@@ -612,120 +612,18 @@ fn get_dummy_field(indent: usize, name: &str, t: &baml_runtime::FieldType) -> Op
 impl WasmRuntime {
     #[wasm_bindgen]
 
-    pub fn check_if_in_prompt(&self, cursorIdx: usize) -> Option<WasmFunction> {
-        self.runtime.internal().ir().walk_functions().find_map(|f| {
-            // Check if the cursor index is within the span of the function
-            let is_in_span = match f.as_v2() {
+    pub fn check_if_in_prompt(&self, cursor_idx: usize) -> bool {
+        self.runtime
+            .internal()
+            .ir()
+            .walk_functions()
+            .any(|f| match f.as_v2() {
                 Some(func_v2) => func_v2.configs.iter().any(|config| {
                     let span = &config.prompt_span;
-                    cursorIdx >= span.start && cursorIdx <= span.end
+                    cursor_idx >= span.start && cursor_idx <= span.end
                 }),
                 None => false,
-            };
-
-            if is_in_span {
-                let snippet = format!(
-                    r#"test TestName {{
-      functions [{name}]
-      args {{
-    {args}
-      }}
-    }}
-    "#,
-                    name = f.name(),
-                    args = f
-                        .inputs()
-                        .right()
-                        .map(|func_params| {
-                            func_params
-                                .iter()
-                                .filter_map(|(k, t)| get_dummy_field(2, k, t))
-                                .collect::<Vec<_>>()
-                                .join("\n")
-                        })
-                        .unwrap_or_default()
-                );
-
-                let wasm_span = match f.span() {
-                    Some(span) => WasmSpan {
-                        file_path: span.file.path().to_string(),
-                        start: span.start,
-                        end: span.end,
-                    },
-                    None => WasmSpan {
-                        file_path: "".to_string(),
-                        start: 0,
-                        end: 0,
-                    },
-                };
-
-                Some(WasmFunction {
-                    name: f.name().to_string(),
-                    span: wasm_span,
-                    test_snippet: snippet,
-                    test_cases: f
-                        .walk_tests()
-                        .map(|tc| {
-                            let params = match tc.test_case_params(&self.runtime.env_vars()) {
-                                Ok(params) => Ok(params
-                                    .iter()
-                                    .map(|(k, v)| {
-                                        let as_str = match v {
-                                            Ok(v) => match serde_json::to_string(v) {
-                                                Ok(s) => Ok(s),
-                                                Err(e) => Err(e.to_string()),
-                                            },
-                                            Err(e) => Err(e.to_string()),
-                                        };
-
-                                        let (value, error) = match as_str {
-                                            Ok(s) => (Some(s), None),
-                                            Err(e) => (None, Some(e)),
-                                        };
-
-                                        WasmParam {
-                                            name: k.to_string(),
-                                            value,
-                                            error,
-                                        }
-                                    })
-                                    .collect()),
-                                Err(e) => Err(e.to_string()),
-                            };
-
-                            let (mut params, error) = match params {
-                                Ok(p) => (p, None),
-                                Err(e) => (Vec::new(), Some(e)),
-                            };
-
-                            // Any missing params should be set to an error
-                            let _ = f.inputs().right().map(|func_params| {
-                                for (param_name, _) in func_params {
-                                    if !params.iter().any(|p| p.name.cmp(param_name).is_eq()) {
-                                        params.insert(
-                                            0,
-                                            WasmParam {
-                                                name: param_name.to_string(),
-                                                value: None,
-                                                error: Some("Missing parameter".to_string()),
-                                            },
-                                        );
-                                    }
-                                }
-                            });
-
-                            WasmTestCase {
-                                name: tc.test_case().name.clone(),
-                                inputs: params,
-                                error,
-                            }
-                        })
-                        .collect(),
-                })
-            } else {
-                None
-            }
-        })
+            })
     }
 
     #[wasm_bindgen]
