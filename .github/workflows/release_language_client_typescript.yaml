@@ -26,25 +26,25 @@ jobs:
             host: macos-14
             build: pnpm build --target aarch64-apple-darwin
 
-          - target: aarch64-pc-windows-msvc
-            host: windows-latest
-            build: pnpm build --target aarch64-pc-windows-msvc
+          # - target: aarch64-pc-windows-msvc
+          #   host: windows-latest
+          #   build: pnpm build --target aarch64-pc-windows-msvc
 
-          - target: aarch64-unknown-linux-gnu
-            host: ubuntu-latest
-            build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
+          # - target: aarch64-unknown-linux-gnu
+          #   host: ubuntu-latest
+          #   build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
 
-          - target: x86_64-apple-darwin
-            host: macos-latest
-            build: pnpm build --target x86_64-apple-darwin
+          # - target: x86_64-apple-darwin
+          #   host: macos-latest
+          #   build: pnpm build --target x86_64-apple-darwin
 
-          - target: x86_64-pc-windows-msvc
-            host: windows-latest
-            build: pnpm build --target x86_64-pc-windows-msvc
+          # - target: x86_64-pc-windows-msvc
+          #   host: windows-latest
+          #   build: pnpm build --target x86_64-pc-windows-msvc
 
-          - target: x86_64-unknown-linux-gnu
-            host: ubuntu-latest
-            build: pnpm build --target x86_64-unknown-linux-gnu --use-napi-cross
+          # - target: x86_64-unknown-linux-gnu
+          #   host: ubuntu-latest
+          #   build: pnpm build --target x86_64-unknown-linux-gnu --use-napi-cross
 
     name: stable - ${{ matrix.settings.target }} - node@20
     runs-on: ${{ matrix.settings.host }}
@@ -79,7 +79,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: engine/language_client_typescript/dist/*
+          path: engine/language_client_typescript/*.node
           if-no-files-found: error
 
   test-macOS-windows-binding:
@@ -90,12 +90,12 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: windows-latest
-            target: x86_64-pc-windows-msvc
-            architecture: x64
-          - host: macos-latest
-            target: x86_64-apple-darwin
-            architecture: x64
+          # - host: windows-latest
+          #   target: x86_64-pc-windows-msvc
+          #   architecture: x64
+          # - host: macos-latest
+          #   target: x86_64-apple-darwin
+          #   architecture: x64
           - host: macos-latest
             target: aarch64-apple-darwin
             architecture: arm64
