@@ -2,7 +2,7 @@ import { BamlCtxManager, BamlRuntimePy } from '@boundaryml/baml'
 import { BamlClient } from './client'
 
 
-const _DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = new BamlRuntime.from_directory(
+const _DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntimePy.fromDirectory(
   process.env.BAML_SRC_PATH ?? "{{ rel_baml_src_path }}",
   process.env
 )

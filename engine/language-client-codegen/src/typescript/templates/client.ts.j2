@@ -18,14 +18,14 @@ export class BamlClient {
       {{name}}: {{type}}{% if !loop.last %},{% endif %}
       {%- endfor %}
   ): Promise<{{fn.return_type}}> {
-    const raw = await self.runtime.call_function(
+    const raw = await this.runtime.callFunction(
       "{{fn.name}}",
       {
         {% for (name, _) in fn.args -%}
         "{{name}}": {{name}},
         {%- endfor %}
       },
-      self.ctx_manager.get(),
+      this.ctx_manager.get(),
     )
     return raw.parsed() as {{fn.return_type}}
   }
@@ -37,12 +37,11 @@ class BamlStreamClient {
 
   {% for fn in funcs %}
   {{ fn.name }}(
-      self,
       {% for (name, type) in fn.args -%}
       {{name}}: {{type}}{% if !loop.last %},{% endif %}
       {%- endfor %}
   ): BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}> {
-    const raw = self.runtime.stream_function(
+    const raw = this.runtime.streamFunction(
       "{{fn.name}}",
       {
         {%- for (name, _) in fn.args %}
@@ -50,13 +49,13 @@ class BamlStreamClient {
         {%- endfor %}
       },
       undefined,
-      self.ctx_manager.get(),
+      this.ctx_manager.get(),
     )
     return new BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}>(
       raw,
       (a): a is {{ fn.partial_return_type }} => a,
       (a): a is {{ fn.return_type }} => a,
-      self.ctx_manager.get(),
+      this.ctx_manager.get(),
     )
   }
   {% endfor %}
