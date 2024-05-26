@@ -24,11 +24,6 @@ struct TypescriptFunction {
     args: Vec<(String, String)>,
 }
 
-struct BamlFile {
-    path: String,
-    content: String,
-}
-
 #[derive(askama::Template)]
 #[template(path = "index.ts.j2", escape = "none")]
 struct TypescriptInit {}
@@ -42,7 +37,7 @@ struct TypescriptGlobals {
 #[derive(askama::Template)]
 #[template(path = "inlinedbaml.ts.j2", escape = "none")]
 struct InlinedBaml {
-    files: Vec<BamlFile>,
+    filemap_base64: String,
 }
 
 #[derive(askama::Template)]
@@ -113,19 +108,8 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
     type Error = anyhow::Error;
 
     fn try_from((_ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
-        log::info!(
-            "InlinedBaml: {:?}",
-            args.input_files.keys().collect::<Vec<_>>()
-        );
         Ok(InlinedBaml {
-            files: args
-                .input_files
-                .iter()
-                .map(|(path, content)| BamlFile {
-                    path: path.to_string(),
-                    content: content.to_string(),
-                })
-                .collect(),
+            filemap_base64: args.input_file_map_base64.to_string(),
         })
     }
 }

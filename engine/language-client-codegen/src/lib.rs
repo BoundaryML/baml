@@ -9,6 +9,7 @@ mod python;
 mod ruby;
 mod typescript;
 use base64::prelude::*;
+use serde_json::json;
 
 pub struct GeneratorArgs {
     /// Output directory for the generated client, relative to baml_src
@@ -17,7 +18,7 @@ pub struct GeneratorArgs {
     /// Path to the BAML source directory
     baml_src_dir: PathBuf,
 
-    input_files: HashMap<String, String>,
+    input_file_map_base64: String,
 }
 
 fn get_last_segment(path: &str) -> String {
@@ -44,23 +45,27 @@ impl GeneratorArgs {
         input_files: &HashMap<String, String>,
     ) -> Self {
         let baml_src = baml_src_dir.into();
+        let input_file_map: HashMap<String, String> = input_files
+            .iter()
+            .map(|(k, v)| {
+                (
+                    relative_path_to_baml_src(&PathBuf::from(k.to_string()), &baml_src)
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .to_string(),
+                    v.clone(),
+                )
+            })
+            .collect();
+        let serialized_json = serde_json::to_string(&input_file_map).unwrap();
+        let base64_encoded = BASE64_STANDARD.encode(serialized_json.as_bytes());
+
         Self {
             output_dir_relative_to_baml_src: output_dir.into(),
             baml_src_dir: baml_src.clone(),
             // for the key, whhich is the name, just get the filename
-            input_files: input_files
-                .iter()
-                .map(|(k, v)| {
-                    (
-                        relative_path_to_baml_src(&PathBuf::from(k.to_string()), &baml_src)
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string(),
-                        BASE64_STANDARD.encode(v.clone()),
-                    )
-                })
-                .collect(),
+            input_file_map_base64: base64_encoded,
         }
     }
 
