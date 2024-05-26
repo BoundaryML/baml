@@ -1,5 +1,6 @@
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
+use cfg_if::cfg_if;
 use internal_baml_core::internal_baml_diagnostics::Diagnostics;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;

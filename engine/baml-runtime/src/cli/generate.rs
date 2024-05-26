@@ -1,4 +1,4 @@
-use crate::BamlRuntime;
+use crate::{runtime::runtime_interface::baml_src_files, BamlRuntime};
 use anyhow::Result;
 use internal_baml_core::configuration::GeneratorOutputType;
 use std::path::PathBuf;
@@ -20,20 +20,33 @@ impl GenerateArgs {
         let runtime =
             BamlRuntime::from_directory(&self.from.clone().into(), std::env::vars().collect())?;
 
-        let client_type: GeneratorOutputType = match (self.client_type.as_ref(), caller_type) {
-            (Some(explicit_client_type), _) => explicit_client_type.into(),
-            (None, super::CallerType::Python) => GeneratorOutputType::PythonPydantic,
-            (None, super::CallerType::Ruby) => GeneratorOutputType::Ruby,
-            (None, super::CallerType::Typescript) => GeneratorOutputType::Typescript,
-        };
+        // Safe to unwrap as the files are guaranteed to exist if the runtime was created successfully.
+        let src_files = baml_src_files(&self.from.clone().into())?;
+        let file_content = src_files
+            .iter()
+            .map(|k| {
+                (
+                    k.to_string_lossy().into(),
+                    std::fs::read_to_string(&k).unwrap(),
+                )
+            })
+            .collect();
+
+        let client_type = self.client_type.as_ref().map_or_else(
+            || match caller_type {
+                crate::CallerType::Python => GeneratorOutputType::PythonPydantic,
+                crate::CallerType::Ruby => GeneratorOutputType::Ruby,
+                crate::CallerType::Typescript => GeneratorOutputType::Typescript,
+            },
+            |x| x.into(),
+        );
 
         let generate_output = runtime.generate_client(
             &client_type,
             &internal_baml_codegen::GeneratorArgs::new(
                 &self.from,
                 PathBuf::from(&self.to).join("baml_client"),
-                // TODO: populate these files, using same approach as src/runtime/runtime_interface.rs
-                &Default::default(),
+                &file_content,
             ),
         )?;
 
