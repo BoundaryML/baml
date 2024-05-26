@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use async_std::stream;
 use baml_types::BamlValue;
 use internal_baml_core::ir::ClientWalker;
 
@@ -9,7 +10,7 @@ use crate::{
     RuntimeContext,
 };
 
-use self::{anthropic::AnthropicClient, openai::OpenAIClient};
+use self::{anthropic::AnthropicClient, openai::OpenAIClient, request::RequestBuilder};
 
 use super::{
     orchestrator::{
@@ -23,6 +24,7 @@ use super::{
 
 mod anthropic;
 mod openai;
+pub(super) mod request;
 
 pub enum LLMPrimitiveProvider {
     OpenAI(OpenAIClient),
@@ -133,6 +135,32 @@ impl LLMPrimitiveProvider {
         match self {
             LLMPrimitiveProvider::OpenAI(o) => o.name.as_str(),
             LLMPrimitiveProvider::Anthropic(a) => a.name.as_str(),
+        }
+    }
+}
+
+impl RequestBuilder for LLMPrimitiveProvider {
+    fn http_client(&self) -> &reqwest::Client {
+        match self {
+            LLMPrimitiveProvider::OpenAI(client) => client.http_client(),
+            LLMPrimitiveProvider::Anthropic(client) => client.http_client(),
+        }
+    }
+    fn invocation_params(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        match self {
+            LLMPrimitiveProvider::OpenAI(client) => client.invocation_params(),
+            LLMPrimitiveProvider::Anthropic(client) => client.invocation_params(),
+        }
+    }
+
+    fn build_request(
+        &self,
+        prompt: either::Either<&String, &Vec<internal_baml_jinja::RenderedChatMessage>>,
+        stream: bool,
+    ) -> reqwest::RequestBuilder {
+        match self {
+            LLMPrimitiveProvider::OpenAI(client) => client.build_request(prompt, stream),
+            LLMPrimitiveProvider::Anthropic(client) => client.build_request(prompt, stream),
         }
     }
 }

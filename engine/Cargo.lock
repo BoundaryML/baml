@@ -470,6 +470,7 @@ dependencies = [
  "async-trait",
  "baml-types",
  "base64 0.22.1",
+ "cfg-if",
  "chrono",
  "clap 4.5.1",
  "colored",

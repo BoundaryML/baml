@@ -431,7 +431,7 @@ impl From<&LLMResponse> for LLMEventSchema {
                         template_args: Default::default(),
                         r#override: None,
                     },
-                    invocation_params: Default::default(),
+                    invocation_params: s.invocation_params.clone(),
                 },
                 output: Some(LLMOutputModel {
                     raw_text: s.content.clone(),
@@ -455,7 +455,7 @@ impl From<&LLMResponse> for LLMEventSchema {
                         template_args: Default::default(),
                         r#override: None,
                     },
-                    invocation_params: Default::default(),
+                    invocation_params: s.invocation_params.clone(),
                 },
                 output: None,
                 error: Some(s.message.clone()),

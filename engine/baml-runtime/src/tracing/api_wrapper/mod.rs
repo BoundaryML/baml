@@ -1,10 +1,13 @@
 mod env_setup;
-use std::collections::HashMap;
 
 use anyhow::Result;
 pub(super) mod api_interface;
 pub(super) mod core_types;
+use instant::Duration;
+use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
+
+use crate::request::create_client;
 
 pub(super) use self::api_interface::{BoundaryAPI, BoundaryTestAPI};
 use self::core_types::{TestCaseStatus, UpdateTestCase};
@@ -101,6 +104,7 @@ impl APIConfig {
                 stage: stage.to_string(),
                 sessions_id: sessions_id.to_string(),
                 host_name: host_name.to_string(),
+                client: create_client().unwrap(),
             }),
             _ => Self::LocalOnly(PartialAPIConfig {
                 base_url: base_url.to_string(),
@@ -122,6 +126,8 @@ pub(super) struct CompleteAPIConfig {
     pub stage: String,
     pub sessions_id: String,
     pub host_name: String,
+
+    client: reqwest::Client,
 }
 
 #[derive(Debug, Clone)]
@@ -137,48 +143,26 @@ pub(super) struct PartialAPIConfig {
 }
 
 impl CompleteAPIConfig {
-    pub(self) async fn post(&self, path: &str, body: &Value) -> Result<Value> {
-        use crate::request::{call_request_with_json, response_text, RequestError};
-
+    pub(self) async fn post<'a, T: DeserializeOwned>(&self, path: &str, body: &Value) -> Result<T> {
         let url = format!("{}/{}", self.base_url, path);
 
-        match call_request_with_json(
-            &url,
-            body,
-            Some(
-                vec![(
-                    "Authorization".to_string(),
-                    format!("Bearer {}", self.api_key),
-                )]
-                .into_iter()
-                .collect(),
-            ),
-        )
-        .await
-        {
-            Ok(res) => Ok(res),
-            Err(e) => match e {
-                RequestError::FetchError(e) => {
-                    Err(anyhow::anyhow!("Failed to fetch: {url}\n{:?}", e))
-                }
-                RequestError::ResponseError(status, resp) => Err(anyhow::anyhow!(
-                    "Failed to fetch (status: {}): {url}\n{}",
-                    status,
-                    match response_text(resp).await {
-                        Ok(v) => v,
-                        Err(e) => format!("{:#?}", e),
-                    }
-                )),
-                RequestError::JsonError(e) => {
-                    Err(anyhow::anyhow!("Failed to parse response: {url}\n{:?}", e))
-                }
-                RequestError::SerdeError(e) => {
-                    Err(anyhow::anyhow!("Failed to parse json: {url}\n{:?}", e))
-                }
-                RequestError::BuildError(e) => {
-                    Err(anyhow::anyhow!("Failed to build request: {url}\n{:?}", e))
-                }
-            },
+        let req = self
+            .client
+            .post(&url)
+            .json(body)
+            .bearer_auth(&self.api_key)
+            .build()?;
+
+        let Ok(res) = self.client.execute(req).await else {
+            return Err(anyhow::anyhow!("Failed to fetch: {url}"));
+        };
+        let status = res.status();
+        match res.json::<T>().await {
+            Ok(v) => Ok(v),
+            Err(e) => Err(anyhow::anyhow!(
+                "Failed to parse response: {url}. Status: {status}\n{:?}",
+                e
+            )),
         }
     }
 }
@@ -338,6 +322,7 @@ impl APIWrapper {
                     stage: config.stage,
                     sessions_id: config.sessions_id,
                     host_name: config.host_name,
+                    client: create_client().unwrap(),
                 }),
             },
             _ => Self {

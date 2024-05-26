@@ -9,6 +9,7 @@ use jsonish::BamlValueWithFlags;
 use crate::{
     internal::{
         llm_client::{
+            primitive::request::RequestBuilder,
             traits::{WithPrompt, WithStreamable},
             LLMErrorResponse, LLMResponse,
         },
@@ -79,6 +80,7 @@ where
                         prompt,
                         start_time: system_start,
                         latency: instant_start.elapsed(),
+                        invocation_params: node.provider.invocation_params().clone(),
                         message: "Stream ended without response".to_string(),
                         code: crate::internal::llm_client::ErrorCode::from_u16(2),
                     })

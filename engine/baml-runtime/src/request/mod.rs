@@ -1,13 +1,15 @@
-#[cfg(not(target_arch = "wasm32"))]
-mod no_wasm;
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) type RequestError = no_wasm::NoWasmRequestError;
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) use no_wasm::{call_request_with_json, response_json, response_text};
+use anyhow::{Context, Result};
+use instant::Duration;
 
-#[cfg(target_arch = "wasm32")]
-mod wasm;
-#[cfg(target_arch = "wasm32")]
-pub(crate) type RequestError = wasm::WasmRequestError;
-#[cfg(target_arch = "wasm32")]
-pub(crate) use wasm::{call_request_with_json, response_json, response_text};
+pub(crate) fn create_client() -> Result<reqwest::Client> {
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            Ok(reqwest::Client::new())
+        } else {
+            reqwest::Client::builder()
+                .http2_keep_alive_interval(Some(Duration::from_secs(10)))
+                .build()
+                .context("Failed to create reqwest client")
+        }
+    }
+}

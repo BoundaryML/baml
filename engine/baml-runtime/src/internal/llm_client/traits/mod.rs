@@ -107,11 +107,6 @@ where
 
 // Stream related
 pub trait SseResponseTrait {
-    fn build_request_for_stream(
-        &self,
-        prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-    ) -> Result<reqwest::RequestBuilder>;
-
     fn response_stream(
         &self,
         resp: reqwest::Response,
