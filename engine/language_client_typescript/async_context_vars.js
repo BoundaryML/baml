@@ -19,7 +19,16 @@ class CtxManager {
         manager.upsertTags(tags);
     }
     get() {
-        return this.ctx.getStore();
+        let store = this.ctx.getStore();
+        if (store === undefined) {
+            console.log('Creating new context manager');
+            store = this.rt.createContextManager();
+            this.ctx.enterWith(store);
+        }
+        else {
+            console.log('Reusing existing context manager');
+        }
+        return store;
     }
     startTraceSync(name, args) {
         const mng = this.get();

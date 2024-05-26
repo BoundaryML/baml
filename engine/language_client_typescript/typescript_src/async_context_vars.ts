@@ -20,7 +20,12 @@ export class CtxManager {
   }
 
   get(): RuntimeContextManagerPy {
-    return this.ctx.getStore()!
+    let store = this.ctx.getStore()
+    if (store === undefined) {
+      store = this.rt.createContextManager()
+      this.ctx.enterWith(store)
+    }
+    return store
   }
 
   startTraceSync(name: string, args: Record<string, any>): BamlSpanPy {

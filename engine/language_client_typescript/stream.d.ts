@@ -1,4 +1,4 @@
-import { FunctionResultPy, FunctionResultStreamPy, RuntimeContextManagerPy } from '../native';
+import { FunctionResultPy, FunctionResultStreamPy, RuntimeContextManagerPy } from './native';
 export declare class BamlStream<PartialOutputType, FinalOutputType> {
     private ffiStream;
     private partialCoerce;

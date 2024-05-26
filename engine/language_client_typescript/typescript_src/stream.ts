@@ -1,4 +1,4 @@
-import { FunctionResultPy, FunctionResultStreamPy, RuntimeContextManagerPy } from '../native'
+import { FunctionResultPy, FunctionResultStreamPy, RuntimeContextManagerPy } from './native'
 
 export class BamlStream<PartialOutputType, FinalOutputType> {
   private task: Promise<FunctionResultPy> | null = null

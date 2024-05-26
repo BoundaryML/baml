@@ -53,14 +53,16 @@ impl BamlRuntimePy {
         let Some(args_map) = args.as_map() else {
             return Err(napi::Error::new(
                 napi::Status::GenericFailure,
-                "Invalid args",
+                format!(
+                    "Invalid args: Expected a map of arguments, got: {}",
+                    args.r#type()
+                ),
             ));
         };
 
         let baml_runtime = self.inner.clone();
+        log::info!("Got runtime");
         let ctx_mng = ctx.inner.clone();
-
-        let ctx_mng = ctx_mng;
         let result = baml_runtime
             .call_function(function_name, &args_map, &ctx_mng)
             .await;
