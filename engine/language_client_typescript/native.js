@@ -367,3 +367,4 @@ module.exports.BamlSpanPy = nativeBinding.BamlSpanPy
 module.exports.FunctionResultPy = nativeBinding.FunctionResultPy
 module.exports.FunctionResultStreamPy = nativeBinding.FunctionResultStreamPy
 module.exports.RuntimeContextManagerPy = nativeBinding.RuntimeContextManagerPy
+module.exports.invoke_runtime_cli = nativeBinding.invoke_runtime_cli

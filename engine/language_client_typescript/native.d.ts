@@ -37,3 +37,5 @@ export class RuntimeContextManagerPy {
   deepClone(): RuntimeContextManagerPy
 }
 
+export function invoke_runtime_cli(params: Array<string>): void
+
