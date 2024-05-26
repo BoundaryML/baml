@@ -486,6 +486,7 @@ dependencies = [
  "fastrand 2.1.0",
  "futures",
  "hostname",
+ "include_dir",
  "indexmap 2.2.5",
  "indoc",
  "instant",

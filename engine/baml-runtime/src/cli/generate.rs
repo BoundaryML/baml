@@ -3,6 +3,8 @@ use anyhow::Result;
 use internal_baml_core::configuration::GeneratorOutputType;
 use std::path::PathBuf;
 
+use super::LanguageClientType;
+
 #[derive(clap::Args, Debug)]
 pub struct GenerateArgs {
     #[arg(long, help = "path/to/baml_src")]
@@ -32,14 +34,10 @@ impl GenerateArgs {
             })
             .collect();
 
-        let client_type = self.client_type.as_ref().map_or_else(
-            || match caller_type {
-                crate::CallerType::Python => GeneratorOutputType::PythonPydantic,
-                crate::CallerType::Ruby => GeneratorOutputType::Ruby,
-                crate::CallerType::Typescript => GeneratorOutputType::Typescript,
-            },
-            |x| x.into(),
-        );
+        let client_type = self
+            .client_type
+            .as_ref()
+            .map_or_else(|| caller_type.into(), |x| x.into());
 
         let generate_output = runtime.generate_client(
             &client_type,
@@ -61,27 +59,5 @@ impl GenerateArgs {
         );
 
         Ok(())
-    }
-}
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-enum LanguageClientType {
-    #[clap(name = "python/pydantic")]
-    PythonPydantic,
-
-    #[clap(name = "ruby")]
-    Ruby,
-
-    #[clap(name = "typescript")]
-    Typescript,
-}
-
-impl Into<GeneratorOutputType> for &LanguageClientType {
-    fn into(self) -> GeneratorOutputType {
-        match self {
-            LanguageClientType::PythonPydantic => GeneratorOutputType::PythonPydantic,
-            LanguageClientType::Ruby => GeneratorOutputType::Ruby,
-            LanguageClientType::Typescript => GeneratorOutputType::Typescript,
-        }
     }
 }
