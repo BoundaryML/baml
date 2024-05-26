@@ -37,7 +37,7 @@ struct TypescriptGlobals {
 #[derive(askama::Template)]
 #[template(path = "inlinedbaml.ts.j2", escape = "none")]
 struct InlinedBaml {
-    filemap_base64: String,
+    filemap: String,
 }
 
 #[derive(askama::Template)]
@@ -108,8 +108,17 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
     type Error = anyhow::Error;
 
     fn try_from((_ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
+        let escaped_filemap = args
+            .input_file_map_json
+            .to_string()
+            .replace("\\", "\\\\") // Escapes all backslashes first.
+            .replace("`", "\\`") // Then escapes backticks.
+            .replace("\"", "\\\"") // Optionally escapes double quotes if they can interfere in the target environment.
+            .replace("\n", "\\n") // Optionally escape newline characters if needed in the string literal.
+            .replace("\r", "\\r"); // Optionally escape carriage returns if they are present.
+
         Ok(InlinedBaml {
-            filemap_base64: args.input_file_map_base64.to_string(),
+            filemap: escaped_filemap,
         })
     }
 }

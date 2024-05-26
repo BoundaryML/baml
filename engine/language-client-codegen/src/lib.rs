@@ -18,14 +18,7 @@ pub struct GeneratorArgs {
     /// Path to the BAML source directory
     baml_src_dir: PathBuf,
 
-    input_file_map_base64: String,
-}
-
-fn get_last_segment(path: &str) -> String {
-    match path.rsplit('/').next() {
-        Some(segment) => segment.to_string(),
-        None => path.to_string(),
-    }
+    input_file_map_json: String,
 }
 
 fn relative_path_to_baml_src(path: &PathBuf, baml_src: &PathBuf) -> Result<PathBuf> {
@@ -59,13 +52,13 @@ impl GeneratorArgs {
             })
             .collect();
         let serialized_json = serde_json::to_string(&input_file_map).unwrap();
-        let base64_encoded = BASE64_STANDARD.encode(serialized_json.as_bytes());
+        // let base64_encoded = BASE64_STANDARD.encode(serialized_json.as_bytes());
 
         Self {
             output_dir_relative_to_baml_src: output_dir.into(),
             baml_src_dir: baml_src.clone(),
             // for the key, whhich is the name, just get the filename
-            input_file_map_base64: base64_encoded,
+            input_file_map_json: serialized_json,
         }
     }
 

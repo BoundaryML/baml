@@ -38,6 +38,12 @@ struct PythonGlobals {
 #[template(path = "tracing.py.j2", escape = "none")]
 struct PythonTracing {}
 
+#[derive(askama::Template)]
+#[template(path = "inlinedbaml.py.j2", escape = "none")]
+struct InlinedBaml {
+    filemap: String,
+}
+
 pub(crate) fn generate(
     ir: &IntermediateRepr,
     generator: &crate::GeneratorArgs,
@@ -50,6 +56,7 @@ pub(crate) fn generate(
     collector.add_template::<PythonClient>("client.py", (ir, generator))?;
     collector.add_template::<PythonGlobals>("globals.py", (ir, generator))?;
     collector.add_template::<PythonTracing>("tracing.py", (ir, generator))?;
+    collector.add_template::<InlinedBaml>("inlinedbaml.py", (ir, generator))?;
     collector.add_template::<PythonInit>("__init__.py", (ir, generator))?;
 
     collector.commit(&generator.output_dir())
@@ -80,6 +87,23 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonGlobals
                 .baml_src_relative_to_output_dir()?
                 .to_string_lossy()
                 .to_string(),
+        })
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
+    type Error = anyhow::Error;
+
+    fn try_from((_ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
+        // Escape backslashes and double quotes, crucial for JSON within a Python string
+        let escaped_filemap = args
+            .input_file_map_json
+            .to_string()
+            .replace("\\", "\\\\") // Escape backslashes first to avoid double escaping
+            .replace("\"", "\\\""); // Escape double quotes
+
+        Ok(InlinedBaml {
+            filemap: escaped_filemap,
         })
     }
 }

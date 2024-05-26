@@ -22,6 +22,17 @@ impl BamlRuntimePy {
             .into())
     }
 
+    #[staticmethod]
+    fn from_files(
+        root_path: String,
+        files: HashMap<String, String>,
+        env_vars: HashMap<String, String>,
+    ) -> PyResult<Self> {
+        Ok(BamlRuntime::from_file_content(&root_path, &files, env_vars)
+            .map_err(BamlError::from_anyhow)?
+            .into())
+    }
+
     #[pyo3()]
     fn create_context_manager(&self) -> RuntimeContextManagerPy {
         self.inner.create_ctx_manager().into()

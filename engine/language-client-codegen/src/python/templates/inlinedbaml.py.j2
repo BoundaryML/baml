@@ -1,0 +1,8 @@
+import json
+bamlFiles = """{{ filemap }}"""
+
+def get_baml_files():
+    file_map = json.loads(bamlFiles)  # Parses the JSON into a Python dictionary
+    for path, content in file_map.items():
+        file_map[path] = content  # Example operation, might modify as needed
+    return file_map

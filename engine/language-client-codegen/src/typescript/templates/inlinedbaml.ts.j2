@@ -9,9 +9,9 @@ export function b64DecodeUnicode(str: string) {
   )
 }
 
-export const bamlFilesBase64 = "{{ filemap_base64 }}" 
+export const bamlFiles = `{{ filemap }}` 
 export const getBamlFiles = () => {
-    const fileMap = JSON.parse(b64DecodeUnicode(bamlFilesBase64))
+    const fileMap = JSON.parse((bamlFiles))
     for (const [path, content] of Object.entries(fileMap)) {
         fileMap[path] = content
     }
