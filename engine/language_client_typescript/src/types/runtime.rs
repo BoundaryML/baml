@@ -25,6 +25,17 @@ impl BamlRuntimePy {
             .into())
     }
 
+    #[napi(ts_return_type = "BamlRuntimePy")]
+    pub fn from_files(
+        root_path: String,
+        files: HashMap<String, String>,
+        env_vars: HashMap<String, String>,
+    ) -> napi::Result<Self> {
+        Ok(BamlRuntime::from_file_content(&root_path, &files, env_vars)
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?
+            .into())
+    }
+
     #[napi]
     pub fn create_context_manager(&self) -> RuntimeContextManagerPy {
         self.inner.create_ctx_manager().into()

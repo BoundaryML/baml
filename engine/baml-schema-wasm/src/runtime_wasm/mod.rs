@@ -226,6 +226,25 @@ impl WasmProject {
                 }
             })
     }
+
+    #[wasm_bindgen]
+    pub fn run_generators(
+        &self,
+    ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
+        let fake_map: HashMap<String, String> = HashMap::new();
+
+        let js_value = serde_wasm_bindgen::to_value(&fake_map).unwrap();
+        let runtime = self.runtime(js_value);
+        log::info!("Files are: {:#?}", self.files);
+        let res = match runtime {
+            Ok(runtime) => runtime.run_generators(&self.files),
+            Err(e) => Err(wasm_bindgen::JsError::new(
+                format!("Failed to create runtime: {:#?}", e).as_str(),
+            )),
+        };
+
+        res
+    }
 }
 
 #[wasm_bindgen(inspectable, getter_with_clone)]
@@ -608,6 +627,22 @@ fn get_dummy_field(indent: usize, name: &str, t: &baml_runtime::FieldType) -> Op
     }
 }
 
+// Rust-only methods
+impl WasmRuntime {
+    pub fn run_generators(
+        &self,
+        input_files: &HashMap<String, String>,
+    ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
+        Ok(self
+            .runtime
+            .run_generators(input_files)
+            .map_err(|e| JsError::new(format!("{e:#}").as_str()))?
+            .into_iter()
+            .map(|g| g.into())
+            .collect())
+    }
+}
+
 #[wasm_bindgen]
 impl WasmRuntime {
     #[wasm_bindgen]
@@ -733,19 +768,6 @@ impl WasmRuntime {
                 }
             })
             .collect()
-    }
-
-    #[wasm_bindgen]
-    pub fn run_generators(
-        &self,
-    ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
-        Ok(self
-            .runtime
-            .run_generators()
-            .map_err(|e| JsError::new(format!("{e:#}").as_str()))?
-            .into_iter()
-            .map(|g| g.into())
-            .collect())
     }
 
     #[wasm_bindgen]

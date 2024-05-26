@@ -27,6 +27,7 @@ use anyhow::Result;
 
 use baml_types::BamlMap;
 use baml_types::BamlValue;
+use indexmap::IndexMap;
 use internal_baml_core::configuration::GeneratorOutputType;
 use runtime::InternalBamlRuntime;
 
@@ -201,7 +202,10 @@ impl BamlRuntime {
         client_type.generate_client(self.inner.ir(), args)
     }
 
-    pub fn run_generators(&self) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
+    pub fn run_generators(
+        &self,
+        input_files: &HashMap<String, String>,
+    ) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
         use internal_baml_codegen::GenerateClient;
 
         let client_types: Vec<(GeneratorOutputType, internal_baml_codegen::GeneratorArgs)> = self
@@ -216,6 +220,7 @@ impl BamlRuntime {
                     internal_baml_codegen::GeneratorArgs::new(
                         generator.output_dir(),
                         generator.baml_src.clone(),
+                        &input_files,
                     ),
                 )
             })

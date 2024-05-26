@@ -24,6 +24,11 @@ struct TypescriptFunction {
     args: Vec<(String, String)>,
 }
 
+struct BamlFile {
+    path: String,
+    content: String,
+}
+
 #[derive(askama::Template)]
 #[template(path = "index.ts.j2", escape = "none")]
 struct TypescriptInit {}
@@ -32,6 +37,12 @@ struct TypescriptInit {}
 #[template(path = "globals.ts.j2", escape = "none")]
 struct TypescriptGlobals {
     // In TS, we always have baml_src at ./baml_src
+}
+
+#[derive(askama::Template)]
+#[template(path = "inlinedbaml.ts.j2", escape = "none")]
+struct InlinedBaml {
+    files: Vec<BamlFile>,
 }
 
 #[derive(askama::Template)]
@@ -48,6 +59,7 @@ pub(crate) fn generate(
     collector.add_template::<TypescriptGlobals>("globals.ts", (ir, generator))?;
     collector.add_template::<TypescriptTracing>("tracing.ts", (ir, generator))?;
     collector.add_template::<TypescriptInit>("index.ts", (ir, generator))?;
+    collector.add_template::<InlinedBaml>("inlinedbaml.ts", (ir, generator))?;
 
     collector.commit(&generator.output_dir())
 }
@@ -93,6 +105,27 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
         Ok(TypescriptClient {
             funcs: functions,
             types,
+        })
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
+    type Error = anyhow::Error;
+
+    fn try_from((_ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
+        log::info!(
+            "InlinedBaml: {:?}",
+            args.input_files.keys().collect::<Vec<_>>()
+        );
+        Ok(InlinedBaml {
+            files: args
+                .input_files
+                .iter()
+                .map(|(path, content)| BamlFile {
+                    path: path.to_string(),
+                    content: content.to_string(),
+                })
+                .collect(),
         })
     }
 }

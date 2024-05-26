@@ -11,6 +11,7 @@ export class BamlImagePy {
 
 export class BamlRuntimePy {
   static fromDirectory(directory: string, envVars: Record<string, string>): BamlRuntimePy
+  static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): BamlRuntimePy
   createContextManager(): RuntimeContextManagerPy
   callFunction(functionName: string, args: any, ctx: RuntimeContextManagerPy): Promise<FunctionResultPy>
   streamFunction(functionName: string, args: any, cb: (err: any, param: FunctionResultPy) => void, ctx: RuntimeContextManagerPy): FunctionResultStreamPy

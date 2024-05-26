@@ -32,6 +32,8 @@ impl GenerateArgs {
             &internal_baml_codegen::GeneratorArgs::new(
                 &self.from,
                 PathBuf::from(&self.to).join("baml_client"),
+                // TODO: populate these files, using same approach as src/runtime/runtime_interface.rs
+                &Default::default(),
             ),
         )?;
 
