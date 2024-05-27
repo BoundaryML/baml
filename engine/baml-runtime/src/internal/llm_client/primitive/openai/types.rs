@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+pub type CompletionResponse = ChatCompletionGeneric<CompletionChoice>;
 pub type ChatCompletionResponse = ChatCompletionGeneric<ChatCompletionChoice>;
 
 pub type ChatCompletionResponseDelta = ChatCompletionGeneric<ChatCompletionChoiceDelta>;
@@ -23,6 +24,13 @@ pub struct ChatCompletionGeneric<C> {
     /// The object type, which is `chat.completion` for non-streaming chat completion, `chat.completion.chunk` for streaming chat completion.
     pub object: String,
     pub usage: Option<CompletionUsage>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct CompletionChoice {
+    pub finish_reason: Option<FinishReason>,
+    pub index: u32,
+    pub text: String,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]

@@ -10,7 +10,9 @@ use serde_json::json;
 use crate::internal::llm_client::primitive::request::{
     make_parsed_request, make_request, RequestBuilder,
 };
-use crate::internal::llm_client::traits::{SseResponseTrait, StreamResponse, WithStreamChat};
+use crate::internal::llm_client::traits::{
+    SseResponseTrait, StreamResponse, WithCompletion, WithStreamChat,
+};
 use crate::internal::llm_client::{
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
     LLMResponse, ModelFeatures,
@@ -20,80 +22,6 @@ use crate::request::create_client;
 use crate::RuntimeContext;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
-
-fn resolve_properties(
-    client: &ClientWalker,
-    ctx: &RuntimeContext,
-) -> Result<PostRequestProperities> {
-    let mut properties = (&client.item.elem.options)
-        .iter()
-        .map(|(k, v)| {
-            Ok((
-                k.into(),
-                ctx.resolve_expression::<serde_json::Value>(v)
-                    .context(format!(
-                        "client {} could not resolve options.{}",
-                        client.name(),
-                        k
-                    ))?,
-            ))
-        })
-        .collect::<Result<HashMap<_, _>>>()?;
-
-    let default_role = properties
-        .remove("default_role")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "system".to_string());
-
-    let base_url = properties
-        .remove("base_url")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "https://api.openai.com".to_string());
-
-    let api_key = properties
-        .remove("api_key")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .or_else(|| ctx.env.get("OPENAI_API_KEY").map(|s| s.to_string()));
-
-    let headers = properties.remove("headers").map(|v| {
-        if let Some(v) = v.as_object() {
-            v.iter()
-                .map(|(k, v)| {
-                    Ok((
-                        k.to_string(),
-                        match v {
-                            serde_json::Value::String(s) => s.to_string(),
-                            _ => anyhow::bail!("Header '{k}' must be a string"),
-                        },
-                    ))
-                })
-                .collect::<Result<HashMap<String, String>>>()
-        } else {
-            Ok(Default::default())
-        }
-    });
-    let headers = match headers {
-        Some(h) => h?,
-        None => Default::default(),
-    };
-
-    Ok(PostRequestProperities {
-        default_role,
-        base_url,
-        api_key,
-        headers,
-        properties,
-    })
-}
-struct PostRequestProperities {
-    default_role: String,
-    base_url: String,
-    api_key: Option<String>,
-    headers: HashMap<String, String>,
-
-    // These are passed directly to the OpenAI API.
-    properties: HashMap<String, serde_json::Value>,
-}
 
 pub struct OpenAIClient {
     pub name: String,
@@ -123,6 +51,76 @@ impl WithClient for OpenAIClient {
 }
 
 impl WithNoCompletion for OpenAIClient {}
+// TODO: Enable completion with support for completion streams
+// impl WithCompletion for OpenAIClient {
+//     fn completion_options(
+//         &self,
+//         ctx: &RuntimeContext,
+//     ) -> Result<internal_baml_jinja::CompletionOptions> {
+//         return Ok(internal_baml_jinja::CompletionOptions::new("\n".into()));
+//     }
+
+//     async fn completion(&self, ctx: &RuntimeContext, prompt: &String) -> LLMResponse {
+//         let (response, system_start, instant_start) =
+//             match make_parsed_request::<CompletionResponse>(
+//                 self,
+//                 either::Either::Left(prompt),
+//                 false,
+//             )
+//             .await
+//             {
+//                 Ok(v) => v,
+//                 Err(e) => return e,
+//             };
+
+//         if response.choices.len() != 1 {
+//             return LLMResponse::LLMFailure(LLMErrorResponse {
+//                 client: self.context.name.to_string(),
+//                 model: None,
+//                 prompt: internal_baml_jinja::RenderedPrompt::Completion(prompt.clone()),
+//                 start_time: system_start,
+//                 latency: instant_start.elapsed(),
+//                 invocation_params: self.properties.properties.clone(),
+//                 message: format!(
+//                     "Expected exactly one choices block, got {}",
+//                     response.choices.len()
+//                 ),
+//                 code: ErrorCode::Other(200),
+//             });
+//         }
+
+//         let usage = response.usage.as_ref();
+
+//         LLMResponse::Success(LLMCompleteResponse {
+//             client: self.context.name.to_string(),
+//             prompt: internal_baml_jinja::RenderedPrompt::Completion(prompt.clone()),
+//             content: response.choices[0].text.clone(),
+//             start_time: system_start,
+//             latency: instant_start.elapsed(),
+//             model: response.model,
+//             invocation_params: self.properties.properties.clone(),
+//             metadata: LLMCompleteResponseMetadata {
+//                 baml_is_complete: match response.choices.get(0) {
+//                     Some(c) => match c.finish_reason {
+//                         Some(FinishReason::Stop) => true,
+//                         _ => false,
+//                     },
+//                     None => false,
+//                 },
+//                 finish_reason: match response.choices.get(0) {
+//                     Some(c) => match c.finish_reason {
+//                         Some(FinishReason::Stop) => Some(FinishReason::Stop.to_string()),
+//                         _ => None,
+//                     },
+//                     None => None,
+//                 },
+//                 prompt_tokens: usage.map(|u| u.prompt_tokens),
+//                 output_tokens: usage.map(|u| u.completion_tokens),
+//                 total_tokens: usage.map(|u| u.total_tokens),
+//             },
+//         })
+//     }
+// }
 
 impl WithChat for OpenAIClient {
     fn chat_options(&self, _ctx: &RuntimeContext) -> Result<internal_baml_jinja::ChatOptions> {
@@ -203,6 +201,10 @@ use crate::internal::llm_client::{
     ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse,
 };
 
+use super::properties::{
+    resolve_azure_properties, resolve_ollama_properties, resolve_openai_properties,
+    PostRequestProperities,
+};
 use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta, FinishReason};
 
 impl RequestBuilder for OpenAIClient {
@@ -216,10 +218,14 @@ impl RequestBuilder for OpenAIClient {
         stream: bool,
     ) -> reqwest::RequestBuilder {
         let mut req = self.client.post(if prompt.is_left() {
-            format!("{}/v1/completions", self.properties.base_url)
+            format!("{}/completions", self.properties.base_url)
         } else {
-            format!("{}/v1/chat/completions", self.properties.base_url)
+            format!("{}/chat/completions", self.properties.base_url)
         });
+
+        if !self.properties.query_params.is_empty() {
+            req = req.query(&self.properties.query_params);
+        }
 
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
@@ -367,27 +373,44 @@ impl WithStreamChat for OpenAIClient {
     }
 }
 
-impl OpenAIClient {
-    pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+macro_rules! make_openai_client {
+    ($client:ident, $properties:ident) => {
         Ok(Self {
-            name: client.name().into(),
-            properties: resolve_properties(client, ctx)?,
+            name: $client.name().into(),
+            properties: $properties,
             context: RenderContext_Client {
-                name: client.name().into(),
-                provider: client.elem().provider.clone(),
+                name: $client.name().into(),
+                provider: $client.elem().provider.clone(),
             },
             features: ModelFeatures {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
             },
-            retry_policy: client
+            retry_policy: $client
                 .elem()
                 .retry_policy_id
                 .as_ref()
                 .map(|s| s.to_string()),
             client: create_client()?,
         })
+    };
+}
+
+impl OpenAIClient {
+    pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+        let properties = resolve_openai_properties(client, ctx)?;
+        make_openai_client!(client, properties)
+    }
+
+    pub fn new_ollama(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+        let properties = resolve_ollama_properties(client, ctx)?;
+        make_openai_client!(client, properties)
+    }
+
+    pub fn new_azure(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+        let properties = resolve_azure_properties(client, ctx)?;
+        make_openai_client!(client, properties)
     }
 }
 
