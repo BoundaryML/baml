@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::format};
 
 use anyhow::{Context, Result};
 use internal_baml_jinja::RenderedChatMessage;
@@ -65,7 +65,7 @@ pub async fn make_request(
                 start_time: system_now,
                 invocation_params: client.invocation_params().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("Failed to make request: {:#?}", e),
+                message: format!("Failed to execute request: {}", e.to_string()),
                 code: ErrorCode::Other(2),
             }));
         }
@@ -81,7 +81,7 @@ pub async fn make_request(
             invocation_params: client.invocation_params().clone(),
             latency: instant_now.elapsed(),
             message: format!(
-                "Failed to make request: {}",
+                "Request failed: {}",
                 response.text().await.unwrap_or("<no response>".into())
             ),
             code: ErrorCode::from_status(status),
