@@ -122,12 +122,27 @@ impl ScopeStack {
         let scope = self.scopes.pop().unwrap();
         let parent_scope = self.scopes.last_mut().unwrap();
 
-        if errors_as_warnings {
-            parent_scope.warnings.extend(scope.errors);
+        if let Some(name) = scope.name {
+            if errors_as_warnings {
+                parent_scope
+                    .warnings
+                    .extend(scope.errors.iter().map(|e| format!("{}: {}", name, e)));
+            } else {
+                parent_scope
+                    .errors
+                    .extend(scope.errors.iter().map(|e| format!("{}: {}", name, e)));
+            }
+            parent_scope
+                .warnings
+                .extend(scope.warnings.iter().map(|e| format!("{}: {}", name, e)));
         } else {
-            parent_scope.errors.extend(scope.errors);
+            if errors_as_warnings {
+                parent_scope.warnings.extend(scope.errors);
+            } else {
+                parent_scope.errors.extend(scope.errors);
+            }
+            parent_scope.warnings.extend(scope.warnings);
         }
-        parent_scope.warnings.extend(scope.warnings);
     }
 
     pub fn push_error(&mut self, error: String) {

@@ -743,8 +743,10 @@ impl WasmRuntime {
 
                             // Any missing params should be set to an error
                             let _ = f.inputs().right().map(|func_params| {
-                                for (param_name, _) in func_params {
-                                    if !params.iter().any(|p| p.name.cmp(param_name).is_eq()) {
+                                for (param_name, t) in func_params {
+                                    if !params.iter().any(|p| p.name.cmp(param_name).is_eq())
+                                        && !t.is_optional()
+                                    {
                                         params.insert(
                                             0,
                                             WasmParam {
