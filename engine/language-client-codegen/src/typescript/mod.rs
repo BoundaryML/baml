@@ -37,7 +37,7 @@ struct TypescriptGlobals {
 #[derive(askama::Template)]
 #[template(path = "inlinedbaml.ts.j2", escape = "none")]
 struct InlinedBaml {
-    filemap: String,
+    file_map: Vec<(String, String)>,
 }
 
 #[derive(askama::Template)]
@@ -108,17 +108,17 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
     type Error = anyhow::Error;
 
     fn try_from((_ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
-        let escaped_filemap = args
-            .input_file_map_json
-            .to_string()
-            .replace("\\", "\\\\") // Escapes all backslashes first.
-            .replace("`", "\\`") // Then escapes backticks.
-            .replace("\"", "\\\"") // Optionally escapes double quotes if they can interfere in the target environment.
-            .replace("\n", "\\n") // Optionally escape newline characters if needed in the string literal.
-            .replace("\r", "\\r"); // Optionally escape carriage returns if they are present.
-
         Ok(InlinedBaml {
-            filemap: escaped_filemap,
+            file_map: args
+                .input_file_map
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        serde_json::to_string(v).expect("Failed to serialize file map"),
+                    )
+                })
+                .collect(),
         })
     }
 }

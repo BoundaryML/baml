@@ -30,9 +30,7 @@ struct PythonInit {}
 
 #[derive(askama::Template)]
 #[template(path = "globals.py.j2", escape = "none")]
-struct PythonGlobals {
-    rel_baml_src_path: String,
-}
+struct PythonGlobals {}
 
 #[derive(askama::Template)]
 #[template(path = "tracing.py.j2", escape = "none")]
@@ -41,7 +39,7 @@ struct PythonTracing {}
 #[derive(askama::Template)]
 #[template(path = "inlinedbaml.py.j2", escape = "none")]
 struct InlinedBaml {
-    filemap: String,
+    file_map: Vec<(String, String)>,
 }
 
 pub(crate) fn generate(
@@ -82,12 +80,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonGlobals
     type Error = anyhow::Error;
 
     fn try_from((_, args): (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
-        Ok(PythonGlobals {
-            rel_baml_src_path: args
-                .baml_src_relative_to_output_dir()?
-                .to_string_lossy()
-                .to_string(),
-        })
+        Ok(PythonGlobals {})
     }
 }
 
@@ -95,15 +88,17 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
     type Error = anyhow::Error;
 
     fn try_from((_ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
-        // Escape backslashes and double quotes, crucial for JSON within a Python string
-        let escaped_filemap = args
-            .input_file_map_json
-            .to_string()
-            .replace("\\", "\\\\") // Escape backslashes first to avoid double escaping
-            .replace("\"", "\\\""); // Escape double quotes
-
         Ok(InlinedBaml {
-            filemap: escaped_filemap,
+            file_map: args
+                .input_file_map
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        serde_json::to_string(v).expect("Failed to serialize file map"),
+                    )
+                })
+                .collect(),
         })
     }
 }

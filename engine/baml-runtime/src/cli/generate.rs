@@ -54,7 +54,7 @@ generator my_client {{
                 generate_output.client_type.to_string()
             );
         } else {
-            println!("Generated {} baml_client's", generated.len());
+            println!("Generated {} baml_client", generated.len());
         }
 
         Ok(())

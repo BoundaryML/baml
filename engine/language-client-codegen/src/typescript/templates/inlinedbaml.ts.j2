@@ -1,19 +1,8 @@
-// This file has the baml files represented as base64 strings for easier bundling in NextJS and other platforms. You can ignore this.
-export function b64DecodeUnicode(str: string) {
-  return decodeURIComponent(
-    Array.prototype.map
-      .call(atob(str), function (c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-      })
-      .join(''),
-  )
+const fileMap = {
+  {% for k in file_map %}
+  "{{ k.0 }}": {{ k.1 }},
+  {%- endfor %}
 }
-
-export const bamlFiles = `{{ filemap }}` 
 export const getBamlFiles = () => {
-    const fileMap = JSON.parse((bamlFiles))
-    for (const [path, content] of Object.entries(fileMap)) {
-        fileMap[path] = content
-    }
-    return fileMap
+    return fileMap;
 }
