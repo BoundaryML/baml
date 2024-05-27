@@ -27,3 +27,16 @@ test TestFnNamedArgsSingleClass {
     }
   }
 }
+
+function TestMulticlassNamedArgs(myArg: NamedArgsSingleClass, myArg2: NamedArgsSingleClass) -> string {
+  client GPT35
+  prompt #"
+    Print these values back to me:
+    {{myArg.key}}
+    {{myArg.key_two}}
+    {{myArg.key_three}}
+    {{myArg2.key}}
+    {{myArg2.key_two}}
+    {{myArg2.key_three}}
+  "#
+}

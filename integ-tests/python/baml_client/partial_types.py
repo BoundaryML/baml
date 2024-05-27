@@ -120,6 +120,11 @@ class TestOutputClass(BaseModel):
     prop1: Optional[str]
     prop2: Optional[int]
 
+class TestOutputClassNested(BaseModel):
+    prop1: Optional[str]
+    prop2: Optional[int]
+    prop3: "TestOutputClass"
+
 class UnionTest_ReturnType(BaseModel):
     prop1: Optional[Union[Optional[str], Optional[bool]]]
     prop2: List[Optional[Union[Optional[float], Optional[bool]]]]

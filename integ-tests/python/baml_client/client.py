@@ -315,6 +315,20 @@ class BamlClient:
       mdl = create_model("FnOutputClassWithEnumReturnType", inner=(types.TestClassWithEnum, ...))
       return coerce(mdl, raw)
     
+    async def FnOutputNestedClass(
+        self,
+        input: str
+    ) -> types.TestOutputClassNested:
+      raw = await self.__runtime.call_function(
+        "FnOutputNestedClass",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      mdl = create_model("FnOutputNestedClassReturnType", inner=(types.TestOutputClassNested, ...))
+      return coerce(mdl, raw)
+    
     async def FnOutputStringList(
         self,
         input: str
@@ -635,6 +649,20 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestImageInputReturnType", inner=(str, ...))
+      return coerce(mdl, raw)
+    
+    async def TestMulticlassNamedArgs(
+        self,
+        myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestMulticlassNamedArgs",
+        {
+          "myArg": myArg,"myArg2": myArg2,
+        },
+        self.__ctx_manager.get(),
+      )
+      mdl = create_model("TestMulticlassNamedArgsReturnType", inner=(str, ...))
       return coerce(mdl, raw)
     
     async def TestOllama(
@@ -1129,6 +1157,30 @@ class BamlStreamClient:
 
 
       return baml_py.BamlStream[partial_types.TestClassWithEnum, types.TestClassWithEnum](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def FnOutputNestedClass(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[partial_types.TestOutputClassNested, types.TestOutputClassNested]:
+      raw = self.__runtime.stream_function(
+        "FnOutputNestedClass",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+
+      mdl = create_model("FnOutputNestedClassReturnType", inner=(types.TestOutputClassNested, ...))
+      partial_mdl = create_model("FnOutputNestedClassPartialReturnType", inner=(partial_types.TestOutputClassNested, ...))
+
+
+      return baml_py.BamlStream[partial_types.TestOutputClassNested, types.TestOutputClassNested](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
@@ -1678,6 +1730,31 @@ class BamlStreamClient:
 
       mdl = create_model("TestImageInputReturnType", inner=(str, ...))
       partial_mdl = create_model("TestImageInputPartialReturnType", inner=(Optional[str], ...))
+
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestMulticlassNamedArgs(
+        self,
+        myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestMulticlassNamedArgs",
+        {
+          "myArg": myArg,
+          "myArg2": myArg2,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+
+      mdl = create_model("TestMulticlassNamedArgsReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestMulticlassNamedArgsPartialReturnType", inner=(Optional[str], ...))
 
 
       return baml_py.BamlStream[Optional[str], str](

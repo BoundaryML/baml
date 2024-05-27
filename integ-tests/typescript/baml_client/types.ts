@@ -205,6 +205,12 @@ export interface TestOutputClass {
   prop2: number
 }
 
+export interface TestOutputClassNested {
+  prop1: string
+  prop2: number
+  prop3: TestOutputClass
+}
+
 export interface UnionTest_ReturnType {
   prop1: string | boolean
   prop2: (number | boolean)[]

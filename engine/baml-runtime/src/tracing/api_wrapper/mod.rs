@@ -4,7 +4,7 @@ use anyhow::Result;
 pub(super) mod api_interface;
 pub(super) mod core_types;
 use instant::Duration;
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::{json, Value};
 
 use crate::request::create_client;
@@ -167,6 +167,11 @@ impl CompleteAPIConfig {
     }
 }
 
+#[derive(Deserialize)]
+struct LogResponse {
+    status: Option<String>,
+}
+
 impl BoundaryAPI for CompleteAPIConfig {
     async fn check_cache(
         &self,
@@ -181,7 +186,7 @@ impl BoundaryAPI for CompleteAPIConfig {
 
     async fn log_schema(&self, payload: &core_types::LogSchema) -> Result<()> {
         let body = serde_json::to_value(payload)?;
-        self.post("log/v2", &body).await?;
+        self.post::<LogResponse>("log/v2", &body).await?;
         Ok(())
     }
 

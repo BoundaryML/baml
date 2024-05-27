@@ -13,9 +13,25 @@ function FnOutputClass(input: string) -> TestOutputClass {
   "#
 }
 
-test FnOutputClass {
-  functions [FnOutputClass]
+test TestClass {
+  functions [FnOutputClass, FnOutputNestedClass]
   args {
     input "example input"
   }
+}
+
+class TestOutputClassNested {
+  prop1 string
+  prop2 int
+  prop3 TestOutputClass
+}
+
+function FnOutputNestedClass(input: string) -> TestOutputClassNested {
+  client GPT35
+  prompt #"
+    Return a JSON blob with this schema: 
+    {{ctx.output_format}}
+
+    JSON:
+  "#
 }

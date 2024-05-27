@@ -178,6 +178,11 @@ class TestOutputClass(BaseModel):
     prop1: str
     prop2: int
 
+class TestOutputClassNested(BaseModel):
+    prop1: str
+    prop2: int
+    prop3: "TestOutputClass"
+
 class UnionTest_ReturnType(BaseModel):
     prop1: Union[str, bool]
     prop2: List[Union[float, bool]]
