@@ -171,7 +171,6 @@ impl WasmProject {
 
     #[wasm_bindgen]
     pub fn save_file(&mut self, name: &str, content: &str) {
-        log::info!("Saving file: {}", name);
         self.files.insert(name.to_string(), content.to_string());
         self.unsaved_files.remove(name);
     }

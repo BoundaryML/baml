@@ -16,8 +16,10 @@ pub(crate) struct RuntimeCli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    Generate(generate::GenerateArgs),
+    #[command(about = "Initialize a new BAML project.")]
     Init(init::InitArgs),
+    #[command(about = "Runs all generators in the baml_src directory")]
+    Generate(generate::GenerateArgs),
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]

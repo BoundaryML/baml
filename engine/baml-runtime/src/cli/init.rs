@@ -17,6 +17,9 @@ pub struct InitArgs {
     client_type: Option<LanguageClientType>,
 }
 
+static SAMPLE_PROJECT: include_dir::Dir =
+    include_dir!("$CARGO_MANIFEST_DIR/src/cli/initial_project");
+
 impl InitArgs {
     pub fn run(&self, caller_type: super::CallerType) -> Result<()> {
         let client_type: GeneratorOutputType = self
@@ -24,22 +27,21 @@ impl InitArgs {
             .as_ref()
             .map_or_else(|| caller_type.into(), |x| x.into());
 
-        // Staticly copy
-        static SAMPLE_PROJECT: include_dir::Dir =
-            include_dir!("$CARGO_MANIFEST_DIR/src/cli/initial_project");
-
-        // Copy everything from the sample project to the destination
-        let file_prefix = format!("{}/src/cli/initial_project", env!("CARGO_MANIFEST_DIR"));
-        for entry in SAMPLE_PROJECT.files() {
-            let path = entry.path();
-            let dest =
-                std::path::Path::new(&self.dest).join(path.strip_prefix(&file_prefix).unwrap());
-            std::fs::create_dir_all(dest.parent().unwrap())?;
-            std::fs::write(dest, entry.contents())?;
+        // If the destination directory already contains a baml_src directory, we don't want to overwrite it.
+        let dest = std::path::Path::new(&self.dest);
+        let baml_src = dest.join("baml_src");
+        if baml_src.exists() {
+            return Err(anyhow::anyhow!(
+                "Destination directory already contains a baml_src directory: {}",
+                baml_src.display()
+            ));
         }
 
+        SAMPLE_PROJECT.extract(&self.dest)?;
         // Also generate a main.baml file
-        let main_baml = std::path::Path::new(&self.dest).join("generators.baml");
+        let main_baml = std::path::Path::new(&self.dest)
+            .join("baml_src")
+            .join("generators.baml");
         std::fs::write(
             main_baml,
             format!(
