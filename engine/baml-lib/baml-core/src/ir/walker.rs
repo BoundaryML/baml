@@ -189,12 +189,20 @@ impl Expression {
 
     pub fn resolve(&self, env_values: &HashMap<String, String>) -> Result<BamlValue> {
         match self {
-            Expression::Identifier(Identifier::ENV(s)) => match env_values.get(s) {
-                Some(v) => Ok(BamlValue::String(v.clone())),
-                None => anyhow::bail!("Environment variable {} not found", s),
+            Expression::Identifier(idn) => match idn {
+                repr::Identifier::ENV(s) => match env_values.get(s) {
+                    Some(v) => Ok(BamlValue::String(v.clone())),
+                    None => anyhow::bail!("Environment variable {} not found", s),
+                },
+                repr::Identifier::Ref(r) => Ok(BamlValue::String(r.join(".").to_string())),
+                repr::Identifier::Local(r) => match r.as_str() {
+                    "true" => Ok(BamlValue::Bool(true)),
+                    "false" => Ok(BamlValue::Bool(false)),
+                    "null" => Ok(BamlValue::Null),
+                    _ => Ok(BamlValue::String(r.to_string())),
+                },
+                repr::Identifier::Primitive(t) => Ok(BamlValue::String(t.to_string())),
             },
-            Expression::String(s) => Ok(BamlValue::String(s.clone())),
-            Expression::RawString(s) => Ok(BamlValue::String(s.clone())),
             Expression::Bool(b) => Ok(BamlValue::Bool(*b)),
             Expression::Map(m) => {
                 let mut map = baml_types::BamlMap::new();
@@ -210,7 +218,7 @@ impl Expression {
                 }
                 Ok(BamlValue::List(list))
             }
-            repr::Expression::Identifier(idn) => Ok(BamlValue::String(idn.name().to_string())),
+            Expression::RawString(s) | Expression::String(s) => Ok(BamlValue::String(s.clone())),
             repr::Expression::Numeric(n) => {
                 if let Ok(n) = n.parse::<i64>() {
                     Ok(BamlValue::Int(n))
