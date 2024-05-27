@@ -359,7 +359,7 @@ const TestResults: React.FC = () => {
   // reset the tab when switching funcs
   useEffect(() => {
     setShowTests(false)
-  }, [selectedFunction])
+  }, [selectedFunction?.name])
 
   return (
     <div className='flex flex-col w-full gap-2 px-1'>

@@ -329,6 +329,34 @@ class BamlClient:
       mdl = create_model("FnOutputStringListReturnType", inner=(List[str], ...))
       return coerce(mdl, raw)
     
+    async def FnTestAliasedEnumOutput(
+        self,
+        input: str
+    ) -> types.TestEnum:
+      raw = await self.__runtime.call_function(
+        "FnTestAliasedEnumOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      mdl = create_model("FnTestAliasedEnumOutputReturnType", inner=(types.TestEnum, ...))
+      return coerce(mdl, raw)
+    
+    async def FnTestClassAlias(
+        self,
+        input: str
+    ) -> types.TestClassAlias:
+      raw = await self.__runtime.call_function(
+        "FnTestClassAlias",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      mdl = create_model("FnTestClassAliasReturnType", inner=(types.TestClassAlias, ...))
+      return coerce(mdl, raw)
+    
     async def FnTestNamedArgsSingleEnum(
         self,
         myArg: types.NamedArgsSingleEnum
@@ -1111,6 +1139,54 @@ class BamlStreamClient:
 
 
       return baml_py.BamlStream[List[Optional[str]], List[str]](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def FnTestAliasedEnumOutput(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[Optional[types.TestEnum], types.TestEnum]:
+      raw = self.__runtime.stream_function(
+        "FnTestAliasedEnumOutput",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+
+      mdl = create_model("FnTestAliasedEnumOutputReturnType", inner=(types.TestEnum, ...))
+      partial_mdl = create_model("FnTestAliasedEnumOutputPartialReturnType", inner=(Optional[types.TestEnum], ...))
+
+
+      return baml_py.BamlStream[Optional[types.TestEnum], types.TestEnum](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def FnTestClassAlias(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[partial_types.TestClassAlias, types.TestClassAlias]:
+      raw = self.__runtime.stream_function(
+        "FnTestClassAlias",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+
+      mdl = create_model("FnTestClassAliasReturnType", inner=(types.TestClassAlias, ...))
+      partial_mdl = create_model("FnTestClassAliasPartialReturnType", inner=(partial_types.TestClassAlias, ...))
+
+
+      return baml_py.BamlStream[partial_types.TestClassAlias, types.TestClassAlias](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

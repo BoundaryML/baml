@@ -21,34 +21,27 @@ enum TestEnum {
     User is bored
     With a long description
   "#)
-
+   
   @@alias("Category")
 }
- 
-function FnTestAliasedEnumOutput {
-  input string
-  output TestEnum
-}
 
-impl<llm, FnTestAliasedEnumOutput> v1 {
+function FnTestAliasedEnumOutput(input: string) -> TestEnum {
   client GPT35
-
-  override TestEnum {
-    B @description(#"
-      Another super long
-      description
-      with multiple lines
-    "#)
-  }
-
   prompt #"
     Classify the user input into the following category
-     
-    {#print_enum(TestEnum)}
+      
+    {{ctx.output_format}}
     ---
 
-    input: {#input}
+    input: {{input}}
 
     Category ID:
   "#
+}
+
+test FnTestAliasedEnumOutput {
+  functions [FnTestAliasedEnumOutput]
+  args {
+    input "mehhhhh"
+  }
 }

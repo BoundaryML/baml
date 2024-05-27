@@ -6,18 +6,19 @@ class TestClassAlias {
   key5 string @alias("key.with.punctuation/123")
 }
 
-function FnTestClassAlias {
-  input string
-  output TestClassAlias
-}
-
-impl<llm, FnTestClassAlias> v1 {
+function FnTestClassAlias(input: string) -> TestClassAlias {
   client GPT35
   prompt #"
     Return a json blob that has this schema:
-    {#print_type(output)}
+    {{ctx.output_format}}
 
     JSON:
   "#
 }
 
+test FnTestClassAlias {
+  functions [FnTestClassAlias]
+  args {
+    input "example input"
+  }
+}

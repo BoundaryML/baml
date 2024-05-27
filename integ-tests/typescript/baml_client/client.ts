@@ -290,6 +290,32 @@ export class BamlClient {
     return raw.parsed() as string[]
   }
   
+  async FnTestAliasedEnumOutput(
+      input: string
+  ): Promise<TestEnum> {
+    const raw = await this.runtime.callFunction(
+      "FnTestAliasedEnumOutput",
+      {
+        "input": input,
+      },
+      this.ctx_manager.get(),
+    )
+    return raw.parsed() as TestEnum
+  }
+  
+  async FnTestClassAlias(
+      input: string
+  ): Promise<TestClassAlias> {
+    const raw = await this.runtime.callFunction(
+      "FnTestClassAlias",
+      {
+        "input": input,
+      },
+      this.ctx_manager.get(),
+    )
+    return raw.parsed() as TestClassAlias
+  }
+  
   async FnTestNamedArgsSingleEnum(
       myArg: NamedArgsSingleEnum
   ): Promise<string> {
@@ -949,6 +975,44 @@ class BamlStreamClient {
       raw,
       (a): a is (string | null)[] => a,
       (a): a is string[] => a,
+      this.ctx_manager.get(),
+    )
+  }
+  
+  FnTestAliasedEnumOutput(
+      input: string
+  ): BamlStream<(TestEnum | null), TestEnum> {
+    const raw = this.runtime.streamFunction(
+      "FnTestAliasedEnumOutput",
+      {
+        "input": input,
+      },
+      undefined,
+      this.ctx_manager.get(),
+    )
+    return new BamlStream<(TestEnum | null), TestEnum>(
+      raw,
+      (a): a is (TestEnum | null) => a,
+      (a): a is TestEnum => a,
+      this.ctx_manager.get(),
+    )
+  }
+  
+  FnTestClassAlias(
+      input: string
+  ): BamlStream<(Partial<TestClassAlias> | null), TestClassAlias> {
+    const raw = this.runtime.streamFunction(
+      "FnTestClassAlias",
+      {
+        "input": input,
+      },
+      undefined,
+      this.ctx_manager.get(),
+    )
+    return new BamlStream<(Partial<TestClassAlias> | null), TestClassAlias>(
+      raw,
+      (a): a is (Partial<TestClassAlias> | null) => a,
+      (a): a is TestClassAlias => a,
       this.ctx_manager.get(),
     )
   }

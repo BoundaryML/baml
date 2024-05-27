@@ -48,6 +48,14 @@ client<llm> GPT35 {
   }
 }
 
+client<llm> Ollama {
+  provider ollama
+  options {
+    model llama2
+    api_key ""
+  }
+}
+
 client<llm> GPT35Azure {
   provider azure-openai
   options {
@@ -66,13 +74,6 @@ client<llm> Claude {
     model claude-3-haiku-20240307
     api_key env.ANTHROPIC_API_KEY
     max_tokens 1000
-  }
-}
-
-client<llm> Ollama {
-  provider baml-ollama-chat
-  options {
-    model mistral
   }
 }
 
