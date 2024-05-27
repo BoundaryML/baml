@@ -21,6 +21,7 @@ pub mod tracing;
 mod types;
 
 use std::collections::HashMap;
+use std::env;
 use std::sync::Arc;
 
 use anyhow::Result;

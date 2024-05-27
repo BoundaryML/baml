@@ -136,6 +136,16 @@ impl BamlTracer {
             anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
         }
 
+        if let Ok(response) = &response {
+            let is_ok = response.parsed().as_ref().is_some_and(|r| r.is_ok());
+            log::log!(
+                target: "baml_events",
+                if is_ok { log::Level::Info } else { log::Level::Warn },
+                "{}",
+                response
+            );
+        }
+
         if let Some(tracer) = &self.tracer {
             tracer
                 .submit(response.to_log_schema(&self.options, event_chain, tags, span))
