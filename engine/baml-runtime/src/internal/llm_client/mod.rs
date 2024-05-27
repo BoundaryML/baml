@@ -99,7 +99,7 @@ impl ErrorCode {
             ErrorCode::ServerError => "ServerError (500)".into(),
             ErrorCode::ServiceUnavailable => "ServiceUnavailable (503)".into(),
             ErrorCode::UnsupportedResponse(code) => format!("BadResponse {}", code),
-            ErrorCode::Other(code) => format!("Unspecified {}", code),
+            ErrorCode::Other(code) => format!("Unspecified error code: {}", code),
         }
     }
 

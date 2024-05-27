@@ -65,7 +65,7 @@ pub async fn make_request(
                 start_time: system_now,
                 invocation_params: client.invocation_params().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("Failed to execute request: {}", e.to_string()),
+                message: e.to_string(),
                 code: ErrorCode::Other(2),
             }));
         }

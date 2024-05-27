@@ -637,6 +637,20 @@ class BamlClient:
       mdl = create_model("TestImageInputReturnType", inner=(str, ...))
       return coerce(mdl, raw)
     
+    async def TestOllama(
+        self,
+        input: str
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestOllama",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      mdl = create_model("TestOllamaReturnType", inner=(str, ...))
+      return coerce(mdl, raw)
+    
     async def UnionTest_Function(
         self,
         input: Union[str, bool]
@@ -1664,6 +1678,30 @@ class BamlStreamClient:
 
       mdl = create_model("TestImageInputReturnType", inner=(str, ...))
       partial_mdl = create_model("TestImageInputPartialReturnType", inner=(Optional[str], ...))
+
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestOllama(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestOllama",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+
+      mdl = create_model("TestOllamaReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestOllamaPartialReturnType", inner=(Optional[str], ...))
 
 
       return baml_py.BamlStream[Optional[str], str](

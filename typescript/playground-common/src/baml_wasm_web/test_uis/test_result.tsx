@@ -145,6 +145,18 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
                     <b>{llm_failure.code}</b>
                     <br />
                     {llm_failure.message}
+                    <br />
+                    <br />
+                    {(window as any).next?.version ? (
+                      <>Check the browser's network tab for more details</>
+                    ) : (
+                      <>
+                        {
+                          'Check the webview network tab for more details. Command Palette -> Open webview developer tools. '
+                        }
+                      </>
+                    )}
+                    <br />
                   </pre>
                 )}
               </div>
@@ -205,6 +217,18 @@ const LLMFunctionResult: React.FC<{ test: WasmFunctionResponse }> = ({ test }) =
                     <b>{llm_failure.code}</b>
                     <br />
                     {llm_failure.message}
+                    <br />
+                    <br />
+                    {(window as any).next?.version ? (
+                      <>Check the browser's network tab for more details</>
+                    ) : (
+                      <>
+                        {
+                          'Check the webview network tab for more details. Command Palette -> Open webview developer tools. '
+                        }
+                      </>
+                    )}
+                    <br />
                   </pre>
                 )}
               </div>

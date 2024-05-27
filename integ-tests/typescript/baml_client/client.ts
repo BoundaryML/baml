@@ -576,6 +576,19 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
+  async TestOllama(
+      input: string
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestOllama",
+      {
+        "input": input,
+      },
+      this.ctx_manager.get(),
+    )
+    return raw.parsed() as string
+  }
+  
   async UnionTest_Function(
       input: string | boolean
   ): Promise<UnionTest_ReturnType> {
@@ -1385,6 +1398,25 @@ class BamlStreamClient {
       "TestImageInput",
       {
         "img": img,
+      },
+      undefined,
+      this.ctx_manager.get(),
+    )
+    return new BamlStream<(string | null), string>(
+      raw,
+      (a): a is (string | null) => a,
+      (a): a is string => a,
+      this.ctx_manager.get(),
+    )
+  }
+  
+  TestOllama(
+      input: string
+  ): BamlStream<(string | null), string> {
+    const raw = this.runtime.streamFunction(
+      "TestOllama",
+      {
+        "input": input,
       },
       undefined,
       this.ctx_manager.get(),
