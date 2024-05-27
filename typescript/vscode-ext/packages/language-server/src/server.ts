@@ -373,58 +373,61 @@ export function startServer(options?: LSOptions): void {
   })
 
   connection.onCompletion((params: CompletionParams) => {
-    // return undefined
-    const doc = getDocument(params.textDocument.uri)
-    if (doc) {
-      let completionWord = getWordAtPosition(doc, params.position)
-      const splitWord = completionWord.split('{{')
-      completionWord = splitWord[splitWord.length - 1]
-      const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
-      const res = proj.verifyCompletionRequest(doc, params.position)
-      if (res) {
-        if (completionWord === '_.') {
-          return {
-            isIncomplete: false,
-            items: [
-              {
-                label: 'role("system")',
-              },
-              {
-                label: 'role("assistant")',
-              },
-              {
-                label: 'role("user")',
-              },
-            ],
-          }
-        } else if (completionWord === 'ctx.') {
-          return {
-            isIncomplete: false,
-            items: [
-              {
-                label: 'output_format',
-              },
-              {
-                label: 'client',
-              },
-            ],
-          }
-        } else if (completionWord === 'ctx.client.') {
-          return {
-            isIncomplete: false,
-            items: [
-              {
-                label: 'name',
-              },
-              {
-                label: 'provider',
-              },
-            ],
+    try {
+      const doc = getDocument(params.textDocument.uri)
+      if (doc) {
+        let completionWord = getWordAtPosition(doc, params.position)
+        const splitWord = completionWord.split('{{')
+        completionWord = splitWord[splitWord.length - 1]
+        const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+        const res = proj.verifyCompletionRequest(doc, params.position)
+        if (res) {
+          if (completionWord === '_.') {
+            return {
+              isIncomplete: false,
+              items: [
+                {
+                  label: 'role("system")',
+                },
+                {
+                  label: 'role("assistant")',
+                },
+                {
+                  label: 'role("user")',
+                },
+              ],
+            }
+          } else if (completionWord === 'ctx.') {
+            return {
+              isIncomplete: false,
+              items: [
+                {
+                  label: 'output_format',
+                },
+                {
+                  label: 'client',
+                },
+              ],
+            }
+          } else if (completionWord === 'ctx.client.') {
+            return {
+              isIncomplete: false,
+              items: [
+                {
+                  label: 'name',
+                },
+                {
+                  label: 'provider',
+                },
+              ],
+            }
           }
         }
       }
+      return undefined
+    } catch (e) {
+      console.error(`Error occurred while generating completion:\n${e}`)
     }
-    return undefined
   })
   // This handler resolves additional information for the item selected in the completion list.
   // connection.onCompletionResolve((completionItem: CompletionItem) => {
@@ -432,164 +435,56 @@ export function startServer(options?: LSOptions): void {
   // })
 
   connection.onHover((params: HoverParams) => {
-    const doc = getDocument(params.textDocument.uri)
-    if (doc) {
-      const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+    try {
+      const doc = getDocument(params.textDocument.uri)
+      if (doc) {
+        const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
 
-      if (proj) {
-        return proj.handleHoverRequest(doc, params.position)
+        if (proj) {
+          return proj.handleHoverRequest(doc, params.position)
+        }
       }
+      return undefined
+    } catch (e) {
+      console.error(`Error occurred while generating hover:\n${e}`)
     }
-    return undefined
   })
 
   connection.onCodeLens((params: CodeLensParams) => {
-    const document = getDocument(params.textDocument.uri)
-    const codelenses = []
-    if (document) {
-      const proj = bamlProjectManager.getProjectById(URI.parse(document.uri))
+    try {
+      const document = getDocument(params.textDocument.uri)
+      const codelenses = []
 
-      if (proj) {
-        for (const func of proj.list_functions()) {
-          if (URI.parse(func.span.file_path).toString() === document.uri) {
-            const range = Range.create(document.positionAt(func.span.start), document.positionAt(func.span.end))
-            const command: Command = {
-              title: '▶ Open Playground ✨',
-              command: 'baml.openBamlPanel',
-              arguments: [
-                {
-                  projectId: proj,
-                  functionName: func.name,
-                  showTests: true,
-                },
-              ],
+      if (document) {
+        const proj = bamlProjectManager.getProjectById(URI.parse(document.uri))
+
+        if (proj) {
+          for (const func of proj.list_functions()) {
+            if (URI.parse(func.span.file_path).toString() === document.uri) {
+              const range = Range.create(document.positionAt(func.span.start), document.positionAt(func.span.end))
+              const command: Command = {
+                title: '▶ Open Playground ✨',
+                command: 'baml.openBamlPanel',
+                arguments: [
+                  {
+                    projectId: proj,
+                    functionName: func.name,
+                    showTests: true,
+                  },
+                ],
+              }
+              codelenses.push({
+                range,
+                command,
+              })
             }
-            codelenses.push({
-              range,
-              command,
-            })
           }
         }
       }
+      return codelenses
+    } catch (e) {
+      console.error(`Error occurred while generating codelenses:\n${e}`)
     }
-    return codelenses
-
-    // const document = getDocument(params.textDocument.uri)
-    // const codeLenses: CodeLens[] = []
-    // if (!document) {
-    //   console.log('No text document available to compute codelens ' + params.textDocument.uri.toString())
-    //   return codeLenses
-    // }
-    // bamlCache.addDocument(document)
-    // // Dont debounce this! We need to give VSCode the most up to date info.
-    // // VSCode will actually do adaptive debouncing for us https://github.com/microsoft/vscode/issues/106267
-    // // validateTextDocument(document)
-
-    // const db = bamlCache.getParserDatabase(document)
-    // const docFsPath = URI.parse(document.uri).fsPath
-    // const baml_dir = bamlCache.getBamlDir(document)
-    // if (!db) {
-    //   console.log('No db for ' + document.uri + '. There may be a linter error or out of sync file')
-    //   return codeLenses
-    // }
-
-    // for (const fn of db.functions) {
-    //   if (fn.name.source_file !== docFsPath) {
-    //     continue;
-    //   }
-
-    //   const range = Range.create(document.positionAt(fn.name.start), document.positionAt(fn.name.end))
-    //   const command: Command = {
-    //     title: '▶️ Open Playground',
-    //     command: 'baml.openBamlPanel',
-    //     arguments: [
-    //       {
-    //         projectId: baml_dir?.fsPath || '',
-    //         functionName: fn.name.value,
-    //         showTests: true,
-    //       },
-    //     ],
-    //   }
-    //   codeLenses.push({
-    //     range,
-    //     command,
-    //   })
-
-    //   switch (fn.syntax) {
-    //     case "Version2":
-    //       continue;
-
-    //     case "Version1":
-    //       for (const impl of fn.impls) {
-    //         codeLenses.push({
-    //           range: Range.create(document.positionAt(impl.name.start), document.positionAt(impl.name.end)),
-    //           command: {
-    //             title: '▶️ Open Playground',
-    //             command: 'baml.openBamlPanel',
-    //             arguments: [
-    //               {
-    //                 projectId: baml_dir?.fsPath || '',
-    //                 functionName: fn.name.value,
-    //                 implName: impl.name.value,
-    //                 showTests: true,
-    //               },
-    //             ],
-    //           },
-    //         })
-    //         codeLenses.push({
-    //           range: Range.create(document.positionAt(impl.prompt_key.start), document.positionAt(impl.prompt_key.end)),
-    //           command: {
-    //             title: '▶️ Open Live Preview',
-    //             command: 'baml.openBamlPanel',
-    //             arguments: [
-    //               {
-    //                 projectId: baml_dir?.fsPath || '',
-    //                 functionName: fn.name.value,
-    //                 implName: impl.name.value,
-    //                 showTests: false,
-    //               },
-    //             ],
-    //           },
-    //         })
-    //       }
-    //       break;
-
-    //   }
-    // }
-
-    // const testCases = db.functions
-    //   .flatMap((f) =>
-    //     f.test_cases.map((t) => {
-    //       return {
-    //         value: t.name.value,
-    //         start: t.name.start,
-    //         end: t.name.end,
-    //         source_file: t.name.source_file,
-    //         function: f.name.value,
-    //       }
-    //     }),
-    //   )
-    //   .filter((x) => x.source_file === docFsPath)
-    // testCases.forEach((name) => {
-    //   const range = Range.create(document.positionAt(name.start), document.positionAt(name.end))
-    //   const command: Command = {
-    //     title: '▶️ Open Playground',
-    //     command: 'baml.openBamlPanel',
-    //     arguments: [
-    //       {
-    //         projectId: baml_dir?.fsPath || '',
-    //         functionName: name.function,
-    //         testCaseName: name.value,
-    //         showTests: true,
-    //       },
-    //     ],
-    //   }
-    //   codeLenses.push({
-    //     range,
-    //     command,
-    //   })
-    // })
-    // return codeLenses
   })
 
   // connection.onDocumentFormatting((params: DocumentFormattingParams) => {

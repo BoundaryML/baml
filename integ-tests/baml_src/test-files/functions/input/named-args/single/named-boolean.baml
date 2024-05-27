@@ -1,11 +1,15 @@
-function TestFnNamedArgsSingleBool {
-  input (myBool: bool)
-  output string
-}
 
-impl<llm, TestFnNamedArgsSingleBool> v1 {
+
+function TestFnNamedArgsSingleBool(myBool: bool) -> string{
   client GPT35
   prompt #"
-    Return this value back to me: {#input.myBool}
+    Return this value back to me: {{myBool}}
   "#
-}  
+}
+
+test TestFnNamedArgsSingleBool {
+  functions [TestFnNamedArgsSingleBool]
+  args {
+    myBool true
+  }
+}

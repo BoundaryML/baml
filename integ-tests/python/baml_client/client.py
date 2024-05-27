@@ -13,7 +13,7 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Generic, List, Optional, TypeVar, Union
 import pprint
 
 import baml_py
@@ -39,16 +39,14 @@ class BamlOutputWrapper(BaseModel, Generic[OutputType]):
         ) from e
 
 class BamlClient:
-    __runtime: baml_py.BamlRuntimeFfi
+    __runtime: baml_py.BamlRuntimePy
+    __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
 
-    @staticmethod
-    def from_directory(path: str, ctx: Dict[str, Any] = {}) -> "BamlClient":
-      return BamlClient(runtime=baml_py.BamlRuntimeFfi.from_directory(path, ctx))
-
-    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+    def __init__(self, runtime: baml_py.BamlRuntimePy, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
-      self.__stream_client = BamlStreamClient(self.__runtime)
+      self.__ctx_manager = ctx_manager
+      self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
 
     @property
     def stream(self):
@@ -64,7 +62,7 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[types.Category].coerce(raw.parsed())
     
@@ -77,7 +75,7 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[types.Category].coerce(raw.parsed())
     
@@ -90,7 +88,7 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[types.Category].coerce(raw.parsed())
     
@@ -103,7 +101,7 @@ class BamlClient:
         {
           "img": img,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -116,7 +114,7 @@ class BamlClient:
         {
           "classWithImage": classWithImage,"img2": img2,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -129,7 +127,7 @@ class BamlClient:
         {
           "classWithImage": classWithImage,"img2": img2,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -142,7 +140,7 @@ class BamlClient:
         {
           "classWithImage": classWithImage,"img2": img2,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -155,20 +153,20 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[List[str]].coerce(raw.parsed())
     
     async def ExtractResume(
         self,
-        resume: str
+        resume: str,img: baml_py.Image
     ) -> types.Resume:
       raw = await self.__runtime.call_function(
         "ExtractResume",
         {
-          "resume": resume,
+          "resume": resume,"img": img,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[types.Resume].coerce(raw.parsed())
     
@@ -181,9 +179,35 @@ class BamlClient:
         {
           "resume": resume,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[types.Resume].coerce(raw.parsed())
+    
+    async def FnClassOptionalOutput(
+        self,
+        input: str
+    ) -> Optional[types.ClassOptionalOutput]:
+      raw = await self.__runtime.call_function(
+        "FnClassOptionalOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[Optional[types.ClassOptionalOutput]].coerce(raw.parsed())
+    
+    async def FnClassOptionalOutput2(
+        self,
+        input: str
+    ) -> Optional[types.ClassOptionalOutput2]:
+      raw = await self.__runtime.call_function(
+        "FnClassOptionalOutput2",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[Optional[types.ClassOptionalOutput2]].coerce(raw.parsed())
     
     async def FnClassOptionalOutput2_V2(
         self,
@@ -194,9 +218,100 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[Optional[types.ClassOptionalOutput2v2]].coerce(raw.parsed())
+    
+    async def FnEnumListOutput(
+        self,
+        input: str
+    ) -> List[types.EnumOutput]:
+      raw = await self.__runtime.call_function(
+        "FnEnumListOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[List[types.EnumOutput]].coerce(raw.parsed())
+    
+    async def FnEnumOutput(
+        self,
+        input: str
+    ) -> types.EnumOutput:
+      raw = await self.__runtime.call_function(
+        "FnEnumOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[types.EnumOutput].coerce(raw.parsed())
+    
+    async def FnNamedArgsSingleStringOptional(
+        self,
+        myString: Optional[str]
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "FnNamedArgsSingleStringOptional",
+        {
+          "myString": myString,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def FnOutputBool(
+        self,
+        input: str
+    ) -> bool:
+      raw = await self.__runtime.call_function(
+        "FnOutputBool",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[bool].coerce(raw.parsed())
+    
+    async def FnOutputClass(
+        self,
+        input: str
+    ) -> types.TestOutputClass:
+      raw = await self.__runtime.call_function(
+        "FnOutputClass",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[types.TestOutputClass].coerce(raw.parsed())
+    
+    async def FnOutputClassList(
+        self,
+        input: str
+    ) -> List[types.TestOutputClass]:
+      raw = await self.__runtime.call_function(
+        "FnOutputClassList",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[List[types.TestOutputClass]].coerce(raw.parsed())
+    
+    async def FnOutputClassWithEnum(
+        self,
+        input: str
+    ) -> types.TestClassWithEnum:
+      raw = await self.__runtime.call_function(
+        "FnOutputClassWithEnum",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[types.TestClassWithEnum].coerce(raw.parsed())
     
     async def FnOutputClassWithEnum_V2(
         self,
@@ -207,9 +322,35 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[types.TestClassWithEnum2].coerce(raw.parsed())
+    
+    async def FnOutputStringList(
+        self,
+        input: str
+    ) -> List[str]:
+      raw = await self.__runtime.call_function(
+        "FnOutputStringList",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[List[str]].coerce(raw.parsed())
+    
+    async def FnTestNamedArgsSingleEnum(
+        self,
+        myArg: types.NamedArgsSingleEnum
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "FnTestNamedArgsSingleEnum",
+        {
+          "myArg": myArg,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
     
     async def GetDataType(
         self,
@@ -220,7 +361,7 @@ class BamlClient:
         {
           "text": text,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[types.RaysData].coerce(raw.parsed())
     
@@ -233,7 +374,7 @@ class BamlClient:
         {
           "email": email,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[types.OrderInfo].coerce(raw.parsed())
     
@@ -246,9 +387,22 @@ class BamlClient:
         {
           "query": query,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[types.SearchParams].coerce(raw.parsed())
+    
+    async def OptionalTest_Function(
+        self,
+        input: str
+    ) -> List[Optional[types.OptionalTest_ReturnType]]:
+      raw = await self.__runtime.call_function(
+        "OptionalTest_Function",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[List[Optional[types.OptionalTest_ReturnType]]].coerce(raw.parsed())
     
     async def OptionalTest_Function_V2(
         self,
@@ -259,9 +413,217 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[List[Optional[types.OptionalTest_ReturnTypev2]]].coerce(raw.parsed())
+    
+    async def PromptTestClaude(
+        self,
+        input: str
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "PromptTestClaude",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def PromptTestClaudeChat(
+        self,
+        input: str
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "PromptTestClaudeChat",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def PromptTestClaudeChatNoSystem(
+        self,
+        input: str
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "PromptTestClaudeChatNoSystem",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def PromptTestOpenAI(
+        self,
+        input: str
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "PromptTestOpenAI",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def PromptTestOpenAIChat(
+        self,
+        input: str
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "PromptTestOpenAIChat",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def PromptTestOpenAIChatNoSystem(
+        self,
+        input: str
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "PromptTestOpenAIChatNoSystem",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def TestFnNamedArgsSingleBool(
+        self,
+        myBool: bool
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestFnNamedArgsSingleBool",
+        {
+          "myBool": myBool,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def TestFnNamedArgsSingleClass(
+        self,
+        myArg: types.NamedArgsSingleClass
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestFnNamedArgsSingleClass",
+        {
+          "myArg": myArg,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def TestFnNamedArgsSingleEnumList(
+        self,
+        myArg: List[types.NamedArgsSingleEnumList]
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestFnNamedArgsSingleEnumList",
+        {
+          "myArg": myArg,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def TestFnNamedArgsSingleFloat(
+        self,
+        myFloat: float
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestFnNamedArgsSingleFloat",
+        {
+          "myFloat": myFloat,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def TestFnNamedArgsSingleInt(
+        self,
+        myInt: int
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestFnNamedArgsSingleInt",
+        {
+          "myInt": myInt,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def TestFnNamedArgsSingleString(
+        self,
+        myString: str
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestFnNamedArgsSingleString",
+        {
+          "myString": myString,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def TestFnNamedArgsSingleStringArray(
+        self,
+        myStringArray: List[str]
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestFnNamedArgsSingleStringArray",
+        {
+          "myStringArray": myStringArray,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def TestFnNamedArgsSingleStringList(
+        self,
+        myArg: List[str]
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestFnNamedArgsSingleStringList",
+        {
+          "myArg": myArg,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def TestImageInput(
+        self,
+        img: baml_py.Image
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestImageInput",
+        {
+          "img": img,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[str].coerce(raw.parsed())
+    
+    async def UnionTest_Function(
+        self,
+        input: Union[str, bool]
+    ) -> types.UnionTest_ReturnType:
+      raw = await self.__runtime.call_function(
+        "UnionTest_Function",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+      )
+      return BamlOutputWrapper[types.UnionTest_ReturnType].coerce(raw.parsed())
     
     async def V2_FnClassOptional(
         self,
@@ -272,7 +634,7 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -285,7 +647,7 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -298,7 +660,7 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[List[types.EnumOutput]].coerce(raw.parsed())
     
@@ -311,7 +673,7 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[types.EnumOutput2].coerce(raw.parsed())
     
@@ -324,7 +686,7 @@ class BamlClient:
         {
           "myString": myString,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -337,7 +699,7 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[bool].coerce(raw.parsed())
     
@@ -350,7 +712,7 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[types.TestOutputClass2].coerce(raw.parsed())
     
@@ -363,7 +725,7 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[List[types.TestOutputClass]].coerce(raw.parsed())
     
@@ -376,7 +738,7 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[List[str]].coerce(raw.parsed())
     
@@ -389,7 +751,7 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -402,7 +764,7 @@ class BamlClient:
         {
           "myArg": myArg,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -415,7 +777,7 @@ class BamlClient:
         {
           "myBool": myBool,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -428,7 +790,7 @@ class BamlClient:
         {
           "myArg": myArg,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -441,7 +803,7 @@ class BamlClient:
         {
           "myArg": myArg,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -454,7 +816,7 @@ class BamlClient:
         {
           "myFloat": myFloat,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -467,7 +829,7 @@ class BamlClient:
         {
           "myInt": myInt,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -480,7 +842,7 @@ class BamlClient:
         {
           "myString": myString,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -493,7 +855,7 @@ class BamlClient:
         {
           "myStringArray": myStringArray,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -506,7 +868,7 @@ class BamlClient:
         {
           "myArg": myArg,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -519,7 +881,7 @@ class BamlClient:
         {
           "var": var,"var_with_underscores": var_with_underscores,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[str].coerce(raw.parsed())
     
@@ -532,16 +894,18 @@ class BamlClient:
         {
           "input": input,
         },
-        ctx={}
+        self.__ctx_manager.get(),
       )
       return BamlOutputWrapper[Union[types.UnionTest_ReturnTypev2, types.DataType]].coerce(raw.parsed())
     
 
 class BamlStreamClient:
-    __runtime: baml_py.BamlRuntimeFfi
+    __runtime: baml_py.BamlRuntimePy
+    __ctx_manager: baml_py.BamlCtxManager
 
-    def __init__(self, runtime: baml_py.BamlRuntimeFfi):
+    def __init__(self, runtime: baml_py.BamlRuntimePy, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
+      self.__ctx_manager = ctx_manager
 
     
     def ClassifyMessage(
@@ -553,12 +917,14 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[types.Category], types.Category](
         raw,
         BamlOutputWrapper[Optional[types.Category]].coerce,
         BamlOutputWrapper[types.Category].coerce,
+        self.__ctx_manager.get(),
       )
     
     def ClassifyMessage2(
@@ -570,12 +936,14 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[types.Category], types.Category](
         raw,
         BamlOutputWrapper[Optional[types.Category]].coerce,
         BamlOutputWrapper[types.Category].coerce,
+        self.__ctx_manager.get(),
       )
     
     def ClassifyMessage3(
@@ -587,12 +955,14 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[types.Category], types.Category](
         raw,
         BamlOutputWrapper[Optional[types.Category]].coerce,
         BamlOutputWrapper[types.Category].coerce,
+        self.__ctx_manager.get(),
       )
     
     def DescribeImage(
@@ -604,12 +974,14 @@ class BamlStreamClient:
         {
           "img": img,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def DescribeImage2(
@@ -622,12 +994,14 @@ class BamlStreamClient:
           "classWithImage": classWithImage,
           "img2": img2,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def DescribeImage3(
@@ -640,12 +1014,14 @@ class BamlStreamClient:
           "classWithImage": classWithImage,
           "img2": img2,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def DescribeImage4(
@@ -658,12 +1034,14 @@ class BamlStreamClient:
           "classWithImage": classWithImage,
           "img2": img2,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def ExtractNames(
@@ -675,29 +1053,34 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[List[Optional[str]], List[str]](
         raw,
         BamlOutputWrapper[List[Optional[str]]].coerce,
         BamlOutputWrapper[List[str]].coerce,
+        self.__ctx_manager.get(),
       )
     
     def ExtractResume(
         self,
-        resume: str
+        resume: str,img: baml_py.Image
     ) -> baml_py.BamlStream[partial_types.Resume, types.Resume]:
       raw = self.__runtime.stream_function(
         "ExtractResume",
         {
           "resume": resume,
+          "img": img,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[partial_types.Resume, types.Resume](
         raw,
         BamlOutputWrapper[partial_types.Resume].coerce,
         BamlOutputWrapper[types.Resume].coerce,
+        self.__ctx_manager.get(),
       )
     
     def ExtractResume2(
@@ -709,12 +1092,52 @@ class BamlStreamClient:
         {
           "resume": resume,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[partial_types.Resume, types.Resume](
         raw,
         BamlOutputWrapper[partial_types.Resume].coerce,
         BamlOutputWrapper[types.Resume].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def FnClassOptionalOutput(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[partial_types.ClassOptionalOutput, Optional[types.ClassOptionalOutput]]:
+      raw = self.__runtime.stream_function(
+        "FnClassOptionalOutput",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[partial_types.ClassOptionalOutput, Optional[types.ClassOptionalOutput]](
+        raw,
+        BamlOutputWrapper[partial_types.ClassOptionalOutput].coerce,
+        BamlOutputWrapper[Optional[types.ClassOptionalOutput]].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def FnClassOptionalOutput2(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[partial_types.ClassOptionalOutput2, Optional[types.ClassOptionalOutput2]]:
+      raw = self.__runtime.stream_function(
+        "FnClassOptionalOutput2",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[partial_types.ClassOptionalOutput2, Optional[types.ClassOptionalOutput2]](
+        raw,
+        BamlOutputWrapper[partial_types.ClassOptionalOutput2].coerce,
+        BamlOutputWrapper[Optional[types.ClassOptionalOutput2]].coerce,
+        self.__ctx_manager.get(),
       )
     
     def FnClassOptionalOutput2_V2(
@@ -726,12 +1149,147 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[partial_types.ClassOptionalOutput2v2, Optional[types.ClassOptionalOutput2v2]](
         raw,
         BamlOutputWrapper[partial_types.ClassOptionalOutput2v2].coerce,
         BamlOutputWrapper[Optional[types.ClassOptionalOutput2v2]].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def FnEnumListOutput(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[List[Optional[types.EnumOutput]], List[types.EnumOutput]]:
+      raw = self.__runtime.stream_function(
+        "FnEnumListOutput",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[List[Optional[types.EnumOutput]], List[types.EnumOutput]](
+        raw,
+        BamlOutputWrapper[List[Optional[types.EnumOutput]]].coerce,
+        BamlOutputWrapper[List[types.EnumOutput]].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def FnEnumOutput(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[Optional[types.EnumOutput], types.EnumOutput]:
+      raw = self.__runtime.stream_function(
+        "FnEnumOutput",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[types.EnumOutput], types.EnumOutput](
+        raw,
+        BamlOutputWrapper[Optional[types.EnumOutput]].coerce,
+        BamlOutputWrapper[types.EnumOutput].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def FnNamedArgsSingleStringOptional(
+        self,
+        myString: Optional[str]
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "FnNamedArgsSingleStringOptional",
+        {
+          "myString": myString,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def FnOutputBool(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[Optional[bool], bool]:
+      raw = self.__runtime.stream_function(
+        "FnOutputBool",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[bool], bool](
+        raw,
+        BamlOutputWrapper[Optional[bool]].coerce,
+        BamlOutputWrapper[bool].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def FnOutputClass(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[partial_types.TestOutputClass, types.TestOutputClass]:
+      raw = self.__runtime.stream_function(
+        "FnOutputClass",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[partial_types.TestOutputClass, types.TestOutputClass](
+        raw,
+        BamlOutputWrapper[partial_types.TestOutputClass].coerce,
+        BamlOutputWrapper[types.TestOutputClass].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def FnOutputClassList(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]]:
+      raw = self.__runtime.stream_function(
+        "FnOutputClassList",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]](
+        raw,
+        BamlOutputWrapper[List[partial_types.TestOutputClass]].coerce,
+        BamlOutputWrapper[List[types.TestOutputClass]].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def FnOutputClassWithEnum(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[partial_types.TestClassWithEnum, types.TestClassWithEnum]:
+      raw = self.__runtime.stream_function(
+        "FnOutputClassWithEnum",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[partial_types.TestClassWithEnum, types.TestClassWithEnum](
+        raw,
+        BamlOutputWrapper[partial_types.TestClassWithEnum].coerce,
+        BamlOutputWrapper[types.TestClassWithEnum].coerce,
+        self.__ctx_manager.get(),
       )
     
     def FnOutputClassWithEnum_V2(
@@ -743,12 +1301,52 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[partial_types.TestClassWithEnum2, types.TestClassWithEnum2](
         raw,
         BamlOutputWrapper[partial_types.TestClassWithEnum2].coerce,
         BamlOutputWrapper[types.TestClassWithEnum2].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def FnOutputStringList(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[List[Optional[str]], List[str]]:
+      raw = self.__runtime.stream_function(
+        "FnOutputStringList",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[List[Optional[str]], List[str]](
+        raw,
+        BamlOutputWrapper[List[Optional[str]]].coerce,
+        BamlOutputWrapper[List[str]].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def FnTestNamedArgsSingleEnum(
+        self,
+        myArg: types.NamedArgsSingleEnum
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "FnTestNamedArgsSingleEnum",
+        {
+          "myArg": myArg,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def GetDataType(
@@ -760,12 +1358,14 @@ class BamlStreamClient:
         {
           "text": text,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[partial_types.RaysData, types.RaysData](
         raw,
         BamlOutputWrapper[partial_types.RaysData].coerce,
         BamlOutputWrapper[types.RaysData].coerce,
+        self.__ctx_manager.get(),
       )
     
     def GetOrderInfo(
@@ -777,12 +1377,14 @@ class BamlStreamClient:
         {
           "email": email,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[partial_types.OrderInfo, types.OrderInfo](
         raw,
         BamlOutputWrapper[partial_types.OrderInfo].coerce,
         BamlOutputWrapper[types.OrderInfo].coerce,
+        self.__ctx_manager.get(),
       )
     
     def GetQuery(
@@ -794,12 +1396,33 @@ class BamlStreamClient:
         {
           "query": query,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[partial_types.SearchParams, types.SearchParams](
         raw,
         BamlOutputWrapper[partial_types.SearchParams].coerce,
         BamlOutputWrapper[types.SearchParams].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def OptionalTest_Function(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[List[partial_types.OptionalTest_ReturnType], List[Optional[types.OptionalTest_ReturnType]]]:
+      raw = self.__runtime.stream_function(
+        "OptionalTest_Function",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[List[partial_types.OptionalTest_ReturnType], List[Optional[types.OptionalTest_ReturnType]]](
+        raw,
+        BamlOutputWrapper[List[partial_types.OptionalTest_ReturnType]].coerce,
+        BamlOutputWrapper[List[Optional[types.OptionalTest_ReturnType]]].coerce,
+        self.__ctx_manager.get(),
       )
     
     def OptionalTest_Function_V2(
@@ -811,12 +1434,318 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[List[partial_types.OptionalTest_ReturnTypev2], List[Optional[types.OptionalTest_ReturnTypev2]]](
         raw,
         BamlOutputWrapper[List[partial_types.OptionalTest_ReturnTypev2]].coerce,
         BamlOutputWrapper[List[Optional[types.OptionalTest_ReturnTypev2]]].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def PromptTestClaude(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "PromptTestClaude",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def PromptTestClaudeChat(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "PromptTestClaudeChat",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def PromptTestClaudeChatNoSystem(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "PromptTestClaudeChatNoSystem",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def PromptTestOpenAI(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "PromptTestOpenAI",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def PromptTestOpenAIChat(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "PromptTestOpenAIChat",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def PromptTestOpenAIChatNoSystem(
+        self,
+        input: str
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "PromptTestOpenAIChatNoSystem",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def TestFnNamedArgsSingleBool(
+        self,
+        myBool: bool
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestFnNamedArgsSingleBool",
+        {
+          "myBool": myBool,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def TestFnNamedArgsSingleClass(
+        self,
+        myArg: types.NamedArgsSingleClass
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestFnNamedArgsSingleClass",
+        {
+          "myArg": myArg,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def TestFnNamedArgsSingleEnumList(
+        self,
+        myArg: List[types.NamedArgsSingleEnumList]
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestFnNamedArgsSingleEnumList",
+        {
+          "myArg": myArg,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def TestFnNamedArgsSingleFloat(
+        self,
+        myFloat: float
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestFnNamedArgsSingleFloat",
+        {
+          "myFloat": myFloat,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def TestFnNamedArgsSingleInt(
+        self,
+        myInt: int
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestFnNamedArgsSingleInt",
+        {
+          "myInt": myInt,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def TestFnNamedArgsSingleString(
+        self,
+        myString: str
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestFnNamedArgsSingleString",
+        {
+          "myString": myString,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def TestFnNamedArgsSingleStringArray(
+        self,
+        myStringArray: List[str]
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestFnNamedArgsSingleStringArray",
+        {
+          "myStringArray": myStringArray,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def TestFnNamedArgsSingleStringList(
+        self,
+        myArg: List[str]
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestFnNamedArgsSingleStringList",
+        {
+          "myArg": myArg,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def TestImageInput(
+        self,
+        img: baml_py.Image
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestImageInput",
+        {
+          "img": img,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        BamlOutputWrapper[Optional[str]].coerce,
+        BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
+      )
+    
+    def UnionTest_Function(
+        self,
+        input: Union[str, bool]
+    ) -> baml_py.BamlStream[partial_types.UnionTest_ReturnType, types.UnionTest_ReturnType]:
+      raw = self.__runtime.stream_function(
+        "UnionTest_Function",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+      return baml_py.BamlStream[partial_types.UnionTest_ReturnType, types.UnionTest_ReturnType](
+        raw,
+        BamlOutputWrapper[partial_types.UnionTest_ReturnType].coerce,
+        BamlOutputWrapper[types.UnionTest_ReturnType].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_FnClassOptional(
@@ -828,12 +1757,14 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_FnClassOptional2(
@@ -845,12 +1776,14 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_FnEnumListOutput(
@@ -862,12 +1795,14 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[List[Optional[types.EnumOutput]], List[types.EnumOutput]](
         raw,
         BamlOutputWrapper[List[Optional[types.EnumOutput]]].coerce,
         BamlOutputWrapper[List[types.EnumOutput]].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_FnEnumOutput(
@@ -879,12 +1814,14 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[types.EnumOutput2], types.EnumOutput2](
         raw,
         BamlOutputWrapper[Optional[types.EnumOutput2]].coerce,
         BamlOutputWrapper[types.EnumOutput2].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_FnNamedArgsSingleStringOptional(
@@ -896,12 +1833,14 @@ class BamlStreamClient:
         {
           "myString": myString,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_FnOutputBool(
@@ -913,12 +1852,14 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[bool], bool](
         raw,
         BamlOutputWrapper[Optional[bool]].coerce,
         BamlOutputWrapper[bool].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_FnOutputClass(
@@ -930,12 +1871,14 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[partial_types.TestOutputClass2, types.TestOutputClass2](
         raw,
         BamlOutputWrapper[partial_types.TestOutputClass2].coerce,
         BamlOutputWrapper[types.TestOutputClass2].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_FnOutputClassList(
@@ -947,12 +1890,14 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]](
         raw,
         BamlOutputWrapper[List[partial_types.TestOutputClass]].coerce,
         BamlOutputWrapper[List[types.TestOutputClass]].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_FnOutputStringList(
@@ -964,12 +1909,14 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[List[Optional[str]], List[str]](
         raw,
         BamlOutputWrapper[List[Optional[str]]].coerce,
         BamlOutputWrapper[List[str]].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_FnStringOptional(
@@ -981,12 +1928,14 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_FnTestNamedArgsSingleEnum(
@@ -998,12 +1947,14 @@ class BamlStreamClient:
         {
           "myArg": myArg,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleBool(
@@ -1015,12 +1966,14 @@ class BamlStreamClient:
         {
           "myBool": myBool,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleClass(
@@ -1032,12 +1985,14 @@ class BamlStreamClient:
         {
           "myArg": myArg,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleEnumList(
@@ -1049,12 +2004,14 @@ class BamlStreamClient:
         {
           "myArg": myArg,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleFloat(
@@ -1066,12 +2023,14 @@ class BamlStreamClient:
         {
           "myFloat": myFloat,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleInt(
@@ -1083,12 +2042,14 @@ class BamlStreamClient:
         {
           "myInt": myInt,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleString(
@@ -1100,12 +2061,14 @@ class BamlStreamClient:
         {
           "myString": myString,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleStringArray(
@@ -1117,12 +2080,14 @@ class BamlStreamClient:
         {
           "myStringArray": myStringArray,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSingleStringList(
@@ -1134,12 +2099,14 @@ class BamlStreamClient:
         {
           "myArg": myArg,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_TestFnNamedArgsSyntax(
@@ -1152,12 +2119,14 @@ class BamlStreamClient:
           "var": var,
           "var_with_underscores": var_with_underscores,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[str], str](
         raw,
         BamlOutputWrapper[Optional[str]].coerce,
         BamlOutputWrapper[str].coerce,
+        self.__ctx_manager.get(),
       )
     
     def V2_UnionTest_Function(
@@ -1169,11 +2138,13 @@ class BamlStreamClient:
         {
           "input": input,
         },
-        ctx={},
+        None,
+        self.__ctx_manager.get(),
       )
       return baml_py.BamlStream[Optional[Union[partial_types.UnionTest_ReturnTypev2, Optional[types.DataType]]], Union[types.UnionTest_ReturnTypev2, types.DataType]](
         raw,
         BamlOutputWrapper[Optional[Union[partial_types.UnionTest_ReturnTypev2, Optional[types.DataType]]]].coerce,
         BamlOutputWrapper[Union[types.UnionTest_ReturnTypev2, types.DataType]].coerce,
+        self.__ctx_manager.get(),
       )
     

@@ -2,9 +2,9 @@
 
 Welcome to Baml! To use this generated code, please run one of the following:
 
-$ npm install baml_ts
-$ yarn add baml_ts
-$ pnpm add baml_ts
+$ npm install @boundaryml/baml
+$ yarn add @boundaryml/baml
+$ pnpm add @boundaryml/baml
 
 *************************************************************************************************/
 
@@ -135,11 +135,6 @@ export interface Blah2 {
   prop4: string | null
 }
 
-export interface ClassOptionalFields {
-  prop1: string | null
-  prop2: string | null
-}
-
 export interface ClassOptionalFieldsv2 {
   prop1: string | null
   prop2: string | null
@@ -168,10 +163,12 @@ export interface ClassWithImage {
   fake_image: FakeImage
 }
 
-export interface DynamicPropsClass {
-  prop1: string
-  prop2: string
-  prop3: number
+export interface Education {
+  institution: string
+  location: string
+  degree: string
+  major: string[]
+  graduation_date: string | null
 }
 
 export interface Email {
@@ -191,11 +188,6 @@ export interface FakeImage {
   url: string
 }
 
-export interface ModifiedOutput {
-  reasoning: string
-  answer: string
-}
-
 export interface NamedArgsSingleClass {
   key: string
   key_two: boolean
@@ -212,11 +204,6 @@ export interface NamedArgsSingleClassList2 {
   key: string
   key_two: boolean
   key_three: number
-}
-
-export interface OptionalClass {
-  prop1: string
-  prop2: string
 }
 
 export interface OptionalClassv2 {
@@ -266,7 +253,7 @@ export interface Resume {
   name: string
   email: string
   phone: string
-  experience: string[]
+  experience: Education[]
   education: string[]
   skills: string[]
 }
@@ -278,11 +265,6 @@ export interface SearchParams {
   company: WithReasoning | null
   description: WithReasoning[]
   tags: (Tag | string)[]
-}
-
-export interface SomeClass2 {
-  prop1: string
-  prop2: string
 }
 
 export interface TestClassAlias {

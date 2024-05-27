@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { VSCodeButton, VSCodeProgressRing, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { PropsWithChildren, useMemo, useState } from 'react'
+import { PropsWithChildren, useEffect, useMemo, useState } from 'react'
 import {
   TestState,
   type TestStatusType,
@@ -353,7 +353,13 @@ const TestStatusBanner: React.FC = () => {
 }
 
 const TestResults: React.FC = () => {
+  const selectedFunction = useAtomValue(selectedFunctionAtom)
   const [showTests, setShowTests] = useAtom(showTestsAtom)
+
+  // reset the tab when switching funcs
+  useEffect(() => {
+    setShowTests(false)
+  }, [selectedFunction])
 
   return (
     <div className='flex flex-col w-full gap-2 px-1'>

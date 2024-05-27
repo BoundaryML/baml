@@ -34,10 +34,6 @@ class Blah(BaseModel):
 class Blah2(BaseModel):
     prop4: Optional[str]
 
-class ClassOptionalFields(BaseModel):
-    prop1: Optional[str]
-    prop2: Optional[str]
-
 class ClassOptionalFieldsv2(BaseModel):
     prop1: Optional[str]
     prop2: Optional[str]
@@ -61,10 +57,12 @@ class ClassWithImage(BaseModel):
     param2: Optional[str]
     fake_image: "FakeImage"
 
-class DynamicPropsClass(BaseModel):
-    prop1: Optional[str]
-    prop2: Optional[str]
-    prop3: Optional[int]
+class Education(BaseModel):
+    institution: Optional[str]
+    location: Optional[str]
+    degree: Optional[str]
+    major: List[Optional[str]]
+    graduation_date: Optional[str]
 
 class Email(BaseModel):
     subject: Optional[str]
@@ -80,10 +78,6 @@ class Event(BaseModel):
 class FakeImage(BaseModel):
     url: Optional[str]
 
-class ModifiedOutput(BaseModel):
-    reasoning: Optional[str]
-    answer: Optional[str]
-
 class NamedArgsSingleClass(BaseModel):
     key: Optional[str]
     key_two: Optional[bool]
@@ -98,10 +92,6 @@ class NamedArgsSingleClassList2(BaseModel):
     key: Optional[str]
     key_two: Optional[bool]
     key_three: Optional[int]
-
-class OptionalClass(BaseModel):
-    prop1: Optional[str]
-    prop2: Optional[str]
 
 class OptionalClassv2(BaseModel):
     prop1: Optional[str]
@@ -142,7 +132,7 @@ class Resume(BaseModel):
     name: Optional[str]
     email: Optional[str]
     phone: Optional[str]
-    experience: List[Optional[str]]
+    experience: List["Education"]
     education: List[Optional[str]]
     skills: List[Optional[str]]
 
@@ -153,10 +143,6 @@ class SearchParams(BaseModel):
     company: "WithReasoning"
     description: List["WithReasoning"]
     tags: List[Optional[Union[Optional[types.Tag], Optional[str]]]]
-
-class SomeClass2(BaseModel):
-    prop1: Optional[str]
-    prop2: Optional[str]
 
 class TestClassAlias(BaseModel):
     key: Optional[str]

@@ -3,19 +3,19 @@ class TestOutputClass {
   prop2 int
 }
 
-
-function FnOutputClass {
-  input string
-  output TestOutputClass
-}
-
-impl<llm, FnOutputClass> v1 {
+function FnOutputClass(input: string) -> TestOutputClass {
   client GPT35
   prompt #"
     Return a JSON blob with this schema: 
-    {#print_type(output)}
+    {{ctx.output_format}}
 
     JSON:
   "#
 }
 
+test FnOutputClass {
+  functions [FnOutputClass]
+  args {
+    input "example input"
+  }
+}

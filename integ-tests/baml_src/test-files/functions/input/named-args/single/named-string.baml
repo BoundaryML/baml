@@ -1,12 +1,14 @@
 // test string
-function TestFnNamedArgsSingleString {
-  input (myString: string)
-  output string
-}
-
-impl<llm, TestFnNamedArgsSingleString> v1 {
+function TestFnNamedArgsSingleString(myString: string) -> string {
   client GPT35
   prompt #"
-    Return this value back to me: {#input.myString}
+    Return this value back to me: {{myString}}
   "#
+}
+
+test TestFnNamedArgsSingleString {
+  functions [TestFnNamedArgsSingleString]
+  args {
+    myString "example string"
+  }
 }
