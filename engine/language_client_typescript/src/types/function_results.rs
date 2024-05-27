@@ -1,10 +1,10 @@
 use baml_types::BamlValue;
 use napi_derive::napi;
 
-crate::lang_wrapper!(FunctionResultPy, baml_runtime::FunctionResult);
+crate::lang_wrapper!(FunctionResult, baml_runtime::FunctionResult);
 
 #[napi]
-impl FunctionResultPy {
+impl FunctionResult {
     fn __str__(&self) -> String {
         format!("{:#}", self.inner)
     }

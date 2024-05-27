@@ -361,10 +361,10 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-module.exports.BamlImagePy = nativeBinding.BamlImagePy
-module.exports.BamlRuntimePy = nativeBinding.BamlRuntimePy
-module.exports.BamlSpanPy = nativeBinding.BamlSpanPy
-module.exports.FunctionResultPy = nativeBinding.FunctionResultPy
-module.exports.FunctionResultStreamPy = nativeBinding.FunctionResultStreamPy
-module.exports.RuntimeContextManagerPy = nativeBinding.RuntimeContextManagerPy
+module.exports.BamlImage = nativeBinding.BamlImage
+module.exports.BamlRuntime = nativeBinding.BamlRuntime
+module.exports.BamlSpan = nativeBinding.BamlSpan
+module.exports.FunctionResult = nativeBinding.FunctionResult
+module.exports.FunctionResultStream = nativeBinding.FunctionResultStream
+module.exports.RuntimeContextManager = nativeBinding.RuntimeContextManager
 module.exports.invoke_runtime_cli = nativeBinding.invoke_runtime_cli

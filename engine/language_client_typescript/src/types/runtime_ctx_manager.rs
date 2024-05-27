@@ -1,10 +1,10 @@
 use baml_types::BamlValue;
 use napi_derive::napi;
 
-crate::lang_wrapper!(RuntimeContextManagerPy, baml_runtime::RuntimeContextManager);
+crate::lang_wrapper!(RuntimeContextManager, baml_runtime::RuntimeContextManager);
 
 #[napi]
-impl RuntimeContextManagerPy {
+impl RuntimeContextManager {
     #[napi]
     pub fn upsert_tags(&self, tags: serde_json::Value) -> napi::Result<()> {
         let tags: Result<BamlValue, serde_json::Error> = serde_json::from_value(tags);
@@ -29,7 +29,7 @@ impl RuntimeContextManagerPy {
 
     #[napi]
     pub fn deep_clone(&self) -> Self {
-        RuntimeContextManagerPy {
+        RuntimeContextManager {
             inner: self.inner.deep_clone(),
         }
     }

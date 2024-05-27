@@ -1,18 +1,18 @@
-import { FunctionResultPy, FunctionResultStreamPy, RuntimeContextManagerPy } from './native'
+import { FunctionResult, FunctionResultStream, RuntimeContextManager } from './native'
 
 export class BamlStream<PartialOutputType, FinalOutputType> {
-  private task: Promise<FunctionResultPy> | null = null
+  private task: Promise<FunctionResult> | null = null
 
-  private eventQueue: (FunctionResultPy | null)[] = []
+  private eventQueue: (FunctionResult | null)[] = []
 
   constructor(
-    private ffiStream: FunctionResultStreamPy,
-    private partialCoerce: (result: FunctionResultPy) => PartialOutputType,
-    private finalCoerce: (result: FunctionResultPy) => FinalOutputType,
-    private ctxManager: RuntimeContextManagerPy,
+    private ffiStream: FunctionResultStream,
+    private partialCoerce: (result: FunctionResult) => PartialOutputType,
+    private finalCoerce: (result: FunctionResult) => FinalOutputType,
+    private ctxManager: RuntimeContextManager,
   ) {}
 
-  private async driveToCompletion(): Promise<FunctionResultPy> {
+  private async driveToCompletion(): Promise<FunctionResult> {
     try {
       this.ffiStream.onEvent((err, data) => {
         if (err) {
@@ -29,7 +29,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
     }
   }
 
-  private driveToCompletionInBg(): Promise<FunctionResultPy> {
+  private driveToCompletionInBg(): Promise<FunctionResult> {
     if (this.task === null) {
       this.task = this.driveToCompletion()
     }

@@ -33,12 +33,12 @@ fn baml_py(_: Python<'_>, m: Bound<'_, PyModule>) -> PyResult<()> {
         eprintln!("Failed to initialize BAML logger: {:#}", e);
     };
 
-    m.add_class::<types::BamlRuntimePy>()?;
-    m.add_class::<types::FunctionResultPy>()?;
-    m.add_class::<types::FunctionResultStreamPy>()?;
+    m.add_class::<types::BamlRuntime>()?;
+    m.add_class::<types::FunctionResult>()?;
+    m.add_class::<types::FunctionResultStream>()?;
     m.add_class::<types::BamlImagePy>()?;
-    m.add_class::<types::RuntimeContextManagerPy>()?;
-    m.add_class::<types::BamlSpanPy>()?;
+    m.add_class::<types::RuntimeContextManager>()?;
+    m.add_class::<types::BamlSpan>()?;
 
     m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;
 

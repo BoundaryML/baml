@@ -6,16 +6,16 @@ import contextvars
 import functools
 import inspect
 import typing
-from .baml_py import RuntimeContextManagerPy, BamlRuntimePy, BamlSpanPy
+from .baml_py import RuntimeContextManager, BamlRuntime, BamlSpan
 import atexit
 
 F = typing.TypeVar("F", bound=typing.Callable[..., typing.Any])
 
 
 class CtxManager:
-    def __init__(self, rt: BamlRuntimePy):
+    def __init__(self, rt: BamlRuntime):
         self.rt = rt
-        self.ctx = contextvars.ContextVar[RuntimeContextManagerPy](
+        self.ctx = contextvars.ContextVar[RuntimeContextManager](
             "baml_ctx", default=rt.create_context_manager()
         )
         atexit.register(self.rt.flush)
@@ -24,24 +24,24 @@ class CtxManager:
         mngr = self.ctx.get()
         mngr.upsert_tags(tags)
 
-    def get(self) -> RuntimeContextManagerPy:
+    def get(self) -> RuntimeContextManager:
         return self.ctx.get()
 
     def start_trace_sync(
         self, name: str, args: typing.Dict[str, typing.Any]
-    ) -> BamlSpanPy:
+    ) -> BamlSpan:
         mng = self.ctx.get()
-        return BamlSpanPy.new(self.rt, name, args, mng)
+        return BamlSpan.new(self.rt, name, args, mng)
 
     def start_trace_async(
         self, name: str, args: typing.Dict[str, typing.Any]
-    ) -> BamlSpanPy:
+    ) -> BamlSpan:
         mng = self.ctx.get()
         cln = mng.deep_clone()
         self.ctx.set(cln)
-        return BamlSpanPy.new(self.rt, name, args, cln)
+        return BamlSpan.new(self.rt, name, args, cln)
 
-    async def end_trace(self, span: BamlSpanPy, response: typing.Any) -> None:
+    async def end_trace(self, span: BamlSpan, response: typing.Any) -> None:
         await span.finish(response, self.ctx.get())
 
     def trace_fn(self, func: F) -> F:

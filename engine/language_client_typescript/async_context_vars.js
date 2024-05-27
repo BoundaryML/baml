@@ -28,13 +28,13 @@ class CtxManager {
     }
     startTraceSync(name, args) {
         const mng = this.get();
-        return native_1.BamlSpanPy.new(this.rt, name, args, mng);
+        return native_1.BamlSpan.new(this.rt, name, args, mng);
     }
     startTraceAsync(name, args) {
         const mng = this.get();
         const clone = mng.deepClone();
         this.ctx.enterWith(clone);
-        return native_1.BamlSpanPy.new(this.rt, name, args, clone);
+        return native_1.BamlSpan.new(this.rt, name, args, clone);
     }
     async endTrace(span, response) {
         await span.finish(response, this.get());

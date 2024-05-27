@@ -3,18 +3,18 @@ use napi::Env;
 use napi::{JsFunction, JsObject, JsUndefined};
 use napi_derive::napi;
 
-use super::function_results::FunctionResultPy;
-use super::runtime_ctx_manager::RuntimeContextManagerPy;
+use super::function_results::FunctionResult;
+use super::runtime_ctx_manager::RuntimeContextManager;
 
 crate::lang_wrapper!(
-    FunctionResultStreamPy,
+    FunctionResultStream,
     baml_runtime::FunctionResultStream,
     no_from,
     thread_safe,
     cb: Option<napi::Ref<()>>
 );
 
-impl FunctionResultStreamPy {
+impl FunctionResultStream {
     pub(super) fn new(
         inner: baml_runtime::FunctionResultStream,
         event: Option<napi::Ref<()>>,
@@ -27,20 +27,20 @@ impl FunctionResultStreamPy {
 }
 
 #[napi]
-impl FunctionResultStreamPy {
+impl FunctionResultStream {
     #[napi]
     pub fn on_event(
         &mut self,
         env: Env,
-        #[napi(ts_arg_type = "(err: any, param: FunctionResultPy) => void")] func: JsFunction,
+        #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] func: JsFunction,
     ) -> napi::Result<JsUndefined> {
         let cb = env.create_reference(func)?;
         self.cb = Some(cb);
         env.get_undefined()
     }
 
-    #[napi(ts_return_type = "Promise<FunctionResultPy>")]
-    pub fn done(&self, env: Env, rctx: &RuntimeContextManagerPy) -> napi::Result<JsObject> {
+    #[napi(ts_return_type = "Promise<FunctionResult>")]
+    pub fn done(&self, env: Env, rctx: &RuntimeContextManager) -> napi::Result<JsObject> {
         let inner = self.inner.clone();
 
         let on_event = match &self.cb {
@@ -50,7 +50,7 @@ impl FunctionResultStreamPy {
                     &cb,
                     0,
                     |ctx: ThreadSafeCallContext<baml_runtime::FunctionResult>| {
-                        Ok(vec![FunctionResultPy::from(ctx.value)])
+                        Ok(vec![FunctionResult::from(ctx.value)])
                     },
                 )?;
 
@@ -69,7 +69,7 @@ impl FunctionResultStreamPy {
             let ctx_mng = ctx_mng;
             let res = inner.lock().await.run(on_event, &ctx_mng).await;
             res.0
-                .map(FunctionResultPy::from)
+                .map(FunctionResult::from)
                 .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
         };
 

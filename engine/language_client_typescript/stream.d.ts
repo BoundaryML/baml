@@ -1,4 +1,4 @@
-import { FunctionResultPy, FunctionResultStreamPy, RuntimeContextManagerPy } from './native';
+import { FunctionResult, FunctionResultStream, RuntimeContextManager } from './native';
 export declare class BamlStream<PartialOutputType, FinalOutputType> {
     private ffiStream;
     private partialCoerce;
@@ -6,7 +6,7 @@ export declare class BamlStream<PartialOutputType, FinalOutputType> {
     private ctxManager;
     private task;
     private eventQueue;
-    constructor(ffiStream: FunctionResultStreamPy, partialCoerce: (result: FunctionResultPy) => PartialOutputType, finalCoerce: (result: FunctionResultPy) => FinalOutputType, ctxManager: RuntimeContextManagerPy);
+    constructor(ffiStream: FunctionResultStream, partialCoerce: (result: FunctionResult) => PartialOutputType, finalCoerce: (result: FunctionResult) => FinalOutputType, ctxManager: RuntimeContextManager);
     private driveToCompletion;
     private driveToCompletionInBg;
     [Symbol.asyncIterator](): AsyncIterableIterator<PartialOutputType>;

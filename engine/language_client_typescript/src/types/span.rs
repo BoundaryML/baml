@@ -2,10 +2,10 @@ use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_types::BamlValue;
 use napi_derive::napi;
 
-use super::runtime::BamlRuntimePy;
-use super::runtime_ctx_manager::RuntimeContextManagerPy;
+use super::runtime::BamlRuntime;
+use super::runtime_ctx_manager::RuntimeContextManager;
 
-crate::lang_wrapper!(BamlSpanPy,
+crate::lang_wrapper!(BamlSpan,
   Option<baml_runtime::tracing::TracingSpan>,
   no_from,
   thread_safe,
@@ -13,13 +13,13 @@ crate::lang_wrapper!(BamlSpanPy,
 );
 
 #[napi]
-impl BamlSpanPy {
+impl BamlSpan {
     #[napi(ts_return_type = "BamlSpanPy")]
     pub fn new(
-        runtime: &BamlRuntimePy,
+        runtime: &BamlRuntime,
         function_name: String,
         args: serde_json::Value,
-        ctx: &RuntimeContextManagerPy,
+        ctx: &RuntimeContextManager,
     ) -> napi::Result<Self> {
         let args: BamlValue = serde_json::from_value(args)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
@@ -44,7 +44,7 @@ impl BamlSpanPy {
     pub async fn finish(
         &self,
         result: serde_json::Value,
-        ctx: &RuntimeContextManagerPy,
+        ctx: &RuntimeContextManager,
     ) -> napi::Result<serde_json::Value> {
         let result: BamlValue = serde_json::from_value(result)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;

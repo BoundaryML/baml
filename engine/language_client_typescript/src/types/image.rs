@@ -1,20 +1,20 @@
 use napi_derive::napi;
 use serde_json::json;
 
-crate::lang_wrapper!(BamlImagePy, baml_types::BamlImage);
+crate::lang_wrapper!(BamlImage, baml_types::BamlImage);
 
 #[napi]
-impl BamlImagePy {
+impl BamlImage {
     #[napi(factory)]
     pub fn from_url(url: String) -> Self {
-        BamlImagePy {
+        BamlImage {
             inner: baml_types::BamlImage::Url(baml_types::ImageUrl::new(url)),
         }
     }
 
     #[napi(factory)]
     pub fn from_base64(media_type: String, base64: String) -> Self {
-        BamlImagePy {
+        BamlImage {
             inner: baml_types::BamlImage::Base64(baml_types::ImageBase64::new(base64, media_type)),
         }
     }

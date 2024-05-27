@@ -4,10 +4,10 @@ use pyo3::{PyObject, Python, ToPyObject};
 use crate::parse_py_type::parse_py_type;
 use crate::BamlError;
 
-crate::lang_wrapper!(RuntimeContextManagerPy, baml_runtime::RuntimeContextManager);
+crate::lang_wrapper!(RuntimeContextManager, baml_runtime::RuntimeContextManager);
 
 #[pymethods]
-impl RuntimeContextManagerPy {
+impl RuntimeContextManager {
     #[pyo3()]
     fn upsert_tags(&self, py: Python<'_>, tags: PyObject) -> PyResult<bool> {
         let tags = parse_py_type(tags.into_bound(py).to_object(py))?;
@@ -20,7 +20,7 @@ impl RuntimeContextManagerPy {
 
     #[pyo3()]
     fn deep_clone(&self) -> Self {
-        RuntimeContextManagerPy {
+        RuntimeContextManager {
             inner: self.inner.deep_clone(),
         }
     }

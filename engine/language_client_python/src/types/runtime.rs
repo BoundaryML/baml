@@ -1,23 +1,23 @@
 use crate::parse_py_type::parse_py_type;
-use crate::types::function_results::FunctionResultPy;
+use crate::types::function_results::FunctionResult;
 use crate::BamlError;
 
-use super::function_result_stream::FunctionResultStreamPy;
-use super::runtime_ctx_manager::RuntimeContextManagerPy;
+use super::function_result_stream::FunctionResultStream;
+use super::runtime_ctx_manager::RuntimeContextManager;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
-use baml_runtime::BamlRuntime;
+use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
 use pyo3::{PyObject, Python, ToPyObject};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-crate::lang_wrapper!(BamlRuntimePy, BamlRuntime, clone_safe);
+crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe);
 
 #[pymethods]
-impl BamlRuntimePy {
+impl BamlRuntime {
     #[staticmethod]
     fn from_directory(directory: PathBuf, env_vars: HashMap<String, String>) -> PyResult<Self> {
-        Ok(BamlRuntime::from_directory(&directory, env_vars)
+        Ok(CoreBamlRuntime::from_directory(&directory, env_vars)
             .map_err(BamlError::from_anyhow)?
             .into())
     }
@@ -28,13 +28,15 @@ impl BamlRuntimePy {
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> PyResult<Self> {
-        Ok(BamlRuntime::from_file_content(&root_path, &files, env_vars)
-            .map_err(BamlError::from_anyhow)?
-            .into())
+        Ok(
+            CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
+                .map_err(BamlError::from_anyhow)?
+                .into(),
+        )
     }
 
     #[pyo3()]
-    fn create_context_manager(&self) -> RuntimeContextManagerPy {
+    fn create_context_manager(&self) -> RuntimeContextManager {
         self.inner.create_ctx_manager().into()
     }
 
@@ -45,7 +47,7 @@ impl BamlRuntimePy {
         py: Python<'_>,
         function_name: String,
         args: PyObject,
-        ctx: &RuntimeContextManagerPy,
+        ctx: &RuntimeContextManager,
     ) -> PyResult<PyObject> {
         let args = parse_py_type(args.into_bound(py).to_object(py))?;
         let Some(args_map) = args.as_map_owned() else {
@@ -64,7 +66,7 @@ impl BamlRuntimePy {
 
             result
                 .0
-                .map(FunctionResultPy::from)
+                .map(FunctionResult::from)
                 .map_err(BamlError::from_anyhow)
         })
         .map(|f| f.into())
@@ -77,8 +79,8 @@ impl BamlRuntimePy {
         function_name: String,
         args: PyObject,
         on_event: Option<PyObject>,
-        ctx: &RuntimeContextManagerPy,
-    ) -> PyResult<FunctionResultStreamPy> {
+        ctx: &RuntimeContextManager,
+    ) -> PyResult<FunctionResultStream> {
         let args = parse_py_type(args.into_bound(py).to_object(py))?;
         let Some(args_map) = args.as_map() else {
             return Err(BamlError::new_err("Failed to parse args"));
@@ -91,7 +93,7 @@ impl BamlRuntimePy {
             .stream_function(function_name, args_map, &ctx)
             .map_err(BamlError::from_anyhow)?;
 
-        Ok(FunctionResultStreamPy::new(stream, on_event))
+        Ok(FunctionResultStream::new(stream, on_event))
     }
 
     #[pyo3()]

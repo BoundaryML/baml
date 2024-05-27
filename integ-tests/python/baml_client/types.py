@@ -87,16 +87,16 @@ class TestEnum(str, Enum):
     G = "G"
 
 class Blah(BaseModel):
-    prop4: Optional[str]
+    prop4: Optional[str] = None
 
 class ClassOptionalOutput(BaseModel):
     prop1: str
     prop2: str
 
 class ClassOptionalOutput2(BaseModel):
-    prop1: Optional[str]
-    prop2: Optional[str]
-    prop3: Optional["Blah"]
+    prop1: Optional[str] = None
+    prop2: Optional[str] = None
+    prop3: Optional["Blah"] = None
 
 class ClassWithImage(BaseModel):
     myImage: baml_py.Image
@@ -108,7 +108,7 @@ class Education(BaseModel):
     location: str
     degree: str
     major: List[str]
-    graduation_date: Optional[str]
+    graduation_date: Optional[str] = None
 
 class Email(BaseModel):
     subject: str
@@ -134,14 +134,14 @@ class OptionalTest_Prop1(BaseModel):
     omega_b: int
 
 class OptionalTest_ReturnType(BaseModel):
-    omega_1: Optional["OptionalTest_Prop1"]
-    omega_2: Optional[str]
+    omega_1: Optional["OptionalTest_Prop1"] = None
+    omega_2: Optional[str] = None
     omega_3: List[Optional["OptionalTest_CategoryType"]]
 
 class OrderInfo(BaseModel):
     order_status: "OrderStatus"
-    tracking_number: Optional[str]
-    estimated_arrival_date: Optional[str]
+    tracking_number: Optional[str] = None
+    estimated_arrival_date: Optional[str] = None
 
 class RaysData(BaseModel):
     dataType: "DataType"
@@ -156,10 +156,10 @@ class Resume(BaseModel):
     skills: List[str]
 
 class SearchParams(BaseModel):
-    dateRange: Optional[int]
+    dateRange: Optional[int] = None
     location: List[str]
-    jobTitle: Optional["WithReasoning"]
-    company: Optional["WithReasoning"]
+    jobTitle: Optional["WithReasoning"] = None
+    company: Optional["WithReasoning"] = None
     description: List["WithReasoning"]
     tags: List[Union["Tag", str]]
 

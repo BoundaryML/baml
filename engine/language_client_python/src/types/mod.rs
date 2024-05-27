@@ -7,9 +7,9 @@ mod runtime;
 mod runtime_ctx_manager;
 mod span;
 
-pub use function_result_stream::FunctionResultStreamPy;
-pub use function_results::FunctionResultPy;
+pub use function_result_stream::FunctionResultStream;
+pub use function_results::FunctionResult;
 pub use image::BamlImagePy;
-pub use runtime::BamlRuntimePy;
-pub use runtime_ctx_manager::RuntimeContextManagerPy;
-pub use span::BamlSpanPy;
+pub use runtime::BamlRuntime;
+pub use runtime_ctx_manager::RuntimeContextManager;
+pub use span::BamlSpan;

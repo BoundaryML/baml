@@ -1,9 +1,9 @@
-import { BamlCtxManager, BamlRuntimePy } from '@boundaryml/baml'
+import { BamlCtxManager, BamlRuntime } from '@boundaryml/baml'
 import { BamlClient } from './client'
 import { getBamlFiles } from './inlinedbaml'
 
 
-const _DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntimePy.fromFiles(
+const _DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntime.fromFiles(
   'baml_src',
   getBamlFiles(),
   process.env

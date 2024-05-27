@@ -7,7 +7,7 @@ function FnEnumListOutput(input: string) -> EnumOutput[] {
 
     Answer:
   "#
-}
+} 
 
 test FnEnumListOutput {
   functions [FnEnumListOutput]

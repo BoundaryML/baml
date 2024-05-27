@@ -1,4 +1,4 @@
-import { BamlRuntimePy, FunctionResult, BamlCtxManager, BamlStream } from "@boundaryml/baml"
+import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream } from "@boundaryml/baml"
 import { 
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%} 
 } from "./types"
@@ -6,7 +6,7 @@ import {
 export class BamlClient {
   private stream_client: BamlStreamClient
 
-  constructor(private runtime: BamlRuntimePy, private ctx_manager: BamlCtxManager) {
+  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {
     this.stream_client = new BamlStreamClient(runtime, ctx_manager)
   }
 
@@ -35,7 +35,7 @@ export class BamlClient {
 }
 
 class BamlStreamClient {
-  constructor(private runtime: BamlRuntimePy, private ctx_manager: BamlCtxManager) {}
+  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
 
   {% for fn in funcs %}
   {{ fn.name }}(

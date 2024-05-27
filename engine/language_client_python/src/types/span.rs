@@ -5,24 +5,24 @@ use pyo3::{PyObject, Python, ToPyObject};
 use crate::parse_py_type::parse_py_type;
 use crate::BamlError;
 
-use super::runtime::BamlRuntimePy;
-use super::runtime_ctx_manager::RuntimeContextManagerPy;
+use super::runtime::BamlRuntime;
+use super::runtime_ctx_manager::RuntimeContextManager;
 
-crate::lang_wrapper!(BamlSpanPy,
+crate::lang_wrapper!(BamlSpan,
   Option<baml_runtime::tracing::TracingSpan>,
   no_from,
   rt: std::sync::Arc<baml_runtime::BamlRuntime>
 );
 
 #[pymethods]
-impl BamlSpanPy {
+impl BamlSpan {
     #[staticmethod]
     fn new(
         py: Python<'_>,
-        runtime: &BamlRuntimePy,
+        runtime: &BamlRuntime,
         function_name: &str,
         args: PyObject,
-        ctx: &RuntimeContextManagerPy,
+        ctx: &RuntimeContextManager,
     ) -> PyResult<Self> {
         let args = parse_py_type(args.into_bound(py).to_object(py))?;
         let Some(args_map) = args.as_map() else {
@@ -43,7 +43,7 @@ impl BamlSpanPy {
         &mut self,
         py: Python<'_>,
         result: PyObject,
-        ctx: &RuntimeContextManagerPy,
+        ctx: &RuntimeContextManager,
     ) -> PyResult<PyObject> {
         let result = parse_py_type(result.into_bound(py).to_object(py))?;
 

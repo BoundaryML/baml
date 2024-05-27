@@ -1,13 +1,13 @@
-import { BamlSpanPy, RuntimeContextManagerPy, BamlRuntimePy } from './native'
+import { BamlSpan, RuntimeContextManager, BamlRuntime } from './native'
 import { AsyncLocalStorage } from 'async_hooks'
 
 export class CtxManager {
-  private rt: BamlRuntimePy
-  private ctx: AsyncLocalStorage<RuntimeContextManagerPy>
+  private rt: BamlRuntime
+  private ctx: AsyncLocalStorage<RuntimeContextManager>
 
-  constructor(rt: BamlRuntimePy) {
+  constructor(rt: BamlRuntime) {
     this.rt = rt
-    this.ctx = new AsyncLocalStorage<RuntimeContextManagerPy>()
+    this.ctx = new AsyncLocalStorage<RuntimeContextManager>()
     this.ctx.enterWith(rt.createContextManager())
     process.on('exit', () => {
       this.rt.flush()
@@ -19,7 +19,7 @@ export class CtxManager {
     manager.upsertTags(tags)
   }
 
-  get(): RuntimeContextManagerPy {
+  get(): RuntimeContextManager {
     let store = this.ctx.getStore()
     if (store === undefined) {
       store = this.rt.createContextManager()
@@ -28,19 +28,19 @@ export class CtxManager {
     return store
   }
 
-  startTraceSync(name: string, args: Record<string, any>): BamlSpanPy {
+  startTraceSync(name: string, args: Record<string, any>): BamlSpan {
     const mng = this.get()
-    return BamlSpanPy.new(this.rt, name, args, mng)
+    return BamlSpan.new(this.rt, name, args, mng)
   }
 
-  startTraceAsync(name: string, args: Record<string, any>): BamlSpanPy {
+  startTraceAsync(name: string, args: Record<string, any>): BamlSpan {
     const mng = this.get()
     const clone = mng.deepClone()
     this.ctx.enterWith(clone)
-    return BamlSpanPy.new(this.rt, name, args, clone)
+    return BamlSpan.new(this.rt, name, args, clone)
   }
 
-  async endTrace(span: BamlSpanPy, response: any): Promise<void> {
+  async endTrace(span: BamlSpan, response: any): Promise<void> {
     await span.finish(response, this.get())
   }
 

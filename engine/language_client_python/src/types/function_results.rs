@@ -3,10 +3,10 @@ use pyo3::prelude::{pymethods, PyResult};
 use pyo3::{PyObject, Python};
 use pythonize::pythonize;
 
-crate::lang_wrapper!(FunctionResultPy, baml_runtime::FunctionResult);
+crate::lang_wrapper!(FunctionResult, baml_runtime::FunctionResult);
 
 #[pymethods]
-impl FunctionResultPy {
+impl FunctionResult {
     fn __str__(&self) -> String {
         format!("{:#}", self.inner)
     }

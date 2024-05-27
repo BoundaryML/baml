@@ -20,6 +20,8 @@ test TestClass {
   }
 }
 
+ 
+
 class TestOutputClassNested {
   prop1 string
   prop2 int

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use log::log;
 
 use super::python_language_features::ToPython;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType};
@@ -17,6 +18,7 @@ struct PythonEnum<'ir> {
 
 struct PythonClass<'ir> {
     name: &'ir str,
+    // the name, and the type of the field
     fields: Vec<(&'ir str, String)>,
 }
 
@@ -29,6 +31,7 @@ pub(crate) struct PythonStreamTypes<'ir> {
 /// The Python class corresponding to Partial<TypeDefinedInBaml>
 struct PartialPythonClass<'ir> {
     name: &'ir str,
+    // the name, and the type of the field
     fields: Vec<(&'ir str, String)>,
 }
 
@@ -69,7 +72,12 @@ impl<'ir> From<ClassWalker<'ir>> for PythonClass<'ir> {
                 .elem
                 .static_fields
                 .iter()
-                .map(|f| (f.elem.name.as_str(), f.elem.r#type.elem.to_type_ref()))
+                .map(|f| {
+                    (
+                        f.elem.name.as_str(),
+                        add_default_value(&f.elem.r#type.elem, &f.elem.r#type.elem.to_type_ref()),
+                    )
+                })
                 .collect(),
         }
     }
@@ -100,11 +108,25 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
                 .map(|f| {
                     (
                         f.elem.name.as_str(),
-                        f.elem.r#type.elem.to_partial_type_ref(),
+                        add_default_value(
+                            &f.elem.r#type.elem,
+                            &f.elem.r#type.elem.to_partial_type_ref(),
+                        ),
                     )
                 })
                 .collect(),
         }
+    }
+}
+
+pub fn add_default_value(
+    node: &internal_baml_core::ir::repr::FieldType,
+    type_str: &String,
+) -> String {
+    if type_str.starts_with("Optional[") {
+        return format!("{} = None", type_str);
+    } else {
+        return type_str.clone();
     }
 }
 

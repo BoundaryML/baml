@@ -1,8 +1,8 @@
-use super::function_result_stream::FunctionResultStreamPy;
-use super::runtime_ctx_manager::RuntimeContextManagerPy;
-use crate::types::function_results::FunctionResultPy;
+use super::function_result_stream::FunctionResultStream;
+use super::runtime_ctx_manager::RuntimeContextManager;
+use crate::types::function_results::FunctionResult;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
-use baml_runtime::BamlRuntime;
+use baml_runtime::BamlRuntime as CoreRuntime;
 use baml_types::BamlValue;
 use napi::Env;
 use napi::JsFunction;
@@ -10,34 +10,34 @@ use napi_derive::napi;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-crate::lang_wrapper!(BamlRuntimePy, BamlRuntime, clone_safe);
+crate::lang_wrapper!(BamlRuntime, CoreRuntime, clone_safe);
 
 #[napi]
-impl BamlRuntimePy {
-    #[napi(ts_return_type = "BamlRuntimePy")]
+impl BamlRuntime {
+    #[napi(ts_return_type = "BamlRuntimeTs")]
     pub fn from_directory(
         directory: String,
         env_vars: HashMap<String, String>,
     ) -> napi::Result<Self> {
         let directory = PathBuf::from(directory);
-        Ok(BamlRuntime::from_directory(&directory, env_vars)
+        Ok(CoreRuntime::from_directory(&directory, env_vars)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?
             .into())
     }
 
-    #[napi(ts_return_type = "BamlRuntimePy")]
+    #[napi(ts_return_type = "BamlRuntimeTs")]
     pub fn from_files(
         root_path: String,
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> napi::Result<Self> {
-        Ok(BamlRuntime::from_file_content(&root_path, &files, env_vars)
+        Ok(CoreRuntime::from_file_content(&root_path, &files, env_vars)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?
             .into())
     }
 
     #[napi]
-    pub fn create_context_manager(&self) -> RuntimeContextManagerPy {
+    pub fn create_context_manager(&self) -> RuntimeContextManager {
         self.inner.create_ctx_manager().into()
     }
 
@@ -46,8 +46,8 @@ impl BamlRuntimePy {
         &self,
         function_name: String,
         args: serde_json::Value,
-        ctx: &RuntimeContextManagerPy,
-    ) -> napi::Result<FunctionResultPy> {
+        ctx: &RuntimeContextManager,
+    ) -> napi::Result<FunctionResult> {
         let args: BamlValue = serde_json::from_value(args)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
         let Some(args_map) = args.as_map() else {
@@ -69,7 +69,7 @@ impl BamlRuntimePy {
 
         result
             .0
-            .map(FunctionResultPy::from)
+            .map(FunctionResult::from)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
     }
 
@@ -80,8 +80,8 @@ impl BamlRuntimePy {
         function_name: String,
         args: serde_json::Value,
         #[napi(ts_arg_type = "(err: any, param: FunctionResultPy) => void")] cb: Option<JsFunction>,
-        ctx: &RuntimeContextManagerPy,
-    ) -> napi::Result<FunctionResultStreamPy> {
+        ctx: &RuntimeContextManager,
+    ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = serde_json::from_value(args)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
         let Some(args_map) = args.as_map() else {
@@ -102,7 +102,7 @@ impl BamlRuntimePy {
             None => None,
         };
 
-        Ok(FunctionResultStreamPy::new(stream, cb))
+        Ok(FunctionResultStream::new(stream, cb))
     }
 
     #[napi]

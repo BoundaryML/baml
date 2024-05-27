@@ -3,16 +3,16 @@ use pyo3::{PyObject, PyRefMut, Python};
 
 use crate::BamlError;
 
-use super::function_results::FunctionResultPy;
-use super::runtime_ctx_manager::RuntimeContextManagerPy;
+use super::function_results::FunctionResult;
+use super::runtime_ctx_manager::RuntimeContextManager;
 
 crate::lang_wrapper!(
-    FunctionResultStreamPy,
+    FunctionResultStream,
     baml_runtime::FunctionResultStream, thread_safe,
     on_event: Option<PyObject>
 );
 
-impl FunctionResultStreamPy {
+impl FunctionResultStream {
     pub(super) fn new(inner: baml_runtime::FunctionResultStream, event: Option<PyObject>) -> Self {
         Self {
             inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),
@@ -22,7 +22,7 @@ impl FunctionResultStreamPy {
 }
 
 #[pymethods]
-impl FunctionResultStreamPy {
+impl FunctionResultStream {
     fn __str__(&self) -> String {
         format!("FunctionResultStream")
     }
@@ -40,13 +40,13 @@ impl FunctionResultStreamPy {
         slf
     }
 
-    fn done(&self, py: Python<'_>, ctx: &RuntimeContextManagerPy) -> PyResult<PyObject> {
+    fn done(&self, py: Python<'_>, ctx: &RuntimeContextManager) -> PyResult<PyObject> {
         let inner = self.inner.clone();
 
         let on_event = self.on_event.as_ref().map(|cb| {
             let cb = cb.clone_ref(py);
             move |event| {
-                let partial = FunctionResultPy::from(event);
+                let partial = FunctionResult::from(event);
                 let res = Python::with_gil(|py| cb.call1(py, (partial,))).map(|_| ());
                 if let Err(e) = res {
                     log::error!("Error calling on_event callback: {:?}", e);
@@ -60,7 +60,7 @@ impl FunctionResultStreamPy {
             let ctx_mng = ctx_mng;
             let mut locked = inner.lock().await;
             let (res, _) = locked.run(on_event, &ctx_mng).await;
-            res.map(FunctionResultPy::from)
+            res.map(FunctionResult::from)
                 .map_err(BamlError::from_anyhow)
         })
         .map(|f| f.into())
