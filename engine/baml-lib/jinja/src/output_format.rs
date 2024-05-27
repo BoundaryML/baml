@@ -1,83 +1,90 @@
-use crate::callable_jinja::CallableJinja;
 use minijinja::{value::Kwargs, ErrorKind, Value};
 
-#[derive(Debug, Clone)]
-pub(crate) struct OutputFormat {
+use crate::RenderContext;
+
+#[derive(Debug)]
+pub struct OutputFormat {
     text: String,
 }
 
-// DO NOT CHANGE THIS w/o adding versioning.
-pub(crate) const DEFAULT_PREFIX: &str = "OUTPUT_JSON_SCHEMA:\n";
-
 impl OutputFormat {
-    pub(crate) fn new(text: String) -> OutputFormat {
-        OutputFormat { text }
-    }
-
-    pub(crate) fn render(&self, mode: OutputFormatMode) -> String {
-        match mode {
-            OutputFormatMode::WithPrefix(prefix) => {
-                format!(
-                    "{}{}",
-                    prefix.as_deref().unwrap_or(DEFAULT_PREFIX),
-                    self.text
-                )
-            }
-            OutputFormatMode::WithoutPrefix => self.text.clone(),
+    pub fn new(ctx: &RenderContext) -> Self {
+        Self {
+            text: ctx.output_format.clone(),
         }
     }
 }
 
-pub(crate) enum OutputFormatMode {
-    WithPrefix(Option<String>),
-    WithoutPrefix,
+impl std::fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Answer in JSON using this schema:\n{}", self.text)
+    }
 }
 
-impl CallableJinja for OutputFormat {
-    type Params = OutputFormatMode;
-
-    fn params(&self) -> &[&'static str] {
-        &["prefix"]
-    }
-
-    fn parse_args(
+impl minijinja::value::Object for OutputFormat {
+    fn call(
         &self,
-        _state: &minijinja::State,
-        args: &[Value],
-        kwargs: &mut Kwargs,
-    ) -> Result<Self::Params, minijinja::Error> {
+        _state: &minijinja::State<'_, '_>,
+        args: &[minijinja::value::Value],
+    ) -> Result<minijinja::value::Value, minijinja::Error> {
+        use minijinja::{
+            value::{from_args, ValueKind},
+            Error,
+        };
+
+        let (args, kwargs): (&[Value], Kwargs) = from_args(args)?;
         if !args.is_empty() {
-            return Err(minijinja::Error::new(
+            return Err(Error::new(
                 ErrorKind::TooManyArguments,
-                format!("may only be called with named arguments"),
+                format!("output_format() may only be called with named arguments"),
             ));
         }
 
-        match kwargs.get::<Value>("prefix") {
-            Ok(prefix) => {
-                if prefix.is_none() || prefix.is_undefined() {
-                    Ok(OutputFormatMode::WithoutPrefix)
-                } else if let Some(prefix) = prefix.as_str() {
-                    Ok(OutputFormatMode::WithPrefix(Some(prefix.to_string())))
-                } else {
-                    Err(minijinja::Error::new(
-                        ErrorKind::TooManyArguments,
-                        format!(
-                            "expected 'prefix' to be string or none, but was type '{}'",
-                            prefix.kind()
-                        ),
-                    ))
-                }
+        let Ok(prefix) = kwargs.get::<Value>("prefix") else {
+            // prefix was not specified, defaults to "Use this output format:"
+            return Ok(Value::from_safe_string(format!("{}", self)));
+        };
+
+        let Ok(_) = kwargs.assert_all_used() else {
+            return Err(Error::new(
+                ErrorKind::TooManyArguments,
+                "output_format() got an unexpected keyword argument (only 'prefix' is allowed)",
+            ));
+        };
+
+        match prefix.kind() {
+            ValueKind::Undefined | ValueKind::None => {
+                // prefix specified as none appears to result in ValueKind::Undefined
+                return Ok(Value::from_safe_string(self.text.to_string()));
             }
-            Err(_) => Ok(OutputFormatMode::WithPrefix(None)),
+            // prefix specified as a string
+            ValueKind::String => {
+                return Ok(Value::from_safe_string(format!(
+                    "{}\n{}",
+                    prefix.to_string(),
+                    self.text
+                )));
+            }
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::TooManyArguments,
+                    format!(
+                        "output_format() expected 'prefix' to be string or none, but was type '{}'",
+                        prefix.kind()
+                    ),
+                ));
+            }
         }
     }
-
-    fn call(
+    fn call_method(
         &self,
-        _state: &minijinja::State,
-        mode: Self::Params,
-    ) -> Result<Value, minijinja::Error> {
-        Ok(Value::from_safe_string(self.render(mode)))
+        _state: &minijinja::State<'_, '_>,
+        name: &str,
+        _args: &[minijinja::value::Value],
+    ) -> Result<minijinja::value::Value, minijinja::Error> {
+        Err(minijinja::Error::new(
+            ErrorKind::UnknownMethod,
+            format!("output_format has no callable attribute '{}'", name),
+        ))
     }
 }

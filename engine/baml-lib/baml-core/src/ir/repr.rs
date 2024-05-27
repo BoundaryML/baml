@@ -819,9 +819,6 @@ pub struct FunctionV2 {
 #[derive(serde::Serialize, Debug)]
 pub struct FunctionConfig {
     pub name: String,
-    // TODO: We technically have alll the information given output type
-    // and we should derive this each time.
-    pub output_format: String,
     pub prompt_template: String,
     #[serde(skip)]
     pub prompt_span: ast::Span,
@@ -1059,9 +1056,6 @@ impl WithRepr<FunctionV2> for FunctionWalker<'_> {
             }?,
             configs: vec![FunctionConfig {
                 name: "default_config".to_string(),
-                output_format: self
-                    .output_format(self.db, self.identifier().span())
-                    .unwrap_or("{{{ Unable to generate ctx.output_format }}}".into()),
                 prompt_template: self.jinja_prompt().to_string(),
                 prompt_span: self.ast_function().span().clone(),
                 client: self

@@ -4,7 +4,9 @@ use napi::{JsFunction, JsObject, JsUndefined};
 use napi_derive::napi;
 
 use super::function_results::FunctionResult;
+use super::runtime::BamlRuntime;
 use super::runtime_ctx_manager::RuntimeContextManager;
+use baml_runtime::InternalRuntimeInterface;
 
 crate::lang_wrapper!(
     FunctionResultStream,
@@ -39,8 +41,13 @@ impl FunctionResultStream {
         env.get_undefined()
     }
 
-    #[napi(ts_return_type = "Promise<FunctionResult>")]
-    pub fn done(&self, env: Env, rctx: &RuntimeContextManager) -> napi::Result<JsObject> {
+    #[napi(ts_return_type = "Promise<FunctionResultPy>")]
+    pub fn done(
+        &self,
+        env: Env,
+        rt: &BamlRuntime,
+        rctx: &RuntimeContextManager,
+    ) -> napi::Result<JsObject> {
         let inner = self.inner.clone();
 
         let on_event = match &self.cb {
@@ -65,9 +72,14 @@ impl FunctionResultStream {
         };
 
         let ctx_mng = rctx.inner.clone();
+        let rt = rt.inner.clone();
         let fut = async move {
             let ctx_mng = ctx_mng;
-            let res = inner.lock().await.run(on_event, &ctx_mng).await;
+            let res = inner
+                .lock()
+                .await
+                .run(rt.internal().ir(), on_event, &ctx_mng)
+                .await;
             res.0
                 .map(FunctionResult::from)
                 .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))

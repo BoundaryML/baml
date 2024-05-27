@@ -2,6 +2,7 @@ use baml_types::{BamlImage, BamlValue};
 use colored::*;
 mod evaluate_type;
 mod get_vars;
+mod output_format;
 
 use evaluate_type::get_variable_types;
 pub use evaluate_type::{PredefinedTypes, Type, TypeError};
@@ -10,6 +11,8 @@ use minijinja::{self, value::Kwargs};
 use minijinja::{context, ErrorKind, Value};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use crate::output_format::OutputFormat;
 
 fn get_env<'a>() -> minijinja::Environment<'a> {
     let mut env = minijinja::Environment::new();
@@ -75,7 +78,7 @@ pub struct RenderContext_Client {
 pub struct RenderContext {
     pub client: RenderContext_Client,
     pub output_format: String,
-    pub env: HashMap<String, String>,
+    pub tags: HashMap<String, BamlValue>,
 }
 
 pub struct TemplateStringMacro {
@@ -86,85 +89,6 @@ pub struct TemplateStringMacro {
 
 const MAGIC_CHAT_ROLE_DELIMITER: &'static str = "BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER";
 const MAGIC_IMAGE_DELIMITER: &'static str = "BAML_IMAGE_MAGIC_STRING_DELIMITER";
-
-#[derive(Debug)]
-struct OutputFormat {
-    text: String,
-}
-
-impl std::fmt::Display for OutputFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Answer in JSON using this schema:\n{}", self.text)
-    }
-}
-
-impl minijinja::value::Object for OutputFormat {
-    fn call(
-        &self,
-        _state: &minijinja::State<'_, '_>,
-        args: &[minijinja::value::Value],
-    ) -> Result<minijinja::value::Value, minijinja::Error> {
-        use minijinja::{
-            value::{from_args, ValueKind},
-            Error,
-        };
-
-        let (args, kwargs): (&[Value], Kwargs) = from_args(args)?;
-        if !args.is_empty() {
-            return Err(Error::new(
-                ErrorKind::TooManyArguments,
-                format!("output_format() may only be called with named arguments"),
-            ));
-        }
-
-        let Ok(prefix) = kwargs.get::<Value>("prefix") else {
-            // prefix was not specified, defaults to "Use this output format:"
-            return Ok(Value::from_safe_string(format!("{}", self)));
-        };
-
-        let Ok(_) = kwargs.assert_all_used() else {
-            return Err(Error::new(
-                ErrorKind::TooManyArguments,
-                "output_format() got an unexpected keyword argument (only 'prefix' is allowed)",
-            ));
-        };
-
-        match prefix.kind() {
-            ValueKind::Undefined | ValueKind::None => {
-                // prefix specified as none appears to result in ValueKind::Undefined
-                return Ok(Value::from_safe_string(self.text.clone()));
-            }
-            // prefix specified as a string
-            ValueKind::String => {
-                return Ok(Value::from_safe_string(format!(
-                    "{}\n{}",
-                    prefix.to_string(),
-                    self.text
-                )));
-            }
-            _ => {
-                return Err(Error::new(
-                    ErrorKind::TooManyArguments,
-                    format!(
-                        "output_format() expected 'prefix' to be string or none, but was type '{}'",
-                        prefix.kind()
-                    ),
-                ));
-            }
-        }
-    }
-    fn call_method(
-        &self,
-        _state: &minijinja::State<'_, '_>,
-        name: &str,
-        _args: &[minijinja::value::Value],
-    ) -> Result<minijinja::value::Value, minijinja::Error> {
-        Err(minijinja::Error::new(
-            ErrorKind::UnknownMethod,
-            format!("output_format has no callable attribute '{}'", name),
-        ))
-    }
-}
 
 fn render_minijinja(
     template: &str,
@@ -213,12 +137,13 @@ fn render_minijinja(
         .join("\n");
 
     env.add_template("prompt", &template)?;
+    let formatter = OutputFormat::new(ctx);
     env.add_global(
         "ctx",
         context! {
             client => ctx.client,
-            env => ctx.env,
-            output_format => minijinja::value::Value::from_object(OutputFormat{ text: ctx.output_format.clone() }),
+            tags => ctx.tags,
+            output_format => minijinja::value::Value::from_object(formatter),
         },
     );
 
@@ -538,7 +463,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -581,7 +506,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -621,7 +546,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -661,7 +586,7 @@ mod render_tests {
                     and also outputs this word 4 times
                     after giving a response: {{ haiku_subject }}
                     
-                    {{ _.chat(ctx.env.ROLE) }}
+                    {{ _.chat(ctx.tags['ROLE']) }}
                     
                     Tell me a haiku about {{ haiku_subject }}. {{ ctx.output_format }}
 
@@ -675,7 +600,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -740,7 +665,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -779,7 +704,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -812,7 +737,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -845,7 +770,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -876,7 +801,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -926,7 +851,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         );
@@ -975,7 +900,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -1035,7 +960,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -1077,7 +1002,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                 },
                 output_format: "output[]".to_string(),
-                env: HashMap::new(),
+                tags: HashMap::new(),
             },
             &vec![],
         );

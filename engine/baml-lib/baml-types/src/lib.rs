@@ -94,6 +94,13 @@ impl BamlValue {
         }
     }
 
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            BamlValue::String(s) => Some(s),
+            _ => None,
+        }
+    }
+
     pub fn as_map(&self) -> Option<&BamlMap<String, BamlValue>> {
         match self {
             BamlValue::Map(m) => Some(m),

@@ -101,6 +101,14 @@ impl<'a> Walker<'a, &'a Enum> {
         &self.elem().name
     }
 
+    pub fn alias(&self, env_values: &HashMap<String, String>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .get("alias")
+            .map(|v| v.as_string_value(env_values))
+            .transpose()
+    }
+
     pub fn walk_values(&'a self) -> impl Iterator<Item = Walker<'a, &'a EnumValue>> {
         self.item.elem.values.iter().map(|v| Walker {
             db: self.db,
@@ -128,6 +136,22 @@ impl<'a> Walker<'a, &'a EnumValue> {
 
     pub fn name(&self) -> &str {
         &self.item.elem.0
+    }
+
+    pub fn alias(&self, env_values: &HashMap<String, String>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .get("alias")
+            .map(|v| v.as_string_value(env_values))
+            .transpose()
+    }
+
+    pub fn description(&self, env_values: &HashMap<String, String>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .get("description")
+            .map(|v| v.as_string_value(env_values))
+            .transpose()
     }
 
     pub fn valid_values(&self, env_values: &HashMap<String, String>) -> Result<Vec<String>> {
@@ -286,6 +310,14 @@ impl<'a> Walker<'a, &'a Class> {
         &self.elem().name
     }
 
+    pub fn alias(&self, env_values: &HashMap<String, String>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .get("alias")
+            .map(|v| v.as_string_value(env_values))
+            .transpose()
+    }
+
     pub fn walk_fields(&'a self) -> impl Iterator<Item = Walker<'a, &'a Field>> {
         self.item.elem.static_fields.iter().map(|f| Walker {
             db: self.db,
@@ -369,12 +401,28 @@ impl<'a> Walker<'a, &'a Field> {
         &self.elem().name
     }
 
-    pub fn r#type(&self) -> &repr::FieldType {
+    pub fn r#type(&'a self) -> &'a repr::FieldType {
         &self.elem().r#type.elem
     }
 
     pub fn elem(&self) -> &'a repr::Field {
         &self.item.elem
+    }
+
+    pub fn alias(&self, env_values: &HashMap<String, String>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .get("alias")
+            .map(|v| v.as_string_value(env_values))
+            .transpose()
+    }
+
+    pub fn description(&self, env_values: &HashMap<String, String>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .get("description")
+            .map(|v| v.as_string_value(env_values))
+            .transpose()
     }
 
     pub fn valid_names(&self, env_values: &HashMap<String, String>) -> Result<Vec<String>> {
