@@ -184,7 +184,13 @@ pub fn parse_py_type(any: PyObject) -> PyResult<BamlValue> {
             } else if t.is_subclass(&base_model).unwrap_or(false) {
                 let name = t
                     .name()
-                    .map(|n| n.to_string())
+                    .map(|n| {
+                        if let Some(x) = n.rfind("baml_client.types.") {
+                            n[x + "baml_client.types.".len()..].to_string()
+                        } else {
+                            n.to_string()
+                        }
+                    })
                     .unwrap_or("<UnnamedBaseModel>".to_string());
                 let fields = match t
                     .getattr("model_fields")?

@@ -40,8 +40,7 @@ impl BamlRuntime {
         self.inner.create_ctx_manager().into()
     }
 
-    /// TODO: ctx should be optional
-    #[pyo3(signature = (function_name, args, *, ctx))]
+    #[pyo3(signature = (function_name, args, ctx))]
     fn call_function(
         &self,
         py: Python<'_>,
@@ -49,6 +48,11 @@ impl BamlRuntime {
         args: PyObject,
         ctx: &RuntimeContextManager,
     ) -> PyResult<PyObject> {
+        log::info!(
+            "pyo3 call_function called with: {} {:#?}",
+            function_name,
+            args
+        );
         let args = parse_py_type(args.into_bound(py).to_object(py))?;
         let Some(args_map) = args.as_map_owned() else {
             return Err(BamlError::new_err("Failed to parse args"));

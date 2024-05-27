@@ -380,9 +380,13 @@ impl ToLogSchema for FunctionResult {
             root_event_id: event_chain.first().map(|s| s.span_id).unwrap().to_string(),
             event_id: event_chain.last().map(|s| s.span_id).unwrap().to_string(),
             // Second to last element in the event chain
-            parent_event_id: event_chain
-                .get(event_chain.len() - 2)
-                .map(|s| s.span_id.to_string()),
+            parent_event_id: if event_chain.len() >= 2 {
+                event_chain
+                    .get(event_chain.len() - 2)
+                    .map(|s| s.span_id.to_string())
+            } else {
+                None
+            },
             context: (api, event_chain, tags, &span).into(),
             io: IO {
                 input: Some((&span.params).into()),

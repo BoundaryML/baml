@@ -50,7 +50,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     {% endfor %}
 
 class BamlStreamClient:
