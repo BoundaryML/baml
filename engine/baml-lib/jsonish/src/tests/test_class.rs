@@ -295,3 +295,24 @@ test_partial_deserializer!(
         "skills": []
     }
 );
+
+test_partial_deserializer!(
+    test_resume_partial_2,
+    NEST_CLASS_WITH_LIST,
+    r#"{
+        "experience": [
+            "Senior Minister of Singapore since 2024",
+            "Prime Minister of Singapore from 2004 to "#,
+    FieldType::Class("Resume".to_string()),
+    {
+        "name": null,
+        "email": null,
+        "phone": null,
+        "experience": [
+            "Senior Minister of Singapore since 2024",
+            "Prime Minister of Singapore from 2004 to "
+        ],
+        "education": [],
+        "skills": []
+    }
+);
