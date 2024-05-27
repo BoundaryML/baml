@@ -13,6 +13,10 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             "anthropic",
             "baml-ollama-chat",
             "ollama",
+            "baml-round-robin",
+            "round-robin",
+            "baml-fallback",
+            "fallback",
         ];
 
         let suggestions: Vec<&str> = allowed_providers

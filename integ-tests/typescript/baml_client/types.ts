@@ -50,18 +50,7 @@ export enum EnumInClass {
   TWO = "TWO",
 }
 
-export enum EnumInClass2 {
-  ONE = "ONE",
-  TWO = "TWO",
-}
-
 export enum EnumOutput {
-  ONE = "ONE",
-  TWO = "TWO",
-  THREE = "THREE",
-}
-
-export enum EnumOutput2 {
   ONE = "ONE",
   TWO = "TWO",
   THREE = "THREE",
@@ -72,17 +61,7 @@ export enum NamedArgsSingleEnum {
   TWO = "TWO",
 }
 
-export enum NamedArgsSingleEnum2 {
-  ONE = "ONE",
-  TWO = "TWO",
-}
-
 export enum NamedArgsSingleEnumList {
-  ONE = "ONE",
-  TWO = "TWO",
-}
-
-export enum NamedArgsSingleEnumList2 {
   ONE = "ONE",
   TWO = "TWO",
 }
@@ -93,22 +72,11 @@ export enum OptionalTest_CategoryType {
   Gamma = "Gamma",
 }
 
-export enum OptionalTest_CategoryTypev2 {
-  Aleph = "Aleph",
-  Beta = "Beta",
-  Gamma = "Gamma",
-}
-
 export enum OrderStatus {
   ORDERED = "ORDERED",
   SHIPPED = "SHIPPED",
   DELIVERED = "DELIVERED",
   CANCELLED = "CANCELLED",
-}
-
-export enum OverrideEnum {
-  ONE = "ONE",
-  TWO = "TWO",
 }
 
 export enum Tag {
@@ -131,15 +99,6 @@ export interface Blah {
   prop4: string | null
 }
 
-export interface Blah2 {
-  prop4: string | null
-}
-
-export interface ClassOptionalFieldsv2 {
-  prop1: string | null
-  prop2: string | null
-}
-
 export interface ClassOptionalOutput {
   prop1: string
   prop2: string
@@ -149,12 +108,6 @@ export interface ClassOptionalOutput2 {
   prop1: string | null
   prop2: string | null
   prop3: Blah | null
-}
-
-export interface ClassOptionalOutput2v2 {
-  prop1: string | null
-  prop2: string | null
-  prop3: Blah2 | null
 }
 
 export interface ClassWithImage {
@@ -194,29 +147,7 @@ export interface NamedArgsSingleClass {
   key_three: number
 }
 
-export interface NamedArgsSingleClass2 {
-  key: string
-  key_two: boolean
-  key_three: number
-}
-
-export interface NamedArgsSingleClassList2 {
-  key: string
-  key_two: boolean
-  key_three: number
-}
-
-export interface OptionalClassv2 {
-  prop1: string
-  prop2: string
-}
-
 export interface OptionalTest_Prop1 {
-  omega_a: string
-  omega_b: number
-}
-
-export interface OptionalTest_Prop1v2 {
   omega_a: string
   omega_b: number
 }
@@ -227,21 +158,10 @@ export interface OptionalTest_ReturnType {
   omega_3: (OptionalTest_CategoryType | null)[]
 }
 
-export interface OptionalTest_ReturnTypev2 {
-  omega_1: OptionalTest_Prop1v2 | null
-  omega_2: string | null
-  omega_3: (OptionalTest_CategoryTypev2 | null)[]
-}
-
 export interface OrderInfo {
   order_status: OrderStatus
   tracking_number: string | null
   estimated_arrival_date: string | null
-}
-
-export interface OverrideClass {
-  prop1: string
-  prop2: string
 }
 
 export interface RaysData {
@@ -280,28 +200,12 @@ export interface TestClassWithEnum {
   prop2: EnumInClass
 }
 
-export interface TestClassWithEnum2 {
-  prop1: string
-  prop2: EnumInClass
-}
-
 export interface TestOutputClass {
   prop1: string
   prop2: number
 }
 
-export interface TestOutputClass2 {
-  prop1: string
-  prop2: number
-}
-
 export interface UnionTest_ReturnType {
-  prop1: string | boolean
-  prop2: (number | boolean)[]
-  prop3: number[] | boolean[]
-}
-
-export interface UnionTest_ReturnTypev2 {
   prop1: string | boolean
   prop2: (number | boolean)[]
   prop3: number[] | boolean[]

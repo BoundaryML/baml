@@ -31,13 +31,6 @@ from . import types
 class Blah(BaseModel):
     prop4: Optional[str]
 
-class Blah2(BaseModel):
-    prop4: Optional[str]
-
-class ClassOptionalFieldsv2(BaseModel):
-    prop1: Optional[str]
-    prop2: Optional[str]
-
 class ClassOptionalOutput(BaseModel):
     prop1: Optional[str]
     prop2: Optional[str]
@@ -46,11 +39,6 @@ class ClassOptionalOutput2(BaseModel):
     prop1: Optional[str]
     prop2: Optional[str]
     prop3: "Blah"
-
-class ClassOptionalOutput2v2(BaseModel):
-    prop1: Optional[str]
-    prop2: Optional[str]
-    prop3: "Blah2"
 
 class ClassWithImage(BaseModel):
     myImage: Optional[baml_py.Image]
@@ -83,25 +71,7 @@ class NamedArgsSingleClass(BaseModel):
     key_two: Optional[bool]
     key_three: Optional[int]
 
-class NamedArgsSingleClass2(BaseModel):
-    key: Optional[str]
-    key_two: Optional[bool]
-    key_three: Optional[int]
-
-class NamedArgsSingleClassList2(BaseModel):
-    key: Optional[str]
-    key_two: Optional[bool]
-    key_three: Optional[int]
-
-class OptionalClassv2(BaseModel):
-    prop1: Optional[str]
-    prop2: Optional[str]
-
 class OptionalTest_Prop1(BaseModel):
-    omega_a: Optional[str]
-    omega_b: Optional[int]
-
-class OptionalTest_Prop1v2(BaseModel):
     omega_a: Optional[str]
     omega_b: Optional[int]
 
@@ -110,19 +80,10 @@ class OptionalTest_ReturnType(BaseModel):
     omega_2: Optional[str]
     omega_3: List[Optional[types.OptionalTest_CategoryType]]
 
-class OptionalTest_ReturnTypev2(BaseModel):
-    omega_1: "OptionalTest_Prop1v2"
-    omega_2: Optional[str]
-    omega_3: List[Optional[types.OptionalTest_CategoryTypev2]]
-
 class OrderInfo(BaseModel):
     order_status: Optional[types.OrderStatus]
     tracking_number: Optional[str]
     estimated_arrival_date: Optional[str]
-
-class OverrideClass(BaseModel):
-    prop1: Optional[str]
-    prop2: Optional[str]
 
 class RaysData(BaseModel):
     dataType: Optional[types.DataType]
@@ -155,24 +116,11 @@ class TestClassWithEnum(BaseModel):
     prop1: Optional[str]
     prop2: Optional[types.EnumInClass]
 
-class TestClassWithEnum2(BaseModel):
-    prop1: Optional[str]
-    prop2: Optional[types.EnumInClass]
-
 class TestOutputClass(BaseModel):
     prop1: Optional[str]
     prop2: Optional[int]
 
-class TestOutputClass2(BaseModel):
-    prop1: Optional[str]
-    prop2: Optional[int]
-
 class UnionTest_ReturnType(BaseModel):
-    prop1: Optional[Union[Optional[str], Optional[bool]]]
-    prop2: List[Optional[Union[Optional[float], Optional[bool]]]]
-    prop3: Optional[Union[List[Optional[float]], List[Optional[bool]]]]
-
-class UnionTest_ReturnTypev2(BaseModel):
     prop1: Optional[Union[Optional[str], Optional[bool]]]
     prop2: List[Optional[Union[Optional[float], Optional[bool]]]]
     prop3: Optional[Union[List[Optional[float]], List[Optional[bool]]]]

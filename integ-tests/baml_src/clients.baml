@@ -92,7 +92,7 @@ client<llm> Resilient_ComplexSyntax {
     ]
   }
 }
-
+ 
 client<llm> Lottery_SimpleSyntax {
   provider baml-round-robin
   options {
@@ -115,6 +115,6 @@ client<llm> Lottery_ComplexSyntax {
       {
         client Claude
       }
-    ]
+    ] 
   }
 }
