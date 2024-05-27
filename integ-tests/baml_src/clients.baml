@@ -46,7 +46,19 @@ client<llm> GPT35 {
     model "gpt-3.5-turbo"
     api_key env.OPENAI_API_KEY
   }
-}  
+}
+
+client<llm> GPT35Azure {
+  provider azure-openai
+  options {
+    resource_name "west-us-azure-baml"
+    deployment_id "gpt-35-turbo-default"
+    // base_url "https://west-us-azure-baml.openai.azure.com/openai/deployments/gpt-35-turbo-default"
+    api_version "2024-02-01"
+    api_key env.AZURE_OPENAI_API_KEY
+  }
+}
+
 
 client<llm> Claude {
   provider baml-anthropic-chat
