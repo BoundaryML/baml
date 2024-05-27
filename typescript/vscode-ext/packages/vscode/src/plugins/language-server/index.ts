@@ -455,7 +455,7 @@ const plugin: BamlVSCodePlugin = {
       context.subscriptions.push(telemetry)
       await telemetry.initialize()
 
-      if (extensionId === 'Gloo.baml-insider') {
+      if (extensionId === 'Boundary.baml-insider') {
         // checkForOtherExtension()
       }
     }
