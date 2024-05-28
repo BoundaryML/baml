@@ -7,7 +7,7 @@ use crate::GeneratorArgs;
 use super::ToTypeReferenceInClientDefinition;
 
 #[derive(askama::Template)]
-#[template(path = "types.ts.j2", escape = "none")]
+#[template(path = "types.js.j2", escape = "none")]
 pub(crate) struct TypescriptTypes<'ir> {
     enums: Vec<TypescriptEnum<'ir>>,
     classes: Vec<TypescriptClass<'ir>>,
@@ -20,7 +20,7 @@ struct TypescriptEnum<'ir> {
 
 struct TypescriptClass<'ir> {
     name: &'ir str,
-    fields: Vec<(&'ir str, String)>,
+    fields: Vec<(&'ir str, bool, String)>,
 }
 
 impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypescriptTypes<'ir> {
@@ -66,7 +66,13 @@ impl<'ir> From<&ClassWalker<'ir>> for TypescriptClass<'ir> {
                 .elem
                 .static_fields
                 .iter()
-                .map(|f| (f.elem.name.as_str(), f.elem.r#type.elem.to_type_ref()))
+                .map(|f| {
+                    (
+                        f.elem.name.as_str(),
+                        f.elem.r#type.elem.is_optional(),
+                        f.elem.r#type.elem.to_type_ref(),
+                    )
+                })
                 .collect(),
         }
     }

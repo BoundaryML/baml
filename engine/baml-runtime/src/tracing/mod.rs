@@ -6,6 +6,7 @@ mod wasm_tracer;
 
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
+use colored::Colorize;
 use internal_baml_jinja::RenderedPrompt;
 use serde_json::json;
 use std::collections::HashMap;
@@ -136,11 +137,13 @@ impl BamlTracer {
         }
 
         if let Ok(response) = &response {
+            let name = event_chain.last().map(|s| s.name.as_str());
             let is_ok = response.parsed().as_ref().is_some_and(|r| r.is_ok());
             log::log!(
                 target: "baml_events",
                 if is_ok { log::Level::Info } else { log::Level::Warn },
-                "{}",
+                "{}{}",
+                name.map(|s| format!("Function {}:\n", s)).unwrap_or_default().purple(),
                 response
             );
         }

@@ -61,5 +61,5 @@ const fileMap = {
   "fiddle-examples/classify-message.baml": "// This will be available as an enum in your Python and Typescript code.\nenum Category {\n    Refund\n    CancelOrder\n    TechnicalSupport\n    AccountIssue\n    Question\n}\n\nfunction ClassifyMessage(input: string) -> Category {\n  client GPT4\n\n  prompt #\"\n    Classify the following INPUT into ONE\n    of the following categories:\n\n    INPUT: {{ input }}\n\n    {{ ctx.output_format }}\n\n    Response:\n  \"#\n}",
 }
 export const getBamlFiles = () => {
-    return fileMap;
+  return fileMap
 }

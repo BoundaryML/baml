@@ -1,5 +1,6 @@
 import assert from 'assert'
 import { b, NamedArgsSingleEnumList } from '../baml_client'
+import { Image } from '@boundaryml/baml'
 
 describe('Integ tests', () => {
   it('should work for all inputs', async () => {
@@ -45,7 +46,7 @@ describe('Integ tests', () => {
     expect(res).toContain('3566')
 
     // TODO fix the fact it's required.
-    // res = await b.FnNamedArgsSingleStringOptional()
+    res = await b.FnNamedArgsSingleStringOptional()
   })
 
   it('should work for all outputs', async () => {
@@ -96,10 +97,7 @@ describe('Integ tests', () => {
   })
 
   it('should work with image', async () => {
-    // TODO: images are of type any right now.
-    // let res = await b.TestImageInput({
-    //   image: 'https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png',
-    // })
-    // expect(res).toEqual('true')
+    let res = await b.TestImageInput(Image.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png'))
+    expect(res.toLowerCase()).toContain('green')
   })
 })

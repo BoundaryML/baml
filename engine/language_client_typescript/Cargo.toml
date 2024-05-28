@@ -18,7 +18,7 @@ napi = { version = "2", features = [
   "serde-json",
   "anyhow",
   "tokio_rt",
-  "napi4",
+  "napi5",
   "async",
 ] }
 napi-derive = "2"

@@ -16,6 +16,16 @@ test  TestImageInput {
   }
 }
 
+test  shrek {
+  functions [TestImageInput]
+  args {
+    img {
+      url "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+    }
+  }
+}
+
+
 // double check this before adding it. Probably n ot right.
 // function TestImageInputAnthropic(img: image) -> string{
 //   client GPT4o
