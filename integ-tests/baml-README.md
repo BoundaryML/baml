@@ -2,7 +2,7 @@
 
 ## Installations
 
-Make sure to download the [VSCode Playground](https://marketplace.visualstudio.com/items?itemName=gloo.baml).
+Make sure to download the [VSCode Playground](https://marketplace.visualstudio.com/items?itemName=boundary.baml).
 
 To use BAML with either python or typescript, you should run:
 

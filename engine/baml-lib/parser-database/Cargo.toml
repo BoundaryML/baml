@@ -8,6 +8,7 @@ description.workspace = true
 license-file.workspace = true
 
 [dependencies]
+baml-types = { path = "../baml-types" }
 internal-baml-jinja = { path = "../jinja" }
 internal-baml-diagnostics = { path = "../diagnostics" }
 internal-baml-schema-ast = { path = "../schema-ast" }

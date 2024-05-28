@@ -97,12 +97,12 @@ mod internal_tests {
         )?;
         log::info!("Runtime:");
 
-        let mut params = IndexMap::new();
-
-        params.insert(
-            "input".to_string(),
+        let params = [(
+            "input".into(),
             baml_types::BamlValue::String("Attention Is All You Need. Mark. Hello.".into()),
-        );
+        )]
+        .into_iter()
+        .collect();
 
         let ctx = runtime.create_ctx_manager();
         let (res, _) = runtime

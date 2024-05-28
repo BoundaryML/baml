@@ -185,6 +185,13 @@ export function activate(context: vscode.ExtensionContext) {
         root_path: 'default',
         function_name: args?.functionName ?? 'default',
       })
+      // to account for some delays (this is a hack, sorry)
+      setTimeout(() => {
+        WebPanelView.currentPanel?.postMessage('select_function', {
+          root_path: 'default',
+          function_name: args?.functionName ?? 'default',
+        })
+      }, 1000)
       console.info('Opening BAML panel')
       requestDiagnostics()
     },
@@ -205,14 +212,15 @@ export function activate(context: vscode.ExtensionContext) {
       const name = editor.document.fileName
       const text = editor.document.getText()
 
-      WebPanelView.currentPanel?.postMessage('update_cursor', {
-        cursor: {
-          fileName: name,
-          fileText: text,
-          line: position.line + 1,
-          column: position.character,
-        },
-      })
+      // TODO: buggy when used with multiple functions, needs a fix.
+      // WebPanelView.currentPanel?.postMessage('update_cursor', {
+      //   cursor: {
+      //     fileName: name,
+      //     fileText: text,
+      //     line: position.line + 1,
+      //     column: position.character,
+      //   },
+      // })
     }
   })
 
@@ -245,7 +253,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   )
 
-  server.listen(8003)
+  server.listen(8195)
   // TODO: Reactivate linter.
   // runDiagnostics();
 }

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -15,13 +15,46 @@ pub struct GeneratorArgs {
 
     /// Path to the BAML source directory
     baml_src_dir: PathBuf,
+
+    input_file_map: HashMap<String, String>,
+}
+
+fn relative_path_to_baml_src(path: &PathBuf, baml_src: &PathBuf) -> Result<PathBuf> {
+    pathdiff::diff_paths(path, baml_src).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Failed to compute relative path from {} to {}",
+            path.display(),
+            baml_src.display()
+        )
+    })
 }
 
 impl GeneratorArgs {
-    pub fn new(output_dir: impl Into<PathBuf>, baml_src_dir: impl Into<PathBuf>) -> Self {
+    pub fn new(
+        output_dir: impl Into<PathBuf>,
+        baml_src_dir: impl Into<PathBuf>,
+        input_files: &HashMap<String, String>,
+    ) -> Self {
+        let baml_src = baml_src_dir.into();
+        let input_file_map: HashMap<String, String> = input_files
+            .iter()
+            .map(|(k, v)| {
+                (
+                    relative_path_to_baml_src(&PathBuf::from(k.to_string()), &baml_src)
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .to_string(),
+                    v.clone(),
+                )
+            })
+            .collect();
+
         Self {
             output_dir_relative_to_baml_src: output_dir.into(),
-            baml_src_dir: baml_src_dir.into(),
+            baml_src_dir: baml_src.clone(),
+            // for the key, whhich is the name, just get the filename
+            input_file_map,
         }
     }
 

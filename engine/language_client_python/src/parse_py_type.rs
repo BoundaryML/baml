@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::python_types::BamlImagePy;
 use anyhow::{bail, Result};
 use baml_types::{BamlImage, BamlMap, BamlValue};
 use pyo3::{
@@ -9,6 +8,8 @@ use pyo3::{
     types::PyList,
     PyErr, PyObject, PyResult, Python, ToPyObject,
 };
+
+use crate::types::BamlImagePy;
 
 struct SerializationError {
     position: Vec<String>,
@@ -58,7 +59,7 @@ enum MappedPyType {
     Float(f64),
     Bool(bool),
     None,
-    BamlImage(BamlImagePy),
+    BamlImage(BamlImage),
     Unsupported(String),
 }
 
@@ -66,19 +67,7 @@ impl TryFrom<BamlImagePy> for BamlImage {
     type Error = &'static str;
 
     fn try_from(value: BamlImagePy) -> Result<Self, Self::Error> {
-        match value {
-            BamlImagePy {
-                url: Some(url),
-                base64: None,
-                media_type: None,
-            } => Ok(BamlImage::url(url)),
-            BamlImagePy {
-                url: None,
-                base64: Some(base64),
-                media_type: Some(media_type),
-            } => Ok(BamlImage::base64(base64, media_type)),
-            _ => Err("Invalid BamlImagePy"),
-        }
+        Ok(value.inner.clone())
     }
 }
 fn pyobject_to_json<'py, F>(
@@ -162,16 +151,7 @@ where
         MappedPyType::Int(v) => Ok(BamlValue::Int(v)),
         MappedPyType::Float(v) => Ok(BamlValue::Float(v)),
         MappedPyType::Bool(v) => Ok(BamlValue::Bool(v)),
-        MappedPyType::BamlImage(v) => {
-            if let Ok(v) = BamlImage::try_from(v) {
-                Ok(BamlValue::Image(v))
-            } else {
-                Err(vec![SerializationError {
-                    position: prefix,
-                    message: "Invalid BamlImagePy".to_string(),
-                }])
-            }
-        }
+        MappedPyType::BamlImage(v) => Ok(BamlValue::Image(v)),
         MappedPyType::None => Ok(BamlValue::Null),
         MappedPyType::Unsupported(r#type) => Err(vec![SerializationError {
             position: prefix,
@@ -204,7 +184,13 @@ pub fn parse_py_type(any: PyObject) -> PyResult<BamlValue> {
             } else if t.is_subclass(&base_model).unwrap_or(false) {
                 let name = t
                     .name()
-                    .map(|n| n.to_string())
+                    .map(|n| {
+                        if let Some(x) = n.rfind("baml_client.types.") {
+                            n[x + "baml_client.types.".len()..].to_string()
+                        } else {
+                            n.to_string()
+                        }
+                    })
                     .unwrap_or("<UnnamedBaseModel>".to_string());
                 let fields = match t
                     .getattr("model_fields")?
@@ -246,8 +232,9 @@ pub fn parse_py_type(any: PyObject) -> PyResult<BamlValue> {
                 Ok(MappedPyType::Bool(b))
             } else if any.is_none(py) {
                 Ok(MappedPyType::None)
-            } else if let Ok(b) = any.extract::<BamlImagePy>(py) {
-                Ok(MappedPyType::BamlImage(b))
+            } else if let Ok(b) = any.downcast_bound::<BamlImagePy>(py) {
+                let b = b.borrow();
+                Ok(MappedPyType::BamlImage(b.inner.clone()))
             } else {
                 Ok(MappedPyType::Unsupported(format!("{:?}", t)))
             }

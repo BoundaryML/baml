@@ -3,7 +3,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
 pub use internal_baml_diagnostics;
-use internal_baml_parser_database::ParserDatabase;
 pub use internal_baml_parser_database::{self};
 
 pub use internal_baml_schema_ast::{self, ast};

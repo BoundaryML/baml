@@ -3,15 +3,17 @@ enum NamedArgsSingleEnum {
   TWO
 }
 
-function FnTestNamedArgsSingleEnum {
-  input (myArg: NamedArgsSingleEnum)
-  output string
-}
-
-impl<llm, FnTestNamedArgsSingleEnum> v1 {
+function FnTestNamedArgsSingleEnum(myArg: NamedArgsSingleEnum) -> string {
   client GPT35
   prompt #"
     Print these values back to me:
-    {#input.myArg}
+    {{myArg}}
   "#
+}
+
+test FnTestNamedArgsSingleEnum {
+  functions [FnTestNamedArgsSingleEnum]
+  args {
+    myArg ONE
+  }
 }

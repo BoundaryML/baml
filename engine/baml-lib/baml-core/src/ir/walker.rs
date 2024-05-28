@@ -78,7 +78,7 @@ impl<'a> Walker<'a, &'a Function> {
         &self.item.elem
     }
 
-    pub fn output(&self) -> &'a repr::FieldType {
+    pub fn output(&self) -> &'a baml_types::FieldType {
         match &self.item.elem {
             repr::Function::V1(f) => &f.output.elem,
             repr::Function::V2(f) => &f.output.elem,
@@ -87,7 +87,7 @@ impl<'a> Walker<'a, &'a Function> {
 
     pub fn inputs(
         &self,
-    ) -> either::Either<&'a repr::FunctionArgs, &'a Vec<(String, repr::FieldType)>> {
+    ) -> either::Either<&'a repr::FunctionArgs, &'a Vec<(String, baml_types::FieldType)>> {
         self.item.elem.inputs()
     }
 
@@ -101,11 +101,31 @@ impl<'a> Walker<'a, &'a Enum> {
         &self.elem().name
     }
 
+    pub fn alias(&self, env_values: &HashMap<String, String>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .get("alias")
+            .map(|v| v.as_string_value(env_values))
+            .transpose()
+    }
+
     pub fn walk_values(&'a self) -> impl Iterator<Item = Walker<'a, &'a EnumValue>> {
         self.item.elem.values.iter().map(|v| Walker {
             db: self.db,
             item: v,
         })
+    }
+
+    pub fn find_value(&self, name: &str) -> Option<Walker<'a, &'a EnumValue>> {
+        self.item
+            .elem
+            .values
+            .iter()
+            .find(|v| v.elem.0 == name)
+            .map(|v| Walker {
+                db: self.db,
+                item: v,
+            })
     }
 
     pub fn elem(&self) -> &'a repr::Enum {
@@ -126,8 +146,24 @@ impl<'a> Walker<'a, &'a EnumValue> {
             .unwrap_or(Ok(false))
     }
 
-    pub fn name(&self) -> &str {
+    pub fn name(&'a self) -> &'a str {
         &self.item.elem.0
+    }
+
+    pub fn alias(&self, env_values: &HashMap<String, String>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .get("alias")
+            .map(|v| v.as_string_value(env_values))
+            .transpose()
+    }
+
+    pub fn description(&self, env_values: &HashMap<String, String>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .get("description")
+            .map(|v| v.as_string_value(env_values))
+            .transpose()
     }
 
     pub fn valid_values(&self, env_values: &HashMap<String, String>) -> Result<Vec<String>> {
@@ -189,12 +225,20 @@ impl Expression {
 
     pub fn resolve(&self, env_values: &HashMap<String, String>) -> Result<BamlValue> {
         match self {
-            Expression::Identifier(Identifier::ENV(s)) => match env_values.get(s) {
-                Some(v) => Ok(BamlValue::String(v.clone())),
-                None => anyhow::bail!("Environment variable {} not found", s),
+            Expression::Identifier(idn) => match idn {
+                repr::Identifier::ENV(s) => match env_values.get(s) {
+                    Some(v) => Ok(BamlValue::String(v.clone())),
+                    None => anyhow::bail!("Environment variable {} not found", s),
+                },
+                repr::Identifier::Ref(r) => Ok(BamlValue::String(r.join(".").to_string())),
+                repr::Identifier::Local(r) => match r.as_str() {
+                    "true" => Ok(BamlValue::Bool(true)),
+                    "false" => Ok(BamlValue::Bool(false)),
+                    "null" => Ok(BamlValue::Null),
+                    _ => Ok(BamlValue::String(r.to_string())),
+                },
+                repr::Identifier::Primitive(t) => Ok(BamlValue::String(t.to_string())),
             },
-            Expression::String(s) => Ok(BamlValue::String(s.clone())),
-            Expression::RawString(s) => Ok(BamlValue::String(s.clone())),
             Expression::Bool(b) => Ok(BamlValue::Bool(*b)),
             Expression::Map(m) => {
                 let mut map = baml_types::BamlMap::new();
@@ -210,7 +254,7 @@ impl Expression {
                 }
                 Ok(BamlValue::List(list))
             }
-            repr::Expression::Identifier(idn) => Ok(BamlValue::String(idn.name().to_string())),
+            Expression::RawString(s) | Expression::String(s) => Ok(BamlValue::String(s.clone())),
             repr::Expression::Numeric(n) => {
                 if let Ok(n) = n.parse::<i64>() {
                     Ok(BamlValue::Int(n))
@@ -278,11 +322,31 @@ impl<'a> Walker<'a, &'a Class> {
         &self.elem().name
     }
 
+    pub fn alias(&self, env_values: &HashMap<String, String>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .get("alias")
+            .map(|v| v.as_string_value(env_values))
+            .transpose()
+    }
+
     pub fn walk_fields(&'a self) -> impl Iterator<Item = Walker<'a, &'a Field>> {
         self.item.elem.static_fields.iter().map(|f| Walker {
             db: self.db,
             item: f,
         })
+    }
+
+    pub fn find_field(&'a self, name: &str) -> Option<Walker<'a, &'a Field>> {
+        self.item
+            .elem
+            .static_fields
+            .iter()
+            .find(|f| f.elem.name == name)
+            .map(|f| Walker {
+                db: self.db,
+                item: f,
+            })
     }
 
     pub fn elem(&self) -> &'a repr::Class {
@@ -361,12 +425,28 @@ impl<'a> Walker<'a, &'a Field> {
         &self.elem().name
     }
 
-    pub fn r#type(&self) -> &repr::FieldType {
+    pub fn r#type(&'a self) -> &'a baml_types::FieldType {
         &self.elem().r#type.elem
     }
 
-    pub fn elem(&self) -> &'a repr::Field {
+    pub fn elem(&'a self) -> &'a repr::Field {
         &self.item.elem
+    }
+
+    pub fn alias(&self, env_values: &HashMap<String, String>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .get("alias")
+            .map(|v| v.as_string_value(env_values))
+            .transpose()
+    }
+
+    pub fn description(&self, env_values: &HashMap<String, String>) -> Result<Option<String>> {
+        self.item
+            .attributes
+            .get("description")
+            .map(|v| v.as_string_value(env_values))
+            .transpose()
     }
 
     pub fn valid_names(&self, env_values: &HashMap<String, String>) -> Result<Vec<String>> {

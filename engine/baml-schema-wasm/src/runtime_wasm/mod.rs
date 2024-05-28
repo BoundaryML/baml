@@ -1,8 +1,6 @@
 pub mod generator;
 pub mod runtime_prompt;
 
-use std::collections::HashMap;
-
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::InternalRuntimeInterface;
@@ -11,6 +9,7 @@ use baml_runtime::{
 };
 use baml_types::{BamlMap, BamlValue};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -172,7 +171,6 @@ impl WasmProject {
 
     #[wasm_bindgen]
     pub fn save_file(&mut self, name: &str, content: &str) {
-        log::info!("Saving file: {}", name);
         self.files.insert(name.to_string(), content.to_string());
         self.unsaved_files.remove(name);
     }
@@ -226,6 +224,25 @@ impl WasmProject {
                     JsValue::from_str(&e.to_string())
                 }
             })
+    }
+
+    #[wasm_bindgen]
+    pub fn run_generators(
+        &self,
+    ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
+        let fake_map: HashMap<String, String> = HashMap::new();
+
+        let js_value = serde_wasm_bindgen::to_value(&fake_map).unwrap();
+        let runtime = self.runtime(js_value);
+        log::info!("Files are: {:#?}", self.files);
+        let res = match runtime {
+            Ok(runtime) => runtime.run_generators(&self.files),
+            Err(e) => Err(wasm_bindgen::JsError::new(
+                format!("Failed to create runtime: {:#?}", e).as_str(),
+            )),
+        };
+
+        res
     }
 }
 
@@ -609,8 +626,40 @@ fn get_dummy_field(indent: usize, name: &str, t: &baml_runtime::FieldType) -> Op
     }
 }
 
+// Rust-only methods
+impl WasmRuntime {
+    pub fn run_generators(
+        &self,
+        input_files: &HashMap<String, String>,
+    ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
+        Ok(self
+            .runtime
+            .run_generators(input_files)
+            .map_err(|e| JsError::new(format!("{e:#}").as_str()))?
+            .into_iter()
+            .map(|g| g.into())
+            .collect())
+    }
+}
+
 #[wasm_bindgen]
 impl WasmRuntime {
+    #[wasm_bindgen]
+
+    pub fn check_if_in_prompt(&self, cursor_idx: usize) -> bool {
+        self.runtime
+            .internal()
+            .ir()
+            .walk_functions()
+            .any(|f| match f.as_v2() {
+                Some(func_v2) => func_v2.configs.iter().any(|config| {
+                    let span = &config.prompt_span;
+                    cursor_idx >= span.start && cursor_idx <= span.end
+                }),
+                None => false,
+            })
+    }
+
     #[wasm_bindgen]
     pub fn list_functions(&self) -> Vec<WasmFunction> {
         self.runtime
@@ -694,8 +743,10 @@ impl WasmRuntime {
 
                             // Any missing params should be set to an error
                             let _ = f.inputs().right().map(|func_params| {
-                                for (param_name, _) in func_params {
-                                    if !params.iter().any(|p| p.name.cmp(param_name).is_eq()) {
+                                for (param_name, t) in func_params {
+                                    if !params.iter().any(|p| p.name.cmp(param_name).is_eq())
+                                        && !t.is_optional()
+                                    {
                                         params.insert(
                                             0,
                                             WasmParam {
@@ -718,19 +769,6 @@ impl WasmRuntime {
                 }
             })
             .collect()
-    }
-
-    #[wasm_bindgen]
-    pub fn run_generators(
-        &self,
-    ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
-        Ok(self
-            .runtime
-            .run_generators()
-            .map_err(|e| JsError::new(format!("{e:#}").as_str()))?
-            .into_iter()
-            .map(|g| g.into())
-            .collect())
     }
 
     #[wasm_bindgen]

@@ -470,6 +470,7 @@ dependencies = [
  "async-trait",
  "baml-types",
  "base64 0.22.1",
+ "cfg-if",
  "chrono",
  "clap 4.5.1",
  "colored",
@@ -485,6 +486,7 @@ dependencies = [
  "fastrand 2.1.0",
  "futures",
  "hostname",
+ "include_dir",
  "indexmap 2.2.5",
  "indoc",
  "instant",
@@ -1852,6 +1854,7 @@ dependencies = [
  "indoc",
  "log",
  "pest",
+ "serde",
  "strsim 0.10.0",
 ]
 
@@ -1860,6 +1863,7 @@ name = "internal-baml-jinja"
 version = "0.20.0-canary.0"
 dependencies = [
  "anyhow",
+ "askama",
  "baml-types",
  "colored",
  "env_logger",
@@ -1875,6 +1879,7 @@ dependencies = [
 name = "internal-baml-parser-database"
 version = "0.20.0-canary.0"
 dependencies = [
+ "baml-types",
  "colored",
  "either",
  "enumflags2",
@@ -1908,6 +1913,7 @@ dependencies = [
 name = "internal-baml-schema-ast"
 version = "0.20.0-canary.0"
 dependencies = [
+ "baml-types",
  "either",
  "internal-baml-diagnostics",
  "log",
@@ -2615,7 +2621,7 @@ dependencies = [
 [[package]]
 name = "pyo3-asyncio"
 version = "0.21.0"
-source = "git+https://github.com/awestlake87/pyo3-asyncio.git?rev=d1ec64076dd1b5c797db4b7b811f588466956d20#d1ec64076dd1b5c797db4b7b811f588466956d20"
+source = "git+https://github.com/BoundaryML/pyo3-asyncio.git?branch=migration-pyo3-0.21#d1ec64076dd1b5c797db4b7b811f588466956d20"
 dependencies = [
  "futures",
  "once_cell",

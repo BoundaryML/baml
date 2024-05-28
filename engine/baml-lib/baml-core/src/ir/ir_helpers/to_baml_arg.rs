@@ -1,5 +1,4 @@
-use baml_types::{BamlMap, BamlValue};
-use internal_baml_schema_ast::ast::TypeValue;
+use baml_types::{BamlMap, BamlValue, TypeValue};
 
 use crate::ir::{FieldType, IntermediateRepr};
 
@@ -158,6 +157,8 @@ pub fn validate_arg(
         }
         FieldType::Optional(inner) => {
             if matches!(value, BamlValue::Null) {
+                Some(value.clone())
+            } else {
                 let mut inner_scope = ScopeStack::new();
                 let baml_arg = validate_arg(ir, inner, value, &mut inner_scope);
                 if inner_scope.has_errors() {
@@ -166,8 +167,6 @@ pub fn validate_arg(
                 } else {
                     baml_arg
                 }
-            } else {
-                Some(value.clone())
             }
         }
     }

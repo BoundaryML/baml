@@ -23,7 +23,7 @@ pub struct ImageUrl {
 }
 
 impl ImageUrl {
-    fn new(url: String) -> ImageUrl {
+    pub fn new(url: String) -> ImageUrl {
         ImageUrl { url }
     }
 }
@@ -35,7 +35,7 @@ pub struct ImageBase64 {
 }
 
 impl ImageBase64 {
-    fn new(base64: String, media_type: String) -> ImageBase64 {
+    pub fn new(base64: String, media_type: String) -> ImageBase64 {
         ImageBase64 { base64, media_type }
     }
 }

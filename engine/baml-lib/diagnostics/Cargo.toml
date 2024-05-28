@@ -14,3 +14,4 @@ indoc.workspace = true
 log = "0.4.20"
 strsim = "0.10.0"
 anyhow.workspace = true
+serde = { version = "1.0", features = ["derive"] }

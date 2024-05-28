@@ -22,7 +22,6 @@ use crate::{
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
 use dashmap::DashMap;
-use indexmap::IndexMap;
 
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
@@ -93,7 +92,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
-        params: &IndexMap<String, BamlValue>,
+        params: &BamlMap<String, BamlValue>,
         node_index: Option<usize>,
     ) -> Result<(RenderedPrompt, OrchestrationScope)> {
         let func = self.get_function(function_name, ctx)?;
@@ -119,7 +118,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let node = selected.swap_remove(node_index);
         return node
             .provider
-            .render_prompt(&renderer, ctx, &baml_args)
+            .render_prompt(self.ir(), &renderer, ctx, &baml_args)
             .map(|prompt| (prompt, node.scope));
     }
 
@@ -157,7 +156,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContext,
-    ) -> Result<IndexMap<String, BamlValue>> {
+    ) -> Result<BamlMap<String, BamlValue>> {
         let func = self.get_function(function_name, ctx)?;
         let test = self.ir().find_test(&func, test_name)?;
 
@@ -187,6 +186,58 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             Err(e) => return Err(anyhow::anyhow!("Unable to resolve test params: {:?}", e)),
         }
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn baml_src_files(dir: &std::path::PathBuf) -> Result<Vec<PathBuf>> {
+    static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
+
+    log::info!("Reading files from {:#}", dir.to_string_lossy());
+
+    if !dir.exists() {
+        anyhow::bail!("{dir:#?} does not exist (expected a directory containing BAML files)",);
+    }
+    if dir.is_file() {
+        return Err(anyhow::anyhow!(
+            "{dir:#?} is a file, not a directory (expected a directory containing BAML files)",
+        ));
+    }
+    if !dir.is_dir() {
+        return Err(anyhow::anyhow!(
+            "{dir:#?} is not a directory (expected a directory containing BAML files)",
+        ));
+    }
+
+    let src_files = walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|e| match e {
+            Ok(e) => Some(e),
+            Err(e) => {
+                log::error!("Error while reading files from {dir:#?}: {e}");
+                None
+            }
+        })
+        .filter(|e| e.file_type().is_file())
+        .filter(|e| {
+            let Some(ext) = e.path().extension() else {
+                return false;
+            };
+            let Some(ext) = ext.to_str() else {
+                return false;
+            };
+            VALID_EXTENSIONS.contains(&ext)
+        })
+        .map(|e| e.path().to_path_buf())
+        .collect::<Vec<_>>();
+
+    if !src_files
+        .iter()
+        .any(|f| f.extension() == Some("baml".as_ref()))
+    {
+        anyhow::bail!("no .baml files found in {dir:#?}");
+    }
+
+    Ok(src_files)
 }
 
 impl RuntimeConstructor for InternalBamlRuntime {
@@ -221,54 +272,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn from_directory(dir: &std::path::PathBuf) -> Result<InternalBamlRuntime> {
-        static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
-
-        log::info!("Reading files from {:#}", dir.to_string_lossy());
-
-        if !dir.exists() {
-            anyhow::bail!("{dir:#?} does not exist (expected a directory containing BAML files)",);
-        }
-        if dir.is_file() {
-            return Err(anyhow::anyhow!(
-                "{dir:#?} is a file, not a directory (expected a directory containing BAML files)",
-            ));
-        }
-        if !dir.is_dir() {
-            return Err(anyhow::anyhow!(
-                "{dir:#?} is not a directory (expected a directory containing BAML files)",
-            ));
-        }
-
-        let src_files = walkdir::WalkDir::new(dir)
-            .into_iter()
-            .filter_map(|e| match e {
-                Ok(e) => Some(e),
-                Err(e) => {
-                    log::error!("Error while reading files from {dir:#?}: {e}");
-                    None
-                }
-            })
-            .filter(|e| e.file_type().is_file())
-            .filter(|e| {
-                let Some(ext) = e.path().extension() else {
-                    return false;
-                };
-                let Some(ext) = ext.to_str() else {
-                    return false;
-                };
-                VALID_EXTENSIONS.contains(&ext)
-            })
-            .map(|e| e.path().to_path_buf())
-            .collect::<Vec<_>>();
-
-        if !src_files
-            .iter()
-            .any(|f| f.extension() == Some("baml".as_ref()))
-        {
-            anyhow::bail!("no .baml files found in {dir:#?}");
-        }
-
-        InternalBamlRuntime::from_files(dir, src_files)
+        InternalBamlRuntime::from_files(dir, baml_src_files(dir)?)
     }
 }
 
@@ -287,9 +291,14 @@ impl RuntimeInterface for InternalBamlRuntime {
         let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
 
         // Now actually execute the code.
-        let (history, _) = orchestrate_call(orchestrator, &ctx, &renderer, &baml_args, |s, ctx| {
-            jsonish::from_str(self.ir(), &ctx.env, func.output(), s, false)
-        })
+        let (history, _) = orchestrate_call(
+            orchestrator,
+            self.ir(),
+            &ctx,
+            &renderer,
+            &baml_args,
+            |s, ctx| jsonish::from_str(self.ir(), &ctx.env, func.output(), s, false),
+        )
         .await;
 
         FunctionResult::new_chain(history)

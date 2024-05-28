@@ -137,7 +137,7 @@
     "type_definition": {
       "patterns": [
         {
-          "match": "\\b(bool|int|float|string|null)\\b",
+          "match": "\\b(bool|int|float|string|null|image)\\b",
           "name": "storage.type.declaration.native"
         },
         {

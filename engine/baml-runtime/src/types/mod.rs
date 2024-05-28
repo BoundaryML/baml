@@ -1,7 +1,7 @@
 mod context_manager;
 mod expression_helper;
 mod response;
-mod runtime_context;
+pub(crate) mod runtime_context;
 mod stream;
 
 pub use context_manager::RuntimeContextManager;

@@ -2,17 +2,17 @@
 
 # Re-export the pyo3 API
 from .baml_py import (
-    BamlRuntimeFfi,
+    BamlRuntime,
     FunctionResult,
     FunctionResultStream,
-    Image,
+    BamlImagePy as Image,
     invoke_runtime_cli,
 )
 from .stream import BamlStream
 from .async_context_vars import CtxManager as BamlCtxManager
 
 __all__ = [
-    "BamlRuntimeFfi",
+    "BamlRuntime",
     "BamlStream",
     "BamlCtxManager",
     "FunctionResult",

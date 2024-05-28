@@ -4,23 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-optionalDependencies:
-  '@boundaryml/baml-darwin-arm64':
-    specifier: 0.0.2
-    version: 0.0.2
-  '@boundaryml/baml-linux-arm64-gnu':
-    specifier: 0.0.2
-    version: 0.0.2
-  '@boundaryml/baml-linux-x64-gnu':
-    specifier: 0.0.2
-    version: 0.0.2
-  '@boundaryml/baml-win32-arm64-msvc':
-    specifier: 0.0.2
-    version: 0.0.2
-  '@boundaryml/baml-win32-x64-msvc':
-    specifier: 0.0.2
-    version: 0.0.2
-
 devDependencies:
   '@biomejs/biome':
     specifier: ^1.7.3
@@ -37,6 +20,9 @@ devDependencies:
   ts-node:
     specifier: ^10.9.2
     version: 10.9.2(@types/node@20.12.11)(typescript@5.4.5)
+  typescript:
+    specifier: ^5.4.5
+    version: 5.4.5
 
 packages:
 
@@ -126,51 +112,6 @@ packages:
     os: [win32]
     requiresBuild: true
     dev: true
-    optional: true
-
-  /@boundaryml/baml-darwin-arm64@0.0.2:
-    resolution: {integrity: sha512-aKRVaC7PETZLAqQTj+iaPBIde4NaKrmJ6BG0IHRqH4DNK8z86RqMd++1XasU9Bs2A8nGe/824y9Vs/ErBGYAaA==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [darwin]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@boundaryml/baml-linux-arm64-gnu@0.0.2:
-    resolution: {integrity: sha512-zR5fFe3lRq+1zkW9h9YzPbvuwR5fyRcDgV78bjdRxKBDqLKS3WK45zlP4lYI/uFGZY82wIDAJsMUv6ZfqCnCIA==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [linux]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@boundaryml/baml-linux-x64-gnu@0.0.2:
-    resolution: {integrity: sha512-+hwvTFPu3BTp+5E9vW2SPrB+l5o6BdhHMU3xA1Fnaeh67+8gFB5NYfoz+r11bKP9graujA8PiILrwdwWuA+CoA==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [linux]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@boundaryml/baml-win32-arm64-msvc@0.0.2:
-    resolution: {integrity: sha512-wAxumDkoCW/5fjLlaE2l280nQXlrv6BWc4MxcJTM6XNrfbnwLhWskIv4dgzkSJ7bCZIRps/QBIfvl7Zzmu9qPw==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [win32]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@boundaryml/baml-win32-x64-msvc@0.0.2:
-    resolution: {integrity: sha512-R/bntBxrTZcIAGuudo4df6YLgOjmOUf9r9JmMQ6JiZBikipWIFtlDjnORLkWmhl3seJMa4usI0BkCixrozfm2g==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [win32]
-    requiresBuild: true
-    dev: false
     optional: true
 
   /@cspotcode/source-map-support@0.8.1:

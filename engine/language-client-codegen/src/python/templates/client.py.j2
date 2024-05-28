@@ -2,33 +2,29 @@ from typing import Any, Generic, List, Optional, TypeVar, Union
 import pprint
 
 import baml_py
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, create_model
 
 from . import partial_types, types
 
 OutputType = TypeVar('OutputType')
 
-class BamlOutputWrapper(BaseModel, Generic[OutputType]):
-    wrapped: OutputType
-    
-    @classmethod
-    def coerce(cls, parsed: Any) -> OutputType:
-      try:
-        return cls.model_validate(obj={'wrapped': parsed}).wrapped
-      except ValidationError as e:
-        {# TODO(sam): can I surface {{ fn.name }} here? #}
-        raise TypeError(
-          "Internal BAML error while casting output type:\n{}".format(
-            pprint.pformat(parsed)
-          )
-        ) from e
+def coerce(cls: BaseModel, parsed: Any) -> Any:
+  try:
+    return cls.model_validate({"inner": parsed}).inner
+  except ValidationError as e:
+    raise TypeError(
+      "Internal BAML error while casting output to {}\n{}".format(
+        cls.__name__,
+        pprint.pformat(parsed)
+      )
+    ) from e
 
 class BamlClient:
-    __runtime: baml_py.BamlRuntimeFfi
+    __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
 
-    def __init__(self, runtime: baml_py.BamlRuntimeFfi, ctx_manager: baml_py.BamlCtxManager):
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
@@ -53,14 +49,15 @@ class BamlClient:
         },
         self.__ctx_manager.get(),
       )
-      return BamlOutputWrapper[{{ fn.return_type }}].coerce(raw.parsed())
+      mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
+      return coerce(mdl, raw.parsed())
     {% endfor %}
 
 class BamlStreamClient:
-    __runtime: baml_py.BamlRuntimeFfi
+    __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
 
-    def __init__(self, runtime: baml_py.BamlRuntimeFfi, ctx_manager: baml_py.BamlCtxManager):
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
 
@@ -81,10 +78,15 @@ class BamlStreamClient:
         None,
         self.__ctx_manager.get(),
       )
+
+      mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
+      partial_mdl = create_model("{{ fn.name }}PartialReturnType", inner=({{ fn.partial_return_type }}, ...))
+
+
       return baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](
         raw,
-        BamlOutputWrapper[{{ fn.partial_return_type }}].coerce,
-        BamlOutputWrapper[{{ fn.return_type }}].coerce,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
         self.__ctx_manager.get(),
       )
     {% endfor %}

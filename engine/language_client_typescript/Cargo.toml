@@ -9,12 +9,18 @@ crate-type = ["cdylib"]
 
 [dependencies]
 baml-types = { path = "../baml-lib/baml-types" }
-baml-runtime = { path = "../baml-runtime", features = [] }
+baml-runtime = { path = "../baml-runtime", features = ["internal"] }
 env_logger.workspace = true
 futures.workspace = true
 internal-baml-codegen.workspace = true
 log.workspace = true
-napi = { version = "2", features = ["serde-json", "anyhow", "tokio_rt"] }
+napi = { version = "2", features = [
+  "serde-json",
+  "anyhow",
+  "tokio_rt",
+  "napi4",
+  "async",
+] }
 napi-derive = "2"
 serde.workspace = true
 serde_json.workspace = true

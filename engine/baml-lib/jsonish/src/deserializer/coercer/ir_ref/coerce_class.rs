@@ -87,7 +87,7 @@ impl TypeCoercer for ClassWalker<'_> {
                                     &field,
                                     &valid_keys,
                                     ctx,
-                                    obj.get(field.name()),
+                                    Some(v),
                                     &mut completed_cls,
                                 );
                                 update_map(
@@ -133,8 +133,26 @@ impl TypeCoercer for ClassWalker<'_> {
                     if let Some(v) = required_values.get(f.name()) {
                         let next = match v {
                             Some(Ok(_)) => None,
-                            Some(Err(e)) => f.r#type().default_value(Some(e)),
-                            None => f.r#type().default_value(None),
+                            Some(Err(e)) => f.r#type().default_value(Some(e)).or_else(|| {
+                                if ctx.allow_partials {
+                                    Some(BamlValueWithFlags::Null(
+                                        DeserializerConditions::new()
+                                            .with_flag(Flag::OptionalDefaultFromNoValue),
+                                    ))
+                                } else {
+                                    None
+                                }
+                            }),
+                            None => f.r#type().default_value(None).or_else(|| {
+                                if ctx.allow_partials {
+                                    Some(BamlValueWithFlags::Null(
+                                        DeserializerConditions::new()
+                                            .with_flag(Flag::OptionalDefaultFromNoValue),
+                                    ))
+                                } else {
+                                    None
+                                }
+                            }),
                         };
 
                         if let Some(next) = next {
@@ -159,7 +177,7 @@ impl TypeCoercer for ClassWalker<'_> {
                 .map(|(k, _)| k.clone())
                 .collect::<Vec<_>>();
 
-            if !ctx.allow_partials && !missing_required_fields.is_empty() {
+            if !missing_required_fields.is_empty() {
                 log::info!(
                     "Missing required fields: {:?} in  {:?}",
                     missing_required_fields,

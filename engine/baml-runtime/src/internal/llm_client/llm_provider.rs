@@ -37,22 +37,9 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMProvider {
             "baml-fallback" | "fallback" | "baml-round-robin" | "round-robin" => {
                 LLMStrategyProvider::try_from((client, ctx)).map(LLMProvider::Strategy)
             }
-            "baml-openai-chat"
-            | "openai"
-            | "baml-anthropic-chat"
-            | "anthropic"
-            | "baml-ollama-chat"
-            | "ollama" => LLMPrimitiveProvider::try_from((client, ctx))
+            name => LLMPrimitiveProvider::try_from((client, ctx))
                 .map(Arc::new)
                 .map(LLMProvider::Primitive),
-            other => {
-                let options = ["openai", "anthropic", "ollama", "round-robin", "fallback"];
-                anyhow::bail!(
-                    "Unsupported provider: {}. Available ones are: {}",
-                    other,
-                    options.join(", ")
-                )
-            }
         }
     }
 }

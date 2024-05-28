@@ -1,47 +1,28 @@
-from .baml_py import FunctionResult, FunctionResultStream, RuntimeContextManagerPy
-from enum import Enum
-from typing import Callable, Generic, Optional, TypeVar, Union
+from __future__ import annotations
+from .baml_py import FunctionResult, FunctionResultStream, RuntimeContextManager
+from typing import Callable, Generic, Optional, TypeVar
+
 import asyncio
-
-
-class CallbackOnTimer:
-    __callback: Callable[[int], None]
-
-    def __init__(self, cb: Callable[[int], None]):
-        self.__callback = cb
-
-    async def done(self) -> str:
-        for i in range(3):
-            self.__callback(i)
-            await asyncio.sleep(1)
-        return "final message"
-
 
 PartialOutputType = TypeVar("PartialOutputType")
 FinalOutputType = TypeVar("FinalOutputType")
-
-
-class EventType(Enum):
-    EVENT = "event"
-    DONE = "done"
 
 
 class BamlStream(Generic[PartialOutputType, FinalOutputType]):
     __ffi_stream: FunctionResultStream
     __partial_coerce: Callable[[FunctionResult], PartialOutputType]
     __final_coerce: Callable[[FunctionResult], FinalOutputType]
-    __ctx_manager: RuntimeContextManagerPy
+    __ctx_manager: RuntimeContextManager
 
     __task: Optional[asyncio.Task[FunctionResult]] = None
     __event_queue: asyncio.Queue[Optional[FunctionResult]] = asyncio.Queue()
-    __done_queue: asyncio.Queue[Union[FunctionResult, Exception]] = asyncio.Queue(1)
 
     def __init__(
         self,
         ffi_stream: FunctionResultStream,
         partial_coerce: Callable[[FunctionResult], PartialOutputType],
         final_coerce: Callable[[FunctionResult], FinalOutputType],
-        ctx_manager: RuntimeContextManagerPy,
+        ctx_manager: RuntimeContextManager,
     ):
         self.__ffi_stream = ffi_stream.on_event(self.__enqueue)
         self.__partial_coerce = partial_coerce

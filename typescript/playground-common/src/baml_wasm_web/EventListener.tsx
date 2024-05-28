@@ -22,7 +22,7 @@ const defaultEnvKeyValues: [string, string][] = (() => {
   } else {
     console.log('Not running in a Next.js environment, set default value')
     // Not running in a Next.js environment, set default value
-    return [['BOUNDARY_ANTHROPIC_PROXY_URL', 'http://localhost:8003']]
+    return [['BOUNDARY_ANTHROPIC_PROXY_URL', 'http://localhost:8195']]
   }
 })()
 

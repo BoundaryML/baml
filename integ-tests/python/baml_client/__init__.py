@@ -13,14 +13,15 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-import baml_py
-import pydantic
-
-from .client import BamlClient
+from .globals import b
 from . import types
+from . import tracing
+from . import partial_types
+
 
 __all__ = [
-  "BamlClient",
+  "b",
+  "partial_types",
+  "tracing",
   "types",
 ]
-

@@ -5,8 +5,7 @@ mod threaded_tracer;
 mod wasm_tracer;
 
 use anyhow::Result;
-use baml_types::BamlValue;
-use indexmap::IndexMap;
+use baml_types::{BamlMap, BamlValue};
 use internal_baml_jinja::RenderedPrompt;
 use serde_json::json;
 use std::collections::HashMap;
@@ -39,7 +38,7 @@ type TracerImpl = NonThreadedTracer;
 
 pub struct TracingSpan {
     span_id: Uuid,
-    params: IndexMap<String, BamlValue>,
+    params: BamlMap<String, BamlValue>,
     start_time: web_time::SystemTime,
 }
 
@@ -83,7 +82,7 @@ impl BamlTracer {
         &self,
         function_name: &str,
         ctx: &RuntimeContextManager,
-        params: &IndexMap<String, BamlValue>,
+        params: &BamlMap<String, BamlValue>,
     ) -> (Option<TracingSpan>, RuntimeContext) {
         let span_id = ctx.enter(function_name);
         if !self.enabled {
@@ -98,7 +97,6 @@ impl BamlTracer {
         (Some(span), ctx.create_ctx())
     }
 
-    #[allow(dead_code)]
     pub(crate) async fn finish_span(
         &self,
         span: TracingSpan,
@@ -135,6 +133,16 @@ impl BamlTracer {
 
         if span.span_id != span_id {
             anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
+        }
+
+        if let Ok(response) = &response {
+            let is_ok = response.parsed().as_ref().is_some_and(|r| r.is_ok());
+            log::log!(
+                target: "baml_events",
+                if is_ok { log::Level::Info } else { log::Level::Warn },
+                "{}",
+                response
+            );
         }
 
         if let Some(tracer) = &self.tracer {
@@ -203,9 +211,9 @@ impl
     }
 }
 
-impl From<&IndexMap<String, BamlValue>> for IOValue {
-    fn from(items: &IndexMap<String, BamlValue>) -> Self {
-        log::info!("Converting IOValue from IndexMap: {:#?}", items);
+impl From<&BamlMap<String, BamlValue>> for IOValue {
+    fn from(items: &BamlMap<String, BamlValue>) -> Self {
+        log::info!("Converting IOValue from BamlMap: {:#?}", items);
         IOValue {
             r#type: TypeSchema {
                 name: api_wrapper::core_types::TypeSchemaName::Multi,
@@ -372,9 +380,13 @@ impl ToLogSchema for FunctionResult {
             root_event_id: event_chain.first().map(|s| s.span_id).unwrap().to_string(),
             event_id: event_chain.last().map(|s| s.span_id).unwrap().to_string(),
             // Second to last element in the event chain
-            parent_event_id: event_chain
-                .get(event_chain.len() - 2)
-                .map(|s| s.span_id.to_string()),
+            parent_event_id: if event_chain.len() >= 2 {
+                event_chain
+                    .get(event_chain.len() - 2)
+                    .map(|s| s.span_id.to_string())
+            } else {
+                None
+            },
             context: (api, event_chain, tags, &span).into(),
             io: IO {
                 input: Some((&span.params).into()),
@@ -432,7 +444,7 @@ impl From<&LLMResponse> for LLMEventSchema {
                         template_args: Default::default(),
                         r#override: None,
                     },
-                    invocation_params: Default::default(),
+                    invocation_params: s.invocation_params.clone(),
                 },
                 output: Some(LLMOutputModel {
                     raw_text: s.content.clone(),
@@ -456,7 +468,7 @@ impl From<&LLMResponse> for LLMEventSchema {
                         template_args: Default::default(),
                         r#override: None,
                     },
-                    invocation_params: Default::default(),
+                    invocation_params: s.invocation_params.clone(),
                 },
                 output: None,
                 error: Some(s.message.clone()),

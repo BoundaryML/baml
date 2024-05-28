@@ -9,26 +9,30 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         let allowed_providers = [
             "baml-openai-chat",
             "openai",
+            "baml-azure-chat",
+            "azure-openai",
             "baml-anthropic-chat",
             "anthropic",
             "baml-ollama-chat",
             "ollama",
+            "baml-round-robin",
+            "round-robin",
+            "baml-fallback",
+            "fallback",
         ];
 
-        let suggestions: Vec<&str> = allowed_providers
+        let suggestions: Vec<String> = allowed_providers
             .iter()
             .filter(|&&p| !p.starts_with("baml-"))
-            .cloned()
+            .map(|&p| p.to_string())
             .collect();
 
         if !allowed_providers.contains(&provider.as_str()) {
-            ctx.push_warning(DatamodelWarning::new(
-                format!(
-                    "Unsupported provider: {}. Available ones are: {}",
-                    provider,
-                    suggestions.join(", ")
-                ),
+            ctx.push_error(DatamodelError::not_found_error(
+                "client provider",
+                provider,
                 span.clone(),
+                suggestions,
             ));
         }
 

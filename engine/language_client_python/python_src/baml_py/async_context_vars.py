@@ -6,16 +6,16 @@ import contextvars
 import functools
 import inspect
 import typing
-from .baml_py import RuntimeContextManagerPy, BamlRuntimeFfi, BamlSpan
+from .baml_py import RuntimeContextManager, BamlRuntime, BamlSpan
 import atexit
 
 F = typing.TypeVar("F", bound=typing.Callable[..., typing.Any])
 
 
 class CtxManager:
-    def __init__(self, rt: BamlRuntimeFfi):
+    def __init__(self, rt: BamlRuntime):
         self.rt = rt
-        self.ctx = contextvars.ContextVar[RuntimeContextManagerPy](
+        self.ctx = contextvars.ContextVar[RuntimeContextManager](
             "baml_ctx", default=rt.create_context_manager()
         )
         atexit.register(self.rt.flush)
@@ -24,7 +24,7 @@ class CtxManager:
         mngr = self.ctx.get()
         mngr.upsert_tags(tags)
 
-    def get(self) -> RuntimeContextManagerPy:
+    def get(self) -> RuntimeContextManager:
         return self.ctx.get()
 
     def start_trace_sync(

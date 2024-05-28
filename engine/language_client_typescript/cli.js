@@ -1,4 +1,4 @@
 if (require.main === module) {
-  const baml = require('@boundaryml/baml')
-  baml.BamlRuntimeFfi.runCli(process.argv.slice(1))
+  const baml = require('./native')
+  baml.invoke_runtime_cli(process.argv.slice(1))
 }

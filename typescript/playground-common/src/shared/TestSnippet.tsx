@@ -33,7 +33,7 @@ const FunctionTestSnippet: React.FC = () => {
         <div className='relative'>
           <Textarea
             readOnly
-            className='h-[200px] p-2 overflow-y-auto font-mono text-xs rounded-sm bg-vscode-input-background'
+            className='h-[200px] p-2 overflow-y-auto font-mono text-xs rounded-sm bg-vscode-input-background border-0'
           >
             {snippet}
           </Textarea>

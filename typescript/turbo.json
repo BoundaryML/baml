@@ -11,12 +11,12 @@
     },
     "@gloo-ai/baml-schema-wasm-node#build": {
       "dependsOn": ["^build"],
-      "inputs": ["../../engine/**/*.rs", "../../engine/**/*.toml"],
+      "inputs": ["../../engine/**/*.rs", "../../engine/**/*.toml", "../../engine/**/*.j2"],
       "outputs": ["dist/**"]
     },
     "@gloo-ai/baml-schema-wasm-web#build": {
       "dependsOn": ["^build"],
-      "inputs": ["../../engine/**/*.rs", "../../engine/**/*.toml"],
+      "inputs": ["../../engine/**/*.rs", "../../engine/**/*.toml", "../../engine/**/*.j2"],
       "outputs": ["dist/**"]
     },
     "@gloo-ai/web-panel#build": {
@@ -45,7 +45,9 @@
       "outputs": ["out/**"]
     },
     "lint": {},
-    "clean": {},
+    "clean": {
+      "cache": false
+    },
     "baml-client#build": {
       "dependsOn": ["@gloo-ai/baml-language-server#build"],
       "outputs": ["out/**"]

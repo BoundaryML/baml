@@ -1,6 +1,6 @@
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
-use indexmap::IndexMap;
+use cfg_if::cfg_if;
 use internal_baml_core::internal_baml_diagnostics::Diagnostics;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
@@ -118,7 +118,7 @@ pub trait InternalRuntimeInterface {
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
-        params: &IndexMap<String, BamlValue>,
+        params: &BamlMap<String, BamlValue>,
         node_index: Option<usize>,
     ) -> Result<(RenderedPrompt, OrchestrationScope)>;
 
@@ -129,5 +129,5 @@ pub trait InternalRuntimeInterface {
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContext,
-    ) -> Result<IndexMap<String, BamlValue>>;
+    ) -> Result<BamlMap<String, BamlValue>>;
 }

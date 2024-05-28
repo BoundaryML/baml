@@ -15,10 +15,10 @@
 # fmt: off
 import os
 
-from baml_py import BamlCtxManager, BamlRuntimeFfi
+from baml_py import BamlCtxManager, BamlRuntimePy
 from .client import BamlClient
 
-_DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntimeFfi.from_directory(os.environ.get('BAML_SRC_PATH', "/Users/vbv/repos/gloo-lang/integ-tests2/baml_src"), os.environ.copy())
+_DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntimePy.from_directory(os.environ.get('BAML_SRC_PATH', "/Users/vbv/repos/gloo-lang/integ-tests2/baml_src"), os.environ.copy())
 DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX = BamlCtxManager(_DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
 
 b = BamlClient(_DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)

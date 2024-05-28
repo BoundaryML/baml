@@ -3,6 +3,8 @@ import { access, mkdir, open, readdir, readFile, rename, rm, writeFile } from 'f
 import path from 'path'
 import { type Diagnostic, DiagnosticSeverity, Position, LocationLink, Hover } from 'vscode-languageserver'
 import { TextDocument } from 'vscode-languageserver-textdocument'
+import { CompletionList, CompletionItem } from 'vscode-languageserver'
+
 import { existsSync, readFileSync } from 'fs'
 
 import type { URI } from 'vscode-uri'
@@ -34,20 +36,20 @@ class Project {
   private current_runtime?: BamlWasm.WasmRuntime
 
   constructor(
-    private files: BamlWasm.WasmProject,
+    private wasmProject: BamlWasm.WasmProject,
     private onSuccess: (e: WasmDiagnosticError, files: Record<string, string>) => void,
   ) {}
 
   update_runtime() {
     if (this.current_runtime == undefined) {
       try {
-        this.current_runtime = this.files.runtime({})
+        this.current_runtime = this.wasmProject.runtime({})
 
-        const files = this.files.files()
+        const files = this.wasmProject.files()
         const fileMap = Object.fromEntries(
           files.map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string]),
         )
-        this.onSuccess(this.files.diagnostics(this.current_runtime), fileMap)
+        this.onSuccess(this.wasmProject.diagnostics(this.current_runtime), fileMap)
       } catch (e) {
         console.error(`Error updating runtime: ${e}`)
         this.current_runtime = undefined
@@ -58,11 +60,11 @@ class Project {
 
   requestDiagnostics() {
     if (this.current_runtime) {
-      const files = this.files.files()
+      const files = this.wasmProject.files()
       const fileMap = Object.fromEntries(
         files.map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string]),
       )
-      this.onSuccess(this.files.diagnostics(this.current_runtime), fileMap)
+      this.onSuccess(this.wasmProject.diagnostics(this.current_runtime), fileMap)
     }
   }
 
@@ -76,13 +78,13 @@ class Project {
   }
 
   replace_all_files(files: BamlWasm.WasmProject) {
-    this.files = files
+    this.wasmProject = files
     this.last_successful_runtime = this.current_runtime
     this.current_runtime = undefined
   }
 
   update_unsaved_file(file_path: string, content: string) {
-    this.files.set_unsaved_file(file_path, content)
+    this.wasmProject.set_unsaved_file(file_path, content)
     if (this.current_runtime) {
       this.last_successful_runtime = this.current_runtime
     }
@@ -90,7 +92,7 @@ class Project {
   }
 
   save_file(file_path: string, content: string) {
-    this.files.save_file(file_path, content)
+    this.wasmProject.save_file(file_path, content)
     if (this.current_runtime) {
       this.last_successful_runtime = this.current_runtime
     }
@@ -107,7 +109,7 @@ class Project {
   }
 
   upsert_file(file_path: string, content: string | undefined) {
-    this.files.update_file(file_path, content)
+    this.wasmProject.update_file(file_path, content)
     if (this.current_runtime) {
       this.last_successful_runtime = this.current_runtime
     }
@@ -188,6 +190,45 @@ class Project {
     return runtime.list_functions()
   }
 
+  verifyCompletionRequest(doc: TextDocument, position: Position): boolean {
+    const text = doc.getText()
+    const offset = doc.offsetAt(position)
+
+    let openBracesCount = 0
+    let closeBracesCount = 0
+
+    for (let i = 0; i < offset; i++) {
+      if (text[i] === '{' && text[i + 1] === '{') {
+        openBracesCount++
+        i++ // Skip the next character
+      } else if (text[i] === '}' && text[i + 1] === '}') {
+        closeBracesCount++
+        i++ // Skip the next character
+      }
+    }
+    if (openBracesCount > closeBracesCount) {
+      //need logic to convert line and column to index value
+      let cursorIdx = 0
+      const fileContent = doc.getText()
+
+      const lines = fileContent.split('\n')
+      let charCount = 0
+
+      for (let i = 0; i < position.line; i++) {
+        charCount += lines[i].length + 1 // +1 for the newline character
+      }
+
+      charCount += position.character
+      cursorIdx = charCount
+
+      const funcOfPrompt = this.runtime().check_if_in_prompt(position.line)
+      if (funcOfPrompt) {
+        return true
+      }
+    }
+    return false
+  }
+
   // Not currently debounced - lodash debounce doesn't work for this, p-debounce doesn't support trailing edge
   runGeneratorsWithoutDebounce = async ({
     onSuccess,
@@ -196,61 +237,60 @@ class Project {
     const startMillis = performance.now()
     try {
       await Promise.all(
-        this.runtime()
-          .run_generators()
-          .map(async (g) => {
-            // Creating the tmpdir next to the output dir can cause some weird issues with vscode, if we recover
-            // from an error and delete the tmpdir - vscode's explorer UI will still show baml_client.tmp even
-            // though it doesn't exist anymore, and vscode has no good way of letting the user purge it from the UI
-            const tmpDir = path.join(path.dirname(g.output_dir), path.basename(g.output_dir) + '.tmp')
-            const backupDir = path.join(path.dirname(g.output_dir), path.basename(g.output_dir) + '.bak')
+        this.wasmProject.run_generators().map(async (g) => {
+          // Creating the tmpdir next to the output dir can cause some weird issues with vscode, if we recover
+          // from an error and delete the tmpdir - vscode's explorer UI will still show baml_client.tmp even
+          // though it doesn't exist anymore, and vscode has no good way of letting the user purge it from the UI
+          const tmpDir = path.join(path.dirname(g.output_dir), path.basename(g.output_dir) + '.tmp')
+          const backupDir = path.join(path.dirname(g.output_dir), path.basename(g.output_dir) + '.bak')
 
-            await mkdir(tmpDir, { recursive: true })
-            await Promise.all(
-              g.files.map(async (f) => {
-                const fpath = path.join(tmpDir, f.path_in_output_dir)
-                await mkdir(path.dirname(fpath), { recursive: true })
-                await writeFile(fpath, f.contents)
+          await mkdir(tmpDir, { recursive: true })
+          await Promise.all(
+            g.files.map(async (f) => {
+              const fpath = path.join(tmpDir, f.path_in_output_dir)
+              await mkdir(path.dirname(fpath), { recursive: true })
+              await writeFile(fpath, f.contents)
+            }),
+          )
+
+          if (existsSync(backupDir)) {
+            await rm(backupDir, { recursive: true, force: true })
+          }
+          if (existsSync(g.output_dir)) {
+            const contents = await readdir(g.output_dir, { withFileTypes: true })
+            const contentsWithSafeToRemove = await Promise.all(
+              contents.map(async (c) => {
+                if (c.isDirectory()) {
+                  if (['__pycache__'].includes(c.name)) {
+                    return { path: c.name, safeToRemove: true }
+                  }
+                  return { path: c.name, safeToRemove: false }
+                }
+
+                const handle = await open(path.join(g.output_dir, c.name))
+                try {
+                  const { bytesRead, buffer } = await handle.read(Buffer.alloc(1024), 0, 1024, 0)
+                  const firstNBytes = buffer.subarray(0, bytesRead).toString('utf8')
+
+                  return { path: c.name, safeToRemove: firstNBytes.includes('generated by BAML') }
+                } finally {
+                  await handle.close()
+                }
               }),
             )
-
-            if (existsSync(backupDir)) {
-              await rm(backupDir, { recursive: true, force: true })
-            }
-            if (existsSync(g.output_dir)) {
-              const contents = await readdir(g.output_dir, { withFileTypes: true })
-              const contentsWithSafeToRemove = await Promise.all(
-                contents.map(async (c) => {
-                  if (c.isDirectory()) {
-                    return { path: c.name, safeToRemove: false }
-                  }
-
-                  const handle = await open(path.join(g.output_dir, c.name))
-                  try {
-                    const { bytesRead, buffer } = await handle.read(Buffer.alloc(1024), 0, 1024, 0)
-                    const firstNBytes = buffer.subarray(0, bytesRead).toString('utf8')
-
-                    return { path: c.name, safeToRemove: firstNBytes.includes('generated by BAML') }
-                  } finally {
-                    await handle.close()
-                  }
-                }),
+            const notSafeToRemove = contentsWithSafeToRemove.filter((c) => !c.safeToRemove).map((c) => c.path)
+            if (notSafeToRemove.length !== 0) {
+              throw new Error(
+                `Output dir ${g.output_dir} contains this file(s) not generated by BAML: ${notSafeToRemove.join(', ')}`,
               )
-              const notSafeToRemove = contentsWithSafeToRemove.filter((c) => !c.safeToRemove).map((c) => c.path)
-              if (notSafeToRemove.length !== 0) {
-                throw new Error(
-                  `Output directory ${g.output_dir} contains files not generated by BAML: ${notSafeToRemove.join(
-                    ', ',
-                  )}`,
-                )
-              }
-              await rename(g.output_dir, backupDir)
             }
-            await rename(tmpDir, g.output_dir)
-            await rm(backupDir, { recursive: true, force: true })
+            await rename(g.output_dir, backupDir)
+          }
+          await rename(tmpDir, g.output_dir)
+          await rm(backupDir, { recursive: true, force: true })
 
-            return g
-          }),
+          return g
+        }),
       )
       const endMillis = performance.now()
 

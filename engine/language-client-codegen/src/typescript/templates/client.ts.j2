@@ -1,61 +1,64 @@
-import { BamlRuntimeFfi, FunctionResult } from "@boundaryml/baml"
-import types from "./types"
+import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream } from "@boundaryml/baml"
+import { 
+  {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%} 
+} from "./types"
 
 export class BamlClient {
-  private _runtime: BamlRuntimeFfi
-  private _unstableClient: BamlUnstableClient
+  private stream_client: BamlStreamClient
 
-  static fromDirectory(path: string): BamlClient {
-    return new BamlClient(BamlRuntimeFfi.fromDirectory(path))
+  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {
+    this.stream_client = new BamlStreamClient(runtime, ctx_manager)
   }
 
-  constructor(private _runtime: BamlRuntimeFfi) {
-    this._unstableClient = new UnstableBamlClient(this._runtime)
-  }
+  get stream() {
+    return this.stream_client
+  }  
 
-  get unstable(): UnstableBamlClient { return this._unstableClient; }
-
-{% for fn in funcs %}
-  {{fn.name}} = async (args: {
-    {%- for (name, type) in fn.args %}
-    {{name}}: {{type}},
-    {%- endfor %}
-  }): {{fn.return_type}} => {
-    const raw = await this._runtime.callFunction("{{fn.name}}", args, {})
-    return raw.parsed as {{fn.return_type}}
+  {% for fn in funcs %}
+  async {{ fn.name }}(
+      {% for (name, type) in fn.args -%}
+      {{name}}: {{type}}{% if !loop.last %},{% endif %}
+      {%- endfor %}
+  ): Promise<{{fn.return_type}}> {
+    const raw = await this.runtime.callFunction(
+      "{{fn.name}}",
+      {
+        {% for (name, _) in fn.args -%}
+        "{{name}}": {{name}},
+        {%- endfor %}
+      },
+      this.ctx_manager.get(),
+    )
+    return raw.parsed() as {{fn.return_type}}
   }
-{% endfor %}
+  {% endfor %}
 }
 
-export class UnstableBamlClient {
-  constructor(private _runtime: BamlRuntimeFfi) {}
+class BamlStreamClient {
+  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
 
-{% for fn in funcs %}
-  {{fn.name}} = async (args: {
-    {%- for (name, type) in fn.args %}
-    {{name}}: {{type}},
-    {%- endfor %}
-  }): FunctionResult => {
-    return this._runtime.callFunction("{{fn.name}}", args, {})
+  {% for fn in funcs %}
+  {{ fn.name }}(
+      {% for (name, type) in fn.args -%}
+      {{name}}: {{type}}{% if !loop.last %},{% endif %}
+      {%- endfor %}
+  ): BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}> {
+    const raw = this.runtime.streamFunction(
+      "{{fn.name}}",
+      {
+        {%- for (name, _) in fn.args %}
+        "{{name}}": {{name}},
+        {%- endfor %}
+      },
+      undefined,
+      this.ctx_manager.get(),
+    )
+    return new BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}>(
+      raw,
+      (a): a is {{ fn.partial_return_type }} => a,
+      (a): a is {{ fn.return_type }} => a,
+      this.ctx_manager.get(),
+    )
   }
-{% endfor %}
+  {% endfor %}
 }
-
-{# uncomment when we implement streaming
-export class BamlStreamClient {
-  constructor(private _runtime: BamlRuntimeFfi) {}
-
-{% for fn in funcs %}
-  {{fn.name}} = async function* (args: {
-    {%- for (name, type) in fn.args %}
-    {{name}}: {{type}},
-    {%- endfor %}
-  }): {{fn.return_type}} {
-    const stream = this._runtime.callStream("{{fn.name}}", args, {})
-    for await (const raw of stream) {
-      yield UNSUPPORTED_DO_NOT_SHIP_type_cast<{{fn.return_type}}>(raw.parsed)
-    }
-  }
-{% endfor %}
-}
-#}

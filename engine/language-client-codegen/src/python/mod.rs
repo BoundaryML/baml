@@ -30,13 +30,17 @@ struct PythonInit {}
 
 #[derive(askama::Template)]
 #[template(path = "globals.py.j2", escape = "none")]
-struct PythonGlobals {
-    rel_baml_src_path: String,
-}
+struct PythonGlobals {}
 
 #[derive(askama::Template)]
 #[template(path = "tracing.py.j2", escape = "none")]
 struct PythonTracing {}
+
+#[derive(askama::Template)]
+#[template(path = "inlinedbaml.py.j2", escape = "none")]
+struct InlinedBaml {
+    file_map: Vec<(String, String)>,
+}
 
 pub(crate) fn generate(
     ir: &IntermediateRepr,
@@ -50,13 +54,8 @@ pub(crate) fn generate(
     collector.add_template::<PythonClient>("client.py", (ir, generator))?;
     collector.add_template::<PythonGlobals>("globals.py", (ir, generator))?;
     collector.add_template::<PythonTracing>("tracing.py", (ir, generator))?;
-
-    collector.add_file(
-        "__init__.py",
-        PythonInit {}
-            .render()
-            .map_err(|e| anyhow::Error::from(e).context("Error while rendering __init__.py"))?,
-    );
+    collector.add_template::<InlinedBaml>("inlinedbaml.py", (ir, generator))?;
+    collector.add_template::<PythonInit>("__init__.py", (ir, generator))?;
 
     collector.commit(&generator.output_dir())
 }
@@ -69,15 +68,37 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonTracing
     }
 }
 
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonInit {
+    type Error = anyhow::Error;
+
+    fn try_from(_: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        Ok(PythonInit {})
+    }
+}
+
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonGlobals {
     type Error = anyhow::Error;
 
     fn try_from((_, args): (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
-        Ok(PythonGlobals {
-            rel_baml_src_path: args
-                .baml_src_relative_to_output_dir()?
-                .to_string_lossy()
-                .to_string(),
+        Ok(PythonGlobals {})
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
+    type Error = anyhow::Error;
+
+    fn try_from((_ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
+        Ok(InlinedBaml {
+            file_map: args
+                .input_file_map
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        serde_json::to_string(v).expect("Failed to serialize file map"),
+                    )
+                })
+                .collect(),
         })
     }
 }

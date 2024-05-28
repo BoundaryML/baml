@@ -2,7 +2,7 @@ name: Release language_client_python
 
 on:
   push:
-    branches: ["sam/rust-llm"]
+    branches: ["working-vscode"]
   workflow_dispatch: {}
 
 permissions:
@@ -80,6 +80,6 @@ jobs:
       - run: mkdir dist && mv wheels-*/* dist
 
       # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
-      # it is pinned to this filename, so renaming this file is not safe!!: release_python_ffi.yaml
+      # it is pinned to this github actions filename, so renaming this file is not safe!!
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

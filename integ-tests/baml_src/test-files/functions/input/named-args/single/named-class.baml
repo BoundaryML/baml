@@ -7,17 +7,36 @@ class NamedArgsSingleClass {
   // key3 int
 }
 
-function TestFnNamedArgsSingleClass {
-  input (myArg: NamedArgsSingleClass)
-  output string
-}
-
-impl<llm, TestFnNamedArgsSingleClass> v1 {
+function TestFnNamedArgsSingleClass(myArg: NamedArgsSingleClass) -> string {
   client GPT35
   prompt #"
     Print these values back to me:
-    {#input.myArg.key}
-    {#input.myArg.key_two}
-    {#input.myArg.key_three}
+    {{myArg.key}}
+    {{myArg.key_two}}
+    {{myArg.key_three}}
   "#
-}  
+}
+
+test TestFnNamedArgsSingleClass {
+  functions [TestFnNamedArgsSingleClass]
+  args {
+    myArg {
+      key "example",
+      key_two true,
+      key_three 42
+    }
+  }
+}
+
+function TestMulticlassNamedArgs(myArg: NamedArgsSingleClass, myArg2: NamedArgsSingleClass) -> string {
+  client GPT35
+  prompt #"
+    Print these values back to me:
+    {{myArg.key}}
+    {{myArg.key_two}}
+    {{myArg.key_three}}
+    {{myArg2.key}}
+    {{myArg2.key_two}}
+    {{myArg2.key_three}}
+  "#
+}

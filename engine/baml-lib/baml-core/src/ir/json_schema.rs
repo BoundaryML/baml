@@ -1,6 +1,6 @@
 // JSON Schema
 
-use internal_baml_schema_ast::ast::TypeValue;
+use baml_types::TypeValue;
 use serde_json::json;
 
 use super::{

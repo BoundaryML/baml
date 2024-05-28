@@ -84,7 +84,6 @@ impl FunctionResult {
     }
 
     pub fn parsed_content(&self) -> Result<&BamlValueWithFlags> {
-        log::trace!("FunctionResult::parsed_content {:#?}", self.parsed());
         self.parsed()
             .as_ref()
             .map(|res| {

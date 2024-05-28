@@ -181,7 +181,10 @@ impl PredefinedTypes {
                 ),
                 (
                     "baml::BuiltIn".into(),
-                    HashMap::from([("chat".into(), Type::FunctionRef("baml::Chat".into()))]),
+                    HashMap::from([
+                        ("chat".into(), Type::FunctionRef("baml::Chat".into())),
+                        ("role".into(), Type::FunctionRef("baml::Chat".into())),
+                    ]),
                 ),
                 (
                     "jinja::loop".into(),

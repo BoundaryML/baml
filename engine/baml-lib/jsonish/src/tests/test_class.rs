@@ -295,3 +295,54 @@ test_partial_deserializer!(
         "skills": []
     }
 );
+
+test_partial_deserializer!(
+    test_resume_partial_2,
+    NEST_CLASS_WITH_LIST,
+    r#"{
+        "experience": [
+            "Senior Minister of Singapore since 2024",
+            "Prime Minister of Singapore from 2004 to "#,
+    FieldType::Class("Resume".to_string()),
+    {
+        "name": null,
+        "email": null,
+        "phone": null,
+        "experience": [
+            "Senior Minister of Singapore since 2024",
+            "Prime Minister of Singapore from 2004 to "
+        ],
+        "education": [],
+        "skills": []
+    }
+);
+
+const CLASS_WITH_ALIASES: &str = r#"
+class TestClassAlias {
+    key string @alias("key-dash")
+    key2 string @alias("key21")
+    key3 string @alias("key with space")
+    key4 string //unaliased
+    key5 string @alias("key.with.punctuation/123")
+}
+"#;
+
+test_deserializer!(
+    test_aliases,
+    CLASS_WITH_ALIASES,
+    r#"{
+        "key-dash": "This is a value with a dash",
+        "key21": "This is a value for key21",
+        "key with space": "This is a value with space",
+        "key4": "This is a value for key4",
+        "key.with.punctuation/123": "This is a value with punctuation and numbers"
+      }"#,
+    FieldType::Class("TestClassAlias".to_string()),
+    {
+        "key": "This is a value with a dash",
+        "key2": "This is a value for key21",
+        "key3": "This is a value with space",
+        "key4": "This is a value for key4",
+        "key5": "This is a value with punctuation and numbers"
+    }
+);

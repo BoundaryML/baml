@@ -9,13 +9,14 @@ packages = [{include = "app"}]
 [tool.poetry.dependencies]
 python = "^3.8"
 # Use client in production
-# baml = "^0.14.1"
-baml = {path = "../../clients/python"}
+# baml-py = "^0.14.1"
 ruff = "^0.3.3"
 maturin = "^1.5.1"
 
 # After poetry install run this:
 # env -u CONDA_PREFIX poetry run maturin develop --manifest-path ../../clients/python-ffi/Cargo.toml
+pytest-asyncio = "^0.23.7"
+pytest = "^8.2.1"
 
 [build-system]
 requires = ["poetry-core"]
