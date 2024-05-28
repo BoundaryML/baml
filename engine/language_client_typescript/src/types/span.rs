@@ -14,7 +14,7 @@ crate::lang_wrapper!(BamlSpan,
 
 #[napi]
 impl BamlSpan {
-    #[napi(ts_return_type = "BamlSpanPy")]
+    #[napi(ts_return_type = "BamlSpan")]
     pub fn new(
         runtime: &BamlRuntime,
         function_name: String,
