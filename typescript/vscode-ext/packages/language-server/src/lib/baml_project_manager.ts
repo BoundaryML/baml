@@ -447,6 +447,10 @@ class BamlProjectManager {
     })
   }
 
+  get_projects() {
+    return this.projects
+  }
+
   get_project_from_py_call(funcName: string) {
     const splitFuncName = funcName.split('.')
     const finalFuncName = splitFuncName[1]
@@ -520,15 +524,6 @@ class BamlProjectManager {
 
   getProjectById(id: URI): Project {
     return this.get_project(uriToRootPath(id))
-  }
-
-  runGenerators() {
-    for (const project of this.projects.values()) {
-      const files = project.runGenerators()
-      for (const f of files) {
-        console.log(f.path, f.contents.length)
-      }
-    }
   }
 }
 

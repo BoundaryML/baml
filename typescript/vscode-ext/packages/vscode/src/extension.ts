@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 import axios from 'axios'
-import glooLens from './PythonToBamlCodeLensProvider'
+import glooLens from './LanguageToBamlCodeLensProvider'
 import { WebPanelView } from './panels/WebPanelView'
 import testExecutor from './panels/execute_test'
 import plugins from './plugins'
@@ -198,6 +198,7 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   context.subscriptions.push(bamlPlaygroundCommand)
+  console.log('pushing glooLens')
   context.subscriptions.push(
     vscode.languages.registerCodeLensProvider({ scheme: 'file', language: 'python' }, glooLens),
   )

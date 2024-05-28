@@ -8,11 +8,12 @@ import * as vscode from 'vscode'
 import type { LanguageClientOptions } from 'vscode-languageclient'
 import { type LanguageClient, type ServerOptions, TransportKind } from 'vscode-languageclient/node'
 import { z } from 'zod'
-import pythonToBamlCodeLens from '../../PythonToBamlCodeLensProvider'
+import pythonToBamlCodeLens from '../../LanguageToBamlCodeLensProvider'
 import { WebPanelView } from '../../panels/WebPanelView'
 import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
 import type { BamlVSCodePlugin } from '../types'
+import { URI } from 'vscode-uri'
 
 const packageJson = require('../../../package.json') // eslint-disable-line
 
@@ -44,6 +45,10 @@ export const generateTestRequest = async (test_request: TestRequest): Promise<st
 
 export const requestDiagnostics = async () => {
   await client?.sendRequest('requestDiagnostics')
+}
+
+export const getBAMLFunctions = async (): Promise<any> => {
+  return await client.sendRequest('getBAMLFunctions')
 }
 
 const LatestVersions = z.object({
@@ -286,7 +291,7 @@ const activateClient = (
     client.onRequest('set_database', ({ rootPath, db }: { rootPath: string; db: ParserDatabase }) => {
       try {
         BamlDB.set(rootPath, db)
-        pythonToBamlCodeLens.setDB(rootPath, db)
+        // pythonToBamlCodeLens.setDB(rootPath, db)
         console.log('set_database')
         WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
       } catch (e) {

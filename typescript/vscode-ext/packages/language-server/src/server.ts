@@ -28,7 +28,7 @@ import { URI } from 'vscode-uri'
 import debounce from 'lodash/debounce'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 import { IPCMessageReader, IPCMessageWriter, createConnection } from 'vscode-languageserver/node'
-import { getWordAtPosition, trimLine } from './lib/ast'
+import { getWordAtPosition } from './lib/ast'
 // import { FileChangeType } from 'vscode'
 import fs from 'fs'
 // import { cliBuild, cliCheckForUpdates, cliVersion } from './baml-cli'
@@ -37,7 +37,6 @@ import { z } from 'zod'
 // import { getVersion, getEnginesVersion } from './lib/wasm/internals'
 import BamlProjectManager from './lib/baml_project_manager'
 import type { LSOptions, LSSettings } from './lib/types'
-import { getWordAtPosition } from './lib/ast'
 ;(globalThis as any).crypto = require('node:crypto').webcrypto
 
 const packageJson = require('../../package.json') // eslint-disable-line
@@ -393,13 +392,19 @@ export function startServer(options?: LSOptions): void {
   // })
   connection.onDefinition((params: DeclarationParams) => {
     const doc = getDocument(params.textDocument.uri)
-
     if (doc) {
-      //accesses project from uri via bamlProjectManager
-      const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
-      if (proj) {
-        //returns the definition of reference within the project
-        return proj.handleDefinitionRequest(doc, params.position)
+      const lang = getLanguageExtension(doc.uri)
+
+      if (lang === 'baml') {
+        console.log('BAML definition')
+        //accesses project from uri via bamlProjectManager
+        const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+        if (proj) {
+          //returns the definition of reference within the project
+          return proj.handleDefinitionRequest(doc, params.position)
+        }
+      } else if (lang == 'py') {
+        console.log('Python definition')
       }
     }
     return undefined
@@ -666,6 +671,32 @@ export function startServer(options?: LSOptions): void {
       }
       return undefined
     }
+  })
+
+  connection.onRequest('getBAMLFunctions', async () => {
+    console.log('client request getBAMLFunctions')
+
+    const allFunctions: any[] = []
+    const projects = bamlProjectManager.get_projects()
+
+    if (!projects || projects.size === 0) {
+      console.log('No projects found in bamlProjectManager')
+      return { functions: allFunctions }
+    }
+
+    for (const [id, proj] of projects.entries()) {
+      console.log(`Processing project: ${id}`)
+      const functions = proj.list_functions()
+      allFunctions.push(...functions.map((func) => func.toJSON()))
+    }
+
+    if (allFunctions.length > 0) {
+      console.log(`Found ${allFunctions.length} functions`)
+    } else {
+      console.log('No functions found')
+    }
+
+    return JSON.stringify(allFunctions)
   })
 
   console.log('Server-side -- listening to connection')
