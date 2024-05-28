@@ -79,7 +79,7 @@ impl BamlRuntime {
         env: Env,
         function_name: String,
         args: serde_json::Value,
-        #[napi(ts_arg_type = "(err: any, param: FunctionResultPy) => void")] cb: Option<JsFunction>,
+        #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] cb: Option<JsFunction>,
         ctx: &RuntimeContextManager,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = serde_json::from_value(args)
