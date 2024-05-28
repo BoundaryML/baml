@@ -16,7 +16,6 @@
 $RECYCLE.BIN/
 *$py.class
 **/*.rs.bk
-**/__pycache__
 **/dist
 *.cab
 *.env
@@ -132,8 +131,7 @@ Thumbs.db
 Thumbs.db:encryptable
 [Dd]esktop.ini
 __pycache__
-__pycache__# Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,macos,windows,linux
-__pycache__/
+.pytest_cache
 bin/
 bower_components
 coverage

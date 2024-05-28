@@ -42,7 +42,7 @@ impl FunctionResultStream {
         slf
     }
 
-    fn done(
+    fn getFinalResponse(
         &self,
         py: Python<'_>,
         rt: &BamlRuntime,
