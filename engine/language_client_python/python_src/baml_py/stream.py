@@ -13,9 +13,8 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
     __partial_coerce: Callable[[FunctionResult], PartialOutputType]
     __final_coerce: Callable[[FunctionResult], FinalOutputType]
     __ctx_manager: RuntimeContextManager
-
-    __task: Optional[asyncio.Task[FunctionResult]] = None
-    __event_queue: asyncio.Queue[Optional[FunctionResult]] = asyncio.Queue()
+    __task: Optional[asyncio.Task[FunctionResult]]
+    __event_queue: asyncio.Queue[Optional[FunctionResult]]
 
     def __init__(
         self,
@@ -28,6 +27,8 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         self.__partial_coerce = partial_coerce
         self.__final_coerce = final_coerce
         self.__ctx_manager = ctx_manager
+        self.__task = None
+        self.__event_queue = asyncio.Queue()
 
     def __enqueue(self, data: FunctionResult) -> None:
         self.__event_queue.put_nowait(data)
