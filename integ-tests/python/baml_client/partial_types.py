@@ -29,76 +29,76 @@ from . import types
 
 
 class Blah(BaseModel):
-    prop4: Optional[str] = None
+    prop4: Optional[str]
 
 class ClassOptionalOutput(BaseModel):
-    prop1: Optional[str] = None
-    prop2: Optional[str] = None
+    prop1: Optional[str]
+    prop2: Optional[str]
 
 class ClassOptionalOutput2(BaseModel):
-    prop1: Optional[str] = None
-    prop2: Optional[str] = None
+    prop1: Optional[str]
+    prop2: Optional[str]
     prop3: "Blah"
 
 class ClassWithImage(BaseModel):
-    myImage: Optional[baml_py.Image] = None
-    param2: Optional[str] = None
+    myImage: Optional[baml_py.Image]
+    param2: Optional[str]
     fake_image: "FakeImage"
 
 class Education(BaseModel):
-    institution: Optional[str] = None
-    location: Optional[str] = None
-    degree: Optional[str] = None
+    institution: Optional[str]
+    location: Optional[str]
+    degree: Optional[str]
     major: List[Optional[str]]
-    graduation_date: Optional[str] = None
+    graduation_date: Optional[str]
 
 class Email(BaseModel):
-    subject: Optional[str] = None
-    body: Optional[str] = None
-    from_address: Optional[str] = None
+    subject: Optional[str]
+    body: Optional[str]
+    from_address: Optional[str]
 
 class Event(BaseModel):
-    title: Optional[str] = None
-    date: Optional[str] = None
-    location: Optional[str] = None
-    description: Optional[str] = None
+    title: Optional[str]
+    date: Optional[str]
+    location: Optional[str]
+    description: Optional[str]
 
 class FakeImage(BaseModel):
-    url: Optional[str] = None
+    url: Optional[str]
 
 class NamedArgsSingleClass(BaseModel):
-    key: Optional[str] = None
-    key_two: Optional[bool] = None
-    key_three: Optional[int] = None
+    key: Optional[str]
+    key_two: Optional[bool]
+    key_three: Optional[int]
 
 class OptionalTest_Prop1(BaseModel):
-    omega_a: Optional[str] = None
-    omega_b: Optional[int] = None
+    omega_a: Optional[str]
+    omega_b: Optional[int]
 
 class OptionalTest_ReturnType(BaseModel):
     omega_1: "OptionalTest_Prop1"
-    omega_2: Optional[str] = None
+    omega_2: Optional[str]
     omega_3: List[Optional[types.OptionalTest_CategoryType]]
 
 class OrderInfo(BaseModel):
-    order_status: Optional[types.OrderStatus] = None
-    tracking_number: Optional[str] = None
-    estimated_arrival_date: Optional[str] = None
+    order_status: Optional[types.OrderStatus]
+    tracking_number: Optional[str]
+    estimated_arrival_date: Optional[str]
 
 class RaysData(BaseModel):
-    dataType: Optional[types.DataType] = None
-    value: Optional[Union["Resume", "Event"]] = None
+    dataType: Optional[types.DataType]
+    value: Optional[Union["Resume", "Event"]]
 
 class Resume(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
+    name: Optional[str]
+    email: Optional[str]
+    phone: Optional[str]
     experience: List["Education"]
     education: List[Optional[str]]
     skills: List[Optional[str]]
 
 class SearchParams(BaseModel):
-    dateRange: Optional[int] = None
+    dateRange: Optional[int]
     location: List[Optional[str]]
     jobTitle: "WithReasoning"
     company: "WithReasoning"
@@ -106,30 +106,30 @@ class SearchParams(BaseModel):
     tags: List[Optional[Union[Optional[types.Tag], Optional[str]]]]
 
 class TestClassAlias(BaseModel):
-    key: Optional[str] = None
-    key2: Optional[str] = None
-    key3: Optional[str] = None
-    key4: Optional[str] = None
-    key5: Optional[str] = None
+    key: Optional[str]
+    key2: Optional[str]
+    key3: Optional[str]
+    key4: Optional[str]
+    key5: Optional[str]
 
 class TestClassWithEnum(BaseModel):
-    prop1: Optional[str] = None
-    prop2: Optional[types.EnumInClass] = None
+    prop1: Optional[str]
+    prop2: Optional[types.EnumInClass]
 
 class TestOutputClass(BaseModel):
-    prop1: Optional[str] = None
-    prop2: Optional[int] = None
+    prop1: Optional[str]
+    prop2: Optional[int]
 
 class TestOutputClassNested(BaseModel):
-    prop1: Optional[str] = None
-    prop2: Optional[int] = None
+    prop1: Optional[str]
+    prop2: Optional[int]
     prop3: "TestOutputClass"
 
 class UnionTest_ReturnType(BaseModel):
-    prop1: Optional[Union[Optional[str], Optional[bool]]] = None
+    prop1: Optional[Union[Optional[str], Optional[bool]]]
     prop2: List[Optional[Union[Optional[float], Optional[bool]]]]
-    prop3: Optional[Union[List[Optional[float]], List[Optional[bool]]]] = None
+    prop3: Optional[Union[List[Optional[float]], List[Optional[bool]]]]
 
 class WithReasoning(BaseModel):
-    value: Optional[str] = None
-    reasoning: Optional[str] = None
+    value: Optional[str]
+    reasoning: Optional[str]

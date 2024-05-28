@@ -35,11 +35,11 @@ def coerce(cls: BaseModel, parsed: Any) -> Any:
     ) from e
 
 class BamlClient:
-    __runtime: baml_py.BamlRuntime
+    __runtime: baml_py.BamlRuntimePy
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
 
-    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
+    def __init__(self, runtime: baml_py.BamlRuntimePy, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
@@ -695,10 +695,10 @@ class BamlClient:
     
 
 class BamlStreamClient:
-    __runtime: baml_py.BamlRuntime
+    __runtime: baml_py.BamlRuntimePy
     __ctx_manager: baml_py.BamlCtxManager
 
-    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
+    def __init__(self, runtime: baml_py.BamlRuntimePy, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
 

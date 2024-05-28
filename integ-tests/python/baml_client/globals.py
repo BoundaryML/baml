@@ -15,11 +15,11 @@
 # fmt: off
 import os
 
-from baml_py import BamlCtxManager, BamlRuntime
+from baml_py import BamlCtxManager, BamlRuntimePy
 from .client import BamlClient
 from .inlinedbaml import get_baml_files
 
-_DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntime.from_files(
+_DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntimePy.from_files(
   "baml_src",
   get_baml_files(),
   os.environ.copy()

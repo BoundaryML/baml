@@ -1,3 +1,4 @@
+import assert from 'assert'
 import { b, NamedArgsSingleEnumList } from '../baml_client'
 
 describe('Integ tests', () => {
@@ -44,6 +45,30 @@ describe('Integ tests', () => {
 
     // TODO fix the fact it's required.
     //res = await b.FnNamedArgsSingleStringOptional()
+  })
+
+  it('should work for all outputs', async () => {
+    const a = 'a' // dummy
+    let res = await b.FnOutputBool(a)
+    expect(res).toEqual(true)
+
+    const list = await b.FnOutputClassList(a)
+    expect(list.length).toBeGreaterThan(0)
+    assert(list[0].prop1.length > 0)
+
+    const classWEnum = await b.FnOutputClassWithEnum(a)
+    expect(['ONE', 'TWO']).toContain(classWEnum.prop2)
+
+    const classs = await b.FnOutputClass(a)
+    expect(classs.prop1).not.toBeNull()
+    // Actually select 540
+    expect(classs.prop2).toEqual(540)
+
+    // enum list output
+    const enumList = await b.FnEnumListOutput(a)
+    expect(enumList.length).toBe(2)
+
+    const myEnum = await b.FnEnumOutput(a)
   })
 
   it('should work with image', async () => {
