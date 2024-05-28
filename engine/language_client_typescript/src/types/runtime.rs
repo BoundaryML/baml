@@ -14,7 +14,7 @@ crate::lang_wrapper!(BamlRuntime, CoreRuntime, clone_safe);
 
 #[napi]
 impl BamlRuntime {
-    #[napi(ts_return_type = "BamlRuntimeTs")]
+    #[napi(ts_return_type = "BamlRuntime")]
     pub fn from_directory(
         directory: String,
         env_vars: HashMap<String, String>,
@@ -25,7 +25,7 @@ impl BamlRuntime {
             .into())
     }
 
-    #[napi(ts_return_type = "BamlRuntimeTs")]
+    #[napi(ts_return_type = "BamlRuntime")]
     pub fn from_files(
         root_path: String,
         files: HashMap<String, String>,
