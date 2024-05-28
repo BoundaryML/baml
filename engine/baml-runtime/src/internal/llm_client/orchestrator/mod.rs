@@ -4,6 +4,7 @@ mod stream;
 use anyhow::Result;
 use baml_types::BamlValue;
 
+use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, sync::Arc};
 
@@ -171,11 +172,12 @@ pub trait IterOrchestrator {
 impl<'ir> WithPrompt<'ir> for OrchestratorNode {
     fn render_prompt(
         &'ir self,
+        ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<RenderedPrompt> {
-        self.provider.render_prompt(renderer, ctx, params)
+        self.provider.render_prompt(ir, renderer, ctx, params)
     }
 }
 

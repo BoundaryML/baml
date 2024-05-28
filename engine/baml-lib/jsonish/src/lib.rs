@@ -7,9 +7,10 @@ use anyhow::Result;
 mod deserializer;
 mod jsonish;
 
+use baml_types::FieldType;
 use deserializer::coercer::{ParsingContext, TypeCoercer};
 
-use internal_baml_core::ir::repr::{FieldType, IntermediateRepr};
+use internal_baml_core::ir::repr::IntermediateRepr;
 
 pub use deserializer::types::BamlValueWithFlags;
 

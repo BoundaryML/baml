@@ -1,8 +1,9 @@
+use baml_types::TypeValue;
 use internal_baml_diagnostics::DatamodelError;
 
 use super::{
-    identifier::TypeValue, traits::WithAttributes, Attribute, Comment, Identifier, Span,
-    WithDocumentation, WithIdentifier, WithName, WithSpan,
+    traits::WithAttributes, Attribute, Comment, Identifier, Span, WithDocumentation,
+    WithIdentifier, WithName, WithSpan,
 };
 
 /// A field definition in a model or a composite type.

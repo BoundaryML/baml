@@ -79,6 +79,8 @@ impl RuntimeContextManager {
         RuntimeContext {
             env: self.env_vars.clone(),
             tags: ctx.last().map(|(.., x)| x).cloned().unwrap_or_default(),
+            class_override: Default::default(),
+            enum_overrides: Default::default(),
         }
     }
 
@@ -95,6 +97,8 @@ impl RuntimeContextManager {
         RuntimeContext {
             env: env_vars.collect(),
             tags: ctx.last().map(|(.., x)| x).cloned().unwrap_or_default(),
+            class_override: Default::default(),
+            enum_overrides: Default::default(),
         }
     }
 }

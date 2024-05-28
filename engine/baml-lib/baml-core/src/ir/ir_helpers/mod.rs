@@ -74,7 +74,7 @@ impl IRHelper for IntermediateRepr {
         }
     }
 
-    fn find_class(&self, class_name: &str) -> Result<ClassWalker<'_>> {
+    fn find_class<'a>(&'a self, class_name: &str) -> Result<ClassWalker<'a>> {
         match self.walk_classes().find(|e| e.name() == class_name) {
             Some(e) => Ok(e),
             None => {

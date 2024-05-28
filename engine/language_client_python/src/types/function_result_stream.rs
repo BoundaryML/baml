@@ -5,6 +5,8 @@ use crate::BamlError;
 
 use super::function_results::FunctionResult;
 use super::runtime_ctx_manager::RuntimeContextManager;
+use super::BamlRuntime;
+use baml_runtime::InternalRuntimeInterface;
 
 crate::lang_wrapper!(
     FunctionResultStream,
@@ -40,7 +42,12 @@ impl FunctionResultStream {
         slf
     }
 
-    fn done(&self, py: Python<'_>, ctx: &RuntimeContextManager) -> PyResult<PyObject> {
+    fn done(
+        &self,
+        py: Python<'_>,
+        rt: &BamlRuntime,
+        ctx: &RuntimeContextManager,
+    ) -> PyResult<PyObject> {
         let inner = self.inner.clone();
 
         let on_event = self.on_event.as_ref().map(|cb| {
@@ -55,11 +62,11 @@ impl FunctionResultStream {
         });
 
         let ctx_mng = ctx.inner.clone();
-
+        let rt = rt.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let ctx_mng = ctx_mng;
             let mut locked = inner.lock().await;
-            let (res, _) = locked.run(on_event, &ctx_mng).await;
+            let (res, _) = locked.run(rt.internal().ir(), on_event, &ctx_mng).await;
             res.map(FunctionResult::from)
                 .map_err(BamlError::from_anyhow)
         })

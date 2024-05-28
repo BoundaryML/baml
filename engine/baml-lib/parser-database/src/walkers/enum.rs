@@ -40,6 +40,21 @@ impl<'db> EnumWalker<'db> {
             .collect::<Vec<_>>()
             .into_iter()
     }
+
+    /// Find a value by name.
+    pub fn find_value(&self, name: &str) -> Option<EnumValueWalker<'db>> {
+        self.ast_enum()
+            .values
+            .iter()
+            .enumerate()
+            .find_map(|(idx, v)| {
+                if v.name() == name {
+                    Some(self.walk((self.id, ast::EnumValueId(idx as u32))))
+                } else {
+                    None
+                }
+            })
+    }
 }
 
 impl<'db> WithIdentifier for EnumWalker<'db> {

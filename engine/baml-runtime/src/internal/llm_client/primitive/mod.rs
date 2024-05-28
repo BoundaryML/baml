@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use baml_types::BamlValue;
-use internal_baml_core::ir::ClientWalker;
+use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 
 use crate::{
     internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
@@ -86,11 +86,12 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
 impl<'ir> WithPrompt<'ir> for LLMPrimitiveProvider {
     fn render_prompt(
         &'ir self,
+        ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<internal_baml_jinja::RenderedPrompt> {
-        match_llm_provider!(self, render_prompt, renderer, ctx, params)
+        match_llm_provider!(self, render_prompt, ir, renderer, ctx, params)
     }
 }
 

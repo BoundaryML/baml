@@ -118,7 +118,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let node = selected.swap_remove(node_index);
         return node
             .provider
-            .render_prompt(&renderer, ctx, &baml_args)
+            .render_prompt(self.ir(), &renderer, ctx, &baml_args)
             .map(|prompt| (prompt, node.scope));
     }
 
@@ -291,9 +291,14 @@ impl RuntimeInterface for InternalBamlRuntime {
         let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
 
         // Now actually execute the code.
-        let (history, _) = orchestrate_call(orchestrator, &ctx, &renderer, &baml_args, |s, ctx| {
-            jsonish::from_str(self.ir(), &ctx.env, func.output(), s, false)
-        })
+        let (history, _) = orchestrate_call(
+            orchestrator,
+            self.ir(),
+            &ctx,
+            &renderer,
+            &baml_args,
+            |s, ctx| jsonish::from_str(self.ir(), &ctx.env, func.output(), s, false),
+        )
         .await;
 
         FunctionResult::new_chain(history)

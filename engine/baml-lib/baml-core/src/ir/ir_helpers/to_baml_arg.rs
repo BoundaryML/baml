@@ -1,5 +1,4 @@
-use baml_types::{BamlMap, BamlValue};
-use internal_baml_schema_ast::ast::TypeValue;
+use baml_types::{BamlMap, BamlValue, TypeValue};
 
 use crate::ir::{FieldType, IntermediateRepr};
 

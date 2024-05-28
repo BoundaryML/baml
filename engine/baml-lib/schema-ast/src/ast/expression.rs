@@ -1,3 +1,5 @@
+use baml_types::TypeValue;
+
 use crate::ast::Span;
 use std::fmt;
 
@@ -156,7 +158,7 @@ impl Expression {
     pub fn from_json(value: serde_json::Value, span: Span, empty_span: Span) -> Expression {
         match value {
             serde_json::Value::Null => {
-                Expression::Identifier(Identifier::Primitive(super::TypeValue::Null, span))
+                Expression::Identifier(Identifier::Primitive(TypeValue::Null, span))
             }
             serde_json::Value::Bool(b) => Expression::BoolValue(b, span),
             serde_json::Value::Number(n) => Expression::NumericValue(n.to_string(), span),

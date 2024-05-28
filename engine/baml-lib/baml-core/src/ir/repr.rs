@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::{anyhow, bail, Context, Result};
+use baml_types::FieldType;
 use either::Either;
 
 use indexmap::IndexMap;
@@ -278,87 +279,28 @@ pub trait WithRepr<T> {
     }
 }
 
-/// FieldType represents the type of either a class field or a function arg.
-#[derive(serde::Serialize, Debug)]
-pub enum FieldType {
-    Primitive(ast::TypeValue),
-    Enum(EnumId),
-    Class(ClassId),
-    List(Box<FieldType>),
-    Map(Box<FieldType>, Box<FieldType>),
-    Union(Vec<FieldType>),
-    Tuple(Vec<FieldType>),
-    Optional(Box<FieldType>),
-}
-
-// Impl display for FieldType
-impl std::fmt::Display for FieldType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FieldType::Enum(name) | FieldType::Class(name) => {
-                write!(f, "{}", name)
-            }
-            FieldType::Primitive(t) => write!(f, "{}", t),
-            FieldType::Union(choices) => {
-                write!(
-                    f,
-                    "({})",
-                    choices
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                )
-            }
-            FieldType::Tuple(choices) => {
-                write!(
-                    f,
-                    "({})",
-                    choices
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            FieldType::Map(k, v) => write!(f, "map<{}, {}>", k.to_string(), v.to_string()),
-            FieldType::List(t) => write!(f, "{}[]", t.to_string()),
-            FieldType::Optional(t) => write!(f, "{}?", t.to_string()),
-        }
-    }
-}
-
-impl FieldType {
-    fn with_arity(self, arity: &FieldArity) -> FieldType {
-        match arity {
-            FieldArity::Required => self,
-            FieldArity::Optional => FieldType::Optional(Box::new(self)),
-        }
-    }
-
-    pub fn is_optional(&self) -> bool {
-        match self {
-            FieldType::Optional(_) => true,
-            FieldType::Primitive(ast::TypeValue::Null) => true,
-            FieldType::Union(types) => types.iter().any(FieldType::is_optional),
-            _ => false,
-        }
+fn type_with_arity(t: FieldType, arity: &FieldArity) -> FieldType {
+    match arity {
+        FieldArity::Required => t,
+        FieldArity::Optional => FieldType::Optional(Box::new(t)),
     }
 }
 
 impl WithRepr<FieldType> for ast::FieldType {
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
         Ok(match self {
-            ast::FieldType::Identifier(arity, idn) => (match idn {
-                ast::Identifier::Primitive(t, ..) => FieldType::Primitive(*t),
-                ast::Identifier::Local(name, _) => match db.find_type(idn) {
-                    Some(Either::Left(_class_walker)) => Ok(FieldType::Class(name.clone())),
-                    Some(Either::Right(_enum_walker)) => Ok(FieldType::Enum(name.clone())),
-                    None => Err(anyhow!("Field type uses unresolvable local identifier")),
-                }?,
-                _ => bail!("Field type uses unsupported identifier type"),
-            })
-            .with_arity(arity),
+            ast::FieldType::Identifier(arity, idn) => type_with_arity(
+                (match idn {
+                    ast::Identifier::Primitive(t, ..) => FieldType::Primitive(*t),
+                    ast::Identifier::Local(name, _) => match db.find_type(idn) {
+                        Some(Either::Left(_class_walker)) => Ok(FieldType::Class(name.clone())),
+                        Some(Either::Right(_enum_walker)) => Ok(FieldType::Enum(name.clone())),
+                        None => Err(anyhow!("Field type uses unresolvable local identifier")),
+                    }?,
+                    _ => bail!("Field type uses unsupported identifier type"),
+                }),
+                arity,
+            ),
             ast::FieldType::List(ft, dims, _) => {
                 // NB: potential bug: this hands back a 1D list when dims == 0
                 let mut repr = FieldType::List(Box::new(ft.repr(db)?));
@@ -378,15 +320,15 @@ impl WithRepr<FieldType> for ast::FieldType {
                 let mut types = t.iter().map(|ft| ft.repr(db)).collect::<Result<Vec<_>>>()?;
 
                 if arity.is_optional() {
-                    types.push(FieldType::Primitive(ast::TypeValue::Null));
+                    types.push(FieldType::Primitive(baml_types::TypeValue::Null));
                 }
 
                 FieldType::Union(types)
             }
-            ast::FieldType::Tuple(arity, t, _) => {
-                FieldType::Tuple(t.iter().map(|ft| ft.repr(db)).collect::<Result<Vec<_>>>()?)
-                    .with_arity(arity)
-            }
+            ast::FieldType::Tuple(arity, t, _) => type_with_arity(
+                FieldType::Tuple(t.iter().map(|ft| ft.repr(db)).collect::<Result<Vec<_>>>()?),
+                arity,
+            ),
         })
     }
 }
@@ -401,7 +343,7 @@ pub enum Identifier {
     /// A string without spaces or '.' Always starts with a letter. May contain numbers
     Local(String),
     /// Special types (always lowercase).
-    Primitive(ast::TypeValue),
+    Primitive(baml_types::TypeValue),
 }
 
 impl Identifier {
@@ -819,9 +761,6 @@ pub struct FunctionV2 {
 #[derive(serde::Serialize, Debug)]
 pub struct FunctionConfig {
     pub name: String,
-    // TODO: We technically have alll the information given output type
-    // and we should derive this each time.
-    pub output_format: String,
     pub prompt_template: String,
     #[serde(skip)]
     pub prompt_span: ast::Span,
@@ -1059,9 +998,6 @@ impl WithRepr<FunctionV2> for FunctionWalker<'_> {
             }?,
             configs: vec![FunctionConfig {
                 name: "default_config".to_string(),
-                output_format: self
-                    .output_format(self.db, self.identifier().span())
-                    .unwrap_or("{{{ Unable to generate ctx.output_format }}}".into()),
                 prompt_template: self.jinja_prompt().to_string(),
                 prompt_span: self.ast_function().span().clone(),
                 client: self

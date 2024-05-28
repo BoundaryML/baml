@@ -5,6 +5,7 @@ mod chat;
 mod completion;
 
 use baml_types::BamlValue;
+use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
 
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
@@ -34,6 +35,7 @@ pub trait WithClient {
 pub trait WithPrompt<'ir> {
     fn render_prompt(
         &'ir self,
+        ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &BamlValue,
@@ -59,13 +61,14 @@ where
 {
     fn render_prompt(
         &'ir self,
+        ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<RenderedPrompt> {
         let features = self.model_features();
 
-        let prompt = renderer.render_prompt(ctx, params, self.context())?;
+        let prompt = renderer.render_prompt(ir, ctx, params, self.context())?;
         log::debug!("WithPrompt.render_prompt => {:#?}", prompt);
 
         let mut prompt = match (features.completion, features.chat) {
