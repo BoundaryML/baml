@@ -32,7 +32,7 @@ async def test_should_work_for_all_inputs():
         myArg2=NamedArgsSingleClass(
             key="key",
             key_two=True,
-            key_three=52,
+            key_three=64,
         ),
     )
     assert "52" in res and "64" in res
