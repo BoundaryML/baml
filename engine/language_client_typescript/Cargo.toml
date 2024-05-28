@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 baml-types = { path = "../baml-lib/baml-types" }
-baml-runtime = { path = "../baml-runtime", features = [] }
+baml-runtime = { path = "../baml-runtime", features = ["internal"] }
 env_logger.workspace = true
 futures.workspace = true
 internal-baml-codegen.workspace = true
