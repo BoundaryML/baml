@@ -142,10 +142,6 @@ dist-ssr
 dist/
 ehthumbs.db
 ehthumbs_vista.db
-engine/language_client_typescript/*.d.ts
-engine/language_client_typescript/*.d.ts.map
-engine/language_client_typescript/*.js
-!engine/language_client_typescript/cli.js
 jspm_packages/
 lerna-debug.log*
 logs
