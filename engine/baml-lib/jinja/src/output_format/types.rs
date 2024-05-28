@@ -159,7 +159,7 @@ impl std::fmt::Display for ClassRender {
         writeln!(f, "{{")?;
         for value in &self.values {
             if let Some(desc) = &value.description {
-                writeln!(f, "  // {}", desc.replace("\n", "\n  //"))?;
+                writeln!(f, "  // {}", desc.replace("\n", "\n  // "))?;
             }
             writeln!(
                 f,
