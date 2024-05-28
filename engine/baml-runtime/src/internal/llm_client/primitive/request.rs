@@ -34,6 +34,7 @@ pub async fn make_request(
     stream: bool,
 ) -> Result<(Response, web_time::SystemTime, web_time::Instant), LLMResponse> {
     let (system_now, instant_now) = (web_time::SystemTime::now(), web_time::Instant::now());
+    log::info!("Making request using client {}", client.context().name);
 
     let req = match client
         .build_request(prompt, stream)

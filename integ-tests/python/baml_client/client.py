@@ -525,6 +525,20 @@ class BamlClient:
       mdl = create_model("PromptTestOpenAIChatNoSystemReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    async def TestFallbackClient(
+        self,
+        
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestFallbackClient",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+      )
+      mdl = create_model("TestFallbackClientReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def TestFnNamedArgsSingleBool(
         self,
         myBool: bool
@@ -677,6 +691,34 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestOllamaReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    async def TestRetryConstant(
+        self,
+        
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestRetryConstant",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+      )
+      mdl = create_model("TestRetryConstantReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    async def TestRetryExponential(
+        self,
+        
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestRetryExponential",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+      )
+      mdl = create_model("TestRetryExponentialReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
     async def UnionTest_Function(
@@ -1523,6 +1565,29 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def TestFallbackClient(
+        self,
+        
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestFallbackClient",
+        {
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+
+      mdl = create_model("TestFallbackClientReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestFallbackClientPartialReturnType", inner=(Optional[str], ...))
+
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
     def TestFnNamedArgsSingleBool(
         self,
         myBool: bool
@@ -1779,6 +1844,52 @@ class BamlStreamClient:
 
       mdl = create_model("TestOllamaReturnType", inner=(str, ...))
       partial_mdl = create_model("TestOllamaPartialReturnType", inner=(Optional[str], ...))
+
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestRetryConstant(
+        self,
+        
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestRetryConstant",
+        {
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+
+      mdl = create_model("TestRetryConstantReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestRetryConstantPartialReturnType", inner=(Optional[str], ...))
+
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestRetryExponential(
+        self,
+        
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestRetryExponential",
+        {
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+
+      mdl = create_model("TestRetryExponentialReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestRetryExponentialPartialReturnType", inner=(Optional[str], ...))
 
 
       return baml_py.BamlStream[Optional[str], str](

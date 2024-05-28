@@ -31,3 +31,17 @@ client<llm> RetryClientExponential {
     api_key "blahh"
   }
 }
+
+function TestRetryConstant() -> string {
+  client RetryClientConstant
+  prompt #"
+    Say a haiku
+  "#
+}
+
+function TestRetryExponential() -> string {
+  client RetryClientExponential
+  prompt #"
+    Say a haiku
+  "#
+}

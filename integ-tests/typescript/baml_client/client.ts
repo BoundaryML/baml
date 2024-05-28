@@ -472,6 +472,19 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
+  async TestFallbackClient(
+      
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestFallbackClient",
+      {
+        
+      },
+      this.ctx_manager.get(),
+    )
+    return raw.parsed() as string
+  }
+  
   async TestFnNamedArgsSingleBool(
       myBool: boolean
   ): Promise<string> {
@@ -609,6 +622,32 @@ export class BamlClient {
       "TestOllama",
       {
         "input": input,
+      },
+      this.ctx_manager.get(),
+    )
+    return raw.parsed() as string
+  }
+  
+  async TestRetryConstant(
+      
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestRetryConstant",
+      {
+        
+      },
+      this.ctx_manager.get(),
+    )
+    return raw.parsed() as string
+  }
+  
+  async TestRetryExponential(
+      
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestRetryExponential",
+      {
+        
       },
       this.ctx_manager.get(),
     )
@@ -1284,6 +1323,24 @@ class BamlStreamClient {
     )
   }
   
+  TestFallbackClient(
+      
+  ): BamlStream<(string | null), string> {
+    const raw = this.runtime.streamFunction(
+      "TestFallbackClient",
+      {
+      },
+      undefined,
+      this.ctx_manager.get(),
+    )
+    return new BamlStream<(string | null), string>(
+      raw,
+      (a): a is (string | null) => a,
+      (a): a is string => a,
+      this.ctx_manager.get(),
+    )
+  }
+  
   TestFnNamedArgsSingleBool(
       myBool: boolean
   ): BamlStream<(string | null), string> {
@@ -1482,6 +1539,42 @@ class BamlStreamClient {
       "TestOllama",
       {
         "input": input,
+      },
+      undefined,
+      this.ctx_manager.get(),
+    )
+    return new BamlStream<(string | null), string>(
+      raw,
+      (a): a is (string | null) => a,
+      (a): a is string => a,
+      this.ctx_manager.get(),
+    )
+  }
+  
+  TestRetryConstant(
+      
+  ): BamlStream<(string | null), string> {
+    const raw = this.runtime.streamFunction(
+      "TestRetryConstant",
+      {
+      },
+      undefined,
+      this.ctx_manager.get(),
+    )
+    return new BamlStream<(string | null), string>(
+      raw,
+      (a): a is (string | null) => a,
+      (a): a is string => a,
+      this.ctx_manager.get(),
+    )
+  }
+  
+  TestRetryExponential(
+      
+  ): BamlStream<(string | null), string> {
+    const raw = this.runtime.streamFunction(
+      "TestRetryExponential",
+      {
       },
       undefined,
       this.ctx_manager.get(),

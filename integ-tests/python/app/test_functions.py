@@ -75,3 +75,18 @@ async def test_should_work_for_all_outputs():
 @pytest.mark.asyncio
 async def test_should_work_with_image():
     pass  # TODO: Handle image testing when type definitions and support are available
+
+
+@pytest.mark.asyncio
+async def test_works_with_retries2():
+    try:
+        await b.TestRetryExponential()
+        assert False, "Expected an exception but none was raised."
+    except Exception as e:
+        print("Expected error", e)
+
+
+@pytest.mark.asyncio
+async def test_works_with_fallbacks():
+    res = await b.TestFallbackClient()
+    assert len(res) > 0, "Expected non-empty result but got empty."
