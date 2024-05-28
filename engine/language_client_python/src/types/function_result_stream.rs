@@ -67,7 +67,7 @@ impl FunctionResultStream {
             let ctx_mng = ctx_mng;
             let mut locked = inner.lock().await;
             let (res, _) = locked.run(rt.internal().ir(), on_event, &ctx_mng).await;
-            res.map(FunctionResultPy::from)
+            res.map(FunctionResult::from)
                 .map_err(BamlError::from_anyhow)
         })
         .map(|f| f.into())

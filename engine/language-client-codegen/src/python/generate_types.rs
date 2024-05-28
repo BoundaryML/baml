@@ -119,10 +119,7 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
     }
 }
 
-pub fn add_default_value(
-    node: &internal_baml_core::ir::repr::FieldType,
-    type_str: &String,
-) -> String {
+pub fn add_default_value(node: &FieldType, type_str: &String) -> String {
     if type_str.starts_with("Optional[") {
         return format!("{} = None", type_str);
     } else {
