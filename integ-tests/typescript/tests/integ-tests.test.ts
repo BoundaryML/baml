@@ -16,7 +16,7 @@ describe('Integ tests', () => {
       key_two: true,
       key_three: 52,
     })
-    expect(res).toContain(52)
+    expect(res).toContain('52')
 
     res = await b.TestMulticlassNamedArgs(
       {
@@ -30,11 +30,20 @@ describe('Integ tests', () => {
         key_three: 64,
       },
     )
-    expect(res).toContain(52)
-    expect(res).toContain(64)
+    expect(res).toContain('52')
+    expect(res).toContain('64')
 
     res = await b.TestFnNamedArgsSingleEnumList([NamedArgsSingleEnumList.TWO])
     expect(res).toContain('TWO')
+
+    res = await b.TestFnNamedArgsSingleFloat(3.12)
+    expect(res).toContain('3.12')
+
+    res = await b.TestFnNamedArgsSingleInt(3566)
+    expect(res).toContain('3566')
+
+    // TODO fix the fact it's required.
+    //res = await b.FnNamedArgsSingleStringOptional()
   })
 
   it('should work with image', async () => {
