@@ -167,10 +167,6 @@ export function activate(context: vscode.ExtensionContext) {
   const bamlPlaygroundCommand = vscode.commands.registerCommand(
     'baml.openBamlPanel',
     (args?: { projectId?: string; functionName?: string; implName?: string; showTests?: boolean }) => {
-      const projectId = args?.projectId
-      const initialFunctionName = args?.functionName
-      const initialImplName = args?.implName
-      const showTests = args?.showTests
       const config = vscode.workspace.getConfiguration()
       config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
       WebPanelView.render(context.extensionUri)

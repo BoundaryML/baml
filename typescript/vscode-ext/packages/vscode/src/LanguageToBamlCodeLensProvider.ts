@@ -1,31 +1,17 @@
-import type { ParserDatabase } from '@baml/common'
 import * as vscode from 'vscode'
-import { URI } from 'vscode-languageclient'
-import { type LanguageClient } from 'vscode-languageclient/node'
 import { getBAMLFunctions } from './plugins/language-server'
-let client: LanguageClient
 
 export class LanguageToBamlCodeLensProvider implements vscode.CodeLensProvider {
-  // public setDB(path: string, db: ParserDatabase) {
-  //   this.path = path
-  //   this.db = db
-  // }
-
   public async provideCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
-    console.log('providing code lenses')
-    try {
-      if (document.languageId === 'python' || document.languageId === 'typescript') {
-        return this.getCodeLenses(document)
-      }
-    } catch (e) {
-      console.log('Error providing code lenses' + JSON.stringify(e, null, 2))
+    if (document.languageId === 'python' || document.languageId === 'typescript') {
+      return this.getCodeLenses(document)
     }
+
     const codeLenses: vscode.CodeLens[] = []
     return codeLenses
   }
 
   private async getCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
-    console.log('Getting code lenses')
     const codeLenses: vscode.CodeLens[] = []
 
     const text = document.getText()
@@ -36,13 +22,13 @@ export class LanguageToBamlCodeLensProvider implements vscode.CodeLensProvider {
     }
 
     // Match all occurrences of baml function calls
-    const functionCalls = [...text.matchAll(/(baml|b)\.[a-zA-Z0-9_]+/g)]
+    const functionCalls = [...text.matchAll(/(baml|b)(\.[a-zA-Z0-9_]+)+/g)]
     if (functionCalls.length === 0) {
       return codeLenses
     }
 
     let bamlFunctions: any
-    console.log('Making client request')
+
     try {
       // Get BAML functions in this project
       const response = await getBAMLFunctions()
@@ -50,35 +36,24 @@ export class LanguageToBamlCodeLensProvider implements vscode.CodeLensProvider {
         return codeLenses
       }
       bamlFunctions = JSON.parse(response)
-      console.log('BAML functions received')
-      console.log(`bamlFunctions: ${JSON.stringify(bamlFunctions, null, 2)}`)
     } catch (e) {
       console.error(`Error fetching BAML functions: ${e}`)
       return codeLenses
-    }
-
-    if (bamlFunctions) {
-      bamlFunctions.forEach((func: { name: string }) => {
-        console.log(func.name)
-      })
-    } else {
-      console.log('No functions to display.')
     }
 
     // Iterate over each function call
     functionCalls.forEach((match) => {
       const call = match[0]
       const position = match.index ?? 0
-      const functionName = call.split('.')[1]
-      console.log(`Current iterated function name: ${functionName}`)
+      const functionArr = call.split('.')
+      const functionName = functionArr[functionArr.length - 1]
+
       // Find the corresponding function definition in bamlFunctions
       const functionDef = bamlFunctions.find((f: any) => f.name === functionName)
       if (functionDef) {
-        console.log(`Found function definition: ${functionDef}`)
         const range = new vscode.Range(document.positionAt(position), document.positionAt(position + call.length))
 
         // Placeholder function to parse arguments into a readable format
-        const formatArguments = (args: any) => args.map((arg: any) => `${arg.name}: ${arg.type}`).join(', ')
 
         // Create the command for the code lens
         const command: vscode.Command = {

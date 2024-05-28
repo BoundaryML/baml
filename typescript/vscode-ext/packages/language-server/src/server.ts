@@ -396,15 +396,12 @@ export function startServer(options?: LSOptions): void {
       const lang = getLanguageExtension(doc.uri)
 
       if (lang === 'baml') {
-        console.log('BAML definition')
         //accesses project from uri via bamlProjectManager
         const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
         if (proj) {
           //returns the definition of reference within the project
           return proj.handleDefinitionRequest(doc, params.position)
         }
-      } else if (lang == 'py') {
-        console.log('Python definition')
       }
     }
     return undefined
@@ -674,26 +671,16 @@ export function startServer(options?: LSOptions): void {
   })
 
   connection.onRequest('getBAMLFunctions', async () => {
-    console.log('client request getBAMLFunctions')
-
     const allFunctions: any[] = []
     const projects = bamlProjectManager.get_projects()
 
     if (!projects || projects.size === 0) {
-      console.log('No projects found in bamlProjectManager')
       return { functions: allFunctions }
     }
 
     for (const [id, proj] of projects.entries()) {
-      console.log(`Processing project: ${id}`)
       const functions = proj.list_functions()
       allFunctions.push(...functions.map((func) => func.toJSON()))
-    }
-
-    if (allFunctions.length > 0) {
-      console.log(`Found ${allFunctions.length} functions`)
-    } else {
-      console.log('No functions found')
     }
 
     return JSON.stringify(allFunctions)
