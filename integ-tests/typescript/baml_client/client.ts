@@ -1325,6 +1325,7 @@ class BamlStreamClient {
     const raw = this.runtime.streamFunction(
       "TestFallbackClient",
       {
+        
       },
       undefined,
       this.ctx_manager.get(),
@@ -1552,6 +1553,7 @@ class BamlStreamClient {
     const raw = this.runtime.streamFunction(
       "TestRetryConstant",
       {
+        
       },
       undefined,
       this.ctx_manager.get(),
@@ -1570,6 +1572,7 @@ class BamlStreamClient {
     const raw = this.runtime.streamFunction(
       "TestRetryExponential",
       {
+        
       },
       undefined,
       this.ctx_manager.get(),
