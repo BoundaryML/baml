@@ -420,32 +420,28 @@ const plugin: BamlVSCodePlugin = {
         },
       ),
 
-      commands.registerCommand('baml.jumpToDefinition', async (args: { sourceFile?: string; name?: string }) => {
-        const { sourceFile, name } = args
-        if (!sourceFile || !name) {
-          return
-        }
-
-        const response = await client.sendRequest('getDefinition', { sourceFile, name })
-        if (response) {
-          const { targetUri, targetRange, targetSelectionRange } = response as {
-            targetUri: string
-            targetRange: {
-              start: { line: number; column: number }
-              end: { line: number; column: number }
-            }
-            targetSelectionRange: {
-              start: { line: number; column: number }
-              end: { line: number; column: number }
-            }
+      commands.registerCommand(
+        'baml.jumpToDefinition',
+        async (args: { file_path: string; start: number; end: number }) => {
+          if (!args.file_path) {
+            vscode.window.showErrorMessage('File path is missing.')
+            return
           }
-          const uri = Uri.parse(targetUri)
-          const doc = await workspace.openTextDocument(uri)
-          // go to line
-          const selection = new vscode.Selection(targetSelectionRange.start.line, 0, targetSelectionRange.end.line, 0)
-          await window.showTextDocument(doc, { selection, viewColumn: ViewColumn.Beside })
-        }
-      }),
+
+          try {
+            const uri = vscode.Uri.file(args.file_path)
+            const doc = await vscode.workspace.openTextDocument(uri)
+
+            const start = doc.positionAt(args.start)
+            const end = doc.positionAt(args.end)
+            const range = new vscode.Range(start, end)
+
+            await vscode.window.showTextDocument(doc, { selection: range, viewColumn: vscode.ViewColumn.Beside })
+          } catch (error) {
+            vscode.window.showErrorMessage(`Error navigating to function definition: ${error}`)
+          }
+        },
+      ),
     )
 
     activateClient(context, serverOptions, clientOptions)

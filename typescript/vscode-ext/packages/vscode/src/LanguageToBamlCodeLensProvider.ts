@@ -92,9 +92,7 @@ export class LanguageToBamlCodeLensProvider implements vscode.CodeLensProvider {
 
         // Create the command for the code lens
         const command: vscode.Command = {
-          title: `▶️ ${functionDef.name}(${formatArguments(functionDef.input)}) -> ${formatArguments(
-            functionDef.output,
-          )}`,
+          title: `▶️ Open ${functionDef.name} in BAML`,
           tooltip: 'Jump to definition',
           command: 'baml.jumpToDefinition',
           arguments: [
