@@ -263,14 +263,6 @@ pub struct WasmFunction {
     pub test_snippet: String,
 }
 
-// #[wasm_bindgen(getter_with_clone, inspectable)]
-// pub struct BasicFunction{
-//     pub name: String,
-//     pub file_name: String,
-//     pub start: usize,
-//     pub end: usize
-// }
-
 #[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Clone)]
 pub struct WasmSpan {
@@ -667,30 +659,6 @@ impl WasmRuntime {
                 }),
                 None => false,
             })
-    }
-
-    // #[wasm_bindgen]
-    // pub fn list_basic_functions(&self) -> Vec<BasicFunction> {
-    //     self.runtime
-    //         .internal()
-    //         .ir()
-    //         .walk_functions()
-    //         .map(|f| {
-    //             let span = f.span().unwrap_or_else(|| baml_runtime::Span {
-    //                 file: baml_runtime::File::new("".to_string()),
-    //                 start: 0,
-    //                 end: 0,
-    //             });
-
-    //             BasicFunction {
-    //                 name: f.name().to_string(),
-    //                 file_name: span.file.path().to_string(),
-    //                 start: span.start,
-    //                 end: span.end,
-    //             }
-    //         })
-    //         .collect()
-    // }
 
 
     #[wasm_bindgen]

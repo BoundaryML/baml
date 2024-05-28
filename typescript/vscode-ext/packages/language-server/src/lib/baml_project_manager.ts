@@ -126,13 +126,11 @@ class Project {
       return []
     }
 
-    console.log(`cleaned_word: ${cleaned_word}`)
     // Search for the symbol in the runtime
     const match = this.runtime().search_for_symbol(cleaned_word)
 
     // If we found a match, return the location
     if (match) {
-      console.log(`match found for ${cleaned_word}`)
       return [
         {
           targetUri: match.uri.toString(),
@@ -449,23 +447,6 @@ class BamlProjectManager {
 
   get_projects() {
     return this.projects
-  }
-
-  get_project_from_py_call(funcName: string) {
-    const splitFuncName = funcName.split('.')
-    const finalFuncName = splitFuncName[1]
-    console.log(`finalFuncName: ${finalFuncName}`)
-    console.log(`num of projects: ${this.projects.size}`)
-    for (const project of this.projects.values()) {
-      console.log(`project: ${project}`)
-      const functions = project.list_functions()
-      for (const func of functions) {
-        console.log(`iterated func.name: ${func.name}`)
-        if (func.name === finalFuncName) {
-          return project
-        }
-      }
-    }
   }
 
   async touch_project(path: URI) {
