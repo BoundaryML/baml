@@ -48,8 +48,15 @@ impl BamlRuntime {
         args: serde_json::Value,
         ctx: &RuntimeContextManager,
     ) -> napi::Result<FunctionResult> {
-        let args: BamlValue = serde_json::from_value(args)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
+        let args: BamlValue = serde_json::from_value(args).map_err(|e| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                format!(
+                    "Unabled to parse args to function {function_name}: {}",
+                    e.to_string()
+                ),
+            )
+        })?;
         let Some(args_map) = args.as_map() else {
             return Err(napi::Error::new(
                 napi::Status::GenericFailure,

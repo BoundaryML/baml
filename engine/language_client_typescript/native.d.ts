@@ -10,16 +10,16 @@ export class BamlImage {
 }
 
 export class BamlRuntime {
-  static fromDirectory(directory: string, envVars: Record<string, string>): BamlRuntimeTs
-  static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): BamlRuntimeTs
+  static fromDirectory(directory: string, envVars: Record<string, string>): BamlRuntime
+  static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): BamlRuntime
   createContextManager(): RuntimeContextManager
   callFunction(functionName: string, args: any, ctx: RuntimeContextManager): Promise<FunctionResult>
-  streamFunction(functionName: string, args: any, cb: (err: any, param: FunctionResultPy) => void, ctx: RuntimeContextManager): FunctionResultStream
+  streamFunction(functionName: string, args: any, cb: (err: any, param: FunctionResult) => void, ctx: RuntimeContextManager): FunctionResultStream
   flush(): void
 }
 
 export class BamlSpan {
-  static new(runtime: BamlRuntime, functionName: string, args: any, ctx: RuntimeContextManager): BamlSpanPy
+  static new(runtime: BamlRuntime, functionName: string, args: any, ctx: RuntimeContextManager): BamlSpan
   finish(result: any, ctx: RuntimeContextManager): Promise<any>
 }
 
@@ -29,7 +29,7 @@ export class FunctionResult {
 
 export class FunctionResultStream {
   onEvent(func: (err: any, param: FunctionResult) => void): void
-  done(rctx: RuntimeContextManager): Promise<FunctionResult>
+  done(rt: BamlRuntime, rctx: RuntimeContextManager): Promise<FunctionResult>
 }
 
 export class RuntimeContextManager {

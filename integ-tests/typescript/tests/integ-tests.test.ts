@@ -17,6 +17,7 @@ describe('Integ tests', () => {
       key_two: true,
       key_three: 52,
     })
+    console.log('got response', res)
     expect(res).toContain('52')
 
     res = await b.TestMulticlassNamedArgs(
@@ -44,7 +45,7 @@ describe('Integ tests', () => {
     expect(res).toContain('3566')
 
     // TODO fix the fact it's required.
-    //res = await b.FnNamedArgsSingleStringOptional()
+    // res = await b.FnNamedArgsSingleStringOptional()
   })
 
   it('should work for all outputs', async () => {
