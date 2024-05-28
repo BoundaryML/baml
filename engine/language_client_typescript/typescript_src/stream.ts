@@ -56,7 +56,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
     }
   }
 
-  async done(): Promise<FinalOutputType> {
+  async getFinalResponse(): Promise<FinalOutputType> {
     const final = await this.driveToCompletionInBg()
 
     return this.finalCoerce(final.parsed())
