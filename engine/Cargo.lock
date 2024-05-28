@@ -381,27 +381,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml-ffi"
-version = "0.20.0-canary.0"
-dependencies = [
- "anyhow",
- "chrono",
- "colored",
- "envy",
- "hostname",
- "internal-baml-jinja",
- "napi",
- "napi-build",
- "napi-derive",
- "reqwest 0.11.24",
- "serde",
- "serde_json",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "baml-fmt"
 version = "0.20.0-canary.0"
 dependencies = [
@@ -3643,19 +3622,7 @@ checksum = "c3523ab5a71916ccf420eebdf5521fcef02141234bbc0b8a49f2fdc4544364ef"
 dependencies = [
  "log",
  "pin-project-lite",
- "tracing-attributes",
  "tracing-core",
-]
-
-[[package]]
-name = "tracing-attributes"
-version = "0.1.27"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.52",
 ]
 
 [[package]]
@@ -3690,7 +3657,6 @@ dependencies = [
  "once_cell",
  "regex",
  "sharded-slab",
- "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",

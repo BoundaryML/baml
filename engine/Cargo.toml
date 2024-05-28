@@ -3,7 +3,6 @@ resolver = "2"
 members = [
   "baml-cli",
   "baml-lib/*",
-  "baml-core-ffi",
   "baml-fmt",
   "baml-runtime",
   "baml-schema-wasm",
