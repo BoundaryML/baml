@@ -25,6 +25,14 @@ macro_rules! lang_wrapper {
         }
     };
 
+    ($name:ident, $type:ty, custom_finalize, no_from, thread_safe $(, $attr_name:ident : $attr_type:ty)*) => {
+        #[napi_derive::napi(custom_finalize)]
+        pub struct $name {
+            pub(crate) inner: std::sync::Arc<tokio::sync::Mutex<$type>>,
+            $($attr_name: $attr_type),*
+        }
+    };
+
     ($name:ident, $type:ty, thread_safe $(, $attr_name:ident : $attr_type:ty)*) => {
         #[napi_derive::napi]
         pub struct $name {

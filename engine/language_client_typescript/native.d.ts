@@ -29,7 +29,7 @@ export class FunctionResult {
 
 export class FunctionResultStream {
   onEvent(func: (err: any, param: FunctionResult) => void): void
-  done(rt: BamlRuntime, rctx: RuntimeContextManager): Promise<FunctionResult>
+  done(rctx: RuntimeContextManager): Promise<FunctionResult>
 }
 
 export class RuntimeContextManager {
