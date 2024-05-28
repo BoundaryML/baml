@@ -6,8 +6,6 @@ import { getBAMLFunctions } from './plugins/language-server'
 let client: LanguageClient
 
 export class LanguageToBamlCodeLensProvider implements vscode.CodeLensProvider {
-  private db: ParserDatabase | undefined
-
   // public setDB(path: string, db: ParserDatabase) {
   //   this.path = path
   //   this.db = db
@@ -16,10 +14,8 @@ export class LanguageToBamlCodeLensProvider implements vscode.CodeLensProvider {
   public async provideCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
     console.log('providing code lenses')
     try {
-      if (document.languageId === 'python') {
-        return this.getPythonCodeLenses(document)
-      } else if (document.languageId === 'typescript') {
-        return this.getTypeScriptCodeLenses(document)
+      if (document.languageId === 'python' || document.languageId === 'typescript') {
+        return this.getCodeLenses(document)
       }
     } catch (e) {
       console.log('Error providing code lenses' + JSON.stringify(e, null, 2))
@@ -28,14 +24,8 @@ export class LanguageToBamlCodeLensProvider implements vscode.CodeLensProvider {
     return codeLenses
   }
 
-  private getTypeScriptCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
-    const codeLenses: vscode.CodeLens[] = []
-
-    return codeLenses
-  }
-
-  private async getPythonCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
-    console.log('Getting Python code lenses')
+  private async getCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
+    console.log('Getting code lenses')
     const codeLenses: vscode.CodeLens[] = []
 
     const text = document.getText()

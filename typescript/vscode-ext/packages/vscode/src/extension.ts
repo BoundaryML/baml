@@ -199,9 +199,15 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(bamlPlaygroundCommand)
   console.log('pushing glooLens')
+
+  const pythonSelector = { language: 'python', scheme: 'file' }
+  const typescriptSelector = { language: 'typescript', scheme: 'file' }
+
   context.subscriptions.push(
-    vscode.languages.registerCodeLensProvider({ scheme: 'file', language: 'python' }, glooLens),
+    vscode.languages.registerCodeLensProvider(pythonSelector, glooLens),
+    vscode.languages.registerCodeLensProvider(typescriptSelector, glooLens),
   )
+
   context.subscriptions.push(diagnosticsCollection)
 
   // Add cursor movement listener
