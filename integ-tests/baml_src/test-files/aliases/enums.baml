@@ -30,11 +30,12 @@ function FnTestAliasedEnumOutput(input: string) -> TestEnum {
   prompt #"
     Classify the user input into the following category
       
-    {{ctx.output_format}}
-    ---
+    {{ ctx.output_format }}
 
-    input: {{input}}
+    {{ _.role('user') }}
+    {{input}}
 
+    {{ _.role('assistant') }}
     Category ID:
   "#
 }

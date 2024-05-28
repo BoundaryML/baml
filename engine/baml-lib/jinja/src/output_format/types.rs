@@ -120,7 +120,7 @@ impl EnumRender {
         let mut result = format!("{}\n{}", self.name, self.delimiter);
         for value in &self.values {
             result.push_str(&format!(
-                "{}{}\n",
+                "\n{}{}",
                 match options.enum_value_prefix {
                     RenderSetting::Auto => "- ",
                     RenderSetting::Always(ref prefix) => prefix,
@@ -192,7 +192,7 @@ impl OutputFormatContent {
             RenderSetting::Auto => match &self.target {
                 FieldType::Primitive(TypeValue::String) => None,
                 FieldType::Primitive(_) => Some("Answer as a: "),
-                FieldType::Enum(_) => Some("Answer with any of the categories: "),
+                FieldType::Enum(_) => Some("Answer with any of the categories:\n"),
                 FieldType::Class(_) => Some("Answer in JSON using this schema:\n"),
                 FieldType::List(_) => Some("Answer with a JSON Array using this schema:\n"),
                 FieldType::Union(_) => Some("Answer in JSON using any of these schemas:\n"),
@@ -345,7 +345,16 @@ impl OutputFormatContent {
 
         let message = match &self.target {
             FieldType::Primitive(TypeValue::String) if prefix.is_none() => None,
-            FieldType::Enum(_) => None,
+            FieldType::Enum(e) => {
+                let Some(enm) = self.enums.iter().find(|enm| enm.name.name == *e) else {
+                    return Err(minijinja::Error::new(
+                        minijinja::ErrorKind::BadSerialization,
+                        format!("Enum {} not found", e),
+                    ));
+                };
+
+                Some(self.enum_to_string(enm, &options))
+            }
             _ => Some(self.inner_type_render(&options, &self.target, &mut render_state, false)?),
         };
 

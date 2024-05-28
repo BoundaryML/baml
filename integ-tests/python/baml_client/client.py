@@ -35,11 +35,11 @@ def coerce(cls: BaseModel, parsed: Any) -> Any:
     ) from e
 
 class BamlClient:
-    __runtime: baml_py.BamlRuntimePy
+    __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
 
-    def __init__(self, runtime: baml_py.BamlRuntimePy, ctx_manager: baml_py.BamlCtxManager):
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
@@ -61,7 +61,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("ClassifyMessageReturnType", inner=(types.Category, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def ClassifyMessage2(
         self,
@@ -75,7 +75,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("ClassifyMessage2ReturnType", inner=(types.Category, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def ClassifyMessage3(
         self,
@@ -89,7 +89,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("ClassifyMessage3ReturnType", inner=(types.Category, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def DescribeImage(
         self,
@@ -103,7 +103,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("DescribeImageReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def DescribeImage2(
         self,
@@ -117,7 +117,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("DescribeImage2ReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def DescribeImage3(
         self,
@@ -131,7 +131,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("DescribeImage3ReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def DescribeImage4(
         self,
@@ -145,7 +145,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("DescribeImage4ReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def ExtractNames(
         self,
@@ -159,7 +159,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("ExtractNamesReturnType", inner=(List[str], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def ExtractResume(
         self,
@@ -173,7 +173,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("ExtractResumeReturnType", inner=(types.Resume, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def ExtractResume2(
         self,
@@ -187,7 +187,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("ExtractResume2ReturnType", inner=(types.Resume, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnClassOptionalOutput(
         self,
@@ -201,7 +201,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnClassOptionalOutputReturnType", inner=(Optional[types.ClassOptionalOutput], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnClassOptionalOutput2(
         self,
@@ -215,7 +215,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnClassOptionalOutput2ReturnType", inner=(Optional[types.ClassOptionalOutput2], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnEnumListOutput(
         self,
@@ -229,7 +229,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnEnumListOutputReturnType", inner=(List[types.EnumOutput], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnEnumOutput(
         self,
@@ -243,7 +243,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnEnumOutputReturnType", inner=(types.EnumOutput, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnNamedArgsSingleStringOptional(
         self,
@@ -257,7 +257,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnNamedArgsSingleStringOptionalReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnOutputBool(
         self,
@@ -271,7 +271,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnOutputBoolReturnType", inner=(bool, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnOutputClass(
         self,
@@ -285,7 +285,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnOutputClassReturnType", inner=(types.TestOutputClass, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnOutputClassList(
         self,
@@ -299,7 +299,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnOutputClassListReturnType", inner=(List[types.TestOutputClass], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnOutputClassWithEnum(
         self,
@@ -313,7 +313,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnOutputClassWithEnumReturnType", inner=(types.TestClassWithEnum, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnOutputNestedClass(
         self,
@@ -327,7 +327,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnOutputNestedClassReturnType", inner=(types.TestOutputClassNested, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnOutputStringList(
         self,
@@ -341,7 +341,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnOutputStringListReturnType", inner=(List[str], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnTestAliasedEnumOutput(
         self,
@@ -355,7 +355,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnTestAliasedEnumOutputReturnType", inner=(types.TestEnum, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnTestClassAlias(
         self,
@@ -369,7 +369,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnTestClassAliasReturnType", inner=(types.TestClassAlias, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnTestNamedArgsSingleEnum(
         self,
@@ -383,7 +383,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnTestNamedArgsSingleEnumReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def GetDataType(
         self,
@@ -397,7 +397,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("GetDataTypeReturnType", inner=(types.RaysData, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def GetOrderInfo(
         self,
@@ -411,7 +411,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("GetOrderInfoReturnType", inner=(types.OrderInfo, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def GetQuery(
         self,
@@ -425,7 +425,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("GetQueryReturnType", inner=(types.SearchParams, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def OptionalTest_Function(
         self,
@@ -439,7 +439,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("OptionalTest_FunctionReturnType", inner=(List[Optional[types.OptionalTest_ReturnType]], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def PromptTestClaude(
         self,
@@ -453,7 +453,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("PromptTestClaudeReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def PromptTestClaudeChat(
         self,
@@ -467,7 +467,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("PromptTestClaudeChatReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def PromptTestClaudeChatNoSystem(
         self,
@@ -481,7 +481,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("PromptTestClaudeChatNoSystemReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def PromptTestOpenAI(
         self,
@@ -495,7 +495,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("PromptTestOpenAIReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def PromptTestOpenAIChat(
         self,
@@ -509,7 +509,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("PromptTestOpenAIChatReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def PromptTestOpenAIChatNoSystem(
         self,
@@ -523,7 +523,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("PromptTestOpenAIChatNoSystemReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleBool(
         self,
@@ -537,7 +537,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleBoolReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleClass(
         self,
@@ -551,7 +551,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleClassReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleEnumList(
         self,
@@ -565,7 +565,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleEnumListReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleFloat(
         self,
@@ -579,7 +579,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleFloatReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleInt(
         self,
@@ -593,7 +593,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleIntReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleString(
         self,
@@ -607,7 +607,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleStringReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleStringArray(
         self,
@@ -621,7 +621,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleStringArrayReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleStringList(
         self,
@@ -635,7 +635,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleStringListReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestImageInput(
         self,
@@ -649,7 +649,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestImageInputReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestMulticlassNamedArgs(
         self,
@@ -663,7 +663,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestMulticlassNamedArgsReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestOllama(
         self,
@@ -677,7 +677,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestOllamaReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def UnionTest_Function(
         self,
@@ -691,14 +691,14 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("UnionTest_FunctionReturnType", inner=(types.UnionTest_ReturnType, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
 
 class BamlStreamClient:
-    __runtime: baml_py.BamlRuntimePy
+    __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
 
-    def __init__(self, runtime: baml_py.BamlRuntimePy, ctx_manager: baml_py.BamlCtxManager):
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
 

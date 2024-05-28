@@ -9,10 +9,7 @@ class TestClassAlias {
 function FnTestClassAlias(input: string) -> TestClassAlias {
   client GPT35
   prompt #"
-    Return a json blob that has this schema:
     {{ctx.output_format}}
-
-    JSON:
   "#
 }
 
