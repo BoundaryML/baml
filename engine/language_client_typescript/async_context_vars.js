@@ -39,6 +39,9 @@ class CtxManager {
     async endTrace(span, response) {
         await span.finish(response, this.get());
     }
+    flush() {
+        this.rt.flush();
+    }
     traceFnSync(name, func) {
         return ((...args) => {
             const params = args.reduce((acc, arg, i) => ({

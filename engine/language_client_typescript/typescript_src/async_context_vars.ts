@@ -44,6 +44,10 @@ export class CtxManager {
     await span.finish(response, this.get())
   }
 
+  flush(): void {
+    this.rt.flush()
+  }
+
   traceFnSync<ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(name: string, func: F): F {
     return <F>((...args: any[]) => {
       const params = args.reduce(
