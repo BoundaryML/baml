@@ -13,19 +13,22 @@ pub struct SpanCtx {
 
 #[derive(Debug)]
 pub struct PropertyAttributes {
-    pub(crate) alias: Option<Option<String>>,
+    pub(crate) alias: Option<BamlValue>,
     pub(crate) skip: Option<bool>,
     pub(crate) meta: HashMap<String, BamlValue>,
 }
 
 #[derive(Debug)]
 pub struct RuntimeEnumOverride {
+    pub(crate) alias: Option<BamlValue>,
     pub(crate) values: HashMap<String, PropertyAttributes>,
 }
 
 #[derive(Debug)]
 pub struct RuntimeClassOverride {
-    pub(crate) properties: HashMap<String, (FieldType, PropertyAttributes)>,
+    pub(crate) alias: Option<BamlValue>,
+    pub(crate) new_fields: HashMap<String, (FieldType, PropertyAttributes)>,
+    pub(crate) update_fields: HashMap<String, PropertyAttributes>,
 }
 
 #[derive(Debug)]

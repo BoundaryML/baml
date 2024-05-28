@@ -36,7 +36,7 @@ pub use field::{Field, FieldArity, FieldType};
 pub use find_at_position::*;
 pub use function::{FuncArguementId, Function, FunctionArg, FunctionArgs, NamedFunctionArgList};
 pub use generator_config::GeneratorConfig;
-pub use identifier::{Identifier, RefIdentifier, TypeValue};
+pub use identifier::{Identifier, RefIdentifier};
 pub use indentation_type::IndentationType;
 pub use internal_baml_diagnostics::Span;
 pub use newline_type::NewlineType;

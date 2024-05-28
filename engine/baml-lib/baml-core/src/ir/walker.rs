@@ -78,7 +78,7 @@ impl<'a> Walker<'a, &'a Function> {
         &self.item.elem
     }
 
-    pub fn output(&self) -> &'a repr::FieldType {
+    pub fn output(&self) -> &'a baml_types::FieldType {
         match &self.item.elem {
             repr::Function::V1(f) => &f.output.elem,
             repr::Function::V2(f) => &f.output.elem,
@@ -87,7 +87,7 @@ impl<'a> Walker<'a, &'a Function> {
 
     pub fn inputs(
         &self,
-    ) -> either::Either<&'a repr::FunctionArgs, &'a Vec<(String, repr::FieldType)>> {
+    ) -> either::Either<&'a repr::FunctionArgs, &'a Vec<(String, baml_types::FieldType)>> {
         self.item.elem.inputs()
     }
 
@@ -116,6 +116,18 @@ impl<'a> Walker<'a, &'a Enum> {
         })
     }
 
+    pub fn find_value(&self, name: &str) -> Option<Walker<'a, &'a EnumValue>> {
+        self.item
+            .elem
+            .values
+            .iter()
+            .find(|v| v.elem.0 == name)
+            .map(|v| Walker {
+                db: self.db,
+                item: v,
+            })
+    }
+
     pub fn elem(&self) -> &'a repr::Enum {
         &self.item.elem
     }
@@ -134,7 +146,7 @@ impl<'a> Walker<'a, &'a EnumValue> {
             .unwrap_or(Ok(false))
     }
 
-    pub fn name(&self) -> &str {
+    pub fn name(&'a self) -> &'a str {
         &self.item.elem.0
     }
 
@@ -325,6 +337,18 @@ impl<'a> Walker<'a, &'a Class> {
         })
     }
 
+    pub fn find_field(&'a self, name: &str) -> Option<Walker<'a, &'a Field>> {
+        self.item
+            .elem
+            .static_fields
+            .iter()
+            .find(|f| f.elem.name == name)
+            .map(|f| Walker {
+                db: self.db,
+                item: f,
+            })
+    }
+
     pub fn elem(&self) -> &'a repr::Class {
         &self.item.elem
     }
@@ -401,11 +425,11 @@ impl<'a> Walker<'a, &'a Field> {
         &self.elem().name
     }
 
-    pub fn r#type(&'a self) -> &'a repr::FieldType {
+    pub fn r#type(&'a self) -> &'a baml_types::FieldType {
         &self.elem().r#type.elem
     }
 
-    pub fn elem(&self) -> &'a repr::Field {
+    pub fn elem(&'a self) -> &'a repr::Field {
         &self.item.elem
     }
 

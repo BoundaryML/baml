@@ -108,12 +108,12 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                     "rtype": "primitive",
                     "optional": arity.is_optional(),
                     "value": match name {
-                        ast::TypeValue::Bool => "bool",
-                        ast::TypeValue::Int => "int",
-                        ast::TypeValue::Float => "float",
-                        ast::TypeValue::String => "string",
-                        ast::TypeValue::Null => "null",
-                        ast::TypeValue::Image => "image",
+                        baml_types::TypeValue::Bool => "bool",
+                        baml_types::TypeValue::Int => "int",
+                        baml_types::TypeValue::Float => "float",
+                        baml_types::TypeValue::String => "string",
+                        baml_types::TypeValue::Null => "null",
+                        baml_types::TypeValue::Image => "image",
                     }
                 })
             }

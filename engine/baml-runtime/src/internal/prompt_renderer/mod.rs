@@ -64,7 +64,7 @@ impl PromptRenderer {
         internal_baml_jinja::render_prompt(
             &config.prompt_template,
             params,
-            &RenderContext {
+            RenderContext {
                 client: client_ctx.clone(),
                 tags: ctx.tags.clone(),
                 output_format: render_output_format(ir, ctx, &func_v2.output.elem)?,

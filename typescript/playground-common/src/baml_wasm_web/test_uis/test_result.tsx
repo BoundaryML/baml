@@ -93,6 +93,9 @@ const asSortedJson = (parsed: any): any => {
   if (typeof parsed !== 'object') {
     return parsed
   }
+  if (parsed === null || parsed === undefined) {
+    return parsed
+  }
 
   let sorted: Record<string, any> = {}
   Object.keys(parsed)

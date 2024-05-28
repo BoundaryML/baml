@@ -3,12 +3,14 @@ use colored::*;
 mod evaluate_type;
 mod get_vars;
 mod output_format;
+pub use output_format::types;
 
 use evaluate_type::get_variable_types;
 pub use evaluate_type::{PredefinedTypes, Type, TypeError};
 
 use minijinja::{self, value::Kwargs};
 use minijinja::{context, ErrorKind, Value};
+use output_format::types::OutputFormatContent;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -74,10 +76,10 @@ pub struct RenderContext_Client {
     pub provider: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Debug)]
 pub struct RenderContext {
     pub client: RenderContext_Client,
-    pub output_format: String,
+    pub output_format: OutputFormatContent,
     pub tags: HashMap<String, BamlValue>,
 }
 
@@ -93,7 +95,7 @@ const MAGIC_IMAGE_DELIMITER: &'static str = "BAML_IMAGE_MAGIC_STRING_DELIMITER";
 fn render_minijinja(
     template: &str,
     args: &minijinja::Value,
-    ctx: &RenderContext,
+    mut ctx: RenderContext,
     template_string_macros: &[TemplateStringMacro],
 ) -> Result<RenderedPrompt, minijinja::Error> {
     let mut env = get_env();
@@ -137,12 +139,14 @@ fn render_minijinja(
         .join("\n");
 
     env.add_template("prompt", &template)?;
+    let client = ctx.client.clone();
+    let tags = std::mem::take(&mut ctx.tags);
     let formatter = OutputFormat::new(ctx);
     env.add_global(
         "ctx",
         context! {
-            client => ctx.client,
-            tags => ctx.tags,
+            client => client,
+            tags => tags,
             output_format => minijinja::value::Value::from_object(formatter),
         },
     );
@@ -374,7 +378,7 @@ impl RenderedPrompt {
 // pub fn render_prompt(
 //     template: &str,
 //     args: &minijinja::Value,
-//     ctx: &RenderContext,
+//     ctx: RenderContext,
 //     template_string_macros: &[TemplateStringMacro],
 // ) -> anyhow::Result<RenderedPrompt> {
 //     let rendered = render_minijinja(template, args, ctx, template_string_macros);
@@ -399,7 +403,7 @@ impl RenderedPrompt {
 pub fn render_prompt(
     template: &str,
     args: &BamlValue,
-    ctx: &RenderContext,
+    ctx: RenderContext,
     template_string_macros: &[TemplateStringMacro],
 ) -> anyhow::Result<RenderedPrompt> {
     if !matches!(args, BamlValue::Map(_)) {
@@ -457,12 +461,12 @@ mod render_tests {
             "{{ _.chat(\"system\") }}
             Here is an image: {{ img }}",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
@@ -500,12 +504,12 @@ mod render_tests {
             "{{ _.chat(\"system\") }}
             Here is an image: {{ myObject.img }}",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
@@ -540,12 +544,12 @@ mod render_tests {
             "{{ _.chat(\"system\") }}
             Here is an image: {{ img }}. Please help me.",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
@@ -594,12 +598,12 @@ mod render_tests {
             
             ",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
@@ -659,12 +663,12 @@ mod render_tests {
                 after giving a response: {{ haiku_subject }}
             ",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
@@ -698,12 +702,12 @@ mod render_tests {
         let rendered = render_prompt(
             "{{ ctx.output_format }}",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
@@ -731,12 +735,12 @@ mod render_tests {
         let rendered = render_prompt(
             "{{ ctx.output_format() }}",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
@@ -764,21 +768,18 @@ mod render_tests {
         let rendered = render_prompt(
             "{{ ctx.output_format(prefix=null) }}",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
 
-        assert_eq!(
-            rendered,
-            RenderedPrompt::Completion("iambic pentameter".to_string())
-        );
+        assert_eq!(rendered, RenderedPrompt::Completion("string".into()));
 
         Ok(())
     }
@@ -795,12 +796,12 @@ mod render_tests {
         let rendered = render_prompt(
             "{{ ctx.output_format(prefix='custom format:') }}",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
@@ -845,12 +846,12 @@ mod render_tests {
                     hi!
             "#,
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
@@ -894,12 +895,12 @@ mod render_tests {
                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
             "#,
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
@@ -954,12 +955,12 @@ mod render_tests {
                 after giving a response: {{ haiku_subject }}
             ",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
@@ -996,12 +997,12 @@ mod render_tests {
         let rendered = render_prompt(
             "Hello, {{ name }!",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "output[]".to_string(),
+                output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
             },
             &vec![],

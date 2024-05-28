@@ -1,3 +1,5 @@
+use baml_types::TypeValue;
+
 use super::{Span, WithName, WithSpan};
 
 /// An identifier the refers to a field or type in a different location.
@@ -7,30 +9,6 @@ pub struct RefIdentifier {
     /// The identifier contents.
     pub name: String,
     pub full_name: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
-pub enum TypeValue {
-    String,
-    Int,
-    Float,
-    Bool,
-    // Char,
-    Null,
-    Image,
-}
-
-impl std::fmt::Display for TypeValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TypeValue::String => write!(f, "string"),
-            TypeValue::Int => write!(f, "int"),
-            TypeValue::Float => write!(f, "float"),
-            TypeValue::Bool => write!(f, "bool"),
-            TypeValue::Null => write!(f, "null"),
-            TypeValue::Image => write!(f, "image"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
