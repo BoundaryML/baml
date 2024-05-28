@@ -41,7 +41,7 @@ impl FunctionResultStream {
         env.get_undefined()
     }
 
-    #[napi(ts_return_type = "Promise<FunctionResultPy>")]
+    #[napi(ts_return_type = "Promise<FunctionResult>")]
     pub fn done(
         &self,
         env: Env,
