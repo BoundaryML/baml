@@ -55,6 +55,6 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
                 break
             yield self.__partial_coerce(event.parsed())
 
-    async def done(self):
+    async def get_final_response(self):
         final = await self.__drive_to_completion_in_bg()
         return self.__final_coerce(final.parsed())
