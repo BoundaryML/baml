@@ -1,5 +1,7 @@
+from __future__ import annotations
 from .baml_py import FunctionResult, FunctionResultStream, RuntimeContextManager
 from typing import Callable, Generic, Optional, TypeVar
+
 import asyncio
 
 PartialOutputType = TypeVar("PartialOutputType")
