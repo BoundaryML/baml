@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -16,7 +16,7 @@ pub struct GeneratorArgs {
     /// Path to the BAML source directory
     baml_src_dir: PathBuf,
 
-    input_file_map: HashMap<String, String>,
+    input_file_map: BTreeMap<PathBuf, String>,
 }
 
 fn relative_path_to_baml_src(path: &PathBuf, baml_src: &PathBuf) -> Result<PathBuf> {
@@ -30,32 +30,38 @@ fn relative_path_to_baml_src(path: &PathBuf, baml_src: &PathBuf) -> Result<PathB
 }
 
 impl GeneratorArgs {
-    pub fn new(
+    pub fn new<'i>(
         output_dir: impl Into<PathBuf>,
         baml_src_dir: impl Into<PathBuf>,
-        input_files: &HashMap<String, String>,
-    ) -> Self {
+        input_files: impl IntoIterator<Item = (&'i PathBuf, &'i String)>,
+    ) -> Result<Self> {
         let baml_src = baml_src_dir.into();
-        let input_file_map: HashMap<String, String> = input_files
-            .iter()
-            .map(|(k, v)| {
-                (
-                    relative_path_to_baml_src(&PathBuf::from(k.to_string()), &baml_src)
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .to_string(),
-                    v.clone(),
-                )
-            })
-            .collect();
+        let input_file_map: BTreeMap<PathBuf, String> = input_files
+            .into_iter()
+            .map(|(k, v)| Ok((relative_path_to_baml_src(k, &baml_src)?, v.clone())))
+            .collect::<Result<_>>()?;
 
-        Self {
+        Ok(Self {
             output_dir_relative_to_baml_src: output_dir.into(),
             baml_src_dir: baml_src.clone(),
             // for the key, whhich is the name, just get the filename
             input_file_map,
-        }
+        })
+    }
+
+    pub fn file_map(&self) -> Result<Vec<(String, String)>> {
+        self.input_file_map
+            .iter()
+            .map(|(k, v)| {
+                Ok((
+                    k.display().to_string(),
+                    serde_json::to_string(v).map_err(|e| {
+                        anyhow::Error::from(e)
+                            .context(format!("Failed to serialize contents of {:#}", k.display()))
+                    })?,
+                ))
+            })
+            .collect()
     }
 
     pub fn output_dir(&self) -> PathBuf {

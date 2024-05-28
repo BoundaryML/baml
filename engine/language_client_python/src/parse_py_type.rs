@@ -1,11 +1,11 @@
-use std::{any::Any, borrow::Borrow, collections::HashMap};
+use std::collections::HashMap;
 
 use anyhow::{bail, Result};
 use baml_types::{BamlImage, BamlMap, BamlValue};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},
-    types::{PyBool, PyBoolMethods, PyList, PyString},
+    types::{PyBool, PyBoolMethods, PyList},
     PyErr, PyObject, PyResult, Python, ToPyObject,
 };
 

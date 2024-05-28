@@ -111,16 +111,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
 
     fn try_from((_ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
         Ok(InlinedBaml {
-            file_map: args
-                .input_file_map
-                .iter()
-                .map(|(k, v)| {
-                    (
-                        k.clone(),
-                        serde_json::to_string(v).expect("Failed to serialize file map"),
-                    )
-                })
-                .collect(),
+            file_map: args.file_map()?,
         })
     }
 }

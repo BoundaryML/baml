@@ -1,6 +1,9 @@
 {
   "folders": [
     {
+      "path": "."
+    },
+    {
       "path": ".github"
     },
     {

@@ -38,7 +38,7 @@ pub fn build(baml_dir: &Option<String>) -> Result<(PathBuf, Configuration, Valid
         log::warn!("{}", diagnostics.warnings_to_pretty_string());
     }
 
-    let ir = internal_baml_core::ir::repr::IntermediateRepr::from_parser_database(
+    let _ir = internal_baml_core::ir::repr::IntermediateRepr::from_parser_database(
         &parsed.db,
         // TODO(sam): this should really be parsed.configuration
         Configuration::new(),

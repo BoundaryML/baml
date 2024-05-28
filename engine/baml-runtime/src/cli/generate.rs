@@ -19,17 +19,11 @@ impl GenerateArgs {
         let src_dir = PathBuf::from(&self.from);
         let runtime = BamlRuntime::from_directory(&src_dir, std::env::vars().collect())?;
 
-        // Safe to unwrap as the files are guaranteed to exist if the runtime was created successfully.
         let src_files = baml_src_files(&src_dir)?;
         let all_files = src_files
             .iter()
-            .map(|k| {
-                (
-                    k.to_string_lossy().into(),
-                    std::fs::read_to_string(&k).unwrap(),
-                )
-            })
-            .collect();
+            .map(|k| Ok((k.clone(), std::fs::read_to_string(&k)?)))
+            .collect::<Result<_>>()?;
 
         let generated = runtime.run_generators(&all_files)?;
 
@@ -39,7 +33,11 @@ impl GenerateArgs {
             let output_dir = src_dir.join("..").join("baml_client");
             let generate_output = runtime.generate_client(
                 &client_type,
-                &internal_baml_codegen::GeneratorArgs::new(&output_dir, &self.from, &all_files),
+                &internal_baml_codegen::GeneratorArgs::new(
+                    &output_dir,
+                    &self.from,
+                    all_files.iter(),
+                )?,
             )?;
             println!("Generated 1 baml_client at {}.", output_dir.display());
 

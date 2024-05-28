@@ -5,8 +5,6 @@ use crate::BamlError;
 
 use super::function_results::FunctionResult;
 use super::runtime_ctx_manager::RuntimeContextManager;
-use super::BamlRuntime;
-use baml_runtime::InternalRuntimeInterface;
 
 crate::lang_wrapper!(
     FunctionResultStream,
