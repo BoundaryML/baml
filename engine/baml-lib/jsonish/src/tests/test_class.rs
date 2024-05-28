@@ -316,3 +316,33 @@ test_partial_deserializer!(
         "skills": []
     }
 );
+
+const CLASS_WITH_ALIASES: &str = r#"
+class TestClassAlias {
+    key string @alias("key-dash")
+    key2 string @alias("key21")
+    key3 string @alias("key with space")
+    key4 string //unaliased
+    key5 string @alias("key.with.punctuation/123")
+}
+"#;
+
+test_deserializer!(
+    test_aliases,
+    CLASS_WITH_ALIASES,
+    r#"{
+        "key-dash": "This is a value with a dash",
+        "key21": "This is a value for key21",
+        "key with space": "This is a value with space",
+        "key4": "This is a value for key4",
+        "key.with.punctuation/123": "This is a value with punctuation and numbers"
+      }"#,
+    FieldType::Class("TestClassAlias".to_string()),
+    {
+        "key": "This is a value with a dash",
+        "key2": "This is a value for key21",
+        "key3": "This is a value with space",
+        "key4": "This is a value for key4",
+        "key5": "This is a value with punctuation and numbers"
+    }
+);

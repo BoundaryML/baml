@@ -87,7 +87,7 @@ impl TypeCoercer for ClassWalker<'_> {
                                     &field,
                                     &valid_keys,
                                     ctx,
-                                    obj.get(field.name()),
+                                    Some(v),
                                     &mut completed_cls,
                                 );
                                 update_map(
