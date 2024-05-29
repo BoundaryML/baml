@@ -347,6 +347,7 @@ dependencies = [
  "anyhow",
  "baml-lib",
  "baml-runtime",
+ "baml-types",
  "base64 0.22.1",
  "check-latest",
  "chrono",

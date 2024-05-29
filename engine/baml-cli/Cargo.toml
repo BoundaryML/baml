@@ -13,6 +13,7 @@ baml-runtime = { path = "../baml-runtime", features = [
   "internal",
 ], default-features = false }
 baml-lib = { path = "../baml-lib/baml" }
+baml-types = { path = "../baml-lib/baml-types" }
 base64.workspace = true
 check-latest = "1.0.2"
 chrono = "0.4.31"

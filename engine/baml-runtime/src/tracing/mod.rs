@@ -184,6 +184,7 @@ impl
             &TracingSpan,
         ),
     ) -> Self {
+        log::info!("Tags for LogSchemaContext: {:#?}", tags);
         let parent_chain = event_chain
             .iter()
             .map(|ctx| EventChain {
@@ -202,7 +203,13 @@ impl
             process_id: api.session_id().to_string(),
             tags: tags
                 .into_iter()
-                .map(|(k, v)| (k.clone(), v.to_string()))
+                .filter_map(|(k, v)| match v.as_str() {
+                    Some(v) => Some((k, v.to_string())),
+                    None => Some((
+                        k,
+                        serde_json::to_string(&v).unwrap_or_else(|_| "<unknown>".to_string()),
+                    )),
+                })
                 .chain(std::iter::once((
                     "baml.runtime".to_string(),
                     env!("CARGO_PKG_VERSION").to_string(),

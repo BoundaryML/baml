@@ -28,6 +28,7 @@ use anyhow::Result;
 
 use baml_types::BamlMap;
 use baml_types::BamlValue;
+use cli::LanguageClientType;
 use indexmap::IndexMap;
 use internal_baml_core::configuration::GeneratorOutputType;
 use runtime::InternalBamlRuntime;
@@ -109,8 +110,16 @@ impl BamlRuntime {
         cli::RuntimeCli::parse_from(argv.into_iter()).run(caller_type)
     }
 
-    pub fn create_ctx_manager(&self) -> RuntimeContextManager {
-        RuntimeContextManager::new_from_env_vars(self.env_vars.clone())
+    pub fn create_ctx_manager(&self, language: BamlValue) -> RuntimeContextManager {
+        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone());
+        let tags: HashMap<String, BamlValue> = [("baml.language", language)]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect();
+        log::info!("Setting tags: {:#?}", tags);
+        ctx.upsert_tags(tags);
+        log::info!("Context manager created:");
+        ctx
     }
 }
 

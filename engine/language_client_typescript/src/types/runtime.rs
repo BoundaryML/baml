@@ -40,7 +40,9 @@ impl BamlRuntime {
 
     #[napi]
     pub fn create_context_manager(&self) -> RuntimeContextManager {
-        self.inner.create_ctx_manager().into()
+        self.inner
+            .create_ctx_manager(BamlValue::String("typescript".to_string()))
+            .into()
     }
 
     #[napi(ts_return_type = "Promise<FunctionResult>")]
