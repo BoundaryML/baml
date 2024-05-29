@@ -105,7 +105,11 @@ impl BamlTracer {
         response: Option<BamlValue>,
     ) -> Result<Option<uuid::Uuid>> {
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
-            anyhow::bail!("Attempting to finish a span without first starting one");
+            anyhow::bail!(
+                "Attempting to finish a span {:#?} without first starting one. Current context {:#?}",
+                span,
+                ctx
+            );
         };
 
         if span.span_id != span_id {

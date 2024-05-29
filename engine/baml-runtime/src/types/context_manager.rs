@@ -4,6 +4,7 @@ use std::{
 };
 
 use baml_types::BamlValue;
+use std::fmt;
 
 use crate::{RuntimeContext, SpanCtx};
 
@@ -14,6 +15,15 @@ pub struct RuntimeContextManager {
     context: Arc<Mutex<Vec<Context>>>,
     env_vars: HashMap<String, String>,
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
+}
+
+impl fmt::Debug for RuntimeContextManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RuntimeContextManager")
+            .field("context", &self.context.lock())
+            .field("global_tags", &self.global_tags)
+            .finish()
+    }
 }
 
 impl RuntimeContextManager {
@@ -58,11 +68,13 @@ impl RuntimeContextManager {
             .lock()
             .unwrap()
             .push((span.clone(), name.to_string(), last_tags));
+        log::trace!("Entering with: {:#?}", self.context.lock().unwrap());
         span
     }
 
     pub fn exit(&self) -> Option<(uuid::Uuid, Vec<SpanCtx>, HashMap<String, BamlValue>)> {
         let mut ctx = self.context.lock().unwrap();
+        log::trace!("Exiting: {:#?}", ctx);
 
         let prev = ctx
             .iter()

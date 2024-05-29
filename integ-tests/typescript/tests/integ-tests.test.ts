@@ -143,19 +143,25 @@ describe('Integ tests', () => {
   it('supports tracing sync', async () => {
     const blah = 'blah'
 
-    const res = traceSync('myFunc', (firstArg: string, secondArg: number) => {
+    const res = traceSync('myFuncParent', (firstArg: string, secondArg: number) => {
       console.log('hello world')
 
-      const res2 = traceSync('dummyFunc', dummyFunc)(firstArg)
+      const res2 = traceSync('dummyFunc', dummyFunc)('dummyFunc')
+      console.log('dummyFunc returned')
 
       const res3 = traceSync('dummyFunc2', dummyFunc)(firstArg)
+      console.log('dummyFunc2 returned')
 
       return 'hello world'
-    })('hi', 10)
+    })('myFuncParent', 10)
 
-    traceSync('dummyFunc', dummyFunc)('hi there')
+    // adding this console log makes it work.
+    // console.log('res returned', res)
+
+    traceSync('dummyFunc3', dummyFunc)('hi there')
   })
 
+  // Look at the dashboard to verify results.
   it('supports tracing async', async () => {
     const res = await traceAsync('parentAsync', async (firstArg: string, secondArg: number) => {
       console.log('hello world')
@@ -164,7 +170,17 @@ describe('Integ tests', () => {
 
       const res2 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('secondDummyFuncArg')
 
+      const llm_res = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
+
       const res3 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('thirdDummyFuncArg')
+
+      return 'hello world'
+    })('hi', 10)
+
+    const res2 = await traceAsync('parentAsync2', async (firstArg: string, secondArg: number) => {
+      console.log('hello world')
+
+      const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
 
       return 'hello world'
     })('hi', 10)

@@ -21,6 +21,7 @@ export class BamlRuntime {
 export class BamlSpan {
   static new(runtime: BamlRuntime, functionName: string, args: any, ctx: RuntimeContextManager): BamlSpan
   finish(result: any, ctx: RuntimeContextManager): Promise<any>
+  finishSync(result: any, ctx: RuntimeContextManager): any
 }
 
 export class FunctionResult {
