@@ -147,7 +147,6 @@ const updateCursorAtom = atom(
       return
     }
 
-    console.log(`Line: ${cursor.line}, Column: ${cursor.column}`)
     const project = get(projectFamilyAtom(selectedProject))
     const runtime = get(selectedRuntimeAtom)
 
@@ -163,7 +162,6 @@ const updateCursorAtom = atom(
 
       cursorIdx += cursor.column
 
-      console.log(`Cursor position: ${cursorIdx}`)
       const selectedFunc = runtime.get_function_at_position(fileName, cursorIdx)
       if (selectedFunc) {
         set(selectedFunctionAtom, selectedFunc.name)

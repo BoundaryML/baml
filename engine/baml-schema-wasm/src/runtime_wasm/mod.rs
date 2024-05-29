@@ -879,19 +879,13 @@ impl WasmRuntime {
         cursor_idx: usize,
     ) -> Option<WasmFunction> {
         let functions = self.list_functions();
-        log::info!("Cursor index is {:#?}", cursor_idx);
+
         for function in functions {
             let span = function.span.clone(); // Clone the span
 
             if span.file_path == file_name
                 && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
             {
-                log::info!(
-                    "Function is {:#?} and Span is {:#?} to {:#?}",
-                    function.name,
-                    span.start,
-                    span.end
-                );
                 return Some(function);
             }
         }
