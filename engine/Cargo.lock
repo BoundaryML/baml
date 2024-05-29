@@ -1960,6 +1960,7 @@ dependencies = [
  "either",
  "indoc",
  "internal-baml-core",
+ "internal-baml-jinja",
  "log",
  "pest",
  "regex",

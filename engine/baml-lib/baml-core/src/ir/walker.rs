@@ -165,40 +165,6 @@ impl<'a> Walker<'a, &'a EnumValue> {
             .map(|v| v.as_string_value(env_values))
             .transpose()
     }
-
-    pub fn valid_values(&self, env_values: &HashMap<String, String>) -> Result<Vec<String>> {
-        let name = self
-            .item
-            .attributes
-            .get("alias")
-            .map(|s| s.as_string_value(env_values));
-
-        let name = match name {
-            Some(Ok(s)) => s,
-            Some(Err(e)) => anyhow::bail!("Error parsing alias: {:?}", e),
-            None => self.item.elem.0.clone(),
-        };
-
-        let name = name.trim();
-
-        let description = self
-            .item
-            .attributes
-            .get("description")
-            .map(|s| s.as_string_value(env_values));
-
-        match &description {
-            Some(Ok(s)) => {
-                let s = s.trim();
-                // For enums, we generate one for "name", one for "description", and one for "name: description"
-                // (this means that we currently don't support deserializing "name[^a-zA-Z0-9]{1,5}description" but
-                // for now it suffices)
-                Ok(vec![name.into(), s.into(), format!("{}: {}", name, s)])
-            }
-            Some(Err(e)) => anyhow::bail!("Error parsing description: {:?}", e),
-            None => Ok(vec![name.into()]),
-        }
-    }
 }
 
 impl Expression {
@@ -447,14 +413,6 @@ impl<'a> Walker<'a, &'a Field> {
             .get("description")
             .map(|v| v.as_string_value(env_values))
             .transpose()
-    }
-
-    pub fn valid_names(&self, env_values: &HashMap<String, String>) -> Result<Vec<String>> {
-        let val = self.item.attributes.get("alias").map_or_else(
-            || Ok(self.name().to_string()),
-            |v| v.as_string_value(env_values),
-        )?;
-        Ok(vec![val])
     }
 
     pub fn span(&self) -> Option<&crate::Span> {

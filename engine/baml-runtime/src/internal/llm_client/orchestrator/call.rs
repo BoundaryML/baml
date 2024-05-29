@@ -23,7 +23,7 @@ pub async fn orchestrate(
     ctx: &RuntimeContext,
     prompt: &PromptRenderer,
     params: &BamlValue,
-    parse_fn: impl Fn(&str, &RuntimeContext) -> Result<BamlValueWithFlags>,
+    parse_fn: impl Fn(&str) -> Result<BamlValueWithFlags>,
 ) -> (
     Vec<(
         OrchestrationScope,
@@ -45,7 +45,7 @@ pub async fn orchestrate(
         };
         let response = node.single_call(&ctx, &prompt).await;
         let parsed_response = match &response {
-            LLMResponse::Success(s) => Some(parse_fn(&s.content, ctx)),
+            LLMResponse::Success(s) => Some(parse_fn(&s.content)),
             _ => None,
         };
 

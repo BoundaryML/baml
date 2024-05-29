@@ -1,8 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, iter};
 
 use anyhow::Result;
 use baml_types::BamlMap;
-use internal_baml_core::ir::{ClassFieldWalker, ClassWalker, FieldType};
+use internal_baml_core::{
+    ast::Field,
+    ir::{ClassFieldWalker, ClassWalker, FieldType},
+};
+use internal_baml_jinja::types::{Class, Name};
 
 use crate::deserializer::{
     coercer::{array_helper, DefaultValue, ParsingError, TypeCoercer},
@@ -12,46 +16,37 @@ use crate::deserializer::{
 
 use super::ParsingContext;
 
-impl TypeCoercer for ClassWalker<'_> {
+// Name, type, description
+type FieldValue = (Name, FieldType, Option<String>);
+
+impl TypeCoercer for Class {
     fn coerce(
         &self,
         ctx: &ParsingContext,
         target: &FieldType,
         value: Option<&crate::jsonish::Value>,
     ) -> Result<BamlValueWithFlags, ParsingError> {
-        let field_with_names = self
-            .walk_fields()
-            .map(|f| Ok((f, f.valid_names(ctx.env)?)))
-            .collect::<Result<Vec<_>>>()
-            .map_err(|e| ctx.error_internal(e))?;
-        let (optional, required): (Vec<_>, Vec<_>) = field_with_names
-            .iter()
-            .partition(|f| f.0.r#type().is_optional());
+        let (optional, required): (Vec<_>, Vec<_>) =
+            self.fields.iter().partition(|f| f.1.is_optional());
         let mut optional_values = optional
             .iter()
-            .map(|(f, _)| (f.name().into(), None))
-            .collect::<HashMap<String, _>>();
+            .map(|(f, ..)| (f.real_name().to_string(), None))
+            .collect::<HashMap<_, _>>();
         let mut required_values = required
             .iter()
-            .map(|(f, _)| (f.name().into(), None))
-            .collect::<HashMap<String, _>>();
+            .map(|(f, ..)| (f.real_name().to_string(), None))
+            .collect::<HashMap<_, _>>();
         let mut flags = DeserializerConditions::new();
 
         let mut completed_cls = Vec::new();
 
-        match field_with_names.len() {
+        match self.fields.len() {
             0 => {}
             1 => {
                 // Special case for single fields (we may want to consider creating the kv manually)
-                let (field, valid_keys) = &field_with_names[0];
-                let parsed_field = parse_field(
-                    (self, target),
-                    field,
-                    valid_keys,
-                    ctx,
-                    value,
-                    &mut completed_cls,
-                );
+                let field = &self.fields[0];
+                let parsed_field =
+                    parse_field((self, target), field, ctx, value, &mut completed_cls);
 
                 update_map(
                     &mut required_values,
@@ -78,14 +73,14 @@ impl TypeCoercer for ClassWalker<'_> {
                     }
                     Some(crate::jsonish::Value::Object(obj)) => {
                         obj.iter().for_each(|(key, v)| {
-                            if let Some((field, valid_keys)) = field_with_names
+                            if let Some(field) = self
+                                .fields
                                 .iter()
-                                .find(|(_, valid_names)| valid_names.contains(key))
+                                .find(|(name, ..)| name.rendered_name().trim() == key)
                             {
                                 let parsed_field = parse_field(
                                     (self, target),
-                                    &field,
-                                    &valid_keys,
+                                    field,
                                     ctx,
                                     Some(v),
                                     &mut completed_cls,
@@ -93,7 +88,7 @@ impl TypeCoercer for ClassWalker<'_> {
                                 update_map(
                                     &mut required_values,
                                     &mut optional_values,
-                                    &field,
+                                    field,
                                     parsed_field,
                                 );
                             } else {
@@ -110,14 +105,18 @@ impl TypeCoercer for ClassWalker<'_> {
 
         // Check what we have / what we need
         {
-            field_with_names.iter().for_each(|(f, _)| {
-                if f.r#type().is_optional() {
-                    if let Some(v) = optional_values.get(f.name()) {
+            self.fields.iter().for_each(|(field_name, t, ..)| {
+                if t.is_optional() {
+                    if let Some(v) = optional_values.get(field_name.real_name()) {
                         let next = match v {
                             Some(Ok(_)) => None,
                             Some(Err(e)) => {
-                                log::info!("Error in optional field {}: {}", f.name(), e);
-                                f.r#type().default_value(Some(e))
+                                log::info!(
+                                    "Error in optional field {}: {}",
+                                    field_name.real_name(),
+                                    e
+                                );
+                                t.default_value(Some(e))
                             }
                             // If we're missing a field, thats ok!
                             None => Some(BamlValueWithFlags::Null(
@@ -126,14 +125,15 @@ impl TypeCoercer for ClassWalker<'_> {
                         };
 
                         if let Some(next) = next {
-                            optional_values.insert(f.name().into(), Some(Ok(next)));
+                            optional_values
+                                .insert(field_name.real_name().to_string(), Some(Ok(next)));
                         }
                     }
                 } else {
-                    if let Some(v) = required_values.get(f.name()) {
+                    if let Some(v) = required_values.get(field_name.real_name()) {
                         let next = match v {
                             Some(Ok(_)) => None,
-                            Some(Err(e)) => f.r#type().default_value(Some(e)).or_else(|| {
+                            Some(Err(e)) => t.default_value(Some(e)).or_else(|| {
                                 if ctx.allow_partials {
                                     Some(BamlValueWithFlags::Null(
                                         DeserializerConditions::new()
@@ -143,7 +143,7 @@ impl TypeCoercer for ClassWalker<'_> {
                                     None
                                 }
                             }),
-                            None => f.r#type().default_value(None).or_else(|| {
+                            None => t.default_value(None).or_else(|| {
                                 if ctx.allow_partials {
                                     Some(BamlValueWithFlags::Null(
                                         DeserializerConditions::new()
@@ -156,7 +156,8 @@ impl TypeCoercer for ClassWalker<'_> {
                         };
 
                         if let Some(next) = next {
-                            required_values.insert(f.name().into(), Some(Ok(next)));
+                            required_values
+                                .insert(field_name.real_name().to_string(), Some(Ok(next)));
                         }
                     }
                 }
@@ -199,18 +200,18 @@ impl TypeCoercer for ClassWalker<'_> {
                 let valid_fields = required_values
                     .iter()
                     .filter_map(|(k, v)| match v.to_owned() {
-                        Some(Ok(v)) => Some((k.clone(), v)),
+                        Some(Ok(v)) => Some((k.to_string(), v)),
                         _ => None,
                     })
                     .chain(optional_values.iter().map(|(k, v)| {
                         match v.to_owned() {
                             Some(Ok(v)) => {
                                 // Decide if null is a better option.
-                                (k.clone(), v)
+                                (k.to_string(), v)
                             }
-                            None => (k.clone(), BamlValueWithFlags::Null(Default::default())),
+                            None => (k.to_string(), BamlValueWithFlags::Null(Default::default())),
                             Some(Err(e)) => (
-                                k.clone(),
+                                k.to_string(),
                                 BamlValueWithFlags::Null(
                                     DeserializerConditions::new()
                                         .with_flag(Flag::DefaultButHadUnparseableValue(e)),
@@ -223,7 +224,7 @@ impl TypeCoercer for ClassWalker<'_> {
                 completed_cls.insert(
                     0,
                     Ok(BamlValueWithFlags::Class(
-                        self.name().into(),
+                        self.name.real_name().into(),
                         flags,
                         valid_fields,
                     )),
@@ -238,14 +239,13 @@ impl TypeCoercer for ClassWalker<'_> {
 }
 
 fn parse_field<'a>(
-    (cls, cls_target): (&'a ClassWalker, &FieldType),
-    field: &'a ClassFieldWalker,
-    valid_keys: &[String],
+    (cls, cls_target): (&'a Class, &FieldType),
+    (field_name, t, ..): &'a FieldValue,
     ctx: &ParsingContext,
     value: Option<&crate::jsonish::Value>,
     completed_cls: &mut Vec<Result<BamlValueWithFlags, ParsingError>>,
 ) -> Result<BamlValueWithFlags, ParsingError> {
-    log::info!("Parsing field: {} from {:?}", field.name(), value);
+    log::info!("Parsing field: {} from {:?}", field_name.real_name(), value);
 
     match value {
         Some(crate::jsonish::Value::Array(items)) => {
@@ -264,49 +264,40 @@ fn parse_field<'a>(
                 completed_cls.push(Ok(option1));
             }
 
-            let field_scope = ctx.enter_scope(field.name());
+            let field_scope = ctx.enter_scope(field_name.real_name());
             // Coerce the each item into the field
             let option2 = array_helper::coerce_array_to_singular(
                 &field_scope,
-                field.r#type(),
+                t,
                 &items.iter().collect::<Vec<_>>(),
-                &|value| {
-                    field
-                        .r#type()
-                        .coerce(&field_scope, field.r#type(), Some(value))
-                },
+                &|value| t.coerce(&field_scope, t, Some(value)),
             );
 
             // Coerce the array to the field
-            let option3 =
-                field
-                    .r#type()
-                    .coerce(&ctx.enter_scope(field.name()), field.r#type(), value);
+            let option3 = t.coerce(&ctx.enter_scope(field_name.real_name()), t, value);
 
-            match array_helper::pick_best(&field_scope, field.r#type(), &[option2, option3]) {
+            match array_helper::pick_best(&field_scope, t, &[option2, option3]) {
                 Ok(mut v) => {
-                    v.add_flag(Flag::ImpliedKey(field.name().into()));
+                    v.add_flag(Flag::ImpliedKey(field_name.real_name().into()));
                     Ok(v)
                 }
                 Err(e) => Err(e),
             }
         }
         Some(crate::jsonish::Value::Object(obj)) => {
-            let field_scope = ctx.enter_scope(field.name());
+            let field_scope = ctx.enter_scope(field_name.real_name());
+            let valid_keys = [field_name.rendered_name()];
 
             // Coerce each matching key into the field
             let mut candidates = valid_keys
                 .iter()
-                .filter_map(|key| {
-                    obj.get(key).map(|value| {
-                        field
-                            .r#type()
-                            .coerce(&field_scope, field.r#type(), Some(value))
-                    })
+                .filter_map(|&key| {
+                    obj.get(key)
+                        .map(|value| t.coerce(&field_scope, t, Some(value)))
                 })
                 .collect::<Vec<_>>();
 
-            if obj.is_empty() && field.r#type().is_optional() {
+            if obj.is_empty() && t.is_optional() {
                 // If the object is empty, and the field is optional, then we can just return null
                 candidates.push(Ok(BamlValueWithFlags::Null(
                     DeserializerConditions::new().with_flag(Flag::OptionalDefaultFromNoValue),
@@ -314,44 +305,39 @@ fn parse_field<'a>(
             }
 
             // Also try to implicitly coerce the object into the field
-            let option2 = match field.r#type().coerce(&field_scope, field.r#type(), value) {
+            let option2 = match t.coerce(&field_scope, t, value) {
                 Ok(mut v) => {
-                    v.add_flag(Flag::ImpliedKey(field.name().into()));
+                    v.add_flag(Flag::ImpliedKey(field_name.real_name().into()));
                     Ok(v)
                 }
                 Err(e) => Err(e),
             };
 
             candidates.push(option2);
-            array_helper::pick_best(&field_scope, field.r#type(), &candidates)
+            array_helper::pick_best(&field_scope, t, &candidates)
         }
-        v => {
-            match field
-                .r#type()
-                .coerce(&ctx.enter_scope(field.name()), field.r#type(), v)
-            {
-                Ok(mut v) => {
-                    v.add_flag(Flag::ImpliedKey(field.name().into()));
-                    Ok(v)
-                }
-                Err(e) => Err(e),
+        v => match t.coerce(&ctx.enter_scope(field_name.real_name()), t, v) {
+            Ok(mut v) => {
+                v.add_flag(Flag::ImpliedKey(field_name.real_name().into()));
+                Ok(v)
             }
-        }
+            Err(e) => Err(e),
+        },
     }
 }
 
 fn update_map<'a>(
     required_values: &'a mut HashMap<String, Option<Result<BamlValueWithFlags, ParsingError>>>,
     optional_values: &'a mut HashMap<String, Option<Result<BamlValueWithFlags, ParsingError>>>,
-    field: &'a ClassFieldWalker,
+    (name, t, ..): &'a FieldValue,
     value: Result<BamlValueWithFlags, ParsingError>,
 ) {
-    let map = if field.r#type().is_optional() {
+    let map = if t.is_optional() {
         optional_values
     } else {
         required_values
     };
-    let key = field.name();
+    let key = name.real_name();
     // TODO: @hellovai plumb this via some flag?
     match map.get(key) {
         Some(Some(_)) => {

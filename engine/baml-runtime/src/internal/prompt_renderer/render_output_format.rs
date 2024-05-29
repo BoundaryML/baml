@@ -206,7 +206,6 @@ fn relevant_data_models<'a>(
 
     while !start.is_empty() {
         let output = start.pop().unwrap();
-        log::debug!("PROMPT_RENDER: Checking type: {:?}", output);
         match &output {
             FieldType::Enum(enm) => {
                 if checked_types.insert(output.to_string()) {
@@ -245,7 +244,6 @@ fn relevant_data_models<'a>(
                         }
                     }
 
-                    log::debug!("PROMPT_RENDER: Checking enum: {}", values.len());
                     enums.push(Enum {
                         name: Name::new_with_alias(enm.to_string(), alias.value()),
                         values,

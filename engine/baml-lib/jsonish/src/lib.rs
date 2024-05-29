@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashMap;
-
 use anyhow::Result;
 mod deserializer;
 mod jsonish;
@@ -10,13 +8,11 @@ mod jsonish;
 use baml_types::FieldType;
 use deserializer::coercer::{ParsingContext, TypeCoercer};
 
-use internal_baml_core::ir::repr::IntermediateRepr;
-
 pub use deserializer::types::BamlValueWithFlags;
+use internal_baml_jinja::types::OutputFormatContent;
 
 pub fn from_str(
-    ir: &IntermediateRepr,
-    env: &HashMap<String, String>,
+    of: &OutputFormatContent,
     target: &FieldType,
     raw_string: &str,
     allow_partials: bool,
@@ -30,7 +26,7 @@ pub fn from_str(
 
     log::info!("Parsed value: {:?}", value);
 
-    let ctx = ParsingContext::new(ir, env, allow_partials);
+    let ctx = ParsingContext::new(of, allow_partials);
 
     // Lets try to now coerce the value into the expected schema.
     match target.coerce(&ctx, target, Some(&value)) {

@@ -107,13 +107,6 @@ pub trait InternalRuntimeInterface {
         ctx: &RuntimeContext,
     ) -> Result<FunctionWalker<'ir>>;
 
-    fn parse_response<'ir>(
-        &'ir self,
-        function: &FunctionWalker<'ir>,
-        response: &crate::internal::llm_client::LLMCompleteResponse,
-        ctx: &RuntimeContext,
-    ) -> Result<jsonish::BamlValueWithFlags>;
-
     fn render_prompt(
         &self,
         function_name: &str,
