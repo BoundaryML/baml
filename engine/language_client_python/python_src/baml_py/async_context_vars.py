@@ -44,6 +44,12 @@ class CtxManager:
     async def end_trace(self, span: BamlSpan, response: typing.Any) -> None:
         await span.finish(response, self.ctx.get())
 
+    def end_trace_sync(self, span: BamlSpan, response: typing.Any) -> None:
+        span.finish_sync(response, self.ctx.get())
+
+    def flush(self) -> None:
+        self.rt.flush()
+
     def trace_fn(self, func: F) -> F:
         func_name = func.__name__
         signature = inspect.signature(func).parameters
@@ -83,10 +89,10 @@ class CtxManager:
                 span = self.start_trace_sync(func_name, params)
                 try:
                     response = func(*args, **kwargs)
-                    asyncio.run(self.end_trace(span, response))
+                    self.end_trace_sync(span, response)
                     return response
                 except Exception as e:
-                    asyncio.run(self.end_trace(span, e))
+                    self.end_trace_sync(span, e)
                     raise e
 
             return typing.cast(F, wrapper)

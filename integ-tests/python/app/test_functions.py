@@ -2,7 +2,7 @@ import pytest
 
 from baml_client import b
 from baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
-
+from baml_client.tracing import trace, set_tags, flush
 
 @pytest.mark.asyncio
 async def test_should_work_for_all_inputs():
@@ -132,3 +132,45 @@ async def test_streaming_claude():
     print("final:")
     print(final)
     assert msgs[-1] == final, "Expected last stream message to match final response."
+
+@pytest.mark.asyncio
+async def test_tracing_async():
+    res = await parent_async("first-arg-value")
+    
+    res2 = await parent_async2("second-arg-value")
+
+def test_tracing_sync():
+    res = parent_sync("first-arg-value")
+    res2 = sync_dummy_func("second-dummycall-arg")
+
+
+@trace
+async def parent_async(myStr: str):
+    set_tags({"myKey": "myVal"})
+    await async_dummy_func(myStr)
+    await b.FnOutputClass(myStr)
+    sync_dummy_func(myStr)
+    return "hello world parentasync"
+
+@trace
+async def parent_async2(myStr: str):
+    return "hello world parentasync2"
+
+@trace
+def parent_sync(myStr: str):
+    sync_dummy_func(myStr)
+    return "hello world parentsync"
+
+@trace
+async def async_dummy_func(myArgggg: str):
+    return "asyncDummyFuncOutput"
+
+@trace
+def sync_dummy_func(dummyFuncArg: str):
+    return "pythonDummyFuncOutput"
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup(request):
+    """Cleanup a testing directory once we are finished."""
+    flush()
+    

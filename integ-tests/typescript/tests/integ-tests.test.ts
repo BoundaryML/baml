@@ -1,6 +1,6 @@
 import assert from 'assert'
 import { Image } from '@boundaryml/baml'
-import { b, NamedArgsSingleEnumList, flush, traceAsync, traceSync } from '../baml_client'
+import { b, NamedArgsSingleEnumList, flush, traceAsync, traceSync, setTags } from '../baml_client'
 
 describe('Integ tests', () => {
   it('should work for all inputs', async () => {
@@ -144,6 +144,8 @@ describe('Integ tests', () => {
     const blah = 'blah'
 
     const res = traceSync('myFuncParent', (firstArg: string, secondArg: number) => {
+      setTags({ myKey: 'myVal' })
+
       console.log('hello world')
 
       const res2 = traceSync('dummyFunc', dummyFunc)('dummyFunc')
@@ -165,6 +167,7 @@ describe('Integ tests', () => {
   it('supports tracing async', async () => {
     const res = await traceAsync('parentAsync', async (firstArg: string, secondArg: number) => {
       console.log('hello world')
+      setTags({ myKey: 'myVal' })
 
       const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
 
