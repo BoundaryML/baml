@@ -18,8 +18,8 @@ async def test_should_work_for_all_inputs():
             key="key",
             key_two=True,
             key_three=52,
-        )
-    )
+        ) 
+    ) 
     print("got response", res)
     assert "52" in res
 

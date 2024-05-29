@@ -262,6 +262,7 @@ pub struct WasmFunction {
     #[wasm_bindgen(readonly)]
     pub test_snippet: String,
 }
+
 #[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Clone)]
 pub struct WasmSpan {
@@ -658,7 +659,7 @@ impl WasmRuntime {
                 }),
                 None => false,
             })
-    }
+
 
     #[wasm_bindgen]
     pub fn list_functions(&self) -> Vec<WasmFunction> {
