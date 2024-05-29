@@ -87,8 +87,8 @@ case "$_path" in
     ;;
 
   /engine/language_client_ruby | /engine/language_client_ruby/* )
-    command="rake compile; date"
-    command="cargo build; date"
+    #command="rake compile; date"
+    command="cargo build"
 
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \

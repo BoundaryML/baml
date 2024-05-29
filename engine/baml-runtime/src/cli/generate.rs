@@ -39,7 +39,7 @@ impl GenerateArgs {
                     all_files.iter(),
                 )?,
             )?;
-            println!("Generated 1 baml_client at {}.", output_dir.display());
+            println!("Generated 1 baml_client at {}", output_dir.display());
 
             println!(
                 r#"

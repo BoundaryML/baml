@@ -20,22 +20,14 @@ magnus = { version = "0.6", features = ["rb-sys"] }
 # Must be kept in sync with ../../Gemfile
 rb-sys = { version = "0.9.97", features = [
   "global-allocator",
-  "bindgen-rbimpls",
-  "bindgen-deprecated-types",
-  "stable-api-compiled-fallback",
+  #"bindgen-rbimpls",
+  #"bindgen-deprecated-types",
+  "stable-api",
 ] }
 serde.workspace = true
 serde_json.workspace = true
 serde_magnus = "0.8.1"
 tokio = { version = "1", features = ["full"] }
-
-[dev-dependencies]
-rb-sys = { version = "0.9.97", features = [
-  "link-ruby",
-  "bindgen-rbimpls",
-  "bindgen-deprecated-types",
-  "stable-api-compiled-fallback",
-] }
 
 [build-dependencies]
 rb-sys-env = { version = "0.1" }
