@@ -1,6 +1,6 @@
 import assert from 'assert'
 import { Image } from '@boundaryml/baml'
-import { b, NamedArgsSingleEnumList, flush } from '../baml_client'
+import { b, NamedArgsSingleEnumList, flush, traceAsync, traceSync } from '../baml_client'
 
 describe('Integ tests', () => {
   it('should work for all inputs', async () => {
@@ -139,7 +139,58 @@ describe('Integ tests', () => {
     }
     expect(msgs.at(-1)).toEqual(final)
   })
+
+  it('supports tracing sync', async () => {
+    const blah = 'blah'
+
+    const res = traceSync('myFunc', (firstArg: string, secondArg: number) => {
+      console.log('hello world')
+
+      const res2 = traceSync('dummyFunc', dummyFunc)(firstArg)
+
+      const res3 = traceSync('dummyFunc2', dummyFunc)(firstArg)
+
+      return 'hello world'
+    })('hi', 10)
+
+    traceSync('dummyFunc', dummyFunc)('hi there')
+  })
+
+  it('supports tracing async', async () => {
+    const res = await traceAsync('parentAsync', async (firstArg: string, secondArg: number) => {
+      console.log('hello world')
+
+      const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
+
+      const res2 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('secondDummyFuncArg')
+
+      const res3 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('thirdDummyFuncArg')
+
+      return 'hello world'
+    })('hi', 10)
+  })
 })
+
+function asyncDummyFunc(myArg: string): Promise<MyInterface> {
+  console.log('asyncDummyFuncArgs', arguments)
+  return new Promise((resolve) => {
+    resolve({
+      key: 'key',
+      key_two: true,
+      key_three: 52,
+    })
+  })
+}
+
+interface MyInterface {
+  key: string
+  key_two: boolean
+  key_three: number
+}
+
+function dummyFunc(myArg: string): string {
+  return 'hello world'
+}
 
 afterAll(async () => {
   flush()

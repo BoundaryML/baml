@@ -34,10 +34,8 @@ impl RuntimeContextManager {
     }
 
     pub fn upsert_tags(&self, tags: HashMap<String, BamlValue>) {
-        log::info!("Upserting tags: {:#?}", tags);
         let mut ctx = self.context.lock().unwrap();
         if let Some((.., last_tags)) = ctx.last_mut() {
-            log::info!("Adding tags: {:#?}\n", tags);
             last_tags.extend(tags);
         } else {
             self.global_tags.lock().unwrap().extend(tags);
@@ -96,7 +94,6 @@ impl RuntimeContextManager {
                 .unwrap_or_default()
         };
         tags.extend(ctx_tags);
-        log::info!("Creating context with tags: {:#?}\n", tags);
 
         RuntimeContext {
             env: self.env_vars.clone(),

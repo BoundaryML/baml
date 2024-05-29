@@ -46,7 +46,7 @@ class CtxManager {
         return ((...args) => {
             const params = args.reduce((acc, arg, i) => ({
                 ...acc,
-                [func.length > i ? func.arguments[i].name : `<arg:${i}>`]: arg,
+                [`arg${i}`]: arg, // generic way to label args
             }), {});
             const span = this.startTraceSync(name, params);
             try {
@@ -60,12 +60,12 @@ class CtxManager {
             }
         });
     }
-    traceFnAync(func) {
-        const funcName = func.name;
+    traceFnAync(name, func) {
+        const funcName = name;
         return (async (...args) => {
             const params = args.reduce((acc, arg, i) => ({
                 ...acc,
-                [func.length > i ? func.arguments[i].name : `<arg:${i}>`]: arg,
+                [`arg${i}`]: arg, // generic way to label args
             }), {});
             const span = this.startTraceAsync(funcName, params);
             try {

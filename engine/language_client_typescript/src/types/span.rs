@@ -48,6 +48,7 @@ impl BamlSpan {
     ) -> napi::Result<serde_json::Value> {
         let result: BamlValue = serde_json::from_value(result)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
+        log::info!("Finishing span: {:#?}\n", self.inner.lock().await);
 
         let span = {
             self.inner.lock().await.take().ok_or_else(|| {

@@ -36,7 +36,7 @@ use self::wasm_tracer::NonThreadedTracer;
 type TracerImpl = ThreadedTracer;
 #[cfg(target_arch = "wasm32")]
 type TracerImpl = NonThreadedTracer;
-
+#[derive(Debug)]
 pub struct TracingSpan {
     span_id: Uuid,
     params: BamlMap<String, BamlValue>,
@@ -184,7 +184,6 @@ impl
             &TracingSpan,
         ),
     ) -> Self {
-        log::info!("Tags for LogSchemaContext: {:#?}", tags);
         let parent_chain = event_chain
             .iter()
             .map(|ctx| EventChain {
@@ -223,7 +222,7 @@ impl
 
 impl From<&BamlMap<String, BamlValue>> for IOValue {
     fn from(items: &BamlMap<String, BamlValue>) -> Self {
-        log::info!("Converting IOValue from BamlMap: {:#?}", items);
+        log::trace!("Converting IOValue from BamlMap: {:#?}", items);
         IOValue {
             r#type: TypeSchema {
                 name: api_wrapper::core_types::TypeSchemaName::Multi,

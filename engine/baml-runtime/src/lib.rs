@@ -116,9 +116,7 @@ impl BamlRuntime {
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
             .collect();
-        log::info!("Setting tags: {:#?}", tags);
         ctx.upsert_tags(tags);
-        log::info!("Context manager created:");
         ctx
     }
 }

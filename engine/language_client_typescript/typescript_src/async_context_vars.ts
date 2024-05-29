@@ -48,12 +48,12 @@ export class CtxManager {
     this.rt.flush()
   }
 
-  traceFnSync<ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(name: string, func: F): F {
+  traceFnSync<ReturnType, F extends (...args: any[]) => ReturnType>(name: string, func: F): F {
     return <F>((...args: any[]) => {
       const params = args.reduce(
         (acc, arg, i) => ({
           ...acc,
-          [func.length > i ? func.arguments[i].name : `<arg:${i}>`]: arg,
+          [`arg${i}`]: arg, // generic way to label args
         }),
         {},
       )
@@ -69,13 +69,13 @@ export class CtxManager {
     })
   }
 
-  traceFnAync<ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(func: F): F {
-    const funcName = func.name
+  traceFnAync<ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(name: string, func: F): F {
+    const funcName = name
     return <F>(async (...args: any[]) => {
       const params = args.reduce(
         (acc, arg, i) => ({
           ...acc,
-          [func.length > i ? func.arguments[i].name : `<arg:${i}>`]: arg,
+          [`arg${i}`]: arg, // generic way to label args
         }),
         {},
       )
