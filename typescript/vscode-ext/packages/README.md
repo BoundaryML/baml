@@ -1,3 +1,9 @@
+## This extension is deprecated.
+You must use the new "Baml" extension. 
+See the migration guide: https://www.notion.so/gloochat/Rust-runtime-migration-c7758a5496414d399a28acb0adbb1de9?pvs=4 
+
+
+
 # Baml Language VS Code Extension
 
 This VS Code extension provides support for the Baml language used to define function-based LLM pipelines.

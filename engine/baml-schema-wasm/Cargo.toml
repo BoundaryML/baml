@@ -10,6 +10,6 @@ license-file.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-wasm-bindgen = "=0.2.87"
+wasm-bindgen = "=0.2.92"
 wasm-logger = { version = "0.2.0" }
 baml-fmt = { path = "../baml-fmt" }
