@@ -80,3 +80,39 @@ test_deserializer!(
     FieldType::Primitive(TypeValue::String),
     "1"
 );
+
+test_deserializer!(
+    test_string_from_string21,
+    EMPTY_FILE,
+    r#"Some preview text
+
+    JSON Output:
+    
+    [
+      {
+        "blah": "blah"
+      },
+      {
+        "blah": "blah"
+      },
+      {
+        "blah": "blah"
+      }
+    ]"#,
+    FieldType::Primitive(TypeValue::String),
+    r#"Some preview text
+
+    JSON Output:
+    
+    [
+      {
+        "blah": "blah"
+      },
+      {
+        "blah": "blah"
+      },
+      {
+        "blah": "blah"
+      }
+    ]"#
+);
