@@ -1,4 +1,4 @@
-use baml_runtime::{BamlRuntime, RuntimeContext, RuntimeInterface};
+use baml_runtime::{BamlRuntime, RuntimeContext};
 use indexmap::IndexMap;
 use magnus::IntoValue;
 use magnus::{
@@ -41,19 +41,18 @@ impl BamlRuntimeFfi {
         }
     }
 
-    pub fn from_directory(directory: PathBuf) -> Result<Self> {
+    pub fn from_directory(directory: PathBuf, env_vars: HashMap<String, String>) -> Result<Self> {
         let ruby = BamlRuntimeFfi::try_lock_gvl()?;
 
-        let baml_runtime =
-            match BamlRuntime::from_directory(&directory, &RuntimeContext::from_env()) {
-                Ok(br) => br,
-                Err(e) => {
-                    return Err(Error::new(
-                        ruby.exception_runtime_error(),
-                        format!("{:?}", e.context("Failed to initialize BAML runtime")),
-                    ))
-                }
-            };
+        let baml_runtime = match BamlRuntime::from_directory(&directory, env_vars) {
+            Ok(br) => br,
+            Err(e) => {
+                return Err(Error::new(
+                    ruby.exception_runtime_error(),
+                    format!("{:?}", e.context("Failed to initialize BAML runtime")),
+                ))
+            }
+        };
 
         // NB: libruby will panic if called from a non-Ruby thread, so we stick to the current thread
         // to avoid causing issues
@@ -73,24 +72,16 @@ impl BamlRuntimeFfi {
         })
     }
 
-    pub fn call_function(&self, call_fn_args: RHash) -> Result<ruby_types::FunctionResult> {
+    pub fn call_function(
+        &self,
+        function_name: String,
+        args: RHash,
+        ctx: &RuntimeContextManager,
+    ) -> Result<ruby_types::FunctionResult> {
         let ruby = BamlRuntimeFfi::try_lock_gvl()?;
 
-        let call_fn_args = get_kwargs(call_fn_args, &["function_name", "args"], &["ctx"])?;
-
-        let (function_name, args): (String, RHash) = call_fn_args.required;
-        let (ctx,): (Option<RHash>,) = call_fn_args.optional;
-        let rest: RHash = call_fn_args.splat;
-
-        if !rest.is_empty() {
-            return Err(Error::new(
-                ruby.exception_syntax_error(),
-                format!("unexpected keyword arguments: {}", rest),
-            ));
-        }
-
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
-            Ok(args) => args.into_iter().collect::<IndexMap<_, _>>(),
+            Ok(args) => args.into_iter().collect(),
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_syntax_error(),
@@ -99,28 +90,13 @@ impl BamlRuntimeFfi {
             }
         };
 
-        let mut ctx = match ctx {
-            Some(ctx) => serde_magnus::deserialize::<_, RuntimeContext>(ctx)?,
-            None => RuntimeContext::default(),
-        };
         log::debug!("Calling {function_name} with:\nargs: {args:#?}\nctx (where env is envvar overrides): {ctx:#?}");
-        ctx.env = std::env::vars_os()
-            .map(|(k, v)| {
-                (
-                    k.to_string_lossy().to_string(),
-                    v.to_string_lossy().to_string(),
-                )
-            })
-            .chain(ctx.env.into_iter())
-            .collect();
 
-        let retval = match self
-            .t
-            .block_on(self.internal.borrow_mut().call_function_impl(
-                function_name.clone(),
-                &args,
-                &ctx,
-            )) {
+        let retval = match self.t.block_on(self.internal.borrow().call_function(
+            function_name.clone(),
+            &args,
+            &ctx.inner,
+        )) {
             Ok(res) => Ok(ruby_types::FunctionResult::new(res)),
             Err(e) => Err(Error::new(
                 ruby.exception_runtime_error(),
@@ -153,9 +129,9 @@ fn init() -> Result<()> {
     let runtime_class = module.define_class("BamlRuntime", class::object())?;
     runtime_class.define_singleton_method(
         "from_directory",
-        function!(BamlRuntimeFfi::from_directory, 1),
+        function!(BamlRuntimeFfi::from_directory, 2),
     )?;
-    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 1))?;
+    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 3))?;
 
     ruby_types::define_types(&module)?;
 

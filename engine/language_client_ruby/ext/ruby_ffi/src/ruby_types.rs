@@ -1,4 +1,7 @@
-use magnus::{class, exception::runtime_error, method, prelude::*, value::Value, Error, RModule};
+use baml_types::BamlValue;
+use magnus::{
+    class, exception::runtime_error, method, prelude::*, value::Value, Error, RModule, Ruby,
+};
 
 use crate::Result;
 
@@ -28,8 +31,9 @@ impl FunctionResult {
 
     pub fn parsed(&self) -> Result<Value> {
         match self.inner.parsed_content() {
-            Ok(parsed) => serde_magnus::serialize(parsed),
+            Ok(parsed) => serde_magnus::serialize(&BamlValue::from(parsed)),
             Err(e) => Err(Error::new(
+                //rb.exception_runtime_error(),
                 runtime_error(),
                 format!("Failed to parse LLM response: {}", self.inner),
             )),
