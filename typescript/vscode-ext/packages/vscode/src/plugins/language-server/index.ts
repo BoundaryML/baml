@@ -385,15 +385,12 @@ const plugin: BamlVSCodePlugin = {
       // Register the server for baml docs and python
       documentSelector: [
         { scheme: 'file', language: 'baml' },
-        { scheme: 'file', language: 'python' },
         {
           language: 'json',
           pattern: '**/baml_src/**',
         },
       ],
-      synchronize: {
-        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json,py}'),
-      },
+      synchronize: {},
     }
 
     context.subscriptions.push(
