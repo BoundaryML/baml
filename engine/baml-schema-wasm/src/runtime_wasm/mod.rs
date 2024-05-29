@@ -10,6 +10,7 @@ use baml_runtime::{
 use baml_types::{BamlMap, BamlValue};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use wasm_bindgen::prelude::*;
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -635,7 +636,13 @@ impl WasmRuntime {
     ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
         Ok(self
             .runtime
-            .run_generators(input_files)
+            // convert the input_files into HashMap(PathBuf, string)
+            .run_generators(
+                &input_files
+                    .iter()
+                    .map(|(k, v)| (PathBuf::from(k), v.clone()))
+                    .collect(),
+            )
             .map_err(|e| JsError::new(format!("{e:#}").as_str()))?
             .into_iter()
             .map(|g| g.into())
