@@ -10,6 +10,6 @@ export declare class BamlStream<PartialOutputType, FinalOutputType> {
     private driveToCompletion;
     private driveToCompletionInBg;
     [Symbol.asyncIterator](): AsyncIterableIterator<PartialOutputType>;
-    done(): Promise<FinalOutputType>;
+    getFinalResponse(): Promise<FinalOutputType>;
 }
 //# sourceMappingURL=stream.d.ts.map

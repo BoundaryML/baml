@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "python-project"
+name = "python-integ-tests"
 version = "0.1.0"
 description = ""
 authors = ["None"]
 readme = "README.md"
-packages = [{include = "app"}]
+packages = [{ include = "app" }]
 
 [tool.poetry.dependencies]
 python = "^3.8"
@@ -17,6 +17,7 @@ maturin = "^1.5.1"
 # env -u CONDA_PREFIX poetry run maturin develop --manifest-path ../../clients/python-ffi/Cargo.toml
 pytest-asyncio = "^0.23.7"
 pytest = "^8.2.1"
+pydantic = "^2.7.1"
 
 [build-system]
 requires = ["poetry-core"]

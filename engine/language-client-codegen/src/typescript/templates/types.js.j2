@@ -1,3 +1,5 @@
+import { Image } from "@boundaryml/baml"
+
 {%- for enum in enums %}
 export enum {{enum.name}} {
   {%- for value in enum.values %}
@@ -8,8 +10,8 @@ export enum {{enum.name}} {
 
 {%- for cls in classes %}
 export interface {{cls.name}} {
-  {%- for (name, type) in cls.fields %}
-  {{name}}: {{type}}
+  {%- for (name, optional, type) in cls.fields %}
+  {{name}}{% if optional %}?{% endif %}: {{type}}
   {%- endfor %}
 }
 {% endfor %}

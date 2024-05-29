@@ -1,16 +1,16 @@
+use napi::bindgen_prelude::ObjectFinalize;
 use napi::threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode};
 use napi::Env;
 use napi::{JsFunction, JsObject, JsUndefined};
 use napi_derive::napi;
 
 use super::function_results::FunctionResult;
-use super::runtime::BamlRuntime;
 use super::runtime_ctx_manager::RuntimeContextManager;
-use baml_runtime::InternalRuntimeInterface;
 
 crate::lang_wrapper!(
     FunctionResultStream,
     baml_runtime::FunctionResultStream,
+    custom_finalize,
     no_from,
     thread_safe,
     cb: Option<napi::Ref<()>>
@@ -37,17 +37,16 @@ impl FunctionResultStream {
         #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] func: JsFunction,
     ) -> napi::Result<JsUndefined> {
         let cb = env.create_reference(func)?;
+        let prev = self.cb.take();
+        if let Some(mut old_cb) = prev {
+            old_cb.unref(env)?;
+        }
         self.cb = Some(cb);
         env.get_undefined()
     }
 
     #[napi(ts_return_type = "Promise<FunctionResult>")]
-    pub fn done(
-        &self,
-        env: Env,
-        rt: &BamlRuntime,
-        rctx: &RuntimeContextManager,
-    ) -> napi::Result<JsObject> {
+    pub fn done(&self, env: Env, rctx: &RuntimeContextManager) -> napi::Result<JsObject> {
         let inner = self.inner.clone();
 
         let on_event = match &self.cb {
@@ -72,19 +71,23 @@ impl FunctionResultStream {
         };
 
         let ctx_mng = rctx.inner.clone();
-        let rt = rt.inner.clone();
         let fut = async move {
             let ctx_mng = ctx_mng;
-            let res = inner
-                .lock()
-                .await
-                .run(rt.internal().ir(), on_event, &ctx_mng)
-                .await;
+            let res = inner.lock().await.run(on_event, &ctx_mng).await;
             res.0
                 .map(FunctionResult::from)
                 .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
         };
 
         env.execute_tokio_future(fut, |&mut _, data| Ok(data))
+    }
+}
+
+impl ObjectFinalize for FunctionResultStream {
+    fn finalize(mut self, env: Env) -> napi::Result<()> {
+        if let Some(mut cb) = self.cb.take() {
+            cb.unref(env)?;
+        }
+        Ok(())
     }
 }

@@ -905,7 +905,7 @@ impl WasmFunction {
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
         let ctx = rt
             .runtime
-            .create_ctx_manager()
+            .create_ctx_manager(BamlValue::String("wasm".to_string()))
             .create_ctx_with_default(missing_env_vars.iter());
 
         rt.runtime
@@ -936,7 +936,7 @@ impl WasmFunction {
             cb.call1(&this, &res).unwrap();
         });
 
-        let ctx = rt.create_ctx_manager();
+        let ctx = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
         let (test_response, span) = rt
             .run_test(&function_name, &test_name, &ctx, Some(cb))
             .await;

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use baml_lib::internal_baml_core::ir::TestCaseWalker;
+use baml_types::BamlValue;
 use colored::*;
 use indexmap::{IndexMap, IndexSet};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -327,7 +328,7 @@ impl TestCommand {
             let sem_clone = semaphore.clone();
 
             let state_clone = locked_state.clone();
-            let ctx = runtime.create_ctx_manager();
+            let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()));
             let handle = self.test_handler(sem_clone, &test, state_clone, &ctx, bars.clone());
 
             handles.push(handle);

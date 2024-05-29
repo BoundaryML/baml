@@ -295,7 +295,7 @@ impl WithStreamChat for AnthropicClient {
         prompt: &Vec<RenderedChatMessage>,
     ) -> StreamResponse {
         let (response, system_now, instant_now) =
-            match make_request(self, either::Either::Right(prompt), false).await {
+            match make_request(self, either::Either::Right(prompt), true).await {
                 Ok(v) => v,
                 Err(e) => return Err(e),
             };

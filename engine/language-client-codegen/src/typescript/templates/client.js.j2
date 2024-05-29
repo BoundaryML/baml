@@ -1,4 +1,4 @@
-import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream } from "@boundaryml/baml"
+import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image } from "@boundaryml/baml"
 import { 
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%} 
 } from "./types"
@@ -16,15 +16,15 @@ export class BamlClient {
 
   {% for fn in funcs %}
   async {{ fn.name }}(
-      {% for (name, type) in fn.args -%}
-      {{name}}: {{type}}{% if !loop.last %},{% endif %}
+      {% for (name, optional, type) in fn.args -%}
+      {{name}}{% if optional %}?{% endif %}: {{type}}{% if !loop.last %},{% endif %}
       {%- endfor %}
   ): Promise<{{fn.return_type}}> {
     const raw = await this.runtime.callFunction(
       "{{fn.name}}",
       {
-        {% for (name, _) in fn.args -%}
-        "{{name}}": {{name}},
+        {% for (name, optional, type) in fn.args -%}
+        "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
         {%- endfor %}
       },
       this.ctx_manager.get(),
@@ -39,15 +39,15 @@ class BamlStreamClient {
 
   {% for fn in funcs %}
   {{ fn.name }}(
-      {% for (name, type) in fn.args -%}
-      {{name}}: {{type}}{% if !loop.last %},{% endif %}
+      {% for (name, optional, type) in fn.args -%}
+      {{name}}{% if optional %}?{% endif %}: {{type}}{% if !loop.last %},{% endif %}
       {%- endfor %}
   ): BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}> {
     const raw = this.runtime.streamFunction(
       "{{fn.name}}",
       {
-        {%- for (name, _) in fn.args %}
-        "{{name}}": {{name}},
+        {% for (name, optional, type) in fn.args -%}
+        "{{name}}": {{name}}{% if optional %} ?? null{% endif %}{% if !loop.last %},{% endif %}
         {%- endfor %}
       },
       undefined,

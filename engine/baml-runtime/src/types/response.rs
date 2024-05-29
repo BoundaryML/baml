@@ -1,5 +1,5 @@
+use crate::internal::llm_client::orchestrator::OrchestrationScope;
 pub use crate::internal::llm_client::LLMResponse;
-use crate::{internal::llm_client::orchestrator::OrchestrationScope, tracing::TracingSpan};
 use anyhow::Result;
 use colored::*;
 
@@ -19,8 +19,12 @@ impl std::fmt::Display for FunctionResult {
         writeln!(f, "{}", self.llm_response())?;
         match &self.parsed() {
             Some(Ok(val)) => {
-                writeln!(f, "{}", "---Parsed Response---".blue())?;
                 let val: BamlValue = val.into();
+                writeln!(
+                    f,
+                    "{}",
+                    format!("---Parsed Response ({})---", val.r#type()).blue()
+                )?;
                 write!(f, "{:#}", serde_json::json!(val))
             }
             Some(Err(e)) => {
@@ -162,6 +166,7 @@ impl TestResponse {
     }
 }
 
+use std::any::Any;
 #[cfg(test)]
 use std::process::Termination;
 

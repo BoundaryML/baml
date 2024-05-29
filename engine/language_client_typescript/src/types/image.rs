@@ -1,3 +1,4 @@
+use napi::bindgen_prelude::External;
 use napi_derive::napi;
 use serde_json::json;
 
@@ -5,18 +6,20 @@ crate::lang_wrapper!(BamlImage, baml_types::BamlImage);
 
 #[napi]
 impl BamlImage {
-    #[napi(factory)]
-    pub fn from_url(url: String) -> Self {
-        BamlImage {
+    #[napi(ts_return_type = "BamlImage")]
+    pub fn from_url(url: String) -> External<BamlImage> {
+        let img = BamlImage {
             inner: baml_types::BamlImage::Url(baml_types::ImageUrl::new(url)),
-        }
+        };
+        External::new(img)
     }
 
-    #[napi(factory)]
-    pub fn from_base64(media_type: String, base64: String) -> Self {
-        BamlImage {
+    #[napi(ts_return_type = "BamlImage")]
+    pub fn from_base64(media_type: String, base64: String) -> External<BamlImage> {
+        let img = BamlImage {
             inner: baml_types::BamlImage::Base64(baml_types::ImageBase64::new(base64, media_type)),
-        }
+        };
+        External::new(img)
     }
 
     #[napi(js_name = "isUrl")]
@@ -24,8 +27,8 @@ impl BamlImage {
         matches!(&self.inner, baml_types::BamlImage::Url(_))
     }
 
-    #[napi(getter)]
-    pub fn url(&self) -> napi::Result<String> {
+    #[napi]
+    pub fn as_url(&self) -> napi::Result<String> {
         match &self.inner {
             baml_types::BamlImage::Url(url) => Ok(url.url.clone()),
             _ => Err(napi::Error::new(
@@ -35,8 +38,8 @@ impl BamlImage {
         }
     }
 
-    #[napi(getter)]
-    pub fn base64(&self) -> napi::Result<Vec<String>> {
+    #[napi(ts_return_type = "[string, string]")]
+    pub fn as_base64(&self) -> napi::Result<Vec<String>> {
         match &self.inner {
             baml_types::BamlImage::Base64(base64) => {
                 Ok(vec![base64.base64.clone(), base64.media_type.clone()])
@@ -48,9 +51,9 @@ impl BamlImage {
         }
     }
 
-    #[napi(js_name = "toJson")]
-    pub fn to_json(&self) -> serde_json::Value {
-        match &self.inner {
+    #[napi(js_name = "toJSON")]
+    pub fn to_json(&self) -> napi::Result<serde_json::Value> {
+        Ok(match &self.inner {
             baml_types::BamlImage::Url(url) => json!({
                 "url": url.url
             }),
@@ -58,6 +61,6 @@ impl BamlImage {
                 "base64": base64.base64,
                 "media_type": base64.media_type
             }),
-        }
+        })
     }
 }

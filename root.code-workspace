@@ -13,9 +13,6 @@
       "path": "integ-tests"
     },
     {
-      "path": "integ-tests2"
-    },
-    {
       "name": "typescript",
       "path": "typescript"
     },

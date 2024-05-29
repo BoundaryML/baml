@@ -103,6 +103,10 @@ impl BamlValue {
         }
     }
 
+    pub fn is_map(&self) -> bool {
+        matches!(self, BamlValue::Map(_))
+    }
+
     pub fn as_map(&self) -> Option<&BamlMap<String, BamlValue>> {
         match self {
             BamlValue::Map(m) => Some(m),

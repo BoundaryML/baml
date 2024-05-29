@@ -1,11 +1,13 @@
 use super::function_result_stream::FunctionResultStream;
 use super::runtime_ctx_manager::RuntimeContextManager;
+use crate::parse_ts_types;
 use crate::types::function_results::FunctionResult;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreRuntime;
 use baml_types::BamlValue;
 use napi::Env;
 use napi::JsFunction;
+use napi::JsObject;
 use napi_derive::napi;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -38,26 +40,21 @@ impl BamlRuntime {
 
     #[napi]
     pub fn create_context_manager(&self) -> RuntimeContextManager {
-        self.inner.create_ctx_manager().into()
+        self.inner
+            .create_ctx_manager(BamlValue::String("typescript".to_string()))
+            .into()
     }
 
-    #[napi]
-    pub async fn call_function(
+    #[napi(ts_return_type = "Promise<FunctionResult>")]
+    pub fn call_function(
         &self,
+        env: Env,
         function_name: String,
-        args: serde_json::Value,
+        #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
         ctx: &RuntimeContextManager,
-    ) -> napi::Result<FunctionResult> {
-        let args: BamlValue = serde_json::from_value(args).map_err(|e| {
-            napi::Error::new(
-                napi::Status::GenericFailure,
-                format!(
-                    "Unabled to parse args to function {function_name}: {}",
-                    e.to_string()
-                ),
-            )
-        })?;
-        let Some(args_map) = args.as_map() else {
+    ) -> napi::Result<JsObject> {
+        let args = parse_ts_types::js_object_to_baml_value(env, args)?;
+        if !args.is_map() {
             return Err(napi::Error::new(
                 napi::Status::GenericFailure,
                 format!(
@@ -65,19 +62,23 @@ impl BamlRuntime {
                     args.r#type()
                 ),
             ));
-        };
+        }
+        let args_map = args.as_map_owned().unwrap();
 
         let baml_runtime = self.inner.clone();
-        log::info!("Got runtime");
         let ctx_mng = ctx.inner.clone();
-        let result = baml_runtime
-            .call_function(function_name, &args_map, &ctx_mng)
-            .await;
+        let fut = async move {
+            let result = baml_runtime
+                .call_function(function_name, &args_map, &ctx_mng)
+                .await;
 
-        result
-            .0
-            .map(FunctionResult::from)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+            result
+                .0
+                .map(FunctionResult::from)
+                .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+        };
+
+        env.execute_tokio_future(fut, |&mut _, data| Ok(data))
     }
 
     #[napi]
@@ -85,23 +86,26 @@ impl BamlRuntime {
         &self,
         env: Env,
         function_name: String,
-        args: serde_json::Value,
+        #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
         #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] cb: Option<JsFunction>,
         ctx: &RuntimeContextManager,
     ) -> napi::Result<FunctionResultStream> {
-        let args: BamlValue = serde_json::from_value(args)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
-        let Some(args_map) = args.as_map() else {
+        let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
+        if !args.is_map() {
             return Err(napi::Error::new(
                 napi::Status::GenericFailure,
-                "Invalid args",
+                format!(
+                    "Invalid args: Expected a map of arguments, got: {}",
+                    args.r#type()
+                ),
             ));
-        };
+        }
+        let args_map = args.as_map_owned().unwrap();
 
         let ctx = ctx.inner.clone();
         let stream = self
             .inner
-            .stream_function(function_name, args_map, &ctx)
+            .stream_function(function_name, &args_map, &ctx)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
 
         let cb = match cb {

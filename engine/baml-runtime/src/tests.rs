@@ -30,7 +30,7 @@ fn test_graph_test() -> Result<()> {
         .collect(),
     )?;
 
-    let ctx = runtime.create_ctx_manager();
+    let ctx = runtime.create_ctx_manager(BamlValue::String("none".to_string()));
     let ctx = ctx.create_ctx();
     let graph = runtime.inner.orchestration_graph("GPT4Turbo", &ctx)?;
     for node in graph.iter() {
@@ -64,7 +64,7 @@ async fn test_run_test() -> Result<()> {
         [("OPENAI_API_KEY", "API_KEY")].into_iter().collect(),
     )
     .unwrap();
-    let ctx = runtime.create_ctx_manager();
+    let ctx = runtime.create_ctx_manager(BamlValue::String("none".to_string()));
     let (res, _) = runtime
         .run_test("ExtractNames", "pale_maroon", &ctx, Some(|_| {}))
         .await;
@@ -81,7 +81,7 @@ async fn test_call_function() -> Result<FunctionResult> {
         &directory,
         [("OPENAI_API_KEY", "OPENAI_API_KEY")].into_iter().collect(),
     )?;
-    let ctx = runtime.create_ctx_manager();
+    let ctx = runtime.create_ctx_manager(BamlValue::String("none".to_string()));
 
     let mut params = baml_types::BamlMap::new();
     params.insert(

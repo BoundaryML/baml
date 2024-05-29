@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use std::{any::Any, borrow::Borrow, collections::HashMap};
 
 use anyhow::{bail, Result};
 use baml_types::{BamlImage, BamlMap, BamlValue};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},
-    types::PyList,
+    types::{PyBool, PyBoolMethods, PyList, PyString},
     PyErr, PyObject, PyResult, Python, ToPyObject,
 };
 
@@ -176,7 +176,13 @@ pub fn parse_py_type(any: PyObject) -> PyResult<BamlValue> {
             if t.is_subclass(&enum_type).unwrap_or(false) {
                 let name = t
                     .name()
-                    .map(|n| n.to_string())
+                    .map(|n| {
+                        if let Some(x) = n.rfind("baml_client.types.") {
+                            n[x + "baml_client.types.".len()..].to_string()
+                        } else {
+                            n.to_string()
+                        }
+                    })
                     .unwrap_or("<UnnamedEnum>".to_string());
                 let value = any.getattr(py, "value")?;
                 let value = value.extract::<String>(py)?;
@@ -222,14 +228,16 @@ pub fn parse_py_type(any: PyObject) -> PyResult<BamlValue> {
                 Ok(MappedPyType::List(items))
             } else if let Ok(kv) = any.extract::<HashMap<String, PyObject>>(py) {
                 Ok(MappedPyType::Map(kv))
-            } else if let Ok(s) = any.extract::<String>(py) {
-                Ok(MappedPyType::String(s))
+            } else if let Ok(b) = any.downcast_bound::<PyBool>(py) {
+                Ok(MappedPyType::Bool(b.is_true()))
             } else if let Ok(i) = any.extract::<i64>(py) {
                 Ok(MappedPyType::Int(i))
+            } else if let Ok(i) = any.extract::<u64>(py) {
+                Ok(MappedPyType::Int(i as i64))
             } else if let Ok(f) = any.extract::<f64>(py) {
                 Ok(MappedPyType::Float(f))
-            } else if let Ok(b) = any.extract::<bool>(py) {
-                Ok(MappedPyType::Bool(b))
+            } else if let Ok(s) = any.extract::<String>(py) {
+                Ok(MappedPyType::String(s))
             } else if any.is_none(py) {
                 Ok(MappedPyType::None)
             } else if let Ok(b) = any.downcast_bound::<BamlImagePy>(py) {

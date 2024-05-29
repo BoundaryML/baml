@@ -51,7 +51,7 @@ class BamlStream {
             yield this.partialCoerce(event.parsed());
         }
     }
-    async done() {
+    async getFinalResponse() {
         const final = await this.driveToCompletionInBg();
         return this.finalCoerce(final.parsed());
     }

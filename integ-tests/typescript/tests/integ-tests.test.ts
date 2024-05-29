@@ -1,5 +1,6 @@
 import assert from 'assert'
-import { b, NamedArgsSingleEnumList } from '../baml_client'
+import { Image } from '@boundaryml/baml'
+import { b, NamedArgsSingleEnumList, flush } from '../baml_client'
 
 describe('Integ tests', () => {
   it('should work for all inputs', async () => {
@@ -45,7 +46,7 @@ describe('Integ tests', () => {
     expect(res).toContain('3566')
 
     // TODO fix the fact it's required.
-    // res = await b.FnNamedArgsSingleStringOptional()
+    res = await b.FnNamedArgsSingleStringOptional()
   })
 
   it('should work for all outputs', async () => {
@@ -96,10 +97,50 @@ describe('Integ tests', () => {
   })
 
   it('should work with image', async () => {
-    // TODO: images are of type any right now.
-    // let res = await b.TestImageInput({
-    //   image: 'https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png',
-    // })
-    // expect(res).toEqual('true')
+    let res = await b.TestImageInput(
+      Image.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png'),
+    )
+    expect(res.toLowerCase()).toContain('green')
   })
+
+  it('should support streaming in OpenAI', async () => {
+    const stream = b.stream.PromptTestOpenAI('Mt Rainier is tall')
+    const msgs: string[] = []
+    for await (const msg of stream) {
+      msgs.push(msg ?? '')
+    }
+    const final = await stream.getFinalResponse()
+
+    expect(final.length).toBeGreaterThan(0)
+    expect(msgs.length).toBeGreaterThan(0)
+    for (let i = 0; i < msgs.length - 2; i++) {
+      expect(msgs[i + 1].startsWith(msgs[i])).toBeTruthy()
+    }
+    expect(msgs.at(-1)).toEqual(final)
+  })
+
+  it('should support streaming without iterating', async () => {
+    const final = await b.stream.PromptTestOpenAI('Mt Rainier is tall').getFinalResponse()
+    expect(final.length).toBeGreaterThan(0)
+  })
+
+  it('should support streaming in Claude', async () => {
+    const stream = b.stream.PromptTestClaude('Mt Rainier is tall')
+    const msgs: string[] = []
+    for await (const msg of stream) {
+      msgs.push(msg ?? '')
+    }
+    const final = await stream.getFinalResponse()
+
+    expect(final.length).toBeGreaterThan(0)
+    expect(msgs.length).toBeGreaterThan(0)
+    for (let i = 0; i < msgs.length - 2; i++) {
+      expect(msgs[i + 1].startsWith(msgs[i])).toBeTruthy()
+    }
+    expect(msgs.at(-1)).toEqual(final)
+  })
+})
+
+afterAll(async () => {
+  flush()
 })

@@ -63,7 +63,6 @@ first.scope.clone();
 impl FunctionResultStream {
     pub async fn run<F>(
         &mut self,
-        ir: &IntermediateRepr,
         on_event: Option<F>,
         ctx: &RuntimeContextManager,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>)
@@ -84,7 +83,7 @@ impl FunctionResultStream {
 
         let (history, _) = orchestrate_stream(
             local_orchestrator,
-            ir,
+            self.ir.as_ref(),
             &rctx,
             &self.renderer,
             &baml_types::BamlValue::Map(local_params),
