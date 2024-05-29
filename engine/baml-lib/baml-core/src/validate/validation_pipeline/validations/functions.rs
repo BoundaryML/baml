@@ -66,7 +66,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             Some(p) => p,
             None => {
                 ctx.push_error(DatamodelError::new_validation_error(
-                    "Template string must be a raw string literal.",
+                    "Template string must be a raw string literal like `template_string MyTemplate(myArg: string) #\"\n\n\"#`",
                     template.identifier().span().clone(),
                 ));
                 continue;

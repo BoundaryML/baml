@@ -28,6 +28,7 @@ function ExtractResume(resume: string, img: image) -> Resume {
         {{ AddRole("Software Engineer") }}
 
         Extract data:
+        
 
         <<<<
         {{ resume }}
