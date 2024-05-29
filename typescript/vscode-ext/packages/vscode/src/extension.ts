@@ -216,14 +216,14 @@ export function activate(context: vscode.ExtensionContext) {
       const text = editor.document.getText()
 
       // TODO: buggy when used with multiple functions, needs a fix.
-      // WebPanelView.currentPanel?.postMessage('update_cursor', {
-      //   cursor: {
-      //     fileName: name,
-      //     fileText: text,
-      //     line: position.line + 1,
-      //     column: position.character,
-      //   },
-      // })
+      WebPanelView.currentPanel?.postMessage('update_cursor', {
+        cursor: {
+          fileName: name,
+          fileText: text,
+          line: position.line + 1,
+          column: position.character,
+        },
+      })
     }
   })
 
