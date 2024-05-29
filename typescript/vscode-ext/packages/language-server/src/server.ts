@@ -360,8 +360,6 @@ export function startServer(options?: LSOptions): void {
   connection.onDefinition((params: DeclarationParams) => {
     const doc = getDocument(params.textDocument.uri)
     if (doc) {
-      const lang = getLanguageExtension(doc.uri)
-
       //accesses project from uri via bamlProjectManager
       const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
       if (proj) {
@@ -635,21 +633,36 @@ export function startServer(options?: LSOptions): void {
     }
   })
 
-  connection.onRequest('getBAMLFunctions', async () => {
-    const allFunctions: any[] = []
-    const projects = bamlProjectManager.get_projects()
+  connection.onRequest(
+    'getBAMLFunctions',
+    async (): Promise<
+      {
+        name: string
+        span: { file_path: string; start: number; end: number }
+      }[]
+    > => {
+      const projects = bamlProjectManager.get_projects()
 
-    if (!projects || projects.size === 0) {
-      return { functions: allFunctions }
-    }
+      const allFunctions = []
+      for (const [id, proj] of projects.entries()) {
+        const functions = proj.list_functions()
+        allFunctions.push(
+          ...functions.map(
+            (
+              func,
+            ): {
+              name: string
+              span: { file_path: string; start: number; end: number }
+            } => {
+              return func.toJSON() as any
+            },
+          ),
+        )
+      }
 
-    for (const [id, proj] of projects.entries()) {
-      const functions = proj.list_functions()
-      allFunctions.push(...functions.map((func) => func.toJSON()))
-    }
-
-    return JSON.stringify(allFunctions)
-  })
+      return allFunctions
+    },
+  )
 
   console.log('Server-side -- listening to connection')
   // Make the text document manager listen on the connection

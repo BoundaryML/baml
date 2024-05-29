@@ -47,7 +47,12 @@ export const requestDiagnostics = async () => {
   await client?.sendRequest('requestDiagnostics')
 }
 
-export const getBAMLFunctions = async (): Promise<any> => {
+export const getBAMLFunctions = async (): Promise<
+  {
+    name: string
+    span: { file_path: string; start: number; end: number }
+  }[]
+> => {
   return await client.sendRequest('getBAMLFunctions')
 }
 

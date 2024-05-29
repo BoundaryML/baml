@@ -27,19 +27,8 @@ export class LanguageToBamlCodeLensProvider implements vscode.CodeLensProvider {
       return codeLenses
     }
 
-    let bamlFunctions: any
-
-    try {
-      // Get BAML functions in this project
-      const response = await getBAMLFunctions()
-      if (!response) {
-        return codeLenses
-      }
-      bamlFunctions = JSON.parse(response)
-    } catch (e) {
-      console.error(`Error fetching BAML functions: ${e}`)
-      return codeLenses
-    }
+    // Get BAML functions in this project
+    const bamlFunctions = await getBAMLFunctions()
 
     // Iterate over each function call
     functionCalls.forEach((match) => {
