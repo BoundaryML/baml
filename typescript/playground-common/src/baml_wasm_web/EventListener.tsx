@@ -147,26 +147,24 @@ const updateCursorAtom = atom(
       return
     }
 
+    console.log(`Line: ${cursor.line}, Column: ${cursor.column}`)
     const project = get(projectFamilyAtom(selectedProject))
     const runtime = get(selectedRuntimeAtom)
 
     if (runtime && project) {
-      //need logic to convert line and column to index value
-      let cursorIdx = 0
       const fileName = cursor.fileName
       const fileContent = cursor.fileText
       const lines = fileContent.split('\n')
-      let charCount = 0
 
-      for (let i = 0; i < cursor.line; i++) {
-        charCount += lines[i].length + 1 // +1 for the newline character
+      let cursorIdx = 0
+      for (let i = 0; i < cursor.line - 1; i++) {
+        cursorIdx += lines[i].length + 1 // +1 for the newline character
       }
 
-      charCount += cursor.column
-      cursorIdx = charCount
+      cursorIdx += cursor.column
 
+      console.log(`Cursor position: ${cursorIdx}`)
       const selectedFunc = runtime.get_function_at_position(fileName, cursorIdx)
-
       if (selectedFunc) {
         set(selectedFunctionAtom, selectedFunc.name)
       }

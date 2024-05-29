@@ -659,7 +659,7 @@ impl WasmRuntime {
                 }),
                 None => false,
             })
-
+    }
 
     #[wasm_bindgen]
     pub fn list_functions(&self) -> Vec<WasmFunction> {
@@ -875,16 +875,23 @@ impl WasmRuntime {
     #[wasm_bindgen]
     pub fn get_function_at_position(
         &self,
-        fileName: &str,
-        cursorIdx: usize,
+        file_name: &str,
+        cursor_idx: usize,
     ) -> Option<WasmFunction> {
         let functions = self.list_functions();
-
+        log::info!("Cursor index is {:#?}", cursor_idx);
         for function in functions {
             let span = function.span.clone(); // Clone the span
-            if span.file_path == fileName
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursorIdx)
+
+            if span.file_path == file_name
+                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
             {
+                log::info!(
+                    "Function is {:#?} and Span is {:#?} to {:#?}",
+                    function.name,
+                    span.start,
+                    span.end
+                );
                 return Some(function);
             }
         }

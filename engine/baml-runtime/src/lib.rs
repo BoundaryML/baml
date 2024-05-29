@@ -28,7 +28,7 @@ use anyhow::Result;
 
 use baml_types::BamlMap;
 use baml_types::BamlValue;
-use cli::LanguageClientType;
+// use cli::LanguageClientType;
 use indexmap::IndexMap;
 use internal_baml_core::configuration::GeneratorOutputType;
 use runtime::InternalBamlRuntime;
