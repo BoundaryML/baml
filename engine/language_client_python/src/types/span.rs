@@ -1,4 +1,5 @@
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
+use baml_types::BamlValue;
 use pyo3::prelude::{pymethods, PyResult};
 use pyo3::{PyObject, Python, ToPyObject};
 
@@ -24,7 +25,8 @@ impl BamlSpan {
         args: PyObject,
         ctx: &RuntimeContextManager,
     ) -> PyResult<Self> {
-        let args = parse_py_type(args.into_bound(py).to_object(py))?;
+        let args = parse_py_type(args.into_bound(py).to_object(py), true)?
+            .unwrap_or(BamlValue::Map(Default::default()));
         let Some(args_map) = args.as_map() else {
             return Err(BamlError::new_err("Failed to parse args"));
         };
@@ -45,7 +47,7 @@ impl BamlSpan {
         result: PyObject,
         ctx: &RuntimeContextManager,
     ) -> PyResult<PyObject> {
-        let result = parse_py_type(result.into_bound(py).to_object(py))?;
+        let result = parse_py_type(result.into_bound(py).to_object(py), true)?;
 
         let span = self
             .inner
@@ -56,7 +58,7 @@ impl BamlSpan {
         let ctx = ctx.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let result = runtime
-                .finish_span(span, Some(result), &ctx)
+                .finish_span(span, result, &ctx)
                 .await
                 .map_err(BamlError::from_anyhow)
                 .map(|u| u.map(|id| id.to_string()))?;
@@ -71,7 +73,7 @@ impl BamlSpan {
         result: PyObject,
         ctx: &RuntimeContextManager,
     ) -> PyResult<PyObject> {
-        let result = parse_py_type(result)?;
+        let result = parse_py_type(result, true)?;
 
         // Acquire the span from the internal storage
         let span = self
@@ -85,7 +87,7 @@ impl BamlSpan {
         let runtime = self.rt.clone();
         let ctx = ctx.inner.clone();
 
-        let finish_span_future = runtime.finish_span(span, Some(result), &ctx);
+        let finish_span_future = runtime.finish_span(span, result, &ctx);
 
         // Block the current thread until the asynchronous code completes
         let result = tokio_runtime

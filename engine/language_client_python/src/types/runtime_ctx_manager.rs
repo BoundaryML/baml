@@ -10,7 +10,10 @@ crate::lang_wrapper!(RuntimeContextManager, baml_runtime::RuntimeContextManager)
 impl RuntimeContextManager {
     #[pyo3()]
     fn upsert_tags(&self, py: Python<'_>, tags: PyObject) -> PyResult<bool> {
-        let tags = parse_py_type(tags.into_bound(py).to_object(py))?;
+        let Some(tags) = parse_py_type(tags.into_bound(py).to_object(py), true)? else {
+            // No tags to process
+            return Ok(true);
+        };
         let Some(tags) = tags.as_map_owned() else {
             return Err(BamlError::new_err("Failed to parse tags"));
         };

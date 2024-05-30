@@ -20,6 +20,7 @@ from typing import List, Optional, Union
 
 
 class Category(str, Enum):
+    
     Refund = "Refund"
     CancelOrder = "CancelOrder"
     TechnicalSupport = "TechnicalSupport"
@@ -27,6 +28,7 @@ class Category(str, Enum):
     Question = "Question"
 
 class Category2(str, Enum):
+    
     Refund = "Refund"
     CancelOrder = "CancelOrder"
     TechnicalSupport = "TechnicalSupport"
@@ -34,6 +36,7 @@ class Category2(str, Enum):
     Question = "Question"
 
 class Category3(str, Enum):
+    
     Refund = "Refund"
     CancelOrder = "CancelOrder"
     TechnicalSupport = "TechnicalSupport"
@@ -41,6 +44,7 @@ class Category3(str, Enum):
     Question = "Question"
 
 class Color(str, Enum):
+    
     RED = "RED"
     BLUE = "BLUE"
     GREEN = "GREEN"
@@ -49,48 +53,58 @@ class Color(str, Enum):
     WHITE = "WHITE"
 
 class DataType(str, Enum):
+    
     Resume = "Resume"
     Event = "Event"
 
 class EnumInClass(str, Enum):
+    
     ONE = "ONE"
     TWO = "TWO"
 
 class EnumOutput(str, Enum):
+    
     ONE = "ONE"
     TWO = "TWO"
     THREE = "THREE"
 
 class Hobby(str, Enum):
+    
     SPORTS = "SPORTS"
     MUSIC = "MUSIC"
     READING = "READING"
 
 class NamedArgsSingleEnum(str, Enum):
+    
     ONE = "ONE"
     TWO = "TWO"
 
 class NamedArgsSingleEnumList(str, Enum):
+    
     ONE = "ONE"
     TWO = "TWO"
 
 class OptionalTest_CategoryType(str, Enum):
+    
     Aleph = "Aleph"
     Beta = "Beta"
     Gamma = "Gamma"
 
 class OrderStatus(str, Enum):
+    
     ORDERED = "ORDERED"
     SHIPPED = "SHIPPED"
     DELIVERED = "DELIVERED"
     CANCELLED = "CANCELLED"
 
 class Tag(str, Enum):
+    
     Security = "Security"
     AI = "AI"
     Blockchain = "Blockchain"
 
 class TestEnum(str, Enum):
+    
     A = "A"
     B = "B"
     C = "C"
@@ -101,14 +115,17 @@ class TestEnum(str, Enum):
 
 class Blah(BaseModel):
     
+    
     prop4: Optional[str] = None
 
 class ClassOptionalOutput(BaseModel):
+    
     
     prop1: str
     prop2: str
 
 class ClassOptionalOutput2(BaseModel):
+    
     
     prop1: Optional[str] = None
     prop2: Optional[str] = None
@@ -116,11 +133,13 @@ class ClassOptionalOutput2(BaseModel):
 
 class ClassWithImage(BaseModel):
     
+    
     myImage: baml_py.Image
     param2: str
     fake_image: "FakeImage"
 
 class Education(BaseModel):
+    
     
     institution: str
     location: str
@@ -130,11 +149,13 @@ class Education(BaseModel):
 
 class Email(BaseModel):
     
+    
     subject: str
     body: str
     from_address: str
 
 class Event(BaseModel):
+    
     
     title: str
     date: str
@@ -143,9 +164,11 @@ class Event(BaseModel):
 
 class FakeImage(BaseModel):
     
+    
     url: str
 
 class NamedArgsSingleClass(BaseModel):
+    
     
     key: str
     key_two: bool
@@ -153,16 +176,19 @@ class NamedArgsSingleClass(BaseModel):
 
 class OptionalTest_Prop1(BaseModel):
     
+    
     omega_a: str
     omega_b: int
 
 class OptionalTest_ReturnType(BaseModel):
+    
     
     omega_1: Optional["OptionalTest_Prop1"] = None
     omega_2: Optional[str] = None
     omega_3: List[Optional["OptionalTest_CategoryType"]]
 
 class OrderInfo(BaseModel):
+    
     
     order_status: "OrderStatus"
     tracking_number: Optional[str] = None
@@ -171,15 +197,18 @@ class OrderInfo(BaseModel):
 class Person(BaseModel):
     
     model_config = ConfigDict(extra='allow')
+    
     name: Optional[str] = None
     hair_color: Optional[Union["Color", str]] = None
 
 class RaysData(BaseModel):
     
+    
     dataType: "DataType"
     value: Union["Resume", "Event"]
 
 class Resume(BaseModel):
+    
     
     name: str
     email: str
@@ -190,6 +219,7 @@ class Resume(BaseModel):
 
 class SearchParams(BaseModel):
     
+    
     dateRange: Optional[int] = None
     location: List[str]
     jobTitle: Optional["WithReasoning"] = None
@@ -199,6 +229,7 @@ class SearchParams(BaseModel):
 
 class TestClassAlias(BaseModel):
     
+    
     key: str
     key2: str
     key3: str
@@ -207,15 +238,18 @@ class TestClassAlias(BaseModel):
 
 class TestClassWithEnum(BaseModel):
     
+    
     prop1: str
     prop2: "EnumInClass"
 
 class TestOutputClass(BaseModel):
     
+    
     prop1: str
     prop2: int
 
 class TestOutputClassNested(BaseModel):
+    
     
     prop1: str
     prop2: int
@@ -223,11 +257,13 @@ class TestOutputClassNested(BaseModel):
 
 class UnionTest_ReturnType(BaseModel):
     
+    
     prop1: Union[str, bool]
     prop2: List[Union[float, bool]]
     prop3: Union[List[float], List[bool]]
 
 class WithReasoning(BaseModel):
+    
     
     value: str
     reasoning: str

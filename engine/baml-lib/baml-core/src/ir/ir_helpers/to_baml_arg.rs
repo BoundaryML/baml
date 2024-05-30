@@ -106,7 +106,7 @@ pub fn validate_arg(
         },
         FieldType::Class(name) => match value {
             BamlValue::Class(n, _) if n == name => return Some(value.clone()),
-            BamlValue::Map(obj) => match ir.find_class(name) {
+            BamlValue::Class(_, obj) | BamlValue::Map(obj) => match ir.find_class(name) {
                 Ok(c) => {
                     let mut fields = BamlMap::new();
                     for f in c.walk_fields() {

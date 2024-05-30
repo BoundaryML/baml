@@ -5,6 +5,10 @@ from baml_client import b
 from baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
 from baml_client.tracing import trace, set_tags, flush
 from baml_client.type_builder import TypeBuilder
+import datetime
+
+class MyCustomClass(NamedArgsSingleClass):
+    date: datetime.datetime
 
 
 @pytest.mark.asyncio
@@ -48,6 +52,18 @@ async def test_should_work_for_all_inputs():
 
     res = await b.TestFnNamedArgsSingleInt(3566)
     assert "3566" in res
+
+@pytest.mark.asyncio
+async def test_custom_types():
+    print("calling with class")
+    res = await b.TestFnNamedArgsSingleClass(
+        myArg=MyCustomClass(
+            key="key",
+            key_two=True,
+            key_three=52,
+            date=datetime.datetime.now()
+        )
+    )
 
 
 @pytest.mark.asyncio
@@ -167,7 +183,7 @@ def test_tracing_sync():
 
 @trace
 async def parent_async(myStr: str):
-    set_tags({"myKey": "myVal"})
+    set_tags(myKey="myVal")
     await async_dummy_func(myStr)
     await b.FnOutputClass(myStr)
     sync_dummy_func(myStr)

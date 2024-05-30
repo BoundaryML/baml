@@ -2766,3 +2766,4 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
       )
+    

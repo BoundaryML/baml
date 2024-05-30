@@ -52,7 +52,11 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
     ) -> PyResult<PyObject> {
-        let args = parse_py_type(args.into_bound(py).to_object(py))?;
+        let Some(args) = parse_py_type(args.into_bound(py).to_object(py), false)? else {
+            return Err(BamlError::new_err(
+                "Failed to parse args, perhaps you used a non-serializable type?",
+            ));
+        };
         let Some(args_map) = args.as_map_owned() else {
             return Err(BamlError::new_err("Failed to parse args"));
         };
@@ -86,7 +90,11 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
     ) -> PyResult<FunctionResultStream> {
-        let args = parse_py_type(args.into_bound(py).to_object(py))?;
+        let Some(args) = parse_py_type(args.into_bound(py).to_object(py), false)? else {
+            return Err(BamlError::new_err(
+                "Failed to parse args, perhaps you used a non-serializable type?",
+            ));
+        };
         let Some(args_map) = args.as_map() else {
             return Err(BamlError::new_err("Failed to parse args"));
         };
