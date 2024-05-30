@@ -21,6 +21,10 @@ pub fn from_str(
     raw_string: &str,
     allow_partials: bool,
 ) -> Result<BamlValueWithFlags> {
+    if matches!(target, FieldType::Primitive(String)) {
+        return Ok(BamlValueWithFlags::String(raw_string.to_string().into()));
+    }
+
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.
     let value = jsonish::parse(raw_string, jsonish::ParseOptions::default())?;
 
