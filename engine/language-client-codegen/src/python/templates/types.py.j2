@@ -7,6 +7,7 @@ from typing import List, Optional, Union
 {# Enums -#}
 {% for enum in enums %}
 class {{enum.name}}(str, Enum):
+    {% if enum.values.is_empty() %}pass{% endif %}
     {%- for value in enum.values %}
     {{ value }} = "{{ value }}"
     {%- endfor %}
@@ -18,6 +19,7 @@ class {{cls.name}}(BaseModel):
     {% if cls.dynamic %}
     model_config = ConfigDict(extra='allow')
     {%- endif %}
+    {% if cls.fields.is_empty() && !cls.dynamic %}pass{% endif %}
     
     {%- for (name, type) in cls.fields %}
     {{name}}: {{type}}
