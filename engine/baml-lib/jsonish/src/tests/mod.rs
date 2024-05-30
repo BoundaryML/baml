@@ -156,3 +156,59 @@ test_deserializer!(
     ```
     "#
 );
+
+const FOO_FILE: &str = r#"
+class Foo {
+  id string
+}
+"#;
+test_deserializer!(
+    test_string_from_string23,
+    FOO_FILE,
+    r#"Hello there. Here is {playername}
+
+    JSON Output:
+    ```json
+      {
+        "id": "{{hi} there"
+      }
+    ```
+    "#,
+    FieldType::Class("Foo".to_string()),
+    json!({"id": r#"{{hi} there"# })
+);
+
+// This fails
+// test_deserializer!(
+//     test_string_from_string23,
+//     FOO_FILE,
+//     r#"Hello there. Here is {{playername}
+
+//   JSON Output:
+
+//     {
+//       "id": "{{hi} there"
+//     }
+
+//   "#,
+//     FieldType::Class("Foo".to_string()),
+//     json!({"id": r#"{{hi} there"# })
+// );
+
+// also fails -- if you are in an object and you are casting to a string, dont do that.
+// TODO: find all the json blobs here correctly
+test_deserializer!(
+    test_string_from_string24,
+    FOO_FILE,
+    r#"Hello there. Here is {playername}
+
+    JSON Output:
+
+      {
+        "id": "{{hi} there",
+      }
+
+    "#,
+    FieldType::Class("Foo".to_string()),
+    json!({"id": r#"{{hi} there"# })
+);
