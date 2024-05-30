@@ -55,7 +55,7 @@ class NewClassBuilder:
     def __init__(self, tb: _TypeBuilder, name: str):
         self.__bldr = tb.class_(name)
         self.__properties: typing.Set[str] = set()
-        self.__props = NewClassProperties(self, self.__bldr)
+        self.__props = NewClassProperties(self.__bldr, self.__properties)
 
     def field(self) -> FieldType:
         return self.__bldr.field()
@@ -90,12 +90,12 @@ class ClassPropertyBuilder:
 
 
 class NewClassProperties:
-    def __init__(self, class_builder: NewClassBuilder, cls_bldr: ClassBuilder):
-        self.__cls_builder = class_builder
+    def __init__(self, cls_bldr: ClassBuilder, properties: typing.Set[str]):
         self.__bldr = cls_bldr
+        self.__properties = properties
 
     def __getattr__(self, name: str) -> "ClassPropertyBuilder":
-        if name not in self.__cls_builder.__properties:
+        if name not in self.__properties:
             raise AttributeError(f"Property {name} not found.")
         return ClassPropertyBuilder(self.__bldr.property(name))
 
@@ -104,7 +104,7 @@ class NewEnumBuilder:
     def __init__(self, tb: _TypeBuilder, name: str):
         self.__bldr = tb.enum(name)
         self.__values: typing.Set[str] = set()
-        self.__vals = NewEnumValues(self, self.__bldr)
+        self.__vals = NewEnumValues(self.__bldr, self.__values)
 
     def field(self) -> FieldType:
         return self.__bldr.field()
@@ -124,11 +124,11 @@ class NewEnumBuilder:
 
 
 class NewEnumValues:
-    def __init__(self, enum_builder: NewEnumBuilder, enum_bldr: EnumBuilder):
-        self.__enum_builder = enum_builder
+    def __init__(self, enum_bldr: EnumBuilder, values: typing.Set[str]):
         self.__bldr = enum_bldr
+        self.__values = values
 
     def __getattr__(self, name: str) -> "EnumValueBuilder":
-        if name not in self.__enum_builder.__values:
+        if name not in self.__values:
             raise AttributeError(f"Value {name} not found.")
         return self.__bldr.value(name)

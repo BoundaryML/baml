@@ -1,5 +1,5 @@
 import typing
-from baml_py.type_builder import FieldType, TypeBuilder as _TypeBuilder, ClassPropertyBuilder, EnumValueBuilder
+from baml_py.type_builder import FieldType, TypeBuilder as _TypeBuilder, ClassPropertyBuilder, EnumValueBuilder, EnumBuilder
 
 class TypeBuilder(_TypeBuilder):
     def __init__(self):
@@ -28,7 +28,7 @@ class {{cls.name}}Builder:
     def __init__(self, tb: _TypeBuilder):
         self.__bldr = tb._tb.class_("{{cls.name}}")
         self.__properties = set([{% for (name, _) in cls.fields %} "{{name}}", {% endfor %}])
-        self.__props = {{cls.name}}Properties(self)
+        self.__props = {{cls.name}}Properties(self.__bldr, self.__properties)
 
     def field(self) -> FieldType:
         return self.__bldr.field()
@@ -46,20 +46,21 @@ class {{cls.name}}Builder:
         return ClassPropertyBuilder(self.__bldr.property(name).type(type))
 
 class {{cls.name}}Properties:
-    def __init__(self, class_builder: "{{cls.name}}Builder"):
-        self.__cls_builder = class_builder
+    def __init__(self, cls_bldr: ClassBuilder, properties: typing.Set[str]):
+        self.__bldr = cls_bldr
+        self.__properties = properties
 
     {%- for (name, type) in cls.fields %}
 
     @property
     def {{name}}(self) -> ClassPropertyBuilder:
-        return self.__cls_builder.__bldr.property("{{name}}")
+        return self.__bldr.property("{{name}}")
     {%- endfor %}
 
     def __getattr__(self, name: str) -> ClassPropertyBuilder:
-        if name not in self.__cls_builder.__properties:
+        if name not in self.__properties:
             raise AttributeError(f"Property {name} not found.")
-        return ClassPropertyBuilder(self.__cls_builder.__bldr.property(name))
+        return ClassPropertyBuilder(self.__bldr.property(name))
 {%- endif %}{% endfor %}
 
 {% for enum in enums %}{% if enum.dynamic %}
@@ -67,7 +68,7 @@ class {{enum.name}}Builder:
     def __init__(self, tb: _TypeBuilder):
         self.__bldr = tb._tb.enum("{{enum.name}}")
         self.__values = set([{% for value in enum.values %} "{{value}}", {% endfor %}])
-        self.__vals = {{enum.name}}Values(self)
+        self.__vals = {{enum.name}}Values(self.__bldr, self.__values)
 
     def field(self) -> FieldType:
         return self.__bldr.field()
@@ -86,20 +87,21 @@ class {{enum.name}}Builder:
         return self.__bldr.value(name)
 
 class {{enum.name}}Values:
-    def __init__(self, enum_builder: "{{enum.name}}Builder"):
-        self.__enum_builder = enum_builder
+    def __init__(self, enum_bldr: EnumBuilder, values: typing.Set[str]):
+        self.__bldr = enum_bldr
+        self.__values = values
 
     {%- for value in enum.values %}
 
     @property
     def {{value}}(self) -> EnumValueBuilder:
-        return self.__enum_builder.__bldr.value("{{value}}")
+        return self.__bldr.value("{{value}}")
     {%- endfor %}
 
     def __getattr__(self, name: str) -> EnumValueBuilder:
-        if name not in self.__enum_builder.__values:
+        if name not in self.__values:
             raise AttributeError(f"Value {name} not found.")
-        return self.__enum_builder.__bldr.value(name)
+        return self.__bldr.value(name)
 {%- endif %}{% endfor %}
 
 __all__ = ["TypeBuilder"]

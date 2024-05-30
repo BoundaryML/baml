@@ -7,7 +7,6 @@ from .baml_py import (
     FunctionResultStream,
     BamlImagePy as Image,
     invoke_runtime_cli,
-    TypeBuilder,
 )
 from .stream import BamlStream
 from .async_context_vars import CtxManager as BamlCtxManager
@@ -20,5 +19,4 @@ __all__ = [
     "FunctionResultStream",
     "Image",
     "invoke_runtime_cli",
-    "TypeBuilder",
 ]
