@@ -13,8 +13,8 @@ export class BamlRuntime {
   static fromDirectory(directory: string, envVars: Record<string, string>): BamlRuntime
   static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): BamlRuntime
   createContextManager(): RuntimeContextManager
-  callFunction(functionName: string, args: { [string]: any }, ctx: RuntimeContextManager): Promise<FunctionResult>
-  streamFunction(functionName: string, args: { [string]: any }, cb: (err: any, param: FunctionResult) => void, ctx: RuntimeContextManager): FunctionResultStream
+  callFunction(functionName: string, args: { [string]: any }, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null): Promise<FunctionResult>
+  streamFunction(functionName: string, args: { [string]: any }, cb: (err: any, param: FunctionResult) => void, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null): FunctionResultStream
   flush(): void
 }
 
@@ -22,6 +22,34 @@ export class BamlSpan {
   static new(runtime: BamlRuntime, functionName: string, args: any, ctx: RuntimeContextManager): BamlSpan
   finish(result: any, ctx: RuntimeContextManager): Promise<any>
   finishSync(result: any, ctx: RuntimeContextManager): any
+}
+
+export class ClassBuilder {
+  field(): FieldType
+  property(name: string): ClassPropertyBuilder
+}
+
+export class ClassPropertyBuilder {
+  setType(fieldType: FieldType): ClassPropertyBuilder
+  alias(alias?: string | undefined | null): ClassPropertyBuilder
+  description(description?: string | undefined | null): ClassPropertyBuilder
+}
+
+export class EnumBuilder {
+  value(name: string): EnumValueBuilder
+  alias(alias?: string | undefined | null): EnumBuilder
+  field(): FieldType
+}
+
+export class EnumValueBuilder {
+  alias(alias?: string | undefined | null): EnumValueBuilder
+  skip(skip?: boolean | undefined | null): EnumValueBuilder
+  description(description?: string | undefined | null): EnumValueBuilder
+}
+
+export class FieldType {
+  list(): FieldType
+  optional(): FieldType
 }
 
 export class FunctionResult {
@@ -36,6 +64,19 @@ export class FunctionResultStream {
 export class RuntimeContextManager {
   upsertTags(tags: any): void
   deepClone(): RuntimeContextManager
+}
+
+export class TypeBuilder {
+  constructor()
+  getEnum(name: string): EnumBuilder
+  getClass(name: string): ClassBuilder
+  list(inner: FieldType): FieldType
+  optional(inner: FieldType): FieldType
+  string(): FieldType
+  int(): FieldType
+  float(): FieldType
+  bool(): FieldType
+  null(): FieldType
 }
 
 export function invoke_runtime_cli(params: Array<string>): void

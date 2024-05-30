@@ -1,5 +1,5 @@
 import typing
-from baml_py.type_builder import FieldType, TypeBuilder as _TypeBuilder, ClassPropertyBuilder, EnumValueBuilder, EnumBuilder
+from baml_py.type_builder import FieldType, TypeBuilder as _TypeBuilder, ClassPropertyBuilder, EnumValueBuilder, EnumBuilder, ClassBuilder
 
 class TypeBuilder(_TypeBuilder):
     def __init__(self):
@@ -30,7 +30,7 @@ class {{cls.name}}Builder:
         self.__properties = set([{% for (name, _) in cls.fields %} "{{name}}", {% endfor %}])
         self.__props = {{cls.name}}Properties(self.__bldr, self.__properties)
 
-    def field(self) -> FieldType:
+    def type(self) -> FieldType:
         return self.__bldr.field()
 
     @property
@@ -70,7 +70,7 @@ class {{enum.name}}Builder:
         self.__values = set([{% for value in enum.values %} "{{value}}", {% endfor %}])
         self.__vals = {{enum.name}}Values(self.__bldr, self.__values)
 
-    def field(self) -> FieldType:
+    def type(self) -> FieldType:
         return self.__bldr.field()
 
     @property

@@ -364,7 +364,13 @@ if (!nativeBinding) {
 module.exports.BamlImage = nativeBinding.BamlImage
 module.exports.BamlRuntime = nativeBinding.BamlRuntime
 module.exports.BamlSpan = nativeBinding.BamlSpan
+module.exports.ClassBuilder = nativeBinding.ClassBuilder
+module.exports.ClassPropertyBuilder = nativeBinding.ClassPropertyBuilder
+module.exports.EnumBuilder = nativeBinding.EnumBuilder
+module.exports.EnumValueBuilder = nativeBinding.EnumValueBuilder
+module.exports.FieldType = nativeBinding.FieldType
 module.exports.FunctionResult = nativeBinding.FunctionResult
 module.exports.FunctionResultStream = nativeBinding.FunctionResultStream
 module.exports.RuntimeContextManager = nativeBinding.RuntimeContextManager
+module.exports.TypeBuilder = nativeBinding.TypeBuilder
 module.exports.invoke_runtime_cli = nativeBinding.invoke_runtime_cli

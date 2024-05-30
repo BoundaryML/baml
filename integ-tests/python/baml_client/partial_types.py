@@ -87,7 +87,7 @@ class OrderInfo(BaseModel):
 
 class Person(BaseModel):
     name: Optional[str] = None
-    hair_color: Optional[str] = None
+    hair_color: Optional[Union[types.Color, str]] = None
 
 class RaysData(BaseModel):
     dataType: Optional[types.DataType] = None

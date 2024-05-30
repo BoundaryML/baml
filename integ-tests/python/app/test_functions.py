@@ -213,14 +213,14 @@ async def test_dynamic():
     for name, val in tb.Hobby.list_values():
         val.alias(name.lower())
 
-    tb.Person.add_property("hobbies", tb.Hobby.field().list()).description(
+    tb.Person.add_property("hobbies", tb.Hobby.type().list()).description(
         "Some suggested hobbies they might be good at"
     )
 
     # no_tb_res = await b.ExtractPeople("My name is Harrison. My hair is black and I'm 6 feet tall.")
     tb_res = await b.ExtractPeople(
         "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
-        __tb__=tb,
+        {"tb": tb}
     )
 
     assert len(tb_res) > 0, "Expected non-empty result but got empty."

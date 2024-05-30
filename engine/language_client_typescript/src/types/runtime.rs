@@ -1,5 +1,6 @@
 use super::function_result_stream::FunctionResultStream;
 use super::runtime_ctx_manager::RuntimeContextManager;
+use super::type_builder::TypeBuilder;
 use crate::parse_ts_types;
 use crate::types::function_results::FunctionResult;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
@@ -52,6 +53,7 @@ impl BamlRuntime {
         function_name: String,
         #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
         ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
     ) -> napi::Result<JsObject> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -67,9 +69,11 @@ impl BamlRuntime {
 
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+
         let fut = async move {
             let result = baml_runtime
-                .call_function(function_name, &args_map, &ctx_mng)
+                .call_function(function_name, &args_map, &ctx_mng, tb.as_ref())
                 .await;
 
             result
@@ -89,6 +93,7 @@ impl BamlRuntime {
         #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
         #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] cb: Option<JsFunction>,
         ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -103,9 +108,10 @@ impl BamlRuntime {
         let args_map = args.as_map_owned().unwrap();
 
         let ctx = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
         let stream = self
             .inner
-            .stream_function(function_name, &args_map, &ctx)
+            .stream_function(function_name, &args_map, &ctx, tb.as_ref())
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
 
         let cb = match cb {
@@ -113,7 +119,7 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb))
+        Ok(FunctionResultStream::new(stream, cb, tb))
     }
 
     #[napi]

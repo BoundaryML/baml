@@ -57,7 +57,7 @@ class NewClassBuilder:
         self.__properties: typing.Set[str] = set()
         self.__props = NewClassProperties(self.__bldr, self.__properties)
 
-    def field(self) -> FieldType:
+    def type(self) -> FieldType:
         return self.__bldr.field()
 
     def list_properties(self) -> typing.List[typing.Tuple[str, "ClassPropertyBuilder"]]:
@@ -106,7 +106,7 @@ class NewEnumBuilder:
         self.__values: typing.Set[str] = set()
         self.__vals = NewEnumValues(self.__bldr, self.__values)
 
-    def field(self) -> FieldType:
+    def type(self) -> FieldType:
         return self.__bldr.field()
 
     @property

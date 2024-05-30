@@ -6,7 +6,7 @@
   "scripts": {
     "test": "jest",
     "build": "cd ../../clients/ts && npm run build && cd - && pnpm i",
-    "integ-tests": "BAML_LOG=info infisical run --env=test -- pnpm test -- --silent false --testTimeout 30000",
+    "integ-tests": "BAML_LOG=baml_events infisical run --env=test -- pnpm test -- --silent false --testTimeout 30000",
     "generate": "baml-cli generate --from ../baml_src"
   },
   "keywords": [],

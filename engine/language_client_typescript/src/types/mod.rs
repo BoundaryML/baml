@@ -6,3 +6,4 @@ pub mod image;
 mod runtime;
 mod runtime_ctx_manager;
 mod span;
+mod type_builder;

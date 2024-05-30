@@ -14,19 +14,24 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 import typing
-from baml_py.type_builder import FieldType, TypeBuilder as _TypeBuilder, ClassPropertyBuilder, EnumValueBuilder
+from baml_py.type_builder import FieldType, TypeBuilder as _TypeBuilder, ClassPropertyBuilder, EnumValueBuilder, EnumBuilder, ClassBuilder
 
 class TypeBuilder(_TypeBuilder):
     def __init__(self):
         super().__init__(classes=set(
           ["Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","Education","Email","Event","FakeImage","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","RaysData","Resume","SearchParams","TestClassAlias","TestClassWithEnum","TestOutputClass","TestOutputClassNested","UnionTest_ReturnType","WithReasoning",]
         ), enums=set(
-          ["Category","Category2","Category3","DataType","EnumInClass","EnumOutput","Hobby","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",]
+          ["Category","Category2","Category3","Color","DataType","EnumInClass","EnumOutput","Hobby","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",]
         ))
 
     @property
     def Person(self) -> "PersonBuilder":
         return PersonBuilder(self)
+
+    @property
+    def Color(self) -> "ColorBuilder":
+        return ColorBuilder(self)
+
 
     @property
     def Hobby(self) -> "HobbyBuilder":
@@ -37,9 +42,9 @@ class PersonBuilder:
     def __init__(self, tb: _TypeBuilder):
         self.__bldr = tb._tb.class_("Person")
         self.__properties = set([ "name",  "hair_color", ])
-        self.__props = PersonProperties(self)
+        self.__props = PersonProperties(self.__bldr, self.__properties)
 
-    def field(self) -> FieldType:
+    def type(self) -> FieldType:
         return self.__bldr.field()
 
     @property
@@ -55,30 +60,86 @@ class PersonBuilder:
         return ClassPropertyBuilder(self.__bldr.property(name).type(type))
 
 class PersonProperties:
-    def __init__(self, class_builder: "PersonBuilder"):
-        self.__cls_builder = class_builder
+    def __init__(self, cls_bldr: ClassBuilder, properties: typing.Set[str]):
+        self.__bldr = cls_bldr
+        self.__properties = properties
 
     @property
     def name(self) -> ClassPropertyBuilder:
-        return self.__cls_builder.__bldr.property("name")
+        return self.__bldr.property("name")
 
     @property
     def hair_color(self) -> ClassPropertyBuilder:
-        return self.__cls_builder.__bldr.property("hair_color")
+        return self.__bldr.property("hair_color")
 
     def __getattr__(self, name: str) -> ClassPropertyBuilder:
-        if name not in self.__cls_builder.__properties:
+        if name not in self.__properties:
             raise AttributeError(f"Property {name} not found.")
-        return ClassPropertyBuilder(self.__cls_builder.__bldr.property(name))
+        return ClassPropertyBuilder(self.__bldr.property(name))
 
 
+class ColorBuilder:
+    def __init__(self, tb: _TypeBuilder):
+        self.__bldr = tb._tb.enum("Color")
+        self.__values = set([ "RED",  "BLUE",  "GREEN",  "YELLOW",  "BLACK",  "WHITE", ])
+        self.__vals = ColorValues(self.__bldr, self.__values)
+
+    def type(self) -> FieldType:
+        return self.__bldr.field()
+
+    @property
+    def values(self) -> "ColorValues":
+        return self.__vals
+
+    def list_values(self) -> typing.List[typing.Tuple[str, EnumValueBuilder]]:
+        return [(name, self.__bldr.value(name)) for name in self.__values]
+
+    def add_value(self, name: str) -> EnumValueBuilder:
+        if name in self.__values:
+            raise ValueError(f"Value {name} already exists.")
+        self.__values.add(name)
+        return self.__bldr.value(name)
+
+class ColorValues:
+    def __init__(self, enum_bldr: EnumBuilder, values: typing.Set[str]):
+        self.__bldr = enum_bldr
+        self.__values = values
+
+    @property
+    def RED(self) -> EnumValueBuilder:
+        return self.__bldr.value("RED")
+
+    @property
+    def BLUE(self) -> EnumValueBuilder:
+        return self.__bldr.value("BLUE")
+
+    @property
+    def GREEN(self) -> EnumValueBuilder:
+        return self.__bldr.value("GREEN")
+
+    @property
+    def YELLOW(self) -> EnumValueBuilder:
+        return self.__bldr.value("YELLOW")
+
+    @property
+    def BLACK(self) -> EnumValueBuilder:
+        return self.__bldr.value("BLACK")
+
+    @property
+    def WHITE(self) -> EnumValueBuilder:
+        return self.__bldr.value("WHITE")
+
+    def __getattr__(self, name: str) -> EnumValueBuilder:
+        if name not in self.__values:
+            raise AttributeError(f"Value {name} not found.")
+        return self.__bldr.value(name)
 class HobbyBuilder:
     def __init__(self, tb: _TypeBuilder):
         self.__bldr = tb._tb.enum("Hobby")
         self.__values = set([ "SPORTS",  "MUSIC",  "READING", ])
-        self.__vals = HobbyValues(self)
+        self.__vals = HobbyValues(self.__bldr, self.__values)
 
-    def field(self) -> FieldType:
+    def type(self) -> FieldType:
         return self.__bldr.field()
 
     @property
@@ -95,24 +156,25 @@ class HobbyBuilder:
         return self.__bldr.value(name)
 
 class HobbyValues:
-    def __init__(self, enum_builder: "HobbyBuilder"):
-        self.__enum_builder = enum_builder
+    def __init__(self, enum_bldr: EnumBuilder, values: typing.Set[str]):
+        self.__bldr = enum_bldr
+        self.__values = values
 
     @property
     def SPORTS(self) -> EnumValueBuilder:
-        return self.__enum_builder.__bldr.value("SPORTS")
+        return self.__bldr.value("SPORTS")
 
     @property
     def MUSIC(self) -> EnumValueBuilder:
-        return self.__enum_builder.__bldr.value("MUSIC")
+        return self.__bldr.value("MUSIC")
 
     @property
     def READING(self) -> EnumValueBuilder:
-        return self.__enum_builder.__bldr.value("READING")
+        return self.__bldr.value("READING")
 
     def __getattr__(self, name: str) -> EnumValueBuilder:
-        if name not in self.__enum_builder.__values:
+        if name not in self.__values:
             raise AttributeError(f"Value {name} not found.")
-        return self.__enum_builder.__bldr.value(name)
+        return self.__bldr.value(name)
 
 __all__ = ["TypeBuilder"]

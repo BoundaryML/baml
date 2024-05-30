@@ -9,6 +9,7 @@ use baml_types::FieldType;
 use deserializer::coercer::{ParsingContext, TypeCoercer};
 
 pub use deserializer::types::BamlValueWithFlags;
+use internal_baml_core::ir::TypeValue;
 use internal_baml_jinja::types::OutputFormatContent;
 
 pub fn from_str(
@@ -17,7 +18,7 @@ pub fn from_str(
     raw_string: &str,
     allow_partials: bool,
 ) -> Result<BamlValueWithFlags> {
-    if matches!(target, FieldType::Primitive(String)) {
+    if matches!(target, FieldType::Primitive(TypeValue::String)) {
         return Ok(BamlValueWithFlags::String(raw_string.to_string().into()));
     }
 

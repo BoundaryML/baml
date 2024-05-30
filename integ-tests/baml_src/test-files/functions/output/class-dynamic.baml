@@ -1,6 +1,17 @@
 class Person {
   name string?
-  hair_color string?
+  hair_color Color?
+
+  @@dynamic
+}
+
+enum Color {
+  RED
+  BLUE
+  GREEN
+  YELLOW
+  BLACK
+  WHITE
 
   @@dynamic
 }

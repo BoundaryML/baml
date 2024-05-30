@@ -26,16 +26,12 @@ class Category(str, Enum):
     AccountIssue = "AccountIssue"
     Question = "Question"
 
-
-
 class Category2(str, Enum):
     Refund = "Refund"
     CancelOrder = "CancelOrder"
     TechnicalSupport = "TechnicalSupport"
     AccountIssue = "AccountIssue"
     Question = "Question"
-
-
 
 class Category3(str, Enum):
     Refund = "Refund"
@@ -44,54 +40,44 @@ class Category3(str, Enum):
     AccountIssue = "AccountIssue"
     Question = "Question"
 
-
+class Color(str, Enum):
+    RED = "RED"
+    BLUE = "BLUE"
+    GREEN = "GREEN"
+    YELLOW = "YELLOW"
+    BLACK = "BLACK"
+    WHITE = "WHITE"
 
 class DataType(str, Enum):
     Resume = "Resume"
     Event = "Event"
 
-
-
 class EnumInClass(str, Enum):
     ONE = "ONE"
     TWO = "TWO"
-
-
 
 class EnumOutput(str, Enum):
     ONE = "ONE"
     TWO = "TWO"
     THREE = "THREE"
 
-
-
 class Hobby(str, Enum):
     SPORTS = "SPORTS"
     MUSIC = "MUSIC"
     READING = "READING"
 
-
-dynHobby = Union[Hobby, str]
-
-
 class NamedArgsSingleEnum(str, Enum):
     ONE = "ONE"
     TWO = "TWO"
-
-
 
 class NamedArgsSingleEnumList(str, Enum):
     ONE = "ONE"
     TWO = "TWO"
 
-
-
 class OptionalTest_CategoryType(str, Enum):
     Aleph = "Aleph"
     Beta = "Beta"
     Gamma = "Gamma"
-
-
 
 class OrderStatus(str, Enum):
     ORDERED = "ORDERED"
@@ -99,14 +85,10 @@ class OrderStatus(str, Enum):
     DELIVERED = "DELIVERED"
     CANCELLED = "CANCELLED"
 
-
-
 class Tag(str, Enum):
     Security = "Security"
     AI = "AI"
     Blockchain = "Blockchain"
-
-
 
 class TestEnum(str, Enum):
     A = "A"
@@ -116,8 +98,6 @@ class TestEnum(str, Enum):
     E = "E"
     F = "F"
     G = "G"
-
-
 
 class Blah(BaseModel):
     
@@ -192,7 +172,7 @@ class Person(BaseModel):
     
     model_config = ConfigDict(extra='allow')
     name: Optional[str] = None
-    hair_color: Optional[str] = None
+    hair_color: Optional[Union["Color", str]] = None
 
 class RaysData(BaseModel):
     

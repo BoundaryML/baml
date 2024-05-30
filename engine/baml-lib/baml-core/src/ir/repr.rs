@@ -227,8 +227,8 @@ fn to_ir_attributes(
     if let Some(ast_attributes) = maybe_ast_attributes {
         match ast_attributes {
             ToStringAttributes::Static(s) => {
-                if let Some(dynamic) = s.dynamic_type() {
-                    attributes.insert("dynamic_type".to_string(), Expression::Bool(*dynamic));
+                if let Some(true) = s.dynamic_type() {
+                    attributes.insert("dynamic_type".to_string(), Expression::Bool(true));
                 }
 
                 if let Some(skip) = s.skip() {

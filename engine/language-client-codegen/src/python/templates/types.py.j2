@@ -10,10 +10,6 @@ class {{enum.name}}(str, Enum):
     {%- for value in enum.values %}
     {{ value }} = "{{ value }}"
     {%- endfor %}
-
-{% if enum.dynamic %}
-dyn{{ enum.name }} = Union[{{enum.name}}, str]
-{% endif %}
 {% endfor %}
 
 {#- Classes -#}

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use either::Either;
 use indexmap::IndexMap;
-use internal_baml_core::ir::{repr::IntermediateRepr, FieldType};
+use internal_baml_core::ir::{repr::IntermediateRepr, FieldType, IRHelper};
 
 use self::typescript_language_features::{ToTypescript, TypescriptLanguageFeatures};
 use crate::dir_writer::FileCollector;
@@ -50,6 +50,7 @@ pub(crate) fn generate(
 ) -> Result<IndexMap<PathBuf, String>> {
     let mut collector = FileCollector::<TypescriptLanguageFeatures>::new();
     collector.add_template::<generate_types::TypescriptTypes>("types.ts", (ir, generator))?;
+    collector.add_template::<generate_types::TypeBuilder>("type_builder.ts", (ir, generator))?;
     collector.add_template::<TypescriptClient>("client.ts", (ir, generator))?;
     collector.add_template::<TypescriptGlobals>("globals.ts", (ir, generator))?;
     collector.add_template::<TypescriptTracing>("tracing.ts", (ir, generator))?;
@@ -74,15 +75,15 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
                         let (_function, _impl_) = c.item;
                         Ok(TypescriptFunction {
                             name: f.name().to_string(),
-                            return_type: f.elem().output().to_type_ref(),
-                            partial_return_type: f.elem().output().to_partial_type_ref(),
+                            return_type: f.elem().output().to_type_ref(ir),
+                            partial_return_type: f.elem().output().to_partial_type_ref(ir),
                             args: match f.inputs() {
                                 either::Either::Left(_args) => anyhow::bail!("Typescript codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
                                 either::Either::Right(args) => args
                                     .iter()
                                     .map(|(name, r#type)| (name.to_string(),
                                         r#type.is_optional(),
-                                     r#type.to_type_ref()))
+                                     r#type.to_type_ref(ir)))
                                     .collect(),
                             },
                         })
@@ -141,22 +142,32 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptIni
 }
 
 trait ToTypeReferenceInClientDefinition {
-    fn to_type_ref(&self) -> String;
+    fn to_type_ref(&self, ir: &IntermediateRepr) -> String;
 
-    fn to_partial_type_ref(&self) -> String;
+    fn to_partial_type_ref(&self, ir: &IntermediateRepr) -> String;
 }
 
 impl ToTypeReferenceInClientDefinition for FieldType {
-    fn to_partial_type_ref(&self) -> String {
+    fn to_partial_type_ref(&self, ir: &IntermediateRepr) -> String {
         match self {
-            FieldType::Enum(name) => format!("({name} | null)"),
+            FieldType::Enum(name) => {
+                if ir
+                    .find_enum(name)
+                    .map(|e| e.item.attributes.get("dynamic_type").is_some())
+                    .unwrap_or(false)
+                {
+                    format!("(string | {name} | null)")
+                } else {
+                    format!("({name} | null)")
+                }
+            }
             FieldType::Class(name) => format!("(Partial<{name}> | null)"),
-            FieldType::List(inner) => format!("{}[]", inner.to_partial_type_ref()),
+            FieldType::List(inner) => format!("{}[]", inner.to_partial_type_ref(ir)),
             FieldType::Map(key, value) => {
                 format!(
                     "(Record<{}, {}> | null)",
-                    key.to_type_ref(),
-                    value.to_partial_type_ref()
+                    key.to_type_ref(ir),
+                    value.to_partial_type_ref(ir)
                 )
             }
             FieldType::Primitive(r#type) => format!("({} | null)", r#type.to_typescript()),
@@ -164,7 +175,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 "({} | null)",
                 inner
                     .iter()
-                    .map(|t| t.to_partial_type_ref())
+                    .map(|t| t.to_partial_type_ref(ir))
                     .collect::<Vec<_>>()
                     .join(" | ")
             ),
@@ -172,32 +183,43 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 "([{}] | null)",
                 inner
                     .iter()
-                    .map(|t| t.to_partial_type_ref())
+                    .map(|t| t.to_partial_type_ref(ir))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => format!("({} | null)", inner.to_partial_type_ref()),
+            FieldType::Optional(inner) => format!("({} | null)", inner.to_partial_type_ref(ir)),
         }
     }
 
-    fn to_type_ref(&self) -> String {
+    fn to_type_ref(&self, ir: &IntermediateRepr) -> String {
         match self {
-            FieldType::Class(name) | FieldType::Enum(name) => format!("{name}"),
+            FieldType::Enum(name) => {
+                if ir
+                    .find_enum(name)
+                    .map(|e| e.item.attributes.get("dynamic_type").is_some())
+                    .unwrap_or(false)
+                {
+                    format!("(string | {name})")
+                } else {
+                    format!("{name}")
+                }
+            }
+            FieldType::Class(name) => format!("{name}"),
             FieldType::List(inner) => match inner.as_ref() {
                 FieldType::Union(_) | FieldType::Optional(_) => {
-                    format!("({})[]", inner.to_type_ref())
+                    format!("({})[]", inner.to_type_ref(ir))
                 }
-                _ => format!("{}[]", inner.to_type_ref()),
+                _ => format!("{}[]", inner.to_type_ref(ir)),
             },
             FieldType::Map(key, value) => {
-                format!("Record<{}, {}>", key.to_type_ref(), value.to_type_ref())
+                format!("Record<{}, {}>", key.to_type_ref(ir), value.to_type_ref(ir))
             }
             FieldType::Primitive(r#type) => r#type.to_typescript(),
             FieldType::Union(inner) => format!(
                 "{}",
                 inner
                     .iter()
-                    .map(|t| t.to_type_ref())
+                    .map(|t| t.to_type_ref(ir))
                     .collect::<Vec<_>>()
                     .join(" | ")
             ),
@@ -205,11 +227,11 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 "[{}]",
                 inner
                     .iter()
-                    .map(|t| t.to_type_ref())
+                    .map(|t| t.to_type_ref(ir))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => format!("{} | null", inner.to_type_ref()),
+            FieldType::Optional(inner) => format!("{} | null", inner.to_type_ref(ir)),
         }
     }
 }
