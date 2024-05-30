@@ -84,7 +84,7 @@ pub trait InternalClientLookup<'a> {
         &'a self,
         client_name: &str,
         ctx: &RuntimeContext,
-    ) -> Result<dashmap::mapref::one::Ref<String, Arc<LLMProvider>>>;
+    ) -> Result<Arc<LLMProvider>>;
 
     fn get_retry_policy(&self, policy_name: &str, ctx: &RuntimeContext) -> Result<CallablePolicy>;
 }

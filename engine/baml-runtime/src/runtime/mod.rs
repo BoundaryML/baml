@@ -4,7 +4,14 @@ pub(crate) mod runtime_interface;
 use anyhow::Result;
 use std::{collections::HashMap, path::PathBuf};
 
-use dashmap::DashMap;
+cfg_if::cfg_if!(
+    if #[cfg(target_arch = "wasm32")] {
+        type DashMap<K, V> = std::sync::Arc<std::sync::Mutex<std::collections::HashMap<K, V>>>;
+    } else {
+        use dashmap::DashMap;
+    }
+);
+
 use internal_baml_core::{
     internal_baml_diagnostics::{Diagnostics, SourceFile},
     ir::repr::IntermediateRepr,
@@ -42,8 +49,8 @@ impl InternalBamlRuntime {
         Ok(InternalBamlRuntime {
             ir: Arc::new(ir),
             diagnostics: schema.diagnostics,
-            clients: DashMap::new(),
-            retry_policies: DashMap::new(),
+            clients: Default::default(),
+            retry_policies: Default::default(),
         })
     }
 
@@ -64,8 +71,8 @@ impl InternalBamlRuntime {
         Ok(Self {
             ir: Arc::new(ir),
             diagnostics: schema.diagnostics,
-            clients: DashMap::new(),
-            retry_policies: DashMap::new(),
+            clients: Default::default(),
+            retry_policies: Default::default(),
         })
     }
 }

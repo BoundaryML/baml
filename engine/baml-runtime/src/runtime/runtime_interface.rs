@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     internal::{
@@ -22,7 +26,6 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
-use dashmap::DashMap;
 
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
@@ -39,35 +42,58 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
         &'a self,
         client_name: &str,
         ctx: &RuntimeContext,
-    ) -> Result<dashmap::mapref::one::Ref<String, Arc<LLMProvider>>> {
-        if let Some(client) = self.clients.get(client_name) {
-            return Ok(client);
+    ) -> Result<Arc<LLMProvider>> {
+        #[cfg(target_arch = "wasm32")]
+        let mut clients = self.clients.lock().unwrap();
+        #[cfg(not(target_arch = "wasm32"))]
+        let clients = &self.clients;
+
+        if let Some(client) = clients.get(client_name) {
+            return Ok(client.clone());
         } else {
             let walker = self
                 .ir()
                 .find_client(client_name)
                 .context(format!("Could not find client with name: {}", client_name))?;
             let client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
-            self.clients.insert(client_name.into(), client.clone());
-            Ok(self.clients.get(client_name).unwrap())
+            clients.insert(client_name.into(), client.clone());
+            Ok(client)
         }
     }
 
     fn get_retry_policy(&self, policy_name: &str, _ctx: &RuntimeContext) -> Result<CallablePolicy> {
-        let policy_ref = self
-            .retry_policies
-            .entry(policy_name.into())
-            .or_try_insert_with(|| {
-                self.ir()
-                    .walk_retry_policies()
-                    .find(|walker| walker.name() == policy_name)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("Could not find retry policy with name: {}", policy_name)
-                    })
-                    .map(CallablePolicy::from)
-            })?;
+        #[cfg(target_arch = "wasm32")]
+        let mut retry_policies = self.retry_policies.lock().unwrap();
+        #[cfg(not(target_arch = "wasm32"))]
+        let retry_policies = &self.retry_policies;
 
-        Ok(policy_ref.value().clone())
+        let inserter = || {
+            self.ir()
+                .walk_retry_policies()
+                .find(|walker| walker.name() == policy_name)
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Could not find retry policy with name: {}", policy_name)
+                })
+                .map(CallablePolicy::from)
+        };
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(policy_ref) = retry_policies.get(policy_name) {
+                return Ok(policy_ref.clone());
+            }
+            let new_policy = inserter()?;
+            retry_policies.insert(policy_name.into(), new_policy.clone());
+            Ok(new_policy)
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let policy_ref = retry_policies
+                .entry(policy_name.into())
+                .or_try_insert_with(inserter)?;
+            Ok(policy_ref.value().clone())
+        }
     }
 }
 
@@ -251,8 +277,8 @@ impl RuntimeConstructor for InternalBamlRuntime {
         Ok(Self {
             ir: Arc::new(ir),
             diagnostics: schema.diagnostics,
-            clients: DashMap::new(),
-            retry_policies: DashMap::new(),
+            clients: Default::default(),
+            retry_policies: Default::default(),
         })
     }
 
