@@ -18,6 +18,7 @@ mod request;
 mod runtime;
 pub mod runtime_interface;
 pub mod tracing;
+pub mod type_builder;
 mod types;
 
 use std::collections::HashMap;
@@ -39,6 +40,7 @@ use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
 use runtime_interface::RuntimeInterface;
 use tracing::{BamlTracer, TracingSpan};
+use type_builder::TypeBuilder;
 pub use types::*;
 
 use clap::Parser;
@@ -132,14 +134,16 @@ impl BamlRuntime {
     where
         F: Fn(FunctionResult) -> (),
     {
-        let (span, rctx) = self.tracer.start_span(test_name, ctx, &Default::default());
+        let (span, rctx) = self
+            .tracer
+            .start_span(test_name, ctx, None, &Default::default());
 
         let params = self.inner.get_test_params(function_name, test_name, &rctx);
 
         let response = match params {
-            Ok(params) => match self.stream_function(function_name.into(), &params, ctx) {
+            Ok(params) => match self.stream_function(function_name.into(), &params, ctx, None) {
                 Ok(mut stream) => {
-                    let (response, span) = stream.run(on_event, ctx).await;
+                    let (response, span) = stream.run(on_event, ctx, None).await;
                     let response = response.map(|res| TestResponse {
                         function_response: res,
                         function_span: span,
@@ -168,8 +172,11 @@ impl BamlRuntime {
         function_name: String,
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
-        let (span, rctx) = self.tracer.start_span(&function_name, ctx, &params);
+        log::trace!("Calling function: {}", function_name);
+        let (span, rctx) = self.tracer.start_span(&function_name, ctx, tb, &params);
+        log::trace!("Span started");
         let response = self
             .inner
             .call_function_impl(function_name, params, rctx)
@@ -190,12 +197,13 @@ impl BamlRuntime {
         function_name: String,
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
     ) -> Result<FunctionResultStream> {
         self.inner.stream_function_impl(
             function_name,
             params,
             self.tracer.clone(),
-            ctx.create_ctx(),
+            ctx.create_ctx(tb),
         )
     }
 
@@ -248,7 +256,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
     ) -> (Option<TracingSpan>, RuntimeContext) {
-        self.tracer.start_span(function_name, ctx, params)
+        self.tracer.start_span(function_name, ctx, None, params)
     }
 
     async fn finish_function_span(

@@ -27,8 +27,8 @@ pub async fn orchestrate_stream<F>(
     ctx: &RuntimeContext,
     prompt: &PromptRenderer,
     params: &BamlValue,
-    partial_parse_fn: impl Fn(&str, &RuntimeContext) -> Result<BamlValueWithFlags>,
-    parse_fn: impl Fn(&str, &RuntimeContext) -> Result<BamlValueWithFlags>,
+    partial_parse_fn: impl Fn(&str) -> Result<BamlValueWithFlags>,
+    parse_fn: impl Fn(&str) -> Result<BamlValueWithFlags>,
     on_event: Option<F>,
 ) -> (
     Vec<(
@@ -61,7 +61,7 @@ where
                     if let Some(on_event) = on_event.as_ref() {
                         match &stream_part {
                             LLMResponse::Success(s) => {
-                                let parsed = partial_parse_fn(&s.content, ctx);
+                                let parsed = partial_parse_fn(&s.content);
                                 on_event(FunctionResult::new(
                                     node.scope.clone(),
                                     LLMResponse::Success(s.clone()),
@@ -91,7 +91,7 @@ where
         };
 
         let parsed_response = match &final_response {
-            LLMResponse::Success(s) => Some(parse_fn(&s.content, ctx)),
+            LLMResponse::Success(s) => Some(parse_fn(&s.content)),
             _ => None,
         };
         let sleep_duration = node.error_sleep_duration().cloned();

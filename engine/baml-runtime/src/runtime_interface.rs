@@ -9,6 +9,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
 use crate::tracing::{BamlTracer, TracingSpan};
+use crate::type_builder::TypeBuilder;
 use crate::RuntimeContextManager;
 use crate::{
     internal::{ir_features::IrFeatures, llm_client::retry_policy::CallablePolicy},
@@ -106,13 +107,6 @@ pub trait InternalRuntimeInterface {
         function_name: &str,
         ctx: &RuntimeContext,
     ) -> Result<FunctionWalker<'ir>>;
-
-    fn parse_response<'ir>(
-        &'ir self,
-        function: &FunctionWalker<'ir>,
-        response: &crate::internal::llm_client::LLMCompleteResponse,
-        ctx: &RuntimeContext,
-    ) -> Result<jsonish::BamlValueWithFlags>;
 
     fn render_prompt(
         &self,

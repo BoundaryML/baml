@@ -7,7 +7,7 @@ use anyhow::Result;
 use askama::Template;
 use either::Either;
 use indexmap::IndexMap;
-use internal_baml_core::ir::{repr::IntermediateRepr, FieldType};
+use internal_baml_core::ir::{repr::IntermediateRepr, FieldType, IRHelper};
 
 use self::python_language_features::{PythonLanguageFeatures, ToPython};
 use crate::dir_writer::FileCollector;
@@ -51,6 +51,7 @@ pub(crate) fn generate(
     collector
         .add_template::<generate_types::PythonStreamTypes>("partial_types.py", (ir, generator))?;
     collector.add_template::<generate_types::PythonTypes>("types.py", (ir, generator))?;
+    collector.add_template::<generate_types::TypeBuilder>("type_builder.py", (ir, generator))?;
     collector.add_template::<PythonClient>("client.py", (ir, generator))?;
     collector.add_template::<PythonGlobals>("globals.py", (ir, generator))?;
     collector.add_template::<PythonTracing>("tracing.py", (ir, generator))?;
@@ -109,13 +110,13 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
                         let (_function, _impl_) = c.item;
                         Ok(PythonFunction {
                             name: f.name().to_string(),
-                            partial_return_type: f.elem().output().to_partial_type_ref(),
-                            return_type: f.elem().output().to_type_ref(),
+                            partial_return_type: f.elem().output().to_partial_type_ref(ir),
+                            return_type: f.elem().output().to_type_ref(ir),
                             args: match f.inputs() {
                                 either::Either::Left(_args) => anyhow::bail!("Python codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
                                 either::Either::Right(args) => args
                                     .iter()
-                                    .map(|(name, r#type)| (name.to_string(), r#type.to_type_ref()))
+                                    .map(|(name, r#type)| (name.to_string(), r#type.to_type_ref(ir)))
                                     .collect(),
                             },
                         })
@@ -131,25 +132,36 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
 }
 
 trait ToTypeReferenceInClientDefinition {
-    fn to_type_ref(&self) -> String;
+    fn to_type_ref(&self, ir: &IntermediateRepr) -> String;
 
-    fn to_partial_type_ref(&self) -> String;
+    fn to_partial_type_ref(&self, ir: &IntermediateRepr) -> String;
 }
 
 impl ToTypeReferenceInClientDefinition for FieldType {
-    fn to_type_ref(&self) -> String {
+    fn to_type_ref(&self, ir: &IntermediateRepr) -> String {
         match self {
-            FieldType::Class(name) | FieldType::Enum(name) => format!("types.{name}"),
-            FieldType::List(inner) => format!("List[{}]", inner.to_type_ref()),
+            FieldType::Enum(name) => {
+                if ir
+                    .find_enum(name)
+                    .map(|e| e.item.attributes.get("dynamic_type").is_some())
+                    .unwrap_or(false)
+                {
+                    format!("Union[types.{name}, str]")
+                } else {
+                    format!("types.{name}")
+                }
+            }
+            FieldType::Class(name) => format!("types.{name}"),
+            FieldType::List(inner) => format!("List[{}]", inner.to_type_ref(ir)),
             FieldType::Map(key, value) => {
-                format!("Dict[{}, {}]", key.to_type_ref(), value.to_type_ref())
+                format!("Dict[{}, {}]", key.to_type_ref(ir), value.to_type_ref(ir))
             }
             FieldType::Primitive(r#type) => r#type.to_python(),
             FieldType::Union(inner) => format!(
                 "Union[{}]",
                 inner
                     .iter()
-                    .map(|t| t.to_type_ref())
+                    .map(|t| t.to_type_ref(ir))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -157,24 +169,34 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 "Tuple[{}]",
                 inner
                     .iter()
-                    .map(|t| t.to_type_ref())
+                    .map(|t| t.to_type_ref(ir))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_ref()),
+            FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_ref(ir)),
         }
     }
 
-    fn to_partial_type_ref(&self) -> String {
+    fn to_partial_type_ref(&self, ir: &IntermediateRepr) -> String {
         match self {
+            FieldType::Enum(name) => {
+                if ir
+                    .find_enum(name)
+                    .map(|e| e.item.attributes.get("dynamic_type").is_some())
+                    .unwrap_or(false)
+                {
+                    format!("Optional[Union[types.{name}, str]]")
+                } else {
+                    format!("Optional[types.{name}]")
+                }
+            }
             FieldType::Class(name) => format!("partial_types.{name}"),
-            FieldType::Enum(name) => format!("Optional[types.{name}]"),
-            FieldType::List(inner) => format!("List[{}]", inner.to_partial_type_ref()),
+            FieldType::List(inner) => format!("List[{}]", inner.to_partial_type_ref(ir)),
             FieldType::Map(key, value) => {
                 format!(
                     "Dict[{}, {}]",
-                    key.to_partial_type_ref(),
-                    value.to_type_ref()
+                    key.to_type_ref(ir),
+                    value.to_partial_type_ref(ir)
                 )
             }
             FieldType::Primitive(r#type) => format!("Optional[{}]", r#type.to_python()),
@@ -182,7 +204,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 "Optional[Union[{}]]",
                 inner
                     .iter()
-                    .map(|t| t.to_partial_type_ref())
+                    .map(|t| t.to_partial_type_ref(ir))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -190,11 +212,11 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 "Optional[Tuple[{}]]",
                 inner
                     .iter()
-                    .map(|t| t.to_partial_type_ref())
+                    .map(|t| t.to_partial_type_ref(ir))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => inner.to_partial_type_ref(),
+            FieldType::Optional(inner) => inner.to_partial_type_ref(ir),
         }
     }
 }

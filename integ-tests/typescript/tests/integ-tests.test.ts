@@ -1,6 +1,7 @@
 import assert from 'assert'
 import { Image } from '@boundaryml/baml'
 import { b, NamedArgsSingleEnumList, flush, traceAsync, traceSync, setTags } from '../baml_client'
+import TypeBuilder from "../baml_client/type_builder";
 
 describe('Integ tests', () => {
   it('should work for all inputs', async () => {
@@ -187,6 +188,19 @@ describe('Integ tests', () => {
 
       return 'hello world'
     })('hi', 10)
+  })
+
+  it('should work with dynamics', async () => {
+    let tb = new TypeBuilder();
+    tb.Person.addProperty("last_name", tb.string().optional());
+    tb.Person.addProperty("height", tb.float().optional()).description("Height in meters");
+    tb.Hobby.addValue("CHESS")
+    tb.Hobby.listValues().map(([name, v]) => v.alias(name.toLowerCase()))
+    tb.Person.addProperty("hobbies", tb.Hobby.type().list().optional()).description("Some suggested hobbies they might be good at");
+
+    const res = await b.ExtractPeople("My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.", { tb })
+    expect(res.length).toBeGreaterThan(0)
+    console.log(res)
   })
 })
 

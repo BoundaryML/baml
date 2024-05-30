@@ -1,10 +1,8 @@
-use std::vec;
+use std::sync::Arc;
 
 use anyhow::Result;
-use askama::Template;
 use baml_types::{FieldType, TypeValue};
-use indexmap::IndexSet;
-use serde::de;
+use indexmap::{IndexMap, IndexSet};
 
 #[derive(Debug)]
 pub struct Name {
@@ -30,6 +28,10 @@ impl Name {
     pub fn rendered_name(&self) -> &str {
         self.rendered_name.as_ref().unwrap_or(&self.name)
     }
+
+    pub fn real_name(&self) -> &str {
+        &self.name
+    }
 }
 
 #[derive(Debug)]
@@ -46,10 +48,10 @@ pub struct Class {
     pub fields: Vec<(Name, FieldType, Option<String>)>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OutputFormatContent {
-    enums: Vec<Enum>,
-    classes: Vec<Class>,
+    enums: Arc<IndexMap<String, Enum>>,
+    classes: Arc<IndexMap<String, Class>>,
     target: FieldType,
 }
 
@@ -179,8 +181,18 @@ struct RenderState {
 impl OutputFormatContent {
     pub fn new(enums: Vec<Enum>, classes: Vec<Class>, target: FieldType) -> Self {
         Self {
-            enums,
-            classes,
+            enums: Arc::new(
+                enums
+                    .into_iter()
+                    .map(|e| (e.name.name.clone(), e))
+                    .collect(),
+            ),
+            classes: Arc::new(
+                classes
+                    .into_iter()
+                    .map(|c| (c.name.name.clone(), c))
+                    .collect(),
+            ),
             target,
         }
     }
@@ -241,7 +253,7 @@ impl OutputFormatContent {
                 }
             },
             FieldType::Enum(e) => {
-                let Some(enm) = self.enums.iter().find(|enm| enm.name.name == *e) else {
+                let Some(enm) = self.enums.get(e) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
                         format!("Enum {} not found", e),
@@ -267,7 +279,7 @@ impl OutputFormatContent {
                 }
             }
             FieldType::Class(cls) => {
-                let Some(class) = self.classes.iter().find(|c| c.name.name == *cls) else {
+                let Some(class) = self.classes.get(cls) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
                         format!("Class {} not found", cls),
@@ -318,7 +330,7 @@ impl OutputFormatContent {
                 if inner.is_optional() {
                     inner_str
                 } else {
-                    format!("{}{}null", &options.or_splitter, inner_str)
+                    format!("{}{}null", inner_str, &options.or_splitter)
                 }
             }
             FieldType::Tuple(_) => {
@@ -346,7 +358,7 @@ impl OutputFormatContent {
         let message = match &self.target {
             FieldType::Primitive(TypeValue::String) if prefix.is_none() => None,
             FieldType::Enum(e) => {
-                let Some(enm) = self.enums.iter().find(|enm| enm.name.name == *e) else {
+                let Some(enm) = self.enums.get(e) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
                         format!("Enum {} not found", e),
@@ -362,11 +374,7 @@ impl OutputFormatContent {
             .hoisted_enums
             .iter()
             .map(|e| {
-                let enm = self
-                    .enums
-                    .iter()
-                    .find(|enm| enm.name.name == *e)
-                    .expect("Enum not found");
+                let enm = self.enums.get(e).expect("Enum not found");
                 self.enum_to_string(enm, &options)
             })
             .collect::<Vec<_>>();
@@ -420,18 +428,28 @@ impl OutputFormatContent {
 #[cfg(test)]
 impl OutputFormatContent {
     pub fn new_array() -> Self {
-        Self {
-            enums: vec![],
-            classes: vec![],
-            target: FieldType::List(Box::new(FieldType::Primitive(TypeValue::String))),
-        }
+        Self::new(
+            vec![],
+            vec![],
+            FieldType::List(Box::new(FieldType::Primitive(TypeValue::String))),
+        )
     }
 
     pub fn new_string() -> Self {
-        Self {
-            enums: vec![],
-            classes: vec![],
-            target: FieldType::Primitive(TypeValue::String),
-        }
+        Self::new(vec![], vec![], FieldType::Primitive(TypeValue::String))
+    }
+}
+
+impl OutputFormatContent {
+    pub fn find_enum(&self, name: &str) -> Result<&Enum> {
+        self.enums
+            .get(name)
+            .ok_or_else(|| anyhow::anyhow!("Enum {} not found", name))
+    }
+
+    pub fn find_class(&self, name: &str) -> Result<&Class> {
+        self.classes
+            .get(name)
+            .ok_or_else(|| anyhow::anyhow!("Class {} not found", name))
     }
 }

@@ -1,5 +1,6 @@
 use anyhow::Result;
-use internal_baml_core::ir::{EnumValueWalker, EnumWalker, FieldType};
+use baml_types::FieldType;
+use internal_baml_jinja::types::Enum;
 
 use crate::deserializer::{
     coercer::{ParsingError, TypeCoercer},
@@ -9,23 +10,26 @@ use crate::deserializer::{
 
 use super::ParsingContext;
 
-fn candidates<'a>(
-    enm: &'a EnumWalker<'a>,
-    ctx: &ParsingContext,
-) -> Result<Vec<(EnumValueWalker<'a>, Vec<String>)>> {
-    enm.walk_values()
-        .filter_map(|v| match v.skip(ctx.env) {
-            Ok(true) => return None,
-            Ok(false) => match v.valid_values(ctx.env) {
-                Ok(valid_values) => Some(Ok((v, valid_values))),
-                Err(e) => return Some(Err(e)),
-            },
-            Err(e) => return Some(Err(e)),
+fn candidates<'a>(enm: &'a Enum) -> Vec<(&'a str, Vec<String>)> {
+    enm.values
+        .iter()
+        .map(|(name, desc)| {
+            (
+                name.real_name(),
+                match desc.as_ref().map(|d| d.trim()) {
+                    Some(d) if !d.is_empty() => vec![
+                        name.rendered_name().into(),
+                        d.into(),
+                        format!("{}: {}", name.rendered_name(), d),
+                    ],
+                    _ => vec![name.rendered_name().into()],
+                },
+            )
         })
         .collect()
 }
 
-impl TypeCoercer for EnumWalker<'_> {
+impl TypeCoercer for Enum {
     fn coerce(
         &self,
         ctx: &ParsingContext,
@@ -54,10 +58,7 @@ impl TypeCoercer for EnumWalker<'_> {
             }
         };
 
-        let candidates = match candidates(self, ctx) {
-            Ok(c) => c,
-            Err(e) => return Err(ctx.error_internal(e)),
-        };
+        let candidates = candidates(self);
 
         let context = context.trim();
 
@@ -75,8 +76,8 @@ impl TypeCoercer for EnumWalker<'_> {
             }
 
             return Ok(BamlValueWithFlags::Enum(
-                self.name().into(),
-                (e.name().into(), flags).into(),
+                self.name.real_name().into(),
+                (e.to_string(), flags).into(),
             ));
         }
 
@@ -100,8 +101,8 @@ impl TypeCoercer for EnumWalker<'_> {
                 return Err(ctx.error_too_many_matches(target, mismatch.iter().map(|(_, e)| e)));
             }
             return Ok(BamlValueWithFlags::Enum(
-                self.name().into(),
-                (e.name().into(), flags).into(),
+                self.name.real_name().into(),
+                (e.to_string(), flags).into(),
             ));
         }
 
@@ -117,9 +118,9 @@ fn strip_punctuation(s: &str) -> String {
 
 fn enum_match_strategy<'a>(
     value_str: &str,
-    candidates: &'a Vec<(EnumValueWalker<'a>, Vec<String>)>,
+    candidates: &'a Vec<(&'a str, Vec<String>)>,
     flags: &mut DeserializerConditions,
-) -> Option<&'a EnumValueWalker<'a>> {
+) -> Option<&'a str> {
     // Try and look for a value that matches the value.
     // First search for exact matches
     for (e, valid_values) in candidates {
@@ -183,7 +184,7 @@ fn enum_match_strategy<'a>(
             flags.add_flag(Flag::EnumOneFromMany(
                 result
                     .iter()
-                    .map(|(count, _, e)| ((*count) as usize, e.name().into()))
+                    .map(|(count, _, e)| ((*count) as usize, e.to_string()))
                     .collect(),
             ));
         }

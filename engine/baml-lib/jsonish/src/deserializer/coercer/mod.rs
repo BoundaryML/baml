@@ -6,6 +6,7 @@ mod coerce_union;
 mod field_type;
 mod ir_ref;
 use anyhow::Result;
+use internal_baml_jinja::types::OutputFormatContent;
 use std::collections::HashMap;
 
 use internal_baml_core::ir::{repr::IntermediateRepr, FieldType};
@@ -14,21 +15,15 @@ use super::types::BamlValueWithFlags;
 
 pub struct ParsingContext<'a> {
     scope: Vec<String>,
-    env: &'a HashMap<String, String>,
-    ir: &'a IntermediateRepr,
+    of: &'a OutputFormatContent,
     allow_partials: bool,
 }
 
 impl ParsingContext<'_> {
-    pub(crate) fn new<'a>(
-        ir: &'a IntermediateRepr,
-        env: &'a HashMap<String, String>,
-        allow_partials: bool,
-    ) -> ParsingContext<'a> {
+    pub(crate) fn new<'a>(of: &'a OutputFormatContent, allow_partials: bool) -> ParsingContext<'a> {
         ParsingContext {
             scope: Vec::new(),
-            env,
-            ir,
+            of,
             allow_partials,
         }
     }
@@ -38,8 +33,7 @@ impl ParsingContext<'_> {
         new_scope.push(scope.to_string());
         ParsingContext {
             scope: new_scope,
-            env: self.env,
-            ir: self.ir,
+            of: self.of,
             allow_partials: self.allow_partials,
         }
     }

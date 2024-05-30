@@ -6,7 +6,7 @@ use std::{
 use baml_types::BamlValue;
 use std::fmt;
 
-use crate::{RuntimeContext, SpanCtx};
+use crate::{type_builder::TypeBuilder, RuntimeContext, SpanCtx};
 
 type Context = (uuid::Uuid, String, HashMap<String, BamlValue>);
 
@@ -94,7 +94,7 @@ impl RuntimeContextManager {
         Some((id, prev, tags))
     }
 
-    pub fn create_ctx(&self) -> RuntimeContext {
+    pub fn create_ctx(&self, tb: Option<&TypeBuilder>) -> RuntimeContext {
         let mut tags = self.global_tags.lock().unwrap().clone();
         let ctx_tags = {
             self.context
@@ -106,12 +106,19 @@ impl RuntimeContextManager {
                 .unwrap_or_default()
         };
         tags.extend(ctx_tags);
+        let tags = {
+            let ctx = self.context.lock().unwrap();
+            let ctx = ctx.last();
+            ctx.map(|(.., tags)| tags).cloned().unwrap_or_default()
+        };
+
+        let (cls, enm) = tb.map(|tb| tb.to_overrides()).unwrap_or_default();
 
         RuntimeContext {
             env: self.env_vars.clone(),
             tags,
-            class_override: Default::default(),
-            enum_overrides: Default::default(),
+            class_override: cls,
+            enum_overrides: enm,
         }
     }
 

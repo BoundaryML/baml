@@ -1,14 +1,16 @@
 mod render_output_format;
+use jsonish::BamlValueWithFlags;
 use render_output_format::render_output_format;
 
 use anyhow::Result;
-use baml_types::BamlValue;
+use baml_types::{BamlValue, FieldType};
 use internal_baml_core::{
     error_unsupported,
     ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
 };
 use internal_baml_jinja::{
-    RenderContext, RenderContext_Client, RenderedPrompt, TemplateStringMacro,
+    types::OutputFormatContent, RenderContext, RenderContext_Client, RenderedPrompt,
+    TemplateStringMacro,
 };
 
 use crate::RuntimeContext;
@@ -16,10 +18,16 @@ use crate::RuntimeContext;
 pub struct PromptRenderer {
     function_name: String,
     client_name: String,
+    output_defs: OutputFormatContent,
+    output_type: FieldType,
 }
 
 impl PromptRenderer {
-    pub fn from_function(function: &FunctionWalker) -> Result<PromptRenderer> {
+    pub fn from_function(
+        function: &FunctionWalker,
+        ir: &IntermediateRepr,
+        ctx: &RuntimeContext,
+    ) -> Result<PromptRenderer> {
         let Some(func_v2) = function.as_v2() else {
             error_unsupported!(
                 "function",
@@ -34,11 +42,22 @@ impl PromptRenderer {
         Ok(PromptRenderer {
             function_name: function.name().into(),
             client_name: config.client.clone(),
+            output_defs: render_output_format(ir, ctx, &func_v2.output.elem)?,
+            output_type: func_v2.output.elem.clone(),
         })
     }
 
     pub fn client_name(&self) -> &str {
         &self.client_name
+    }
+
+    pub fn parse(&self, raw_string: &str, allow_partials: bool) -> Result<BamlValueWithFlags> {
+        jsonish::from_str(
+            &self.output_defs,
+            &self.output_type,
+            raw_string,
+            allow_partials,
+        )
     }
 
     pub fn render_prompt(
@@ -67,7 +86,7 @@ impl PromptRenderer {
             RenderContext {
                 client: client_ctx.clone(),
                 tags: ctx.tags.clone(),
-                output_format: render_output_format(ir, ctx, &func_v2.output.elem)?,
+                output_format: self.output_defs.clone(),
             },
             &ir.walk_template_strings()
                 .map(|t| TemplateStringMacro {

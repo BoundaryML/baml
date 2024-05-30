@@ -13,5 +13,8 @@ export interface {{cls.name}} {
   {%- for (name, optional, type) in cls.fields %}
   {{name}}{% if optional %}?{% endif %}: {{type}}
   {%- endfor %}
+  {% if cls.dynamic %}
+  [key: string]: any;
+  {%- endif %}
 }
 {% endfor %}

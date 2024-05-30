@@ -16,6 +16,7 @@ use crate::{
     },
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
     tracing::{BamlTracer, TracingSpan},
+    type_builder::TypeBuilder,
     FunctionResult, FunctionResultStream, InternalRuntimeInterface, RuntimeContext,
     RuntimeContextManager, RuntimeInterface, TestResponse,
 };
@@ -98,7 +99,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let func = self.get_function(function_name, ctx)?;
         let baml_args = self.ir().check_function_params(&func, params)?;
 
-        let renderer = PromptRenderer::from_function(&func)?;
+        let renderer = PromptRenderer::from_function(&func, &self.ir(), ctx)?;
         let client_name = renderer.client_name().to_string();
 
         let client = self.get_llm_provider(&client_name, ctx)?;
@@ -129,21 +130,6 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
     ) -> Result<FunctionWalker<'ir>> {
         let walker = self.ir().find_function(function_name)?;
         Ok(walker)
-    }
-
-    fn parse_response<'ir>(
-        &'ir self,
-        function: &FunctionWalker<'ir>,
-        response: &crate::internal::llm_client::LLMCompleteResponse,
-        ctx: &RuntimeContext,
-    ) -> Result<jsonish::BamlValueWithFlags> {
-        jsonish::from_str(
-            self.ir(),
-            &ctx.env,
-            function.output(),
-            &response.content,
-            false,
-        )
     }
 
     fn ir(&self) -> &IntermediateRepr {
@@ -286,20 +272,16 @@ impl RuntimeInterface for InternalBamlRuntime {
         let func = self.get_function(&function_name, &ctx)?;
         let baml_args = self.ir().check_function_params(&func, &params)?;
 
-        let renderer = PromptRenderer::from_function(&func)?;
+        let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
         let client_name = renderer.client_name().to_string();
         let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
 
         // Now actually execute the code.
-        let (history, _) = orchestrate_call(
-            orchestrator,
-            self.ir(),
-            &ctx,
-            &renderer,
-            &baml_args,
-            |s, ctx| jsonish::from_str(self.ir(), &ctx.env, func.output(), s, false),
-        )
-        .await;
+        let (history, _) =
+            orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
+                renderer.parse(s, false)
+            })
+            .await;
 
         FunctionResult::new_chain(history)
     }
@@ -312,7 +294,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         ctx: RuntimeContext,
     ) -> Result<FunctionResultStream> {
         let func = self.get_function(&function_name, &ctx)?;
-        let renderer = PromptRenderer::from_function(&func)?;
+        let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
         let client_name = renderer.client_name().to_string();
         let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
         let Some(baml_args) = self

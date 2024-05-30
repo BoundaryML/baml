@@ -39,6 +39,12 @@ fn baml_py(_: Python<'_>, m: Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::BamlImagePy>()?;
     m.add_class::<types::RuntimeContextManager>()?;
     m.add_class::<types::BamlSpan>()?;
+    m.add_class::<types::TypeBuilder>()?;
+    m.add_class::<types::EnumBuilder>()?;
+    m.add_class::<types::ClassBuilder>()?;
+    m.add_class::<types::EnumValueBuilder>()?;
+    m.add_class::<types::ClassPropertyBuilder>()?;
+    m.add_class::<types::FieldType>()?;
 
     m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;
 

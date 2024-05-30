@@ -4,6 +4,7 @@ use crate::BamlError;
 
 use super::function_result_stream::FunctionResultStream;
 use super::runtime_ctx_manager::RuntimeContextManager;
+use super::type_builder::TypeBuilder;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
@@ -42,13 +43,14 @@ impl BamlRuntime {
             .into()
     }
 
-    #[pyo3(signature = (function_name, args, ctx))]
+    #[pyo3(signature = (function_name, args, ctx, tb))]
     fn call_function(
         &self,
         py: Python<'_>,
         function_name: String,
         args: PyObject,
         ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
     ) -> PyResult<PyObject> {
         let args = parse_py_type(args.into_bound(py).to_object(py))?;
         let Some(args_map) = args.as_map_owned() else {
@@ -58,11 +60,12 @@ impl BamlRuntime {
 
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
 
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let ctx_mng = ctx_mng;
             let result = baml_runtime
-                .call_function(function_name, &args_map, &ctx_mng)
+                .call_function(function_name, &args_map, &ctx_mng, tb.as_ref())
                 .await;
 
             result
@@ -73,7 +76,7 @@ impl BamlRuntime {
         .map(|f| f.into())
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb))]
     fn stream_function(
         &self,
         py: Python<'_>,
@@ -81,6 +84,7 @@ impl BamlRuntime {
         args: PyObject,
         on_event: Option<PyObject>,
         ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
     ) -> PyResult<FunctionResultStream> {
         let args = parse_py_type(args.into_bound(py).to_object(py))?;
         let Some(args_map) = args.as_map() else {
@@ -91,10 +95,19 @@ impl BamlRuntime {
         let ctx = ctx.inner.clone();
         let stream = self
             .inner
-            .stream_function(function_name, args_map, &ctx)
+            .stream_function(
+                function_name,
+                args_map,
+                &ctx,
+                tb.map(|tb| tb.inner.clone()).as_ref(),
+            )
             .map_err(BamlError::from_anyhow)?;
 
-        Ok(FunctionResultStream::new(stream, on_event))
+        Ok(FunctionResultStream::new(
+            stream,
+            on_event,
+            tb.map(|tb| tb.inner.clone()),
+        ))
     }
 
     #[pyo3()]

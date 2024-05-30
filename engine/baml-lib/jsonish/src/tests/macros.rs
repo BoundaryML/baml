@@ -4,8 +4,9 @@ macro_rules! test_failing_deserializer {
         #[test_log::test]
         fn $name() {
             let ir = load_test_ir($file_content);
+            let target = render_output_format(&ir, &$target_type, &Default::default()).unwrap();
 
-            let result = from_str(&ir, &Default::default(), &$target_type, $raw_string, false);
+            let result = from_str(&target, &$target_type, $raw_string, false);
 
             assert!(result.is_err(), "Failed to parse: {:?}", result);
         }
@@ -18,10 +19,10 @@ macro_rules! test_deserializer {
         #[test_log::test]
         fn $name() {
             let ir = load_test_ir($file_content);
+            let target = render_output_format(&ir, &$target_type, &Default::default()).unwrap();
 
             let result = from_str(
-                &ir,
-                &Default::default(),
+                &target,
                 &$target_type,
                 $raw_string,
                 false,
@@ -47,10 +48,10 @@ macro_rules! test_partial_deserializer {
         #[test_log::test]
         fn $name() {
             let ir = load_test_ir($file_content);
+            let target = render_output_format(&ir, &$target_type, &Default::default()).unwrap();
 
             let result = from_str(
-                &ir,
-                &Default::default(),
+                &target,
                 &$target_type,
                 $raw_string,
                 true,

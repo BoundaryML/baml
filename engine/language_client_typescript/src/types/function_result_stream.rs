@@ -13,17 +13,20 @@ crate::lang_wrapper!(
     custom_finalize,
     no_from,
     thread_safe,
-    cb: Option<napi::Ref<()>>
+    cb: Option<napi::Ref<()>>,
+    tb: Option<baml_runtime::type_builder::TypeBuilder>
 );
 
 impl FunctionResultStream {
     pub(super) fn new(
         inner: baml_runtime::FunctionResultStream,
         event: Option<napi::Ref<()>>,
+        tb: Option<baml_runtime::type_builder::TypeBuilder>,
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),
             cb: event,
+            tb,
         }
     }
 }
@@ -71,9 +74,15 @@ impl FunctionResultStream {
         };
 
         let ctx_mng = rctx.inner.clone();
+        let tb = self.tb.as_ref().map(|tb| tb.clone());
+
         let fut = async move {
             let ctx_mng = ctx_mng;
-            let res = inner.lock().await.run(on_event, &ctx_mng).await;
+            let res = inner
+                .lock()
+                .await
+                .run(on_event, &ctx_mng, tb.as_ref())
+                .await;
             res.0
                 .map(FunctionResult::from)
                 .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))

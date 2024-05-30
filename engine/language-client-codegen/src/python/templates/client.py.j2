@@ -1,10 +1,12 @@
-from typing import Any, Generic, List, Optional, TypeVar, Union
+from typing import Any, Generic, List, Optional, TypeVar, Union, TypedDict
+from typing_extensions import NotRequired
 import pprint
 
 import baml_py
 from pydantic import BaseModel, ValidationError, create_model
 
 from . import partial_types, types
+from .type_builder import TypeBuilder
 
 OutputType = TypeVar('OutputType')
 
@@ -18,6 +20,10 @@ def coerce(cls: BaseModel, parsed: Any) -> Any:
         pprint.pformat(parsed)
       )
     ) from e
+
+# Define the TypedDict with optional parameters having default values
+class BamlCallOptions(TypedDict, total=False):
+    tb: NotRequired[TypeBuilder]
 
 class BamlClient:
     __runtime: baml_py.BamlRuntime
@@ -37,9 +43,16 @@ class BamlClient:
     async def {{ fn.name }}(
         self,
         {% for (name, type) in fn.args -%}
-        {{name}}: {{type}}{% if !loop.last %},{% endif %}
+        {{name}}: {{type}},
         {%- endfor %}
+        baml_options: BamlCallOptions = {},
     ) -> {{fn.return_type}}:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
       raw = await self.__runtime.call_function(
         "{{fn.name}}",
         {
@@ -48,6 +61,7 @@ class BamlClient:
           {%- endfor %}
         },
         self.__ctx_manager.get(),
+        tb,
       )
       mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
       return coerce(mdl, raw.parsed())
@@ -65,9 +79,16 @@ class BamlStreamClient:
     def {{ fn.name }}(
         self,
         {% for (name, type) in fn.args -%}
-        {{name}}: {{type}}{% if !loop.last %},{% endif %}
+        {{name}}: {{type}},
         {%- endfor %}
+        baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
       raw = self.__runtime.stream_function(
         "{{fn.name}}",
         {
@@ -77,6 +98,7 @@ class BamlStreamClient:
         },
         None,
         self.__ctx_manager.get(),
+        tb,
       )
 
       mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
@@ -87,5 +109,6 @@ class BamlStreamClient:
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
         self.__ctx_manager.get(),
+        tb,
       )
     {% endfor %}

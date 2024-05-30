@@ -40,6 +40,15 @@ export enum Category3 {
   Question = "Question",
 }
 
+export enum Color {
+  RED = "RED",
+  BLUE = "BLUE",
+  GREEN = "GREEN",
+  YELLOW = "YELLOW",
+  BLACK = "BLACK",
+  WHITE = "WHITE",
+}
+
 export enum DataType {
   Resume = "Resume",
   Event = "Event",
@@ -54,6 +63,12 @@ export enum EnumOutput {
   ONE = "ONE",
   TWO = "TWO",
   THREE = "THREE",
+}
+
+export enum Hobby {
+  SPORTS = "SPORTS",
+  MUSIC = "MUSIC",
+  READING = "READING",
 }
 
 export enum NamedArgsSingleEnum {
@@ -97,23 +112,27 @@ export enum TestEnum {
 
 export interface Blah {
   prop4?: string | null
+  
 }
 
 export interface ClassOptionalOutput {
   prop1: string
   prop2: string
+  
 }
 
 export interface ClassOptionalOutput2 {
   prop1?: string | null
   prop2?: string | null
   prop3?: Blah | null
+  
 }
 
 export interface ClassWithImage {
   myImage: Image
   param2: string
   fake_image: FakeImage
+  
 }
 
 export interface Education {
@@ -122,12 +141,14 @@ export interface Education {
   degree: string
   major: string[]
   graduation_date?: string | null
+  
 }
 
 export interface Email {
   subject: string
   body: string
   from_address: string
+  
 }
 
 export interface Event {
@@ -135,38 +156,52 @@ export interface Event {
   date: string
   location: string
   description: string
+  
 }
 
 export interface FakeImage {
   url: string
+  
 }
 
 export interface NamedArgsSingleClass {
   key: string
   key_two: boolean
   key_three: number
+  
 }
 
 export interface OptionalTest_Prop1 {
   omega_a: string
   omega_b: number
+  
 }
 
 export interface OptionalTest_ReturnType {
   omega_1?: OptionalTest_Prop1 | null
   omega_2?: string | null
   omega_3: (OptionalTest_CategoryType | null)[]
+  
 }
 
 export interface OrderInfo {
   order_status: OrderStatus
   tracking_number?: string | null
   estimated_arrival_date?: string | null
+  
+}
+
+export interface Person {
+  name?: string | null
+  hair_color?: (string | Color) | null
+  
+  [key: string]: any;
 }
 
 export interface RaysData {
   dataType: DataType
   value: Resume | Event
+  
 }
 
 export interface Resume {
@@ -176,6 +211,7 @@ export interface Resume {
   experience: Education[]
   education: string[]
   skills: string[]
+  
 }
 
 export interface SearchParams {
@@ -185,6 +221,7 @@ export interface SearchParams {
   company?: WithReasoning | null
   description: WithReasoning[]
   tags: (Tag | string)[]
+  
 }
 
 export interface TestClassAlias {
@@ -193,31 +230,37 @@ export interface TestClassAlias {
   key3: string
   key4: string
   key5: string
+  
 }
 
 export interface TestClassWithEnum {
   prop1: string
   prop2: EnumInClass
+  
 }
 
 export interface TestOutputClass {
   prop1: string
   prop2: number
+  
 }
 
 export interface TestOutputClassNested {
   prop1: string
   prop2: number
   prop3: TestOutputClass
+  
 }
 
 export interface UnionTest_ReturnType {
   prop1: string | boolean
   prop2: (number | boolean)[]
   prop3: number[] | boolean[]
+  
 }
 
 export interface WithReasoning {
   value: string
   reasoning: string
+  
 }
