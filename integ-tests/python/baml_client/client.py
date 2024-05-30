@@ -13,7 +13,7 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-from typing import Any, Generic, List, Optional, TypeVar, Union, TypedDict
+from typing import Any, List, Optional, TypeVar, Union, TypedDict, Type
 from typing_extensions import NotRequired
 import pprint
 
@@ -25,9 +25,9 @@ from .type_builder import TypeBuilder
 
 OutputType = TypeVar('OutputType')
 
-def coerce(cls: BaseModel, parsed: Any) -> Any:
+def coerce(cls: Type[BaseModel], parsed: Any) -> Any:
   try:
-    return cls.model_validate({"inner": parsed}).inner
+    return cls.model_validate({"inner": parsed}).inner # type: ignore
   except ValidationError as e:
     raise TypeError(
       "Internal BAML error while casting output to {}\n{}".format(
@@ -2766,4 +2766,3 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
       )
-    

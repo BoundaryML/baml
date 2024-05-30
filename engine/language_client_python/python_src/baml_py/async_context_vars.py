@@ -20,7 +20,7 @@ class CtxManager:
         )
         atexit.register(self.rt.flush)
 
-    def upsert_tags(self, tags: typing.Dict[str, str]) -> None:
+    def upsert_tags(self, **tags: str) -> None:
         mngr = self.ctx.get()
         mngr.upsert_tags(tags)
 

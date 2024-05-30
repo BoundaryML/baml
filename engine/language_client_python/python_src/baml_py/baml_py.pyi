@@ -58,6 +58,10 @@ class BamlRuntime:
         ctx: RuntimeContextManager,
         tb: Optional[TypeBuilder],
     ) -> FunctionResult: ...
+    @staticmethod
+    def from_files(
+        root_path: str, files: Dict[str, str], env_vars: Dict[str, str]
+    ) -> BamlRuntime: ...
     def stream_function(
         self,
         function_name: str,
