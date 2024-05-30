@@ -82,7 +82,6 @@ class BamlStreamClient:
       mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
       partial_mdl = create_model("{{ fn.name }}PartialReturnType", inner=({{ fn.partial_return_type }}, ...))
 
-
       return baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](
         raw,
         lambda x: coerce(partial_mdl, x),

@@ -1,8 +1,8 @@
 {
-  "name": "baml",
+  "name": "baml-extension",
   "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.32.0",
+  "version": "0.0.27",
   "publisher": "Boundary",
   "repository": "https://github.com/BoundaryML/baml",
   "homepage": "https://www.boundaryml.com",

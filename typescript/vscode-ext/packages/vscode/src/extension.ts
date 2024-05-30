@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 import axios from 'axios'
-import glooLens from './PythonToBamlCodeLensProvider'
+import glooLens from './LanguageToBamlCodeLensProvider'
 import { WebPanelView } from './panels/WebPanelView'
 import testExecutor from './panels/execute_test'
 import plugins from './plugins'
@@ -167,10 +167,6 @@ export function activate(context: vscode.ExtensionContext) {
   const bamlPlaygroundCommand = vscode.commands.registerCommand(
     'baml.openBamlPanel',
     (args?: { projectId?: string; functionName?: string; implName?: string; showTests?: boolean }) => {
-      const projectId = args?.projectId
-      const initialFunctionName = args?.functionName
-      const initialImplName = args?.implName
-      const showTests = args?.showTests
       const config = vscode.workspace.getConfiguration()
       config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
       WebPanelView.render(context.extensionUri)
@@ -198,9 +194,16 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   context.subscriptions.push(bamlPlaygroundCommand)
+  console.log('pushing glooLens')
+
+  const pythonSelector = { language: 'python', scheme: 'file' }
+  const typescriptSelector = { language: 'typescript', scheme: 'file' }
+
   context.subscriptions.push(
-    vscode.languages.registerCodeLensProvider({ scheme: 'file', language: 'python' }, glooLens),
+    vscode.languages.registerCodeLensProvider(pythonSelector, glooLens),
+    vscode.languages.registerCodeLensProvider(typescriptSelector, glooLens),
   )
+
   context.subscriptions.push(diagnosticsCollection)
 
   // Add cursor movement listener
@@ -213,14 +216,14 @@ export function activate(context: vscode.ExtensionContext) {
       const text = editor.document.getText()
 
       // TODO: buggy when used with multiple functions, needs a fix.
-      // WebPanelView.currentPanel?.postMessage('update_cursor', {
-      //   cursor: {
-      //     fileName: name,
-      //     fileText: text,
-      //     line: position.line + 1,
-      //     column: position.character,
-      //   },
-      // })
+      WebPanelView.currentPanel?.postMessage('update_cursor', {
+        cursor: {
+          fileName: name,
+          fileText: text,
+          line: position.line + 1,
+          column: position.character,
+        },
+      })
     }
   })
 

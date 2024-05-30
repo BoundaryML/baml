@@ -4,23 +4,24 @@ export class BamlImage {
   static fromUrl(url: string): BamlImage
   static fromBase64(mediaType: string, base64: string): BamlImage
   isUrl(): boolean
-  get url(): string
-  get base64(): Array<string>
-  toJson(): any
+  asUrl(): string
+  asBase64(): [string, string]
+  toJSON(): any
 }
 
 export class BamlRuntime {
-  static fromDirectory(directory: string, envVars: Record<string, string>): BamlRuntimeTs
-  static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): BamlRuntimeTs
+  static fromDirectory(directory: string, envVars: Record<string, string>): BamlRuntime
+  static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): BamlRuntime
   createContextManager(): RuntimeContextManager
-  callFunction(functionName: string, args: any, ctx: RuntimeContextManager): Promise<FunctionResult>
-  streamFunction(functionName: string, args: any, cb: (err: any, param: FunctionResultPy) => void, ctx: RuntimeContextManager): FunctionResultStream
+  callFunction(functionName: string, args: { [string]: any }, ctx: RuntimeContextManager): Promise<FunctionResult>
+  streamFunction(functionName: string, args: { [string]: any }, cb: (err: any, param: FunctionResult) => void, ctx: RuntimeContextManager): FunctionResultStream
   flush(): void
 }
 
 export class BamlSpan {
-  static new(runtime: BamlRuntime, functionName: string, args: any, ctx: RuntimeContextManager): BamlSpanPy
+  static new(runtime: BamlRuntime, functionName: string, args: any, ctx: RuntimeContextManager): BamlSpan
   finish(result: any, ctx: RuntimeContextManager): Promise<any>
+  finishSync(result: any, ctx: RuntimeContextManager): any
 }
 
 export class FunctionResult {

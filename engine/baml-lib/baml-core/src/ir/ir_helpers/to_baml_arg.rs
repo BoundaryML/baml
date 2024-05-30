@@ -34,7 +34,14 @@ pub fn validate_arg(
         FieldType::Primitive(t) => match t {
             TypeValue::String if matches!(value, BamlValue::String(_)) => Some(value.clone()),
             TypeValue::Int if matches!(value, BamlValue::Int(_)) => Some(value.clone()),
-            TypeValue::Float if matches!(value, BamlValue::Float(_)) => Some(value.clone()),
+            TypeValue::Float => match value {
+                BamlValue::Int(val) => Some(BamlValue::Float(*val as f64)),
+                BamlValue::Float(_) => Some(value.clone()),
+                _ => {
+                    scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                    None
+                }
+            },
             TypeValue::Bool if matches!(value, BamlValue::Bool(_)) => Some(value.clone()),
             TypeValue::Null if matches!(value, BamlValue::Null) => Some(value.clone()),
             TypeValue::Image => match value {

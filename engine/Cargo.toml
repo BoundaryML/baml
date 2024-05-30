@@ -3,7 +3,6 @@ resolver = "2"
 members = [
   "baml-cli",
   "baml-lib/*",
-  "baml-core-ffi",
   "baml-fmt",
   "baml-runtime",
   "baml-schema-wasm",
@@ -52,6 +51,7 @@ strum_macros = "0.26.2"
 walkdir = "2.5.0"
 web-time = "1.1.0"
 
+baml-types = { path = "baml-lib/baml-types" }
 internal-baml-codegen = { path = "language-client-codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja" }

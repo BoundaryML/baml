@@ -109,7 +109,10 @@ pub fn parse<'a>(str: &'a str, mut options: ParseOptions) -> Result<Value> {
                     0 => {}
                     1 => {
                         let (v, fixes) = items.into_iter().next().unwrap();
-                        return Ok(Value::FixedJson(v.into(), fixes));
+                        return Ok(Value::AnyOf(
+                            vec![Value::FixedJson(v.into(), fixes)],
+                            str.to_string(),
+                        ));
                     }
                     _ => {
                         // In the case of multiple JSON objects:

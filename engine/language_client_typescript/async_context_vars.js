@@ -28,6 +28,8 @@ class CtxManager {
     }
     startTraceSync(name, args) {
         const mng = this.get();
+        // const clone = mng.deepClone()
+        // this.ctx.enterWith(clone)
         return native_1.BamlSpan.new(this.rt, name, args, mng);
     }
     startTraceAsync(name, args) {
@@ -37,32 +39,48 @@ class CtxManager {
         return native_1.BamlSpan.new(this.rt, name, args, clone);
     }
     async endTrace(span, response) {
-        await span.finish(response, this.get());
+        const manager = this.ctx.getStore();
+        if (!manager) {
+            console.error('Context lost before span could be finished\n');
+            return;
+        }
+        await span.finish(response, manager);
+    }
+    endTraceSync(span, response) {
+        const manager = this.ctx.getStore();
+        if (!manager) {
+            console.error('Context lost before span could be finished\n');
+            return;
+        }
+        span.finishSync(response, manager);
+    }
+    flush() {
+        this.rt.flush();
     }
     traceFnSync(name, func) {
         return ((...args) => {
             const params = args.reduce((acc, arg, i) => ({
                 ...acc,
-                [func.length > i ? func.arguments[i].name : `<arg:${i}>`]: arg,
+                [`arg${i}`]: arg, // generic way to label args
             }), {});
             const span = this.startTraceSync(name, params);
             try {
                 const response = func(...args);
-                this.endTrace(span, response);
+                this.endTraceSync(span, response);
                 return response;
             }
             catch (e) {
-                this.endTrace(span, e);
+                this.endTraceSync(span, e);
                 throw e;
             }
         });
     }
-    traceFnAync(func) {
-        const funcName = func.name;
+    traceFnAync(name, func) {
+        const funcName = name;
         return (async (...args) => {
             const params = args.reduce((acc, arg, i) => ({
                 ...acc,
-                [func.length > i ? func.arguments[i].name : `<arg:${i}>`]: arg,
+                [`arg${i}`]: arg, // generic way to label args
             }), {});
             const span = this.startTraceAsync(funcName, params);
             try {

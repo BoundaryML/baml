@@ -4,6 +4,7 @@ use std::{
 };
 
 use baml_types::BamlValue;
+use std::fmt;
 
 use crate::{RuntimeContext, SpanCtx};
 
@@ -13,6 +14,16 @@ type Context = (uuid::Uuid, String, HashMap<String, BamlValue>);
 pub struct RuntimeContextManager {
     context: Arc<Mutex<Vec<Context>>>,
     env_vars: HashMap<String, String>,
+    global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
+}
+
+impl fmt::Debug for RuntimeContextManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RuntimeContextManager")
+            .field("context", &self.context.lock())
+            .field("global_tags", &self.global_tags)
+            .finish()
+    }
 }
 
 impl RuntimeContextManager {
@@ -20,6 +31,7 @@ impl RuntimeContextManager {
         Self {
             context: Arc::new(Mutex::new(self.context.lock().unwrap().clone())),
             env_vars: self.env_vars.clone(),
+            global_tags: Arc::new(Mutex::new(self.global_tags.lock().unwrap().clone())),
         }
     }
 
@@ -27,6 +39,7 @@ impl RuntimeContextManager {
         Self {
             context: Default::default(),
             env_vars,
+            global_tags: Default::default(),
         }
     }
 
@@ -34,6 +47,8 @@ impl RuntimeContextManager {
         let mut ctx = self.context.lock().unwrap();
         if let Some((.., last_tags)) = ctx.last_mut() {
             last_tags.extend(tags);
+        } else {
+            self.global_tags.lock().unwrap().extend(tags);
         }
     }
 
@@ -53,11 +68,13 @@ impl RuntimeContextManager {
             .lock()
             .unwrap()
             .push((span.clone(), name.to_string(), last_tags));
+        log::trace!("Entering with: {:#?}", self.context.lock().unwrap());
         span
     }
 
     pub fn exit(&self) -> Option<(uuid::Uuid, Vec<SpanCtx>, HashMap<String, BamlValue>)> {
         let mut ctx = self.context.lock().unwrap();
+        log::trace!("Exiting: {:#?}", ctx);
 
         let prev = ctx
             .iter()
@@ -66,19 +83,33 @@ impl RuntimeContextManager {
                 name: name.clone(),
             })
             .collect();
-        let Some((id, _, tags)) = ctx.pop() else {
+        let Some((id, _, mut tags)) = ctx.pop() else {
             return None;
         };
+
+        for (k, v) in self.global_tags.lock().unwrap().iter() {
+            tags.entry(k.clone()).or_insert_with(|| v.clone());
+        }
 
         Some((id, prev, tags))
     }
 
     pub fn create_ctx(&self) -> RuntimeContext {
-        let ctx = self.context.lock().unwrap();
+        let mut tags = self.global_tags.lock().unwrap().clone();
+        let ctx_tags = {
+            self.context
+                .lock()
+                .unwrap()
+                .last()
+                .map(|(.., x)| x)
+                .cloned()
+                .unwrap_or_default()
+        };
+        tags.extend(ctx_tags);
 
         RuntimeContext {
             env: self.env_vars.clone(),
-            tags: ctx.last().map(|(.., x)| x).cloned().unwrap_or_default(),
+            tags,
             class_override: Default::default(),
             enum_overrides: Default::default(),
         }

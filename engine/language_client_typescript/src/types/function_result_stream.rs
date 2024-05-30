@@ -1,3 +1,4 @@
+use napi::bindgen_prelude::ObjectFinalize;
 use napi::threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode};
 use napi::Env;
 use napi::{JsFunction, JsObject, JsUndefined};
@@ -11,6 +12,7 @@ use baml_runtime::InternalRuntimeInterface;
 crate::lang_wrapper!(
     FunctionResultStream,
     baml_runtime::FunctionResultStream,
+    custom_finalize,
     no_from,
     thread_safe,
     cb: Option<napi::Ref<()>>
@@ -37,6 +39,10 @@ impl FunctionResultStream {
         #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] func: JsFunction,
     ) -> napi::Result<JsUndefined> {
         let cb = env.create_reference(func)?;
+        let prev = self.cb.take();
+        if let Some(mut old_cb) = prev {
+            old_cb.unref(env)?;
+        }
         self.cb = Some(cb);
         env.get_undefined()
     }
@@ -86,5 +92,14 @@ impl FunctionResultStream {
         };
 
         env.execute_tokio_future(fut, |&mut _, data| Ok(data))
+    }
+}
+
+impl ObjectFinalize for FunctionResultStream {
+    fn finalize(mut self, env: Env) -> napi::Result<()> {
+        if let Some(mut cb) = self.cb.take() {
+            cb.unref(env)?;
+        }
+        Ok(())
     }
 }

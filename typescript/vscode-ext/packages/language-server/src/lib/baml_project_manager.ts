@@ -103,7 +103,6 @@ class Project {
     // Read the file content
     const fileContent = readFileSync(file_path, 'utf8')
 
-    // Create a TextDocument
     const doc = TextDocument.create(file_path, 'plaintext', 1, fileContent)
 
     return doc
@@ -444,6 +443,10 @@ class BamlProjectManager {
       project.update_unsaved_file(path.fsPath, content)
       project.update_runtime()
     })
+  }
+
+  get_projects() {
+    return this.projects
   }
 
   async touch_project(path: URI) {

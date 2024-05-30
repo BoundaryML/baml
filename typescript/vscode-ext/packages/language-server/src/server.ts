@@ -28,7 +28,7 @@ import { URI } from 'vscode-uri'
 import debounce from 'lodash/debounce'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 import { IPCMessageReader, IPCMessageWriter, createConnection } from 'vscode-languageserver/node'
-
+import { getWordAtPosition } from './lib/ast'
 // import { FileChangeType } from 'vscode'
 import fs from 'fs'
 // import { cliBuild, cliCheckForUpdates, cliVersion } from './baml-cli'
@@ -37,7 +37,6 @@ import { z } from 'zod'
 // import { getVersion, getEnginesVersion } from './lib/wasm/internals'
 import BamlProjectManager from './lib/baml_project_manager'
 import type { LSOptions, LSSettings } from './lib/types'
-import { getWordAtPosition } from './lib/ast'
 ;(globalThis as any).crypto = require('node:crypto').webcrypto
 
 const packageJson = require('../../package.json') // eslint-disable-line
@@ -360,7 +359,6 @@ export function startServer(options?: LSOptions): void {
 
   connection.onDefinition((params: DeclarationParams) => {
     const doc = getDocument(params.textDocument.uri)
-
     if (doc) {
       //accesses project from uri via bamlProjectManager
       const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
@@ -594,7 +592,6 @@ export function startServer(options?: LSOptions): void {
   )
 
   connection.onRequest('cliVersion', async () => {
-    console.log('Checking baml version at ' + config?.path)
     try {
       // const res = await new Promise<string>((resolve, reject) => {
       //   cliVersion(config?.path || 'baml', reject, (ver) => {
@@ -635,6 +632,37 @@ export function startServer(options?: LSOptions): void {
       return undefined
     }
   })
+
+  connection.onRequest(
+    'getBAMLFunctions',
+    async (): Promise<
+      {
+        name: string
+        span: { file_path: string; start: number; end: number }
+      }[]
+    > => {
+      const projects = bamlProjectManager.get_projects()
+
+      const allFunctions = []
+      for (const [id, proj] of projects.entries()) {
+        const functions = proj.list_functions()
+        allFunctions.push(
+          ...functions.map(
+            (
+              func,
+            ): {
+              name: string
+              span: { file_path: string; start: number; end: number }
+            } => {
+              return func.toJSON() as any
+            },
+          ),
+        )
+      }
+
+      return allFunctions
+    },
+  )
 
   console.log('Server-side -- listening to connection')
   // Make the text document manager listen on the connection

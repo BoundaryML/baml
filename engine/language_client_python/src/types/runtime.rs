@@ -37,7 +37,9 @@ impl BamlRuntime {
 
     #[pyo3()]
     fn create_context_manager(&self) -> RuntimeContextManager {
-        self.inner.create_ctx_manager().into()
+        self.inner
+            .create_ctx_manager(baml_types::BamlValue::String("python".to_string()))
+            .into()
     }
 
     #[pyo3(signature = (function_name, args, ctx))]

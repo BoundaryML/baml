@@ -1,5 +1,7 @@
+from __future__ import annotations
 from .baml_py import FunctionResult, FunctionResultStream, RuntimeContextManager
 from typing import Callable, Generic, Optional, TypeVar
+
 import asyncio
 
 PartialOutputType = TypeVar("PartialOutputType")
@@ -11,9 +13,8 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
     __partial_coerce: Callable[[FunctionResult], PartialOutputType]
     __final_coerce: Callable[[FunctionResult], FinalOutputType]
     __ctx_manager: RuntimeContextManager
-
-    __task: Optional[asyncio.Task[FunctionResult]] = None
-    __event_queue: asyncio.Queue[Optional[FunctionResult]] = asyncio.Queue()
+    __task: Optional[asyncio.Task[FunctionResult]]
+    __event_queue: asyncio.Queue[Optional[FunctionResult]]
 
     def __init__(
         self,
@@ -26,6 +27,8 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         self.__partial_coerce = partial_coerce
         self.__final_coerce = final_coerce
         self.__ctx_manager = ctx_manager
+        self.__task = None
+        self.__event_queue = asyncio.Queue()
 
     def __enqueue(self, data: FunctionResult) -> None:
         self.__event_queue.put_nowait(data)
@@ -53,6 +56,6 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
                 break
             yield self.__partial_coerce(event.parsed())
 
-    async def done(self):
+    async def get_final_response(self):
         final = await self.__drive_to_completion_in_bg()
         return self.__final_coerce(final.parsed())

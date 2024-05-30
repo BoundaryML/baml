@@ -61,7 +61,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("ClassifyMessageReturnType", inner=(types.Category, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def ClassifyMessage2(
         self,
@@ -75,7 +75,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("ClassifyMessage2ReturnType", inner=(types.Category, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def ClassifyMessage3(
         self,
@@ -89,7 +89,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("ClassifyMessage3ReturnType", inner=(types.Category, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def DescribeImage(
         self,
@@ -103,7 +103,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("DescribeImageReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def DescribeImage2(
         self,
@@ -117,7 +117,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("DescribeImage2ReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def DescribeImage3(
         self,
@@ -131,7 +131,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("DescribeImage3ReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def DescribeImage4(
         self,
@@ -145,7 +145,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("DescribeImage4ReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def ExtractNames(
         self,
@@ -159,7 +159,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("ExtractNamesReturnType", inner=(List[str], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def ExtractResume(
         self,
@@ -173,7 +173,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("ExtractResumeReturnType", inner=(types.Resume, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def ExtractResume2(
         self,
@@ -187,7 +187,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("ExtractResume2ReturnType", inner=(types.Resume, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnClassOptionalOutput(
         self,
@@ -201,7 +201,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnClassOptionalOutputReturnType", inner=(Optional[types.ClassOptionalOutput], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnClassOptionalOutput2(
         self,
@@ -215,7 +215,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnClassOptionalOutput2ReturnType", inner=(Optional[types.ClassOptionalOutput2], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnEnumListOutput(
         self,
@@ -229,7 +229,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnEnumListOutputReturnType", inner=(List[types.EnumOutput], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnEnumOutput(
         self,
@@ -243,7 +243,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnEnumOutputReturnType", inner=(types.EnumOutput, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnNamedArgsSingleStringOptional(
         self,
@@ -257,7 +257,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnNamedArgsSingleStringOptionalReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnOutputBool(
         self,
@@ -271,7 +271,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnOutputBoolReturnType", inner=(bool, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnOutputClass(
         self,
@@ -285,7 +285,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnOutputClassReturnType", inner=(types.TestOutputClass, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnOutputClassList(
         self,
@@ -299,7 +299,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnOutputClassListReturnType", inner=(List[types.TestOutputClass], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnOutputClassWithEnum(
         self,
@@ -313,7 +313,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnOutputClassWithEnumReturnType", inner=(types.TestClassWithEnum, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnOutputNestedClass(
         self,
@@ -327,7 +327,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnOutputNestedClassReturnType", inner=(types.TestOutputClassNested, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnOutputStringList(
         self,
@@ -341,7 +341,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnOutputStringListReturnType", inner=(List[str], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnTestAliasedEnumOutput(
         self,
@@ -355,7 +355,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnTestAliasedEnumOutputReturnType", inner=(types.TestEnum, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnTestClassAlias(
         self,
@@ -369,7 +369,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnTestClassAliasReturnType", inner=(types.TestClassAlias, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def FnTestNamedArgsSingleEnum(
         self,
@@ -383,7 +383,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("FnTestNamedArgsSingleEnumReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def GetDataType(
         self,
@@ -397,7 +397,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("GetDataTypeReturnType", inner=(types.RaysData, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def GetOrderInfo(
         self,
@@ -411,7 +411,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("GetOrderInfoReturnType", inner=(types.OrderInfo, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def GetQuery(
         self,
@@ -425,7 +425,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("GetQueryReturnType", inner=(types.SearchParams, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def OptionalTest_Function(
         self,
@@ -439,7 +439,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("OptionalTest_FunctionReturnType", inner=(List[Optional[types.OptionalTest_ReturnType]], ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def PromptTestClaude(
         self,
@@ -453,7 +453,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("PromptTestClaudeReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def PromptTestClaudeChat(
         self,
@@ -467,7 +467,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("PromptTestClaudeChatReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def PromptTestClaudeChatNoSystem(
         self,
@@ -481,7 +481,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("PromptTestClaudeChatNoSystemReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def PromptTestOpenAI(
         self,
@@ -495,7 +495,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("PromptTestOpenAIReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def PromptTestOpenAIChat(
         self,
@@ -509,7 +509,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("PromptTestOpenAIChatReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def PromptTestOpenAIChatNoSystem(
         self,
@@ -523,7 +523,21 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("PromptTestOpenAIChatNoSystemReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
+    
+    async def TestFallbackClient(
+        self,
+        
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestFallbackClient",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+      )
+      mdl = create_model("TestFallbackClientReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleBool(
         self,
@@ -537,7 +551,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleBoolReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleClass(
         self,
@@ -551,7 +565,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleClassReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleEnumList(
         self,
@@ -565,7 +579,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleEnumListReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleFloat(
         self,
@@ -579,7 +593,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleFloatReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleInt(
         self,
@@ -593,7 +607,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleIntReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleString(
         self,
@@ -607,7 +621,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleStringReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleStringArray(
         self,
@@ -621,7 +635,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleStringArrayReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleStringList(
         self,
@@ -635,7 +649,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestFnNamedArgsSingleStringListReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestImageInput(
         self,
@@ -649,7 +663,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestImageInputReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestMulticlassNamedArgs(
         self,
@@ -663,7 +677,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestMulticlassNamedArgsReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
     async def TestOllama(
         self,
@@ -677,7 +691,35 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("TestOllamaReturnType", inner=(str, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
+    
+    async def TestRetryConstant(
+        self,
+        
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestRetryConstant",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+      )
+      mdl = create_model("TestRetryConstantReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    async def TestRetryExponential(
+        self,
+        
+    ) -> str:
+      raw = await self.__runtime.call_function(
+        "TestRetryExponential",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+      )
+      mdl = create_model("TestRetryExponentialReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
     
     async def UnionTest_Function(
         self,
@@ -691,7 +733,7 @@ class BamlClient:
         self.__ctx_manager.get(),
       )
       mdl = create_model("UnionTest_FunctionReturnType", inner=(types.UnionTest_ReturnType, ...))
-      return coerce(mdl, raw)
+      return coerce(mdl, raw.parsed())
     
 
 class BamlStreamClient:
@@ -719,7 +761,6 @@ class BamlStreamClient:
       mdl = create_model("ClassifyMessageReturnType", inner=(types.Category, ...))
       partial_mdl = create_model("ClassifyMessagePartialReturnType", inner=(Optional[types.Category], ...))
 
-
       return baml_py.BamlStream[Optional[types.Category], types.Category](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -742,7 +783,6 @@ class BamlStreamClient:
 
       mdl = create_model("ClassifyMessage2ReturnType", inner=(types.Category, ...))
       partial_mdl = create_model("ClassifyMessage2PartialReturnType", inner=(Optional[types.Category], ...))
-
 
       return baml_py.BamlStream[Optional[types.Category], types.Category](
         raw,
@@ -767,7 +807,6 @@ class BamlStreamClient:
       mdl = create_model("ClassifyMessage3ReturnType", inner=(types.Category, ...))
       partial_mdl = create_model("ClassifyMessage3PartialReturnType", inner=(Optional[types.Category], ...))
 
-
       return baml_py.BamlStream[Optional[types.Category], types.Category](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -790,7 +829,6 @@ class BamlStreamClient:
 
       mdl = create_model("DescribeImageReturnType", inner=(str, ...))
       partial_mdl = create_model("DescribeImagePartialReturnType", inner=(Optional[str], ...))
-
 
       return baml_py.BamlStream[Optional[str], str](
         raw,
@@ -816,7 +854,6 @@ class BamlStreamClient:
       mdl = create_model("DescribeImage2ReturnType", inner=(str, ...))
       partial_mdl = create_model("DescribeImage2PartialReturnType", inner=(Optional[str], ...))
 
-
       return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -840,7 +877,6 @@ class BamlStreamClient:
 
       mdl = create_model("DescribeImage3ReturnType", inner=(str, ...))
       partial_mdl = create_model("DescribeImage3PartialReturnType", inner=(Optional[str], ...))
-
 
       return baml_py.BamlStream[Optional[str], str](
         raw,
@@ -866,7 +902,6 @@ class BamlStreamClient:
       mdl = create_model("DescribeImage4ReturnType", inner=(str, ...))
       partial_mdl = create_model("DescribeImage4PartialReturnType", inner=(Optional[str], ...))
 
-
       return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -889,7 +924,6 @@ class BamlStreamClient:
 
       mdl = create_model("ExtractNamesReturnType", inner=(List[str], ...))
       partial_mdl = create_model("ExtractNamesPartialReturnType", inner=(List[Optional[str]], ...))
-
 
       return baml_py.BamlStream[List[Optional[str]], List[str]](
         raw,
@@ -915,7 +949,6 @@ class BamlStreamClient:
       mdl = create_model("ExtractResumeReturnType", inner=(types.Resume, ...))
       partial_mdl = create_model("ExtractResumePartialReturnType", inner=(partial_types.Resume, ...))
 
-
       return baml_py.BamlStream[partial_types.Resume, types.Resume](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -938,7 +971,6 @@ class BamlStreamClient:
 
       mdl = create_model("ExtractResume2ReturnType", inner=(types.Resume, ...))
       partial_mdl = create_model("ExtractResume2PartialReturnType", inner=(partial_types.Resume, ...))
-
 
       return baml_py.BamlStream[partial_types.Resume, types.Resume](
         raw,
@@ -963,7 +995,6 @@ class BamlStreamClient:
       mdl = create_model("FnClassOptionalOutputReturnType", inner=(Optional[types.ClassOptionalOutput], ...))
       partial_mdl = create_model("FnClassOptionalOutputPartialReturnType", inner=(partial_types.ClassOptionalOutput, ...))
 
-
       return baml_py.BamlStream[partial_types.ClassOptionalOutput, Optional[types.ClassOptionalOutput]](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -986,7 +1017,6 @@ class BamlStreamClient:
 
       mdl = create_model("FnClassOptionalOutput2ReturnType", inner=(Optional[types.ClassOptionalOutput2], ...))
       partial_mdl = create_model("FnClassOptionalOutput2PartialReturnType", inner=(partial_types.ClassOptionalOutput2, ...))
-
 
       return baml_py.BamlStream[partial_types.ClassOptionalOutput2, Optional[types.ClassOptionalOutput2]](
         raw,
@@ -1011,7 +1041,6 @@ class BamlStreamClient:
       mdl = create_model("FnEnumListOutputReturnType", inner=(List[types.EnumOutput], ...))
       partial_mdl = create_model("FnEnumListOutputPartialReturnType", inner=(List[Optional[types.EnumOutput]], ...))
 
-
       return baml_py.BamlStream[List[Optional[types.EnumOutput]], List[types.EnumOutput]](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1034,7 +1063,6 @@ class BamlStreamClient:
 
       mdl = create_model("FnEnumOutputReturnType", inner=(types.EnumOutput, ...))
       partial_mdl = create_model("FnEnumOutputPartialReturnType", inner=(Optional[types.EnumOutput], ...))
-
 
       return baml_py.BamlStream[Optional[types.EnumOutput], types.EnumOutput](
         raw,
@@ -1059,7 +1087,6 @@ class BamlStreamClient:
       mdl = create_model("FnNamedArgsSingleStringOptionalReturnType", inner=(str, ...))
       partial_mdl = create_model("FnNamedArgsSingleStringOptionalPartialReturnType", inner=(Optional[str], ...))
 
-
       return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1082,7 +1109,6 @@ class BamlStreamClient:
 
       mdl = create_model("FnOutputBoolReturnType", inner=(bool, ...))
       partial_mdl = create_model("FnOutputBoolPartialReturnType", inner=(Optional[bool], ...))
-
 
       return baml_py.BamlStream[Optional[bool], bool](
         raw,
@@ -1107,7 +1133,6 @@ class BamlStreamClient:
       mdl = create_model("FnOutputClassReturnType", inner=(types.TestOutputClass, ...))
       partial_mdl = create_model("FnOutputClassPartialReturnType", inner=(partial_types.TestOutputClass, ...))
 
-
       return baml_py.BamlStream[partial_types.TestOutputClass, types.TestOutputClass](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1130,7 +1155,6 @@ class BamlStreamClient:
 
       mdl = create_model("FnOutputClassListReturnType", inner=(List[types.TestOutputClass], ...))
       partial_mdl = create_model("FnOutputClassListPartialReturnType", inner=(List[partial_types.TestOutputClass], ...))
-
 
       return baml_py.BamlStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]](
         raw,
@@ -1155,7 +1179,6 @@ class BamlStreamClient:
       mdl = create_model("FnOutputClassWithEnumReturnType", inner=(types.TestClassWithEnum, ...))
       partial_mdl = create_model("FnOutputClassWithEnumPartialReturnType", inner=(partial_types.TestClassWithEnum, ...))
 
-
       return baml_py.BamlStream[partial_types.TestClassWithEnum, types.TestClassWithEnum](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1178,7 +1201,6 @@ class BamlStreamClient:
 
       mdl = create_model("FnOutputNestedClassReturnType", inner=(types.TestOutputClassNested, ...))
       partial_mdl = create_model("FnOutputNestedClassPartialReturnType", inner=(partial_types.TestOutputClassNested, ...))
-
 
       return baml_py.BamlStream[partial_types.TestOutputClassNested, types.TestOutputClassNested](
         raw,
@@ -1203,7 +1225,6 @@ class BamlStreamClient:
       mdl = create_model("FnOutputStringListReturnType", inner=(List[str], ...))
       partial_mdl = create_model("FnOutputStringListPartialReturnType", inner=(List[Optional[str]], ...))
 
-
       return baml_py.BamlStream[List[Optional[str]], List[str]](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1226,7 +1247,6 @@ class BamlStreamClient:
 
       mdl = create_model("FnTestAliasedEnumOutputReturnType", inner=(types.TestEnum, ...))
       partial_mdl = create_model("FnTestAliasedEnumOutputPartialReturnType", inner=(Optional[types.TestEnum], ...))
-
 
       return baml_py.BamlStream[Optional[types.TestEnum], types.TestEnum](
         raw,
@@ -1251,7 +1271,6 @@ class BamlStreamClient:
       mdl = create_model("FnTestClassAliasReturnType", inner=(types.TestClassAlias, ...))
       partial_mdl = create_model("FnTestClassAliasPartialReturnType", inner=(partial_types.TestClassAlias, ...))
 
-
       return baml_py.BamlStream[partial_types.TestClassAlias, types.TestClassAlias](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1274,7 +1293,6 @@ class BamlStreamClient:
 
       mdl = create_model("FnTestNamedArgsSingleEnumReturnType", inner=(str, ...))
       partial_mdl = create_model("FnTestNamedArgsSingleEnumPartialReturnType", inner=(Optional[str], ...))
-
 
       return baml_py.BamlStream[Optional[str], str](
         raw,
@@ -1299,7 +1317,6 @@ class BamlStreamClient:
       mdl = create_model("GetDataTypeReturnType", inner=(types.RaysData, ...))
       partial_mdl = create_model("GetDataTypePartialReturnType", inner=(partial_types.RaysData, ...))
 
-
       return baml_py.BamlStream[partial_types.RaysData, types.RaysData](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1322,7 +1339,6 @@ class BamlStreamClient:
 
       mdl = create_model("GetOrderInfoReturnType", inner=(types.OrderInfo, ...))
       partial_mdl = create_model("GetOrderInfoPartialReturnType", inner=(partial_types.OrderInfo, ...))
-
 
       return baml_py.BamlStream[partial_types.OrderInfo, types.OrderInfo](
         raw,
@@ -1347,7 +1363,6 @@ class BamlStreamClient:
       mdl = create_model("GetQueryReturnType", inner=(types.SearchParams, ...))
       partial_mdl = create_model("GetQueryPartialReturnType", inner=(partial_types.SearchParams, ...))
 
-
       return baml_py.BamlStream[partial_types.SearchParams, types.SearchParams](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1370,7 +1385,6 @@ class BamlStreamClient:
 
       mdl = create_model("OptionalTest_FunctionReturnType", inner=(List[Optional[types.OptionalTest_ReturnType]], ...))
       partial_mdl = create_model("OptionalTest_FunctionPartialReturnType", inner=(List[partial_types.OptionalTest_ReturnType], ...))
-
 
       return baml_py.BamlStream[List[partial_types.OptionalTest_ReturnType], List[Optional[types.OptionalTest_ReturnType]]](
         raw,
@@ -1395,7 +1409,6 @@ class BamlStreamClient:
       mdl = create_model("PromptTestClaudeReturnType", inner=(str, ...))
       partial_mdl = create_model("PromptTestClaudePartialReturnType", inner=(Optional[str], ...))
 
-
       return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1418,7 +1431,6 @@ class BamlStreamClient:
 
       mdl = create_model("PromptTestClaudeChatReturnType", inner=(str, ...))
       partial_mdl = create_model("PromptTestClaudeChatPartialReturnType", inner=(Optional[str], ...))
-
 
       return baml_py.BamlStream[Optional[str], str](
         raw,
@@ -1443,7 +1455,6 @@ class BamlStreamClient:
       mdl = create_model("PromptTestClaudeChatNoSystemReturnType", inner=(str, ...))
       partial_mdl = create_model("PromptTestClaudeChatNoSystemPartialReturnType", inner=(Optional[str], ...))
 
-
       return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1466,7 +1477,6 @@ class BamlStreamClient:
 
       mdl = create_model("PromptTestOpenAIReturnType", inner=(str, ...))
       partial_mdl = create_model("PromptTestOpenAIPartialReturnType", inner=(Optional[str], ...))
-
 
       return baml_py.BamlStream[Optional[str], str](
         raw,
@@ -1491,7 +1501,6 @@ class BamlStreamClient:
       mdl = create_model("PromptTestOpenAIChatReturnType", inner=(str, ...))
       partial_mdl = create_model("PromptTestOpenAIChatPartialReturnType", inner=(Optional[str], ...))
 
-
       return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1515,6 +1524,27 @@ class BamlStreamClient:
       mdl = create_model("PromptTestOpenAIChatNoSystemReturnType", inner=(str, ...))
       partial_mdl = create_model("PromptTestOpenAIChatNoSystemPartialReturnType", inner=(Optional[str], ...))
 
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestFallbackClient(
+        self,
+        
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestFallbackClient",
+        {
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+
+      mdl = create_model("TestFallbackClientReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestFallbackClientPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlStream[Optional[str], str](
         raw,
@@ -1539,7 +1569,6 @@ class BamlStreamClient:
       mdl = create_model("TestFnNamedArgsSingleBoolReturnType", inner=(str, ...))
       partial_mdl = create_model("TestFnNamedArgsSingleBoolPartialReturnType", inner=(Optional[str], ...))
 
-
       return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1562,7 +1591,6 @@ class BamlStreamClient:
 
       mdl = create_model("TestFnNamedArgsSingleClassReturnType", inner=(str, ...))
       partial_mdl = create_model("TestFnNamedArgsSingleClassPartialReturnType", inner=(Optional[str], ...))
-
 
       return baml_py.BamlStream[Optional[str], str](
         raw,
@@ -1587,7 +1615,6 @@ class BamlStreamClient:
       mdl = create_model("TestFnNamedArgsSingleEnumListReturnType", inner=(str, ...))
       partial_mdl = create_model("TestFnNamedArgsSingleEnumListPartialReturnType", inner=(Optional[str], ...))
 
-
       return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1610,7 +1637,6 @@ class BamlStreamClient:
 
       mdl = create_model("TestFnNamedArgsSingleFloatReturnType", inner=(str, ...))
       partial_mdl = create_model("TestFnNamedArgsSingleFloatPartialReturnType", inner=(Optional[str], ...))
-
 
       return baml_py.BamlStream[Optional[str], str](
         raw,
@@ -1635,7 +1661,6 @@ class BamlStreamClient:
       mdl = create_model("TestFnNamedArgsSingleIntReturnType", inner=(str, ...))
       partial_mdl = create_model("TestFnNamedArgsSingleIntPartialReturnType", inner=(Optional[str], ...))
 
-
       return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1658,7 +1683,6 @@ class BamlStreamClient:
 
       mdl = create_model("TestFnNamedArgsSingleStringReturnType", inner=(str, ...))
       partial_mdl = create_model("TestFnNamedArgsSingleStringPartialReturnType", inner=(Optional[str], ...))
-
 
       return baml_py.BamlStream[Optional[str], str](
         raw,
@@ -1683,7 +1707,6 @@ class BamlStreamClient:
       mdl = create_model("TestFnNamedArgsSingleStringArrayReturnType", inner=(str, ...))
       partial_mdl = create_model("TestFnNamedArgsSingleStringArrayPartialReturnType", inner=(Optional[str], ...))
 
-
       return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1707,7 +1730,6 @@ class BamlStreamClient:
       mdl = create_model("TestFnNamedArgsSingleStringListReturnType", inner=(str, ...))
       partial_mdl = create_model("TestFnNamedArgsSingleStringListPartialReturnType", inner=(Optional[str], ...))
 
-
       return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1730,7 +1752,6 @@ class BamlStreamClient:
 
       mdl = create_model("TestImageInputReturnType", inner=(str, ...))
       partial_mdl = create_model("TestImageInputPartialReturnType", inner=(Optional[str], ...))
-
 
       return baml_py.BamlStream[Optional[str], str](
         raw,
@@ -1756,7 +1777,6 @@ class BamlStreamClient:
       mdl = create_model("TestMulticlassNamedArgsReturnType", inner=(str, ...))
       partial_mdl = create_model("TestMulticlassNamedArgsPartialReturnType", inner=(Optional[str], ...))
 
-
       return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
@@ -1780,6 +1800,49 @@ class BamlStreamClient:
       mdl = create_model("TestOllamaReturnType", inner=(str, ...))
       partial_mdl = create_model("TestOllamaPartialReturnType", inner=(Optional[str], ...))
 
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestRetryConstant(
+        self,
+        
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestRetryConstant",
+        {
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+
+      mdl = create_model("TestRetryConstantReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestRetryConstantPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestRetryExponential(
+        self,
+        
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      raw = self.__runtime.stream_function(
+        "TestRetryExponential",
+        {
+        },
+        None,
+        self.__ctx_manager.get(),
+      )
+
+      mdl = create_model("TestRetryExponentialReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestRetryExponentialPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlStream[Optional[str], str](
         raw,
@@ -1803,7 +1866,6 @@ class BamlStreamClient:
 
       mdl = create_model("UnionTest_FunctionReturnType", inner=(types.UnionTest_ReturnType, ...))
       partial_mdl = create_model("UnionTest_FunctionPartialReturnType", inner=(partial_types.UnionTest_ReturnType, ...))
-
 
       return baml_py.BamlStream[partial_types.UnionTest_ReturnType, types.UnionTest_ReturnType](
         raw,

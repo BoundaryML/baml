@@ -10,6 +10,7 @@ use baml_runtime::{
 use baml_types::{BamlMap, BamlValue};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use wasm_bindgen::prelude::*;
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -17,7 +18,7 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
 pub fn on_wasm_init() {
-    match console_log::init_with_level(log::Level::Debug) {
+    match console_log::init_with_level(log::Level::Warn) {
         Ok(_) => web_sys::console::log_1(&"Initialized BAML runtime logging".into()),
         Err(e) => web_sys::console::log_1(
             &format!("Failed to initialize BAML runtime logging: {:?}", e).into(),
@@ -262,6 +263,7 @@ pub struct WasmFunction {
     #[wasm_bindgen(readonly)]
     pub test_snippet: String,
 }
+
 #[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Clone)]
 pub struct WasmSpan {
@@ -634,7 +636,13 @@ impl WasmRuntime {
     ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
         Ok(self
             .runtime
-            .run_generators(input_files)
+            // convert the input_files into HashMap(PathBuf, string)
+            .run_generators(
+                &input_files
+                    .iter()
+                    .map(|(k, v)| (PathBuf::from(k), v.clone()))
+                    .collect(),
+            )
             .map_err(|e| JsError::new(format!("{e:#}").as_str()))?
             .into_iter()
             .map(|g| g.into())
@@ -874,15 +882,16 @@ impl WasmRuntime {
     #[wasm_bindgen]
     pub fn get_function_at_position(
         &self,
-        fileName: &str,
-        cursorIdx: usize,
+        file_name: &str,
+        cursor_idx: usize,
     ) -> Option<WasmFunction> {
         let functions = self.list_functions();
 
         for function in functions {
             let span = function.span.clone(); // Clone the span
-            if span.file_path == fileName
-                && ((span.start + 1)..=(span.end + 1)).contains(&cursorIdx)
+
+            if span.file_path == file_name
+                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
             {
                 return Some(function);
             }
@@ -904,7 +913,7 @@ impl WasmFunction {
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
         let ctx = rt
             .runtime
-            .create_ctx_manager()
+            .create_ctx_manager(BamlValue::String("wasm".to_string()))
             .create_ctx_with_default(missing_env_vars.iter());
 
         rt.runtime
@@ -935,7 +944,7 @@ impl WasmFunction {
             cb.call1(&this, &res).unwrap();
         });
 
-        let ctx = rt.create_ctx_manager();
+        let ctx = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
         let (test_response, span) = rt
             .run_test(&function_name, &test_name, &ctx, Some(cb))
             .await;

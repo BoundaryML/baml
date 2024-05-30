@@ -12,7 +12,7 @@ use self::typescript_language_features::{ToTypescript, TypescriptLanguageFeature
 use crate::dir_writer::FileCollector;
 
 #[derive(askama::Template)]
-#[template(path = "client.ts.j2", escape = "none")]
+#[template(path = "client.js.j2", escape = "none")]
 struct TypescriptClient {
     funcs: Vec<TypescriptFunction>,
     types: Vec<String>,
@@ -21,7 +21,7 @@ struct TypescriptFunction {
     name: String,
     partial_return_type: String,
     return_type: String,
-    args: Vec<(String, String)>,
+    args: Vec<(String, bool, String)>,
 }
 
 #[derive(askama::Template)]
@@ -80,7 +80,9 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
                                 either::Either::Left(_args) => anyhow::bail!("Typescript codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
                                 either::Either::Right(args) => args
                                     .iter()
-                                    .map(|(name, r#type)| (name.to_string(), r#type.to_type_ref()))
+                                    .map(|(name, r#type)| (name.to_string(),
+                                        r#type.is_optional(),
+                                     r#type.to_type_ref()))
                                     .collect(),
                             },
                         })
@@ -109,16 +111,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
 
     fn try_from((_ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
         Ok(InlinedBaml {
-            file_map: args
-                .input_file_map
-                .iter()
-                .map(|(k, v)| {
-                    (
-                        k.clone(),
-                        serde_json::to_string(v).expect("Failed to serialize file map"),
-                    )
-                })
-                .collect(),
+            file_map: args.file_map()?,
         })
     }
 }

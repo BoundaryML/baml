@@ -8,11 +8,12 @@ import * as vscode from 'vscode'
 import type { LanguageClientOptions } from 'vscode-languageclient'
 import { type LanguageClient, type ServerOptions, TransportKind } from 'vscode-languageclient/node'
 import { z } from 'zod'
-import pythonToBamlCodeLens from '../../PythonToBamlCodeLensProvider'
+import pythonToBamlCodeLens from '../../LanguageToBamlCodeLensProvider'
 import { WebPanelView } from '../../panels/WebPanelView'
 import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
 import type { BamlVSCodePlugin } from '../types'
+import { URI } from 'vscode-uri'
 
 const packageJson = require('../../../package.json') // eslint-disable-line
 
@@ -44,6 +45,15 @@ export const generateTestRequest = async (test_request: TestRequest): Promise<st
 
 export const requestDiagnostics = async () => {
   await client?.sendRequest('requestDiagnostics')
+}
+
+export const getBAMLFunctions = async (): Promise<
+  {
+    name: string
+    span: { file_path: string; start: number; end: number }
+  }[]
+> => {
+  return await client.sendRequest('getBAMLFunctions')
 }
 
 const LatestVersions = z.object({
@@ -286,7 +296,6 @@ const activateClient = (
     client.onRequest('set_database', ({ rootPath, db }: { rootPath: string; db: ParserDatabase }) => {
       try {
         BamlDB.set(rootPath, db)
-        pythonToBamlCodeLens.setDB(rootPath, db)
         console.log('set_database')
         WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
       } catch (e) {
@@ -373,7 +382,7 @@ const plugin: BamlVSCodePlugin = {
 
     // Options to control the language client
     const clientOptions: LanguageClientOptions = {
-      // Register the server for baml docs
+      // Register the server for baml docs and python
       documentSelector: [
         { scheme: 'file', language: 'baml' },
         {
@@ -381,9 +390,7 @@ const plugin: BamlVSCodePlugin = {
           pattern: '**/baml_src/**',
         },
       ],
-      synchronize: {
-        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json}'),
-      },
+      synchronize: {},
     }
 
     context.subscriptions.push(
@@ -414,32 +421,28 @@ const plugin: BamlVSCodePlugin = {
         },
       ),
 
-      commands.registerCommand('baml.jumpToDefinition', async (args: { sourceFile?: string; name?: string }) => {
-        const { sourceFile, name } = args
-        if (!sourceFile || !name) {
-          return
-        }
-
-        const response = await client.sendRequest('getDefinition', { sourceFile, name })
-        if (response) {
-          const { targetUri, targetRange, targetSelectionRange } = response as {
-            targetUri: string
-            targetRange: {
-              start: { line: number; column: number }
-              end: { line: number; column: number }
-            }
-            targetSelectionRange: {
-              start: { line: number; column: number }
-              end: { line: number; column: number }
-            }
+      commands.registerCommand(
+        'baml.jumpToDefinition',
+        async (args: { file_path: string; start: number; end: number }) => {
+          if (!args.file_path) {
+            vscode.window.showErrorMessage('File path is missing.')
+            return
           }
-          const uri = Uri.parse(targetUri)
-          const doc = await workspace.openTextDocument(uri)
-          // go to line
-          const selection = new vscode.Selection(targetSelectionRange.start.line, 0, targetSelectionRange.end.line, 0)
-          await window.showTextDocument(doc, { selection, viewColumn: ViewColumn.Beside })
-        }
-      }),
+
+          try {
+            const uri = vscode.Uri.file(args.file_path)
+            const doc = await vscode.workspace.openTextDocument(uri)
+
+            const start = doc.positionAt(args.start)
+            const end = doc.positionAt(args.end)
+            const range = new vscode.Range(start, end)
+
+            await vscode.window.showTextDocument(doc, { selection: range, viewColumn: vscode.ViewColumn.Beside })
+          } catch (error) {
+            vscode.window.showErrorMessage(`Error navigating to function definition: ${error}`)
+          }
+        },
+      ),
     )
 
     activateClient(context, serverOptions, clientOptions)

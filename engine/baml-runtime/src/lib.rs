@@ -22,6 +22,7 @@ mod types;
 
 use std::collections::HashMap;
 use std::env;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -109,8 +110,14 @@ impl BamlRuntime {
         cli::RuntimeCli::parse_from(argv.into_iter()).run(caller_type)
     }
 
-    pub fn create_ctx_manager(&self) -> RuntimeContextManager {
-        RuntimeContextManager::new_from_env_vars(self.env_vars.clone())
+    pub fn create_ctx_manager(&self, language: BamlValue) -> RuntimeContextManager {
+        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone());
+        let tags: HashMap<String, BamlValue> = [("baml.language", language)]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect();
+        ctx.upsert_tags(tags);
+        ctx
     }
 }
 
@@ -205,7 +212,7 @@ impl BamlRuntime {
 
     pub fn run_generators(
         &self,
-        input_files: &HashMap<String, String>,
+        input_files: &IndexMap<PathBuf, String>,
     ) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
         use internal_baml_codegen::GenerateClient;
 
@@ -216,16 +223,16 @@ impl BamlRuntime {
             .generators
             .iter()
             .map(|(generator, _)| {
-                (
+                Ok((
                     generator.output_type.clone(),
                     internal_baml_codegen::GeneratorArgs::new(
                         generator.output_dir(),
                         generator.baml_src.clone(),
-                        &input_files,
-                    ),
-                )
+                        input_files.iter(),
+                    )?,
+                ))
             })
-            .collect();
+            .collect::<Result<_>>()?;
 
         client_types
             .iter()
