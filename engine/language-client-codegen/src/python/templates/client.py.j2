@@ -5,6 +5,7 @@ import baml_py
 from pydantic import BaseModel, ValidationError, create_model
 
 from . import partial_types, types
+from .type_builder import TypeBuilder
 
 OutputType = TypeVar('OutputType')
 
@@ -37,8 +38,9 @@ class BamlClient:
     async def {{ fn.name }}(
         self,
         {% for (name, type) in fn.args -%}
-        {{name}}: {{type}}{% if !loop.last %},{% endif %}
+        {{name}}: {{type}},
         {%- endfor %}
+        __tb__: Optional[TypeBuilder] = None,
     ) -> {{fn.return_type}}:
       raw = await self.__runtime.call_function(
         "{{fn.name}}",
@@ -48,6 +50,7 @@ class BamlClient:
           {%- endfor %}
         },
         self.__ctx_manager.get(),
+        __tb__._tb,
       )
       mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
       return coerce(mdl, raw.parsed())
@@ -65,8 +68,9 @@ class BamlStreamClient:
     def {{ fn.name }}(
         self,
         {% for (name, type) in fn.args -%}
-        {{name}}: {{type}}{% if !loop.last %},{% endif %}
+        {{name}}: {{type}},
         {%- endfor %}
+        __tb__: Optional[TypeBuilder] = None,
     ) -> baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}]:
       raw = self.__runtime.stream_function(
         "{{fn.name}}",
@@ -77,6 +81,7 @@ class BamlStreamClient:
         },
         None,
         self.__ctx_manager.get(),
+        __tb__._tb,
       )
 
       mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
@@ -87,5 +92,6 @@ class BamlStreamClient:
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
         self.__ctx_manager.get(),
+        __tb__._tb,
       )
     {% endfor %}

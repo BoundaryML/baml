@@ -85,6 +85,10 @@ class OrderInfo(BaseModel):
     tracking_number: Optional[str] = None
     estimated_arrival_date: Optional[str] = None
 
+class Person(BaseModel):
+    name: Optional[str] = None
+    hair_color: Optional[str] = None
+
 class RaysData(BaseModel):
     dataType: Optional[types.DataType] = None
     value: Optional[Union["Resume", "Event"]] = None

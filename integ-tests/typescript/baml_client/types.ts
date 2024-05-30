@@ -56,6 +56,12 @@ export enum EnumOutput {
   THREE = "THREE",
 }
 
+export enum Hobby {
+  SPORTS = "SPORTS",
+  MUSIC = "MUSIC",
+  READING = "READING",
+}
+
 export enum NamedArgsSingleEnum {
   ONE = "ONE",
   TWO = "TWO",
@@ -162,6 +168,11 @@ export interface OrderInfo {
   order_status: OrderStatus
   tracking_number?: string | null
   estimated_arrival_date?: string | null
+}
+
+export interface Person {
+  name?: string | null
+  hair_color?: string | null
 }
 
 export interface RaysData {

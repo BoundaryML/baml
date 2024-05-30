@@ -330,7 +330,7 @@ impl OutputFormatContent {
                 if inner.is_optional() {
                     inner_str
                 } else {
-                    format!("{}{}null", &options.or_splitter, inner_str)
+                    format!("{}{}null", inner_str, &options.or_splitter)
                 }
             }
             FieldType::Tuple(_) => {

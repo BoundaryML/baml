@@ -107,7 +107,7 @@ mod internal_tests {
 
         let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()));
         let (res, _) = runtime
-            .call_function("GetOrderInfo".to_string(), &params, &ctx)
+            .call_function("GetOrderInfo".to_string(), &params, &ctx, None)
             .await;
 
         assert!(res.is_ok(), "Result: {:#?}", res.err());

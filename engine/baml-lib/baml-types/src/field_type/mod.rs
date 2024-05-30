@@ -1,3 +1,5 @@
+mod builder;
+
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 pub enum TypeValue {
     String,

@@ -51,6 +51,7 @@ pub(crate) fn generate(
     collector
         .add_template::<generate_types::PythonStreamTypes>("partial_types.py", (ir, generator))?;
     collector.add_template::<generate_types::PythonTypes>("types.py", (ir, generator))?;
+    collector.add_template::<generate_types::TypeBuilder>("type_builder.py", (ir, generator))?;
     collector.add_template::<PythonClient>("client.py", (ir, generator))?;
     collector.add_template::<PythonGlobals>("globals.py", (ir, generator))?;
     collector.add_template::<PythonTracing>("tracing.py", (ir, generator))?;

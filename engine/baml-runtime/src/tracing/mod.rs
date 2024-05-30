@@ -14,8 +14,9 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{
-    internal::llm_client::LLMResponse, tracing::api_wrapper::core_types::Role, FunctionResult,
-    RuntimeContext, RuntimeContextManager, SpanCtx, TestResponse,
+    internal::llm_client::LLMResponse, tracing::api_wrapper::core_types::Role,
+    type_builder::TypeBuilder, FunctionResult, RuntimeContext, RuntimeContextManager, SpanCtx,
+    TestResponse,
 };
 
 use self::api_wrapper::{
@@ -83,11 +84,12 @@ impl BamlTracer {
         &self,
         function_name: &str,
         ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
         params: &BamlMap<String, BamlValue>,
     ) -> (Option<TracingSpan>, RuntimeContext) {
         let span_id = ctx.enter(function_name);
         if !self.enabled {
-            return (None, ctx.create_ctx());
+            return (None, ctx.create_ctx(tb));
         }
         let span = TracingSpan {
             span_id,
@@ -95,7 +97,7 @@ impl BamlTracer {
             start_time: web_time::SystemTime::now(),
         };
 
-        (Some(span), ctx.create_ctx())
+        (Some(span), ctx.create_ctx(tb))
     }
 
     pub(crate) async fn finish_span(

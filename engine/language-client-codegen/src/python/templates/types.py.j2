@@ -1,7 +1,7 @@
 {#- baml_py must be imported to enable access to baml_py.Image -#}
 import baml_py
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional, Union
 
 {# Enums -#}
@@ -10,11 +10,19 @@ class {{enum.name}}(str, Enum):
     {%- for value in enum.values %}
     {{ value }} = "{{ value }}"
     {%- endfor %}
+
+{% if enum.dynamic %}
+dyn{{ enum.name }} = Union[{{enum.name}}, str]
+{% endif %}
 {% endfor %}
 
 {#- Classes -#}
 {% for cls in classes %}
 class {{cls.name}}(BaseModel):
+    {% if cls.dynamic %}
+    model_config = ConfigDict(extra='allow')
+    {%- endif %}
+    
     {%- for (name, type) in cls.fields %}
     {{name}}: {{type}}
     {%- endfor %}

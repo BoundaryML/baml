@@ -5,18 +5,27 @@ use crate::BamlError;
 
 use super::function_results::FunctionResult;
 use super::runtime_ctx_manager::RuntimeContextManager;
+use super::type_builder::TypeBuilder;
+use super::BamlRuntime;
+use baml_runtime::InternalRuntimeInterface;
 
 crate::lang_wrapper!(
     FunctionResultStream,
     baml_runtime::FunctionResultStream, thread_safe,
-    on_event: Option<PyObject>
+    on_event: Option<PyObject>,
+    tb: Option<baml_runtime::type_builder::TypeBuilder>
 );
 
 impl FunctionResultStream {
-    pub(super) fn new(inner: baml_runtime::FunctionResultStream, event: Option<PyObject>) -> Self {
+    pub(super) fn new(
+        inner: baml_runtime::FunctionResultStream,
+        event: Option<PyObject>,
+        tb: Option<baml_runtime::type_builder::TypeBuilder>,
+    ) -> Self {
         Self {
             inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),
             on_event: event,
+            tb,
         }
     }
 }
@@ -55,10 +64,11 @@ impl FunctionResultStream {
         });
 
         let ctx_mng = ctx.inner.clone();
+        let tb = self.tb.as_ref().map(|tb| tb.clone());
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let ctx_mng = ctx_mng;
             let mut locked = inner.lock().await;
-            let (res, _) = locked.run(on_event, &ctx_mng).await;
+            let (res, _) = locked.run(on_event, &ctx_mng, tb.as_ref()).await;
             res.map(FunctionResult::from)
                 .map_err(BamlError::from_anyhow)
         })

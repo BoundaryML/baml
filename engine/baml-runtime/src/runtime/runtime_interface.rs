@@ -16,6 +16,7 @@ use crate::{
     },
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
     tracing::{BamlTracer, TracingSpan},
+    type_builder::TypeBuilder,
     FunctionResult, FunctionResultStream, InternalRuntimeInterface, RuntimeContext,
     RuntimeContextManager, RuntimeInterface, TestResponse,
 };

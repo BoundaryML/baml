@@ -1,8 +1,11 @@
 import pytest
 
+import baml_py
 from baml_client import b
 from baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
 from baml_client.tracing import trace, set_tags, flush
+from baml_client.type_builder import TypeBuilder
+
 
 @pytest.mark.asyncio
 async def test_should_work_for_all_inputs():
@@ -18,8 +21,8 @@ async def test_should_work_for_all_inputs():
             key="key",
             key_two=True,
             key_three=52,
-        ) 
-    ) 
+        )
+    )
     print("got response", res)
     assert "52" in res
 
@@ -91,10 +94,12 @@ async def test_works_with_fallbacks():
     res = await b.TestFallbackClient()
     assert len(res) > 0, "Expected non-empty result but got empty."
 
+
 @pytest.mark.asyncio
 async def test_claude():
     res = await b.PromptTestClaude(input="Mt Rainier is tall")
     assert len(res) > 0, "Expected non-empty result but got empty."
+
 
 @pytest.mark.asyncio
 async def test_streaming():
@@ -107,13 +112,22 @@ async def test_streaming():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(prev_msg), "Expected messages to be continuous, but prev was %r and next was %r" % (prev_msg, msg)
+        assert msg.startswith(
+            prev_msg
+        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
+            prev_msg,
+            msg,
+        )
     assert msgs[-1] == final, "Expected last stream message to match final response."
+
 
 @pytest.mark.asyncio
 async def test_streaming_uniterated():
-    final = await b.stream.PromptTestOpenAI(input="The color blue makes me sad").get_final_response()
+    final = await b.stream.PromptTestOpenAI(
+        input="The color blue makes me sad"
+    ).get_final_response()
     assert len(final) > 0, "Expected non-empty final but got empty."
+
 
 @pytest.mark.asyncio
 async def test_streaming_claude():
@@ -126,18 +140,25 @@ async def test_streaming_claude():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(prev_msg), "Expected messages to be continuous, but prev was %r and next was %r" % (prev_msg, msg)
-    print("msgs:") 
+        assert msg.startswith(
+            prev_msg
+        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
+            prev_msg,
+            msg,
+        )
+    print("msgs:")
     print(msgs[-1])
     print("final:")
     print(final)
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
+
 @pytest.mark.asyncio
 async def test_tracing_async():
     res = await parent_async("first-arg-value")
-    
+
     res2 = await parent_async2("second-arg-value")
+
 
 def test_tracing_sync():
     res = parent_sync("first-arg-value")
@@ -152,25 +173,57 @@ async def parent_async(myStr: str):
     sync_dummy_func(myStr)
     return "hello world parentasync"
 
+
 @trace
 async def parent_async2(myStr: str):
     return "hello world parentasync2"
+
 
 @trace
 def parent_sync(myStr: str):
     sync_dummy_func(myStr)
     return "hello world parentsync"
 
+
 @trace
 async def async_dummy_func(myArgggg: str):
     return "asyncDummyFuncOutput"
+
 
 @trace
 def sync_dummy_func(dummyFuncArg: str):
     return "pythonDummyFuncOutput"
 
+
 @pytest.fixture(scope="session", autouse=True)
 def cleanup(request):
     """Cleanup a testing directory once we are finished."""
     flush()
-    
+
+
+@pytest.mark.asyncio
+async def test_dynamic():
+    tb = TypeBuilder()
+    tb.Person.add_property("last_name", tb.string().list())
+    tb.Person.add_property("height", tb.float().optional()).description(
+        "Height in meters"
+    )
+
+    tb.Hobby.add_value("chess")
+    for name, val in tb.Hobby.list_values():
+        val.alias(name.lower())
+
+    tb.Person.add_property("hobbies", tb.Hobby.field().list()).description(
+        "Some suggested hobbies they might be good at"
+    )
+
+    # no_tb_res = await b.ExtractPeople("My name is Harrison. My hair is black and I'm 6 feet tall.")
+    tb_res = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
+        __tb__=tb,
+    )
+
+    assert len(tb_res) > 0, "Expected non-empty result but got empty."
+
+    for r in tb_res:
+        print(r.model_dump())

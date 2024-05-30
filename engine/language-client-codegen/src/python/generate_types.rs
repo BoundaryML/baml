@@ -1,5 +1,4 @@
 use anyhow::Result;
-use log::log;
 
 use super::python_language_features::ToPython;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType};
@@ -11,15 +10,24 @@ pub(crate) struct PythonTypes<'ir> {
     classes: Vec<PythonClass<'ir>>,
 }
 
+#[derive(askama::Template)]
+#[template(path = "type_builder.py.j2", escape = "none")]
+pub(crate) struct TypeBuilder<'ir> {
+    enums: Vec<PythonEnum<'ir>>,
+    classes: Vec<PythonClass<'ir>>,
+}
+
 struct PythonEnum<'ir> {
-    pub name: &'ir str,
-    pub values: Vec<&'ir str>,
+    name: &'ir str,
+    values: Vec<&'ir str>,
+    dynamic: bool,
 }
 
 struct PythonClass<'ir> {
     name: &'ir str,
     // the name, and the type of the field
     fields: Vec<(&'ir str, String)>,
+    dynamic: bool,
 }
 
 #[derive(askama::Template)]
@@ -48,10 +56,24 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonT
     }
 }
 
+impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for TypeBuilder<'ir> {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        (ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs),
+    ) -> Result<TypeBuilder<'ir>> {
+        Ok(TypeBuilder {
+            enums: ir.walk_enums().map(PythonEnum::from).collect::<Vec<_>>(),
+            classes: ir.walk_classes().map(PythonClass::from).collect::<Vec<_>>(),
+        })
+    }
+}
+
 impl<'ir> From<EnumWalker<'ir>> for PythonEnum<'ir> {
     fn from(e: EnumWalker<'ir>) -> PythonEnum<'ir> {
         PythonEnum {
             name: e.name(),
+            dynamic: e.item.attributes.get("dynamic_type").is_some(),
             values: e
                 .item
                 .elem
@@ -67,6 +89,7 @@ impl<'ir> From<ClassWalker<'ir>> for PythonClass<'ir> {
     fn from(c: ClassWalker<'ir>) -> Self {
         PythonClass {
             name: c.name(),
+            dynamic: c.item.attributes.get("dynamic_type").is_some(),
             fields: c
                 .item
                 .elem

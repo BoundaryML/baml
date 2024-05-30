@@ -3,6 +3,7 @@ use anyhow::Result;
 use futures::{stream::StreamExt, Stream};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_core::ir::IRHelper;
+use internal_baml_jinja::Type;
 
 use std::sync::Arc;
 
@@ -18,6 +19,7 @@ use crate::{
         prompt_renderer::PromptRenderer,
     },
     tracing::BamlTracer,
+    type_builder::TypeBuilder,
     FunctionResult, RuntimeContext, RuntimeContextManager,
 };
 
@@ -65,6 +67,7 @@ impl FunctionResultStream {
         &mut self,
         on_event: Option<F>,
         ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>)
     where
         F: Fn(FunctionResult) -> (),
@@ -77,7 +80,7 @@ impl FunctionResultStream {
 
         let (span, rctx) = self
             .tracer
-            .start_span(&self.function_name, ctx, &local_params);
+            .start_span(&self.function_name, ctx, tb, &local_params);
 
         let (history, _) = orchestrate_stream(
             local_orchestrator,
