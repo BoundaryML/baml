@@ -1,35 +1,29 @@
 # Baml Language VS Code Extension
 
-This VS Code extension provides support for the Baml language used to define function-based LLM pipelines.
+This VS Code extension provides support for the Baml language used to define LLM functions, test them in the integrated LLM Playground and build agentic workflows.
 
 ### General features
 
-1. **Auto-build on Save**: Anytime a `.baml` file is saved, the build script is automatically triggered.
-2. **Syntax Highlighting**: Provides enhanced readability and coding experience by highlighting the Baml language syntax for any file with the `.baml` extension.
+1. **Syntax Highlighting**: Provides enhanced readability and coding experience by highlighting the Baml language syntax for any file with the `.baml` extension.
+2. **Dynamic playground**: Run and test your prompts in real-time.
+3. **Build typed clients in several languages**: Command +S a baml file to build a baml client to call your functions in Python or TS.
 
-## Prerequisites
-
-### MacOS
-
-First, install the **baml CLI**:
-
-1. `brew tap boundaryml/baml`
-2. `brew install baml`
-
-To update the CLI
-
-1. `brew update`
-2. `brew upgrade baml`
-
-See [the documentation](https://docs.boundaryml.com/mdx/installation) for full instructions for all platforms
 
 ## Usage
 
-Create a baml_src directory with a main.baml file and you're all set!
+1. **Install BAML dependency**:
 
-**Auto-build on Save**:
-When you save your `.baml` files (`Ctrl+S`), the build script (`baml build`) will automatically run.
+* python: `pip install baml-py`
+* typescript: `npm install @boundaryml/baml`
 
----
+2. **Create a baml_src directory with a main.baml file and you're all set!**
+
+3. **Add your own api keys in the playground to test your functions**
+
+
+4. See more examples at **[promptfiddle.com](promptfiddle.com)
+
+## Documentation
+See our [documentation](https://docs.boundaryml.com)
 
 For any issues, feature requests, or contributions, please reach out at contact@boundaryml.com
