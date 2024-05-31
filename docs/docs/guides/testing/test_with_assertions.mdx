@@ -2,25 +2,21 @@
 title: "Evaluate results with assertions or using LLM Evals"
 ---
 
-<Warning>
-    TypeScript support for testing is still in closed alpha - please contact us if you would like to use it!
-</Warning>
 
+
+# Python guide
 To add assertions to your tests, or add more complex testing scenarios, you can use pytest to test your functions, since Playground BAML tests don't currently support assertions.
 
-To view each pytest run in **Boundary Studio**, (to enable comment/label on test results, scoring, and keeping track over time) -- use the **baml_test** decorator from the `baml_client` import.
-
 ### Example
-See [the full example, including the .baml files for GetOrderInfo](https://github.com/BoundaryML/baml-examples/tree/main/extraction-guide)
-
 ```python test_file.py
 from baml_client import baml as b
-from baml_client.baml_types import Email
+from baml_client.types import Email
 from baml_client.testing import baml_test
+import pytest
 
 # Run `poetry run pytest -m baml_test` in this directory.
 # Setup Boundary Studio to see test details!
-@baml_test
+@pytest.mark.asyncio
 async def test_get_order_info():
   order_info = await b.GetOrderInfo(Email(
       subject="Order #1234",
@@ -34,9 +30,7 @@ async def test_get_order_info():
 </Warning>
 
 
-Run `pytest -m baml_test -k 'order_info'` to run this test. To show have pytest show print statements add the `-s` flag. 
-
-The -m flag indicates it should only run the tests decorated with "baml_test"
+Run `pytest -k 'order_info'` to run this test. To show have pytest show print statements add the `-s` flag. 
 
 <Note>
   Make sure you are running these commands from your python virtual environment
@@ -45,33 +39,6 @@ The -m flag indicates it should only run the tests decorated with "baml_test"
 
 For more advanced testing scenarios, helpful commands, and gotchas, check out the [Advanced Guide](./advanced_testing_guide)
 
-
-
-### View test results in Boundary Studio
-Add @baml_test decorator from `baml_client.testing` to your test functions to view test results in Boundary Studio.
-<img src="/images/v3/test_table.png" />
-
-### Run a specific impl
-When you call a function that has multiple impls, the client will automatically call your defined `default_impl`.
-
-You can always test a specific impl by calling it explicitly in the test function using `b.GetOrderInfo.get_impl("version1").run(...)`
-
-```python
-from baml_client import baml as b
-from baml_client.baml_types import Email
-from baml_client.testing import baml_test
-
-@baml_test
-async def test_get_order_info():
-  order_info = await b.GetOrderInfo.get_impl("version1").run(Email(
-      subject="Order #1234",
-      body="Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99"
-  ))
-
-  assert order_info.cost == 999.99
-```
-
-BAML includes some helper pytest fixtures that will automatically generate tests for each impl you define. See the [advanced pytest guide](./advanced_testing_guide)
 
 
 ### Using an LLM eval
@@ -111,7 +78,7 @@ impl<llm, ValidateProfessionalism> v1 {
 
 ```python
 from baml_client import baml as b
-from baml_client.baml_types import Email, ProfessionalismRating
+from baml_client.types import Email, ProfessionalismRating
 from baml_client.testing import baml_test
 
 @baml_test

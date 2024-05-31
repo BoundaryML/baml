@@ -91,6 +91,12 @@
       "group": "Types",
       "pages": ["docs/syntax/type", "docs/syntax/enum", "docs/syntax/class"]
     },
+    {
+      "group": "prompt",
+      "pages": [
+        "docs/syntax/prompt_engineering/overview"
+      ]
+    },
 
     {
       "group": "client",
@@ -100,13 +106,7 @@
         "docs/syntax/client/redundancy"
       ]
     },
-    {
-      "group": "prompt",
-      "pages": [
-        "docs/syntax/prompt_engineering/overview",
-        "docs/syntax/prompt_engineering/type-deserializer"
-      ]
-    },
+   
     {
       "group": "How-to Guides",
       "pages": [
@@ -120,8 +120,7 @@
           "group": "Testing",
           "pages": [
             "docs/guides/testing/unit_test",
-            "docs/guides/testing/test_with_assertions",
-            "docs/guides/testing/advanced_testing_guide"
+            "docs/guides/testing/test_with_assertions"
           ],
           "icon": "flask-vial"
         },

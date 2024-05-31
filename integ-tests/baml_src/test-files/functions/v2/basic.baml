@@ -3,7 +3,7 @@
 function ExtractResume2(resume: string) -> Resume {
     client Resilient_ComplexSyntax
     prompt #"
-        {{ _.chat('system') }}
+        {{ _.role('system') }}
 
         Extract the following information from the resume:
 

@@ -78,7 +78,7 @@ function SummarizeCustomerDetails {
 ```python Python Usage
 from baml_client import baml as b
 # Import the CustomerInfo pydantic model we generated
-from baml_client.baml_types import CustomerInfo
+from baml_client.types import CustomerInfo
 
 response = await b.SummarizeCustomerDetails(
     CustomerInfo(name="John", age=30, address="123 Main St"))

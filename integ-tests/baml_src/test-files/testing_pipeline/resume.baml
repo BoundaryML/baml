@@ -16,10 +16,10 @@ class Education {
 }
 
 template_string AddRole(foo: string) #"
-    {{ _.chat('system')}}
+    {{ _.role('system')}}
     You are a {{ foo }}. be nice
 
-    {{ _.chat('user') }}
+    {{ _.role('user') }}
 "#
 
 function ExtractResume(resume: string, img: image) -> Resume {
