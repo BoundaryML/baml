@@ -166,16 +166,26 @@ impl TypeCoercer for Class {
 
             log::info!("---");
             for (k, v) in optional_values.iter() {
-                log::info!("  Optional field: {} = {:?}", k, v.is_none());
+                log::info!(
+                    "  Optional field: {} = ({} + {})",
+                    k,
+                    v.is_none(),
+                    v.as_ref().map(|v| v.is_ok()).unwrap_or(false)
+                );
             }
             for (k, v) in required_values.iter() {
-                log::info!("  Required field: {} = {:?}", k, v.is_none());
+                log::info!(
+                    "  Required field: {} = ({} + {})",
+                    k,
+                    v.is_none(),
+                    v.as_ref().map(|v| v.is_ok()).unwrap_or(false)
+                );
             }
             log::info!("----");
 
             let missing_required_fields = required_values
                 .iter()
-                .filter(|(_, v)| v.is_none())
+                .filter(|(_, v)| !v.as_ref().map(|v| v.is_ok()).unwrap_or(false))
                 .map(|(k, _)| k.clone())
                 .collect::<Vec<_>>();
 

@@ -7,6 +7,7 @@ pub mod macros;
 mod test_class;
 mod test_enum;
 mod test_lists;
+mod test_unions;
 
 use std::{
     collections::{HashMap, HashSet},
