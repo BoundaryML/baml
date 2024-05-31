@@ -41,11 +41,8 @@ class CtxManager:
         self.ctx.set(cln)
         return BamlSpan.new(self.rt, name, args, cln)
 
-    async def end_trace(self, span: BamlSpan, response: typing.Any) -> None:
-        await span.finish(response, self.ctx.get())
-
-    def end_trace_sync(self, span: BamlSpan, response: typing.Any) -> None:
-        span.finish_sync(response, self.ctx.get())
+    def end_trace(self, span: BamlSpan, response: typing.Any) -> None:
+        span.finish(response, self.ctx.get())
 
     def flush(self) -> None:
         self.rt.flush()
@@ -69,10 +66,10 @@ class CtxManager:
                 span = self.start_trace_async(func_name, params)
                 try:
                     response = await func(*args, **kwargs)
-                    await self.end_trace(span, response)
+                    self.end_trace(span, response)
                     return response
                 except Exception as e:
-                    await self.end_trace(span, e)
+                    self.end_trace(span, e)
                     raise e
 
             return typing.cast(F, async_wrapper)
@@ -89,10 +86,10 @@ class CtxManager:
                 span = self.start_trace_sync(func_name, params)
                 try:
                     response = func(*args, **kwargs)
-                    self.end_trace_sync(span, response)
+                    self.end_trace(span, response)
                     return response
                 except Exception as e:
-                    self.end_trace_sync(span, e)
+                    self.end_trace(span, e)
                     raise e
 
             return typing.cast(F, wrapper)

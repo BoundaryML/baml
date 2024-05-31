@@ -42,22 +42,13 @@ export class CtxManager {
     return BamlSpan.new(this.rt, name, args, clone)
   }
 
-  async endTrace(span: BamlSpan, response: any): Promise<void> {
+  endTrace(span: BamlSpan, response: any): void {
     const manager = this.ctx.getStore()
     if (!manager) {
       console.error('Context lost before span could be finished\n')
       return
     }
-    await span.finish(response, manager)
-  }
-
-  endTraceSync(span: BamlSpan, response: any): void {
-    const manager = this.ctx.getStore()
-    if (!manager) {
-      console.error('Context lost before span could be finished\n')
-      return
-    }
-    span.finishSync(response, manager)
+    span.finish(response, manager)
   }
 
   flush(): void {
@@ -77,10 +68,10 @@ export class CtxManager {
 
       try {
         const response = func(...args)
-        this.endTraceSync(span, response)
+        this.endTrace(span, response)
         return response
       } catch (e) {
-        this.endTraceSync(span, e)
+        this.endTrace(span, e)
         throw e
       }
     })
@@ -99,10 +90,10 @@ export class CtxManager {
       const span = this.startTraceAsync(funcName, params)
       try {
         const response = await func(...args)
-        await this.endTrace(span, response)
+        this.endTrace(span, response)
         return response
       } catch (e) {
-        await this.endTrace(span, e)
+        this.endTrace(span, e)
         throw e
       }
     })

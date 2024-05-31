@@ -7,6 +7,7 @@ from baml_client.tracing import trace, set_tags, flush
 from baml_client.type_builder import TypeBuilder
 import datetime
 
+
 class MyCustomClass(NamedArgsSingleClass):
     date: datetime.datetime
 
@@ -53,15 +54,13 @@ async def test_should_work_for_all_inputs():
     res = await b.TestFnNamedArgsSingleInt(3566)
     assert "3566" in res
 
+
 @pytest.mark.asyncio
 async def test_custom_types():
     print("calling with class")
     res = await b.TestFnNamedArgsSingleClass(
         myArg=MyCustomClass(
-            key="key",
-            key_two=True,
-            key_three=52,
-            date=datetime.datetime.now()
+            key="key", key_two=True, key_three=52, date=datetime.datetime.now()
         )
     )
 
@@ -94,9 +93,12 @@ async def test_should_work_for_all_outputs():
 @pytest.mark.asyncio
 async def test_should_work_with_image():
     res = await b.TestImageInput(
-        img=baml_py.Image.from_url('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png')
+        img=baml_py.Image.from_url(
+            "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+        )
     )
     assert "green" in res.lower()
+
 
 @pytest.mark.asyncio
 async def test_works_with_retries2():
@@ -173,13 +175,15 @@ async def test_streaming_claude():
 
 @pytest.mark.asyncio
 async def test_tracing_async():
+    # sync_dummy_func("second-dummycall-arg")
     res = await parent_async("first-arg-value")
-
+    # sync_dummy_func("second-dummycall-arg")
     res2 = await parent_async2("second-arg-value")
+    # sync_dummy_func("second-dummycall-arg")
 
 
 def test_tracing_sync():
-    res = parent_sync("first-arg-value")
+    # res = parent_sync("first-arg-value")
     res2 = sync_dummy_func("second-dummycall-arg")
 
 

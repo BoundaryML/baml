@@ -98,6 +98,12 @@ impl FunctionResultStream {
 
         let mut target_id = None;
         if let Some(span) = span {
+            #[cfg(not(target_arch = "wasm32"))]
+            match self.tracer.finish_baml_span(span, ctx, &res) {
+                Ok(id) => target_id = id,
+                Err(e) => log::debug!("Error during logging: {}", e),
+            }
+            #[cfg(target_arch = "wasm32")]
             match self.tracer.finish_baml_span(span, ctx, &res).await {
                 Ok(id) => target_id = id,
                 Err(e) => log::debug!("Error during logging: {}", e),
