@@ -3,10 +3,16 @@ import * as dotenv from 'dotenv';
 import { BamlTestRunner } from "./baml_test_runner";
 import { DeserializerException, DeserializerError } from "./deserializer/diagnostics";
 import { LLMException } from "./client_manager/errors";
+import { loadEnvConfig } from "@next/env";
+import dotenvFlow from 'dotenv-flow';
+
 const setTags = FireBamlEvent.tags;
 
 const loadEnvVars = () => {
-  // dotenv.config();
+  dotenvFlow.config();
+  // NextJS setup
+  const projectDir = process.cwd();
+  loadEnvConfig(projectDir);
 }
 
 

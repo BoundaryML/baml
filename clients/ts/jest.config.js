@@ -10,4 +10,7 @@ module.exports = {
   moduleFileExtensions: ["js", "jsx", "ts", "tsx"],
   moduleDirectories: ["node_modules", "src"],
   silent: false,
+  transform: {
+    "^.+\\.(t|j)sx?$": "@swc/jest",
+  },
 };
