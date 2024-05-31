@@ -290,7 +290,10 @@ const activateClient = (
     })
 
     client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
-      WebPanelView.currentPanel?.postMessage('add_project', params)
+      WebPanelView.currentPanel?.postMessage('add_project', {
+        ...params,
+        root_path: URI.file(params.root_path).toString(),
+      })
     })
 
     client.onRequest('set_database', ({ rootPath, db }: { rootPath: string; db: ParserDatabase }) => {
