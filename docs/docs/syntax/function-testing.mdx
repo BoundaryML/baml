@@ -154,7 +154,7 @@ from baml_client.testing import baml_test
 # Import your baml-generated LLM functions
 from baml_client import baml
 # Import any custom types defined in .baml files
-from baml_client.baml_types import Sentiment
+from baml_client.types import Sentiment
 
 @baml_test
 @pytest.mark.parametrize(
@@ -178,7 +178,7 @@ The parametrize decorator also allows you to specify a custom name for each test
 
 ```python
 from baml_client import baml as b
-from baml_client.baml_types import Sentiment, IClassifySentiment
+from baml_client.types import Sentiment, IClassifySentiment
 
 test_cases = [
     {"input": "I am ecstatic", "expected_output": Sentiment.POSITIVE, "id": "ecstatic-test"},
@@ -207,7 +207,7 @@ from baml_client.testing import baml_test
 # Import your baml-generated LLM functions
 from baml_client import baml
 # Import any custom types defined in .baml files
-from baml_client.baml_types import Sentiment
+from baml_client.types import Sentiment
 
 @baml_test
 @pytest.mark.asyncio
@@ -245,7 +245,7 @@ Alternatively you can just write a test function for each input type.
 ```python
 from baml_client.testing import baml_test
 from baml_client import baml
-from baml_client.baml_types import Sentiment
+from baml_client.types import Sentiment
 
 @baml_test
 @pytest.mark.asyncio

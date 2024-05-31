@@ -4,7 +4,7 @@ title: Installation
 
 <Steps>
   <Step title="Install BAML VSCode Extension">
-    [https://marketplace.visualstudio.com/items?itemName=boundary.BAML](https://marketplace.visualstudio.com/items?itemName=boundary.BAML)
+    [https://marketplace.visualstudio.com/items?itemName=boundary.BAML](https://marketplace.visualstudio.com/items?itemName=boundary.Baml-extension)
 
     If you are using python, [enable typechecking in VSCode's](https://code.visualstudio.com/docs/python/settings-reference#_python-language-server-settings) `settings.json`:
     ```
@@ -46,17 +46,8 @@ title: Installation
   </Step>
 </Steps>
 
-## Ensure BAML CLI can generate your Python / TS client
+## Ensure BAML extension can generate your Python / TS client
 
-    <Tabs>
-    <Tab title="VSCode">
-    Save a `.baml` file using VSCode, and you should see a successful generation message pop up!
-    </Tab>
-    <Tab title="terminal">
-    ```bash
-    # Run from any dir/subdir in your project
-    # Requires you have a baml_src directory with a main.baml file
-    > baml build
-    ```
-    </Tab>
-    </Tabs>
+Save a `.baml` file using VSCode, and you should see a successful generation message pop up!
+
+You can also run `baml-cli generate --from path-to-baml-src` to generate the client code manually.

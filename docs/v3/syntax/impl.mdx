@@ -101,7 +101,7 @@ client<llm> GPT35Client {
 
 ```python Python
 from baml_client import baml as b
-from baml_client.baml_types import Sentiment
+from baml_client.types import Sentiment
 
 async def pipeline(arg: str) -> str:
     sentiment = await b.GetSentiment(arg)

@@ -55,10 +55,7 @@ Block strings are automatically dedented and stripped of the first and last newl
 
 ### Code Strings
 
-Sometimes, you may want to inject some code snippets in python or some other language properties, like [@get](/v3/syntax/class#get). You can get syntax highlighting for these by using **code strings**. You do this by denoting the language before the block string (no spaces).
-
-Like all block strings, it must be surrounded by `#"` and `"#`, and they are trimmed and dedented.
-
+In case you need to add some code documentation or whatnot in a baml file, you can type this in:
 ```llvm
 python#"
     print("Hello World")
@@ -66,3 +63,4 @@ python#"
         return 1
 "#
 ```
+these are not functional code blocks they are can just be used for documentation purposes.

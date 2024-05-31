@@ -1,7 +1,7 @@
 function DescribeImage(img: image) -> string {
   client GPT4Turbo
   prompt #"
-    {{ _.chat(role="user") }}
+    {{ _.role("user") }}
 
 
     Describe the image below in 5 words:
@@ -24,7 +24,7 @@ class ClassWithImage {
 function DescribeImage2(classWithImage: ClassWithImage, img2: image) -> string {
   client GPT4Turbo
   prompt #"
-    {{ _.chat(role="user") }}
+    {{ _.role("user") }}
     You should return 2 answers that answer the following commands.
 
     1. Describe this in 5 words:
@@ -52,7 +52,7 @@ function DescribeImage3(classWithImage: ClassWithImage, img2: image) -> string {
 function DescribeImage4(classWithImage: ClassWithImage, img2: image) -> string {
   client GPT4Turbo
   prompt #"
-    {{ _.chat(role="system")}}
+    {{ _.role("system")}}
 
     Describe this in 5 words:
     {{ classWithImage.myImage }}

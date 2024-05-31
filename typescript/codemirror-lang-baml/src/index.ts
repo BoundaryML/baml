@@ -109,9 +109,10 @@ const exampleCompletion = BAMLLanguage.data.of({
       { label: 'function' },
     ),
     snippetCompletion(
-      'prompt #"\n  {{ _.chat("user") }}\n  INPUT:\n  ---\n  {{ your-variable }}\n  ---\n  Response:\n"#',
+      'prompt #"\n  {{ _.role("user") }}\n  INPUT:\n  ---\n  {{ your-variable }}\n  ---\n  Response:\n"#',
       { label: 'prompt #"' },
     ),
+    snippetCompletion('_.role("${role}")', { label: '_.role"' }),
     snippetCompletion('#"${mystring}"#', { label: '#"' }),
     snippetCompletion('client<llm> GPT4 {\n  provider baml-openai-chat\n  options {\n    model gpt4  \n}}', {
       label: 'client<llm> GPT4',

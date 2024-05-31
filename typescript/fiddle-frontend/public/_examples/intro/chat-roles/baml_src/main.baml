@@ -11,8 +11,8 @@ function ClassifyMessage(input: string) -> Category {
   client GPT4Turbo
 
   prompt #"
-    {# _.chat("system") starts a system message #}
-    {{ _.chat("system") }}
+    {# _.role("system") starts a system message #}
+    {{ _.role("system") }}
 
     Classify the following INPUT into ONE
     of the following categories:
@@ -20,7 +20,7 @@ function ClassifyMessage(input: string) -> Category {
     {{ ctx.output_format }}
 
     {# This starts a user message #}
-    {{ _.chat("user") }}
+    {{ _.role("user") }}
 
     INPUT: {{ input }}
 

@@ -137,7 +137,7 @@ Now that `cost` might be null, we need to handle that:
 
 ```python Python
 from baml_client import baml as b
-from baml_client.baml_types import Email
+from baml_client.types import Email
 import asyncio
 
 async def main():
@@ -161,7 +161,7 @@ if __name__ == "__main__":
 
 ```typescript TypeScript
 import b from '@/baml_client'
-import { Email } from '@/baml_client/baml_types'
+import { Email } from '@/baml_client/types'
 
 const main = async () => {
   const order_info = await b.GetOrderInfo({

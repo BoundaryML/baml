@@ -20,7 +20,7 @@ function ClassifyConversation(messages: Message[]) -> Category[] {
 
 
     {% for m in messages %}
-    {{ _.chat(m.role) }}
+    {{ _.role(m.role) }}
     {{ m.message }}
     {% endfor %}
 

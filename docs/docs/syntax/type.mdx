@@ -65,13 +65,21 @@ temperature of 32 degrees Fahrenheit or cost of $100.00.
   the unit be part of the variable name. For example, `temperature_fahrenheit`
   and `cost_usd` (see [@alias](/docs/syntax/class#alias)).
 
-### ❌ Images
+### ✅  Images
 
-- Not yet supported. Reach out to us on discord if you need this.
+You can use an image like this:
 
-### ❌ Tensors
+```rust
+function DescribeImage(myImg: image) -> string {
+  client GPT4Turbo
+  prompt #"
+    {{ _.role("user")}}
+    Describe the image in four words:
+    {{ myImg }}
+  "#
+}
+```
 
-- Not yet supported. Reach out to us on discord if you need this.
 
 ## Composite/Structured Types
 

@@ -5,10 +5,10 @@ title: "BAML AI functions in 2 minutes"
 
 ### Pre-requisites
 
-Follow the [installation](/v3/home/installation) instructions and run **baml init** in a new project.
+Follow the [installation](/v3/home/installation) instructions.
 
-The starting project structure will look something like this:
-<img src="/images/v3/baml_filetree.png" width={200} />
+{/* The starting project structure will look something like this: */}
+{/* <img src="/images/v3/baml_filetree.png" width={200} /> */}
 
 ## Overview
 
@@ -25,11 +25,18 @@ and agents.
 
 The best way to learn BAML is to run an example in our web playground -- [PromptFiddle.com](https://promptfiddle.com).
 
-But at a high-level, BAML is simple to use -- prompts are built using [Jinja syntax](https://jinja.palletsprojects.com/en/3.1.x/) to make working with strings easier. We extended jinja to add type-support, and static analysis of your template variables, and a realtime side-by-side playground for VSCode.
+But at a high-level, BAML is simple to use -- prompts are built using [Jinja syntax](https://jinja.palletsprojects.com/en/3.1.x/) to make working with strings easier. But we extended jinja to add type-support, static analysis of your template variables, and we have a real-time preview of prompts in the BAML VSCode extension no matter how much logic your prompts use.
 
-We'll write out an example from PromptFiddle here:
+Here's an example from PromptFiddle:
 
 ```rust baml_src/main.baml
+client<llm> GPT4Turbo {
+  provider openai
+  options {
+    model gpt-4-turbo
+    api_key env.OPENAI_API_KEY
+  }
+} 
 // Declare the Resume type we want the AI function to return
 class Resume {
   name string
@@ -71,14 +78,14 @@ All your types become Pydantic models in Python, or type definitions in Typescri
 
 ## 2. Usage in Python or TypeScript
 
-Our VSCode extension automatically generates a **baml_client** in your language of choice.
+Our VSCode extension automatically generates a **baml_client** in the language of choice. (Click the tabs for Python or TypeScript)
 
 <CodeGroup>
 
 ```python Python
 from baml_client import baml as b
 # BAML types get converted to Pydantic models
-from baml_client.baml_types import Resume
+from baml_client.types import Resume
 import asyncio
 
 async def main():
