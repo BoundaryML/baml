@@ -7,9 +7,8 @@ use super::runtime::BamlRuntime;
 use super::runtime_ctx_manager::RuntimeContextManager;
 
 crate::lang_wrapper!(BamlSpan,
-  Option<baml_runtime::tracing::TracingSpan>,
+  Option<Option<baml_runtime::tracing::TracingSpan>>,
   no_from,
-  thread_safe,
   rt: std::sync::Arc<baml_runtime::BamlRuntime>
 );
 
@@ -36,71 +35,32 @@ impl BamlSpan {
             .start_span(&function_name, &args_map, &ctx.inner);
         log::trace!("Starting span: {:#?} for {:?}\n", span, function_name);
         Ok(Self {
-            inner: std::sync::Arc::new(tokio::sync::Mutex::new(span)),
+            inner: span.into(),
             rt: runtime.inner.clone(),
         })
     }
 
     // mthod to finish
     #[napi]
-    pub async fn finish(
-        &self,
+    pub fn finish(
+        &mut self,
         result: serde_json::Value,
         ctx: &RuntimeContextManager,
     ) -> napi::Result<serde_json::Value> {
+        log::info!("Finishing span: {:?}", self.inner);
         let result: BamlValue = serde_json::from_value(result)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
         // log::info!("Finishing span: {:#?}\n", self.inner.lock().await);
 
-        let span = {
-            self.inner.lock().await.take().ok_or_else(|| {
-                napi::Error::new(napi::Status::GenericFailure, "Already used span")
-            })?
-        };
-
-        let result = self
-            .rt
-            .finish_span(span, Some(result), &ctx.inner)
-            .await
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
-            .map(|u| u.map(|id| id.to_string()))?;
-
-        Ok(serde_json::json!(result))
-    }
-
-    #[napi]
-    pub fn finish_sync(
-        &self,
-        result: serde_json::Value,
-        ctx: &RuntimeContextManager,
-    ) -> napi::Result<serde_json::Value> {
-        let result: BamlValue = serde_json::from_value(result)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
-        // log::info!("Finishing span: {:#?}\n", self.inner.lock());
-
-        // Acquire the lock synchronously
-        let mut guard = block_on(self.inner.lock());
-
-        // log::trace!("Finishing span: {:#?}", guard);
-
-        // Take the span safely from the guard
-        let span = guard
+        let span = self
+            .inner
             .take()
             .ok_or_else(|| napi::Error::new(napi::Status::GenericFailure, "Already used span"))?;
 
-        // Finish the span synchronously
-        let future = self.rt.finish_span(span, Some(result), &ctx.inner);
-        let result = block_on(future)
+        self.rt
+            .finish_span(span, Some(result), &ctx.inner)
+            .map(|u| u.map(|id| id.to_string()))
+            .map(|u| serde_json::json!(u))
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
-            .and_then(|u| {
-                u.map(|id| id.to_string()).ok_or_else(|| {
-                    napi::Error::new(
-                        napi::Status::GenericFailure,
-                        "No ID returned from finish_span",
-                    )
-                })
-            })?;
-
-        Ok(serde_json::json!(result))
     }
 }

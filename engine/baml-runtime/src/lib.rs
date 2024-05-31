@@ -22,7 +22,6 @@ pub mod type_builder;
 mod types;
 
 use std::collections::HashMap;
-use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -158,6 +157,12 @@ impl BamlRuntime {
 
         let mut target_id = None;
         if let Some(span) = span {
+            #[cfg(not(target_arch = "wasm32"))]
+            match self.tracer.finish_span(span, ctx, None) {
+                Ok(id) => target_id = id,
+                Err(e) => log::debug!("Error during logging: {}", e),
+            }
+            #[cfg(target_arch = "wasm32")]
             match self.tracer.finish_span(span, ctx, None).await {
                 Ok(id) => target_id = id,
                 Err(e) => log::debug!("Error during logging: {}", e),
@@ -184,6 +189,12 @@ impl BamlRuntime {
 
         let mut target_id = None;
         if let Some(span) = span {
+            #[cfg(not(target_arch = "wasm32"))]
+            match self.tracer.finish_baml_span(span, ctx, &response) {
+                Ok(id) => target_id = id,
+                Err(e) => log::debug!("Error during logging: {}", e),
+            }
+            #[cfg(target_arch = "wasm32")]
             match self.tracer.finish_baml_span(span, ctx, &response).await {
                 Ok(id) => target_id = id,
                 Err(e) => log::debug!("Error during logging: {}", e),
@@ -259,22 +270,60 @@ impl ExperimentalTracingInterface for BamlRuntime {
         self.tracer.start_span(function_name, ctx, None, params)
     }
 
-    async fn finish_function_span(
+    #[cfg(not(target_arch = "wasm32"))]
+    fn finish_function_span(
         &self,
-        span: TracingSpan,
+        span: Option<TracingSpan>,
         result: &Result<FunctionResult>,
         ctx: &RuntimeContextManager,
     ) -> Result<Option<uuid::Uuid>> {
-        self.tracer.finish_baml_span(span, ctx, result).await
+        if let Some(span) = span {
+            self.tracer.finish_baml_span(span, ctx, result)
+        } else {
+            Ok(None)
+        }
     }
 
-    async fn finish_span(
+    #[cfg(target_arch = "wasm32")]
+    async fn finish_function_span(
         &self,
-        span: TracingSpan,
+        span: Option<TracingSpan>,
+        result: &Result<FunctionResult>,
+        ctx: &RuntimeContextManager,
+    ) -> Result<Option<uuid::Uuid>> {
+        if let Some(span) = span {
+            self.tracer.finish_baml_span(span, ctx, result).await
+        } else {
+            Ok(None)
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn finish_span(
+        &self,
+        span: Option<TracingSpan>,
         result: Option<BamlValue>,
         ctx: &RuntimeContextManager,
     ) -> Result<Option<uuid::Uuid>> {
-        self.tracer.finish_span(span, ctx, result).await
+        if let Some(span) = span {
+            self.tracer.finish_span(span, ctx, result)
+        } else {
+            Ok(None)
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    async fn finish_span(
+        &self,
+        span: Option<TracingSpan>,
+        result: Option<BamlValue>,
+        ctx: &RuntimeContextManager,
+    ) -> Result<Option<uuid::Uuid>> {
+        if let Some(span) = span {
+            self.tracer.finish_span(span, ctx, result).await
+        } else {
+            Ok(None)
+        }
     }
 
     fn flush(&self) -> Result<()> {

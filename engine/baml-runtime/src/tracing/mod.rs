@@ -100,6 +100,7 @@ impl BamlTracer {
         (Some(span), ctx.create_ctx(tb))
     }
 
+    #[cfg(target_arch = "wasm32")]
     pub(crate) async fn finish_span(
         &self,
         span: TracingSpan,
@@ -128,6 +129,34 @@ impl BamlTracer {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn finish_span(
+        &self,
+        span: TracingSpan,
+        ctx: &RuntimeContextManager,
+        response: Option<BamlValue>,
+    ) -> Result<Option<uuid::Uuid>> {
+        let Some((span_id, event_chain, tags)) = ctx.exit() else {
+            anyhow::bail!(
+                "Attempting to finish a span {:#?} without first starting one. Current context {:#?}",
+                span,
+                ctx
+            );
+        };
+
+        if span.span_id != span_id {
+            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
+        }
+
+        if let Some(tracer) = &self.tracer {
+            tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
+            Ok(Some(span_id))
+        } else {
+            Ok(None)
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
     pub(crate) async fn finish_baml_span(
         &self,
         span: TracingSpan,
@@ -158,6 +187,41 @@ impl BamlTracer {
             tracer
                 .submit(response.to_log_schema(&self.options, event_chain, tags, span))
                 .await?;
+            Ok(Some(span_id))
+        } else {
+            Ok(None)
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn finish_baml_span(
+        &self,
+        span: TracingSpan,
+        ctx: &RuntimeContextManager,
+        response: &Result<FunctionResult>,
+    ) -> Result<Option<uuid::Uuid>> {
+        let Some((span_id, event_chain, tags)) = ctx.exit() else {
+            anyhow::bail!("Attempting to finish a span without first starting one");
+        };
+
+        if span.span_id != span_id {
+            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
+        }
+
+        if let Ok(response) = &response {
+            let name = event_chain.last().map(|s| s.name.as_str());
+            let is_ok = response.parsed().as_ref().is_some_and(|r| r.is_ok());
+            log::log!(
+                target: "baml_events",
+                if is_ok { log::Level::Info } else { log::Level::Warn },
+                "{}{}",
+                name.map(|s| format!("Function {}:\n", s)).unwrap_or_default().purple(),
+                response
+            );
+        }
+
+        if let Some(tracer) = &self.tracer {
+            tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
             Ok(Some(span_id))
         } else {
             Ok(None)

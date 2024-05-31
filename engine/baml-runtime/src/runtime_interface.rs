@@ -59,18 +59,36 @@ pub trait ExperimentalTracingInterface {
         ctx: &RuntimeContextManager,
     ) -> (Option<TracingSpan>, RuntimeContext);
 
+    #[cfg(target_arch = "wasm32")]
     #[allow(async_fn_in_trait)]
     async fn finish_function_span(
         &self,
-        span: TracingSpan,
+        span: Option<TracingSpan>,
         result: &Result<FunctionResult>,
         ctx: &RuntimeContextManager,
     ) -> Result<Option<uuid::Uuid>>;
 
+    #[cfg(not(target_arch = "wasm32"))]
+    fn finish_function_span(
+        &self,
+        span: Option<TracingSpan>,
+        result: &Result<FunctionResult>,
+        ctx: &RuntimeContextManager,
+    ) -> Result<Option<uuid::Uuid>>;
+
+    #[cfg(target_arch = "wasm32")]
     #[allow(async_fn_in_trait)]
     async fn finish_span(
         &self,
-        span: TracingSpan,
+        span: Option<TracingSpan>,
+        result: Option<BamlValue>,
+        ctx: &RuntimeContextManager,
+    ) -> Result<Option<uuid::Uuid>>;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn finish_span(
+        &self,
+        span: Option<TracingSpan>,
         result: Option<BamlValue>,
         ctx: &RuntimeContextManager,
     ) -> Result<Option<uuid::Uuid>>;

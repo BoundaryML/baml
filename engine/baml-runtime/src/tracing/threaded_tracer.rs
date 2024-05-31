@@ -143,7 +143,7 @@ impl ThreadedTracer {
         }
     }
 
-    pub async fn submit(&self, event: LogSchema) -> Result<()> {
+    pub fn submit(&self, event: LogSchema) -> Result<()> {
         log::info!("Submitting work {}", event.event_id);
         let tx = self
             .tx

@@ -20,33 +20,24 @@ impl BamlImagePy {
         }
     }
 
-    #[getter]
-    pub fn get_url(&self) -> PyResult<Option<String>> {
-        Ok(match &self.inner {
-            baml_types::BamlImage::Url(url) => Some(url.url.clone()),
-            _ => None,
-        })
+    pub fn is_url(&self) -> bool {
+        matches!(&self.inner, baml_types::BamlImage::Url(_))
     }
 
-    #[getter]
-    pub fn get_base64(&self) -> PyResult<Option<(String, String)>> {
-        Ok(match &self.inner {
+    pub fn as_url(&self) -> PyResult<String> {
+        match &self.inner {
+            baml_types::BamlImage::Url(url) => Ok(url.url.clone()),
+            _ => Err(crate::BamlError::new_err("Image is not a URL")),
+        }
+    }
+
+    pub fn as_base64(&self) -> PyResult<Vec<String>> {
+        match &self.inner {
             baml_types::BamlImage::Base64(base64) => {
-                Some((base64.base64.clone(), base64.media_type.clone()))
+                Ok(vec![base64.base64.clone(), base64.media_type.clone()])
             }
-            _ => None,
-        })
-    }
-
-    #[setter]
-    pub fn set_url(&mut self, url: String) {
-        self.inner = baml_types::BamlImage::Url(baml_types::ImageUrl::new(url));
-    }
-
-    #[setter]
-    pub fn set_base64(&mut self, base64: (String, String)) {
-        self.inner =
-            baml_types::BamlImage::Base64(baml_types::ImageBase64::new(base64.0, base64.1));
+            _ => Err(crate::BamlError::new_err("Image is not base64")),
+        }
     }
 
     pub fn __repr__(&self) -> String {

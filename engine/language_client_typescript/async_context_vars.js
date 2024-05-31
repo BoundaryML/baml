@@ -38,21 +38,13 @@ class CtxManager {
         this.ctx.enterWith(clone);
         return native_1.BamlSpan.new(this.rt, name, args, clone);
     }
-    async endTrace(span, response) {
+    endTrace(span, response) {
         const manager = this.ctx.getStore();
         if (!manager) {
             console.error('Context lost before span could be finished\n');
             return;
         }
-        await span.finish(response, manager);
-    }
-    endTraceSync(span, response) {
-        const manager = this.ctx.getStore();
-        if (!manager) {
-            console.error('Context lost before span could be finished\n');
-            return;
-        }
-        span.finishSync(response, manager);
+        span.finish(response, manager);
     }
     flush() {
         this.rt.flush();
@@ -66,11 +58,11 @@ class CtxManager {
             const span = this.startTraceSync(name, params);
             try {
                 const response = func(...args);
-                this.endTraceSync(span, response);
+                this.endTrace(span, response);
                 return response;
             }
             catch (e) {
-                this.endTraceSync(span, e);
+                this.endTrace(span, e);
                 throw e;
             }
         });
@@ -85,11 +77,11 @@ class CtxManager {
             const span = this.startTraceAsync(funcName, params);
             try {
                 const response = await func(...args);
-                await this.endTrace(span, response);
+                this.endTrace(span, response);
                 return response;
             }
             catch (e) {
-                await this.endTrace(span, e);
+                this.endTrace(span, e);
                 throw e;
             }
         });
