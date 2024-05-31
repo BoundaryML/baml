@@ -15,17 +15,17 @@ export async function getProjectHash(): Promise<string> {
 
 async function getSchemaPath(): Promise<string | null> {
   // try the currently open document
-  const schemaPath = window.activeTextEditor?.document.fileName;
+  const schemaPath = window.activeTextEditor?.document.fileName
   if (schemaPath && schemaPath.includes('baml_src')) {
-    return schemaPath.substring(0, schemaPath.indexOf('baml_src') + 'baml_src'.length);
+    return schemaPath.substring(0, schemaPath.indexOf('baml_src') + 'baml_src'.length)
   }
 
   // try the workspace
-  const fileInWorkspace = await workspace.findFiles('**/baml_src/**/*', '**/node_modules/**');
+  const fileInWorkspace = await workspace.findFiles('**/baml_src/**/*', '**/node_modules/**')
   if (fileInWorkspace.length !== 0) {
-    const fullPath = fileInWorkspace[0].toString();
-    return fullPath.substring(0, fullPath.indexOf('baml_src') + 'baml_src'.length);
+    const fullPath = fileInWorkspace[0].toString()
+    return fullPath.substring(0, fullPath.indexOf('baml_src') + 'baml_src'.length)
   }
 
-  return null;
+  return null
 }

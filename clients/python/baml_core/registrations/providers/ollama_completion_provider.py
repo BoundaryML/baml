@@ -45,9 +45,7 @@ class OllamaCompletionProvider(LLMProvider):
 
     async def _stream(self, prompt: str) -> typing.AsyncIterator[LLMResponse]:
         client = ollama.AsyncClient(host=self.__client_host)
-        response: typing.AsyncIterator[  # type: ignore
-            ollama.GenerateResponse
-        ] = await client.generate(
+        response: typing.AsyncIterator[ollama.GenerateResponse] = await client.generate(  # type: ignore
             prompt=prompt,
             **self.__kwargs,
             stream=True,

@@ -1,17 +1,17 @@
-import { ParserDatabase } from '@baml/common'
+import type { ParserDatabase } from '@baml/common'
 // import { languageWasm } from '.'
-import { lint as wasmLint } from "@gloo-ai/baml-schema-wasm-web";
+import { lint as wasmLint } from '@gloo-ai/baml-schema-wasm-web'
 import { handleFormatPanic, handleWasmError } from './internals'
 
 type LintResponse = {
   diagnostics: LinterError[]
 } & (
-    | { ok: false }
-    | {
+  | { ok: false }
+  | {
       ok: true
       response: ParserDatabase
     }
-  )
+)
 
 export interface LinterError {
   start: number

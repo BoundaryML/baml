@@ -28,7 +28,7 @@
     "esbuild-watch": "node ./esbuild.js --sourcemap --watch",
     "lint": "eslint \"src/**/*.ts\"",
     "watch": "pnpm run esbuild-watch",
-    "build": "pnpm run esbuild-base",
+    "build": "pnpm tsc --noEmit && pnpm run esbuild-base",
     "clean": "rimraf out"
   },
   "main": "./dist/index.js",

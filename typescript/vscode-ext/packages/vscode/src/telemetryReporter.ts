@@ -1,14 +1,11 @@
-import { Disposable, workspace } from 'vscode'
-import { getProjectHash } from './hashes'
-import { PostHog } from 'posthog-node'
-import * as vscode from 'vscode'
 import os from 'os'
+import { PostHog } from 'posthog-node'
+import { type Disposable, workspace } from 'vscode'
+import * as vscode from 'vscode'
+import { getProjectHash } from './hashes'
 type TelemetryLevel = 'off' | 'crash' | 'error' | 'all' | undefined
 
-
-const client = new PostHog(
-  'phc_732PWG6HFZ75S7h0TK2AuqRVkqZDiD4WePE9gXYJkOu',
-)
+const client = new PostHog('phc_732PWG6HFZ75S7h0TK2AuqRVkqZDiD4WePE9gXYJkOu')
 
 export interface TelemetryEvent {
   event: string
@@ -47,15 +44,15 @@ export default class TelemetryReporter {
           release: os.release(),
           platform: os.platform(),
           arch: os.arch(),
-        }
+        },
       }
-      this.telemetryProps = properties;
+      this.telemetryProps = properties
       client.capture({
-        event: "extension_loaded",
+        event: 'extension_loaded',
         distinctId: machine_id,
-        properties: properties
-      });
-      client.flush();
+        properties: properties,
+      })
+      client.flush()
     }
   }
 
@@ -66,10 +63,10 @@ export default class TelemetryReporter {
         distinctId: vscode.env.machineId,
         properties: {
           ...this.telemetryProps,
-          ...data.properties
-        }
-      });
-      client.flush();
+          ...data.properties,
+        },
+      })
+      client.flush()
     }
   }
 

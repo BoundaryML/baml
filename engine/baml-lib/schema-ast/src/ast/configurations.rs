@@ -15,7 +15,7 @@ impl Configuration {
         match self {
             Configuration::RetryPolicy(_) => "retry_policy",
             Configuration::Printer(_) => "printer",
-            Configuration::TestCase(_) => "test_case",
+            Configuration::TestCase(_) => "test",
         }
     }
 

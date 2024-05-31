@@ -9,5 +9,5 @@ async function main() {
   const resume = await b.ExtractResume(resume_text)
 
   // Fully type-checked and validated!
-  resume.name === "Jason Doe"
+  resume.name === 'Jason Doe'
 }

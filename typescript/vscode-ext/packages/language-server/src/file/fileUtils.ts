@@ -1,25 +1,25 @@
-import * as path from 'path'
 import * as fs from 'fs'
+import * as path from 'path'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 import { URI } from 'vscode-uri'
 
-// export function findTopLevelParent(filePath: string) {
-//   let currentPath = filePath;
-//   let parentDir: string | null = null;
+export function findTopLevelParent(filePath: string) {
+  let currentPath = filePath
+  let parentDir: string | null = null
 
-//   while (currentPath !== path.parse(currentPath).root) {
-//     currentPath = path.dirname(currentPath);
-//     if (path.basename(currentPath) === 'baml_src') {
-//       parentDir = currentPath;
-//       break;
-//     }
-//   }
+  while (currentPath !== path.parse(currentPath).root) {
+    currentPath = path.dirname(currentPath)
+    if (path.basename(currentPath) === 'baml_src') {
+      parentDir = currentPath
+      break
+    }
+  }
 
-//   if (parentDir !== null) {
-//     return parentDir;
-//   }
-//   return null;
-// }
+  if (parentDir !== null) {
+    return parentDir
+  }
+  return null
+}
 
 /**
  * Non-recursively gathers files with .baml or .json extensions from a given directory,
@@ -29,9 +29,9 @@ import { URI } from 'vscode-uri'
  * @param {boolean} debug - Flag to enable debug logging.
  * @returns {string[]} - An array of file URIs.
  */
-export function gatherFiles(uri: URI, debug: boolean = false): URI[] {
-  let visitedDirs = new Set<string>()
-  let dirStack: URI[] = []
+export function gatherFiles(rootPath: string, debug = false): URI[] {
+  const visitedDirs = new Set<string>()
+  const dirStack: URI[] = []
   const addDir = (dir: URI) => {
     if (!visitedDirs.has(dir.toString())) {
       dirStack.push(dir)
@@ -39,9 +39,9 @@ export function gatherFiles(uri: URI, debug: boolean = false): URI[] {
     }
   }
 
-  addDir(uri)
+  addDir(URI.file(rootPath))
 
-  let fileList: URI[] = []
+  const fileList: URI[] = []
 
   const MAX_DIRS = 1000
   let iterations = 0

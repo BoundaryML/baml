@@ -1,22 +1,15 @@
-
 class ClassOptionalOutput {
   prop1 string
   prop2 string
 }
 
-function FnClassOptionalOutput {
-  input string
-  output ClassOptionalOutput?
-}
-
-impl<llm, FnClassOptionalOutput> v1 {
+function FnClassOptionalOutput(input: string) -> ClassOptionalOutput? {
   client GPT35
   prompt #"
     Return a json blob for the following input:
-    {#input}
+    {{input}}
 
-    Answer in JSON using this schema:
-    {#print_type(output)}
+    {{ctx.output_format}}
 
     JSON:
   "#
@@ -33,20 +26,21 @@ class ClassOptionalOutput2 {
   prop3 Blah?
 }
 
-function FnClassOptionalOutput2 {
-  input string
-  output ClassOptionalOutput2?
-}
-
-impl<llm, FnClassOptionalOutput2> v1 {
+function FnClassOptionalOutput2(input: string) -> ClassOptionalOutput2? {
   client GPT35
   prompt #"
     Return a json blob for the following input:
-    {#input}
+    {{input}}
 
-    Answer in JSON using this schema:
-    {#print_type(output)}
+    {{ctx.output_format}}
 
     JSON:
   "#
+}
+
+test FnClassOptionalOutput2 {
+  functions [FnClassOptionalOutput2, FnClassOptionalOutput]
+  args {
+    input "example input"
+  }
 }

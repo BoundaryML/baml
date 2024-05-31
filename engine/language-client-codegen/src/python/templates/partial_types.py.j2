@@ -1,0 +1,22 @@
+{#- baml_py must be imported to enable access to baml_py.Image -#}
+import baml_py
+from enum import Enum
+from pydantic import BaseModel
+from typing import List, Optional, Union
+
+from . import types
+
+###############################################################################
+#
+#  These types are used for streaming, for when an instance of a type
+#  is still being built up and any of its fields is not yet fully available.
+#
+###############################################################################
+
+{# Partial classes (used for streaming) -#}
+{% for cls in partial_classes %}
+class {{cls.name}}(BaseModel):
+    {%- for (name, partial_type) in cls.fields %}
+    {{name}}: {{partial_type}}
+    {%- endfor %}
+{% endfor %}

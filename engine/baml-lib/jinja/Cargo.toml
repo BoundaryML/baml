@@ -9,6 +9,7 @@ license-file.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+baml-types = { path = "../baml-types", features = ["mini-jinja"] }
 # TODO: disable imports, etc
 minijinja = { version = "1.0.16", default-features = false, features = [
   "macros",
@@ -27,12 +28,14 @@ minijinja = { version = "1.0.16", default-features = false, features = [
   # loader
   #
 ] }
+askama.workspace = true
 anyhow.workspace = true
 indexmap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 log = "0.4.14"
 strsim = "0.11.1"
+colored = "2.1.0"
 
 [dev-dependencies]
 env_logger = "0.11.3"

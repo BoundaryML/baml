@@ -1,3 +1,5 @@
+use baml_types::TypeValue;
+
 use super::{Span, WithName, WithSpan};
 
 /// An identifier the refers to a field or type in a different location.
@@ -7,16 +9,6 @@ pub struct RefIdentifier {
     /// The identifier contents.
     pub name: String,
     pub full_name: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
-pub enum TypeValue {
-    String,
-    Int,
-    Float,
-    Bool,
-    Char,
-    Null,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -93,8 +85,8 @@ impl WithName for Identifier {
                 TypeValue::Int => "int",
                 TypeValue::Float => "float",
                 TypeValue::Bool => "bool",
-                TypeValue::Char => "char",
                 TypeValue::Null => "null",
+                TypeValue::Image => "image",
             },
             Identifier::String(s, _) => s,
             Identifier::ENV(name, _) => name,
@@ -122,7 +114,7 @@ impl From<(&str, Span)> for Identifier {
             "float" => Identifier::Primitive(TypeValue::Float, span),
             "bool" => Identifier::Primitive(TypeValue::Bool, span),
             "null" => Identifier::Primitive(TypeValue::Null, span),
-            "char" => Identifier::Primitive(TypeValue::Char, span),
+            "image" => Identifier::Primitive(TypeValue::Image, span),
             "env" => Identifier::Invalid("env".into(), span),
             other if other.contains('-') => Identifier::String(other.to_string(), span),
             other => Identifier::Local(other.to_string(), span),

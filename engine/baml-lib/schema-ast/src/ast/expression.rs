@@ -1,3 +1,5 @@
+use baml_types::TypeValue;
+
 use crate::ast::Span;
 use std::fmt;
 
@@ -156,7 +158,7 @@ impl Expression {
     pub fn from_json(value: serde_json::Value, span: Span, empty_span: Span) -> Expression {
         match value {
             serde_json::Value::Null => {
-                Expression::Identifier(Identifier::Primitive(super::TypeValue::Null, span))
+                Expression::Identifier(Identifier::Primitive(TypeValue::Null, span))
             }
             serde_json::Value::Bool(b) => Expression::BoolValue(b, span),
             serde_json::Value::Number(n) => Expression::NumericValue(n.to_string(), span),
@@ -180,33 +182,6 @@ impl Expression {
                     .collect();
                 Expression::Map(obj, span)
             }
-        }
-    }
-}
-
-impl Into<serde_json::Value> for &Expression {
-    fn into(self) -> serde_json::Value {
-        match self {
-            Expression::BoolValue(val, _) => serde_json::Value::Bool(*val),
-            Expression::NumericValue(val, _) => serde_json::Value::Number(val.parse().unwrap()),
-            Expression::StringValue(val, _) => serde_json::Value::String(val.clone()),
-            Expression::RawStringValue(val) => serde_json::Value::String(val.value().to_string()),
-            Expression::Identifier(id) => serde_json::Value::String(id.name().to_string()),
-            Expression::Array(vals, _) => {
-                serde_json::Value::Array(vals.iter().map(Into::into).collect())
-            }
-            Expression::Map(vals, _) => serde_json::Value::Object(
-                vals.iter()
-                    .map(|(k, v)| {
-                        let k = Into::<serde_json::Value>::into(k);
-                        let k = match k.as_str() {
-                            Some(k) => k.to_string(),
-                            None => k.to_string(),
-                        };
-                        (k, v.into())
-                    })
-                    .collect(),
-            ),
         }
     }
 }

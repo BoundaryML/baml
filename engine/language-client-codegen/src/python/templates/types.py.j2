@@ -1,0 +1,27 @@
+{#- baml_py must be imported to enable access to baml_py.Image -#}
+import baml_py
+from enum import Enum
+from pydantic import BaseModel, ConfigDict
+from typing import List, Optional, Union
+
+{# Enums -#}
+{% for enum in enums %}
+class {{enum.name}}(str, Enum):
+    {% if enum.values.is_empty() %}pass{% endif %}
+    {%- for value in enum.values %}
+    {{ value }} = "{{ value }}"
+    {%- endfor %}
+{% endfor %}
+
+{#- Classes -#}
+{% for cls in classes %}
+class {{cls.name}}(BaseModel):
+    {% if cls.dynamic %}
+    model_config = ConfigDict(extra='allow')
+    {%- endif %}
+    {% if cls.fields.is_empty() && !cls.dynamic %}pass{% endif %}
+    
+    {%- for (name, type) in cls.fields %}
+    {{name}}: {{type}}
+    {%- endfor %}
+{% endfor %}

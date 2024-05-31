@@ -293,7 +293,7 @@ impl<'db> crate::ParserDatabase {
             .filter_map(|(top_id, _)| top_id.as_test_case_id())
             .map(move |top_id| Walker {
                 db: self,
-                id: (top_id, "test_case"),
+                id: (top_id, "test"),
             })
     }
 
@@ -315,12 +315,12 @@ impl<'db> crate::ParserDatabase {
                         Some(Either::Right(_)) => Type::String,
                     },
                     ast::Identifier::Primitive(idx, _) => match idx {
-                        ast::TypeValue::String => Type::String,
-                        ast::TypeValue::Int => Type::Int,
-                        ast::TypeValue::Float => Type::Float,
-                        ast::TypeValue::Bool => Type::Bool,
-                        ast::TypeValue::Char => Type::String,
-                        ast::TypeValue::Null => Type::None,
+                        baml_types::TypeValue::String => Type::String,
+                        baml_types::TypeValue::Int => Type::Int,
+                        baml_types::TypeValue::Float => Type::Float,
+                        baml_types::TypeValue::Bool => Type::Bool,
+                        baml_types::TypeValue::Null => Type::None,
+                        baml_types::TypeValue::Image => Type::Image,
                     },
                     ast::Identifier::String(_, _) => Type::String,
                     ast::Identifier::Invalid(_, _) => Type::Unknown,

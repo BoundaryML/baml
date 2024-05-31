@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import type React from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Input } from '../components/ui/input'
 import { cn } from './utils'
 
@@ -46,15 +47,15 @@ const SearchBarWithSelector: React.FC<{
   }, [handleKeyDown])
 
   return (
-    <div className="flex flex-col gap-4 p-4 bg-vscode-dropdown-background text-vscode-dropdown-foreground">
+    <div className='flex flex-col gap-4 p-4 bg-vscode-dropdown-background text-vscode-dropdown-foreground'>
       <Input
-        placeholder="Search..."
-        className="border-vscode-panel-border"
+        placeholder='Search...'
+        className='border-vscode-panel-border'
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
         // Additional TailwindCSS classes can be applied if necessary
       />
-      <div className="flex flex-col gap-2 overflow-x-hidden overflow-y-auto max-h-96">
+      <div className='flex flex-col gap-2 overflow-x-hidden overflow-y-auto max-h-96'>
         {filteredOptions.length === 0 ? (
           <div>No options found</div>
         ) : (

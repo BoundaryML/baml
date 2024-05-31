@@ -1,6 +1,6 @@
 use either::Either;
 use internal_baml_jinja::{PredefinedTypes, Type};
-use internal_baml_schema_ast::ast::{self, FunctionArgs, WithIdentifier, WithName};
+use internal_baml_schema_ast::ast::{self, FunctionArgs, Span, WithIdentifier, WithName, WithSpan};
 
 use crate::types::TemplateStringProperties;
 
@@ -51,5 +51,11 @@ impl<'db> TemplateStringWalker<'db> {
 impl WithIdentifier for TemplateStringWalker<'_> {
     fn identifier(&self) -> &ast::Identifier {
         self.ast_node().identifier()
+    }
+}
+
+impl<'a> WithSpan for TemplateStringWalker<'a> {
+    fn span(&self) -> &Span {
+        self.ast_node().span()
     }
 }

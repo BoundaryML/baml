@@ -89,6 +89,12 @@ impl<'de> Deserialize<'de> for LockFile {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum LockfileVersion {
+    V1,
+    V2,
+    UNKNOWN,
+}
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LockFileWrapper {
     version: u32,
     content: LockFile,
@@ -98,6 +104,14 @@ pub struct LockFileWrapper {
 }
 
 impl LockFileWrapper {
+    pub fn version(&self) -> LockfileVersion {
+        match self.version {
+            1 => LockfileVersion::V1,
+            2 => LockfileVersion::V2,
+            _ => LockfileVersion::UNKNOWN,
+        }
+    }
+
     pub fn cli_version(&self) -> Option<&semver::Version> {
         self.content.cli_version.as_ref()
     }
@@ -114,14 +128,7 @@ impl LockFileWrapper {
                     semver::Version::parse(env!("CARGO_PKG_VERSION"))
                         .map_err(|e| format!("{} {}", env!("CARGO_PKG_VERSION"), e.to_string()))?,
                 ),
-                client_version: gen.client_version.as_ref().and_then(|f| {
-                    let res =
-                        semver::Version::parse(&f).map_err(|e| format!("{} {}", f, e.to_string()));
-                    if res.is_err() {
-                        log::warn!("Failed to parse client version: {}", f);
-                    }
-                    res.ok()
-                }),
+                client_version: None,
             },
             span: Some(gen.span.clone()),
         })

@@ -5,6 +5,7 @@ from baml_core_ffi import (
     RenderData_Context,
     RenderedChatMessage,
     TemplateStringMacro,
+    BamlImage,
 )
 
 
@@ -63,6 +64,7 @@ if __name__ == "__main__":
                     7,
                 ],
             },
+            "img": BamlImage(url="https://example.com/image.jpg"),
         },
         ctx=RenderData.ctx(
             client=RenderData.client(name="gpt4", provider="openai"),
@@ -79,8 +81,12 @@ if __name__ == "__main__":
             )
         ],
     )
+    # rendered = render_prompt(
+    #     '{{ _.chat("system") }} {{ctx.env.LANG}}: Hello {{name}}, it\'s a good day today!\n\n{{farewell(name)}}\n\n{{ bar }}',
+    #     args,
+    # )
     rendered = render_prompt(
-        '{{ _.chat("system") }} {{ctx.env.LANG}}: Hello {{name}}, it\'s a good day today!\n\n{{farewell(name)}}\n\n{{ bar }}',
+        '{{ _.chat("system") }} Here is an image {{img}}. Hope you like it.',
         args,
     )
     print("Rendered", rendered)

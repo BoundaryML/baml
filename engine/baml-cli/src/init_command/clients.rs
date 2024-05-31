@@ -66,7 +66,7 @@ impl<T: AsRef<str> + From<&'static str>> WithLoader<Vec<ClientConfig<T>>> for Cl
                 0 => openai_clients(),
                 1 => openai_azure_clients(),
                 2 => anthropic_clients(),
-                _ => unreachable!(),
+                _ => unreachable!("Invalid provider selection"),
             })
             .collect())
     }

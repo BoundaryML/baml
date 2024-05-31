@@ -1,6 +1,6 @@
 @top Baml { Decl* }
 
-Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl | TemplateStringDecl}
+Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl | TemplateStringDecl | TestDecl }
 
 ClassDecl { "class" IdentifierDecl "{" (BlockAttribute | ClassField)* "}" }
 
@@ -46,6 +46,10 @@ ValueExpr { LiteralDecl | PromptExpr | "{" TupleValue* "}" }
 
 ClientDecl {
   "client<llm>" IdentifierDecl "{" TupleValue* "}"
+}
+
+TestDecl {
+  "test" IdentifierDecl "{" TupleValue* "}" 
 }
 
 LiteralDecl { NumericLiteral | QuotedString | UnquotedString }

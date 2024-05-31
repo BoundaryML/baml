@@ -16,5 +16,9 @@ class InterfaceThree {
   another_fiel string
 }
 
-
-
+class InterfaceFour {
+  field InterfaceThree
+  another_field string
+  images image[]
+  single_image image
+}

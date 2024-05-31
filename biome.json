@@ -1,0 +1,4 @@
+{
+  "$schema": "./typescript/node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": ["./typescript/biome.json"]
+}

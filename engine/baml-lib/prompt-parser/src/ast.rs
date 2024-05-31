@@ -2,7 +2,7 @@ mod code_block;
 mod comment_block;
 mod prompt_text;
 mod top;
-mod traits;
+pub mod traits;
 mod variable;
 mod white_space_text;
 

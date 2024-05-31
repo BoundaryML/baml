@@ -7,10 +7,9 @@ mod command;
 mod errors;
 mod import_command;
 mod init_command;
+mod runtime_test_command;
 mod shell;
-mod test_command;
 mod update;
-mod update_client;
 mod version_command;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -32,8 +31,6 @@ enum Commands {
     Build(BuildArgs),
     /// Updates the CLI to the latest version.
     Update(UpdateArgs),
-    /// Updates client libraries for a specified BAML project.
-    UpdateClient(BuildArgs),
     /// Initializes a new BAML project in the current directory.
     Init(InitArgs),
     /// Runs tests for a BAML project.
@@ -78,14 +75,6 @@ pub struct TestArgs {
     /// Sets the default action to perform. Can be either 'run' to execute tests or 'list' to list available tests.
     #[arg(default_value_t = TestAction::List)]
     action: TestAction,
-
-    /// Specifies a port for the test playground. Hidden from help text.
-    #[arg(long, hide = true)]
-    playground_port: Option<u16>,
-
-    /// Specify which generator (and therefore language) you want to use to run the tests.
-    #[arg(long, short = 'g')]
-    generator: Option<String>,
 }
 
 impl fmt::Display for TestAction {
@@ -149,13 +138,11 @@ pub(crate) fn main() {
     let args = Cli::parse();
 
     let response = match &args.command {
-        Commands::Update(_args) => update::update(),
+        Commands::Update(_args) => update::update().map_err(anyhow::Error::new),
         Commands::Build(args) => builder::build(&args.baml_dir).map(|_| ()),
-        Commands::UpdateClient(args) => update_client::update_client(&args.baml_dir),
         Commands::Init(args) => init_command::init_command(args.no_prompt)
+            .map_err(anyhow::Error::new)
             .and_then(|_| builder::build(&None))
-            // Note: double check this runs in the right dir
-            .and_then(|_| update_client::update_client(&None))
             .map(|_| {
                 println!(
                     "\n{}\n{}\n{}",
@@ -164,21 +151,18 @@ pub(crate) fn main() {
                     "Documentation: https://docs.boundaryml.com".cyan()
                 );
             }),
-        Commands::Test(args) => {
-            builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
-                test_command::run(args, &baml_dir, &config, schema)
-            })
-        }
+        Commands::Test(args) => runtime_test_command::run(args),
         Commands::Import(args) => {
             builder::build(&args.baml_dir).and_then(|(baml_dir, config, schema)| {
                 import_command::run(&args.content, &baml_dir, &config, schema)
+                    .map_err(anyhow::Error::new)
             })
         }
-        Commands::Version(args) => version_command::run(args),
+        Commands::Version(args) => version_command::run(args).map_err(anyhow::Error::new),
     };
 
     if let Err(error) = response {
-        log::error!("{}", error);
+        log::error!("{:?}", error);
         std::process::exit(2);
     }
 }

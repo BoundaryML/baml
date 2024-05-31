@@ -31,18 +31,18 @@ export interface StringSpan extends Span {
 
 export type ArgType =
   | {
-    arg_type: 'positional'
-    type: string
-    jsonSchema: Record<string, any>
-  }
-  | {
-    arg_type: 'named'
-    values: {
-      name: StringSpan
+      arg_type: 'positional'
       type: string
       jsonSchema: Record<string, any>
-    }[]
-  }
+    }
+  | {
+      arg_type: 'named'
+      values: {
+        name: StringSpan
+        type: string
+        jsonSchema: Record<string, any>
+      }[]
+    }
 
 // keep in sync with engine/baml-fmt/src/lint.rs
 export type Impl = {
@@ -55,23 +55,27 @@ export type Impl = {
     model?: string
   }
   prompt: {
-    test_case?: string;
-  } & ({
-    type: "Completion"
-    completion: string
-  } | {
-    type: "Chat"
-    chat: {
-      role: string
-      message: string
-    }[]
-  } | {
-    type: "Error"
-    error: string
-  })
-  input_replacers: [string, string][],
-  output_replacers: [string, string][],
-};
+    test_case?: string
+  } & (
+    | {
+        type: 'Completion'
+        completion: string
+      }
+    | {
+        type: 'Chat'
+        chat: {
+          role: string
+          message: string
+        }[]
+      }
+    | {
+        type: 'Error'
+        error: string
+      }
+  )
+  input_replacers: [string, string][]
+  output_replacers: [string, string][]
+}
 
 export interface SFunction {
   name: StringSpan
@@ -83,5 +87,5 @@ export interface SFunction {
     // For now this is a JSON.parse-able string
     content: string
   }[]
-  syntax: "Version1" | "Version2"
+  syntax: 'Version1' | 'Version2'
 }

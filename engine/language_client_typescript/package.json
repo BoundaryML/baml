@@ -1,0 +1,80 @@
+{
+  "name": "@boundaryml/baml",
+  "version": "0.32.0",
+  "description": "BAML typescript bindings (package.json)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BoundaryML/baml.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "napi-rs",
+    "NAPI",
+    "N-API",
+    "Rust",
+    "node-addon",
+    "node-addon-api"
+  ],
+  "bin": {
+    "baml-cli": "./cli.js"
+  },
+  "files": [
+    "./cli.js",
+    "./index.d.ts",
+    "./index.js",
+    "./native.d.ts",
+    "./native.js",
+    "./async_context_vars.d.ts",
+    "./async_context_vars.js",
+    "./stream.d.ts",
+    "./stream.js"
+  ],
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "napi": {
+    "binaryName": "baml",
+    "targets": [
+      "aarch64-apple-darwin",
+      "aarch64-pc-windows-msvc",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-apple-darwin",
+      "x86_64-pc-windows-msvc",
+      "x86_64-unknown-linux-gnu"
+    ]
+  },
+  "engines": {
+    "node": ">= 10"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "pnpm build:napi-release --release && pnpm build:ts_build",
+    "build:debug": "pnpm build:napi-debug && pnpm build:ts_build",
+    "build:napi-release": "pnpm build:napi-debug --release",
+    "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform",
+    "build:ts_build": "tsc ./typescript_src/*.ts --outDir ./ --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true",
+    "format": "run-p format:biome format:rs format:toml",
+    "format:biome": "biome --write .",
+    "format:rs": "cargo fmt",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "echo no tests implemented",
+    "version": "napi version"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.7.3",
+    "@napi-rs/cli": "^3.0.0-alpha.54",
+    "@types/node": "^20.12.11",
+    "npm-run-all2": "^6.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "packageManager": "pnpm@9.0.6",
+  "bugs": {
+    "url": "https://github.com/BoundaryML/baml/issues"
+  },
+  "homepage": "https://github.com/BoundaryML/baml#readme",
+  "author": ""
+}

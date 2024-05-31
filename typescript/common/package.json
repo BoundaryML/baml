@@ -21,7 +21,9 @@
   ],
   "devDependencies": {
     "@types/node": "^20.4.9",
+    "@types/uglify-js": "^3.17.5",
     "@types/uuid": "^9.0.2",
+    "@types/webpack": "^5.28.5",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "copyfiles": "^2.4.1",

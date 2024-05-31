@@ -1,4 +1,4 @@
-use internal_baml_schema_ast::ast::{self, WithIdentifier};
+use internal_baml_schema_ast::ast::{self, WithIdentifier, WithSpan};
 
 use crate::types::{PrinterType, RetryPolicy, TestCase};
 
@@ -25,35 +25,42 @@ impl ConfigurationWalker<'_> {
 
     /// Get as a test case configuration.
     pub fn test_case(&self) -> &TestCase {
-        assert!(self.id.1 == "test_case");
+        assert!(self.id.1 == "test");
         &self.db.types.test_cases[&self.id.0]
     }
 
     /// Get the function that this test case is testing.
-    pub fn walk_function(&self) -> Option<super::FunctionWalker<'_>> {
-        assert!(self.id.1 == "test_case");
-        self.db.find_function_by_name(&self.test_case().function.0)
+    pub fn walk_functions(&self) -> impl Iterator<Item = super::FunctionWalker<'_>> {
+        assert!(self.id.1 == "test");
+        self.test_case()
+            .functions
+            .iter()
+            .filter_map(|id| self.db.find_function_by_name(id.0.as_str()))
     }
 
     /// If adapters are not present we can stream
     pub fn is_streaming_supported(&self) -> bool {
-        let func = match self.walk_function() {
-            Some(func) => func,
-            None => return true,
-        };
+        let is_legacy = self.walk_functions().any(|f| {
+            f.is_old_function()
+                && f.walk_variants()
+                    .any(|v| v.properties().output_adapter.is_some())
+        });
 
-        if func.is_old_function() {
-            !func
-                .walk_variants()
-                .any(|v| v.properties().output_adapter.is_some())
-        } else {
-            true
+        if is_legacy {
+            return false;
         }
+        return true;
     }
 }
 
 impl WithIdentifier for ConfigurationWalker<'_> {
     fn identifier(&self) -> &ast::Identifier {
         self.ast_node().identifier()
+    }
+}
+
+impl<'db> WithSpan for ConfigurationWalker<'db> {
+    fn span(&self) -> &internal_baml_diagnostics::Span {
+        self.ast_node().span()
     }
 }

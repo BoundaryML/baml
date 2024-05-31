@@ -1,0 +1,29 @@
+require "bundler/gem_tasks"
+require "rake/testtask"
+require "rake/extensiontask"
+require "rb_sys/extensiontask"
+
+GEMSPEC_PATH = "baml.gemspec"
+GEMSPEC = Gem::Specification.load(GEMSPEC_PATH) || abort("Could not load #{GEMSPEC_PATH}")
+
+task default: :test
+
+RbSys::ExtensionTask.new("ruby_ffi", GEMSPEC) do |ext|
+  ext.lib_dir = "lib/baml"
+end
+
+Rake::TestTask.new do |t|
+  t.libs << "lib"
+  t.libs << "test"
+  t.test_files = FileList["test/*_test.rb"]
+end
+
+desc "Build native extension for a given platform (i.e. `rake 'native[x86_64-linux]'`)"
+task :native, [:platform] do |_t, platform:|
+  # There's some strange magnus<->rb_sys crate dependency error that occurs when targeting Ruby 2.6
+  Dir.chdir '..' do
+    sh "rb-sys-dock", "--platform", platform, "--mount-toolchains", "--directory", "language_client_ruby", "--build", "--ruby-versions", "3.3"
+  end
+end
+
+task build: :compile

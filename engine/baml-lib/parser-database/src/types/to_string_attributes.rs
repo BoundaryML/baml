@@ -32,6 +32,7 @@ impl DynamicStringAttributes {
 ///
 #[derive(Debug, Default)]
 pub struct StaticStringAttributes {
+    dynamic_type: Option<bool>,
     skip: Option<bool>,
     alias: Option<StringId>,
     meta: HashMap<StringId, StringId>,
@@ -46,6 +47,16 @@ impl StaticStringAttributes {
     ///
     pub fn set_skip(&mut self, skip: bool) {
         self.skip.replace(skip);
+    }
+
+    ///
+    pub fn dynamic_type(&self) -> &Option<bool> {
+        &self.dynamic_type
+    }
+
+    ///
+    pub fn set_dynamic_type(&mut self) {
+        self.dynamic_type.replace(true);
     }
 
     ///

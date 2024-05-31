@@ -8,7 +8,7 @@ use crate::{
 
 use super::{ClassWalker, VariantWalker, Walker};
 
-use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName};
+use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName, WithSpan};
 use serde_json::json;
 
 /// A model field, scalar or relation.
@@ -76,6 +76,12 @@ impl<'db> WithName for FieldWalker<'db> {
     }
 }
 
+impl<'db> WithSpan for FieldWalker<'db> {
+    fn span(&self) -> &internal_baml_diagnostics::Span {
+        self.ast_field().span()
+    }
+}
+
 impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
     fn serialize_data(
         &self,
@@ -102,12 +108,12 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                     "rtype": "primitive",
                     "optional": arity.is_optional(),
                     "value": match name {
-                        ast::TypeValue::Bool => "bool",
-                        ast::TypeValue::Int => "int",
-                        ast::TypeValue::Float => "float",
-                        ast::TypeValue::Char => "char",
-                        ast::TypeValue::String => "string",
-                        ast::TypeValue::Null => "null",
+                        baml_types::TypeValue::Bool => "bool",
+                        baml_types::TypeValue::Int => "int",
+                        baml_types::TypeValue::Float => "float",
+                        baml_types::TypeValue::String => "string",
+                        baml_types::TypeValue::Null => "null",
+                        baml_types::TypeValue::Image => "image",
                     }
                 })
             }

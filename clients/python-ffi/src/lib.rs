@@ -1,6 +1,7 @@
 mod parse_py_type;
 
 use anyhow::{bail, Result};
+
 use internal_baml_jinja;
 use parse_py_type::parse_py_type;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
@@ -113,6 +114,48 @@ impl RenderData {
         })
     }
 }
+// #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+// pub struct ImageUrl {
+//     pub url: String,
+// }
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone, Eq)]
+#[serde(rename_all = "PascalCase")]
+// #[serde(untagged)]
+#[pyclass(name = "BamlImage")]
+pub enum BamlImagePy {
+    // struct
+    Url { url: String },
+    Base64 { base64: String, media_type: String },
+}
+
+// Implement constructor for BamlImage
+#[pymethods]
+impl BamlImagePy {
+    #[new]
+    fn new(url: Option<String>, base64: Option<String>, media_type: Option<String>) -> Self {
+        match (url, base64, media_type) {
+            (Some(url), None, None) => BamlImagePy::Url { url },
+            (None, Some(base64), Some(media_type)) => BamlImagePy::Base64 { base64, media_type },
+            // TODO throw an error instead
+            _ => panic!("Either url or base64 (with media_type) must be provided"),
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{self:#?}")
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Clone, Eq)]
+#[pyclass]
+pub enum ChatMessagePart {
+    Text { text: String },
+    Image { image: BamlImagePy },
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[pyclass]
@@ -121,15 +164,15 @@ struct RenderedChatMessage {
     role: String,
 
     #[pyo3(get)]
-    message: String,
+    parts: Vec<ChatMessagePart>,
 }
 
 // Implemented for testing purposes
 #[pymethods]
 impl RenderedChatMessage {
     #[new]
-    fn new(role: String, message: String) -> Self {
-        RenderedChatMessage { role, message }
+    fn new(role: String, parts: Vec<ChatMessagePart>) -> Self {
+        RenderedChatMessage { role, parts }
     }
 
     fn __repr__(&self) -> String {
@@ -145,7 +188,26 @@ impl From<internal_baml_jinja::RenderedChatMessage> for RenderedChatMessage {
     fn from(chat_message: internal_baml_jinja::RenderedChatMessage) -> Self {
         RenderedChatMessage {
             role: chat_message.role,
-            message: chat_message.message,
+            parts: chat_message
+                .parts
+                .into_iter()
+                .map(|p| match p {
+                    internal_baml_jinja::ChatMessagePart::Text(text) => {
+                        ChatMessagePart::Text { text }
+                    }
+                    internal_baml_jinja::ChatMessagePart::Image(image) => ChatMessagePart::Image {
+                        image: match image {
+                            internal_baml_jinja::BamlImage::Url(image) => {
+                                BamlImagePy::Url { url: image.url }
+                            }
+                            internal_baml_jinja::BamlImage::Base64(image) => BamlImagePy::Base64 {
+                                base64: image.base64,
+                                media_type: image.media_type,
+                            },
+                        },
+                    },
+                })
+                .collect(),
         }
     }
 }
@@ -158,11 +220,6 @@ fn render_prompt(template: String, context: RenderData) -> PyResult<PyObject> {
         template_string_macros,
     } = context;
     let render_args = parse_py_type(args)?;
-    let serde_json::Value::Object(render_args) = render_args else {
-        return Err(PyTypeError::new_err(
-            "args must be convertible to a JSON object",
-        ));
-    };
 
     let rendered = internal_baml_jinja::render_prompt(
         &template,
@@ -215,6 +272,7 @@ fn baml_core_ffi(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RenderData_Context>()?;
     m.add_class::<RenderedChatMessage>()?;
     m.add_class::<TemplateStringMacro>()?;
+    m.add_class::<BamlImagePy>()?;
     Ok(())
 }
 

@@ -1,0 +1,101 @@
+[package]
+edition = "2021"
+name = "baml-runtime"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+
+license-file.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+clap = { version = "4.4.6", features = ["cargo", "derive"] }
+colored = "2.1.0"
+dashmap.workspace = true
+dunce = "1.0.4"
+either.workspace = true
+env_logger.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+json_comments = "0.2.2"
+jsonish = { path = "../baml-lib/jsonish" }
+instant.workspace = true
+internal-baml-codegen.workspace = true
+baml-types = { path = "../baml-lib/baml-types" }
+internal-baml-core = { path = "../baml-lib/baml-core" }
+internal-baml-jinja = { path = "../baml-lib/jinja" }
+# internal-baml-client-llm = { path = "../baml-lib/client-llm" }
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+strsim = "0.11.1"
+strum.workspace = true
+strum_macros.workspace = true
+tokio = { version = "1", default-features = false, features = [
+  "macros",
+  "time",
+] }
+uuid = { version = "1.8.0", features = ["v4", "serde"] }
+web-time.workspace = true
+static_assertions.workspace = true
+mime_guess = "2.0.4"
+mime = "0.3.17"
+
+# For tracing
+envy = "0.4.2"
+chrono = "0.4.38"
+reqwest-eventsource = "0.6.0"
+eventsource-stream = "0.2.3"
+stream-cancel = "0.8.2"
+async-std = "1.12.0"
+fastrand = "2.1.0"
+test-log = "0.2.16"
+pin-project-lite = "0.2.14"
+async-trait = "0.1.80"
+cfg-if = "1.0.0"
+include_dir = "0.7.3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde-wasm-bindgen = "0.6.5"
+wasm-bindgen = { version = "^0.2.74", features = ["serde-serialize"] }
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3.69"
+web-sys = { version = "0.3.69", features = [
+  "Headers",
+  "Request",
+  "RequestInit",
+  "Response",
+  "RequestMode",
+  "Window",
+] }
+uuid = { version = "1.8.0", features = ["v4", "serde", "js"] }
+reqwest = { version = "0.11", features = ["stream", "json"] }
+colored = { version = "2.1.0", default-features = false, features = [
+  "no-color",
+] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.11", features = [
+  "json",
+  "native-tls-vendored",
+  "stream",
+] }
+walkdir = "2.5.0"
+hostname = "0.3.1"
+
+
+[features]
+defaults = []
+internal = []
+
+[dev-dependencies]
+console_log = { version = "1" }
+dissimilar = "1.0.4"
+expect-test = "1.1.0"
+indoc.workspace = true
+either = "1.8.1"
+wasm-bindgen-test = "0.3.42"
+walkdir = "2.5.0"
+wasm-logger = "0.2.0"

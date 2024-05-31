@@ -7,27 +7,30 @@ description.workspace = true
 license-file.workspace = true
 
 [dependencies]
-internal-baml-jinja = { path = "../jinja" }
-internal-baml-diagnostics = { path = "../diagnostics" }
-internal-baml-schema-ast = { path = "../schema-ast" }
-internal-baml-parser-database = { path = "../parser-database" }
-internal-baml-prompt-parser = { path = "../prompt-parser" }
 anyhow.workspace = true
-indexmap.workspace = true
-serde.workspace = true
-serde_json.workspace = true
+baml-types = { path = "../baml-types" }
+chrono = "0.4.31"
+derive_builder.workspace = true
+either.workspace = true
 enumflags2 = "0.7"
-rayon = "1.8.0"
 handlebars = "4.4.0"
 log = "0.4.20"
-chrono = "0.4.31"
-whoami = "1.4.1"
-textwrap = "0.16.0"
-either = "1.6.1"
-strsim = "0.10.0"
-semver = "1.0.20"
+indexmap.workspace = true
+internal-baml-diagnostics = { path = "../diagnostics" }
+internal-baml-jinja.workspace = true
+internal-baml-parser-database = { path = "../parser-database" }
+internal-baml-prompt-parser = { path = "../prompt-parser" }
+internal-baml-schema-ast = { path = "../schema-ast" }
+rayon = "1.8.0"
 regex = "1.10.3"
+semver = "1.0.20"
+serde.workspace = true
+serde_json.workspace = true
 shellwords = "1.1.0"
+strsim = "0.10.0"
+strum.workspace = true
+textwrap = "0.16.0"
+whoami = "1.4.1"
 
 
 [dev-dependencies]

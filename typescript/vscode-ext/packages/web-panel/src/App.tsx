@@ -1,50 +1,44 @@
-import { useEffect, useState, useMemo, useContext } from 'react'
+import { Suspense, useContext, useEffect, useMemo, useState } from 'react'
 
 import './App.css'
 import 'allotment/dist/style.css'
 
-import { ASTContext, ASTProvider } from './shared/ASTProvider'
-import FunctionPanel from './shared/FunctionPanel'
-import { FunctionSelector } from './shared/Selectors'
 import { VSCodeLink } from '@vscode/webview-ui-toolkit/react'
-import CustomErrorBoundary from './utils/ErrorFallback'
-import { Separator } from './components/ui/separator'
-import { Button } from './components/ui/button'
+import { useAtom, useSetAtom } from 'jotai'
+import { DevTools } from 'jotai-devtools'
 import { FlaskConical, FlaskConicalOff } from 'lucide-react'
-import { useSelections } from './shared/hooks'
+import { EventListener } from './baml_wasm_web/EventListener'
+import { Button } from './components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/dialog'
+import { Separator } from './components/ui/separator'
+// import { ASTContext, ASTProvider } from './shared/ASTProvider'
+import FunctionPanel from './shared/FunctionPanel'
 import { ProjectToggle } from './shared/ProjectPanel'
-
-const TestToggle = () => {
-  const { setSelection } = useContext(ASTContext)
-  const { showTests } = useSelections()
-
-  return (
-    <Button
-      variant="outline"
-      className="p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground"
-      onClick={() => setSelection(undefined, undefined, undefined, undefined, !showTests)}
-    >
-      {showTests ? 'Hide tests' : 'Show tests'}
-    </Button>
-  )
-}
+import { FunctionSelector } from './shared/Selectors'
+import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from './shared/SettingsDialog'
+import CustomErrorBoundary from './utils/ErrorFallback'
+import 'jotai-devtools/styles.css'
+import { SettingsIcon } from 'lucide-react'
 
 function App() {
-  const [selected, setSelected] = useState<boolean>(true)
-
+  const setShowSettings = useSetAtom(showSettingsAtom)
   return (
     <CustomErrorBoundary>
-      <ASTProvider>
-        <div className="absolute z-10 flex flex-col items-end gap-1 right-1 top-2 text-end">
-          <TestToggle />
-          <VSCodeLink href="https://docs.boundaryml.com">Docs</VSCodeLink>
-        </div>
-        <div className="flex flex-col gap-2 px-2 pb-4">
-          <FunctionSelector />
-          <Separator className="bg-vscode-textSeparator-foreground" />
-          <FunctionPanel />
-        </div>
-      </ASTProvider>
+      <DevTools />
+      <Suspense fallback={<div>Loading...</div>}>
+        <EventListener>
+          <div className='absolute z-10 flex flex-row items-center justify-center gap-1 right-1 top-2 text-end'>
+            <VSCodeLink href='https://docs.boundaryml.com'>Docs</VSCodeLink>
+            <ShowSettingsButton buttonClassName='h-12 w-12 bg-transparent p-1' iconClassName='h-8 w-8' />
+          </div>
+          <SettingsDialog />
+          <div className='flex flex-col w-full gap-2 px-2 pb-4'>
+            <FunctionSelector />
+            <Separator className='bg-vscode-textSeparator-foreground' />
+            <FunctionPanel />
+          </div>
+        </EventListener>
+      </Suspense>
     </CustomErrorBoundary>
   )
 }

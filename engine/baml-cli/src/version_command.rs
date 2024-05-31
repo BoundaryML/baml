@@ -317,44 +317,44 @@ pub fn check_for_updates(baml_dir_override: &Option<String>) -> Result<CheckedVe
         recommended_update(&ret.cli.current_version, &ret.cli.latest_version);
     ret.vscode.latest_version = latest_versions.vscode;
 
-    if let Ok((_, (config, _))) = get_src_dir(baml_dir_override) {
-        for (gen, _) in config.generators {
-            let latest_version = match gen.language.as_str() {
-                "python" => latest_versions.py_client.clone(),
-                "typescript" => latest_versions.ts_client.clone(),
-                _ => None,
-            };
+    // if let Ok((_, (config, _))) = get_src_dir(baml_dir_override) {
+    //     for (gen, _) in config.generators {
+    //         let latest_version = match gen.output_type.as_str() {
+    //             "python" => latest_versions.py_client.clone(),
+    //             "typescript" => latest_versions.ts_client.clone(),
+    //             _ => None,
+    //         };
 
-            match get_client_version(
-                gen.project_root.to_str().unwrap(),
-                gen.package_version_command.as_str(),
-            ) {
-                Ok(current_version) => {
-                    let recommended_update = recommended_update(&current_version, &latest_version);
+    //         match get_client_version(
+    //             gen.project_root.to_str().unwrap(),
+    //             gen.package_version_command.as_str(),
+    //         ) {
+    //             Ok(current_version) => {
+    //                 let recommended_update = recommended_update(&current_version, &latest_version);
 
-                    ret.generators.push(GeneratorVersion {
-                        name: gen.name,
-                        dir: canonicalize(gen.project_root)?,
-                        language: gen.language.as_str().to_string(),
-                        current_version: Some(current_version),
-                        latest_version,
-                        recommended_update,
-                    });
-                }
-                Err(e) => {
-                    log::warn!("Failed to get version for {}: {}", gen.name, e);
-                    ret.generators.push(GeneratorVersion {
-                        name: gen.name,
-                        dir: canonicalize(gen.project_root)?,
-                        language: gen.language.as_str().to_string(),
-                        current_version: None,
-                        latest_version,
-                        recommended_update: None,
-                    });
-                }
-            }
-        }
-    }
+    //                 ret.generators.push(GeneratorVersion {
+    //                     name: gen.name,
+    //                     dir: canonicalize(gen.project_root)?,
+    //                     language: gen.output_type.as_str().to_string(),
+    //                     current_version: Some(current_version),
+    //                     latest_version,
+    //                     recommended_update,
+    //                 });
+    //             }
+    //             Err(e) => {
+    //                 log::warn!("Failed to get version for {}: {}", gen.name, e);
+    //                 ret.generators.push(GeneratorVersion {
+    //                     name: gen.name,
+    //                     dir: canonicalize(gen.project_root)?,
+    //                     language: gen.output_type.as_str().to_string(),
+    //                     current_version: None,
+    //                     latest_version,
+    //                     recommended_update: None,
+    //                 });
+    //             }
+    //         }
+    //     }
+    // }
 
     Ok(ret)
 }

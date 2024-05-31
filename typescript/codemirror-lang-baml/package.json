@@ -26,6 +26,8 @@
   },
   "devDependencies": {
     "@lezer/generator": "^1.0.0",
+    "@types/uglify-js": "^3.17.5",
+    "@types/webpack": "^5.28.5",
     "mocha": "^9.0.1",
     "rollup": "^2.60.2",
     "rollup-plugin-dts": "^4.0.1",

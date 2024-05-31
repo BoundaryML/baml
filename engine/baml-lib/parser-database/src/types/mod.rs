@@ -4,6 +4,7 @@ use std::hash::Hash;
 use crate::coerce;
 use crate::{context::Context, DatamodelError};
 
+use indexmap::IndexMap;
 use internal_baml_diagnostics::{DatamodelWarning, Span};
 use internal_baml_prompt_parser::ast::{ChatBlock, PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
@@ -237,9 +238,10 @@ pub struct ClientProperties {
 
 #[derive(Debug, Clone)]
 pub struct TestCase {
-    pub function: (String, Span),
-    pub content: Expression,
-    pub group: Option<(String, Span)>,
+    pub functions: Vec<(String, Span)>,
+    // The span is the span of the argument (the expression has its own span)
+    pub args: IndexMap<String, (Span, Expression)>,
+    pub args_field_span: Span,
 }
 
 #[derive(Debug, Clone)]

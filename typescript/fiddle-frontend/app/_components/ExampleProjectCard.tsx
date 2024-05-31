@@ -1,10 +1,4 @@
 'use client'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { BAMLProject } from '@/lib/exampleProjects'
-import clsx from 'clsx'
-import { useAtomValue } from 'jotai'
-import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from 'next/navigation'
-import { unsavedChangesAtom } from '../[project_id]/_atoms/atoms'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,6 +9,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import type { BAMLProject } from '@/lib/exampleProjects'
+import clsx from 'clsx'
+import { useAtomValue } from 'jotai'
+import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from 'next/navigation'
+import { unsavedChangesAtom } from '../[project_id]/_atoms/atoms'
 
 export const ExampleProjectCard = ({ project }: { project: BAMLProject }) => {
   // const searchParams = useSearchParams()
@@ -38,9 +38,9 @@ export const ExampleProjectCard = ({ project }: { project: BAMLProject }) => {
             }
           }}
         >
-          <CardHeader className="w-full px-1 py-4">
-            <CardTitle className="text-base text-left">{project.name}</CardTitle>
-            <CardDescription className="text-sm text-left">{project.description}</CardDescription>
+          <CardHeader className='w-full px-1 py-4'>
+            <CardTitle className='text-base text-left'>{project.name}</CardTitle>
+            <CardDescription className='text-sm text-left'>{project.description}</CardDescription>
           </CardHeader>
         </Card>
       </AlertDialogTrigger>

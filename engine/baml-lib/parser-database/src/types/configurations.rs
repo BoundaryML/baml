@@ -1,10 +1,10 @@
-use internal_baml_diagnostics::{DatamodelError, Span};
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 use internal_baml_schema_ast::ast::{
     ConfigurationId, PrinterConfig, RetryPolicyConfig, WithIdentifier, WithName, WithSpan,
 };
 use regex::Regex;
 
-use crate::{coerce, coerce_expression::coerce_map, context::Context};
+use crate::{coerce, coerce_array, coerce_expression::coerce_map, context::Context};
 
 use super::{
     ContantDelayStrategy, ExponentialBackoffStrategy, Printer, PrinterType, RetryPolicy,
@@ -265,9 +265,8 @@ pub(crate) fn visit_test_case<'db>(
     config: &'db RetryPolicyConfig,
     ctx: &mut Context<'db>,
 ) {
-    let mut function_name = None;
-    let mut test_case = None;
-    let mut group = None;
+    let mut functions = None;
+    let mut args = None;
 
     config
         .iter_fields()
@@ -280,38 +279,97 @@ pub(crate) fn visit_test_case<'db>(
                     f.identifier().span().clone(),
                 ))
             }
-            ("function", Some(val)) => match coerce::string_with_span(val, ctx.diagnostics) {
-                Some((t, span)) => function_name = Some((t.to_string(), span.clone())),
-                None => {}
-            },
-            ("input", Some(val)) => test_case = Some(val),
-            ("group", Some(val)) => match coerce::string_with_span(val, ctx.diagnostics) {
-                Some((t, span)) => group = Some((t.to_string(), span.clone())),
-                None => {}
-            },
+            ("function", Some(val)) => {
+                if functions.is_some() {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Duplicate `function` property",
+                        f.identifier().span().clone(),
+                    ));
+                } else {
+                    match coerce::string_with_span(val, ctx.diagnostics) {
+                        Some((t, span)) => functions = Some(vec![(t.to_string(), span.clone())]),
+                        None => {}
+                    }
+                }
+            }
+            ("functions", Some(val)) => {
+                if functions.is_some() {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Duplicate `functions` property",
+                        f.identifier().span().clone(),
+                    ));
+                } else {
+                    match coerce_array(val, &coerce::string_with_span, ctx.diagnostics) {
+                        Some(val) => {
+                            functions = Some(
+                                val.iter()
+                                    .map(|&(t, span)| (t.to_string(), span.clone()))
+                                    .collect::<Vec<_>>(),
+                            );
+                        }
+                        None => {}
+                    }
+                }
+            }
+            ("input", Some(val)) => {
+                if !val.is_map() {
+                    ctx.diagnostics.push_warning(DatamodelWarning::new(
+                        "Direct values are not supported. Please pass in parameters by name".into(),
+                        val.span().clone(),
+                    ));
+                    args = Some((f.span(), Default::default()));
+                } else {
+                    match coerce_map(val, &coerce::string_with_span, ctx.diagnostics) {
+                        Some(val) => {
+                            let params = val
+                                .iter()
+                                .map(|(k, v)| ((k.0.to_string(), (k.1.clone(), (*v).clone()))))
+                                .collect();
+                            args = Some((f.span(), params));
+                        }
+                        None => ctx.push_error(DatamodelError::new_property_not_known_error(
+                            "input",
+                            f.identifier().span().clone(),
+                            ["functions", "args"].to_vec(),
+                        )),
+                    }
+                }
+            }
+            ("args", Some(val)) => {
+                match coerce_map(val, &coerce::string_with_span, ctx.diagnostics) {
+                    Some(val) => {
+                        let params = val
+                            .iter()
+                            .map(|(k, v)| ((k.0.to_string(), (k.1.clone(), (*v).clone()))))
+                            .collect();
+                        args = Some((f.span(), params));
+                    }
+                    None => {}
+                }
+            }
             (name, Some(_)) => ctx.push_error(DatamodelError::new_property_not_known_error(
                 name,
                 f.identifier().span().clone(),
-                ["function", "input", "group"].to_vec(),
+                ["functions", "args"].to_vec(),
             )),
         });
 
-    match (function_name, test_case) {
+    match (functions, args) {
         (None, _) => ctx.push_error(DatamodelError::new_validation_error(
-            "Missing `function_name` property",
+            "Missing `functions` property",
             config.identifier().span().clone(),
         )),
-        (Some(function_name), None) => ctx.push_error(DatamodelError::new_validation_error(
-            "Missing `test_case` property",
-            function_name.1.clone(),
+        (Some(_function_name), None) => ctx.push_error(DatamodelError::new_validation_error(
+            "Missing `args` property",
+            config.identifier().span().clone(),
         )),
-        (Some(function), Some(test_case)) => {
+        (Some(functions), Some((args_field_span, args))) => {
             ctx.types.test_cases.insert(
                 idx,
                 super::TestCase {
-                    function,
-                    content: test_case.clone(),
-                    group,
+                    functions,
+                    args,
+                    args_field_span: args_field_span.clone(),
                 },
             );
         }

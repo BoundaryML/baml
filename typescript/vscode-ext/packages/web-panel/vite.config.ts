@@ -1,14 +1,25 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
 import path from 'path'
-const isWatchMode = process.argv.includes('--watch') || true;
-console.log('isWatchMode', isWatchMode);
+import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite'
+import topLevelAwait from 'vite-plugin-top-level-await'
+import wasm from 'vite-plugin-wasm'
+
+const isWatchMode = process.argv.includes('--watch') || true
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: react(),
+  plugins: [
+    react({
+      babel: {
+        presets: ['jotai/babel/preset'],
+      },
+    }),
+    wasm(),
+    topLevelAwait(),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@gloo-ai/baml-schema-wasm-web': path.resolve(__dirname, '../../../baml-schema-wasm-web/dist'),
     },
   },
   mode: isWatchMode ? 'development' : 'production',

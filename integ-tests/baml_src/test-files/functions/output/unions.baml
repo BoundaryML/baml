@@ -4,17 +4,19 @@ class UnionTest_ReturnType {
   prop3 (float[] | bool[])
 }
 
-function UnionTest_Function {
-  input string | bool
-  output UnionTest_ReturnType
-}
-
-impl<llm, UnionTest_Function> v1 {
+function UnionTest_Function(input: string | bool) -> UnionTest_ReturnType {
   client GPT35
   prompt #"
     Return a JSON blob with this schema: 
-    {#print_type(output)}
+    {{ctx.output_format}}
 
     JSON:
   "#
+}
+
+test UnionTest_Function {
+  functions [UnionTest_Function]
+  args {
+    input "example input"
+  }
 }

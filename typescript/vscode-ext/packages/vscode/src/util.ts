@@ -1,25 +1,26 @@
-import {
-  WorkspaceEdit,
-  window,
-  TextEdit,
-  SnippetString,
-  TextEditorEdit,
-  env,
-  workspace,
-  ExtensionContext,
-} from 'vscode'
-import { CodeAction, TextDocumentIdentifier, LanguageClientOptions } from 'vscode-languageclient'
-import { LanguageClient, ServerOptions } from 'vscode-languageclient/node'
-import { homedir } from 'os'
 import { readdirSync } from 'fs'
+import { homedir } from 'os'
 import path from 'path'
+import {
+  type ExtensionContext,
+  SnippetString,
+  type TextEdit,
+  type TextEditorEdit,
+  type WorkspaceEdit,
+  env,
+  window,
+  workspace,
+} from 'vscode'
+import type { CodeAction, LanguageClientOptions, TextDocumentIdentifier } from 'vscode-languageclient'
+import { LanguageClient, type ServerOptions } from 'vscode-languageclient/node'
 export function isDebugOrTestSession(): boolean {
   return env.sessionId === 'someValue.sessionId'
 }
 
 export function checkForOtherPrismaExtension(): void {
   const files = readdirSync(path.join(homedir(), '.vscode/extensions')).filter(
-    (file) => file.toLowerCase().startsWith('Gloo.baml-') && !file.toLowerCase().startsWith('Gloo.baml-insider-'),
+    (file) =>
+      file.toLowerCase().startsWith('Boundary.baml-') && !file.toLowerCase().startsWith('Boundary.baml-insider-'),
   )
   if (files.length !== 0) {
     // eslint-disable-next-line @typescript-eslint/no-floating-promises

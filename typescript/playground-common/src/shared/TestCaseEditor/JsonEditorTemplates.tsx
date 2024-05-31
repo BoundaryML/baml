@@ -1,30 +1,29 @@
-import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
-import { Button } from '../../components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog'
-import { vscode } from '../../utils/vscode'
 import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
 import Form, { getDefaultRegistry } from '@rjsf/core'
-import validator from '@rjsf/validator-ajv8'
-import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
-import { Copy, Edit2, FileJson2, Save, Play, PlusIcon, Trash2, XIcon } from 'lucide-react'
-import React, { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { ASTContext } from '../ASTProvider'
-import TypeComponent from '../TypeComponent'
-import { useSelections } from '../hooks'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip'
 import {
-  ArrayFieldTemplateItemType,
-  ArrayFieldTitleProps,
-  BaseInputTemplateProps,
-  FieldTemplateProps,
-  IconButtonProps,
-  ObjectFieldTemplateProps,
+  type ArrayFieldTemplateItemType,
+  type ArrayFieldTitleProps,
+  type BaseInputTemplateProps,
+  type FieldTemplateProps,
+  type IconButtonProps,
+  type ObjectFieldTemplateProps,
   UiSchema,
   ariaDescribedByIds,
   examplesId,
   getInputProps,
   titleId,
 } from '@rjsf/utils'
+import validator from '@rjsf/validator-ajv8'
+import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
+import { Copy, Edit2, FileJson2, Play, PlusIcon, Save, Trash2, XIcon } from 'lucide-react'
+import React, { type ChangeEvent, type FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
+import { Button } from '../../components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip'
+import { vscode } from '../../utils/vscode'
+import { ASTContext } from '../ASTProvider'
+import TypeComponent from '../TypeComponent'
 
 function BaseInputTemplate(props: BaseInputTemplateProps) {
   const {
@@ -85,7 +84,7 @@ function BaseInputTemplate(props: BaseInputTemplateProps) {
       <input
         id={id}
         name={id}
-        className="max-w-[100px] rounded-sm bg-vscode-input-background text-vscode-input-foreground"
+        className='max-w-[100px] rounded-sm bg-vscode-input-background text-vscode-input-foreground'
         readOnly={readonly}
         disabled={disabled}
         autoFocus={autofocus}
@@ -108,7 +107,7 @@ function BaseInputTemplate(props: BaseInputTemplateProps) {
             .map((line: string) => Math.max(1, line.length / 42))
             .reduce((a: number, b: number) => a + b, 0),
         )}
-        className="w-[90%] px-1 rounded-sm bg-vscode-input-background text-vscode-input-foreground"
+        className='w-[90%] px-1 rounded-sm bg-vscode-input-background text-vscode-input-foreground'
         readOnly={readonly}
         disabled={disabled}
         autoFocus={autofocus}
@@ -123,7 +122,7 @@ function BaseInputTemplate(props: BaseInputTemplateProps) {
     )
 
   return (
-    <div className="flex flex-col w-full gap-y-1">
+    <div className='flex flex-col w-full gap-y-1'>
       {input}
       {Array.isArray(schema.examples) && (
         <datalist key={`datalist_${id}`} id={examplesId(id)}>
@@ -139,36 +138,34 @@ function BaseInputTemplate(props: BaseInputTemplateProps) {
 }
 
 const typeLabel = (schema: any): string => {
-  if (schema.type === "array") {
+  if (schema.type === 'array') {
     return `${typeLabel(schema.items)}[]`
   }
   return schema.title || schema.type
-};
+}
 
 function FieldTemplate(props: FieldTemplateProps) {
   const { id, classNames, style, label, displayLabel, help, required, hidden, description, errors, children } = props
 
   if (hidden) {
-    return <div className="hidden">{children}</div>
+    return <div className='hidden'>{children}</div>
   }
 
   return (
     <div className={classNames + ' ml-2 w-full'} style={style}>
       <>
         {props.schema.type === 'boolean' ? null : (
-          <label htmlFor={id} className="flex flex-row items-center gap-x-3">
+          <label htmlFor={id} className='flex flex-row items-center gap-x-3'>
             <div className={props.schema.type === 'object' ? ' font-bold text-sm' : ' text-xs'}>
               {label.split('-').at(-1)}
             </div>
-            <div className={'text-vscode-textSeparator-foreground text-xs font-mono'}>
-              {typeLabel(props.schema)}
-            </div>
+            <div className={'text-vscode-textSeparator-foreground text-xs font-mono'}>{typeLabel(props.schema)}</div>
           </label>
         )}
       </>
 
       {description}
-      <div className="flex flex-row items-center w-full">{children}</div>
+      <div className='flex flex-row items-center w-full'>{children}</div>
       {errors}
       {help}
     </div>
@@ -177,12 +174,12 @@ function FieldTemplate(props: FieldTemplateProps) {
 
 function ObjectFieldTemplate(props: ObjectFieldTemplateProps) {
   return (
-    <div className="w-full">
+    <div className='w-full'>
       {/* <div className="py-2">{props.title}</div> */}
       {props.description}
-      <div className="flex flex-col w-full py-1 gap-y-2">
+      <div className='flex flex-col w-full py-1 gap-y-2'>
         {props.properties.map((element) => (
-          <div className="w-full property-wrapper text-vscode-input-foreground">{element.content}</div>
+          <div className='w-full property-wrapper text-vscode-input-foreground'>{element.content}</div>
         ))}
       </div>
     </div>
@@ -193,10 +190,10 @@ function AddButton(props: IconButtonProps) {
   const { icon, iconType, ...btnProps } = props
   return (
     <Button
-      variant="ghost"
-      size="icon"
+      variant='ghost'
+      size='icon'
       {...btnProps}
-      className="flex flex-row items-center p-1 text-xs w-fit h-fit gap-x-2 hover:bg-vscode-descriptionForeground"
+      className='flex flex-row items-center p-1 text-xs w-fit h-fit gap-x-2 hover:bg-vscode-descriptionForeground'
     >
       <PlusIcon size={14} /> <div>Add item</div>
     </Button>
@@ -206,11 +203,11 @@ function AddButton(props: IconButtonProps) {
 function RemoveButton(props: IconButtonProps) {
   const { icon, iconType, ...btnProps } = props
   return (
-    <div className="flex w-fit h-fit">
+    <div className='flex w-fit h-fit'>
       <Button
         {...btnProps}
         size={'icon'}
-        className="!flex flex-col !px-0 !py-0 bg-red-700 h-fit !max-w-[48px] ml-auto"
+        className='!flex flex-col !px-0 !py-0 bg-red-700 h-fit !max-w-[48px] ml-auto'
         style={{
           flex: 'none',
         }}
@@ -224,10 +221,10 @@ function RemoveButton(props: IconButtonProps) {
 function SubmitButton(props: IconButtonProps) {
   const { icon, iconType, ...btnProps } = props
   return (
-    <div className="flex items-end justify-end w-full ml-auto h-fit">
+    <div className='flex items-end justify-end w-full ml-auto h-fit'>
       <Button
         {...btnProps}
-        className="px-3 py-2 rounded-none bg-vscode-button-background text-vscode-button-foreground w-fit h-fit hover:bg-vscode-button-background hover:opacity-75"
+        className='px-3 py-2 rounded-none bg-vscode-button-background text-vscode-button-foreground w-fit h-fit hover:bg-vscode-button-background hover:opacity-75'
         style={{
           flex: 'none',
         }}
@@ -244,12 +241,12 @@ function ArrayFieldItemTemplate(props: ArrayFieldTemplateItemType) {
     <div>
       <div className={`${className} flex flex-row ml-0 py-1 text-xs text-vscode-descriptionForeground`}>
         {props.hasRemove && (
-          <div className="flex ml-auto w-fit h-fit">
+          <div className='flex ml-auto w-fit h-fit'>
             <Button
               onClick={props.onDropIndexClick(props.index)}
               disabled={props.disabled || props.readonly}
               size={'icon'}
-              className="p-1 bg-transparent w-fit h-fit hover:bg-red-700"
+              className='p-1 bg-transparent w-fit h-fit hover:bg-red-700'
               style={{
                 flex: 'none',
               }}
@@ -286,4 +283,4 @@ export const TEMPLATES = {
   },
   ArrayFieldTitleTemplate,
   ArrayFieldItemTemplate,
-};
+}

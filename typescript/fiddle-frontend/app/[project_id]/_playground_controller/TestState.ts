@@ -1,10 +1,10 @@
 import {
-  ClientEventLog,
+  type ClientEventLog,
   ParserDatabase,
   SFunction,
   StringSpan,
-  TestRequest,
-  TestState as TestStateType,
+  type TestRequest,
+  type TestState as TestStateType,
   TestStatus,
   clientEventLogSchema,
   getFullTestName,
@@ -112,7 +112,7 @@ export class TestState {
         this.handleUpdateTestCase(payload.data)
         break
       case 'log':
-        let res = clientEventLogSchema.safeParse(payload.data)
+        const res = clientEventLogSchema.safeParse(payload.data)
         if (!res.success) {
           console.error(`Failed to parse log event: ${JSON.stringify(payload.data, null, 2)}`)
           console.error(res.error)

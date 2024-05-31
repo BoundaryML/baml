@@ -1,6 +1,7 @@
 use std::{collections::HashMap, io::Write, path::PathBuf};
 
 use baml_lib::{Configuration, ValidatedSchema};
+use base64::Engine;
 use colored::Colorize;
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -86,7 +87,8 @@ pub fn run(
     schema: ValidatedSchema,
 ) -> Result<(), CliError> {
     // Parse base64 encoded content
-    let decoded = base64::decode(content)
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(content)
         .map_err(|e| CliError::StringError(format!("Expected encoded string: {}\n", e)))?;
 
     // Parse content as JSON

@@ -1,6 +1,4 @@
 #[cfg(target_arch = "wasm32")]
-use log::info;
-#[cfg(target_arch = "wasm32")]
 use std::path::PathBuf;
 
 use crate::ast::*;
@@ -91,7 +89,7 @@ pub(crate) fn parse_test_from_json(
 
     let parts = relative_path.components();
 
-    // Ensure is of the form `__tests__/<function_name>/(<group_name>/)/<test_name>.json` using regex
+    // Ensure is of the form `__tests__/<function_name>/<test_name>.json` using regex
     // or throw an error.
     let mut function_name = None;
     let mut test_name = None;
@@ -154,7 +152,7 @@ pub(crate) fn parse_test_from_json(
                 Span::empty(source.clone()),
             ));
             diagnostics.to_result()?;
-            unreachable!()
+            unreachable!("Failed to parse JSON for test:");
         }
     };
     let test_input = file_content.input.to_string();
@@ -173,31 +171,24 @@ pub(crate) fn parse_test_from_json(
         documentation: None,
         span: span.clone(),
     };
-    let function_name = ConfigBlockProperty {
-        name: Identifier::Local("function".into(), span.clone()),
-        value: Some(Expression::StringValue(function_name.into(), span.clone())),
+    let function_names = ConfigBlockProperty {
+        name: Identifier::Local("functions".into(), span.clone()),
+        value: Some(Expression::Array(
+            vec![Expression::StringValue(function_name.into(), span.clone())],
+            span.clone(),
+        )),
         template_args: None,
         attributes: vec![],
         documentation: None,
         span: span.clone(),
     };
-    let mut top = RetryPolicyConfig {
+    let top = RetryPolicyConfig {
         name: Identifier::Local(test_name, span.clone()),
         documentation: None,
         attributes: vec![],
-        fields: vec![test_case, function_name],
+        fields: vec![test_case, function_names],
         span: span.clone(),
     };
-    if let Some(group_name) = group_name {
-        top.fields.push(ConfigBlockProperty {
-            name: Identifier::Local("group".into(), span.clone()),
-            value: Some(Expression::StringValue(group_name, span.clone())),
-            template_args: None,
-            attributes: vec![],
-            documentation: None,
-            span: span.clone(),
-        });
-    }
     Ok(SchemaAst {
         tops: vec![Top::Config(Configuration::TestCase(top))],
     })
