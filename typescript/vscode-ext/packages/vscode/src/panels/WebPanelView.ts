@@ -81,11 +81,14 @@ export class WebPanelView {
         // Panel title
         'BAML Playground',
         // The editor column the panel should be displayed in
-        process.env.VSCODE_DEBUG_MODE === 'true' ? ViewColumn.Two : ViewColumn.Beside,
+        // process.env.VSCODE_DEBUG_MODE === 'true' ? ViewColumn.Two : ViewColumn.Beside,
+        { viewColumn: ViewColumn.Beside, preserveFocus: true },
+
         // Extra panel configurations
         {
           // Enable JavaScript in the webview
           enableScripts: true,
+
           // Restrict the webview to only load resources from the `out` and `web-panel/dist` directories
           localResourceRoots: [Uri.joinPath(extensionUri, 'out'), Uri.joinPath(extensionUri, 'web-panel/dist')],
           retainContextWhenHidden: true,
