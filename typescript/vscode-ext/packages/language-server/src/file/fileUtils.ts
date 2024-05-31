@@ -39,7 +39,7 @@ export function gatherFiles(rootPath: string, debug = false): URI[] {
     }
   }
 
-  addDir(URI.parse(rootPath))
+  addDir(URI.file(rootPath))
 
   const fileList: URI[] = []
 

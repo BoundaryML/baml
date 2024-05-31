@@ -83,7 +83,7 @@ export function startServer(options?: LSOptions): void {
         break
       case 'diagnostic':
         params.errors.forEach(([uri, diagnostics]) => {
-          connection.sendDiagnostics({ uri, diagnostics })
+          connection.sendDiagnostics({ uri: uri, diagnostics })
         })
         break
       case 'error':
@@ -312,6 +312,7 @@ export function startServer(options?: LSOptions): void {
 
   documents.onDidSave(async (change: { document: TextDocument }) => {
     const documentUri = URI.parse(change.document.uri)
+    console.log('saving uri' + documentUri.toString() + '   ' + documentUri.fsPath)
     await bamlProjectManager.save_file(documentUri, change.document.getText())
 
     try {
@@ -458,7 +459,7 @@ export function startServer(options?: LSOptions): void {
 
         if (proj) {
           for (const func of proj.list_functions()) {
-            if (URI.parse(func.span.file_path).toString() === document.uri) {
+            if (URI.file(func.span.file_path).toString() === document.uri) {
               const range = Range.create(document.positionAt(func.span.start), document.positionAt(func.span.end))
               const command: Command = {
                 title: '▶ Open Playground ✨',

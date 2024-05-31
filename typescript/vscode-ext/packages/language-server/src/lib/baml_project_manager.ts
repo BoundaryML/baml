@@ -7,7 +7,7 @@ import { CompletionList, CompletionItem } from 'vscode-languageserver'
 
 import { existsSync, readFileSync } from 'fs'
 
-import type { URI } from 'vscode-uri'
+import { URI } from 'vscode-uri'
 import { findTopLevelParent, gatherFiles } from '../file/fileUtils'
 import { getWordAtPosition, trimLine } from './ast'
 import { debounce } from 'lodash'
@@ -15,6 +15,7 @@ import { debounce } from 'lodash'
 type Notify = (
   params:
     | { type: 'error' | 'warn' | 'info'; message: string }
+    // the string is a uri
     | { type: 'diagnostic'; errors: [string, Diagnostic[]][] }
     | { type: 'runtime_updated'; root_path: string; files: Record<string, string> },
 ) => void
@@ -47,7 +48,9 @@ class Project {
 
         const files = this.wasmProject.files()
         const fileMap = Object.fromEntries(
-          files.map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string]),
+          files
+            .map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string])
+            .map(([path, content]) => [URI.file(path).toString(), content]),
         )
         this.onSuccess(this.wasmProject.diagnostics(this.current_runtime), fileMap)
       } catch (e) {
@@ -62,7 +65,9 @@ class Project {
     if (this.current_runtime) {
       const files = this.wasmProject.files()
       const fileMap = Object.fromEntries(
-        files.map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string]),
+        files
+          .map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string])
+          .map(([path, content]) => [URI.file(path).toString(), content]),
       )
       this.onSuccess(this.wasmProject.diagnostics(this.current_runtime), fileMap)
     }
@@ -77,8 +82,8 @@ class Project {
     return rt
   }
 
-  replace_all_files(files: BamlWasm.WasmProject) {
-    this.wasmProject = files
+  replace_all_files(project: BamlWasm.WasmProject) {
+    this.wasmProject = project
     this.last_successful_runtime = this.current_runtime
     this.current_runtime = undefined
   }
@@ -133,7 +138,7 @@ class Project {
     if (match) {
       return [
         {
-          targetUri: match.uri.toString(),
+          targetUri: URI.file(match.uri).toString(),
           //unused default values for now
           targetRange: {
             start: { line: 0, character: 0 },
@@ -168,7 +173,7 @@ class Project {
         end: { line: match.end_line, character: match.end_character },
       }
 
-      const hoverDoc = this.get_file(match.uri)
+      const hoverDoc = this.get_file(URI.file(match.uri).toString())
 
       if (hoverDoc) {
         const hoverText = hoverDoc.getText(range)
@@ -321,13 +326,14 @@ class BamlProjectManager {
 
   private handleMessage(e: any) {
     if (e instanceof BamlWasm.WasmDiagnosticError) {
-      const diagnostics = new Map<string, Diagnostic[]>(e.all_files.map((f) => [f, []]))
+      const diagnostics = new Map<string, Diagnostic[]>(e.all_files.map((f) => [URI.file(f).toString(), []]))
+      console.log('diagnostic filess ' + JSON.stringify(diagnostics, null, 2))
 
       e.errors().forEach((err) => {
         if (err.type === 'error') {
           console.error(`${err.message}, ${err.start_line}, ${err.start_column}, ${err.end_line}, ${err.end_column}`)
         }
-        diagnostics.get(err.file_path)!.push({
+        diagnostics.get(URI.file(err.file_path).toString())!.push({
           range: {
             start: {
               line: err.start_line,
@@ -343,6 +349,7 @@ class BamlProjectManager {
           source: 'baml',
         })
       })
+      console.log('diagnostics length: ' + Array.from(diagnostics).length)
       this.notifier({ errors: Array.from(diagnostics), type: 'diagnostic' })
     } else if (e instanceof Error) {
       console.error('Error linting, got error ' + e.message)
@@ -377,6 +384,7 @@ class BamlProjectManager {
   }
 
   private get_project(root_path: string) {
+    console.log('Get project root path: ' + root_path)
     const project = this.projects.get(root_path)
     if (!project) {
       throw new Error(`Project not found for path: ${root_path}`)
@@ -386,7 +394,9 @@ class BamlProjectManager {
   }
 
   private add_project(root_path: string, files: { [path: string]: string }) {
-    console.debug(`Adding project: ${root_path}`)
+    // console.debug(`Adding project: ${root_path}`)
+    console.log('add project project path ' + root_path)
+
     const project = BamlWasm.WasmProject.new(root_path, files)
     this.projects.set(
       root_path,
@@ -412,6 +422,7 @@ class BamlProjectManager {
       )
       const rootPath = uriToRootPath(path)
       if (this.projects.has(rootPath)) {
+        console.log('upserting ' + path.fsPath)
         const project = this.get_project(rootPath)
         project.upsert_file(path.fsPath, content)
         project.update_runtime()
