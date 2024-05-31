@@ -93,8 +93,10 @@ async def test_should_work_for_all_outputs():
 
 @pytest.mark.asyncio
 async def test_should_work_with_image():
-    pass  # TODO: Handle image testing when type definitions and support are available
-
+    res = await b.TestImageInput(
+        img=baml_py.Image.from_url('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png')
+    )
+    assert "green" in res.lower()
 
 @pytest.mark.asyncio
 async def test_works_with_retries2():
