@@ -135,7 +135,7 @@ Our VSCode extension automatically generates a python **baml_client** to access 
 from baml_client import baml as b
 # Import your generated Email model. 
 # We generate this pydantic model for you.
-from baml_client.baml_types import Email
+from baml_client.types import Email
 import asyncio
 
 async def main():
@@ -158,7 +158,7 @@ if __name__ == "__main__":
 
 ```typescript TypeScript
 import b from '@/baml_client'
-import { Email } from '@/baml_client/baml_types'
+import { Email } from '@/baml_client/types'
 
 const main = async () => {
   const order_info = await b.GetOrderInfo({

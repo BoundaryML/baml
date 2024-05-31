@@ -31,16 +31,13 @@ client<CLIENT_TYPE> Name {
 BAML ships with the following providers (you can can also write your own!):
 
 - LLM client providers
-  - `baml-anthropic`
-  - `baml-azure-chat`
-  - `baml-azure-completion`
-  - `baml-openai-chat`
-  - `baml-openai-completion`
-  - `baml-ollama-chat`
-  - `baml-ollama-completion` (only for python)
+  - `openai`
+  - `azure-openai`
+  - `anthropic`
+  - `ollama`
 - Composite client providers
-  - `baml-fallback`
-  - `baml-round-robin`
+  - `fallback`
+  - `round-robin`
 
 There are two primary types of LLM clients: chat and completion. BAML abstracts
 away the differences between these two types of LLMs by putting that logic in
@@ -55,10 +52,7 @@ completion prompt.
 
 Provider names:
 
-- `baml-openai-chat`
-- `baml-openai-completion`
-- `baml-azure-chat`
-- `baml-azure-completion`
+- `openai-azure`
 
 You must pick the right provider for the type of model you are using. For
 example, if you are using a GPT-3 model, you must use a `chat` provider, but if
@@ -74,7 +68,7 @@ See [Azure Docs](https://learn.microsoft.com/en-us/azure/ai-services/openai/quic
 // A client that uses the OpenAI chat API.
 client<llm> MyGPT35Client {
   // Since we're using a GPT-3 model, we must use a chat provider.
-  provider baml-openai-chat
+  provider openai
   options {
     model gpt-3.5-turbo
     // Set the api_key parameter to the OPENAI_API_KEY environment variable
@@ -86,7 +80,7 @@ client<llm> MyGPT35Client {
 client<llm> MyAzureClient {
   // I configured the deployment to use a GPT-3 model,
   // so I must use a chat provider.
-  provider baml-azure-chat
+  provider openai-azure
   options {
         api_key env.AZURE_OPENAI_KEY
         // This may change in the future
@@ -103,7 +97,7 @@ client<llm> MyAzureClient {
 
 Provider names:
 
-- `baml-anthropic`
+- `anthropic`
 
 Accepts any options as defined by [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-python/blob/fc90c357176b67cfe3a8152bbbf07df0f12ce27c/src/anthropic/types/completion_create_params.py#L20)
 
@@ -124,14 +118,18 @@ client<llm> MyClient {
 
 Provider names:
 
-- `baml-ollama-chat`
-- `baml-ollama-completion` (only for python)
+- `ollama`
 
 Accepts any options as defined by [Ollama SDK](https://github.com/ollama/ollama/blob/main/docs/api.md#generate-a-chat-completion).
 
+#### Requirements
+Make sure you disable CORS if you are trying to run ollama using the BAML VSCode playground:
+1. in your terminal run `OLLAMA_ORIGINS="*" ollama serve`
+2. Run `ollama run llama2` (or your model), and you should be good to go.
+
 ```rust
 client<llm> MyClient {
-  provider baml-ollama-chat
+  provider ollama
   options {
     model mistral
     options {
@@ -154,7 +152,7 @@ multiple clients. Here's an example:
 
 ```rust
 client<llm> MyClient {
-  provider baml-round-robin
+  provider round-robin
   options {
     strategy [
       MyGptClient
@@ -185,18 +183,18 @@ client<llm> MyClient {
 }
 ```
 
-### Creating your own (Advanced)
+## Other providers
+You can use the `openai` provider if the provider you're trying to use has the same ChatML response format.
 
-Creating a provider is requires a bit more deeper understanding. You can see our source code for any of our providers here:
-
-- [OpenAI + Azure Chat](https://github.com/BoundaryML/baml/blob/canary/clients/python/baml_core/registrations/providers/openai_chat_provider.py)
-- [OpenAI + Azure Completion](https://github.com/BoundaryML/baml/blob/canary/clients/python/baml_core/registrations/providers/openai_completion_provider.py)
-- [Anthropic](https://github.com/BoundaryML/baml/blob/canary/clients/python/baml_core/registrations/providers/anthropic_provider.py)
-- [Fallback](https://github.com/BoundaryML/baml/blob/canary/clients/python/baml_core/registrations/providers/fallback_provider.py)
-
-You can add your own provider by creating a new file anywhere in your application logic, then setting the provider name in .baml to name you registered it with in your implementation.
-
-<Note>
-  We are actively working on how to make custom providers better / easier. If
-  you have ideas, please reach out to us on discord!
-</Note>
+Some providers ask you to add a `base_url`, which you can do like this:
+  
+```rust
+client<llm> MyClient {
+  provider openai
+  options {
+    model some-custom-model
+    api_key env.OPEN
+    base_url "https://some-custom-url-here"
+  }
+}
+```
