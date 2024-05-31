@@ -1,0 +1,91 @@
+# typed: strict
+require "baml"
+require "sorbet-runtime"
+
+require_relative "types"
+
+module Baml
+
+  class BamlClient
+    extend T::Sig
+
+    sig { returns(UnstableBamlClient) }
+    attr_reader :unstable
+
+    sig {params(runtime: Baml::Ffi::BamlRuntime).void}
+    def initialize(runtime:)
+      @runtime = runtime
+      @unstable = T.let(UnstableBamlClient.new(runtime: runtime), UnstableBamlClient)
+    end
+
+    sig {params(path: String).returns(BamlClient)}
+    def self.from_directory(path)
+      BamlClient.new(runtime: Baml::Ffi::BamlRuntime.from_directory(path))
+    end
+
+    {% for fn in funcs -%}
+    sig {
+      params(
+        {% for (name, type) in fn.args -%}
+        {{name}}: {{type}},
+        {%- endfor %}
+      ).returns({{ fn.return_type }})
+    }
+    def {{fn.name}}(
+        {% for (name, _) in fn.args -%}
+        {{name}}:{% if !loop.last %},{% endif %}
+        {%- endfor %}
+    )
+      raw = @runtime.call_function(
+        function_name: "{{fn.name}}",
+        args: {
+          {% for (name, _) in fn.args -%}
+          "{{name}}" => {{name}},
+          {%- endfor %}
+        }
+      )
+      Baml::convert_to({{ fn.return_type }}).from(raw.parsed)
+    end
+
+    {% endfor %}
+
+  end
+
+  class UnstableBamlClient
+    extend T::Sig
+
+    sig {params(runtime: Baml::Ffi::BamlRuntime).void}
+    def initialize(runtime:)
+      @runtime = runtime
+    end
+
+    {% for fn in funcs -%}
+    sig {
+      params(
+        {% for (name, type) in fn.args -%}
+        {{name}}: {{type}},
+        {%- endfor %}
+      ).returns(Baml::Unstable::FunctionResult[{{ fn.return_type }}])
+    }
+    def {{fn.name}}(
+        {% for (name, _) in fn.args -%}
+        {{name}}:{% if !loop.last %},{% endif %}
+        {%- endfor %}
+    )
+      raw = @runtime.call_function(
+        function_name: "{{fn.name}}",
+        args: {
+          {% for (name, _) in fn.args -%}
+          "{{name}}" => {{name}},
+          {%- endfor %}
+        }
+      )
+      Baml::Unstable::FunctionResult[{{ fn.return_type }}].new(
+        inner: raw,
+        parsed: Baml::convert_to({{ fn.return_type }}).from(raw.parsed)
+      )
+    end
+
+    {% endfor %}
+  end
+end

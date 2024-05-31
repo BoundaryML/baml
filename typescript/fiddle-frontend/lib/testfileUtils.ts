@@ -1,4 +1,2 @@
-import { EditorFile } from "@/app/actions";
-import { ParserDatabase } from "@baml/common";
-
-
+import { EditorFile } from '@/app/actions'
+import { ParserDatabase } from '@baml/common'

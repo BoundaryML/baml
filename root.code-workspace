@@ -17,41 +17,18 @@
       "path": "typescript"
     },
     {
-      "name": "clients/python (Python client)",
-      "path": "clients/python"
-    },
-    {
-      "name": "clients/python-ffi (pyo3 client)",
-      "path": "clients/python-ffi"
-    },
-    {
-      "name": "clients/ts (TS client)",
-      "path": "clients/ts"
-    },
-    {
       "name": "Docs",
       "path": "docs"
     },
     {
+      "path": "tools"
+    },
+    {
       "name": "release (Release Tools)",
       "path": "release"
-    },
-    {
-      "name": "client-tests/test1/python",
-      "path": "client-tests/test1/python"
-    },
-    {
-      "path": "client-tests/test2"
     }
   ],
   "settings": {
-    "rust-analyzer.procMacro.ignored": {
-      "napi-derive": [
-        "napi"
-      ]
-    },
-    "editor.formatOnSaveMode": "file",
-    "editor.formatOnSave": true,
     "[rust]": {
       "editor.defaultFormatter": "rust-lang.rust-analyzer",
       "editor.formatOnSave": true
@@ -59,16 +36,49 @@
     "[python]": {
       "editor.defaultFormatter": "ms-python.black-formatter"
     },
-    "mypy.enabled": false,
+    "[javascript]": {
+      "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[typescript]": {
+      "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[typescriptreact]": {
+      "editor.defaultFormatter": "biomejs.biome"
+    },
+    "editor.colorDecoratorsLimit": 2000,
+    "editor.formatOnSaveMode": "file",
+    "editor.formatOnSave": true,
     "editor.tabSize": 2,
+    "mypy.enabled": false,
     "git.openDiffOnClick": true,
+    "python.analysis.typeCheckingMode": "strict",
+    "rust-analyzer.procMacro.ignored": {
+      "napi-derive": [
+        "napi"
+      ]
+    },
+    "sorbet.enabled": true,
+    "sorbet.lspConfigs": [
+      {
+        "id": "stable",
+        "name": "Sorbet",
+        "description": "Stable Sorbet Ruby IDE features",
+        "cwd": "${workspaceFolder}",
+        "command": [
+          "bundle",
+          "exec",
+          "srb",
+          "typecheck",
+          "--lsp",
+          "--disable-watchman"
+        ]
+      }
+    ],
     "workbench.colorCustomizations": {
       "activityBar.background": "#630001",
       "titleBar.activeBackground": "#8B0002",
       "titleBar.activeForeground": "#FFFBFB"
     },
-    "python.analysis.typeCheckingMode": "strict",
-    "editor.colorDecoratorsLimit": 2000
   },
   "extensions": {
     "recommendations": [
@@ -80,7 +90,9 @@
       "unifiedjs.vscode-mdx",
       "tamasfe.even-better-toml",
       "charliermarsh.ruff",
-      "matangover.mypy"
+      "matangover.mypy",
+      "samuelcolvin.jinjahtml",
+      "biomejs.biome"
     ]
   }
 }

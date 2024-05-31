@@ -91,7 +91,6 @@
 //     })),
 //   }
 
-
 //   console.debug(`Linting ${linterInput.files.length} files in ${linterInput.root_path}`)
 //   // console.log("linterInput " + JSON.stringify(linterInput, null, 2))
 

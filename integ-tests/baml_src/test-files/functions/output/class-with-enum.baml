@@ -8,21 +8,20 @@ class TestClassWithEnum {
   prop2 EnumInClass
 }
 
-function FnOutputClassWithEnum {
-  input string
-  output TestClassWithEnum
-}
-
-impl<llm, FnOutputClassWithEnum> v1 {
+function FnOutputClassWithEnum(input: string) -> TestClassWithEnum {
   client GPT35
   prompt #"
     Return a made up json blob that matches this schema:
-    {#print_type(output)}
-
-    Here are the values to use for enum:
-    {#print_enum(EnumInClass)}
+    {{ctx.output_format}}
     ---
 
     JSON:
   "#
+}
+
+test FnOutputClassWithEnum {
+  functions [FnOutputClassWithEnum]
+  args {
+    input "example input"
+  }
 }

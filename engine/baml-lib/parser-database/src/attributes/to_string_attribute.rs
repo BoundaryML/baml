@@ -44,6 +44,12 @@ pub(super) fn visit(ctx: &mut Context<'_>, as_block: bool) -> Option<ToStringAtt
                 modified = true;
                 ctx.validate_visited_arguments();
             }
+        } else {
+            if ctx.visit_optional_single_attr("dynamic") {
+                attributes.set_dynamic_type();
+                modified = true;
+                ctx.validate_visited_arguments();
+            }
         }
 
         if modified {

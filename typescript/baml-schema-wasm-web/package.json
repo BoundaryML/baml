@@ -9,6 +9,16 @@
     "build": "bash ./scripts/build.sh",
     "update-wasm": "bash ./scripts/build.sh"
   },
+  "exports": {
+    ".": {
+      "import": "./dist/baml_schema_build.js",
+      "require": "./dist/baml_schema_build.js"
+    },
+    "./baml_schema_build": {
+      "import": "./dist/baml_schema_build.js",
+      "require": "./dist/baml_schema_build.js"
+    }
+  },
   "repository": {
     "type": "git",
     "url": "",

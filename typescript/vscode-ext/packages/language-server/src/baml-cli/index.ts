@@ -1,5 +1,5 @@
 import { exec } from 'child_process'
-import { URI } from 'vscode-uri'
+import type { URI } from 'vscode-uri'
 
 export function cliBuild(
   cliPath: string,
@@ -7,7 +7,7 @@ export function cliBuild(
   onError?: (errorMessage: string) => void,
   onSuccess?: () => void,
 ) {
-  let buildCommand = `${cliPath} build`
+  const buildCommand = `${cliPath} build`
 
   if (!workspacePath) {
     return
@@ -47,7 +47,7 @@ export function cliVersion(
   onError?: (errorMessage: string) => void,
   onSuccess?: (ver: string) => void,
 ) {
-  let buildCommand = `${cliPath} --version`
+  const buildCommand = `${cliPath} --version`
 
   exec(buildCommand, (error: Error | null, stdout: string, stderr: string) => {
     if (stderr) {
@@ -71,7 +71,7 @@ export function cliCheckForUpdates(
   onError?: (errorMessage: string) => void,
   onSuccess?: (ver: string) => void,
 ) {
-  let buildCommand = `${cliPath} version --check --output json`
+  const buildCommand = `${cliPath} version --check --output json`
 
   exec(buildCommand, (error: Error | null, stdout: string, stderr: string) => {
     if (stderr) {

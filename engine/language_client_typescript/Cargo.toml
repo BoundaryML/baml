@@ -1,0 +1,31 @@
+[package]
+edition = "2021"
+name = "baml-typescript-ffi"
+version = "0.0.1"
+
+[lib]
+name = "baml"
+crate-type = ["cdylib"]
+
+[dependencies]
+baml-types = { path = "../baml-lib/baml-types" }
+baml-runtime = { path = "../baml-runtime", features = ["internal"] }
+env_logger.workspace = true
+futures.workspace = true
+internal-baml-codegen.workspace = true
+log.workspace = true
+napi = { version = "2", features = [
+  "serde-json",
+  "anyhow",
+  "tokio_rt",
+  "napi5",
+  "async",
+] }
+napi-derive = "2"
+serde.workspace = true
+serde_json.workspace = true
+tokio = { version = "1", features = ["full"] }
+indexmap.workspace = true
+
+[build-dependencies]
+napi-build = "2.0.1"

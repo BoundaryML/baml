@@ -20,7 +20,7 @@ log = "0.4.14"
 enumflags2 = "0.7"
 
 [dev-dependencies]
-base64 = "0.13.0"
+base64.workspace = true
 dissimilar = "1.0.4"
 expect-test = "1.1.0"
 indoc.workspace = true

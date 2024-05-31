@@ -1,8 +1,7 @@
 /// Content once a function has been selected.
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import { TestStatus } from '@baml/common'
-import { useImplCtx, useSelections } from './hooks'
+import type { Impl } from '@baml/common'
 import {
   VSCodeBadge,
   VSCodeCheckbox,
@@ -11,20 +10,27 @@ import {
   VSCodePanels,
   VSCodeProgressRing,
 } from '@vscode/webview-ui-toolkit/react'
+import clsx from 'clsx'
+import {
+  type Tiktoken,
+  type TiktokenEncoding,
+  type TiktokenModel,
+  getEncoding,
+  getEncodingNameForModel,
+} from 'js-tiktoken'
 import { useMemo, useState } from 'react'
+import { Checkbox } from '../components/ui/checkbox'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import Link from './Link'
 import TypeComponent from './TypeComponent'
-import { Impl } from '@baml/common/src/parser_db'
-import clsx from 'clsx'
-import { TiktokenEncoding, Tiktoken, TiktokenModel, getEncoding, getEncodingNameForModel } from 'js-tiktoken'
-import { Checkbox } from '../components/ui/checkbox'
+import { useImplCtx } from './hooks'
 
 const Whitespace: React.FC<{ char: 'space' | 'tab' }> = ({ char }) => (
-  <span className="opacity-50 text-vscode-descriptionForeground">{char === 'space' ? <>&middot;</> : <>&rarr;</>}</span>
+  <span className='opacity-50 text-vscode-descriptionForeground'>{char === 'space' ? <>&middot;</> : <>&rarr;</>}</span>
 )
 
 const InvisibleUtf: React.FC<{ text: string }> = ({ text }) => (
-  <span className="text-xs text-red-500 opacity-75">
+  <span className='text-xs text-red-500 opacity-75'>
     {text
       .split('')
       .map((c) => `U+${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
@@ -42,8 +48,8 @@ const TOKEN_BG_STYLES = ['bg-fuchsia-800', 'bg-emerald-700', 'bg-yellow-600', 'b
 
 // Function to replace whitespace characters with visible characters
 const replaceWhitespace = (char: string, key: string) => {
-  if (char === ' ') return <Whitespace key={key} char="space" />
-  if (char === '\t') return <Whitespace key={key} char="tab" />
+  if (char === ' ') return <Whitespace key={key} char='space' />
+  if (char === '\t') return <Whitespace key={key} char='tab' />
   return char
 }
 
@@ -73,9 +79,9 @@ const renderLine = ({
     }
   })
   return showWhitespace ? (
-    <div className={clsx('flex text-xs', { 'flex-wrap': wrapText })}>{formattedText}</div>
+    <div className={clsx('inline-flex text-xs', { 'flex-wrap': wrapText })}>{formattedText}</div>
   ) : (
-    <>{formattedText}</>
+    <div className='whitespace-pre-wrap'>{formattedText}</div>
   )
 }
 
@@ -86,10 +92,10 @@ const CodeLine: React.FC<{
   showWhitespace: boolean
   wrapText: boolean
   maxLineNumber: number
-}> = ({ line, lineNumber: lineNumber, showWhitespace, wrapText, maxLineNumber }) => {
+}> = ({ line, lineNumber, showWhitespace, wrapText, maxLineNumber }) => {
   // Function to render whitespace characters and invisible UTF characters with special styling
   const lineNumberSpan = (
-    <span className="pr-1 font-mono text-xs text-right text-gray-500 select-none">
+    <span className='pr-1 font-mono text-xs text-right text-gray-500 select-none'>
       {lineNumber.toString().padStart(maxLineNumber.toString().length, ' ')}
     </span>
   )
@@ -97,29 +103,32 @@ const CodeLine: React.FC<{
   const isTokenized = Array.isArray(line[0])
 
   if (Array.isArray(line)) {
+    console.log('line', line)
     return (
-      <div>
+      <div className='flex flex-row items-start'>
         {lineNumberSpan}
-        {line.map(([token, tokenIndex], index) => (
-          <span
-            className={clsx('font-mono text-xs', TOKEN_BG_STYLES[tokenIndex % TOKEN_BG_STYLES.length], {
-              'whitespace-pre-wrap': wrapText || isTokenized,
-              'text-white': isTokenized,
-              "after:content-['↵']": index === line.length - 1,
-              'after:opacity-50': index === line.length - 1,
-            })}
-          >
-            {renderLine({ text: token, showWhitespace, wrapText })}
-          </span>
-        ))}
+        <div className='text-wrap'>
+          {line.map(([token, tokenIndex], index) => (
+            <span
+              className={clsx('inline-flex font-mono text-xs', TOKEN_BG_STYLES[tokenIndex % TOKEN_BG_STYLES.length], {
+                'whitespace-pre-wrap': wrapText || isTokenized,
+                'text-white': isTokenized,
+                "after:content-['↵']": index === line.length - 1,
+                'after:opacity-50': index === line.length - 1,
+              })}
+            >
+              {renderLine({ text: token, showWhitespace, wrapText })}
+            </span>
+          ))}
+        </div>
       </div>
     )
   }
 
   return (
-    <div>
+    <div className='flex flex-row items-start'>
       {lineNumberSpan}
-      <span className={clsx('font-mono text-xs inline-block', { 'whitespace-pre-wrap': wrapText })}>
+      <span className={clsx('inline-block font-mono text-xs', { 'whitespace-pre-wrap': wrapText })}>
         {renderLine({ text: line, showWhitespace, wrapText })}
       </span>
     </div>
@@ -163,7 +172,7 @@ class TokenEncoderCache {
   }
 }
 
-const Snippet: React.FC<{
+export const Snippet: React.FC<{
   text: string
   type?: 'preview' | 'error'
   client: Impl['client']
@@ -190,7 +199,7 @@ const Snippet: React.FC<{
   })
 
   const header = (
-    <div className="flex flex-wrap justify-start gap-4 px-2 py-2 text-xs whitespace-nowrap">
+    <div className='flex flex-wrap gap-4 justify-start px-2 py-2 text-xs whitespace-nowrap'>
       {encodingName && (
         <PromptCheckbox checked={showTokens} onChange={(e) => setShowTokens(e)}>
           Show Tokens
@@ -206,9 +215,9 @@ const Snippet: React.FC<{
       {showTokens && encodingName && tokenizer && (
         <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
-            <div className="flex-grow r-full ps-2 pt-1.5">{(tokenizer.tokens as []).length} tokens</div>
+            <div className='flex-grow r-full ps-2 p-0'>{(tokenizer.tokens as []).length} tokens</div>
           </TooltipTrigger>
-          <TooltipContent className="flex flex-col gap-y-1">
+          <TooltipContent className='flex flex-col gap-y-1'>
             Tokenizer {encodingName} for model {client.model}
           </TooltipContent>
         </Tooltip>
@@ -239,7 +248,7 @@ const Snippet: React.FC<{
     return (
       <div className={divStyle}>
         {header}
-        <pre className="w-full p-1 text-xs">{tokenizedContent}</pre>
+        <pre className='p-1 w-full text-xs'>{tokenizedContent}</pre>
       </div>
     )
   } else {
@@ -247,7 +256,7 @@ const Snippet: React.FC<{
     return (
       <div className={divStyle}>
         {header}
-        <pre className="w-full p-1 text-xs">
+        <pre className='p-1 w-full text-xs'>
           {lines.map((line, index) => (
             <CodeLine
               key={index}
@@ -274,9 +283,9 @@ const PromptCheckbox = ({
   onChange: (e: any) => void
 }) => {
   return (
-    <div className="flex flex-row items-center gap-1">
-      <Checkbox checked={checked} onCheckedChange={onChange} className="border-vscode-descriptionForeground " />
-      <span className="text-vscode-descriptionForeground">{children}</span>
+    <div className='flex flex-row gap-1 items-center'>
+      <Checkbox checked={checked} onCheckedChange={onChange} className='border-vscode-descriptionForeground' />
+      <span className='text-vscode-descriptionForeground'>{children}</span>
     </div>
   )
 }
@@ -291,11 +300,11 @@ const PromptPreview: React.FC<{ prompt: Impl['prompt']; client: Impl['client']; 
       return <Snippet client={client} text={prompt.completion} />
     case 'Chat':
       return (
-        <div className="flex flex-col gap-2">
+        <div className='flex flex-col gap-2'>
           {prompt.chat.map(({ role, message }, index: number) => (
-            <div className="flex flex-col">
-              <div className="text-xs">
-                <span className="text-muted-foreground">Role:</span> <span className="font-bold">{role}</span>
+            <div className='flex flex-col'>
+              <div className='text-xs'>
+                <span className='text-muted-foreground'>Role:</span> <span className='font-bold'>{role}</span>
               </div>
               <Snippet key={index} client={client} text={message} />
             </div>
@@ -306,7 +315,7 @@ const PromptPreview: React.FC<{ prompt: Impl['prompt']; client: Impl['client']; 
       if (shouldSuppressError) {
         return null
       }
-      return <Snippet type="error" client={client} text={prompt.error} />
+      return <Snippet type='error' client={client} text={prompt.error} />
   }
 }
 
@@ -319,7 +328,7 @@ const ImplPanel: React.FC<{ impl: Impl; showTab: boolean }> = ({ impl, showTab }
     <>
       {showTab && (
         <VSCodePanelTab key={`tab-${impl.name.value}`} id={`tab-${func.name.value}-${impl.name.value}`}>
-          <div className="flex flex-row gap-1">
+          <div className='flex flex-row gap-1'>
             <span>{impl.name.value}</span>
           </div>
         </VSCodePanelTab>
@@ -327,29 +336,29 @@ const ImplPanel: React.FC<{ impl: Impl; showTab: boolean }> = ({ impl, showTab }
       <VSCodePanelView
         key={`view-${impl.name.value}`}
         id={`view-${func.name.value}-${impl.name.value}`}
-        className="tour-prompt-preview"
+        className='tour-prompt-preview'
       >
-        <div className="flex flex-col w-full gap-2">
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-col items-start text-vscode-descriptionForeground">
-              <span className="flex flex-row items-center gap-1 text-sm font-semibold text-vscode-settings-headerForeground">
+        <div className='flex flex-col gap-2 w-full'>
+          <div className='flex flex-col gap-1'>
+            <div className='flex flex-col items-start text-vscode-descriptionForeground'>
+              <span className='flex flex-row gap-1 items-center text-sm font-semibold text-vscode-settings-headerForeground'>
                 <span>Prompt Preview</span>
-                <Link item={impl.name} display="Edit" />
+                <Link item={impl.name} display='Edit' />
               </span>
-              <div className="flex flex-row gap-1">
-                <span className="text-xs font-light">client</span>
+              <div className='flex flex-row gap-1'>
+                <span className='text-xs font-light'>client</span>
                 <Link item={impl.client.identifier} />
               </div>
-              <div className="flex flex-row gap-1">
+              <div className='flex flex-row gap-1'>
                 {impl.prompt.test_case ? (
                   <>
-                    <span className="text-xs font-light">test case</span>
-                    <span className="font-semibold text-vscode-foreground">{impl.prompt.test_case}</span>
+                    <span className='text-xs font-light'>test case</span>
+                    <span className='font-semibold text-vscode-foreground'>{impl.prompt.test_case}</span>
                   </>
                 ) : (
                   <>
                     {func.syntax === 'Version2' && (
-                      <span className="pt-4 text-sm text-center text-vscode-notifications-foreground">
+                      <span className='pt-4 text-sm text-center text-vscode-notifications-foreground'>
                         Add a test case to see the full prompt!
                       </span>
                     )}

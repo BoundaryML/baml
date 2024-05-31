@@ -1,12 +1,19 @@
 use std::collections::HashMap;
 
 use anyhow::{bail, Result};
+use indexmap::IndexMap;
+use internal_baml_jinja::BamlArgType;
+use internal_baml_jinja::BamlImage;
+use internal_baml_jinja::ImageBase64;
+use internal_baml_jinja::ImageUrl;
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     types::{PyAnyMethods, PyDict, PyList},
     PyErr, PyObject, PyResult, Python, ToPyObject,
 };
 use serde_json::json;
+
+use crate::BamlImagePy;
 
 struct SerializationError {
     position: Vec<String>,
@@ -49,16 +56,29 @@ impl Into<PyErr> for Errors {
 enum MappedPyType {
     Enum(String, String),
     Class(String, HashMap<String, PyObject>),
+    Map(HashMap<String, PyObject>),
     List(Vec<PyObject>),
     String(String),
     Int(i64),
     Float(f64),
     Bool(bool),
     None,
+    BamlImage(BamlImagePy),
     Unsupported(String),
 }
 
-pub fn parse_py_type(any: PyObject) -> PyResult<serde_json::Value> {
+impl From<BamlImagePy> for BamlImage {
+    fn from(value: BamlImagePy) -> Self {
+        match value {
+            BamlImagePy::Url { url } => BamlImage::Url(ImageUrl { url }),
+            BamlImagePy::Base64 { base64, media_type } => {
+                BamlImage::Base64(ImageBase64 { base64, media_type })
+            }
+        }
+    }
+}
+
+pub fn parse_py_type(any: PyObject) -> PyResult<BamlArgType> {
     Python::with_gil(|py| {
         let enum_type = py.import_bound("enum").and_then(|m| m.getattr("Enum"))?;
         let base_model = py
@@ -103,6 +123,7 @@ pub fn parse_py_type(any: PyObject) -> PyResult<serde_json::Value> {
                     }
                 };
                 Ok(MappedPyType::Class(name, fields))
+                // use downcast only
             } else if let Ok(list) = any.downcast_bound::<PyList>(py) {
                 let mut items = vec![];
                 let len = list.len()?;
@@ -112,7 +133,7 @@ pub fn parse_py_type(any: PyObject) -> PyResult<serde_json::Value> {
                 Ok(MappedPyType::List(items))
             } else if let Ok(dict) = any.downcast_bound::<PyDict>(py) {
                 let kv = dict.extract()?;
-                Ok(MappedPyType::Class("<UnnamedDict>".to_string(), kv))
+                Ok(MappedPyType::Map(kv))
             } else if let Ok(s) = any.extract::<String>(py) {
                 Ok(MappedPyType::String(s))
             } else if let Ok(i) = any.extract::<i64>(py) {
@@ -123,16 +144,108 @@ pub fn parse_py_type(any: PyObject) -> PyResult<serde_json::Value> {
                 Ok(MappedPyType::Bool(b))
             } else if any.is_none(py) {
                 Ok(MappedPyType::None)
+            } else if let Ok(b) = any.extract::<BamlImagePy>(py) {
+                Ok(MappedPyType::BamlImage(b))
             } else {
                 Ok(MappedPyType::Unsupported(format!("{:?}", t)))
             }
         };
 
-        match pyobject_to_json(any, py, &mut get_type, vec![]) {
+        match pyobject_to_baml_arg_type(any, py, &mut get_type, vec![]) {
             Ok(v) => Ok(v),
             Err(errors) => Err((Errors { errors }).into()),
         }
     })
+}
+
+fn pyobject_to_baml_arg_type<'py, F>(
+    any: PyObject,
+    py: Python<'py>,
+    to_type: &mut F,
+    prefix: Vec<String>,
+) -> Result<BamlArgType, Vec<SerializationError>>
+where
+    F: FnMut(Python<'py>, PyObject) -> Result<MappedPyType>,
+{
+    let infered = match to_type(py, any) {
+        Ok(infered) => infered,
+        Err(e) => {
+            return Err(vec![SerializationError {
+                position: vec![],
+                message: format!("Failed to parse type: {}", e),
+            }])
+        }
+    };
+    match infered {
+        MappedPyType::Enum(name, value) => Ok(BamlArgType::Enum(name, value)),
+        MappedPyType::Class(name, kvs) => {
+            let mut errs = vec![];
+            let mut obj = IndexMap::new();
+            for (k, v) in kvs {
+                let mut prefix = prefix.clone();
+                prefix.push(k.clone());
+                match pyobject_to_baml_arg_type(v, py, to_type, prefix) {
+                    Ok(v) => {
+                        obj.insert(k, v);
+                    }
+                    Err(e) => errs.extend(e),
+                };
+            }
+            if !errs.is_empty() {
+                Err(errs)
+            } else {
+                Ok(BamlArgType::Class(name, obj))
+            }
+        }
+        MappedPyType::Map(kvs) => {
+            let mut errs = vec![];
+            let mut obj = IndexMap::new();
+            for (k, v) in kvs {
+                let mut prefix = prefix.clone();
+                prefix.push(k.clone());
+                match pyobject_to_baml_arg_type(v, py, to_type, prefix) {
+                    Ok(v) => {
+                        obj.insert(k, v);
+                    }
+                    Err(e) => errs.extend(e),
+                };
+            }
+            if !errs.is_empty() {
+                Err(errs)
+            } else {
+                Ok(BamlArgType::Map(obj))
+            }
+        }
+        MappedPyType::List(items) => {
+            let mut errs = vec![];
+            let mut arr = vec![];
+            let mut count = 0;
+            for item in items {
+                let mut prefix = prefix.clone();
+                prefix.push(count.to_string());
+                match pyobject_to_baml_arg_type(item, py, to_type, prefix) {
+                    Ok(v) => arr.push(v),
+                    Err(e) => errs.extend(e),
+                }
+                count += 1;
+            }
+            if !errs.is_empty() {
+                Err(errs)
+            } else {
+                Ok(BamlArgType::List(arr))
+            }
+        }
+        MappedPyType::String(v) => Ok(BamlArgType::String(v)),
+        MappedPyType::Int(v) => Ok(BamlArgType::Int(v)),
+        MappedPyType::Float(v) => Ok(BamlArgType::Float(v)),
+        MappedPyType::Bool(v) => Ok(BamlArgType::Bool(v)),
+        MappedPyType::BamlImage(v) => Ok(internal_baml_jinja::BamlArgType::Image(v.into())),
+        MappedPyType::Unsupported(r#type) => Err(vec![SerializationError {
+            position: prefix,
+            message: format!("Unsupported type: {}", r#type),
+        }]),
+        MappedPyType::None => Ok(internal_baml_jinja::BamlArgType::None),
+    }
 }
 
 fn pyobject_to_json<'py, F>(
@@ -174,6 +287,25 @@ where
                 Ok(serde_json::Value::Object(obj))
             }
         }
+        MappedPyType::Map(kvs) => {
+            let mut errs = vec![];
+            let mut obj = serde_json::Map::new();
+            for (k, v) in kvs {
+                let mut prefix = prefix.clone();
+                prefix.push(k.clone());
+                match pyobject_to_json(v, py, to_type, prefix) {
+                    Ok(v) => {
+                        obj.insert(k, v);
+                    }
+                    Err(e) => errs.extend(e),
+                };
+            }
+            if !errs.is_empty() {
+                Err(errs)
+            } else {
+                Ok(serde_json::Value::Object(obj))
+            }
+        }
         MappedPyType::List(items) => {
             let mut errs = vec![];
             let mut arr = vec![];
@@ -197,6 +329,7 @@ where
         MappedPyType::Int(v) => Ok(json!(v)),
         MappedPyType::Float(v) => Ok(json!(v)),
         MappedPyType::Bool(v) => Ok(json!(v)),
+        MappedPyType::BamlImage(v) => Ok(json!(v)),
         MappedPyType::None => Ok(serde_json::Value::Null),
         MappedPyType::Unsupported(r#type) => Err(vec![SerializationError {
             position: prefix,

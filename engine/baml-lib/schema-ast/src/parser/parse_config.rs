@@ -44,7 +44,7 @@ pub(crate) fn parse_config_block(
                         Rule::comment_block => pending_field_comment = Some(item),
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                "This line is not a valid field or attribute definition.",
+                                "This line is not a valid field or attribute definition. A valid property may look like: 'myProperty \"some value\"' for example, with no colons.",
                                 diagnostics.span(item.as_span()),
                             ))
                         }
@@ -53,7 +53,8 @@ pub(crate) fn parse_config_block(
                 }
             }
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
-            Rule::PRINTER_KEYWORD
+            Rule::TEST_KEYWORD
+            | Rule::PRINTER_KEYWORD
             | Rule::RETRY_POLICY_KEYWORD
             | Rule::GENERATOR_KEYWORD
             | Rule::CLIENT_KEYWORD => kw = Some(current.as_str()),
@@ -62,7 +63,7 @@ pub(crate) fn parse_config_block(
     }
 
     let span = match kw {
-        Some(name) => diagnostics.span(pair_span.get(0..(name.len())).unwrap()),
+        Some(_) => diagnostics.span(pair_span),
         _ => unreachable!("Encountered impossible model declaration during parsing"),
     };
 
@@ -127,6 +128,23 @@ pub(crate) fn parse_config_block(
             documentation: doc_comment.and_then(parse_comment_block),
             span,
         })),
+        (Some("test"), _, Some(_)) => Err(DatamodelError::new_validation_error(
+            "Template arguments are not allowed for test.",
+            span,
+        )),
+        (Some("test"), None, None) => Err(DatamodelError::new_validation_error(
+            "Missing name for test.",
+            span,
+        )),
+        (Some("test"), Some(name), None) => {
+            Ok(Top::Config(Configuration::TestCase(RetryPolicyConfig {
+                name,
+                fields,
+                attributes,
+                documentation: doc_comment.and_then(parse_comment_block),
+                span,
+            })))
+        }
         _ => unreachable!("Encountered impossible model declaration during parsing",),
     }
 }

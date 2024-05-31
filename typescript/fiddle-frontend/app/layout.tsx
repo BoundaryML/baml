@@ -1,13 +1,13 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { ThemeProvider } from './_components/ThemeProvider'
-import JotaiProvider from './_components/JotaiProvider'
-import { PHProvider } from './_components/PosthogProvider'
-import dynamic from 'next/dynamic'
 import { Toaster } from '@/components/ui/toaster'
-import { BrowseSheet } from './_components/BrowseSheet'
+import JotaiProvider from '@baml/playground-common/baml_wasm_web/JotaiProvider'
+import dynamic from 'next/dynamic'
 import { Suspense } from 'react'
+import { BrowseSheet } from './_components/BrowseSheet'
+import { PHProvider } from './_components/PosthogProvider'
+import { ThemeProvider } from './_components/ThemeProvider'
 
 const PostHogPageView = dynamic(() => import('./PostHogPageView'), {
   ssr: false,
@@ -26,21 +26,18 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang='en'>
       <PHProvider>
         <body className={inter.className}>
           <PostHogPageView />
-          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange={true}>
-            <Toaster />
-
+          <ThemeProvider attribute='class' defaultTheme='dark' enableSystem={false} disableTransitionOnChange={true}>
             <JotaiProvider>
-              <>
-                <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
-                <div className="fixed left-0 bottom-1/2 w-[12%] px-1 items-center justify-center flex">
-                  <BrowseSheet />
-                </div>
-              </>
+              <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+              <div className='fixed left-0 bottom-1/2 w-[12%] px-1 items-center justify-center flex'>
+                <BrowseSheet />
+              </div>
             </JotaiProvider>
+            <Toaster />
           </ThemeProvider>
         </body>
       </PHProvider>

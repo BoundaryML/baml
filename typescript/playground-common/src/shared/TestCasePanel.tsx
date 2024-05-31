@@ -1,25 +1,29 @@
 /// Content once a function has been selected.
 
-import { UiSchema } from '@rjsf/utils'
+import type { UiSchema } from '@rjsf/utils'
 
-import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
-import { JSONSchemaFaker as jsf } from 'json-schema-faker'
-import { Button } from '../components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
-import { vscode } from '../utils/vscode'
-import { ParserDatabase, StringSpan, TestRequest } from '@baml/common'
+import { type ParserDatabase, type StringSpan, TestRequest } from '@baml/common'
+import type { WasmTestCase } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import Form, { getDefaultRegistry } from '@rjsf/core'
 import validator from '@rjsf/validator-ajv8'
 import { VSCodeButton, VSCodeProgressRing, VSCodeTextArea, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
-import { Copy, Edit2, FileJson2, Save, Play, PlusIcon, Trash2, Pin } from 'lucide-react'
-import React, { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { ASTContext } from './ASTProvider'
-import TypeComponent from './TypeComponent'
-import { useSelections } from './hooks'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
-import { TEMPLATES } from './TestCaseEditor/JsonEditorTemplates'
+import { useAtom, useAtomValue } from 'jotai'
+import { JSONSchemaFaker as jsf } from 'json-schema-faker'
+import { Copy, Edit2, FileJson2, Pin, Play, PlusIcon, Save, Trash2 } from 'lucide-react'
+import type React from 'react'
+import { ChangeEvent, FocusEvent, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import JsonView from 'react18-json-view'
+import { Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
+import { selectedFunctionAtom, selectedTestCaseAtom } from '../baml_wasm_web/EventListener'
+import { useRunHooks } from '../baml_wasm_web/test_uis/testHooks'
 import { Badge } from '../components/ui/badge'
+import { Button } from '../components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
+import { vscode } from '../utils/vscode'
+import { ASTContext } from './ASTProvider'
+import { TEMPLATES } from './TestCaseEditor/JsonEditorTemplates'
+import TypeComponent from './TypeComponent'
 
 const uiSchema: UiSchema = {
   'ui:submitButtonOptions': {
@@ -37,106 +41,47 @@ const uiSchema: UiSchema = {
 type Func = ParserDatabase['functions'][number]
 type TestCase = Func['test_cases'][number]
 
-const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ func, test_case }) => {
-  const { impl, input_json_schema, renderedTestCase } = useSelections()
-  const isRendered = renderedTestCase === test_case.name.value
-
-  if (input_json_schema) {
-    input_json_schema.definitions = Object.fromEntries(
-      Object.entries(input_json_schema.definitions as object).map(([k, v]) => [k, { ...v, title: k }]),
-    )
-  }
-  const { root_path, test_results } = useContext(ASTContext)
-
+const TestCasePanelEntry: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
+  const { run, isRunning } = useRunHooks()
   return (
-    <div key={test_case.name.value} className="flex flex-col w-full py-1 pr-2 overflow-x-clip group">
-      <div className="flex flex-row items-center justify-between">
-        <div className="flex flex-row items-center justify-center gap-x-1">
+    <div key={test_case.name} className='flex flex-col py-1 pr-2 w-full overflow-x-clip gap-1 group'>
+      <div className='flex flex-row gap-1 items-center'>
+        <Badge
+          className='bg-vscode-editorSuggestWidget-selectedBackground text-vscode-editorSuggestWidget-foreground hover:bg-vscode-editorSuggestWidget-selectedBackground'
+          variant='default'
+        >
+          <div className='flex flex-row gap-x-1 items-center'>
+            <Pin size={12} /> Pinned
+          </div>
+        </Badge>
+        <div>
+          <b>Test Case: </b>
+          {test_case.name}
+        </div>
+      </div>
+      <div className='flex flex-row justify-between items-center'>
+        <div className='flex flex-row gap-x-1 justify-center items-center'>
           <Button
             variant={'ghost'}
             size={'icon'}
-            className="p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
-            disabled={impl === undefined || test_results?.run_status === 'RUNNING'}
+            className='p-1 rounded-md w-fit h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground text-xs'
+            disabled={isRunning}
             onClick={() => {
-              const runTestRequest: TestRequest = {
-                functions: [
-                  {
-                    name: func.name.value,
-                    tests: [
-                      {
-                        name: test_case.name.value,
-                        impls: impl ? [impl.name.value] : [],
-                      },
-                    ],
-                  },
-                ],
-              }
-              vscode.postMessage({
-                command: 'runTest',
-                data: {
-                  root_path,
-                  tests: runTestRequest,
-                },
-              })
+              run([test_case.name])
             }}
           >
-            <Play size={10} />
+            <div className='flex flex-row gap-1 items-center'>
+              <Play size={10} /> <span className='hidden group-hover:flex'>Run</span>
+            </div>
           </Button>
-          {/* IDK why it doesnt truncate. Probably cause of the allotment */}
-          <div className="flex w-full flex-nowrap">
-            <span className="h-[24px] max-w-[120px] text-center align-middle overflow-hidden flex-1 truncate">
-              {test_case.name.value}
-            </span>
-            {isRendered && (
-              <Badge
-                className="ml-2 bg-vscode-editorSuggestWidget-selectedBackground text-vscode-editorSuggestWidget-foreground hover:bg-vscode-editorSuggestWidget-selectedBackground"
-                variant="default"
-              >
-                <div className="flex flex-row items-center gap-x-1">
-                  <Pin size={12} /> Rendered
-                </div>
-              </Badge>
-            )}
-            <div className="hidden gap-x-1 group-hover:flex">
-              {!isRendered && (
-                <Button
-                  variant={'ghost'}
-                  size="icon"
-                  className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
-                  onClick={() => {
-                    vscode.postMessage({
-                      command: 'selectTestCase',
-                      data: {
-                        root_path,
-                        function_name: func.name.value,
-                        test_name: test_case.name.value,
-                      },
-                    })
-                  }}
-                >
-                  <Pin size={12} />
-                </Button>
-              )}
-              <EditTestCaseForm
-                testCase={test_case}
-                schema={input_json_schema}
-                func={func}
-                getTestParams={(t) => getTestParams(func, t)}
-              >
-                <Button
-                  variant={'ghost'}
-                  size="icon"
-                  className="p-1 w-fit h-fit hover:bg-vscode-button-secondaryHoverBackground"
-                >
-                  <Edit2 className="w-3 h-3 text-vscode-descriptionForeground" />
-                </Button>
-              </EditTestCaseForm>
+          <div className='flex flex-nowrap w-full'>
+            <div className='hidden gap-x-1 group-hover:flex'>
               <Tooltip delayDuration={100}>
                 <TooltipTrigger asChild>
                   <Button
                     variant={'ghost'}
                     size={'icon'}
-                    className="p-1 w-fit h-fit text-vscode-descriptionForeground hover:bg-vscode-button-secondaryHoverBackground"
+                    className='p-1 w-fit h-fit text-vscode-descriptionForeground hover:bg-vscode-button-secondaryHoverBackground'
                     onClick={() => {
                       vscode.postMessage({ command: 'jumpToFile', data: test_case.name })
                     }}
@@ -144,9 +89,9 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
                     <FileJson2 size={14} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent className="flex flex-col gap-y-1">Open test file</TooltipContent>
+                <TooltipContent className='flex flex-col gap-y-1'>Open test file</TooltipContent>
               </Tooltip>
-              <Tooltip delayDuration={100}>
+              {/* <Tooltip delayDuration={100}>
                 <TooltipTrigger>
                   <EditTestCaseForm
                     testCase={test_case}
@@ -165,29 +110,30 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
                   </EditTestCaseForm>
                 </TooltipTrigger>
                 <TooltipContent className="flex flex-col gap-y-1">Duplicate</TooltipContent>
-              </Tooltip>
+              </Tooltip> */}
             </div>
           </div>
         </div>
         <Button
           variant={'ghost'}
           size={'icon'}
-          className="p-1 w-fit h-fit text-vscode-input-foreground"
+          className='p-1 w-fit h-fit text-vscode-input-foreground'
           onClick={() => {
-            vscode.postMessage({
-              command: 'removeTest',
-              data: {
-                root_path,
-                funcName: func.name.value,
-                testCaseName: test_case.name,
-              },
-            })
+            // vscode.postMessage({
+            //   command: 'removeTest',
+            //   data: {
+            //     root_path,
+            //     funcName: func.name.value,
+            //     testCaseName: test_case.name,
+            //   },
+            // })
           }}
         >
           <Trash2 size={10} />
         </Button>
       </div>
-      <EditTestCaseForm
+      <TestCaseCard test_case={test_case} isRendered />
+      {/* <EditTestCaseForm
         testCase={test_case}
         schema={input_json_schema}
         func={func}
@@ -195,11 +141,11 @@ const TestCasePanelEntry: React.FC<{ func: Func; test_case: TestCase }> = ({ fun
       >
         <Button
           variant={'ghost'}
-          className="items-start justify-start w-full px-1 py-1 text-left hover:bg-vscode-button-secondaryHoverBackground h-fit"
+          className="justify-start items-start px-1 py-1 w-full text-left hover:bg-vscode-button-secondaryHoverBackground h-fit"
         >
-          <TestCaseCard test_case={test_case} isRendered={isRendered} />
+          
         </Button>
-      </EditTestCaseForm>
+      </EditTestCaseForm> */}
     </div>
   )
 }
@@ -221,7 +167,7 @@ const getTestParams = (func: Func, testCase: Func['test_cases'][number]) => {
         })),
       }
     }
-    let parsed = JSON.parse(testCase.content)
+    const parsed = JSON.parse(testCase.content)
     let contentMap = new Map<string, string>()
     if (typeof parsed === 'object') {
       contentMap = new Map(
@@ -255,94 +201,14 @@ const autoGenTestCase = (func: Func, input_json_schema: any): TestCase => {
   }
 }
 
-const TestCasePanel: React.FC<{ func: Func }> = ({ func }) => {
-  const { impl, input_json_schema } = useSelections()
+const TestCasePanel: React.FC = () => {
+  const selectedTestCase = useAtomValue(selectedTestCaseAtom)
 
-  const [filter, setFilter] = useState<string>('')
-  // This should be re-generated when this test case is saved
-  const test_cases = useMemo(() => {
-    let test_cases = func.test_cases
-    if (filter) {
-      test_cases = test_cases.filter(
-        (test_case) => test_case.name.value.includes(filter) || test_case.content.includes(filter),
-      )
-    }
-    return test_cases
-  }, [filter, func])
+  if (selectedTestCase === null) {
+    return <div className='flex flex-col w-full h-full'></div>
+  }
 
-  const { root_path, test_results } = useContext(ASTContext)
-
-  return (
-    <div className="flex flex-col w-full h-full tour-test-panel">
-      <div className="flex flex-row gap-x-1">
-        <VSCodeTextField
-          placeholder="Search test cases"
-          className="w-32 shrink"
-          value={filter}
-          onInput={(e) => {
-            setFilter((e as React.FormEvent<HTMLInputElement>).currentTarget.value)
-          }}
-        />
-        {test_results?.run_status === 'RUNNING' ? (
-          <VSCodeButton
-            className="bg-vscode-statusBarItem-errorBackground"
-            onClick={() => vscode.postMessage({ command: 'cancelTestRun' })}
-          >
-            Cancel
-          </VSCodeButton>
-        ) : (
-          <>
-            <Button
-              className="h-full px-1 py-1 text-xs bg-red-500 rounded-sm whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground"
-              // disabled={test_cases.length === 0}
-              onClick={() => {
-                const runTestRequest: TestRequest = {
-                  functions: [
-                    {
-                      name: func.name.value,
-                      run_all_available_tests: filter === '' ? true : false,
-                      tests: test_cases.map((test_case) => ({
-                        name: test_case.name.value,
-                        impls: func.impls.map((i) => i.name.value),
-                      })),
-                    },
-                  ],
-                }
-                vscode.postMessage({
-                  command: 'runTest',
-                  data: {
-                    root_path,
-                    tests: runTestRequest,
-                  },
-                })
-              }}
-            >
-              <>Run {filter ? test_cases.length : 'all'}</>
-            </Button>
-          </>
-        )}
-      </div>
-      <div className="flex flex-col py-2 divide-y gap-y-1 divide-vscode-textSeparator-foreground">
-        {/* <pre>{JSON.stringify(input_json_schema, null, 2)}</pre> */}
-        <EditTestCaseForm
-          key={'new'}
-          testCase={undefined}
-          schema={input_json_schema}
-          func={func}
-          getTestParams={(t) => getTestParams(func, t)}
-        >
-          <Button className="flex flex-row text-sm gap-x-2 bg-vscode-dropdown-background text-vscode-dropdown-foreground hover:opacity-90 hover:bg-vscode-dropdown-background">
-            <PlusIcon size={16} />
-            <div>Add test case</div>
-          </Button>
-        </EditTestCaseForm>
-
-        {test_cases.map((t) => (
-          <TestCasePanelEntry func={func} test_case={t} />
-        ))}
-      </div>
-    </div>
-  )
+  return <TestCasePanelEntry test_case={selectedTestCase} />
 }
 
 const EditTestCaseForm = ({
@@ -383,16 +249,16 @@ const EditTestCaseForm = ({
   return (
     <Dialog open={showForm} onOpenChange={setShowForm}>
       <DialogTrigger asChild={true}>{children}</DialogTrigger>
-      <DialogContent className="max-h-screen overflow-y-scroll bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip">
-        <DialogHeader className="flex flex-row items-center gap-x-4">
-          <DialogTitle className="text-xs font-semibold">{duplicate ? 'Duplicate test' : 'Edit test'}</DialogTitle>
+      <DialogContent className='overflow-y-scroll max-h-screen bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip'>
+        <DialogHeader className='flex flex-row gap-x-4 items-center'>
+          <DialogTitle className='text-xs font-semibold'>{duplicate ? 'Duplicate test' : 'Edit test'}</DialogTitle>
 
-          <div className="flex flex-row items-center pb-1 gap-x-2">
+          <div className='flex flex-row gap-x-2 items-center pb-1'>
             {testCase === undefined || duplicate ? (
               <VSCodeTextField
-                className="w-32"
+                className='w-32'
                 value={testName === undefined ? '' : testName}
-                placeholder="Enter test name"
+                placeholder='Enter test name'
                 onInput={(e) => {
                   // weird things happen if we dont do the replacement here -- on prompt fiddle
                   // it seems new updates to tests dont get propagated if spaces are set.
@@ -449,12 +315,40 @@ const EditTestCaseForm = ({
   )
 }
 
-const TestCaseCard: React.FC<{ test_case: TestCase; isRendered: boolean }> = ({ test_case, isRendered }) => {
+const TestCaseCard: React.FC<{ test_case: WasmTestCase; isRendered: boolean }> = ({ test_case, isRendered }) => {
   return (
-    <div className="flex flex-col max-w-full gap-2 text-xs text-left truncate text-vscode-descriptionForeground">
-      <div className="break-all whitespace-pre-wrap">
-        {test_case.content.substring(0, 120)}
-        {test_case.content.length > 120 && '...'}
+    <div className='flex flex-col gap-2 max-w-full text-xs text-left truncate text-vscode-descriptionForeground'>
+      {test_case.error && (
+        <pre className='break-words whitespace-pre-wrap w-full border-vscode-textSeparator-foreground rounded-md border p-0.5'>
+          {test_case.error}
+        </pre>
+      )}
+      <div className='whitespace-pre-wrap break-all'>
+        <div className='flex flex-col'>
+          {test_case.inputs.map((input) => (
+            <div key={input.name}>
+              <b>{input.name}:</b>
+              {input.value !== undefined && (
+                <JsonView
+                  enableClipboard
+                  className='bg-[#1E1E1E] px-1 py-1 rounded-sm'
+                  theme='a11y'
+                  collapseStringsAfterLength={600}
+                  matchesURL
+                  editable={true}
+                  src={JSON.parse(input.value)}
+                />
+              )}
+              {input.error && (
+                <pre className='break-words whitespace-pre-wrap w-full border-vscode-textSeparator-foreground rounded-md border p-0.5'>
+                  {input.error}
+                </pre>
+              )}
+            </div>
+          ))}
+        </div>
+        {/* {test_case.content.substring(0, 120)}
+        {test_case.content.length > 120 && '...'} */}
       </div>
     </div>
   )

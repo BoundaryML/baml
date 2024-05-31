@@ -1,13 +1,13 @@
-import { Disposable, Webview, WebviewPanel, window, Uri, ViewColumn, workspace } from 'vscode'
-import { getUri } from '../utils/getUri'
-import { getNonce } from '../utils/getNonce'
+import type { StringSpan, TestFileContent, TestRequest } from '@baml/common'
+import { type Disposable, Uri, ViewColumn, type Webview, type WebviewPanel, window, workspace } from 'vscode'
 import * as vscode from 'vscode'
-import { StringSpan, TestFileContent, TestRequest } from '@baml/common'
+import { getNonce } from '../utils/getNonce'
+import { getUri } from '../utils/getUri'
 import testExecutor from './execute_test'
 
-import { uniqueNamesGenerator, Config, adjectives, colors, animals } from 'unique-names-generator'
-import { BamlDB } from '../plugins/language-server'
+import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { URI } from 'vscode-uri'
+import { BamlDB } from '../plugins/language-server'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -56,7 +56,6 @@ export class WebPanelView {
     })
 
     testExecutor.setTestStateListener((testResults) => {
-
       this._panel.webview.postMessage({
         command: 'test-results',
         content: testResults,
@@ -82,11 +81,14 @@ export class WebPanelView {
         // Panel title
         'BAML Playground',
         // The editor column the panel should be displayed in
-        process.env.VSCODE_DEBUG_MODE === "true" ? ViewColumn.Two : ViewColumn.Beside,
+        // process.env.VSCODE_DEBUG_MODE === 'true' ? ViewColumn.Two : ViewColumn.Beside,
+        { viewColumn: ViewColumn.Beside, preserveFocus: true },
+
         // Extra panel configurations
         {
           // Enable JavaScript in the webview
           enableScripts: true,
+
           // Restrict the webview to only load resources from the `out` and `web-panel/dist` directories
           localResourceRoots: [Uri.joinPath(extensionUri, 'out'), Uri.joinPath(extensionUri, 'web-panel/dist')],
           retainContextWhenHidden: true,
@@ -179,8 +181,8 @@ export class WebPanelView {
             window.showInformationMessage(text)
             return
           case 'selectTestCase':
-            console.log('selectTestCase', message.data);
-            const testRequest: { root_path: string; test_name: string, function_name: string } = message.data
+            console.log('selectTestCase', message.data)
+            const testRequest: { root_path: string; test_name: string; function_name: string } = message.data
             vscode.commands.executeCommand('baml.selectTestCase', {
               functionName: testRequest.function_name,
               testCaseName: testRequest.test_name,
@@ -195,17 +197,18 @@ export class WebPanelView {
             return
           }
           case 'downloadTestResults': {
-            const csvData = message.data;
-            vscode.window.showSaveDialog({
-              filters: {
-                'CSV': ['csv']
-              }
-            }).then((uri) => {
-              if (uri) {
-                vscode.workspace.fs.writeFile(uri, Buffer.from(csvData));
-              }
-            })
-
+            const csvData = message.data
+            vscode.window
+              .showSaveDialog({
+                filters: {
+                  CSV: ['csv'],
+                },
+              })
+              .then((uri) => {
+                if (uri) {
+                  vscode.workspace.fs.writeFile(uri, Buffer.from(csvData))
+                }
+              })
           }
           case 'saveTest': {
             const saveTestRequest: {
@@ -214,21 +217,26 @@ export class WebPanelView {
               testCaseName: StringSpan | undefined | string
               params: any
             } = message.data
-            let fileName;
+            let fileName
             if (typeof saveTestRequest.testCaseName === 'string') {
               if (saveTestRequest.testCaseName.length > 0) {
-                fileName = `${saveTestRequest.testCaseName}.json`;
+                fileName = `${saveTestRequest.testCaseName}.json`
               } else {
-                fileName = `${uniqueNamesGenerator(customConfig)}.json`;
+                fileName = `${uniqueNamesGenerator(customConfig)}.json`
               }
             } else if (saveTestRequest.testCaseName?.source_file) {
-              fileName = vscode.Uri.file(saveTestRequest.testCaseName.source_file).path.split('/').pop();
+              fileName = vscode.Uri.file(saveTestRequest.testCaseName.source_file).path.split('/').pop()
             } else {
-              fileName = `${uniqueNamesGenerator(customConfig)}.json`;
+              fileName = `${uniqueNamesGenerator(customConfig)}.json`
             }
 
             if (!fileName) {
-              console.log('No file name provided for test' + saveTestRequest.funcName + ' ' + JSON.stringify(saveTestRequest.testCaseName));
+              console.log(
+                'No file name provided for test' +
+                  saveTestRequest.funcName +
+                  ' ' +
+                  JSON.stringify(saveTestRequest.testCaseName),
+              )
               return
             }
 
@@ -236,7 +244,7 @@ export class WebPanelView {
               URI.file(saveTestRequest.root_path),
               '__tests__',
               saveTestRequest.funcName,
-              fileName
+              fileName,
             )
 
             let testInputContent: any

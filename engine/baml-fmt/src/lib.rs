@@ -1,14 +1,13 @@
 #![allow(dead_code)]
 
-mod lint;
 mod validate;
 
 use baml_lib::{internal_baml_parser_database::ast, SourceFile};
 
 use lsp_types::{Position, Range};
 
-pub fn lint(schema: String) -> String {
-    lint::run(&schema)
+pub fn call_llm(schema: String) -> String {
+    schema
 }
 
 pub fn validate(validate_params: String) -> Result<(), String> {

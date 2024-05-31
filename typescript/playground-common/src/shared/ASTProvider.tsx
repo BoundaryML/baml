@@ -1,7 +1,8 @@
-import CustomErrorBoundary from '../utils/ErrorFallback'
-import { ParserDatabase, TestState } from '@baml/common'
+import type { ParserDatabase, TestState } from '@baml/common'
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
-import React, { PropsWithChildren, createContext, useCallback, useEffect, useMemo, useState } from 'react'
+import type React from 'react'
+import { type PropsWithChildren, createContext, useCallback, useEffect, useMemo, useState } from 'react'
+import CustomErrorBoundary from '../utils/ErrorFallback'
 
 export const ASTContext = createContext<{
   projects: { root_dir: string; db: ParserDatabase }[]
@@ -108,9 +109,9 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
 
   const selectedState = useMemo(() => {
     if (selectedProjectId === undefined) return undefined
-    let match = projects.find((project) => project.root_dir === selectedProjectId)
+    const match = projects.find((project) => project.root_dir === selectedProjectId)
     if (match) {
-      let jsonSchema = {
+      const jsonSchema = {
         definitions: Object.fromEntries([
           ...match.db.classes.flatMap((c) => Object.entries(c.jsonSchema)),
           ...match.db.enums.flatMap((c) => Object.entries(c.jsonSchema)),
@@ -159,6 +160,10 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
       const messageContent = event.data.content
 
       switch (command) {
+        case 'runtime_updated': {
+          const project_path = messageContent
+          break
+        }
         case 'test-stdout': {
           if (messageContent === '<BAML_RESTART>') {
             setTestLog(undefined)
@@ -179,7 +184,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
           break
         }
         case 'setSelectedResource': {
-          let content = messageContent as {
+          const content = messageContent as {
             projectId: string | undefined
             functionName: string | undefined
             implName?: string
@@ -209,7 +214,7 @@ export const ASTProvider: React.FC<PropsWithChildren<any>> = ({ children }) => {
   }, [])
 
   return (
-    <main className="w-full h-screen px-0 py-2 overflow-y-clip">
+    <main className='w-full h-screen px-0 py-2 overflow-y-clip'>
       {selectedState === undefined ? (
         projects.length === 0 ? (
           <div>

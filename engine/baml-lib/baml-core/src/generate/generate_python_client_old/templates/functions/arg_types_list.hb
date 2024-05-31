@@ -1,1 +1,0 @@
-{{#if unnamed_args}}{{args.0.type}}{{else}}{{#each args}}{{this.type}}{{#unless @last}},{{/unless}}{{/each}}{{/if}}

@@ -1,6 +1,6 @@
 use internal_baml_diagnostics::DatamodelError;
 
-use internal_baml_schema_ast::ast::{WithDocumentation, WithIdentifier, WithName};
+use internal_baml_schema_ast::ast::{WithDocumentation, WithIdentifier, WithName, WithSpan};
 use serde_json::json;
 
 use crate::{
@@ -40,11 +40,32 @@ impl<'db> EnumWalker<'db> {
             .collect::<Vec<_>>()
             .into_iter()
     }
+
+    /// Find a value by name.
+    pub fn find_value(&self, name: &str) -> Option<EnumValueWalker<'db>> {
+        self.ast_enum()
+            .values
+            .iter()
+            .enumerate()
+            .find_map(|(idx, v)| {
+                if v.name() == name {
+                    Some(self.walk((self.id, ast::EnumValueId(idx as u32))))
+                } else {
+                    None
+                }
+            })
+    }
 }
 
 impl<'db> WithIdentifier for EnumWalker<'db> {
     fn identifier(&self) -> &ast::Identifier {
         self.ast_enum().identifier()
+    }
+}
+
+impl<'db> WithSpan for EnumWalker<'db> {
+    fn span(&self) -> &internal_baml_diagnostics::Span {
+        &self.ast_enum().span
     }
 }
 
@@ -119,6 +140,12 @@ impl<'db> EnumValueWalker<'db> {
     /// The enum documentation
     pub fn documentation(self) -> Option<&'db str> {
         self.r#enum().ast_enum()[self.id.1].documentation()
+    }
+}
+
+impl<'db> WithSpan for EnumValueWalker<'db> {
+    fn span(&self) -> &internal_baml_diagnostics::Span {
+        &self.r#enum().ast_enum()[self.id.1].span
     }
 }
 

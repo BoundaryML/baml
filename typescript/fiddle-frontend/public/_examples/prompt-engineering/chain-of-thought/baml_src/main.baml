@@ -45,3 +45,33 @@ function GetOrderInfo(email: Email) -> OrderInfo {
     }'
   "#
 }
+
+test Test1 {
+  functions [GetOrderInfo]
+  args {
+    email {
+      from_address "hello@amazon.com"
+      subject "Your Amazon.com order of 'Wood Square Dowel Rods...' has shipped!"
+      body #"
+        Hi Samuel, your package will arrive:
+        Thursday, April 4
+        Track your package:
+        www.amazon.com/gp/your-account/ship-track?ie=UTF8&orderId123
+
+        On the way:
+        Wood Square Dowel Rods...
+        Order #113-7540940
+
+        An Amazon driver may contact you by text message or call you for help on the day of delivery.
+
+        Ship to:
+            Sam
+            SEATTLE, WA
+
+        Shipment total:
+        $0.00
+    "#
+
+    }
+  }
+}

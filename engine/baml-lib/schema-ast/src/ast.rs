@@ -36,7 +36,7 @@ pub use field::{Field, FieldArity, FieldType};
 pub use find_at_position::*;
 pub use function::{FuncArguementId, Function, FunctionArg, FunctionArgs, NamedFunctionArgList};
 pub use generator_config::GeneratorConfig;
-pub use identifier::{Identifier, RefIdentifier, TypeValue};
+pub use identifier::{Identifier, RefIdentifier};
 pub use indentation_type::IndentationType;
 pub use internal_baml_diagnostics::Span;
 pub use newline_type::NewlineType;
@@ -297,7 +297,7 @@ impl TopId {
 
     pub fn as_test_case_id(self) -> Option<ConfigurationId> {
         match self {
-            TopId::Config((id, "test_case")) => Some(id),
+            TopId::Config((id, "test")) => Some(id),
             _ => None,
         }
     }

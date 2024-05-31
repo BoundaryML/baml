@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "NODE_ENV=development next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -62,9 +62,11 @@
   },
   "devDependencies": {
     "@githubocto/tailwind-vscode": "^1.0.5",
-    "@types/node": "^20",
+    "@types/node": "^20.12.12",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/uglify-js": "^3.17.5",
+    "@types/webpack": "^5.28.5",
     "autoprefixer": "^10.0.1",
     "eslint": "^8",
     "eslint-config-next": "14.1.4",

@@ -1,0 +1,5 @@
+*.so
+tmp/
+.bundle/
+vendor/
+pkg/

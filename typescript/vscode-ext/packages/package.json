@@ -1,9 +1,9 @@
 {
-  "name": "baml",
+  "name": "baml-extension",
   "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.32.0",
-  "publisher": "Gloo",
+  "version": "0.32.1",
+  "publisher": "Boundary",
   "repository": "https://github.com/BoundaryML/baml",
   "homepage": "https://www.boundaryml.com",
   "icon": "baml-logo.png",
@@ -33,6 +33,12 @@
           "type": "string",
           "default": "baml",
           "description": "Override the baml CLI path",
+          "scope": "resource"
+        },
+        "baml.envCommand": {
+          "type": "string",
+          "default": "env",
+          "description": "Command to run to retrieve environment variables (runs in workspace root)",
           "scope": "resource"
         },
         "baml.fileWatcher": {
@@ -143,20 +149,25 @@
   },
   "dependencies": {
     "env-paths": "2.2.1",
+    "jotai-devtools": "^0.9.1",
     "minimatch": "6.2.0",
     "vscode-languageclient": "7.0.0",
     "watcher": "1.2.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.7.3",
     "@types/glob": "8.1.0",
     "@types/mocha": "10.0.3",
+    "@types/node": "^20.12.12",
+    "@types/uglify-js": "^3.17.5",
     "@types/vscode": "1.63.0",
+    "@types/webpack": "^5.28.5",
     "@vscode/test-electron": "2.3.5",
+    "@vscode/vsce": "2.21.1",
     "esbuild": "^0.19.4",
     "is-ci": "3.0.1",
     "ovsx": "0.8.3",
-    "typescript": "5.2.2",
-    "@vscode/vsce": "2.21.1"
+    "typescript": "5.2.2"
   },
   "preview": false
 }

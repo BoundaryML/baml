@@ -1,9 +1,9 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_schema_ast::ast::{self, WithName, WithSpan};
 
-use crate::configuration::{Generator, GeneratorLanguage};
+use crate::configuration::{Generator, GeneratorBuilder, GeneratorOutputType};
 
 const LANGUAGE_KEY: &str = "language";
 const OUTPUT_KEY: &str = "output";
@@ -65,9 +65,16 @@ fn parse_optional_key<'a>(
 
 pub(crate) fn parse_generator(
     ast_generator: &ast::GeneratorConfig,
-    baml_src_path: &PathBuf,
+    baml_src: &PathBuf,
 ) -> Result<Generator, Vec<DatamodelError>> {
     let generator_name = ast_generator.name();
+    let mut builder = GeneratorBuilder::default();
+
+    builder
+        .name(generator_name.into())
+        .baml_src(baml_src.clone())
+        .span(ast_generator.span().clone());
+
     let mut errors = vec![];
     let args = ast_generator
         .fields()
@@ -100,25 +107,23 @@ pub(crate) fn parse_generator(
         })
         .collect::<HashMap<_, _>>();
 
-    let _ = match parse_required_key(&args, "language", ast_generator.span()) {
-        Ok("python") => Some(GeneratorLanguage::Python),
-        Ok("typescript") => {
-            errors.push(DatamodelError::new_validation_error(
-                "TypeScript is not supported yet.",
-                ast_generator.span().clone(),
-            ));
-            None
+    match parse_required_key(&args, "language", ast_generator.span()) {
+        Ok("python") => {
+            builder.output_type(GeneratorOutputType::PythonPydantic);
         }
-        Ok(name) => {
-            errors.push(DatamodelError::new_validation_error(
-                &format!("The language '{}' is not supported.", name),
-                ast_generator.span().clone(),
-            ));
-            None
-        }
+        Ok(name) => match GeneratorOutputType::from_str(name) {
+            Ok(lang) => {
+                builder.output_type(lang);
+            }
+            Err(_) => {
+                errors.push(DatamodelError::new_validation_error(
+                    &format!("The language '{}' is not supported.", name),
+                    ast_generator.span().clone(),
+                ));
+            }
+        },
         Err(err) => {
             errors.push(err);
-            None
         }
     };
 
@@ -126,7 +131,7 @@ pub(crate) fn parse_generator(
         Ok(Some(val)) => Some(val),
         Ok(None) => {
             // Check if there's a pyproject.toml
-            let pyproject_toml = baml_src_path.join("pyproject.toml");
+            let pyproject_toml = baml_src.join("pyproject.toml");
             if pyproject_toml.exists() {
                 Some("poetry")
             } else {
@@ -155,12 +160,15 @@ pub(crate) fn parse_generator(
         }
     };
 
-    let project_root = match parse_optional_key(&args, OUTPUT_KEY) {
-        Ok(Some(v)) => Some(PathBuf::from(v)),
-        Ok(None) => Some(PathBuf::from("../")),
+    match parse_optional_key(&args, "project_root") {
+        Ok(Some(name)) => {
+            builder.output_dir(name.into());
+        }
+        Ok(None) => {
+            builder.output_dir("../".into());
+        }
         Err(err) => {
             errors.push(err);
-            None
         }
     };
 
@@ -168,12 +176,12 @@ pub(crate) fn parse_generator(
         return Err(errors);
     }
 
-    let test_command = match command_prefix {
+    let _test_command = match command_prefix {
         Some(prefix) => format!("{} python -m pytest", prefix),
         None => "python -m pytest".into(),
     };
 
-    let install_command = match pkg_manager {
+    let _install_command: String = match pkg_manager {
         Some("poetry") => "poetry add baml@latest".into(),
         Some("pip3") => "pip3 install --upgrade baml".into(),
         Some("pip") => "pip install --upgrade baml".into(),
@@ -186,7 +194,7 @@ pub(crate) fn parse_generator(
         }
     };
 
-    let package_version_command = match pkg_manager {
+    let _package_version_command: String = match pkg_manager {
         Some("poetry") => "poetry show baml".into(),
         Some("pip3") => "pip3 show baml".into(),
         Some("pip") => "pip show baml".into(),
@@ -199,28 +207,9 @@ pub(crate) fn parse_generator(
         }
     };
 
-    let project_root = project_root.unwrap();
-
-    Generator::new(
-        generator_name.to_string(),
-        ast_generator
-            .span()
-            .file
-            .path_buf()
-            .parent()
-            .unwrap()
-            .join(project_root),
-        GeneratorLanguage::Python,
-        test_command,
-        install_command,
-        package_version_command,
-        None,
-        None,
-        ast_generator.span().clone(),
-    )
-    .map_err(|err| {
-        vec![DatamodelError::new_validation_error(
-            &format!("Failed to create generator: {}", err),
+    builder.build().map_err(|e| {
+        vec![DatamodelError::new_internal_error(
+            anyhow::Error::from(e).context("Internal error while parsing generator (v1 syntax)"),
             ast_generator.span().clone(),
         )]
     })

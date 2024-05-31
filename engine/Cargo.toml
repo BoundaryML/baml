@@ -1,23 +1,63 @@
 [workspace]
 resolver = "2"
 members = [
-  "baml-lib/*",
   "baml-cli",
+  "baml-lib/*",
   "baml-fmt",
+  "baml-runtime",
   "baml-schema-wasm",
-  "baml-core-ffi",
+  "language-client-codegen",
+  "language_client_python",
+  "language_client_ruby/ext/ruby_ffi",
+  "language_client_typescript",
+]
+default-members = [
+  "baml-cli",
+  "baml-lib/*",
+  "baml-fmt",
+  "baml-runtime",
+  # Disabled by default: --features no_wasm and --features wasm are mutually exclusive
+  # Building baml-schema-wasm in combination with everything else triggers feature unification,
+  # and it's OK to not build this by default because we have to build ts separately (this may
+  # also have something to do with resolver=2 and how duplicate dep builds are handled)
+  # "baml-schema-wasm",
+  "language-client-codegen",
+  "language_client_python",
+  # requires ruby to be installed, does not build for <3.1
+  # "language_client_ruby/ext/ruby_ffi",
+  "language_client_typescript",
 ]
 
 [workspace.dependencies]
 anyhow = "1.0"
+askama = "0.12.1"
+base64 = "0.22.1"
+cfg-if = "1.0.0"
+dashmap = "5.5.3"
+derive_builder = "0.20.0"
+either = "1.8.1"
 env_logger = "0.11.3"
-serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
-serde = { version = "1", features = ["derive"] }
+futures = { version = "0.3.30", features = ["executor"] }
+log = "0.4.20"
 indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.1"
+instant = "0.1"
+regex = "1.10.4"
+serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
+serde = { version = "1", features = ["derive"] }
+static_assertions = "1.1.0"
+strum = { version = "0.26.2", features = ["derive"] }
+strum_macros = "0.26.2"
+walkdir = "2.5.0"
+web-time = "1.1.0"
+
+baml-types = { path = "baml-lib/baml-types" }
+internal-baml-codegen = { path = "language-client-codegen" }
+internal-baml-core = { path = "baml-lib/baml-core" }
+internal-baml-jinja = { path = "baml-lib/jinja" }
 
 [workspace.package]
-version = "0.20.0-canary.0"
+version = "0.32.0"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

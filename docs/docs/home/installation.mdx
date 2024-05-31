@@ -4,59 +4,39 @@ title: Installation
 
 <Steps>
   <Step title="Install BAML VSCode Extension">
-    [https://marketplace.visualstudio.com/items?itemName=gloo.BAML](https://marketplace.visualstudio.com/items?itemName=gloo.BAML)
+    [https://marketplace.visualstudio.com/items?itemName=boundary.BAML](https://marketplace.visualstudio.com/items?itemName=boundary.BAML)
 
     If you are using python, [enable typechecking in VSCode's](https://code.visualstudio.com/docs/python/settings-reference#_python-language-server-settings) `settings.json`:
     ```
     "python.analysis.typecheckingMode": "basic"
     ```
   </Step>
-  <Step title="Install BAML CLI">
-<CodeGroup>
+  <Step title="Install BAML">
+    <CodeGroup>
+        ```bash Python
+        pip install baml-py
+        ```
 
-```bash Mac
-brew install boundaryml/baml/baml
-```
-
-```bash Linux (debian)
-curl -fsSL https://raw.githubusercontent.com/BoundaryML/homebrew-baml/main/install-baml.sh | bash
-```
-
-```bash Windows / WSL (via scoop)
-# You can install scoop at https://scoop.sh/
-scoop bucket add baml-bucket https://github.com/boundaryml/homebrew-baml
-scoop install baml
-```
-
-</CodeGroup>
-You should be able to run `baml --version` and see the version number. The VSCode Extension will keep the compiler up to date for you.
-
-<Info>
-  If you don't have brew, see: [https://brew.sh/](https://brew.sh/). If you
-  don't have scoop, see: [https://scoop.sh/](https://scoop.sh/).
-</Info>
-
+        ```bash Typescript
+        npm install @boundaryml/baml
+        ```
+    </CodeGroup>
   </Step>
-  <Step title="Add BAML to a project">
-    In your python project, run 
-    ```baml init```.
-    
-    <Tip>
-    After running `baml init`, add or modify baml files in the `./baml_src` directory.
-    </Tip>
+  <Step title="Add your first BAML files">
+      <CodeGroup>
+        ```bash Python
+        # Should be installed via pip install baml-py
+        baml-cli init
+        ```
 
-  </Step>
-  <Step title="Set up Boundary Studio (optional)">
-    Create an account at [https://app.boundaryml.com](https://app.boundaryml.com).
-    
-    Set up a project and generate a secret.
+        ```bash Typescript (npx)
+        npx baml-cli init
+        ```
 
-    In your `.env` file, set the following values generated from the web app:
-    ```bash
-    BOUNDARY_PROJECT_ID=proj_...
-    BOUNDARY_SECRET=gloo:...
-    ```
-
+        ```bash Typescript (pnpx)
+        pnpx baml-cli init
+        ```
+    </CodeGroup>
   </Step>
   <Step title="Learn BAML">
     - [PromptFiddle](https://promptfiddle.com): Interactive examples to learn BAML. (recommended)

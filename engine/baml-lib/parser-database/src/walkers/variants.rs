@@ -1,4 +1,4 @@
-use internal_baml_schema_ast::ast::{Identifier, WithName};
+use internal_baml_schema_ast::ast::{Identifier, WithName, WithSpan};
 
 use crate::{
     ast::{self, WithIdentifier},
@@ -139,5 +139,11 @@ impl<'db> VariantWalker<'db> {
 impl<'db> WithIdentifier for VariantWalker<'db> {
     fn identifier(&self) -> &'db Identifier {
         self.ast_variant().identifier()
+    }
+}
+
+impl<'db> WithSpan for VariantWalker<'db> {
+    fn span(&self) -> &internal_baml_diagnostics::Span {
+        self.ast_variant().span()
     }
 }

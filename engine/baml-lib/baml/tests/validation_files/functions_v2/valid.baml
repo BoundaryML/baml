@@ -56,3 +56,8 @@ string
   prompt #" color {{ color }} "#
 }
 
+
+function InputImage(image: image) -> string {
+  client Bar
+  prompt #" image {{ image }} "#
+}

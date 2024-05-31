@@ -1,14 +1,12 @@
 {
   // "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "tsup.config.ts"],
   // "exclude": ["node_modules", "dist"],
-
   // "compilerOptions": {
   //   "isolatedModules": true,
   //   "lib": ["dom", "dom.iterable", "esnext"],
   //   "moduleResolution": "node",
   //   "declarationMap": true,
   //   "target": "ES2021",
-
   //   "declaration": true,
   //   "outDir": "dist",
   //   "skipLibCheck": true,
@@ -27,7 +25,11 @@
   // }
   "compilerOptions": {
     "target": "esnext",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "useDefineForClassFields": true,
     "allowJs": true,
     "skipLibCheck": true,
@@ -42,11 +44,24 @@
     // "incremental": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "baseUrl": "."
+    "baseUrl": ".",
     // "paths": {
     //   "@/*": ["./src/*"]
     // }
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@gloo-ai/baml-schema-wasm-web/*": [
+        "../baml-schema-wasm-web/dist/*"
+      ]
+    }
   },
-  "include": ["./src"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "./src"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

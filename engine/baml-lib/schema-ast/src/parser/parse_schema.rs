@@ -68,7 +68,7 @@ pub fn parse_schema(
                             Rule::CLASS_KEYWORD => {
                                 top_level_definitions.push(Top::Class(parse_class(current, pending_block_comment.take(), &mut diagnostics)));
                             },
-                            _ => unreachable!(),
+                            _ => unreachable!("Expected class keyword"),
                         };
                     }
                     Rule::function_declaration => {
@@ -132,7 +132,7 @@ pub fn parse_schema(
                         diagnostics.span(current.as_span()),
                     )),
                     Rule::empty_lines => (),
-                    _ => unreachable!(),
+                    _ => unreachable!("Encountered an unknown rule: {:?}", current.as_rule()),
                 }
             }
 

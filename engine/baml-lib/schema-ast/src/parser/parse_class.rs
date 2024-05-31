@@ -46,7 +46,7 @@ pub(crate) fn parse_class(
                         Rule::comment_block => pending_field_comment = Some(item),
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                "This line is not a valid field or attribute definition.",
+                                "This line is not a valid field or attribute definition. A valid class property looks like: 'myProperty string[] @description(\"This is a description\")'",
                                 diagnostics.span(item.as_span()),
                             ))
                         }

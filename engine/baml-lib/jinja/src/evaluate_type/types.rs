@@ -25,6 +25,7 @@ pub enum Type {
     Union(Vec<Type>),
     ClassRef(String),
     FunctionRef(String),
+    Image,
 }
 
 impl PartialEq for Type {
@@ -70,6 +71,7 @@ impl Type {
             ),
             Type::ClassRef(name) => format!("class {}", name),
             Type::FunctionRef(name) => format!("function {}", name),
+            Type::Image => "image".into(),
         }
     }
 
@@ -179,7 +181,10 @@ impl PredefinedTypes {
                 ),
                 (
                     "baml::BuiltIn".into(),
-                    HashMap::from([("chat".into(), Type::FunctionRef("baml::Chat".into()))]),
+                    HashMap::from([
+                        ("chat".into(), Type::FunctionRef("baml::Chat".into())),
+                        ("role".into(), Type::FunctionRef("baml::Chat".into())),
+                    ]),
                 ),
                 (
                     "jinja::loop".into(),

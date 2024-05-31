@@ -1,8 +1,8 @@
-import { BAMLProject } from '@/lib/exampleProjects'
+import type { BAMLProject } from '@/lib/exampleProjects'
 import { loadProject } from '@/lib/loadProject'
 import dynamic from 'next/dynamic'
-import { generateMetadata } from './[project_id]/page'
 import { Suspense } from 'react'
+import { generateMetadata } from './[project_id]/page'
 import { BrowseSheet } from './_components/BrowseSheet'
 const ProjectView = dynamic(() => import('./[project_id]/_components/ProjectView'), { ssr: false })
 
@@ -23,10 +23,10 @@ export default async function Home({
   searchParams: SearchParams
   params: { project_id: string }
 }) {
-  let data: BAMLProject = await loadProject(params, true)
+  const data: BAMLProject = await loadProject(params, true)
   return (
-    <main className="flex flex-col items-center justify-between min-h-screen font-sans">
-      <div className="w-screen h-screen dark:bg-black">
+    <main className='flex flex-col items-center justify-between min-h-screen font-sans'>
+      <div className='w-screen h-screen dark:bg-black'>
         <ProjectView project={data} />
 
         {/* <Suspense fallback={<div>Loading...</div>}>{children}</Suspense> */}

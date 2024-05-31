@@ -1,18 +1,19 @@
 import * as path from 'path'
 
-import { commands, ExtensionContext, OutputChannel, ViewColumn, Uri, window, workspace } from 'vscode'
-import { LanguageClientOptions } from 'vscode-languageclient'
-import { LanguageClient, ServerOptions, TransportKind } from 'vscode-languageclient/node'
-import TelemetryReporter from '../../telemetryReporter'
-import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
-import { BamlVSCodePlugin } from '../types'
-import * as vscode from 'vscode'
-import { WebPanelView } from '../../panels/WebPanelView'
-import { ParserDatabase, TestRequest } from '@baml/common'
-import glooLens from '../../GlooCodeLensProvider'
+import type { ParserDatabase, TestRequest } from '@baml/common'
 import fetch from 'node-fetch'
 import semver from 'semver'
+import { type ExtensionContext, OutputChannel, Uri, ViewColumn, commands, window, workspace } from 'vscode'
+import * as vscode from 'vscode'
+import type { LanguageClientOptions } from 'vscode-languageclient'
+import { type LanguageClient, type ServerOptions, TransportKind } from 'vscode-languageclient/node'
 import { z } from 'zod'
+import pythonToBamlCodeLens from '../../LanguageToBamlCodeLensProvider'
+import { WebPanelView } from '../../panels/WebPanelView'
+import TelemetryReporter from '../../telemetryReporter'
+import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
+import type { BamlVSCodePlugin } from '../types'
+import { URI } from 'vscode-uri'
 
 const packageJson = require('../../../package.json') // eslint-disable-line
 
@@ -31,7 +32,7 @@ let config: BamlConfig | null = null
 let client: LanguageClient
 let serverModule: string
 let telemetry: TelemetryReporter
-let intervalTimers: NodeJS.Timer[] = []
+const intervalTimers: NodeJS.Timeout[] = []
 
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
@@ -40,6 +41,19 @@ export const BamlDB = new Map<string, any>()
 
 export const generateTestRequest = async (test_request: TestRequest): Promise<string | undefined> => {
   return await client.sendRequest('generatePythonTests', test_request)
+}
+
+export const requestDiagnostics = async () => {
+  await client?.sendRequest('requestDiagnostics')
+}
+
+export const getBAMLFunctions = async (): Promise<
+  {
+    name: string
+    span: { file_path: string; start: number; end: number }
+  }[]
+> => {
+  return await client.sendRequest('getBAMLFunctions')
 }
 
 const LatestVersions = z.object({
@@ -159,17 +173,18 @@ const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }
         })
     }
 
-    telemetry.sendTelemetryEvent({
-      event: 'baml.checkForUpdates',
-      properties: {
-        is_typescript: latestVersions.generators.find((g) => g.language === 'typescript'),
-        is_python: latestVersions.generators.find((g) => g.language === 'python'),
-        baml_check: latestVersions,
-        updateAvailable: !!update,
-        vscodeUpdateAvailable: shouldUpdateVscode,
-      },
-
-    })
+    if (telemetry) {
+      telemetry.sendTelemetryEvent({
+        event: 'baml.checkForUpdates',
+        properties: {
+          is_typescript: latestVersions.generators.find((g) => g.language === 'typescript'),
+          is_python: latestVersions.generators.find((g) => g.language === 'python'),
+          baml_check: latestVersions,
+          updateAvailable: !!update,
+          vscodeUpdateAvailable: shouldUpdateVscode,
+        },
+      })
+    }
   } catch (e) {
     console.error('Failed to check for updates', e)
   }
@@ -254,7 +269,7 @@ const activateClient = (
                 for (let i = 0; i < iterations; i++) {
                   const prog = (i / iterations) * 100
                   // Increment is summed up with the previous value
-                  progress.report({ increment: prog, message: `BAML Client generated!` })
+                  progress.report({ increment: prog, message: message.message })
                   await sleep(100)
                 }
 
@@ -273,10 +288,17 @@ const activateClient = (
         }
       }
     })
+
+    client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
+      WebPanelView.currentPanel?.postMessage('add_project', {
+        ...params,
+        root_path: URI.file(params.root_path).toString(),
+      })
+    })
+
     client.onRequest('set_database', ({ rootPath, db }: { rootPath: string; db: ParserDatabase }) => {
       try {
         BamlDB.set(rootPath, db)
-        glooLens.setDB(rootPath, db)
         console.log('set_database')
         WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
       } catch (e) {
@@ -294,10 +316,13 @@ const activateClient = (
     void checkForUpdates({ showIfNoUpdates: false })
     // And check again once every hour
     intervalTimers.push(
-      setInterval(async () => {
-        console.log(`checking for updates ${new Date()}`)
-        await checkForUpdates({ showIfNoUpdates: false })
-      }, 60 * 60 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */),
+      setInterval(
+        async () => {
+          console.log(`checking for updates ${new Date()}`)
+          await checkForUpdates({ showIfNoUpdates: false })
+        },
+        60 * 60 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */,
+      ),
     )
   })
 
@@ -360,7 +385,7 @@ const plugin: BamlVSCodePlugin = {
 
     // Options to control the language client
     const clientOptions: LanguageClientOptions = {
-      // Register the server for baml docs
+      // Register the server for baml docs and python
       documentSelector: [
         { scheme: 'file', language: 'baml' },
         {
@@ -368,9 +393,7 @@ const plugin: BamlVSCodePlugin = {
           pattern: '**/baml_src/**',
         },
       ],
-      synchronize: {
-        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json}'),
-      },
+      synchronize: {},
     }
 
     context.subscriptions.push(
@@ -385,45 +408,44 @@ const plugin: BamlVSCodePlugin = {
         })
       }),
 
-      commands.registerCommand('baml.selectTestCase', async (test_request: {
-        functionName?: string
-        testCaseName?: string
-      }) => {
-        const { functionName, testCaseName } = test_request
-        if (!functionName || !testCaseName) {
-          return
-        }
-
-        console.log('selectTestCase', functionName, testCaseName)
-        await client.sendRequest('selectTestCase', { functionName, testCaseName });
-      }),
-
-      commands.registerCommand('baml.jumpToDefinition', async (args: { sourceFile?: string; name?: string }) => {
-        let { sourceFile, name } = args
-        if (!sourceFile || !name) {
-          return
-        }
-
-        let response = await client.sendRequest('getDefinition', { sourceFile, name })
-        if (response) {
-          let { targetUri, targetRange, targetSelectionRange } = response as {
-            targetUri: string
-            targetRange: {
-              start: { line: number; column: number }
-              end: { line: number; column: number }
-            }
-            targetSelectionRange: {
-              start: { line: number; column: number }
-              end: { line: number; column: number }
-            }
+      commands.registerCommand(
+        'baml.selectTestCase',
+        async (test_request: {
+          functionName?: string
+          testCaseName?: string
+        }) => {
+          const { functionName, testCaseName } = test_request
+          if (!functionName || !testCaseName) {
+            return
           }
-          let uri = Uri.parse(targetUri)
-          let doc = await workspace.openTextDocument(uri)
-          // go to line
-          let selection = new vscode.Selection(targetSelectionRange.start.line, 0, targetSelectionRange.end.line, 0)
-          await window.showTextDocument(doc, { selection, viewColumn: ViewColumn.Beside })
-        }
-      }),
+
+          console.log('selectTestCase', functionName, testCaseName)
+          await client.sendRequest('selectTestCase', { functionName, testCaseName })
+        },
+      ),
+
+      commands.registerCommand(
+        'baml.jumpToDefinition',
+        async (args: { file_path: string; start: number; end: number }) => {
+          if (!args.file_path) {
+            vscode.window.showErrorMessage('File path is missing.')
+            return
+          }
+
+          try {
+            const uri = vscode.Uri.file(args.file_path)
+            const doc = await vscode.workspace.openTextDocument(uri)
+
+            const start = doc.positionAt(args.start)
+            const end = doc.positionAt(args.end)
+            const range = new vscode.Range(start, end)
+
+            await vscode.window.showTextDocument(doc, { selection: range, viewColumn: vscode.ViewColumn.Beside })
+          } catch (error) {
+            vscode.window.showErrorMessage(`Error navigating to function definition: ${error}`)
+          }
+        },
+      ),
     )
 
     activateClient(context, serverOptions, clientOptions)
@@ -439,7 +461,7 @@ const plugin: BamlVSCodePlugin = {
       context.subscriptions.push(telemetry)
       await telemetry.initialize()
 
-      if (extensionId === 'Gloo.baml-insider') {
+      if (extensionId === 'Boundary.baml-insider') {
         // checkForOtherExtension()
       }
     }

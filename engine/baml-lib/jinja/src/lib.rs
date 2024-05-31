@@ -1,13 +1,20 @@
+use baml_types::{BamlImage, BamlValue};
+use colored::*;
 mod evaluate_type;
 mod get_vars;
+mod output_format;
+pub use output_format::types;
 
 use evaluate_type::get_variable_types;
+pub use evaluate_type::{PredefinedTypes, Type, TypeError};
+
 use minijinja::{self, value::Kwargs};
-use minijinja::{context, ErrorKind};
-use serde::Serialize;
+use minijinja::{context, ErrorKind, Value};
+use output_format::types::OutputFormatContent;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-pub use evaluate_type::{PredefinedTypes, Type, TypeError};
+use crate::output_format::OutputFormat;
 
 fn get_env<'a>() -> minijinja::Environment<'a> {
     let mut env = minijinja::Environment::new();
@@ -69,11 +76,11 @@ pub struct RenderContext_Client {
     pub provider: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Debug)]
 pub struct RenderContext {
     pub client: RenderContext_Client,
-    pub output_format: String,
-    pub env: HashMap<String, String>,
+    pub output_format: OutputFormatContent,
+    pub tags: HashMap<String, BamlValue>,
 }
 
 pub struct TemplateStringMacro {
@@ -83,90 +90,12 @@ pub struct TemplateStringMacro {
 }
 
 const MAGIC_CHAT_ROLE_DELIMITER: &'static str = "BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER";
+const MAGIC_IMAGE_DELIMITER: &'static str = "BAML_IMAGE_MAGIC_STRING_DELIMITER";
 
-#[derive(Debug)]
-struct OutputFormat {
-    text: String,
-}
-
-impl std::fmt::Display for OutputFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Answer in JSON using this schema:\n\n{}", self.text)
-    }
-}
-
-impl minijinja::value::Object for OutputFormat {
-    fn call(
-        &self,
-        _state: &minijinja::State<'_, '_>,
-        args: &[minijinja::value::Value],
-    ) -> Result<minijinja::value::Value, minijinja::Error> {
-        use minijinja::{
-            value::{from_args, Value, ValueKind},
-            Error,
-        };
-
-        let (args, kwargs): (&[Value], Kwargs) = from_args(args)?;
-        if !args.is_empty() {
-            return Err(Error::new(
-                ErrorKind::TooManyArguments,
-                format!("output_format() may only be called with named arguments"),
-            ));
-        }
-
-        let Ok(prefix) = kwargs.get::<Value>("prefix") else {
-            // prefix was not specified, defaults to "Use this output format:"
-            return Ok(Value::from_safe_string(format!("{}", self)));
-        };
-
-        let Ok(_) = kwargs.assert_all_used() else {
-            return Err(Error::new(
-                ErrorKind::TooManyArguments,
-                "output_format() got an unexpected keyword argument (only 'prefix' is allowed)",
-            ));
-        };
-
-        match prefix.kind() {
-            ValueKind::Undefined | ValueKind::None => {
-                // prefix specified as none appears to result in ValueKind::Undefined
-                return Ok(Value::from_safe_string(self.text.clone()));
-            }
-            // prefix specified as a string
-            ValueKind::String => {
-                return Ok(Value::from_safe_string(format!(
-                    "{}\n\n{}",
-                    prefix.to_string(),
-                    self.text
-                )));
-            }
-            _ => {
-                return Err(Error::new(
-                    ErrorKind::TooManyArguments,
-                    format!(
-                        "output_format() expected 'prefix' to be string or none, but was type '{}'",
-                        prefix.kind()
-                    ),
-                ));
-            }
-        }
-    }
-    fn call_method(
-        &self,
-        _state: &minijinja::State<'_, '_>,
-        name: &str,
-        _args: &[minijinja::value::Value],
-    ) -> Result<minijinja::value::Value, minijinja::Error> {
-        Err(minijinja::Error::new(
-            ErrorKind::UnknownMethod,
-            format!("output_format has no callable attribute '{}'", name),
-        ))
-    }
-}
-
-fn render_minijinja<T: Serialize>(
+fn render_minijinja(
     template: &str,
-    args: &T,
-    ctx: &RenderContext,
+    args: &minijinja::Value,
+    mut ctx: RenderContext,
     template_string_macros: &[TemplateStringMacro],
 ) -> Result<RenderedPrompt, minijinja::Error> {
     let mut env = get_env();
@@ -186,6 +115,8 @@ fn render_minijinja<T: Serialize>(
 
     // trim
     let template = template.trim();
+    log::debug!("Rendering template: \n{}\n------\n", template);
+    // let args_dict = minijinja::Value::from_serializable(args);
 
     // inject macros
     let template = template_string_macros
@@ -208,46 +139,56 @@ fn render_minijinja<T: Serialize>(
         .join("\n");
 
     env.add_template("prompt", &template)?;
+    let client = ctx.client.clone();
+    let tags = std::mem::take(&mut ctx.tags);
+    let formatter = OutputFormat::new(ctx);
     env.add_global(
         "ctx",
         context! {
-            client => ctx.client,
-            env => ctx.env,
-            output_format => minijinja::value::Value::from_object(OutputFormat{ text: ctx.output_format.clone() }),
+            client => client,
+            tags => tags,
+            output_format => minijinja::value::Value::from_object(formatter),
         },
     );
+
+    let role_fn = minijinja::Value::from_function(
+        |role: Option<String>, kwargs: Kwargs| -> Result<String, minijinja::Error> {
+            let role = match (role, kwargs.get::<String>("role")) {
+                (Some(b), Ok(a)) => {
+                    // If both are present, we should error
+                    return Err(minijinja::Error::new(
+                        ErrorKind::TooManyArguments,
+                        format!("role() called with two roles: '{}' and '{}'", a, b),
+                    ));
+                }
+                (Some(role), _) => role,
+                (_, Ok(role)) => role,
+                _ => {
+                    // If neither are present, we should error
+                    return Err(minijinja::Error::new(
+                        ErrorKind::MissingArgument,
+                        "role() called without role. Try role('role') or role(role='role').",
+                    ));
+                }
+            };
+
+            Ok(format!("{MAGIC_CHAT_ROLE_DELIMITER}:baml-start-baml:{role}:baml-end-baml:{MAGIC_CHAT_ROLE_DELIMITER}"))
+        },
+    );
+
     env.add_global(
         "_",
         context! {
-            chat => minijinja::Value::from_function(|role: Option<String>, kwargs: Kwargs| -> Result<String, minijinja::Error> {
-                let role = match (role, kwargs.get::<String>("role")) {
-                    (Some(b), Ok(a)) => {
-                        // If both are present, we should error
-                        return Err(minijinja::Error::new(
-                            ErrorKind::TooManyArguments,
-                            format!("chat() called with two roles: '{}' and '{}'", a, b),
-                        ));
-                    },
-                    (Some(role), _) => role,
-                    (_, Ok(role)) => role,
-                    _ => {
-                        // If neither are present, we should error
-                        return Err(minijinja::Error::new(
-                            ErrorKind::MissingArgument,
-                            "chat() called without role. Try chat('role') or chat(role='role').",
-                        ));
-                    }
-                };
-
-                Ok(format!("{MAGIC_CHAT_ROLE_DELIMITER}:baml-start-baml:{role}:baml-end-baml:{MAGIC_CHAT_ROLE_DELIMITER}"))
-            })
+            chat => role_fn,
+            role => role_fn
         },
     );
+
     let tmpl = env.get_template("prompt")?;
 
-    let rendered = tmpl.render(minijinja::Value::from_serializable(args))?;
+    let rendered = tmpl.render(args)?;
 
-    if !rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) {
+    if !rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) && !rendered.contains(MAGIC_IMAGE_DELIMITER) {
         return Ok(RenderedPrompt::Completion(rendered));
     }
 
@@ -266,9 +207,35 @@ fn render_minijinja<T: Serialize>(
         } else if role.is_none() && chunk.is_empty() {
             // If there's only whitespace before the first `_.chat()` directive, we discard that chunk
         } else {
+            let mut parts = vec![];
+            for part in chunk.split(MAGIC_IMAGE_DELIMITER) {
+                if part.starts_with(":baml-start-image:") && part.ends_with(":baml-end-image:") {
+                    let image_data = part
+                        .strip_prefix(":baml-start-image:")
+                        .unwrap_or(part)
+                        .strip_suffix(":baml-end-image:")
+                        .unwrap_or(part);
+
+                    match serde_json::from_str::<BamlImage>(image_data) {
+                        Ok(image) => {
+                            parts.push(ChatMessagePart::Image(image));
+                        }
+                        Err(_) => {
+                            Err(minijinja::Error::new(
+                                ErrorKind::CannotUnpack,
+                                format!("Image variable had unrecognizable data: {}", image_data),
+                            ))?;
+                        }
+                    }
+                } else if part.is_empty() {
+                    // only whitespace, so discard
+                } else {
+                    parts.push(ChatMessagePart::Text(part.trim().to_string()));
+                }
+            }
             chat_messages.push(RenderedChatMessage {
                 role: role.unwrap_or("system").to_string(),
-                message: chunk.trim().to_string(),
+                parts,
             });
         }
     }
@@ -279,22 +246,173 @@ fn render_minijinja<T: Serialize>(
 #[derive(Debug, PartialEq, Serialize, Clone)]
 pub struct RenderedChatMessage {
     pub role: String,
-    pub message: String,
+    pub parts: Vec<ChatMessagePart>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub struct ImageUrl {
+    pub url: String,
+}
+
+impl ImageUrl {
+    pub fn new(url: String) -> ImageUrl {
+        ImageUrl { url }
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub struct ImageBase64 {
+    pub base64: String,
+    pub media_type: String,
+}
+
+impl ImageBase64 {
+    pub fn new(base64: String, media_type: String) -> ImageBase64 {
+        ImageBase64 { base64, media_type }
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Clone)]
+pub enum ChatMessagePart {
+    Text(String), // raw user-provided text
+    Image(BamlImage),
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum RenderedPrompt {
     Completion(String),
     Chat(Vec<RenderedChatMessage>),
 }
 
-pub fn render_prompt<T: Serialize>(
+impl std::fmt::Display for RenderedPrompt {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            RenderedPrompt::Completion(s) => write!(f, "[{}] {}", "completion".dimmed(), s),
+            RenderedPrompt::Chat(messages) => {
+                write!(f, "[{}] ", "chat".dimmed())?;
+                for message in messages {
+                    writeln!(
+                        f,
+                        "{}{}",
+                        format!("{}: ", message.role).on_yellow(),
+                        message
+                            .parts
+                            .iter()
+                            .map(|p| match p {
+                                ChatMessagePart::Text(t) => t.clone(),
+                                ChatMessagePart::Image(img) => match img {
+                                    BamlImage::Url(url) =>
+                                        format!("<image_placeholder: {}>", url.url),
+                                    BamlImage::Base64(_) =>
+                                    // TODO: print this as well?
+                                        "<image_placeholder base64>".to_string(),
+                                },
+                            })
+                            .collect::<Vec<String>>()
+                            .join("")
+                    )?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+pub struct ChatOptions {
+    default_role: String,
+    #[allow(dead_code)]
+    valid_roles: Option<Vec<String>>,
+}
+
+impl ChatOptions {
+    pub fn new(default_role: String, valid_roles: Option<Vec<String>>) -> ChatOptions {
+        ChatOptions {
+            default_role,
+            valid_roles,
+        }
+    }
+}
+
+pub struct CompletionOptions {
+    joiner: String,
+}
+
+impl CompletionOptions {
+    pub fn new(joiner: String) -> CompletionOptions {
+        CompletionOptions { joiner }
+    }
+}
+
+impl RenderedPrompt {
+    pub fn as_chat(self, chat_options: &ChatOptions) -> RenderedPrompt {
+        match self {
+            RenderedPrompt::Chat(messages) => RenderedPrompt::Chat(messages),
+            RenderedPrompt::Completion(message) => {
+                RenderedPrompt::Chat(vec![RenderedChatMessage {
+                    role: chat_options.default_role.clone(),
+                    parts: vec![ChatMessagePart::Text(message)],
+                }])
+            }
+        }
+    }
+
+    pub fn as_completion(self, completion_options: &CompletionOptions) -> RenderedPrompt {
+        match self {
+            RenderedPrompt::Chat(messages) => RenderedPrompt::Completion(
+                messages
+                    .into_iter()
+                    .flat_map(|m| {
+                        m.parts.into_iter().map(|p| match p {
+                            ChatMessagePart::Text(t) => t,
+                            ChatMessagePart::Image(_) => "".to_string(), // we are choosing to ignore the image for now
+                        })
+                    })
+                    .collect::<Vec<String>>()
+                    .join(&completion_options.joiner),
+            ),
+            RenderedPrompt::Completion(message) => RenderedPrompt::Completion(message),
+        }
+    }
+}
+
+// pub fn render_prompt(
+//     template: &str,
+//     args: &minijinja::Value,
+//     ctx: RenderContext,
+//     template_string_macros: &[TemplateStringMacro],
+// ) -> anyhow::Result<RenderedPrompt> {
+//     let rendered = render_minijinja(template, args, ctx, template_string_macros);
+
+//     match rendered {
+//         Ok(r) => Ok(r),
+//         Err(err) => {
+//             let mut minijinja_err = "".to_string();
+//             minijinja_err += &format!("{err:#}");
+
+//             let mut err = &err as &dyn std::error::Error;
+//             while let Some(next_err) = err.source() {
+//                 minijinja_err += &format!("\n\ncaused by: {next_err:#}");
+//                 err = next_err;
+//             }
+
+//             anyhow::bail!("Error occurred while rendering prompt: {minijinja_err}");
+//         }
+//     }
+// }
+
+pub fn render_prompt(
     template: &str,
-    args: &T,
-    ctx: &RenderContext,
+    args: &BamlValue,
+    ctx: RenderContext,
     template_string_macros: &[TemplateStringMacro],
 ) -> anyhow::Result<RenderedPrompt> {
-    let rendered = render_minijinja(template, args, ctx, template_string_macros);
+    if !matches!(args, BamlValue::Map(_)) {
+        anyhow::bail!("args must be a map");
+    }
+
+    let minijinja_args: Value = args.clone().into();
+
+    let rendered = render_minijinja(template, &minijinja_args, ctx, template_string_macros);
 
     match rendered {
         Ok(r) => Ok(r),
@@ -318,6 +436,7 @@ mod render_tests {
 
     use super::*;
 
+    use baml_types::BamlMap;
     use env_logger;
     use std::sync::Once;
 
@@ -330,14 +449,137 @@ mod render_tests {
     }
 
     #[test]
+    fn render_image() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "img".to_string(),
+            BamlValue::Image(BamlImage::url("https://example.com/image.jpg".to_string())),
+        )]));
+
+        let rendered = render_prompt(
+            "{{ _.chat(\"system\") }}
+            Here is an image: {{ img }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                parts: vec![
+                    ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
+                    ChatMessagePart::Image(BamlImage::url(
+                        "https://example.com/image.jpg".to_string()
+                    ),),
+                ]
+            },])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_image_nested() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "myObject".to_string(),
+            BamlValue::Map(BamlMap::from([(
+                "img".to_string(),
+                BamlValue::Image(BamlImage::url("https://example.com/image.jpg".to_string())),
+            )])),
+        )]));
+
+        let rendered = render_prompt(
+            "{{ _.chat(\"system\") }}
+            Here is an image: {{ myObject.img }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                parts: vec![
+                    ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
+                    ChatMessagePart::Image(BamlImage::url(
+                        "https://example.com/image.jpg".to_string()
+                    ),),
+                ]
+            },])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_image_suffix() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "img".to_string(),
+            BamlValue::Image(BamlImage::url("https://example.com/image.jpg".to_string())),
+        )]));
+
+        let rendered = render_prompt(
+            "{{ _.chat(\"system\") }}
+            Here is an image: {{ img }}. Please help me.",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                parts: vec![
+                    ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
+                    ChatMessagePart::Image(BamlImage::url(
+                        "https://example.com/image.jpg".to_string()
+                    ),),
+                    ChatMessagePart::Text(vec![". Please help me.",].join("\n")),
+                ]
+            },])
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn render_chat() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
-        };
+        let args = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "
@@ -348,7 +590,7 @@ mod render_tests {
                     and also outputs this word 4 times
                     after giving a response: {{ haiku_subject }}
                     
-                    {{ _.chat(ctx.env.ROLE) }}
+                    {{ _.chat(ctx.tags['ROLE']) }}
                     
                     Tell me a haiku about {{ haiku_subject }}. {{ ctx.output_format }}
 
@@ -356,13 +598,13 @@ mod render_tests {
             
             ",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -372,24 +614,27 @@ mod render_tests {
             RenderedPrompt::Chat(vec![
                 RenderedChatMessage {
                     role: "system".to_string(),
-                    message: vec![
-                        "You are an assistant that always responds",
-                        "in a very excited way with emojis",
-                        "and also outputs this word 4 times",
-                        "after giving a response: sakura",
-                    ]
-                    .join("\n")
+                    parts: vec![ChatMessagePart::Text(
+                        vec![
+                            "You are an assistant that always responds",
+                            "in a very excited way with emojis",
+                            "and also outputs this word 4 times",
+                            "after giving a response: sakura",
+                        ]
+                        .join("\n")
+                    )]
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
-                    message: vec![
-                        "Tell me a haiku about sakura. Answer in JSON using this schema:",
-                        "",
-                        "iambic pentameter",
-                        "",
-                        "End the haiku with a line about your maker, openai.",
-                    ]
-                    .join("\n")
+                    parts: vec![ChatMessagePart::Text(
+                        vec![
+                            "Tell me a haiku about sakura. Answer in JSON using this schema:",
+                            "iambic pentameter",
+                            "",
+                            "End the haiku with a line about your maker, openai.",
+                        ]
+                        .join("\n")
+                    )]
                 }
             ])
         );
@@ -401,11 +646,14 @@ mod render_tests {
     fn render_completion() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
+        let _args = context! {
+            haiku_subject => "sakura"
         };
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "
@@ -415,13 +663,13 @@ mod render_tests {
                 after giving a response: {{ haiku_subject }}
             ",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -446,22 +694,21 @@ mod render_tests {
     fn render_output_format_directly() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
-        };
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "{{ ctx.output_format }}",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -469,7 +716,7 @@ mod render_tests {
         assert_eq!(
             rendered,
             RenderedPrompt::Completion(
-                "Answer in JSON using this schema:\n\niambic pentameter".to_string()
+                "Answer in JSON using this schema:\niambic pentameter".to_string()
             )
         );
 
@@ -480,22 +727,21 @@ mod render_tests {
     fn render_output_format_prefix_unspecified() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
-        };
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "{{ ctx.output_format() }}",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -503,7 +749,7 @@ mod render_tests {
         assert_eq!(
             rendered,
             RenderedPrompt::Completion(
-                "Answer in JSON using this schema:\n\niambic pentameter".to_string()
+                "Answer in JSON using this schema:\niambic pentameter".to_string()
             )
         );
 
@@ -514,30 +760,26 @@ mod render_tests {
     fn render_output_format_prefix_null() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
-        };
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "{{ ctx.output_format(prefix=null) }}",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
 
-        assert_eq!(
-            rendered,
-            RenderedPrompt::Completion("iambic pentameter".to_string())
-        );
+        assert_eq!(rendered, RenderedPrompt::Completion("string".into()));
 
         Ok(())
     }
@@ -546,29 +788,28 @@ mod render_tests {
     fn render_output_format_prefix_str() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
-        };
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "{{ ctx.output_format(prefix='custom format:') }}",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
 
         assert_eq!(
             rendered,
-            RenderedPrompt::Completion("custom format:\n\niambic pentameter".to_string())
+            RenderedPrompt::Completion("custom format:\niambic pentameter".to_string())
         );
 
         Ok(())
@@ -578,11 +819,10 @@ mod render_tests {
     fn render_chat_param_failures() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "name": "world"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
-        };
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "name".to_string(),
+            BamlValue::String("world".to_string()),
+        )]));
 
         // rendering should fail: template contains '{{ name }' (missing '}' at the end)
         let rendered = render_prompt(
@@ -606,13 +846,13 @@ mod render_tests {
                     hi!
             "#,
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         );
@@ -633,11 +873,10 @@ mod render_tests {
     fn render_with_kwargs() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
-        };
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             r#"
@@ -656,13 +895,13 @@ mod render_tests {
                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
             "#,
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -672,22 +911,24 @@ mod render_tests {
             RenderedPrompt::Chat(vec![
                 RenderedChatMessage {
                     role: "system".to_string(),
-                    message: vec![
+                    parts: vec![ChatMessagePart::Text(vec![
                         "You are an assistant that always responds",
                         "in a very excited way with emojis",
                         "and also outputs this word 4 times",
                         "after giving a response: sakura",
+                    ].join("\n"))]
+                },
+                RenderedChatMessage {
+                    role: "john doe".to_string(),
+                    parts: vec![
+                        ChatMessagePart::Text("Tell me a haiku about sakura. Answer in JSON using this schema:\niambic pentameter".to_string())
                     ]
-                    .join("\n")
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
-                    message: vec!["Tell me a haiku about sakura. Answer in JSON using this schema:\n\niambic pentameter",].join("\n")
-                },
-                RenderedChatMessage {
-                    role: "john doe".to_string(),
-                    message: vec!["End the haiku with a line about your maker, openai.",]
-                        .join("\n")
+                    parts: vec![
+                        ChatMessagePart::Text("End the haiku with a line about your maker, openai.".to_string())
+                    ]
                 }
             ])
         );
@@ -699,11 +940,10 @@ mod render_tests {
     fn render_chat_starts_with_system() -> anyhow::Result<()> {
         setup_logging();
 
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "haiku_subject": "sakura"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
-        };
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
 
         let rendered = render_prompt(
             "
@@ -715,13 +955,13 @@ mod render_tests {
                 after giving a response: {{ haiku_subject }}
             ",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "iambic pentameter".to_string(),
-                env: HashMap::from([("ROLE".to_string(), "john doe".to_string())]),
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
             },
             &vec![],
         )?;
@@ -730,13 +970,15 @@ mod render_tests {
             rendered,
             RenderedPrompt::Chat(vec![RenderedChatMessage {
                 role: "system".to_string(),
-                message: vec![
-                    "You are an assistant that always responds",
-                    "in a very excited way with emojis",
-                    "and also outputs this word 4 times",
-                    "after giving a response: sakura",
-                ]
-                .join("\n")
+                parts: vec![ChatMessagePart::Text(
+                    vec![
+                        "You are an assistant that always responds",
+                        "in a very excited way with emojis",
+                        "and also outputs this word 4 times",
+                        "after giving a response: sakura",
+                    ]
+                    .join("\n")
+                )]
             },])
         );
 
@@ -746,24 +988,22 @@ mod render_tests {
     #[test]
     fn render_malformed_jinja() -> anyhow::Result<()> {
         setup_logging();
-
-        let serde_json::Value::Object(args) = serde_json::json!({
-            "name": "world"
-        }) else {
-            anyhow::bail!("args must be convertible to a JSON object");
-        };
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "name".to_string(),
+            BamlValue::String("world".to_string()),
+        )]));
 
         // rendering should fail: template contains '{{ name }' (missing '}' at the end)
         let rendered = render_prompt(
             "Hello, {{ name }!",
             &args,
-            &RenderContext {
+            RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
                 },
-                output_format: "output[]".to_string(),
-                env: HashMap::new(),
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
             },
             &vec![],
         );

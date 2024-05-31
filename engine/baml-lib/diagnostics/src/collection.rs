@@ -7,13 +7,31 @@ use crate::{warning::DatamodelWarning, SourceFile, Span};
 ///
 /// This is used to accumulate multiple errors and warnings during validation.
 /// It is used to not error out early and instead show multiple errors at once.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Diagnostics {
     pub root_path: PathBuf,
     current_file: Option<SourceFile>,
     errors: Vec<DatamodelError>,
     warnings: Vec<DatamodelWarning>,
 }
+
+impl std::fmt::Display for Diagnostics {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let err_str = self.to_pretty_string();
+        let warn_str = self.warnings_to_pretty_string();
+
+        if !err_str.is_empty() {
+            writeln!(f, "{}", err_str)?;
+        }
+        if !warn_str.is_empty() {
+            writeln!(f, "{}", warn_str)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl std::error::Error for Diagnostics {}
 
 impl Diagnostics {
     pub fn new(root_path: PathBuf) -> Diagnostics {

@@ -1,24 +1,29 @@
 {
   "private": true,
   "scripts": {
-    "clean": "rimraf -rf node_modules",
+    "clean": "turbo clean",
     "build": "turbo run build",
     "cache": "turbo cache list",
     "dev": "turbo run dev",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "format": "biome format --write .",
     "generate": "turbo run generate",
     "lint": "turbo run lint",
     "docker-build": "bash build-docker.sh"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.7.3",
     "@types/eslint": "^8.37.0",
     "@typescript-eslint/eslint-plugin": "^5.59.6",
     "@typescript-eslint/parser": "^5.59.6",
     "eslint": "^8.40.0",
-    "prettier": "^2.5.1",
     "rimraf": "^3.0.2",
     "tsx": "^3.7.1",
     "turbo": "^1.10.16"
   },
-  "packageManager": "pnpm@8.6.1"
+  "packageManager": "pnpm@8.6.1",
+  "pnpm": {
+    "patchedDependencies": {
+      "vite-plugin-wasm@3.3.0": "patches/vscode-inline-wasm-as-base64.patch"
+    }
+  }
 }

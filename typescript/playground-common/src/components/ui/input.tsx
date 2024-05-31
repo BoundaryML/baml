@@ -5,6 +5,7 @@ import { cn } from '../../lib/utils'
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type, ...props }, ref) => {
+  const [isVisible, setIsVisible] = React.useState(false)
   return (
     <input
       type={type}

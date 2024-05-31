@@ -1,4 +1,4 @@
-use internal_baml_schema_ast::ast::Expression;
+use internal_baml_schema_ast::ast::{Expression, WithSpan};
 
 use crate::{
     ast::{self, WithIdentifier},
@@ -92,5 +92,11 @@ impl<'db> ClientWalker<'db> {
 impl<'db> WithIdentifier for ClientWalker<'db> {
     fn identifier(&self) -> &ast::Identifier {
         self.ast_client().identifier()
+    }
+}
+
+impl<'db> WithSpan for ClientWalker<'db> {
+    fn span(&self) -> &internal_baml_diagnostics::Span {
+        self.ast_client().span()
     }
 }

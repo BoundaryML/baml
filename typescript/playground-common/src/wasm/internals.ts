@@ -1,5 +1,4 @@
-import { getWasmError, isWasmPanic, WasmPanic } from './error/panic'
-
+import { type WasmPanic, getWasmError, isWasmPanic } from './error/panic'
 
 // import { languageWasm } from '.'
 

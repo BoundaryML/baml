@@ -2,7 +2,7 @@ mod validate_reserved_names;
 
 use crate::{
     ast::{self, TopId, WithAttributes, WithName, WithSpan},
-    coerce, Context, DatamodelError, StaticType, StringId,
+    coerce, coerce_array, Context, DatamodelError, StaticType, StringId,
 };
 
 use internal_baml_schema_ast::ast::{ConfigBlockProperty, WithIdentifier};
@@ -58,7 +58,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                     }
                 }
 
-                &mut names.tops
+                Some(either::Left(&mut names.tops))
             }
             (ast::TopId::Class(model_id), ast::Top::Class(ast_class)) => {
                 validate_class_name(ast_class, ctx.diagnostics);
@@ -83,7 +83,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                     }
                 }
 
-                &mut names.tops
+                Some(either::Left(&mut names.tops))
             }
             (_, ast::Top::Class(_)) => {
                 unreachable!("Encountered impossible class declaration during parsing")
@@ -92,7 +92,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 validate_template_string_name(template_string, ctx.diagnostics);
                 validate_attribute_identifiers(template_string, ctx);
 
-                &mut names.tops
+                Some(either::Left(&mut names.tops))
             }
             (_, ast::Top::TemplateString(_)) => {
                 unreachable!("Encountered impossible template_string declaration during parsing")
@@ -101,7 +101,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 validate_function_name(ast_function, ctx.diagnostics);
                 validate_attribute_identifiers(ast_function, ctx);
 
-                &mut names.tops
+                Some(either::Left(&mut names.tops))
             }
             (_, ast::Top::FunctionOld(_)) => {
                 unreachable!("Encountered impossible function declaration during parsing")
@@ -110,7 +110,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 validate_function_name(ast_function, ctx.diagnostics);
                 validate_attribute_identifiers(ast_function, ctx);
 
-                &mut names.tops
+                Some(either::Left(&mut names.tops))
             }
             (_, ast::Top::Function(_)) => {
                 unreachable!("Encountered impossible function declaration during parsing")
@@ -118,17 +118,17 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
             (_, ast::Top::Generator(generator)) => {
                 validate_generator_name(generator, ctx.diagnostics);
                 check_for_duplicate_properties(top, generator.fields(), &mut tmp_names, ctx);
-                &mut names.generators
+                Some(either::Left(&mut names.generators))
             }
             (_, ast::Top::Variant(variant)) => {
                 validate_variant_name(variant, ctx.diagnostics);
                 check_for_duplicate_properties(top, &variant.fields, &mut tmp_names, ctx);
-                &mut names.tops
+                Some(either::Left(&mut names.tops))
             }
             (_, ast::Top::Client(client)) => {
                 validate_client_name(client, ctx.diagnostics);
                 check_for_duplicate_properties(top, client.fields(), &mut tmp_names, ctx);
-                &mut names.tops
+                Some(either::Left(&mut names.tops))
             }
             (_, ast::Top::Config(config)) => {
                 validate_config_name(config, ctx.diagnostics);
@@ -137,32 +137,50 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                     ast::Configuration::TestCase(t) => {
                         // TODO: I think we should do this later after all parsing, as duplication
                         // would work best as a validation error with walkers.
-                        let function_id = t
+                        let function_ids = t
                             .iter_fields()
-                            .find(|f| f.1.name() == "function")
+                            .find(|f| f.1.name() == "functions")
                             .and_then(|f| match f.1.value {
-                                Some(ref v) => coerce::string(v, ctx.diagnostics),
+                                Some(ref v) => coerce_array(v, &coerce::string, ctx.diagnostics),
                                 None => None,
-                            })
-                            .map(|f| ctx.interner.intern(f));
+                            });
 
-                        match function_id {
-                            Some(f) => names.tests.entry(f).or_insert_with(HashMap::default),
+                        match function_ids {
+                            Some(f) => Some(either::Right(f)),
                             None => {
                                 ctx.push_error(DatamodelError::new_validation_error(
-                                    "Test case must have a function field",
+                                    "Test case must have a functions field",
                                     t.identifier().span().clone(),
                                 ));
-                                &mut names.tops
+                                None
                             }
                         }
                     }
-                    _ => &mut names.tops,
+                    _ => Some(either::Left(&mut names.tops)),
                 }
             }
         };
 
-        insert_name(top_id, top, namespace, ctx)
+        match namespace {
+            Some(either::Left(namespace)) => {
+                insert_name(top_id, top, namespace, ctx);
+            }
+            Some(either::Right(test_functions)) => {
+                for func_name in test_functions {
+                    let func_id = ctx.interner.intern(func_name);
+                    let namespace = names.tests.entry(func_id).or_insert_with(HashMap::default);
+                    let name = ctx.interner.intern(top.name());
+                    if let Some(_) = namespace.insert(name, top_id) {
+                        ctx.push_error(DatamodelError::new_duplicate_test_error(
+                            top.name(),
+                            func_name,
+                            top.identifier().span().clone(),
+                        ));
+                    }
+                }
+            }
+            None => {}
+        }
     }
 
     let _ = std::mem::replace(ctx.names, names);
@@ -177,6 +195,7 @@ fn insert_name(
     let name = ctx.interner.intern(top.name());
 
     if let Some(existing) = namespace.insert(name, top_id) {
+        // For variants, we do extra checks.
         if let (Some(existing_variant), Some(current_variant)) =
             (ctx.ast[existing].as_variant(), top.as_variant())
         {

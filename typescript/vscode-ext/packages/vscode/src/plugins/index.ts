@@ -1,5 +1,5 @@
 import languageServer from './language-server'
-import { BamlVSCodePlugin } from './types'
+import type { BamlVSCodePlugin } from './types'
 
 const plugins: BamlVSCodePlugin[] = [languageServer]
 
