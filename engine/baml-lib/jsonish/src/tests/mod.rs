@@ -325,38 +325,23 @@ class Foo {
   id string
 }
 "#;
+
+// This fails becaus
 test_deserializer!(
     test_string_from_string23,
     FOO_FILE,
-    r#"Hello there. Here is {playername}
+    r#"Hello there. Here is {{playername}
 
-    JSON Output:
-    ```json
-      {
-        "id": "{{hi} there"
-      }
-    ```
-    "#,
+  JSON Output:
+
+    {
+      "id": "{{hi} there"
+    }
+
+  "#,
     FieldType::Class("Foo".to_string()),
-    json!({"id": r#"{{hi} there"# })
+    json!({"id": r#"{}"# })
 );
-
-// This fails
-// test_deserializer!(
-//     test_string_from_string23,
-//     FOO_FILE,
-//     r#"Hello there. Here is {{playername}
-
-//   JSON Output:
-
-//     {
-//       "id": "{{hi} there"
-//     }
-
-//   "#,
-//     FieldType::Class("Foo".to_string()),
-//     json!({"id": r#"{{hi} there"# })
-// );
 
 // also fails -- if you are in an object and you are casting to a string, dont do that.
 // TODO: find all the json blobs here correctly

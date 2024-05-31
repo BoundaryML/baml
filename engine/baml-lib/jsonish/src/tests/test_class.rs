@@ -346,3 +346,92 @@ test_deserializer!(
         "key5": "This is a value with punctuation and numbers"
     }
 );
+
+const CLASS_WITH_NESTED_CLASS_LIST: &str = r#"
+class Resume {
+    name string
+    education Education[]
+    skills string[]
+  }
+  
+  class Education {
+    school string
+    degree string
+    year int
+  }
+"#;
+
+test_deserializer!(
+    test_class_with_nested_list,
+    CLASS_WITH_NESTED_CLASS_LIST,
+    r#"{
+        "name": "Vaibhav Gupta",
+        "education": [
+            {
+                "school": "FOOO",
+                "degree": "FOOO",
+                "year": 2015
+            },
+            {
+                "school": "BAAR",
+                "degree": "BAAR",
+                "year": 2019
+            }
+        ],
+        "skills": [
+          "C++",
+          "SIMD on custom silicon"
+        ]
+      }"#,
+    FieldType::Class("Resume".to_string()),
+    {
+        "name": "Vaibhav Gupta",
+        "education": [
+            {
+                "school": "FOOO",
+                "degree": "FOOO",
+                "year": 2015
+            },
+            {
+                "school": "BAAR",
+                "degree": "BAAR",
+                "year": 2019
+            }
+        ],
+        "skills": [
+            "C++",
+            "SIMD on custom silicon"
+        ]
+    }
+);
+
+test_deserializer!(
+    test_class_with_nestedd_list_just_list,
+    CLASS_WITH_NESTED_CLASS_LIST,
+    r#"[
+          {
+            "school": "FOOO",
+            "degree": "FOOO",
+            "year": 2015
+          },
+          {
+            "school": "BAAR",
+            "degree": "BAAR",
+            "year": 2019
+          }
+        ]
+    "#,
+    FieldType::list(FieldType::class("Education")),
+        [
+            {
+                "school": "FOOO",
+                "degree": "FOOO",
+                "year": 2015
+            },
+            {
+                "school": "BAAR",
+                "degree": "BAAR",
+                "year": 2019
+            }
+        ]
+);

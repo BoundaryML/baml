@@ -46,7 +46,7 @@ impl TypeCoercer for Class {
                 // Special case for single fields (we may want to consider creating the kv manually)
                 let field = &self.fields[0];
                 let parsed_field =
-                    parse_field((self, target), field, ctx, value, &mut completed_cls);
+                    parse_field((self, target), field, ctx, value, &mut completed_cls, false);
 
                 update_map(
                     &mut required_values,
@@ -84,6 +84,7 @@ impl TypeCoercer for Class {
                                     ctx,
                                     Some(v),
                                     &mut completed_cls,
+                                    true,
                                 );
                                 update_map(
                                     &mut required_values,
@@ -244,6 +245,7 @@ fn parse_field<'a>(
     ctx: &ParsingContext,
     value: Option<&crate::jsonish::Value>,
     completed_cls: &mut Vec<Result<BamlValueWithFlags, ParsingError>>,
+    in_key: bool,
 ) -> Result<BamlValueWithFlags, ParsingError> {
     log::info!("Parsing field: {} from {:?}", field_name.real_name(), value);
 
@@ -278,7 +280,9 @@ fn parse_field<'a>(
 
             match array_helper::pick_best(&field_scope, t, &[option2, option3]) {
                 Ok(mut v) => {
-                    v.add_flag(Flag::ImpliedKey(field_name.real_name().into()));
+                    if !in_key {
+                        v.add_flag(Flag::ImpliedKey(field_name.real_name().into()));
+                    }
                     Ok(v)
                 }
                 Err(e) => Err(e),
@@ -318,7 +322,9 @@ fn parse_field<'a>(
         }
         v => match t.coerce(&ctx.enter_scope(field_name.real_name()), t, v) {
             Ok(mut v) => {
-                v.add_flag(Flag::ImpliedKey(field_name.real_name().into()));
+                if !in_key {
+                    v.add_flag(Flag::ImpliedKey(field_name.real_name().into()));
+                }
                 Ok(v)
             }
             Err(e) => Err(e),

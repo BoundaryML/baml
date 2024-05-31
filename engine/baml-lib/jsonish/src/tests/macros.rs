@@ -31,7 +31,8 @@ macro_rules! test_deserializer {
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
 
             let value = result.unwrap();
-            println!("{}", value);
+            // log::info!("{}", value);
+            log::info!("Score: {}", value.score());
             let value: BamlValue = value.into();
             let json_value = json!(value);
 
