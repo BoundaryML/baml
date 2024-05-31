@@ -148,7 +148,6 @@ With BAML you have:
 
 |                                                                                           | Capabilities                                                                                                                                                                                                                                                                                                                       |
 | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BAML CLI [install](#installation)                                                         | Transpiles BAML code to a native Python / Typescript library <br />(you only need it for development, never for releases)<br />Works on Mac, Windows, Linux <br /><img src="https://img.shields.io/badge/Python-3.8+-default?logo=python" /><img src="https://img.shields.io/badge/Typescript-Node_18+-default?logo=typescript" /> |
 | VSCode Extension [install](https://marketplace.visualstudio.com/items?itemName=gloo.baml) | Syntax highlighting for BAML files<br /> Real-time prompt preview <br /> Testing UI                                                                                                                                                                                                                                                |
 | Boundary Studio [open](https://app.boundaryml.com)<br />(not open source)                 | Type-safe observability <br />Labeling                                                                                                                                                                                                                                                                                             |
 
@@ -156,30 +155,15 @@ With BAML you have:
 
 ## Installation
 
-### 1. Download the BAML CLI
+### Python
+`pip install baml-py`
 
-Mac:
-
-```bash
-brew install boundaryml/baml/baml
-```
-
-Linux:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/BoundaryML/homebrew-baml/main/install-baml.sh | bash
-```
-
-Windows (with [Scoop](https://scoop.sh/)):
-
-```
-scoop bucket add baml-bucket https://github.com/boundaryml/homebrew-baml
-scoop install baml
-```
+### Typescript
+`npm install @boundaryml/baml`
 
 ### 2. Download VSCode extension
 
-Search for "BAML" or [Click here](https://marketplace.visualstudio.com/items?itemName=gloo.BAML)
+Search for "BAML" or [Click here](https://marketplace.visualstudio.com/items?itemName=boundary.Baml-extension)
 
 > If you are using python, enable typechecking in VSCode’s settings.json:
 >
@@ -187,10 +171,8 @@ Search for "BAML" or [Click here](https://marketplace.visualstudio.com/items?ite
 
 ### 3. Add BAML to any existing project
 
-```bash
-cd my_project
-baml init
-```
+Typescript: `npx baml-cli init`
+Python: `baml-cli init`
 
 ### 4. OR use these starter projects:
 
@@ -300,90 +282,6 @@ enum Sentiment {
 <br />
 Finally, BAML is more of an ecosystem designed to bring you the best developer experience for doing any kind of LLM function-calling, which is why we've built tools like the playground and Boundary Studio -- our observability platform.
 
-## Flexible Parsing
-
-> "be conservative in what you send, be liberal in what you accept" -- Postel's Law.
-
-LLMs are prone to producing non-conformant outputs. Instead of wasting tokens and time getting the prompt perfect to your needs, we built a parser that handles many of these scenarios for you. The parser uses 0 LLMs, and instead relies on the types you define in BAML.
-
-### Example
-
-<details open>
-
-<summary>BAML Data model</summary>
-
-```typescript
-class Quote {
-  author string @alias("name")
-  quote string[] @description("in lower case")
-}
-```
-
-</details>
-
-<details open>
-
-<summary>Raw LLM Output</summary>
-
-<pre>
-The principal you were talking about is Postel's Law by Jon Postel. 
-
-Your answer in the schema you requested is:
-```json
-{
-   "name": "Jon Postel",
-   "quote": "be conservative in what you send, be liberal in what you accept"
-}
-```
-</pre>
-
-</details>
-
-<details open>
-
-<summary>What BAML parsed as</summary>
-
-```json
-{
-  "author": "Jon Postel",
-  "quote": ["be conservative in what you send, be liberal in what you accept"]
-}
-```
-
-</details>
-
-<details open>
-<summary>What the parser did</summary>
-
-1. Stripped all the prefix and suffix text around the object
-
-```json
-{
-  "name": "Jon Postel",
-  "quote": "be conservative in what you send, be liberal in what you accept"
-}
-```
-
-2. Replaced the alias `name` --> `author`
-
-```json
-{
-  "author": "Jon Postel",
-  "quote": "be conservative in what you send, be liberal in what you accept"
-}
-```
-
-3. Converted `quote` from `string` -> `string[]`
-
-```json
-{
-  "author": "Jon Postel",
-  "quote": ["be conservative in what you send, be liberal in what you accept"]
-}
-```
-
-</details>
-
 ## FAQ
 
 ### Why make a new language?
@@ -394,7 +292,7 @@ We basically wanted [Jinja](https://jinja.palletsprojects.com/en/3.1.x/), but wi
 
 ### Does BAML use LLMs to generate code?
 
-No, the BAML CLI transpiles the code using Rust 🦀. It takes just a few milliseconds!
+No, the BAML dependency transpiles the code using Rust 🦀. It takes just a few milliseconds!
 
 ### What does BAML stand for?
 
@@ -402,7 +300,7 @@ Basically, A Made-up Language
 
 ### How do I deploy with BAML?
 
-BAML files are only used to generate Python or Typescript code. You don’t need to install the BAML CLI in your actual production servers. Just commit the generated code as you would any other python code, and you're good to go
+BAML files are only used to generate Python or Typescript code. Just commit the generated code as you would any other python code, and you're good to go
 
 ### Is BAML secure?
 
