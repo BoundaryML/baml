@@ -13,8 +13,10 @@ import {
   EventListener,
   FunctionPanel,
   FunctionSelector,
+  LibraryGrid,
   //useSelections,
 } from '@baml/playground-common'
+
 import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 import { Separator } from '@baml/playground-common/components/ui/separator'
 import clsx from 'clsx'
@@ -47,6 +49,7 @@ import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from '@baml/play
 import { SettingsIcon } from 'lucide-react'
 import FileViewer from './Tree/FileViewer'
 import { Toaster } from '@/components/ui/toaster'
+import { library } from 'webpack'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(updateFileAtom)
@@ -78,6 +81,10 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const [description, setDescription] = useState(project.description)
   const descriptionInputRef = useRef(null)
   const setOpenExplorePanel = useSetAtom(exploreProjectsOpenAtom)
+  const [libraryIsOpen, setLibraryOpen] = useAtom(libraryOpenAtom)
+  // const [libraryIsOpen, setLibraryOpen] = useAtom(libraryOpenAtom)
+
+  const resizablePanelSizeConstraints = libraryIsOpen ? { minSize: 500, maxSize: 500 } : {}
 
   return (
     // firefox wont apply the background color for some reason so we forcefully set it.
@@ -110,7 +117,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
         )}
 
         <ResizableHandle className=' bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder' />
-        <ResizablePanel defaultSize={88}>
+        <ResizablePanel defaultSize={88} {...resizablePanelSizeConstraints}>
           <div className='flex-col w-full h-full font-sans bg-background dark:bg-vscode-panel-background'>
             <div className='flex flex-row items-center gap-x-12 border-b-[1px] border-vscode-panel-border min-h-[40px]'>
               <div className='flex flex-col items-center h-full py-1 tour-title whitespace-nowrap'>
@@ -151,11 +158,12 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   variant={'ghost'}
                   className='flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foregrounde'
                   onClick={() => {
-                    setOpenExplorePanel(true)
+                    setLibraryOpen(!libraryIsOpen)
                   }}
                 >
-                  <Compass size={16} strokeWidth={2} />
-                  <span className='whitespace-nowrap'>Explore Examples</span>
+                  <span className='whitespace-nowrap'>
+                    {libraryIsOpen ? 'See Playground' : 'Explore BAML Samples'}
+                  </span>{' '}
                 </Button>
               </div>
               {unsavedChanges ? (
@@ -327,78 +335,56 @@ const DummyHydrate = ({ files }: { files: EditorFile[] }) => {
 }
 
 const PlaygroundView = () => {
-  const setShowSettings = useSetAtom(showSettingsAtom)
-  const setLibraryOpen = useSetAtom(libraryOpenAtom)
-  // const [parserDb] = useAtom(currentParserDbAtom)
-  // usePlaygroundListener()
-  // const testRunOutput = useAtomValue(testRunOutputAtom)
+  const [isLibraryOpen] = useAtom(libraryOpenAtom)
 
-  // useEffect(() => {
-  //   if (!parserDb) {
-  //     return
-  //   }
-  //   const newParserDb = { ...parserDb }
+  return <>{isLibraryOpen ? <LibraryView /> : <DefaultPlaygroundView />}</>
+}
 
-  //   window.postMessage({
-  //     command: 'setDb',
-  //     content: [[BAML_DIR, newParserDb]],
-  //   })
-  // }, [parserDb])
-
-  // useEffect(() => {
-  //   if (testRunOutput) {
-  //     window.postMessage({
-  //       command: 'test-results',
-  //       content: testRunOutput.testState,
-  //     })
-  //     window.postMessage({
-  //       command: 'test-stdout',
-  //       content: testRunOutput.outputLogs.join('\n'),
-  //     })
-  //   }
-  // }, [testRunOutput])
-  // return (
-  //   <>
-  //     <CustomErrorBoundary>TODO, implement playground view</CustomErrorBoundary>
-  //   </>
-  // )
-
-  //<TestToggle />
+const LibraryView = () => {
   return (
-    <>
-      <CustomErrorBoundary>
-        <Suspense fallback={<div>Loading...</div>}>
-          <EventListener>
-            <SettingsDialog />
-            <div className='relative flex flex-col w-full gap-2 pr-0'>
-              <div className='relative flex flex-row gap-2'>
-                <FunctionSelector />
-                <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
-                  <Button
-                    variant={'ghost'}
-                    className='flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foregrounde'
-                    onClick={() => {
-                      setLibraryOpen(true)
-                    }}
-                  >
-                    <span className='whitespace-nowrap'>BAML Library</span>
-                  </Button>
-                  <ShowSettingsButton
-                    buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
-                    iconClassName='h-5'
-                  />
-                </div>
-              </div>
-
-              {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
-              <FunctionPanel />
+    <CustomErrorBoundary>
+      <Suspense fallback={<div>Loading...</div>}>
+        <EventListener>
+          <SettingsDialog />
+          <div className='relative flex flex-col w-full gap-4 pr-0'>
+            <div className='relative flex justify-center items-center mx-auto gap-2 py-2 text-lg font-semibold text-white'>
+              BAML Library
             </div>
-            <InitialTour />
-            <PostTestRunTour />
-          </EventListener>
-        </Suspense>
-      </CustomErrorBoundary>
-    </>
+            <LibraryGrid />
+          </div>
+          <InitialTour />
+          <PostTestRunTour />
+        </EventListener>
+      </Suspense>
+    </CustomErrorBoundary>
+  )
+}
+
+const DefaultPlaygroundView = () => {
+  const setShowSettings = useSetAtom(showSettingsAtom)
+  // The rest of the existing DefaultPlaygroundView component logic...
+  return (
+    <CustomErrorBoundary>
+      <Suspense fallback={<div>Loading...</div>}>
+        <EventListener>
+          <SettingsDialog />
+          <div className='relative flex flex-col w-full gap-2 pr-0'>
+            <div className='relative flex flex-row gap-2'>
+              <FunctionSelector />
+              <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
+                <ShowSettingsButton
+                  buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
+                  iconClassName='h-5'
+                />
+              </div>
+            </div>
+            <FunctionPanel />
+          </div>
+          <InitialTour />
+          <PostTestRunTour />
+        </EventListener>
+      </Suspense>
+    </CustomErrorBoundary>
   )
 }
 
