@@ -35,6 +35,7 @@ import {
   PROJECT_ROOT,
   currentEditorFilesAtom,
   exploreProjectsOpenAtom,
+  libraryOpenAtom,
   productTourDoneAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
@@ -327,6 +328,7 @@ const DummyHydrate = ({ files }: { files: EditorFile[] }) => {
 
 const PlaygroundView = () => {
   const setShowSettings = useSetAtom(showSettingsAtom)
+  const setLibraryOpen = useSetAtom(libraryOpenAtom)
   // const [parserDb] = useAtom(currentParserDbAtom)
   // usePlaygroundListener()
   // const testRunOutput = useAtomValue(testRunOutputAtom)
@@ -372,6 +374,15 @@ const PlaygroundView = () => {
               <div className='relative flex flex-row gap-2'>
                 <FunctionSelector />
                 <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
+                  <Button
+                    variant={'ghost'}
+                    className='flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foregrounde'
+                    onClick={() => {
+                      setLibraryOpen(true)
+                    }}
+                  >
+                    <span className='whitespace-nowrap'>BAML Library</span>
+                  </Button>
                   <ShowSettingsButton
                     buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
                     iconClassName='h-5'
