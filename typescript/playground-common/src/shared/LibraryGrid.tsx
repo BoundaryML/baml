@@ -1,25 +1,44 @@
 import { useState } from 'react'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
+import { Button } from '../components/ui/button'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 const CodeGridPreview: React.FC = () => {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
 
   const codeSnippets = [
-    { code: `const a = 1;`, alt: 'Code 1' },
-    { code: `const b = 2;`, alt: 'Code 2' },
-    { code: `const c = 3;`, alt: 'Code 3' },
-    { code: `const d = 4;`, alt: 'Code 4' },
-    { code: `const e = 5;`, alt: 'Code 5' },
-    { code: `const f = 6;`, alt: 'Code 6' },
-    { code: `const g = 7;`, alt: 'Code 7' },
-    { code: `const h = 8;`, alt: 'Code 8' },
+    {
+      code: `client<llm> GPT4Turbo {
+      provider openai
+      options {
+        model gpt-4-turbo
+        api_key env.OPENAI_API_KEY
+      }
+    } `,
+      alt: 'Building a client',
+      fileUrl: 'https://example.com/code/client.llm',
+    },
+    { code: `const b = 2;`, alt: 'Code 2', fileUrl: 'https://example.com/code/code2.js' },
+    { code: `const c = 3;`, alt: 'Code 3', fileUrl: 'https://example.com/code/code3.js' },
+    { code: `const d = 4;`, alt: 'Code 4', fileUrl: 'https://example.com/code/code4.js' },
+    { code: `const e = 5;`, alt: 'Code 5', fileUrl: 'https://example.com/code/code5.js' },
+    { code: `const f = 6;`, alt: 'Code 6', fileUrl: 'https://example.com/code/code6.js' },
+    { code: `const g = 7;`, alt: 'Code 7', fileUrl: 'https://example.com/code/code7.js' },
+    { code: `const h = 8;`, alt: 'Code 8', fileUrl: 'https://example.com/code/code8.js' },
   ]
 
   return (
     <div className='grid gap-4 p-4' style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
       {codeSnippets.map((snippet, idx) => (
         <div key={idx} className='flex flex-col items-center p-2'>
+          <div className='w-full p-2 mt-2 text-center text-white'>
+            <a href={snippet.fileUrl} target='_blank' rel='noopener noreferrer'>
+              {snippet.alt}
+            </a>
+          </div>
+
           <div
             className='relative w-full cursor-pointer'
             style={{ paddingBottom: '150%' }} // Maintain aspect ratio 2:3
@@ -43,10 +62,11 @@ const CodeGridPreview: React.FC = () => {
                   : {}
               }
             >
-              <pre className='whitespace-pre-wrap'>{snippet.code}</pre>
+              <SyntaxHighlighter language='rust' style={tomorrow}>
+                {snippet.code}
+              </SyntaxHighlighter>
             </div>
           </div>
-          <div className='w-full p-2 mt-2 text-center text-white'>{snippet.alt}</div>
         </div>
       ))}
     </div>
@@ -75,6 +95,10 @@ const LibraryGrid: React.FC = () => {
           </ResizablePanel>
         </ResizablePanelGroup>
       </TooltipProvider>
+
+      <Button onClick={() => window.open('https://docs.boundaryml.com', '_blank', 'noopener,noreferrer')}>
+        See full docs here!
+      </Button>
     </div>
   )
 }

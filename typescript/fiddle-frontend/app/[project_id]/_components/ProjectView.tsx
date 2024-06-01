@@ -158,12 +158,11 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   variant={'ghost'}
                   className='flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foregrounde'
                   onClick={() => {
-                    setLibraryOpen(!libraryIsOpen)
+                    setOpenExplorePanel(true)
                   }}
                 >
-                  <span className='whitespace-nowrap'>
-                    {libraryIsOpen ? 'See Playground' : 'Explore BAML Samples'}
-                  </span>{' '}
+                  <Compass size={16} strokeWidth={2} />
+                  <span className='whitespace-nowrap'>Explore Examples</span>
                 </Button>
               </div>
               {unsavedChanges ? (
@@ -347,8 +346,16 @@ const LibraryView = () => {
         <EventListener>
           <SettingsDialog />
           <div className='relative flex flex-col w-full gap-4 pr-0'>
-            <div className='relative flex justify-center items-center mx-auto gap-2 py-2 text-lg font-semibold text-white'>
-              BAML Library
+            <div className='relative flex flex-row w-full gap-4 pr-0'>
+              <Button
+                variant={'ghost'}
+                className='flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foregrounde'
+              >
+                <span className='whitespace-nowrap'>X</span>
+              </Button>
+              <div className='relative flex justify-center items-center mx-auto gap-2 py-2 text-lg font-semibold text-white'>
+                Basics of BAML
+              </div>
             </div>
             <LibraryGrid />
           </div>
@@ -362,6 +369,7 @@ const LibraryView = () => {
 
 const DefaultPlaygroundView = () => {
   const setShowSettings = useSetAtom(showSettingsAtom)
+  const [libraryIsOpen, setLibraryOpen] = useAtom(libraryOpenAtom)
   // The rest of the existing DefaultPlaygroundView component logic...
   return (
     <CustomErrorBoundary>
@@ -371,7 +379,17 @@ const DefaultPlaygroundView = () => {
           <div className='relative flex flex-col w-full gap-2 pr-0'>
             <div className='relative flex flex-row gap-2'>
               <FunctionSelector />
+
               <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
+                <Button
+                  variant={'ghost'}
+                  className='h-full py-1 gap-x-1'
+                  onClick={() => {
+                    setLibraryOpen(!libraryIsOpen)
+                  }}
+                >
+                  <a className='text-blue-500'>Docs</a>
+                </Button>
                 <ShowSettingsButton
                   buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
                   iconClassName='h-5'
