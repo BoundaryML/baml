@@ -12,7 +12,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 python-source = "python_src"
-# "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so)
+# "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so).
 features = ["pyo3/extension-module"]
 
 [project.scripts]
