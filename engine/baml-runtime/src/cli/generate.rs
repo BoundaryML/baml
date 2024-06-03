@@ -30,16 +30,19 @@ impl GenerateArgs {
         if generated.is_empty() {
             let client_type = caller_type.into();
             // Normally `baml_client` is added via the generator, but since we're not running the generator, we need to add it manually.
-            let output_dir = src_dir.join("..").join("baml_client");
+            let output_dir_relative_to_baml_src = PathBuf::from("..");
             let generate_output = runtime.generate_client(
                 &client_type,
                 &internal_baml_codegen::GeneratorArgs::new(
-                    &output_dir,
+                    &output_dir_relative_to_baml_src.join("baml_client"),
                     &self.from,
                     all_files.iter(),
                 )?,
             )?;
-            println!("Generated 1 baml_client at {}", output_dir.display());
+            println!(
+                "Generated 1 baml_client at {}",
+                generate_output.output_dir.display()
+            );
 
             println!(
                 r#"
@@ -47,9 +50,10 @@ You can automatically generate a client by adding the following to any one of yo
 
 generator my_client {{
     output_type "{}"
-    output_dir "../"
+    output_dir "{}"
 }}"#,
-                generate_output.client_type.to_string()
+                generate_output.client_type.to_string(),
+                output_dir_relative_to_baml_src.join("").display(),
             );
         } else {
             println!("Generated {} baml_client", generated.len());

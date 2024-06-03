@@ -22,8 +22,8 @@ template_string AddRole(foo: string) #"
     {{ _.role('user') }}
 "#
 
-function ExtractResume(resume: string, img: image) -> Resume {
-    client GPT4
+function ExtractResume(resume: string, img: image?) -> Resume {
+    client GPT35
     prompt #"
         {{ AddRole("Software Engineer") }}
 
@@ -50,7 +50,7 @@ test sam_resume {
         }
         resume #"
             Sam Lijin
-            he/him |  jobs@sxlijin.com |  sxlijin.github.io |  sxlijin |  sxlijin
+            he/him |  jobs@sxlijin.com |  sxlijin.github.io | 111-222-3333 | sxlijin |  sxlijin
 
             Experience
             Trunk

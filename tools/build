@@ -87,12 +87,17 @@ case "$_path" in
     ;;
 
   /engine/language_client_ruby | /engine/language_client_ruby/* )
-    #command="rake compile; date"
-    command="cargo build"
+    command="RB_SYS_CARGO_PROFILE=dev2 rake compile; date"
+
+    if [ "$_test_mode" -eq 1 ]; then
+      #command="wasm-pack test --chrome . --features=wasm"
+      #command="wasm-pack test --node . --features=wasm"
+      command="${command} && rake test"
+    fi
 
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
-        --ext rs,hb,hbs,toml,baml,rb \
+        --ext rs,j2,toml,baml,rb,gemspec,Gemfile \
         --watch "${_repo_root}/engine" \
         --ignore 'target' \
         --ignore 'tmp' \
@@ -142,7 +147,7 @@ case "$_path" in
   /engine | /engine/* )
     command=""
     if [ "$_test_mode" -eq 1 ]; then
-      command="cargo test ${command} jsonish::parser"
+      command="cargo test ${command}"
     else
       command="cargo build ${command}"
     fi
@@ -252,6 +257,24 @@ case "$_path" in
       npx nodemon \
         --ext py,pyi,rs,j2,toml \
         --watch "${_repo_root}/engine" \
+        --watch . \
+        --ignore baml_client \
+        --exec "${command}"
+    else
+      eval "${command}"
+      date
+    fi
+    ;;
+
+  /integ-tests/ruby | /integ-tests/ruby/* )
+    command="rake generate"
+    if [ "$_test_mode" -eq 1 ]; then
+      command="${command} && infisical run -- rake test"
+    fi
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext bundle,rb \
+        --watch "${_repo_root}/engine/language_client_ruby/lib/" \
         --watch . \
         --ignore baml_client \
         --exec "${command}"

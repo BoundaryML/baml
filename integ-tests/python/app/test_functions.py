@@ -8,10 +8,6 @@ from baml_client.type_builder import TypeBuilder
 import datetime
 
 
-class MyCustomClass(NamedArgsSingleClass):
-    date: datetime.datetime
-
-
 @pytest.mark.asyncio
 async def test_should_work_for_all_inputs():
     res = await b.TestFnNamedArgsSingleBool(True)
@@ -55,8 +51,12 @@ async def test_should_work_for_all_inputs():
     assert "3566" in res
 
 
+class MyCustomClass(NamedArgsSingleClass):
+    date: datetime.datetime
+
+
 @pytest.mark.asyncio
-async def test_custom_types():
+async def accepts_subclass_of_baml_type():
     print("calling with class")
     res = await b.TestFnNamedArgsSingleClass(
         myArg=MyCustomClass(

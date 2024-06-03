@@ -1,0 +1,4 @@
+#!/usr/bin/env ruby
+require "baml"
+
+Baml::Ffi::invoke_runtime_cli(Process.argv0, ARGV)

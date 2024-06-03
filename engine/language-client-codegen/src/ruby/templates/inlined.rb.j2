@@ -1,0 +1,9 @@
+module Baml
+  module Inlined
+    FILE_MAP = {
+        {% for (path, contents) in file_map %}
+        "{{ path }}" => {{ contents }},
+        {%- endfor %}
+    }
+  end
+end

@@ -1,7 +1,7 @@
 
 file_map = {
-    {% for k in file_map %}
-    {{ k.0 }}: {{ k.1 }},
+    {% for (path, contents) in file_map %}
+    {{ path }}: {{ contents }},
     {%- endfor %}
 }
 

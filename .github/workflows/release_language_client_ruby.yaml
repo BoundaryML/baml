@@ -2,13 +2,14 @@ name: Release engine/language_client_ruby
 
 on:
   workflow_dispatch: {}
-  #push:
-  #  branches:
-  #    - sam/rust-llm
 
 permissions:
   contents: read
   id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -23,6 +24,9 @@ jobs:
           #- x64-mingw-ucrt
 
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine/language_client_ruby
     steps:
       - uses: rubygems/configure-rubygems-credentials@main
         with:
@@ -30,8 +34,6 @@ jobs:
           role-to-assume: rg_oidc_akr_p6x4xz53qtk948na3bgy
 
       - uses: actions/checkout@v4
-
-      - run: cd engine/language_client_ruby
 
       - uses: oxidize-rb/actions/setup-ruby-and-rust@main
         with:
@@ -103,13 +105,10 @@ jobs:
             gem install rb_sys -v $version
           fi
 
-      - run: |
-          echo "Switching to top-level workspace - we need to be able to resolve the root-level Cargo.toml"
-          cd ..
-          pwd
-
       - name: Build gem
         shell: bash
+        working-directory: engine
+        if: ${{ matrix.platform == 'x86_64-linux' }}
         run: |
           : Compile gem
           echo "Docker Working Directory: $(pwd)"
@@ -122,6 +121,22 @@ jobs:
             --ruby-versions 3.3,3.2,3.1,3.0,2.7 \
             --build \
             -- sudo yum install -y perl-IPC-Cmd
+
+      - name: Build gem
+        shell: bash
+        working-directory: engine
+        if: ${{ matrix.platform != 'x86_64-linux' }}
+        run: |
+          : Compile gem
+          echo "Docker Working Directory: $(pwd)"
+          set -x
+
+          rb-sys-dock \
+            --platform ${{ matrix.platform }} \
+            --mount-toolchains \
+            --directory language_client_ruby \
+            --ruby-versions 3.3,3.2,3.1,3.0,2.7 \
+            --build
 
       #################################################################################################################
       #

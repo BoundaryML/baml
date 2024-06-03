@@ -12,8 +12,10 @@ pub fn parse<'a>(str: &'a str, options: &ParseOptions) -> Result<Vec<(String, Va
     let mut remaining = str;
     // Find regex for markdown blocks (```<tag><EOF|newline>)
 
-    let md_tag_start = regex::Regex::new(r"```([a-zA-Z0-9 ]+)(?:\n|$)").expect("Invalid regex");
-    let md_tag_end = regex::Regex::new(r"```(?:\n|$)").expect("Invalid regex");
+    let md_tag_start = regex::Regex::new(r"```([a-zA-Z0-9 ]+)(?:\n|$)")
+        .map_err(|e| anyhow::Error::from(e).context("Failed to build regex for md-tag-start"))?;
+    let md_tag_end = regex::Regex::new(r"```(?:\n|$)")
+        .map_err(|e| anyhow::Error::from(e).context("Failed to build regex for md-tag-end"))?;
 
     let mut should_loop = true;
 

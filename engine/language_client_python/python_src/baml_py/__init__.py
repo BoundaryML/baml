@@ -9,7 +9,7 @@ from .baml_py import (
     invoke_runtime_cli,
 )
 from .stream import BamlStream
-from .async_context_vars import CtxManager as BamlCtxManager
+from .ctx_manager import CtxManager as BamlCtxManager
 
 __all__ = [
     "BamlRuntime",

@@ -31,7 +31,7 @@ fn relative_path_to_baml_src(path: &PathBuf, baml_src: &PathBuf) -> Result<PathB
 
 impl GeneratorArgs {
     pub fn new<'i>(
-        output_dir: impl Into<PathBuf>,
+        output_dir_relative_to_baml_src: impl Into<PathBuf>,
         baml_src_dir: impl Into<PathBuf>,
         input_files: impl IntoIterator<Item = (&'i PathBuf, &'i String)>,
     ) -> Result<Self> {
@@ -42,7 +42,7 @@ impl GeneratorArgs {
             .collect::<Result<_>>()?;
 
         Ok(Self {
-            output_dir_relative_to_baml_src: output_dir.into(),
+            output_dir_relative_to_baml_src: output_dir_relative_to_baml_src.into(),
             baml_src_dir: baml_src.clone(),
             // for the key, whhich is the name, just get the filename
             input_file_map,

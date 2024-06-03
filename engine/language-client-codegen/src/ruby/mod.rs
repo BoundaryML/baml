@@ -3,10 +3,9 @@ mod field_type;
 mod generate_types;
 mod ruby_language_features;
 
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 
 use anyhow::Result;
-use askama::Template;
 use indexmap::IndexMap;
 use ruby_language_features::ToRuby;
 
@@ -16,7 +15,8 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 
 use crate::dir_writer::FileCollector;
 
-use self::ruby_language_features::RubyLanguageFeatures;
+use generate_types::ToTypeReferenceInTypeDefinition;
+use ruby_language_features::RubyLanguageFeatures;
 
 #[derive(askama::Template)]
 #[template(path = "client.rb.j2", escape = "none")]
@@ -25,8 +25,15 @@ struct RubyClient {
 }
 struct RubyFunction {
     name: String,
+    partial_return_type: String,
     return_type: String,
     args: Vec<(String, String)>,
+}
+
+#[derive(askama::Template)]
+#[template(path = "inlined.rb.j2", escape = "none")]
+struct InlinedBaml {
+    file_map: Vec<(String, String)>,
 }
 
 pub(crate) fn generate(
@@ -35,29 +42,19 @@ pub(crate) fn generate(
 ) -> Result<IndexMap<PathBuf, String>> {
     let mut collector = FileCollector::<RubyLanguageFeatures>::new();
 
-    collector.add_file(
-        "types.rb",
-        TryInto::<generate_types::RubyTypes>::try_into(ir)
-            .map_err(|e| e.context("Error while building types.rb"))?
-            .render()
-            .map_err(|e| anyhow::Error::from(e).context("Error while rendering types.rb"))?,
-    );
-
-    collector.add_file(
-        "client.rb",
-        TryInto::<RubyClient>::try_into(ir)
-            .map_err(|e| e.context("Error while building client.rb"))?
-            .render()
-            .map_err(|e| anyhow::Error::from(e).context("Error while rendering client.rb"))?,
-    );
+    collector
+        .add_template::<generate_types::RubyStreamTypes>("partial-types.rb", (ir, generator))?;
+    collector.add_template::<generate_types::RubyTypes>("types.rb", (ir, generator))?;
+    collector.add_template::<RubyClient>("client.rb", (ir, generator))?;
+    collector.add_template::<InlinedBaml>("inlined.rb", (ir, generator))?;
 
     collector.commit(&generator.output_dir())
 }
 
-impl TryFrom<&IntermediateRepr> for RubyClient {
+impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir crate::GeneratorArgs)> for RubyClient {
     type Error = anyhow::Error;
 
-    fn try_from(ir: &IntermediateRepr) -> Result<Self> {
+    fn try_from((ir, _): (&'ir IntermediateRepr, &'ir crate::GeneratorArgs)) -> Result<Self> {
         let functions = ir
             .walk_functions()
             .map(|f| {
@@ -69,6 +66,7 @@ impl TryFrom<&IntermediateRepr> for RubyClient {
                         let (_function, _impl_) = c.item;
                         Ok(RubyFunction {
                             name: f.name().to_string(),
+                            partial_return_type: f.elem().output().to_partial_type_ref(),
                             return_type: f.elem().output().to_ruby(),
                             args: match f.inputs() {
                                 either::Either::Left(_args) => anyhow::bail!("Ruby codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
@@ -86,5 +84,15 @@ impl TryFrom<&IntermediateRepr> for RubyClient {
             .into_iter()
             .flatten().collect();
         Ok(RubyClient { funcs: functions })
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
+    type Error = anyhow::Error;
+
+    fn try_from((_ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
+        Ok(InlinedBaml {
+            file_map: args.file_map()?,
+        })
     }
 }

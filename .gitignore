@@ -122,6 +122,7 @@ $RECYCLE.BIN/
 /dist
 /node_modules
 /out/
+engine/language_client_ruby/**/*.bundle
 engine/target/
 Cargo.lock
 Icon

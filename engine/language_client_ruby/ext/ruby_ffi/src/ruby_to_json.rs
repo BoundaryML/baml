@@ -1,9 +1,12 @@
+use baml_types::{BamlMap, BamlValue};
+use core::hash;
+use indexmap::IndexMap;
 use magnus::{
     class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
-    scan_args::get_kwargs, value::Value, Error, Float, Integer, RArray, RHash, RString, Ruby,
-    Symbol,
+    scan_args::get_kwargs, value::Value, Error, Float, Integer, IntoValue, RArray, RClass, RHash,
+    RModule, RString, Ruby, Symbol,
 };
-use std::result::Result;
+use std::{collections::HashMap, result::Result};
 
 struct SerializationError {
     position: Vec<String>,
@@ -20,6 +23,49 @@ impl<'rb> RubyToJson<'rb> {
         serde_magnus::serialize(&json)
     }
 
+    pub fn serialize_baml(ruby: &Ruby, types: RModule, from: &BamlValue) -> crate::Result<Value> {
+        match from {
+            BamlValue::Class(class_name, class_fields) => {
+                let class_type: RClass = types.const_get(class_name.as_str())?;
+                let hash = ruby.hash_new();
+                for (k, v) in class_fields.iter() {
+                    let k = ruby.sym_new(k.as_str());
+                    let v = RubyToJson::serialize_baml(ruby, types, v)?;
+                    hash.aset(k, v)?;
+                }
+                class_type.funcall("new", (hash,))
+            }
+            BamlValue::Enum(enum_name, enum_value) => {
+                let enum_type: RClass = types.const_get(enum_name.as_str())?;
+                let enum_value = ruby.str_new(enum_value);
+                enum_type.funcall("deserialize", (enum_value,))
+            }
+            BamlValue::Map(m) => {
+                let hash = ruby.hash_new();
+                for (k, v) in m.iter() {
+                    let k = ruby.str_new(k);
+                    let v = RubyToJson::serialize_baml(ruby, types, v)?;
+                    hash.aset(k, v)?;
+                }
+                Ok(hash.into_value_with(ruby))
+            }
+            BamlValue::List(l) => {
+                let arr = ruby.ary_new();
+                for v in l.iter() {
+                    let v = RubyToJson::serialize_baml(ruby, types, v)?;
+                    arr.push(v)?;
+                }
+                Ok(arr.into_value_with(ruby))
+            }
+            _ => serde_magnus::serialize(from),
+        }
+    }
+
+    pub fn serialize(ruby: &Ruby, types: RModule, from: Value) -> crate::Result<Value> {
+        let json = RubyToJson::convert(from)?;
+        RubyToJson::serialize_baml(ruby, types, &json)
+    }
+
     /// Convert a Ruby object to a JSON object.
     ///
     /// We have to implement this ourselves instead of relying on Serde, because in the codegen,
@@ -27,7 +73,7 @@ impl<'rb> RubyToJson<'rb> {
     /// fields do not serialize correctly, see https://sorbet.org/docs/tstruct#serialize-gotchas)
     ///
     /// We do still rely on :serialize for enums though.
-    pub fn convert(from: Value) -> crate::Result<serde_json::Value> {
+    pub fn convert(from: Value) -> crate::Result<BamlValue> {
         let ruby = Ruby::get_with(from);
         let result = RubyToJson { ruby: &ruby }.to_json(from, vec![]);
 
@@ -50,9 +96,7 @@ impl<'rb> RubyToJson<'rb> {
         }
     }
 
-    pub fn convert_hash_to_json(
-        from: RHash,
-    ) -> crate::Result<serde_json::Map<String, serde_json::Value>> {
+    pub fn convert_hash_to_json(from: RHash) -> crate::Result<HashMap<String, BamlValue>> {
         let ruby = Ruby::get_with(from);
         let result = RubyToJson { ruby: &ruby }.hash_to_map(from, vec![]);
 
@@ -79,28 +123,17 @@ impl<'rb> RubyToJson<'rb> {
         &self,
         any: Value,
         field_pos: Vec<String>,
-    ) -> Result<serde_json::Value, Vec<SerializationError>> {
-        // done - self.ruby.class_float();
-        // done - self.ruby.class_integer();
-        // done - self.ruby.class_true_class();
-        // done - self.ruby.class_false_class();
-        // done - self.ruby.class_nil_class();
-        // done - self.ruby.class_array();
-        // done - self.ruby.class_string();
-        // done? - self.ruby.class_hash();
-        // enums
-        // done - structs
-
+    ) -> Result<BamlValue, Vec<SerializationError>> {
         if any.is_nil() {
-            return Ok(serde_json::Value::Null);
+            return Ok(BamlValue::Null);
         }
 
         if any.is_kind_of(self.ruby.class_true_class()) {
-            return Ok(serde_json::Value::Bool(true));
+            return Ok(BamlValue::Bool(true));
         }
 
         if any.is_kind_of(self.ruby.class_false_class()) {
-            return Ok(serde_json::Value::Bool(false));
+            return Ok(BamlValue::Bool(false));
         }
 
         if let Some(any) = magnus::Integer::from_value(any) {
@@ -112,9 +145,7 @@ impl<'rb> RubyToJson<'rb> {
         }
 
         if let Some(any) = RString::from_value(any) {
-            return self
-                .to_string(any, field_pos)
-                .map(serde_json::Value::String);
+            return self.to_string(any, field_pos).map(BamlValue::String);
         }
 
         if let Some(any) = RArray::from_value(any) {
@@ -122,9 +153,7 @@ impl<'rb> RubyToJson<'rb> {
         }
 
         if let Some(any) = RHash::from_value(any) {
-            return self
-                .hash_to_map(any, field_pos)
-                .map(serde_json::Value::Object);
+            return self.hash_to_map(any, field_pos).map(BamlValue::Map);
         }
 
         if let Ok(superclass) = any.class().superclass() {
@@ -152,32 +181,19 @@ impl<'rb> RubyToJson<'rb> {
         &self,
         any: Integer,
         field_pos: Vec<String>,
-    ) -> Result<serde_json::Value, Vec<SerializationError>> {
+    ) -> Result<BamlValue, Vec<SerializationError>> {
         if let Ok(any) = any.to_i64() {
-            return Ok(serde_json::Value::Number(serde_json::Number::from(any)));
-        }
-        if let Ok(any) = any.to_u64() {
-            return Ok(serde_json::Value::Number(serde_json::Number::from(any)));
+            return Ok(BamlValue::Int(any));
         }
 
         return Err(vec![SerializationError {
             position: field_pos,
-            message: format!("failed to convert {:?} to i64 or u64", any),
+            message: format!("failed to convert {:?} to i64", any),
         }]);
     }
 
-    fn to_float(
-        &self,
-        any: Float,
-        field_pos: Vec<String>,
-    ) -> Result<serde_json::Value, Vec<SerializationError>> {
-        let Some(as_json) = serde_json::Number::from_f64(any.to_f64()) else {
-            return Err(vec![SerializationError {
-                position: field_pos,
-                message: format!("failed to convert {:?} to float", any),
-            }]);
-        };
-        return Ok(serde_json::Value::Number(as_json));
+    fn to_float(&self, any: Float, _: Vec<String>) -> Result<BamlValue, Vec<SerializationError>> {
+        return Ok(BamlValue::Float(any.to_f64()));
     }
 
     fn to_string(
@@ -198,7 +214,7 @@ impl<'rb> RubyToJson<'rb> {
         &self,
         any: RArray,
         field_pos: Vec<String>,
-    ) -> Result<serde_json::Value, Vec<SerializationError>> {
+    ) -> Result<BamlValue, Vec<SerializationError>> {
         let mut errs = vec![];
         let mut arr = vec![];
 
@@ -225,7 +241,7 @@ impl<'rb> RubyToJson<'rb> {
             return Err(errs);
         }
 
-        return Ok(serde_json::Value::Array(arr));
+        return Ok(BamlValue::List(arr));
     }
 
     fn hash_key_to_string(
@@ -270,11 +286,11 @@ impl<'rb> RubyToJson<'rb> {
         &self,
         any: RHash,
         field_pos: Vec<String>,
-    ) -> Result<serde_json::Map<String, serde_json::Value>, Vec<SerializationError>> {
+    ) -> Result<BamlMap<String, BamlValue>, Vec<SerializationError>> {
         use magnus::r_hash::ForEach;
 
         let mut errs = vec![];
-        let mut map = serde_json::Map::new();
+        let mut map = BamlMap::new();
         if any
             .foreach(|k: Value, v: Value| {
                 let k = match self.hash_key_to_string(k, field_pos.clone()) {
@@ -315,7 +331,7 @@ impl<'rb> RubyToJson<'rb> {
         &self,
         any: Value,
         field_pos: Vec<String>,
-    ) -> Result<serde_json::Value, Vec<SerializationError>> {
+    ) -> Result<BamlValue, Vec<SerializationError>> {
         // https://ruby-doc.org/3.0.4/Module.html#method-i-instance_methods
         let fields = match any
             .class()
@@ -377,7 +393,7 @@ impl<'rb> RubyToJson<'rb> {
         };
 
         let mut errs = vec![];
-        let mut map = serde_json::Map::new();
+        let mut map = BamlMap::new();
         for field in fields.as_slice() {
             let mut field_pos = field_pos.clone();
             field_pos.push(field.clone());
@@ -406,7 +422,14 @@ impl<'rb> RubyToJson<'rb> {
             return Err(errs);
         }
 
-        Ok(serde_json::Value::Object(map))
+        let fully_qualified_class_name = unsafe { any.class().name() }.into_owned();
+        let class_name = match fully_qualified_class_name.rsplit_once("::") {
+            Some((_, class_name)) => class_name.to_string(),
+            None => fully_qualified_class_name,
+        };
+        Ok(BamlValue::Class(class_name, map))
+
+        //Ok(BamlValue::Map(map))
     }
 
     // This codepath is not used right now - it was implemented as a proof-of-concept
@@ -417,7 +440,7 @@ impl<'rb> RubyToJson<'rb> {
         &self,
         any: Result<Value, Error>,
         field_pos: Vec<String>,
-    ) -> Result<serde_json::Value, Vec<SerializationError>> {
+    ) -> Result<BamlValue, Vec<SerializationError>> {
         let any = match any {
             Ok(any) => any,
             Err(e) => {
@@ -429,9 +452,7 @@ impl<'rb> RubyToJson<'rb> {
         };
 
         if let Some(any) = RHash::from_value(any) {
-            return self
-                .hash_to_map(any, field_pos)
-                .map(serde_json::Value::Object);
+            return self.hash_to_map(any, field_pos).map(BamlValue::Map);
         }
 
         return Err(vec![SerializationError {
@@ -447,7 +468,7 @@ impl<'rb> RubyToJson<'rb> {
         &self,
         any: Value,
         field_pos: Vec<String>,
-    ) -> Result<serde_json::Value, Vec<SerializationError>> {
+    ) -> Result<BamlValue, Vec<SerializationError>> {
         match any.check_funcall("serialize", ()) {
             None => {
                 return Err(vec![SerializationError {
