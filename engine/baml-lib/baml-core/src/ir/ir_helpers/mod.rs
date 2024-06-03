@@ -41,6 +41,7 @@ pub trait IRHelper {
         &'a self,
         function: &'a FunctionWalker<'a>,
         params: &BamlMap<String, BamlValue>,
+        allow_implicit_cast_to_string: bool,
     ) -> Result<BamlValue>;
 }
 
@@ -163,6 +164,7 @@ impl IRHelper for IntermediateRepr {
         &'a self,
         function: &'a FunctionWalker<'a>,
         params: &BamlMap<String, BamlValue>,
+        allow_implicit_cast_to_string: bool,
     ) -> Result<BamlValue> {
         let function_params = match function.inputs() {
             either::Either::Left(_) => {
@@ -182,9 +184,13 @@ impl IRHelper for IntermediateRepr {
         for (param_name, param_type) in function_params {
             scope.push(param_name.to_string());
             if let Some(param_value) = params.get(param_name.as_str()) {
-                if let Some(baml_arg) =
-                    to_baml_arg::validate_arg(self, param_type, param_value, &mut scope)
-                {
+                if let Some(baml_arg) = to_baml_arg::validate_arg(
+                    self,
+                    param_type,
+                    param_value,
+                    &mut scope,
+                    allow_implicit_cast_to_string,
+                ) {
                     baml_arg_map.insert(param_name.to_string(), baml_arg);
                 }
             } else {

@@ -29,10 +29,22 @@ pub fn validate_arg(
     field_type: &FieldType,
     value: &BamlValue,
     scope: &mut ScopeStack,
+    allow_implicit_cast_to_string: bool,
 ) -> Option<BamlValue> {
     match field_type {
         FieldType::Primitive(t) => match t {
             TypeValue::String if matches!(value, BamlValue::String(_)) => Some(value.clone()),
+            TypeValue::String if allow_implicit_cast_to_string => match value {
+                BamlValue::Int(i) => Some(BamlValue::String(i.to_string())),
+                BamlValue::Float(f) => Some(BamlValue::String(f.to_string())),
+                BamlValue::Bool(true) => Some(BamlValue::String("true".to_string())),
+                BamlValue::Bool(false) => Some(BamlValue::String("false".to_string())),
+                BamlValue::Null => Some(BamlValue::String("null".to_string())),
+                _ => {
+                    scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                    None
+                }
+            },
             TypeValue::Int if matches!(value, BamlValue::Int(_)) => Some(value.clone()),
             TypeValue::Float => match value {
                 BamlValue::Int(val) => Some(BamlValue::Float(*val as f64)),
@@ -111,7 +123,13 @@ pub fn validate_arg(
                     let mut fields = BamlMap::new();
                     for f in c.walk_fields() {
                         if let Some(v) = obj.get(f.name()) {
-                            if let Some(v) = validate_arg(ir, f.r#type(), v, scope) {
+                            if let Some(v) = validate_arg(
+                                ir,
+                                f.r#type(),
+                                v,
+                                scope,
+                                allow_implicit_cast_to_string,
+                            ) {
                                 fields.insert(f.name().to_string(), v);
                             }
                         } else if !f.r#type().is_optional() {
@@ -138,7 +156,8 @@ pub fn validate_arg(
             BamlValue::List(arr) => {
                 let mut items = Vec::new();
                 for v in arr {
-                    if let Some(v) = validate_arg(ir, item, v, scope) {
+                    if let Some(v) = validate_arg(ir, item, v, scope, allow_implicit_cast_to_string)
+                    {
                         items.push(v);
                     }
                 }
@@ -154,7 +173,8 @@ pub fn validate_arg(
         FieldType::Union(options) => {
             for option in options {
                 let mut scope = ScopeStack::new();
-                let result = validate_arg(ir, option, value, &mut scope);
+                let result =
+                    validate_arg(ir, option, value, &mut scope, allow_implicit_cast_to_string);
                 if !scope.has_errors() {
                     return result;
                 }
@@ -167,7 +187,13 @@ pub fn validate_arg(
                 Some(value.clone())
             } else {
                 let mut inner_scope = ScopeStack::new();
-                let baml_arg = validate_arg(ir, inner, value, &mut inner_scope);
+                let baml_arg = validate_arg(
+                    ir,
+                    inner,
+                    value,
+                    &mut inner_scope,
+                    allow_implicit_cast_to_string,
+                );
                 if inner_scope.has_errors() {
                     scope.push_error(format!("Expected optional {}, got `{}`", inner, value));
                     None
