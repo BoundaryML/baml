@@ -54,6 +54,12 @@ export enum DataType {
   Event = "Event",
 }
 
+export enum DynEnumOne {
+}
+
+export enum DynEnumTwo {
+}
+
 export enum EnumInClass {
   ONE = "ONE",
   TWO = "TWO",
@@ -133,6 +139,20 @@ export interface ClassWithImage {
   param2: string
   fake_image: FakeImage
   
+}
+
+export interface DynamicClassOne {
+  hi: string
+  
+  [key: string]: any;
+}
+
+export interface DynamicClassTwo {
+  hi: string
+  some_class: SomeClassNestedDynamic
+  status: (string | DynEnumOne)
+  
+  [key: string]: any;
 }
 
 export interface Education {
@@ -222,6 +242,12 @@ export interface SearchParams {
   description: WithReasoning[]
   tags: (Tag | string)[]
   
+}
+
+export interface SomeClassNestedDynamic {
+  hi: string
+  
+  [key: string]: any;
 }
 
 export interface TestClassAlias {

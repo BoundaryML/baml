@@ -9,14 +9,14 @@ class TypeBuilder(_TypeBuilder):
           [{% for enum in enums %}"{{enum.name}}",{% endfor %}]
         ))
 
-{%- for cls in classes %}{% if cls.dynamic %}
+{% for cls in classes %}{% if cls.dynamic %}
 
     @property
     def {{cls.name}}(self) -> "{{cls.name}}Builder":
         return {{cls.name}}Builder(self)
-{%- endif %}{% endfor %}
+{% endif %}{% endfor %}
 
-{%- for enum in enums %}{% if enum.dynamic %}
+{% for enum in enums %}{% if enum.dynamic %}
 
     @property
     def {{enum.name}}(self) -> "{{enum.name}}Builder":
@@ -24,6 +24,7 @@ class TypeBuilder(_TypeBuilder):
 {% endif %}{% endfor %}
 
 {% for cls in classes %}{% if cls.dynamic -%}
+
 class {{cls.name}}Builder:
     def __init__(self, tb: _TypeBuilder):
         self.__bldr = tb._tb.class_("{{cls.name}}")
@@ -50,7 +51,7 @@ class {{cls.name}}Properties:
         self.__bldr = cls_bldr
         self.__properties = properties
 
-    {%- for (name, type) in cls.fields %}
+    {% for (name, type) in cls.fields %}
 
     @property
     def {{name}}(self) -> ClassPropertyBuilder:
@@ -61,7 +62,7 @@ class {{cls.name}}Properties:
         if name not in self.__properties:
             raise AttributeError(f"Property {name} not found.")
         return ClassPropertyBuilder(self.__bldr.property(name))
-{%- endif %}{% endfor %}
+{% endif %}{% endfor %}
 
 {% for enum in enums %}{% if enum.dynamic %}
 class {{enum.name}}Builder:
@@ -91,17 +92,17 @@ class {{enum.name}}Values:
         self.__bldr = enum_bldr
         self.__values = values
 
-    {%- for value in enum.values %}
+    {% for value in enum.values %}
 
     @property
     def {{value}}(self) -> EnumValueBuilder:
         return self.__bldr.value("{{value}}")
-    {%- endfor %}
+    {% endfor %}
 
     def __getattr__(self, name: str) -> EnumValueBuilder:
         if name not in self.__values:
             raise AttributeError(f"Value {name} not found.")
         return self.__bldr.value(name)
-{%- endif %}{% endfor %}
+{% endif %}{% endfor %}
 
 __all__ = ["TypeBuilder"]

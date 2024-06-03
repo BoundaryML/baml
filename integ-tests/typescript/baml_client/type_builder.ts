@@ -21,10 +21,20 @@ import { TypeBuilder as _TypeBuilder, EnumBuilder, ClassBuilder } from '@boundar
 export default class TypeBuilder {
     private tb: _TypeBuilder;
     
+    DynamicClassOne: ClassBuilder<'DynamicClassOne', "hi">;
+    
+    DynamicClassTwo: ClassBuilder<'DynamicClassTwo', "hi" | "some_class" | "status">;
+    
     Person: ClassBuilder<'Person', "name" | "hair_color">;
+    
+    SomeClassNestedDynamic: ClassBuilder<'SomeClassNestedDynamic', "hi">;
     
     
     Color: EnumBuilder<'Color', "RED" | "BLUE" | "GREEN" | "YELLOW" | "BLACK" | "WHITE">;
+    
+    DynEnumOne: EnumBuilder<'DynEnumOne'>;
+    
+    DynEnumTwo: EnumBuilder<'DynEnumTwo'>;
     
     Hobby: EnumBuilder<'Hobby', "SPORTS" | "MUSIC" | "READING">;
     
@@ -32,20 +42,40 @@ export default class TypeBuilder {
     constructor() {
         this.tb = new _TypeBuilder({
           classes: new Set([
-            "Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","Education","Email","Event","FakeImage","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","RaysData","Resume","SearchParams","TestClassAlias","TestClassWithEnum","TestOutputClass","TestOutputClassNested","UnionTest_ReturnType","WithReasoning",
+            "Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","DynamicClassOne","DynamicClassTwo","Education","Email","Event","FakeImage","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","RaysData","Resume","SearchParams","SomeClassNestedDynamic","TestClassAlias","TestClassWithEnum","TestOutputClass","TestOutputClassNested","UnionTest_ReturnType","WithReasoning",
           ]),
           enums: new Set([
-            "Category","Category2","Category3","Color","DataType","EnumInClass","EnumOutput","Hobby","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",
+            "Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumTwo","EnumInClass","EnumOutput","Hobby","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",
           ])
         });
+        
+        this.DynamicClassOne = this.tb.classBuilder("DynamicClassOne", [
+          "hi",
+        ]);
+        
+        this.DynamicClassTwo = this.tb.classBuilder("DynamicClassTwo", [
+          "hi","some_class","status",
+        ]);
         
         this.Person = this.tb.classBuilder("Person", [
           "name","hair_color",
         ]);
         
+        this.SomeClassNestedDynamic = this.tb.classBuilder("SomeClassNestedDynamic", [
+          "hi",
+        ]);
+        
         
         this.Color = this.tb.enumBuilder("Color", [
           "RED","BLUE","GREEN","YELLOW","BLACK","WHITE",
+        ]);
+        
+        this.DynEnumOne = this.tb.enumBuilder("DynEnumOne", [
+          
+        ]);
+        
+        this.DynEnumTwo = this.tb.enumBuilder("DynEnumTwo", [
+          
         ]);
         
         this.Hobby = this.tb.enumBuilder("Hobby", [

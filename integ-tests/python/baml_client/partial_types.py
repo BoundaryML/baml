@@ -45,6 +45,14 @@ class ClassWithImage(BaseModel):
     param2: Optional[str] = None
     fake_image: "FakeImage"
 
+class DynamicClassOne(BaseModel):
+    hi: Optional[str] = None
+
+class DynamicClassTwo(BaseModel):
+    hi: Optional[str] = None
+    some_class: "SomeClassNestedDynamic"
+    status: Optional[Union[types.DynEnumOne, str]] = None
+
 class Education(BaseModel):
     institution: Optional[str] = None
     location: Optional[str] = None
@@ -108,6 +116,9 @@ class SearchParams(BaseModel):
     company: "WithReasoning"
     description: List["WithReasoning"]
     tags: List[Optional[Union[Optional[types.Tag], Optional[str]]]]
+
+class SomeClassNestedDynamic(BaseModel):
+    hi: Optional[str] = None
 
 class TestClassAlias(BaseModel):
     key: Optional[str] = None
