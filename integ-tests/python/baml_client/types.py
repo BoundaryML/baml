@@ -57,6 +57,12 @@ class DataType(str, Enum):
     Resume = "Resume"
     Event = "Event"
 
+class DynEnumOne(str, Enum):
+    pass
+
+class DynEnumTwo(str, Enum):
+    pass
+
 class EnumInClass(str, Enum):
     
     ONE = "ONE"
@@ -137,6 +143,20 @@ class ClassWithImage(BaseModel):
     myImage: baml_py.Image
     param2: str
     fake_image: "FakeImage"
+
+class DynamicClassOne(BaseModel):
+    
+    model_config = ConfigDict(extra='allow')
+    
+    hi: str
+
+class DynamicClassTwo(BaseModel):
+    
+    model_config = ConfigDict(extra='allow')
+    
+    hi: str
+    some_class: "SomeClassNestedDynamic"
+    status: Union["DynEnumOne", str]
 
 class Education(BaseModel):
     
@@ -226,6 +246,12 @@ class SearchParams(BaseModel):
     company: Optional["WithReasoning"] = None
     description: List["WithReasoning"]
     tags: List[Union["Tag", str]]
+
+class SomeClassNestedDynamic(BaseModel):
+    
+    model_config = ConfigDict(extra='allow')
+    
+    hi: str
 
 class TestClassAlias(BaseModel):
     

@@ -1,7 +1,7 @@
 
 
 function ExtractResume2(resume: string) -> Resume {
-    client Resilient_ComplexSyntax
+    client GPT4
     prompt #"
         {{ _.role('system') }}
 
