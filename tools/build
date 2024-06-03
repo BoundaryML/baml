@@ -142,7 +142,7 @@ case "$_path" in
   /engine | /engine/* )
     command=""
     if [ "$_test_mode" -eq 1 ]; then
-      command="cargo test ${command}"
+      command="cargo test ${command} jsonish::parser"
     else
       command="cargo build ${command}"
     fi
