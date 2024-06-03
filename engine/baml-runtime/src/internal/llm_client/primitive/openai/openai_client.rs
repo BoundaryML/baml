@@ -220,6 +220,7 @@ impl RequestBuilder for OpenAIClient {
         let mut req = self.client.post(if prompt.is_left() {
             format!("{}/completions", self.properties.base_url)
         } else {
+            // format!("{}", self.properties.base_url)
             format!("{}/chat/completions", self.properties.base_url)
         });
 
@@ -233,8 +234,7 @@ impl RequestBuilder for OpenAIClient {
         if let Some(key) = &self.properties.api_key {
             req = req.bearer_auth(key)
         }
-
-        req = req.header("target-provider", "openai");
+        req = req.header("original-url", "http://localhost:11434/v1");
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();

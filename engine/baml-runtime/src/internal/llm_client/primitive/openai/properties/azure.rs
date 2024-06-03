@@ -63,6 +63,8 @@ pub fn resolve_properties(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .or_else(|| ctx.env.get("AZURE_OPENAI_API_KEY").map(|s| s.to_string()));
 
+    let target_provider = "azure".to_string();
+
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
             v.iter()

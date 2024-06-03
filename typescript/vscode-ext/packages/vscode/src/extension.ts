@@ -254,21 +254,18 @@ export function activate(context: vscode.ExtensionContext) {
   //     target: 'https://api.anthropic.com',
   //     changeOrigin: true,
   //   }),
-  // )
+  //
   server.use(
     '/',
     createProxyMiddleware({
       changeOrigin: true,
       router: (req) => {
-        // Check for a specific header to determine the target
-        const targetHeader = req.headers['target-provider']
-        if (targetHeader === 'anthropic') {
-          return 'https://api.anthropic.com'
-        } else if (targetHeader === 'openai') {
-          return 'https://api.openai.com/chat'
-        } else if (targetHeader === 'ollama') {
-          // Default target
-          return 'https://api.default.com'
+        // Extract the original target URL from the custom header
+        const originalUrl = req.headers['original-url']
+        if (typeof originalUrl === 'string') {
+          return originalUrl
+        } else {
+          throw new Error('x-original-url header is missing or invalid')
         }
       },
     }),

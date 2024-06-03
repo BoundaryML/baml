@@ -34,7 +34,12 @@ pub fn resolve_properties(
     let base_url = properties
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "http://localhost:11434/v1".to_string());
+        .or_else(|| {
+            ctx.env
+                .get("BOUNDARY_ANTHROPIC_PROXY_URL")
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| "'http://localhost:11434/v1".to_string());
 
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
