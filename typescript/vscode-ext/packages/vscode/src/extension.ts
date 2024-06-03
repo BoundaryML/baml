@@ -247,12 +247,22 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   const server = express()
-  server.use(cors())
   server.use(
     '/',
     createProxyMiddleware({
-      target: 'https://api.anthropic.com',
       changeOrigin: true,
+      router: (req) => {
+        // Check for a specific header to determine the target
+        const targetHeader = req.headers['target-provider']
+        if (targetHeader === 'anthropic') {
+          return 'https://api.anthropic.com'
+        } else if (targetHeader === 'openai') {
+          return 'https://api.another.com'
+        } else {
+          // Default target
+          return 'https://api.default.com'
+        }
+      },
     }),
   )
 

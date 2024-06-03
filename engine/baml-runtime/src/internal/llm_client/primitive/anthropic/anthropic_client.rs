@@ -349,6 +349,8 @@ impl RequestBuilder for AnthropicClient {
         if let Some(key) = &self.properties.api_key {
             req = req.header("x-api-key", key);
         }
+        req = req.header("target-provider", "anthropic");
+
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
         match prompt {
