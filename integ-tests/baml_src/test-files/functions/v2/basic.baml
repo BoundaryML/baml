@@ -1,7 +1,7 @@
 
 
 function ExtractResume2(resume: string) -> Resume {
-    client Claude
+    client GPT35Azure
     prompt #"
         {{ _.role('system') }}
 
