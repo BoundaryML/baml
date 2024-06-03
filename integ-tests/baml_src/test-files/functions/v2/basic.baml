@@ -1,7 +1,7 @@
 
 
 function ExtractResume2(resume: string) -> Resume {
-    client GPT35Azure
+    client Ollama
     prompt #"
         {{ _.role('system') }}
 
