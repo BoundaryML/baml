@@ -1,7 +1,7 @@
 
 
 function ExtractResume2(resume: string) -> Resume {
-    client Ollama
+    client Claude
     prompt #"
         {{ _.role('system') }}
 

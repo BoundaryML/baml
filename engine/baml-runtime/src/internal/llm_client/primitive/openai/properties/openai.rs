@@ -33,11 +33,6 @@ pub fn resolve_properties(
     let base_url = properties
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .or_else(|| {
-            ctx.env
-                .get("BOUNDARY_ANTHROPIC_PROXY_URL")
-                .map(|s| s.to_string())
-        })
         .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
 
     let api_key = properties
@@ -73,6 +68,10 @@ pub fn resolve_properties(
         api_key,
         headers,
         properties,
+        proxy_url: ctx
+            .env
+            .get("BOUNDARY_ANTHROPIC_PROXY_URL")
+            .map(|s| s.to_string()),
         query_params: Default::default(),
     })
 }

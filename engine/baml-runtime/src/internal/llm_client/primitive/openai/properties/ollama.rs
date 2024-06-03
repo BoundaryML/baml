@@ -26,6 +26,13 @@ pub fn resolve_properties(
         })
         .collect::<Result<HashMap<_, _>>>()?;
 
+    if let Some(boundary_anthropic_proxy_url) = ctx.env.get("BOUNDARY_ANTHROPIC_PROXY_URL") {
+        properties.insert(
+            "boundary_anthropic_proxy_url".to_string(),
+            serde_json::Value::String(boundary_anthropic_proxy_url.to_string()),
+        );
+    }
+
     let default_role = properties
         .remove("default_role")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
@@ -34,12 +41,7 @@ pub fn resolve_properties(
     let base_url = properties
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .or_else(|| {
-            ctx.env
-                .get("BOUNDARY_ANTHROPIC_PROXY_URL")
-                .map(|s| s.to_string())
-        })
-        .unwrap_or_else(|| "'http://localhost:11434/v1".to_string());
+        .unwrap_or_else(|| "http://localhost:11434/v1".to_string());
 
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
@@ -69,6 +71,10 @@ pub fn resolve_properties(
         api_key: None,
         headers,
         properties,
+        proxy_url: ctx
+            .env
+            .get("BOUNDARY_ANTHROPIC_PROXY_URL")
+            .map(|s| s.to_string()),
         query_params: Default::default(),
     })
 }

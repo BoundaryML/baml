@@ -14,6 +14,7 @@ pub struct PostRequestProperities {
     pub api_key: Option<String>,
     pub headers: HashMap<String, String>,
     pub query_params: HashMap<String, String>,
+    pub proxy_url: Option<String>,
     // These are passed directly to the OpenAI API.
     pub properties: HashMap<String, serde_json::Value>,
 }
