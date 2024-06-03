@@ -23,7 +23,7 @@ pub fn parse<'a>(str: &'a str, options: &ParseOptions) -> Result<Vec<(String, Va
 
         let md_content = if let Some(end) = md_tag_end.find(&remaining[cap.end()..]) {
             let next = remaining[cap.end()..cap.end() + end.start()].trim();
-            remaining = &remaining[end.end()..];
+            remaining = &remaining[cap.end() + end.end()..];
             next
         } else {
             should_loop = false;
@@ -72,7 +72,7 @@ mod test {
     use test_log::test;
 
     #[test]
-    fn test_parse() {
+    fn basic_parse() -> Result<()> {
         let res = parse(
             r#"```json
 {
@@ -92,20 +92,85 @@ print("Hello, world!")
             &ParseOptions::default(),
         );
 
-        assert!(res.is_ok(), "{:?}", res);
-
-        let res = res.unwrap();
+        let res = res?;
         assert_eq!(res.len(), 2);
-        assert_eq!(res[0].0, "json");
-        assert_eq!(res[1].0, "test json");
-        assert_eq!(
-            res[0].1,
-            Value::Object(
+        {
+            let (tag, value) = &res[0];
+            assert_eq!(tag, "json");
+
+            let Value::AnyOf(value, _) = value else {
+                panic!("Expected AnyOf, got {:#?}", value);
+            };
+            assert!(value.contains(&Value::Object(
                 [("a".to_string(), Value::Number((1).into()))]
                     .into_iter()
                     .collect()
-            )
+            )));
+        }
+        {
+            let (tag, value) = &res[1];
+            assert_eq!(tag, "test json");
+
+            let Value::AnyOf(value, _) = value else {
+                panic!("Expected AnyOf, got {:#?}", value);
+            };
+            assert!(value.contains(&Value::String("This is a test".to_string())));
+        }
+
+        Ok(())
+    }
+
+    #[test(should_panic)]
+    fn untagged_blocks() -> Result<()> {
+        let res = parse(
+            r#"
+lorem ipsum
+
+```
+"block1"
+```
+
+"here is some text in between"
+
+```
+"block2"
+```
+
+dolor sit amet
+            "#,
+            &ParseOptions::default(),
         );
-        assert_eq!(res[1].1, Value::String("This is a test".to_string()));
+
+        let res = res?;
+        assert_eq!(res.len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn utf8_between_blocks() -> Result<()> {
+        let res = parse(
+            r#"
+lorem ipsum
+
+```json
+"block1"
+```
+
+🌅🌞🏖️🏊‍♀️🐚🌴🍹🌺🏝️🌊👒😎👙🩴🐠🚤🍉🎣🎨📸🎉💃🕺🌙🌠🍽️🎶✨🌌🏕️🔥🌲🌌🌟💤
+
+```json
+"block2"
+```
+
+dolor sit amet
+            "#,
+            &ParseOptions::default(),
+        );
+
+        let res = res?;
+        assert_eq!(res.len(), 2);
+
+        Ok(())
     }
 }

@@ -74,7 +74,7 @@ mod test {
     use test_log::test;
 
     #[test]
-    fn test_parse() {
+    fn test_parse() -> Result<()> {
         let res = parse(
             r#"```json
 {
@@ -94,21 +94,29 @@ print("Hello, world!")
             &ParseOptions::default(),
         );
 
-        assert!(res.is_ok(), "{:?}", res);
-
-        let res = res.unwrap();
+        let res = res?;
         assert_eq!(res.len(), 2);
-        assert_eq!(
-            res[0],
-            Value::Object(
+        {
+            let value = &res[0];
+            let Value::AnyOf(value, _) = value else {
+                panic!("Expected AnyOf, got {:#?}", value);
+            };
+            assert!(value.contains(&Value::Object(
                 [("a".to_string(), Value::Number((1).into()))]
                     .into_iter()
                     .collect()
-            )
-        );
-        assert_eq!(
-            res[1],
-            Value::Array(vec![Value::String("This is a test".to_string())])
-        );
+            )));
+        }
+        {
+            let value = &res[1];
+            let Value::AnyOf(value, _) = value else {
+                panic!("Expected AnyOf, got {:#?}", value);
+            };
+            assert!(value.contains(&Value::Array(vec![Value::String(
+                "This is a test".to_string()
+            )])));
+        }
+
+        Ok(())
     }
 }
