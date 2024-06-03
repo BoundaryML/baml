@@ -191,8 +191,14 @@ def test_tracing_thread_pool():
     trace_thread_pool()
 
 
-def test_tracing_async_gather():
-    asyncio.run(trace_async_gather())
+@pytest.mark.asyncio
+async def test_tracing_thread_pool_async():
+    await trace_thread_pool_async()
+
+
+@pytest.mark.asyncio
+async def test_tracing_async_gather():
+    await trace_async_gather()
 
 
 import concurrent.futures
@@ -207,6 +213,15 @@ def trace_thread_pool():
         ]
         for future in concurrent.futures.as_completed(futures):
             future.result()
+
+
+@trace
+async def trace_thread_pool_async():
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        # Create 10 tasks and execute them
+        futures = [executor.submit(trace_async_gather) for _ in range(10)]
+        for future in concurrent.futures.as_completed(futures):
+            res = await future.result()
 
 
 @trace
