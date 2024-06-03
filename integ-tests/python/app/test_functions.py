@@ -187,6 +187,48 @@ def test_tracing_sync():
     res2 = sync_dummy_func("second-dummycall-arg")
 
 
+def test_tracing_thread_pool():
+    trace_thread_pool()
+
+
+@pytest.mark.asyncio
+async def test_tracing_thread_pool_async():
+    await trace_thread_pool_async()
+
+
+@pytest.mark.asyncio
+async def test_tracing_async_gather():
+    await trace_async_gather()
+
+
+import concurrent.futures
+
+
+@trace
+def trace_thread_pool():
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        # Create 10 tasks and execute them
+        futures = [
+            executor.submit(parent_sync, "second-dummycall-arg") for _ in range(10)
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            future.result()
+
+
+@trace
+async def trace_thread_pool_async():
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        # Create 10 tasks and execute them
+        futures = [executor.submit(trace_async_gather) for _ in range(10)]
+        for future in concurrent.futures.as_completed(futures):
+            res = await future.result()
+
+
+@trace
+async def trace_async_gather():
+    await asyncio.gather(*[async_dummy_func("second-dummycall-arg") for _ in range(10)])
+
+
 @trace
 async def parent_async(myStr: str):
     set_tags(myKey="myVal")
@@ -203,12 +245,21 @@ async def parent_async2(myStr: str):
 
 @trace
 def parent_sync(myStr: str):
+    import time
+    import random
+
+    time.sleep(0.5 + random.random())
     sync_dummy_func(myStr)
     return "hello world parentsync"
 
 
+import asyncio
+import random
+
+
 @trace
 async def async_dummy_func(myArgggg: str):
+    await asyncio.sleep(0.5 + random.random())
     return "asyncDummyFuncOutput"
 
 
