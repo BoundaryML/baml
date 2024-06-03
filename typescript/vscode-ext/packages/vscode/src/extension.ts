@@ -247,6 +247,14 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   const server = express()
+  server.use(cors())
+  // server.use(
+  //   '/',
+  //   createProxyMiddleware({
+  //     target: 'https://api.anthropic.com',
+  //     changeOrigin: true,
+  //   }),
+  // )
   server.use(
     '/',
     createProxyMiddleware({
@@ -257,8 +265,8 @@ export function activate(context: vscode.ExtensionContext) {
         if (targetHeader === 'anthropic') {
           return 'https://api.anthropic.com'
         } else if (targetHeader === 'openai') {
-          return 'https://api.another.com'
-        } else {
+          return 'https://api.openai.com/chat'
+        } else if (targetHeader === 'ollama') {
           // Default target
           return 'https://api.default.com'
         }

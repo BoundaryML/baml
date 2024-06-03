@@ -233,6 +233,9 @@ impl RequestBuilder for OpenAIClient {
         if let Some(key) = &self.properties.api_key {
             req = req.bearer_auth(key)
         }
+
+        req = req.header("target-provider", "openai");
+
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
         match prompt {
