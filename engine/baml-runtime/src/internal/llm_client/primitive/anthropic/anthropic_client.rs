@@ -364,7 +364,7 @@ impl RequestBuilder for AnthropicClient {
             req = req.header("x-api-key", key);
         }
 
-        req = req.header("original-url", self.properties.base_url.as_str());
+        req = req.header("baml-original-url", self.properties.base_url.as_str());
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
