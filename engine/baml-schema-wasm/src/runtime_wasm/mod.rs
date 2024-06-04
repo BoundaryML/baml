@@ -890,7 +890,7 @@ impl WasmRuntime {
         for function in functions {
             let span = function.span.clone(); // Clone the span
 
-            if span.file_path == file_name
+            if span.file_path.as_str().contains(file_name)
                 && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
             {
                 return Some(function);
