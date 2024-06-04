@@ -269,7 +269,6 @@ export function activate(context: vscode.ExtensionContext) {
       on: {
         proxyRes: (proxyRes, req, res) => {
           proxyRes.headers['Access-Control-Allow-Origin'] = '*'
-          // console.log('proxyRes')
         },
         error: (error) => {
           console.error('proxy error:', error)
