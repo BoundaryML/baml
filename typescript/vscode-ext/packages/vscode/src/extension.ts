@@ -17,12 +17,6 @@ let client: LanguageClient
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml-diagnostics')
 const LANG_NAME = 'Baml'
-const {
-  debugProxyErrorsPlugin, // subscribe to proxy errors to prevent server from crashing
-  loggerPlugin, // log proxy events to a logger (ie. console)
-  errorResponsePlugin, // return 5xx response on proxy error
-  proxyEventsPlugin, // implements the "on:" option
-} = require('http-proxy-middleware')
 
 let timeout: NodeJS.Timeout | undefined
 let statusBarItem: vscode.StatusBarItem
@@ -255,67 +249,32 @@ export function activate(context: vscode.ExtensionContext) {
 
   const server = express()
   server.use(cors())
-  // server.use(
-  //   '/',
-  //   createProxyMiddleware({
-  //     target: 'https://api.anthropic.com',
-  //     changeOrigin: true,
-  //   }),
-  //
   server.use(
     createProxyMiddleware({
       changeOrigin: true,
-      // target: 'http://localhost:11434/v1',
 
       router: (req) => {
         // Extract the original target URL from the custom header
-        // const originalUrl = req.headers['baml-original-url']
-        // console.log(`originalUrl: ${originalUrl}`)
-        const originalUrl = 'http://localhost:11434/v1'
-        console.log(`originalUrl: ${originalUrl}`)
-        console.log(`req : ${JSON.stringify(req.headers, null, 2)}, url: ${req.url}`)
-        // console.log(`hardcoded url: ${hardcode}`)
-        if (typeof originalUrl === 'string') {
-          // delete req.headers['baml-original-url']
-          req.headers['origin'] = 'http://localhost:8195'
+        const originalUrl = req.headers['baml-original-url']
 
-          // return 'http://localhost:8195'
+        if (typeof originalUrl === 'string') {
+          delete req.headers['baml-original-url']
+          req.headers['origin'] = 'http://localhost:8195'
           return originalUrl
         } else {
-          throw new Error('x-original-url header is missing or invalid')
+          throw new Error('baml-original-url header is missing or invalid')
         }
       },
       logger: console,
-      // onProxyRes: (proxyRes, req, res) => {
-      //   console.log('onProxyRes')
-      //   console.log(`onProxyRes: ${JSON.stringify(proxyRes, null, 2)}`)
-      // },
       on: {
-        // proxyReq: (proxyReq, req, res) => {
-        //   try {
-        //     console.log('changing header in proxy req')
-        //     proxyReq.setHeader('origin', 'http://localhost:8195')
-        //     console.log('proxyReq')
-        //     console.log(`proxyReq: ${JSON.stringify(proxyReq.host, null, 2)}`)
-        //     console.log(`proxyReq: ${JSON.stringify(proxyReq.getHeaders(), null, 2)}`)
-        //     console.log(`proxyReq: ${JSON.stringify(proxyReq.req, null, 2)}`)
-        //   } catch (e) {
-        //     console.error('proxyReq error:', e)
-        //   }
-        // },
         proxyRes: (proxyRes, req, res) => {
           proxyRes.headers['Access-Control-Allow-Origin'] = '*'
-          console.log('proxyRes')
-
-          console.log(`proxyRes: ${JSON.stringify(proxyRes.baseUrl, null, 2)}`)
+          // console.log('proxyRes')
         },
         error: (error) => {
-          console.log('error')
-
           console.error('proxy error:', error)
         },
       },
-      // plugins: [debugProxyErrorsPlugin, loggerPlugin, errorResponsePlugin, proxyEventsPlugin],
     }),
   )
 

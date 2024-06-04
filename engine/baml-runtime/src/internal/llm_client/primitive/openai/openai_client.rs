@@ -227,7 +227,6 @@ impl RequestBuilder for OpenAIClient {
                     .clone()
             )
         } else {
-            // format!("{}", self.properties.base_url)
             format!(
                 "{}/chat/completions",
                 self.properties
