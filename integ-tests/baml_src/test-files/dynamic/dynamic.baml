@@ -1,5 +1,4 @@
 class DynamicClassOne {
-  hi string
   @@dynamic
 }
 
@@ -22,4 +21,14 @@ class DynamicClassTwo {
   some_class SomeClassNestedDynamic
   status DynEnumOne
   @@dynamic
+}
+
+function DynamicFunc(input: DynamicClassOne) -> DynamicClassTwo {
+  client GPT35
+  prompt #"
+    Please extract the schema from 
+    {{ input }}
+
+    {{ ctx.output_format }}
+  "#
 }

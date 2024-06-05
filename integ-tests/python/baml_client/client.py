@@ -209,6 +209,28 @@ class BamlClient:
       mdl = create_model("DescribeImage4ReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    async def DynamicFunc(
+        self,
+        input: types.DynamicClassOne,
+        baml_options: BamlCallOptions = {},
+    ) -> types.DynamicClassTwo:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "DynamicFunc",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("DynamicFuncReturnType", inner=(types.DynamicClassTwo, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def ExtractNames(
         self,
         input: str,
@@ -1385,6 +1407,38 @@ class BamlStreamClient:
       partial_mdl = create_model("DescribeImage4PartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
+    def DynamicFunc(
+        self,
+        input: types.DynamicClassOne,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.DynamicClassTwo, types.DynamicClassTwo]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "DynamicFunc",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("DynamicFuncReturnType", inner=(types.DynamicClassTwo, ...))
+      partial_mdl = create_model("DynamicFuncPartialReturnType", inner=(partial_types.DynamicClassTwo, ...))
+
+      return baml_py.BamlStream[partial_types.DynamicClassTwo, types.DynamicClassTwo](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

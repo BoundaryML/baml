@@ -71,7 +71,7 @@ class TypeBuilder(_TypeBuilder):
 class DynamicClassOneBuilder:
     def __init__(self, tb: _TypeBuilder):
         self.__bldr = tb._tb.class_("DynamicClassOne")
-        self.__properties = set([ "hi", ])
+        self.__properties = set([])
         self.__props = DynamicClassOneProperties(self.__bldr, self.__properties)
 
     def type(self) -> FieldType:
@@ -95,10 +95,6 @@ class DynamicClassOneProperties:
         self.__properties = properties
 
     
-
-    @property
-    def hi(self) -> ClassPropertyBuilder:
-        return self.__bldr.property("hi")
 
     def __getattr__(self, name: str) -> ClassPropertyBuilder:
         if name not in self.__properties:
