@@ -68,13 +68,13 @@ pub fn resolve_properties(
         api_key,
         headers,
         properties,
-        proxy_url: None,
-        //Replace proxy_url with code below to enable proxying
-        // proxy_url: ctx
-        // .env
-        // .get("BOUNDARY_ANTHROPIC_PROXY_URL")
-        // .map(|s| Some(s.to_string()))
-        // .unwrap_or(None),
+        // Replace proxy_url with code below to disable proxying
+        // proxy_url: None,
+        proxy_url: ctx
+            .env
+            .get("BOUNDARY_ANTHROPIC_PROXY_URL")
+            .map(|s| Some(s.to_string()))
+            .unwrap_or(None),
         query_params: Default::default(),
     })
 }

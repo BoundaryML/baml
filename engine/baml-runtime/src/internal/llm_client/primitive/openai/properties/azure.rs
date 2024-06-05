@@ -104,12 +104,12 @@ pub fn resolve_properties(
         api_key: None,
         headers,
         properties,
-        proxy_url: None,
-        // Replace proxy_url with code below to enable proxying
-        // proxy_url: ctx
-        //     .env
-        //     .get("BOUNDARY_ANTHROPIC_PROXY_URL")
-        //     .map(|s| s.to_string()),
+        // Replace proxy_url with code below to disable proxying
+        // proxy_url: None,
+        proxy_url: ctx
+            .env
+            .get("BOUNDARY_ANTHROPIC_PROXY_URL")
+            .map(|s| s.to_string()),
         query_params,
     })
 }
