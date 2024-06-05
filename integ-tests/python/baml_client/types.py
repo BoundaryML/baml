@@ -157,6 +157,11 @@ class DynamicClassTwo(BaseModel):
     some_class: "SomeClassNestedDynamic"
     status: Union["DynEnumOne", str]
 
+class DynamicOutput(BaseModel):
+    
+    model_config = ConfigDict(extra='allow')
+    
+
 class Education(BaseModel):
     
     

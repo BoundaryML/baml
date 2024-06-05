@@ -25,6 +25,8 @@ export default class TypeBuilder {
     
     DynamicClassTwo: ClassBuilder<'DynamicClassTwo', "hi" | "some_class" | "status">;
     
+    DynamicOutput: ClassBuilder<'DynamicOutput'>;
+    
     Person: ClassBuilder<'Person', "name" | "hair_color">;
     
     SomeClassNestedDynamic: ClassBuilder<'SomeClassNestedDynamic', "hi">;
@@ -42,7 +44,7 @@ export default class TypeBuilder {
     constructor() {
         this.tb = new _TypeBuilder({
           classes: new Set([
-            "Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","DynamicClassOne","DynamicClassTwo","Education","Email","Event","FakeImage","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","RaysData","Resume","SearchParams","SomeClassNestedDynamic","TestClassAlias","TestClassWithEnum","TestOutputClass","TestOutputClassNested","UnionTest_ReturnType","WithReasoning",
+            "Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","DynamicClassOne","DynamicClassTwo","DynamicOutput","Education","Email","Event","FakeImage","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","RaysData","Resume","SearchParams","SomeClassNestedDynamic","TestClassAlias","TestClassWithEnum","TestOutputClass","TestOutputClassNested","UnionTest_ReturnType","WithReasoning",
           ]),
           enums: new Set([
             "Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumTwo","EnumInClass","EnumOutput","Hobby","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",
@@ -55,6 +57,10 @@ export default class TypeBuilder {
         
         this.DynamicClassTwo = this.tb.classBuilder("DynamicClassTwo", [
           "hi","some_class","status",
+        ]);
+        
+        this.DynamicOutput = this.tb.classBuilder("DynamicOutput", [
+          
         ]);
         
         this.Person = this.tb.classBuilder("Person", [
