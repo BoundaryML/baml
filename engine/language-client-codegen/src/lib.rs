@@ -54,7 +54,10 @@ impl GeneratorArgs {
             .iter()
             .map(|(k, v)| {
                 Ok((
-                    k.display().to_string(),
+                    serde_json::to_string(&k.display().to_string()).map_err(|e| {
+                        anyhow::Error::from(e)
+                            .context(format!("Failed to serialize key {:#}", k.display()))
+                    })?,
                     serde_json::to_string(v).map_err(|e| {
                         anyhow::Error::from(e)
                             .context(format!("Failed to serialize contents of {:#}", k.display()))
