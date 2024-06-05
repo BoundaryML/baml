@@ -148,7 +148,6 @@ class DynamicClassOne(BaseModel):
     
     model_config = ConfigDict(extra='allow')
     
-    hi: str
 
 class DynamicClassTwo(BaseModel):
     

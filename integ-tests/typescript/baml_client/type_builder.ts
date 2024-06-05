@@ -21,7 +21,7 @@ import { TypeBuilder as _TypeBuilder, EnumBuilder, ClassBuilder } from '@boundar
 export default class TypeBuilder {
     private tb: _TypeBuilder;
     
-    DynamicClassOne: ClassBuilder<'DynamicClassOne', "hi">;
+    DynamicClassOne: ClassBuilder<'DynamicClassOne'>;
     
     DynamicClassTwo: ClassBuilder<'DynamicClassTwo', "hi" | "some_class" | "status">;
     
@@ -50,7 +50,7 @@ export default class TypeBuilder {
         });
         
         this.DynamicClassOne = this.tb.classBuilder("DynamicClassOne", [
-          "hi",
+          
         ]);
         
         this.DynamicClassTwo = this.tb.classBuilder("DynamicClassTwo", [

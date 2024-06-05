@@ -142,7 +142,6 @@ export interface ClassWithImage {
 }
 
 export interface DynamicClassOne {
-  hi: string
   
   [key: string]: any;
 }

@@ -136,6 +136,21 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
+  async DynamicFunc(
+      input: DynamicClassOne,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): Promise<DynamicClassTwo> {
+    const raw = await this.runtime.callFunction(
+      "DynamicFunc",
+      {
+        "input": input
+      },
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return raw.parsed() as DynamicClassTwo
+  }
+  
   async ExtractNames(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
@@ -936,6 +951,28 @@ class BamlStreamClient {
       raw,
       (a): a is (string | null) => a,
       (a): a is string => a,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  DynamicFunc(
+      input: DynamicClassOne,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): BamlStream<(Partial<DynamicClassTwo> | null), DynamicClassTwo> {
+    const raw = this.runtime.streamFunction(
+      "DynamicFunc",
+      {
+        "input": input
+      },
+      undefined,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return new BamlStream<(Partial<DynamicClassTwo> | null), DynamicClassTwo>(
+      raw,
+      (a): a is (Partial<DynamicClassTwo> | null) => a,
+      (a): a is DynamicClassTwo => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
