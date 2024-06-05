@@ -154,6 +154,11 @@ export interface DynamicClassTwo {
   [key: string]: any;
 }
 
+export interface DynamicOutput {
+  
+  [key: string]: any;
+}
+
 export interface Education {
   institution: string
   location: string

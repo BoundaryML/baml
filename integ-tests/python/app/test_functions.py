@@ -300,3 +300,16 @@ async def test_dynamic():
 
     for r in tb_res:
         print(r.model_dump())
+
+
+@pytest.mark.asyncio
+async def test_dynamic_class_output():
+    tb = TypeBuilder()
+    tb.DynamicOutput.add_property("hair_color", tb.string())
+    print(tb.DynamicOutput.list_properties())
+    for prop in tb.DynamicOutput.list_properties():
+        print(f"Property: {prop}")
+
+    output = await b.MyFunc(input="My name is Harrison. My hair is black and I'm 6 feet tall.", baml_options={"tb": tb})
+    print(output.model_dump_json())
+    assert output.hair_color == "black"

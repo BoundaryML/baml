@@ -32,3 +32,18 @@ function DynamicFunc(input: DynamicClassOne) -> DynamicClassTwo {
     {{ ctx.output_format }}
   "#
 }
+
+class DynamicOutput {
+  @@dynamic
+}
+ 
+function MyFunc(input: string) -> DynamicOutput {
+  client GPT4
+  prompt #"
+    Given a string, extract info using the schema:
+
+    {{ input}}
+
+    {{ ctx.output_format }}
+  "#
+}

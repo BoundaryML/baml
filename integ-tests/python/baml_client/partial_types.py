@@ -58,6 +58,9 @@ class DynamicClassTwo(BaseModel):
     some_class: "SomeClassNestedDynamic"
     status: Optional[Union[types.DynEnumOne, str]] = None
 
+class DynamicOutput(BaseModel):
+    pass
+
 class Education(BaseModel):
     
     institution: Optional[str] = None

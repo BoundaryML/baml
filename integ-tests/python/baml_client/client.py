@@ -693,6 +693,28 @@ class BamlClient:
       mdl = create_model("GetQueryReturnType", inner=(types.SearchParams, ...))
       return coerce(mdl, raw.parsed())
     
+    async def MyFunc(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.DynamicOutput:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "MyFunc",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("MyFuncReturnType", inner=(types.DynamicOutput, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def OptionalTest_Function(
         self,
         input: str,
@@ -2112,6 +2134,38 @@ class BamlStreamClient:
       partial_mdl = create_model("GetQueryPartialReturnType", inner=(partial_types.SearchParams, ...))
 
       return baml_py.BamlStream[partial_types.SearchParams, types.SearchParams](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
+    def MyFunc(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.DynamicOutput, types.DynamicOutput]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "MyFunc",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("MyFuncReturnType", inner=(types.DynamicOutput, ...))
+      partial_mdl = create_model("MyFuncPartialReturnType", inner=(partial_types.DynamicOutput, ...))
+
+      return baml_py.BamlStream[partial_types.DynamicOutput, types.DynamicOutput](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
