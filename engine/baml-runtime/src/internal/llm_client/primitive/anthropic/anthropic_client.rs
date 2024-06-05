@@ -127,10 +127,7 @@ fn resolve_properties(
         api_key,
         headers,
         properties,
-        proxy_url: ctx
-            .env
-            .get("BOUNDARY_ANTHROPIC_PROXY_URL")
-            .map(|s| s.to_string()),
+        proxy_url: ctx.env.get("BOUNDARY_PROXY_URL").map(|s| s.to_string()),
     })
 }
 

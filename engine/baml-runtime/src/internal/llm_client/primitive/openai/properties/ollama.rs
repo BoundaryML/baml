@@ -66,7 +66,7 @@ pub fn resolve_properties(
         properties,
         proxy_url: ctx
             .env
-            .get("BOUNDARY_ANTHROPIC_PROXY_URL")
+            .get("BOUNDARY_PROXY_URL")
             .map(|s| Some(s.to_string()))
             .unwrap_or(None),
         query_params: Default::default(),

@@ -106,10 +106,7 @@ pub fn resolve_properties(
         properties,
         // Replace proxy_url with code below to disable proxying
         // proxy_url: None,
-        proxy_url: ctx
-            .env
-            .get("BOUNDARY_ANTHROPIC_PROXY_URL")
-            .map(|s| s.to_string()),
+        proxy_url: ctx.env.get("BOUNDARY_PROXY_URL").map(|s| s.to_string()),
         query_params,
     })
 }
