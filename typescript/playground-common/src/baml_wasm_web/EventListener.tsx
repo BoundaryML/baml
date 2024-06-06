@@ -13,7 +13,10 @@ import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
+var port = 1234
+
 const defaultEnvKeyValues: [string, string][] = (() => {
+  // const port2 = 12345
   if ((window as any).next?.version) {
     console.log('Running in nextjs')
     const domain = window?.location?.origin || ''
@@ -21,25 +24,38 @@ const defaultEnvKeyValues: [string, string][] = (() => {
     return [['BOUNDARY_PROXY_URL', domain + '/anthropic/']]
   } else {
     console.log('Not running in a Next.js environment, set default value')
+    console.log('port', port)
     // Not running in a Next.js environment, set default value
-    return [['BOUNDARY_PROXY_URL', 'http://localhost:8195']]
+    return [['BOUNDARY_PROXY_URL', `http://localhost:${port}`]]
   }
 })()
+
+const boundaryProxyUrlAtom = atomWithStorage<string>(
+  'boundary-proxy-url',
+  defaultEnvKeyValues.find(([key]) => key === 'BOUNDARY_PROXY_URL')?.[1] || '',
+  vscodeLocalStorageStore,
+)
 
 const selectedProjectStorageAtom = atomWithStorage<string | null>('selected-project', null, sessionStore)
 const selectedFunctionStorageAtom = atomWithStorage<string | null>('selected-function', null, sessionStore)
 const envKeyValueStorage = atomWithStorage<[string, string][]>(
   'env-key-values',
-  defaultEnvKeyValues,
+  defaultEnvKeyValues.filter(([key]) => key !== 'BOUNDARY_PROXY_URL'),
   vscodeLocalStorageStore,
 )
 
 export const resetEnvKeyValuesAtom = atom(null, (get, set) => {
   set(envKeyValueStorage, [])
+  set(boundaryProxyUrlAtom, defaultEnvKeyValues.find(([key]) => key === 'BOUNDARY_PROXY_URL')?.[1] || '')
 })
+
 export const envKeyValuesAtom = atom(
   (get) => {
-    return get(envKeyValueStorage).map(([k, v], idx): [string, string, number] => [k, v, idx])
+    const boundaryProxyUrl = get(boundaryProxyUrlAtom)
+    return [
+      ...get(envKeyValueStorage).map(([k, v], idx): [string, string, number] => [k, v, idx]),
+      ['BOUNDARY_PROXY_URL', boundaryProxyUrl, get(envKeyValueStorage).length],
+    ]
   },
   (
     get,
@@ -58,16 +74,23 @@ export const envKeyValuesAtom = atom(
         },
   ) => {
     if (update.itemIndex !== null) {
-      const keyValues = [...get(envKeyValueStorage)]
-      if ('value' in update) {
-        keyValues[update.itemIndex][1] = update.value
-      } else if ('newKey' in update) {
-        keyValues[update.itemIndex][0] = update.newKey
-      } else if ('remove' in update) {
-        keyValues.splice(update.itemIndex, 1)
+      if (update.itemIndex === get(envKeyValueStorage).length) {
+        // Update BOUNDARY_PROXY_URL
+        if ('value' in update) {
+          set(boundaryProxyUrlAtom, update.value)
+        }
+      } else {
+        const keyValues = [...get(envKeyValueStorage)]
+        if ('value' in update) {
+          keyValues[update.itemIndex][1] = update.value
+        } else if ('newKey' in update) {
+          keyValues[update.itemIndex][0] = update.newKey
+        } else if ('remove' in update) {
+          keyValues.splice(update.itemIndex, 1)
+        }
+        console.log('Setting env key values', keyValues)
+        set(envKeyValueStorage, keyValues)
       }
-      console.log('Setting env key values', keyValues)
-      set(envKeyValueStorage, keyValues)
     } else {
       set(envKeyValueStorage, (prev) => [...prev, [update.key, update.value ?? '']])
     }
@@ -507,6 +530,12 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
               cursor: { fileName: string; fileText: string; line: number; column: number }
             }
           }
+        | {
+            command: 'port_number'
+            content: {
+              port: number
+            }
+          }
       >,
     ) => {
       const { command, content } = event.data
@@ -539,6 +568,12 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
         case 'remove_project':
           removeProject((content as { root_path: string }).root_path)
+          break
+
+        case 'port_number':
+          port = (content as { port: number }).port
+          defaultEnvKeyValues = getDefaultEnvKeyValues()
+
           break
       }
     }

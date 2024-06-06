@@ -21,6 +21,7 @@ const LANG_NAME = 'Baml'
 let timeout: NodeJS.Timeout | undefined
 let statusBarItem: vscode.StatusBarItem
 let server: any
+var port: number
 
 function scheduleDiagnostics(): void {
   if (timeout) {
@@ -177,6 +178,10 @@ export function activate(context: vscode.ExtensionContext) {
           properties: {},
         })
       }
+      // console.info(`Port number: ${port}`)
+      // WebPanelView.currentPanel?.postMessage('port_number', {
+      //   port: port,
+      // })
 
       WebPanelView.currentPanel?.postMessage('select_function', {
         root_path: 'default',
@@ -247,7 +252,14 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand('baml.openBamlPanel')
   }
 
-  const server = express()
+  const app = require('express')()
+  const server = app.listen(5195, () => {
+    port = server.address().port
+    console.log('Server started on port', port)
+    WebPanelView.currentPanel?.postMessage('port_number', {
+      port: port,
+    })
+  })
   server.use(cors())
   server.use(
     createProxyMiddleware({
@@ -259,7 +271,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (typeof originalUrl === 'string') {
           delete req.headers['baml-original-url']
-          req.headers['origin'] = 'http://localhost:8195'
+          req.headers['origin'] = `http://localhost:${port}`
           return originalUrl
         } else {
           throw new Error('baml-original-url header is missing or invalid')
@@ -277,7 +289,6 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   )
 
-  server.listen(8195)
   // TODO: Reactivate linter.
   // runDiagnostics();
 }
