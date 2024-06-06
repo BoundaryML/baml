@@ -13,10 +13,7 @@ import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
-var port = 1234
-
 const defaultEnvKeyValues: [string, string][] = (() => {
-  // const port2 = 12345
   if ((window as any).next?.version) {
     console.log('Running in nextjs')
     const domain = window?.location?.origin || ''
@@ -24,38 +21,25 @@ const defaultEnvKeyValues: [string, string][] = (() => {
     return [['BOUNDARY_PROXY_URL', domain + '/anthropic/']]
   } else {
     console.log('Not running in a Next.js environment, set default value')
-    console.log('port', port)
     // Not running in a Next.js environment, set default value
-    return [['BOUNDARY_PROXY_URL', `http://localhost:${port}`]]
+    return [['BOUNDARY_PROXY_URL', 'http://localhost:8195']]
   }
 })()
-
-const boundaryProxyUrlAtom = atomWithStorage<string>(
-  'boundary-proxy-url',
-  defaultEnvKeyValues.find(([key]) => key === 'BOUNDARY_PROXY_URL')?.[1] || '',
-  vscodeLocalStorageStore,
-)
 
 const selectedProjectStorageAtom = atomWithStorage<string | null>('selected-project', null, sessionStore)
 const selectedFunctionStorageAtom = atomWithStorage<string | null>('selected-function', null, sessionStore)
 const envKeyValueStorage = atomWithStorage<[string, string][]>(
   'env-key-values',
-  defaultEnvKeyValues.filter(([key]) => key !== 'BOUNDARY_PROXY_URL'),
+  defaultEnvKeyValues,
   vscodeLocalStorageStore,
 )
 
 export const resetEnvKeyValuesAtom = atom(null, (get, set) => {
   set(envKeyValueStorage, [])
-  set(boundaryProxyUrlAtom, defaultEnvKeyValues.find(([key]) => key === 'BOUNDARY_PROXY_URL')?.[1] || '')
 })
-
 export const envKeyValuesAtom = atom(
   (get) => {
-    const boundaryProxyUrl = get(boundaryProxyUrlAtom)
-    return [
-      ...get(envKeyValueStorage).map(([k, v], idx): [string, string, number] => [k, v, idx]),
-      ['BOUNDARY_PROXY_URL', boundaryProxyUrl, get(envKeyValueStorage).length],
-    ]
+    return get(envKeyValueStorage).map(([k, v], idx): [string, string, number] => [k, v, idx])
   },
   (
     get,
@@ -74,23 +58,16 @@ export const envKeyValuesAtom = atom(
         },
   ) => {
     if (update.itemIndex !== null) {
-      if (update.itemIndex === get(envKeyValueStorage).length) {
-        // Update BOUNDARY_PROXY_URL
-        if ('value' in update) {
-          set(boundaryProxyUrlAtom, update.value)
-        }
-      } else {
-        const keyValues = [...get(envKeyValueStorage)]
-        if ('value' in update) {
-          keyValues[update.itemIndex][1] = update.value
-        } else if ('newKey' in update) {
-          keyValues[update.itemIndex][0] = update.newKey
-        } else if ('remove' in update) {
-          keyValues.splice(update.itemIndex, 1)
-        }
-        console.log('Setting env key values', keyValues)
-        set(envKeyValueStorage, keyValues)
+      const keyValues = [...get(envKeyValueStorage)]
+      if ('value' in update) {
+        keyValues[update.itemIndex][1] = update.value
+      } else if ('newKey' in update) {
+        keyValues[update.itemIndex][0] = update.newKey
+      } else if ('remove' in update) {
+        keyValues.splice(update.itemIndex, 1)
       }
+      console.log('Setting env key values', keyValues)
+      set(envKeyValueStorage, keyValues)
     } else {
       set(envKeyValueStorage, (prev) => [...prev, [update.key, update.value ?? '']])
     }
@@ -463,7 +440,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const removeProject = useSetAtom(removeProjectAtom)
   const availableProjects = useAtomValue(availableProjectsAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
-  // const setRuntimeCtx = useSetAtom(runtimeCtxRaw);
+  const setEnvKeyValueStorage = useSetAtom(envKeyValueStorage)
   const version = useAtomValue(versionAtom)
   const wasm = useAtomValue(wasmAtom)
   const setSelectedFunction = useSetAtom(selectedFunctionAtom)
@@ -571,9 +548,24 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           break
 
         case 'port_number':
-          port = (content as { port: number }).port
-          defaultEnvKeyValues = getDefaultEnvKeyValues()
+          setEnvKeyValueStorage((prev) => {
+            let keyExists = false
+            const updated: [string, string][] = prev.map(([key, value]) => {
+              if (key === 'BOUNDARY_PROXY_URL') {
+                keyExists = true
+                return [key, `http://localhost:${content.port}`]
+              }
+              return [key, value]
+            })
 
+            if (!keyExists) {
+              updated.push(['BOUNDARY_PROXY_URL', `http://localhost:${content.port}`])
+            }
+
+            console.log(`Setting port number to ${content.port}`)
+            console.log(`Updated env key values: ${updated}`)
+            return updated
+          })
           break
       }
     }

@@ -253,21 +253,23 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   const app = require('express')()
-  const server = app.listen(5195, () => {
+  app.use(cors())
+
+  const server = app.listen(0, () => {
     port = server.address().port
     console.log('Server started on port', port)
     WebPanelView.currentPanel?.postMessage('port_number', {
       port: port,
     })
   })
-  server.use(cors())
-  server.use(
+
+  app.use(
     createProxyMiddleware({
       changeOrigin: true,
-
       router: (req) => {
         // Extract the original target URL from the custom header
         const originalUrl = req.headers['baml-original-url']
+        console.log('Original URL:', originalUrl)
 
         if (typeof originalUrl === 'string') {
           delete req.headers['baml-original-url']
@@ -288,6 +290,8 @@ export function activate(context: vscode.ExtensionContext) {
       },
     }),
   )
+
+  // Add a catch-all route to handle 404 errors
 
   // TODO: Reactivate linter.
   // runDiagnostics();

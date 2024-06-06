@@ -76,6 +76,10 @@ const envvarsAtom = atom((get) => {
     return { key, value, type: 'user', index }
   })
 
+  envVars.forEach((envVar) => {
+    console.log(`Key: ${envVar.key}, Value: ${envVar.value}, Type: ${envVar.type}, Index: ${envVar.index}`)
+  })
+
   // Add required but unset envvars
   const requiredButUnset = requiredVarNamesCopy
     .filter((k) => !envVars.some(({ key }) => k === key))

@@ -1,7 +1,7 @@
 
 
 function TestOllama(input: string) -> string {
-  client Claude
+  client Ollama
   prompt #"
     Write a nice haiku about {{ input }}
   "#
