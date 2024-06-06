@@ -39,9 +39,9 @@ const showEnvvarValuesAtom = atom(false)
 const tracingEnvVarsAtom = atom(['BOUNDARY_PROJECT_ID', 'BOUNDARY_SECRET'])
 const configEnvVarsAtom = atom(() => {
   if ((window as any).next) {
-    return ['BOUNDARY_ANTHROPIC_PROXY_URL']
+    return ['BOUNDARY_PROXY_URL']
   } else {
-    return ['BOUNDARY_ANTHROPIC_PROXY_URL']
+    return ['BOUNDARY_PROXY_URL']
   }
 })
 
@@ -285,20 +285,6 @@ export const SettingsDialog: React.FC = () => {
               <PlusIcon size={14} /> <div>Add item</div>
             </Button>
           </div>
-
-          {envvars.some((t) => t.type === 'config') && (
-            <div className='flex flex-col gap-1'>
-              <span className='text-sm text-vscode-foreground'>Internal vars</span>
-              <span className='text-xs text-vscode-descriptionForeground'>
-                Anthropic doesn't support client-side web calls, so we proxy the calls.
-              </span>
-              {envvars
-                .filter((t) => t.type === 'config')
-                .map((envvar) => (
-                  <EnvvarInput key={envvar.index} envvar={envvar} />
-                ))}
-            </div>
-          )}
         </div>
         <DialogFooter className='mt-auto'>
           <Button

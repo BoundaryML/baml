@@ -18,11 +18,11 @@ const defaultEnvKeyValues: [string, string][] = (() => {
     console.log('Running in nextjs')
     const domain = window?.location?.origin || ''
     // Running in a Next.js environment, proxy to nextjs rewrite
-    return [['BOUNDARY_ANTHROPIC_PROXY_URL', domain + '/anthropic/']]
+    return [['BOUNDARY_PROXY_URL', domain + '/anthropic/']]
   } else {
     console.log('Not running in a Next.js environment, set default value')
     // Not running in a Next.js environment, set default value
-    return [['BOUNDARY_ANTHROPIC_PROXY_URL', 'http://localhost:8195']]
+    return [['BOUNDARY_PROXY_URL', 'http://localhost:0000']]
   }
 })()
 
@@ -440,7 +440,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const removeProject = useSetAtom(removeProjectAtom)
   const availableProjects = useAtomValue(availableProjectsAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
-  // const setRuntimeCtx = useSetAtom(runtimeCtxRaw);
+  const setEnvKeyValueStorage = useSetAtom(envKeyValueStorage)
   const version = useAtomValue(versionAtom)
   const wasm = useAtomValue(wasmAtom)
   const setSelectedFunction = useSetAtom(selectedFunctionAtom)
@@ -507,6 +507,12 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
               cursor: { fileName: string; fileText: string; line: number; column: number }
             }
           }
+        | {
+            command: 'port_number'
+            content: {
+              port: number
+            }
+          }
       >,
     ) => {
       const { command, content } = event.data
@@ -539,6 +545,24 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
         case 'remove_project':
           removeProject((content as { root_path: string }).root_path)
+          break
+
+        case 'port_number':
+          setEnvKeyValueStorage((prev) => {
+            let keyExists = false
+            const updated: [string, string][] = prev.map(([key, value]) => {
+              if (key === 'BOUNDARY_PROXY_URL') {
+                keyExists = true
+                return [key, `http://localhost:${content.port}`]
+              }
+              return [key, value]
+            })
+
+            if (!keyExists) {
+              updated.push(['BOUNDARY_PROXY_URL', `http://localhost:${content.port}`])
+            }
+            return updated
+          })
           break
       }
     }

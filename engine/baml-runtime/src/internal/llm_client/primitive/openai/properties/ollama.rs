@@ -64,6 +64,11 @@ pub fn resolve_properties(
         api_key: None,
         headers,
         properties,
+        proxy_url: ctx
+            .env
+            .get("BOUNDARY_PROXY_URL")
+            .map(|s| Some(s.to_string()))
+            .unwrap_or(None),
         query_params: Default::default(),
     })
 }

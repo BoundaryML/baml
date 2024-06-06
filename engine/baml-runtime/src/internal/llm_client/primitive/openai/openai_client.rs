@@ -218,9 +218,23 @@ impl RequestBuilder for OpenAIClient {
         stream: bool,
     ) -> reqwest::RequestBuilder {
         let mut req = self.client.post(if prompt.is_left() {
-            format!("{}/completions", self.properties.base_url)
+            format!(
+                "{}/completions",
+                self.properties
+                    .proxy_url
+                    .as_ref()
+                    .unwrap_or(&self.properties.base_url)
+                    .clone()
+            )
         } else {
-            format!("{}/chat/completions", self.properties.base_url)
+            format!(
+                "{}/chat/completions",
+                self.properties
+                    .proxy_url
+                    .as_ref()
+                    .unwrap_or(&self.properties.base_url)
+                    .clone()
+            )
         });
 
         if !self.properties.query_params.is_empty() {
@@ -233,6 +247,8 @@ impl RequestBuilder for OpenAIClient {
         if let Some(key) = &self.properties.api_key {
             req = req.bearer_auth(key)
         }
+        req = req.header("baml-original-url", self.properties.base_url.as_str());
+
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
         match prompt {

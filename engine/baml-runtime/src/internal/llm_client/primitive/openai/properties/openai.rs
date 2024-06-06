@@ -30,7 +30,6 @@ pub fn resolve_properties(
         .remove("default_role")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "system".to_string());
-
     let base_url = properties
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
@@ -69,6 +68,13 @@ pub fn resolve_properties(
         api_key,
         headers,
         properties,
+        // Replace proxy_url with code below to disable proxying
+        // proxy_url: None,
+        proxy_url: ctx
+            .env
+            .get("BOUNDARY_PROXY_URL")
+            .map(|s| Some(s.to_string()))
+            .unwrap_or(None),
         query_params: Default::default(),
     })
 }

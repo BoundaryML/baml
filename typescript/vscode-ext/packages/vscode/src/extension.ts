@@ -17,6 +17,7 @@ let client: LanguageClient
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml-diagnostics')
 const LANG_NAME = 'Baml'
+
 let timeout: NodeJS.Timeout | undefined
 let statusBarItem: vscode.StatusBarItem
 let server: any
@@ -246,17 +247,45 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand('baml.openBamlPanel')
   }
 
-  const server = express()
-  server.use(cors())
-  server.use(
-    '/',
+  const app = require('express')()
+  app.use(cors())
+  var port: number
+  const server = app.listen(0, () => {
+    port = server.address().port
+    WebPanelView.currentPanel?.postMessage('port_number', {
+      port: port,
+    })
+  })
+
+  app.use(
     createProxyMiddleware({
-      target: 'https://api.anthropic.com',
       changeOrigin: true,
+      router: (req) => {
+        // Extract the original target URL from the custom header
+        const originalUrl = req.headers['baml-original-url']
+
+        if (typeof originalUrl === 'string') {
+          delete req.headers['baml-original-url']
+          req.headers['origin'] = `http://localhost:${port}`
+          return originalUrl
+        } else {
+          throw new Error('baml-original-url header is missing or invalid')
+        }
+      },
+      logger: console,
+      on: {
+        proxyRes: (proxyRes, req, res) => {
+          proxyRes.headers['Access-Control-Allow-Origin'] = '*'
+        },
+        error: (error) => {
+          console.error('proxy error:', error)
+        },
+      },
     }),
   )
 
-  server.listen(8195)
+  // Add a catch-all route to handle 404 errors
+
   // TODO: Reactivate linter.
   // runDiagnostics();
 }
