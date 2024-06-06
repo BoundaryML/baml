@@ -22,7 +22,7 @@ const defaultEnvKeyValues: [string, string][] = (() => {
   } else {
     console.log('Not running in a Next.js environment, set default value')
     // Not running in a Next.js environment, set default value
-    return [['BOUNDARY_PROXY_URL', 'http://localhost:8195']]
+    return [['BOUNDARY_PROXY_URL', 'http://localhost:0000']]
   }
 })()
 
@@ -561,9 +561,6 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             if (!keyExists) {
               updated.push(['BOUNDARY_PROXY_URL', `http://localhost:${content.port}`])
             }
-
-            console.log(`Setting port number to ${content.port}`)
-            console.log(`Updated env key values: ${updated}`)
             return updated
           })
           break

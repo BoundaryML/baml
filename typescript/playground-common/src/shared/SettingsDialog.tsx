@@ -76,10 +76,6 @@ const envvarsAtom = atom((get) => {
     return { key, value, type: 'user', index }
   })
 
-  envVars.forEach((envVar) => {
-    console.log(`Key: ${envVar.key}, Value: ${envVar.value}, Type: ${envVar.type}, Index: ${envVar.index}`)
-  })
-
   // Add required but unset envvars
   const requiredButUnset = requiredVarNamesCopy
     .filter((k) => !envVars.some(({ key }) => k === key))
@@ -289,20 +285,6 @@ export const SettingsDialog: React.FC = () => {
               <PlusIcon size={14} /> <div>Add item</div>
             </Button>
           </div>
-
-          {/* {envvars.some((t) => t.type === 'config') && (
-            <div className='flex flex-col gap-1'>
-              <span className='text-sm text-vscode-foreground'>Internal vars</span>
-              <span className='text-xs text-vscode-descriptionForeground'>
-                Some providers do not support client-side web calls, so we proxy the calls.
-              </span>
-              {envvars
-                .filter((t) => t.type === 'config')
-                .map((envvar) => (
-                  <EnvvarInput key={envvar.index} envvar={envvar} />
-                ))}
-            </div>
-          )} */}
         </div>
         <DialogFooter className='mt-auto'>
           <Button

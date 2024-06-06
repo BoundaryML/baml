@@ -21,7 +21,6 @@ const LANG_NAME = 'Baml'
 let timeout: NodeJS.Timeout | undefined
 let statusBarItem: vscode.StatusBarItem
 let server: any
-var port: number
 
 function scheduleDiagnostics(): void {
   if (timeout) {
@@ -178,10 +177,6 @@ export function activate(context: vscode.ExtensionContext) {
           properties: {},
         })
       }
-      // console.info(`Port number: ${port}`)
-      // WebPanelView.currentPanel?.postMessage('port_number', {
-      //   port: port,
-      // })
 
       WebPanelView.currentPanel?.postMessage('select_function', {
         root_path: 'default',
@@ -254,10 +249,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   const app = require('express')()
   app.use(cors())
-
+  var port: number
   const server = app.listen(0, () => {
     port = server.address().port
-    console.log('Server started on port', port)
     WebPanelView.currentPanel?.postMessage('port_number', {
       port: port,
     })
@@ -269,7 +263,6 @@ export function activate(context: vscode.ExtensionContext) {
       router: (req) => {
         // Extract the original target URL from the custom header
         const originalUrl = req.headers['baml-original-url']
-        console.log('Original URL:', originalUrl)
 
         if (typeof originalUrl === 'string') {
           delete req.headers['baml-original-url']
