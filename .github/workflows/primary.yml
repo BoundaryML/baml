@@ -92,9 +92,12 @@ jobs:
       - name: Install aarch64-linux-gnu
         if: matrix._.target == 'aarch64-unknown-linux-gnu'
         run: sudo apt-get install gcc-aarch64-linux-gnu -y
-      - name: Build Rust
-        run: cargo build --release --target ${{ matrix._.target }}
-        working-directory: engine
+
+      # This doesn't work aarch64, so we build each target separately
+      # - name: Build Rust
+      #   run: cargo build --release --target ${{ matrix._.target }}
+      #   working-directory: engine
+
       # Build Node
       - name: PNPM Build
         run: ${{ matrix._.node_build }}
