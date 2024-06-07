@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v4
         with:
           version: 9.0.6
           package_json_file: engine/language_client_typescript/package.json
@@ -107,7 +107,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: setup pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v4
         with:
           version: 9.0.6
           package_json_file: engine/language_client_typescript/package.json
@@ -154,7 +154,7 @@ jobs:
   #   steps:
   #     - uses: actions/checkout@v4
   #     - name: setup pnpm
-  #       uses: pnpm/action-setup@v3
+  #       uses: pnpm/action-setup@v4
   #       with:
   #         version: 9.0.6
   #         package_json_file: engine/language_client_typescript/package.json
@@ -222,7 +222,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: setup pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v4
         with:
           version: 9.0.6
           package_json_file: engine/language_client_typescript/package.json
