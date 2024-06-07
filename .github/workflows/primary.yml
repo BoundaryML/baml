@@ -88,6 +88,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
+      - name: Build Rust
+        run: cargo build --release --target ${{ matrix._.target }}
+        working-directory: engine
       # Build Node
       - name: PNPM Build
         run: ${{ matrix._.node_build }}
