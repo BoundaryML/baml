@@ -13,9 +13,10 @@ import {
   EventListener,
   FunctionPanel,
   FunctionSelector,
-  LibraryGrid,
   //useSelections,
 } from '@baml/playground-common'
+
+import LibraryGrid from '@baml/playground-common/shared/LibraryGrid'
 
 import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 import { Separator } from '@baml/playground-common/components/ui/separator'
@@ -351,11 +352,9 @@ const LibraryView = () => {
                 variant={'ghost'}
                 className='flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foregrounde'
               >
+                {' '}
                 <span className='whitespace-nowrap'>X</span>
               </Button>
-              <div className='relative flex justify-center items-center mx-auto gap-2 py-2 text-lg font-semibold text-white'>
-                Basics of BAML
-              </div>
             </div>
             <LibraryGrid />
           </div>

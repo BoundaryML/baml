@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
 import { Button } from '../components/ui/button'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 const CodeGridPreview: React.FC = () => {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
@@ -17,7 +15,7 @@ const CodeGridPreview: React.FC = () => {
         api_key env.OPENAI_API_KEY
       }
     } `,
-      alt: 'Building a client',
+      alt: 'Building a chatbot',
       fileUrl: 'https://example.com/code/client.llm',
     },
     { code: `const b = 2;`, alt: 'Code 2', fileUrl: 'https://example.com/code/code2.js' },
@@ -30,45 +28,43 @@ const CodeGridPreview: React.FC = () => {
   ]
 
   return (
-    <div className='grid gap-4 p-4' style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-      {codeSnippets.map((snippet, idx) => (
-        <div key={idx} className='flex flex-col items-center p-2'>
-          <div className='w-full p-2 mt-2 text-center text-white'>
-            <a href={snippet.fileUrl} target='_blank' rel='noopener noreferrer'>
-              {snippet.alt}
-            </a>
-          </div>
+    <div>
+      {' '}
+      <div className='relative flex justify-center items-center mx-auto gap-2 text-lg font-semibold text-white'>
+        Basics of BAML
+      </div>
+      <div className='grid gap-4 p-4' style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+        {codeSnippets.map((snippet, idx) => (
+          <div key={idx} className='flex flex-col items-center p-2'>
+            <div className='w-full p-2 mt-2 text-center text-white'>{snippet.alt}</div>
 
-          <div
-            className='relative w-full cursor-pointer'
-            style={{ paddingBottom: '150%' }} // Maintain aspect ratio 2:3
-            onClick={() => setExpandedIndex(idx === expandedIndex ? null : idx)}
-          >
             <div
-              className={`absolute top-0 left-0 w-full h-full p-2 overflow-auto border rounded-md bg-black text-white ${
-                idx === expandedIndex ? 'z-50' : ''
-              }`}
-              style={
-                idx === expandedIndex
-                  ? {
-                      position: 'fixed',
-                      top: '10%',
-                      left: '10%',
-                      right: '10%',
-                      bottom: '10%',
-                      maxHeight: '80vh',
-                      maxWidth: '80vw',
-                    }
-                  : {}
-              }
+              className='relative w-full cursor-pointer'
+              style={{ paddingBottom: '150%' }} // Maintain aspect ratio 2:3
+              onClick={() => setExpandedIndex(idx === expandedIndex ? null : idx)}
             >
-              <SyntaxHighlighter language='rust' style={tomorrow}>
-                {snippet.code}
-              </SyntaxHighlighter>
+              <div
+                className={`absolute top-0 left-0 w-full h-full p-2 overflow-auto border rounded-md bg-black text-white ${
+                  idx === expandedIndex ? 'z-50' : ''
+                }`}
+                style={
+                  idx === expandedIndex
+                    ? {
+                        position: 'fixed',
+                        top: '10%',
+                        left: '10%',
+                        right: '10%',
+                        bottom: '10%',
+                        maxHeight: '80vh',
+                        maxWidth: '80vw',
+                      }
+                    : {}
+                }
+              ></div>
             </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }
@@ -96,7 +92,10 @@ const LibraryGrid: React.FC = () => {
         </ResizablePanelGroup>
       </TooltipProvider>
 
-      <Button onClick={() => window.open('https://docs.boundaryml.com', '_blank', 'noopener,noreferrer')}>
+      <Button
+        className='align-middle self-center mt-4'
+        onClick={() => window.open('https://docs.boundaryml.com', '_blank', 'noopener,noreferrer')}
+      >
         See full docs here!
       </Button>
     </div>
