@@ -33,8 +33,9 @@ struct BamlRuntimeFfi {
 impl Drop for BamlRuntimeFfi {
     fn drop(&mut self) {
         use baml_runtime::runtime_interface::ExperimentalTracingInterface;
-        if let Err(e) = self.inner.flush() {
-            log::error!("Error while flushing BAML log events: {:?}", e);
+        match self.inner.flush() {
+            Ok(_) => log::info!("Flushed BAML log events"),
+            Err(e) => log::error!("Error while flushing BAML log events: {:?}", e),
         }
     }
 }
