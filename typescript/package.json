@@ -24,5 +24,8 @@
     "patchedDependencies": {
       "vite-plugin-wasm@3.3.0": "patches/vscode-inline-wasm-as-base64.patch"
     }
+  },
+  "dependencies": {
+    "react-slick": "^0.30.2"
   }
 }

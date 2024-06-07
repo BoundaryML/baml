@@ -18,15 +18,24 @@ import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from './shared/S
 import CustomErrorBoundary from './utils/ErrorFallback'
 import 'jotai-devtools/styles.css'
 import { SettingsIcon } from 'lucide-react'
-
+import { showSnippetsAtom } from './shared/Snippets'
 function App() {
   const setShowSettings = useSetAtom(showSettingsAtom)
+  const setShowSnippets = useSetAtom(showSnippetsAtom)
   return (
     <CustomErrorBoundary>
       <DevTools />
       <Suspense fallback={<div>Loading...</div>}>
         <EventListener>
           <div className='absolute z-10 flex flex-row items-center justify-center gap-1 right-1 top-2 text-end'>
+            <Button
+              onClick={() => {
+                setShowSnippets(true)
+              }}
+            >
+              BAML Snippets
+            </Button>
+
             <VSCodeLink href='https://docs.boundaryml.com'>Docs</VSCodeLink>
             <ShowSettingsButton buttonClassName='h-10 w-10 bg-transparent p-1' iconClassName='h-7 w-7' />
           </div>

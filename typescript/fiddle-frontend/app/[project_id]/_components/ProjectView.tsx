@@ -15,9 +15,6 @@ import {
   FunctionSelector,
   //useSelections,
 } from '@baml/playground-common'
-
-import LibraryGrid from '@baml/playground-common/shared/LibraryGrid'
-
 import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 import { Separator } from '@baml/playground-common/components/ui/separator'
 import clsx from 'clsx'
@@ -38,7 +35,6 @@ import {
   PROJECT_ROOT,
   currentEditorFilesAtom,
   exploreProjectsOpenAtom,
-  libraryOpenAtom,
   productTourDoneAtom,
   unsavedChangesAtom,
 } from '../_atoms/atoms'
@@ -50,7 +46,6 @@ import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from '@baml/play
 import { SettingsIcon } from 'lucide-react'
 import FileViewer from './Tree/FileViewer'
 import { Toaster } from '@/components/ui/toaster'
-import { library } from 'webpack'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(updateFileAtom)
@@ -82,10 +77,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const [description, setDescription] = useState(project.description)
   const descriptionInputRef = useRef(null)
   const setOpenExplorePanel = useSetAtom(exploreProjectsOpenAtom)
-  const [libraryIsOpen, setLibraryOpen] = useAtom(libraryOpenAtom)
-  // const [libraryIsOpen, setLibraryOpen] = useAtom(libraryOpenAtom)
-
-  const resizablePanelSizeConstraints = libraryIsOpen ? { minSize: 500, maxSize: 500 } : {}
 
   return (
     // firefox wont apply the background color for some reason so we forcefully set it.
@@ -118,7 +109,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
         )}
 
         <ResizableHandle className=' bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder' />
-        <ResizablePanel defaultSize={88} {...resizablePanelSizeConstraints}>
+        <ResizablePanel defaultSize={88}>
           <div className='flex-col w-full h-full font-sans bg-background dark:bg-vscode-panel-background'>
             <div className='flex flex-row items-center gap-x-12 border-b-[1px] border-vscode-panel-border min-h-[40px]'>
               <div className='flex flex-col items-center h-full py-1 tour-title whitespace-nowrap'>
@@ -335,73 +326,68 @@ const DummyHydrate = ({ files }: { files: EditorFile[] }) => {
 }
 
 const PlaygroundView = () => {
-  const [isLibraryOpen] = useAtom(libraryOpenAtom)
-
-  return <>{isLibraryOpen ? <LibraryView /> : <DefaultPlaygroundView />}</>
-}
-
-const LibraryView = () => {
-  return (
-    <CustomErrorBoundary>
-      <Suspense fallback={<div>Loading...</div>}>
-        <EventListener>
-          <SettingsDialog />
-          <div className='relative flex flex-col w-full gap-4 pr-0'>
-            <div className='relative flex flex-row w-full gap-4 pr-0'>
-              <Button
-                variant={'ghost'}
-                className='flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foregrounde'
-              >
-                {' '}
-                <span className='whitespace-nowrap'>X</span>
-              </Button>
-            </div>
-            <LibraryGrid />
-          </div>
-          <InitialTour />
-          <PostTestRunTour />
-        </EventListener>
-      </Suspense>
-    </CustomErrorBoundary>
-  )
-}
-
-const DefaultPlaygroundView = () => {
   const setShowSettings = useSetAtom(showSettingsAtom)
-  const [libraryIsOpen, setLibraryOpen] = useAtom(libraryOpenAtom)
-  // The rest of the existing DefaultPlaygroundView component logic...
-  return (
-    <CustomErrorBoundary>
-      <Suspense fallback={<div>Loading...</div>}>
-        <EventListener>
-          <SettingsDialog />
-          <div className='relative flex flex-col w-full gap-2 pr-0'>
-            <div className='relative flex flex-row gap-2'>
-              <FunctionSelector />
+  // const [parserDb] = useAtom(currentParserDbAtom)
+  // usePlaygroundListener()
+  // const testRunOutput = useAtomValue(testRunOutputAtom)
 
-              <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
-                <Button
-                  variant={'ghost'}
-                  className='h-full py-1 gap-x-1'
-                  onClick={() => {
-                    setLibraryOpen(!libraryIsOpen)
-                  }}
-                >
-                  <a className='text-blue-500'>Docs</a>
-                </Button>
-                <ShowSettingsButton
-                  buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
-                  iconClassName='h-5'
-                />
+  // useEffect(() => {
+  //   if (!parserDb) {
+  //     return
+  //   }
+  //   const newParserDb = { ...parserDb }
+
+  //   window.postMessage({
+  //     command: 'setDb',
+  //     content: [[BAML_DIR, newParserDb]],
+  //   })
+  // }, [parserDb])
+
+  // useEffect(() => {
+  //   if (testRunOutput) {
+  //     window.postMessage({
+  //       command: 'test-results',
+  //       content: testRunOutput.testState,
+  //     })
+  //     window.postMessage({
+  //       command: 'test-stdout',
+  //       content: testRunOutput.outputLogs.join('\n'),
+  //     })
+  //   }
+  // }, [testRunOutput])
+  // return (
+  //   <>
+  //     <CustomErrorBoundary>TODO, implement playground view</CustomErrorBoundary>
+  //   </>
+  // )
+
+  //<TestToggle />
+  return (
+    <>
+      <CustomErrorBoundary>
+        <Suspense fallback={<div>Loading...</div>}>
+          <EventListener>
+            <SettingsDialog />
+            <div className='relative flex flex-col w-full gap-2 pr-0'>
+              <div className='relative flex flex-row gap-2'>
+                <FunctionSelector />
+                <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
+                  <ShowSettingsButton
+                    buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
+                    iconClassName='h-5'
+                  />
+                </div>
               </div>
+
+              {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
+              <FunctionPanel />
             </div>
-            <FunctionPanel />
-          </div>
-          <InitialTour />
-          <PostTestRunTour />
-        </EventListener>
-      </Suspense>
-    </CustomErrorBoundary>
+            <InitialTour />
+            <PostTestRunTour />
+          </EventListener>
+        </Suspense>
+      </CustomErrorBoundary>
+    </>
   )
 }
 
