@@ -175,7 +175,7 @@ impl BamlValueWithFlags {
                     .into_iter()
                     .collect::<Vec<_>>()
                     .join(" | ");
-                format!("List[{inner}]")
+                format!("List[{}:{inner}]", i.len())
             }
             BamlValueWithFlags::Map(_, _) => "Map".to_string(),
             BamlValueWithFlags::Enum(n, _) => format!("Enum {n}"),

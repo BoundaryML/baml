@@ -1,3 +1,4 @@
+mod schema;
 #[cfg(test)]
 mod tests;
 
@@ -24,6 +25,11 @@ pub fn from_str(
 
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.
     let value = jsonish::parse(raw_string, jsonish::ParseOptions::default())?;
+    let schema = schema::from_jsonish_value(&value, None);
+
+    // Determine the best way to get the desired schema from the parsed schema.
+
+    // Pick the schema that is the most specific.
 
     log::info!("Parsed value: {:?}", value);
 
