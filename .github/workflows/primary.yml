@@ -59,9 +59,6 @@ jobs:
     runs-on: ${{ matrix._.host }}
     steps:
       - uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
       # Install python set up
       - uses: actions/setup-python@v5
         with:
@@ -87,7 +84,10 @@ jobs:
       - name: PNPM Install
         run: pnpm install --frozen-lockfile
         working-directory: engine/language_client_typescript
-      
+      # Rust caching
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
       # Build Node
       - name: PNPM Build
         run: ${{ matrix._.node_build }}
