@@ -41,6 +41,7 @@ pub(crate) struct PythonStreamTypes<'ir> {
 /// The Python class corresponding to Partial<TypeDefinedInBaml>
 struct PartialPythonClass<'ir> {
     name: &'ir str,
+    dynamic: bool,
     // the name, and the type of the field
     fields: Vec<(&'ir str, String)>,
 }
@@ -128,6 +129,7 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
     fn from(c: ClassWalker<'ir>) -> PartialPythonClass<'ir> {
         PartialPythonClass {
             name: c.name(),
+            dynamic: c.item.attributes.get("dynamic_type").is_some(),
             fields: c
                 .item
                 .elem
