@@ -2,7 +2,7 @@
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ bundle add baml sorbet-runtime sorbet-coerce sorbet-struct-comparable
+#  $ bundle add baml sorbet-runtime sorbet-struct-comparable
 #
 ###############################################################################
 
@@ -14,7 +14,6 @@
 # formatter:off
 # typed: false
 require "baml"
-require "sorbet-coerce"
 require "sorbet-runtime"
 
 require_relative "inlined"
@@ -184,6 +183,26 @@ module Baml
         "DescribeImage4",
         {
           "classWithImage" => classWithImage,"img2" => img2,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: Baml::Types::DynamicClassOne,
+      ).returns(Baml::Types::DynamicClassTwo)
+      
+    }
+    def DynamicFunc(
+        input:
+    )
+      raw = @runtime.call_function(
+        "DynamicFunc",
+        {
+          "input" => input,
         },
         @ctx_manager,
       )
@@ -604,6 +623,26 @@ module Baml
         "GetQuery",
         {
           "query" => query,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(Baml::Types::DynamicOutput)
+      
+    }
+    def MyFunc(
+        input:
+    )
+      raw = @runtime.call_function(
+        "MyFunc",
+        {
+          "input" => input,
         },
         @ctx_manager,
       )
@@ -1074,8 +1113,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(Baml::Types::Category)],
-        final_coerce: TypeCoerce[Baml::Types::Category],
         ctx_manager: @ctx_manager
       )
     end
@@ -1097,8 +1134,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(Baml::Types::Category)],
-        final_coerce: TypeCoerce[Baml::Types::Category],
         ctx_manager: @ctx_manager
       )
     end
@@ -1120,8 +1155,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(Baml::Types::Category)],
-        final_coerce: TypeCoerce[Baml::Types::Category],
         ctx_manager: @ctx_manager
       )
     end
@@ -1143,8 +1176,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1166,8 +1197,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1189,8 +1218,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1212,8 +1239,27 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: Baml::Types::DynamicClassOne,
+      ).returns(Baml::BamlStream[Baml::Types::DynamicClassTwo])
+    }
+    def DynamicFunc(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "DynamicFunc",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::DynamicClassTwo, Baml::Types::DynamicClassTwo].new(
+        ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
     end
@@ -1235,8 +1281,6 @@ module Baml
       )
       Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T::Array[T.nilable(String)]],
-        final_coerce: TypeCoerce[T::Array[String]],
         ctx_manager: @ctx_manager
       )
     end
@@ -1258,8 +1302,6 @@ module Baml
       )
       Baml::BamlStream[T::Array[Baml::PartialTypes::Person], T::Array[Baml::Types::Person]].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T::Array[Baml::PartialTypes::Person]],
-        final_coerce: TypeCoerce[T::Array[Baml::Types::Person]],
         ctx_manager: @ctx_manager
       )
     end
@@ -1281,8 +1323,6 @@ module Baml
       )
       Baml::BamlStream[Baml::PartialTypes::Resume, Baml::Types::Resume].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[Baml::PartialTypes::Resume],
-        final_coerce: TypeCoerce[Baml::Types::Resume],
         ctx_manager: @ctx_manager
       )
     end
@@ -1304,8 +1344,6 @@ module Baml
       )
       Baml::BamlStream[Baml::PartialTypes::Resume, Baml::Types::Resume].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[Baml::PartialTypes::Resume],
-        final_coerce: TypeCoerce[Baml::Types::Resume],
         ctx_manager: @ctx_manager
       )
     end
@@ -1327,8 +1365,6 @@ module Baml
       )
       Baml::BamlStream[Baml::PartialTypes::ClassOptionalOutput, T.nilable(Baml::Types::ClassOptionalOutput)].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[Baml::PartialTypes::ClassOptionalOutput],
-        final_coerce: TypeCoerce[T.nilable(Baml::Types::ClassOptionalOutput)],
         ctx_manager: @ctx_manager
       )
     end
@@ -1350,8 +1386,6 @@ module Baml
       )
       Baml::BamlStream[Baml::PartialTypes::ClassOptionalOutput2, T.nilable(Baml::Types::ClassOptionalOutput2)].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[Baml::PartialTypes::ClassOptionalOutput2],
-        final_coerce: TypeCoerce[T.nilable(Baml::Types::ClassOptionalOutput2)],
         ctx_manager: @ctx_manager
       )
     end
@@ -1373,8 +1407,6 @@ module Baml
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::Types::EnumOutput)], T::Array[Baml::Types::EnumOutput]].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T::Array[T.nilable(Baml::Types::EnumOutput)]],
-        final_coerce: TypeCoerce[T::Array[Baml::Types::EnumOutput]],
         ctx_manager: @ctx_manager
       )
     end
@@ -1396,8 +1428,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(Baml::Types::EnumOutput), Baml::Types::EnumOutput].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(Baml::Types::EnumOutput)],
-        final_coerce: TypeCoerce[Baml::Types::EnumOutput],
         ctx_manager: @ctx_manager
       )
     end
@@ -1419,8 +1449,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1442,8 +1470,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(T::Boolean), T::Boolean].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(T::Boolean)],
-        final_coerce: TypeCoerce[T::Boolean],
         ctx_manager: @ctx_manager
       )
     end
@@ -1465,8 +1491,6 @@ module Baml
       )
       Baml::BamlStream[Baml::PartialTypes::TestOutputClass, Baml::Types::TestOutputClass].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[Baml::PartialTypes::TestOutputClass],
-        final_coerce: TypeCoerce[Baml::Types::TestOutputClass],
         ctx_manager: @ctx_manager
       )
     end
@@ -1488,8 +1512,6 @@ module Baml
       )
       Baml::BamlStream[T::Array[Baml::PartialTypes::TestOutputClass], T::Array[Baml::Types::TestOutputClass]].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T::Array[Baml::PartialTypes::TestOutputClass]],
-        final_coerce: TypeCoerce[T::Array[Baml::Types::TestOutputClass]],
         ctx_manager: @ctx_manager
       )
     end
@@ -1511,8 +1533,6 @@ module Baml
       )
       Baml::BamlStream[Baml::PartialTypes::TestClassWithEnum, Baml::Types::TestClassWithEnum].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[Baml::PartialTypes::TestClassWithEnum],
-        final_coerce: TypeCoerce[Baml::Types::TestClassWithEnum],
         ctx_manager: @ctx_manager
       )
     end
@@ -1534,8 +1554,6 @@ module Baml
       )
       Baml::BamlStream[Baml::PartialTypes::TestOutputClassNested, Baml::Types::TestOutputClassNested].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[Baml::PartialTypes::TestOutputClassNested],
-        final_coerce: TypeCoerce[Baml::Types::TestOutputClassNested],
         ctx_manager: @ctx_manager
       )
     end
@@ -1557,8 +1575,6 @@ module Baml
       )
       Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T::Array[T.nilable(String)]],
-        final_coerce: TypeCoerce[T::Array[String]],
         ctx_manager: @ctx_manager
       )
     end
@@ -1580,8 +1596,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(Baml::Types::TestEnum), Baml::Types::TestEnum].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(Baml::Types::TestEnum)],
-        final_coerce: TypeCoerce[Baml::Types::TestEnum],
         ctx_manager: @ctx_manager
       )
     end
@@ -1603,8 +1617,6 @@ module Baml
       )
       Baml::BamlStream[Baml::PartialTypes::TestClassAlias, Baml::Types::TestClassAlias].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[Baml::PartialTypes::TestClassAlias],
-        final_coerce: TypeCoerce[Baml::Types::TestClassAlias],
         ctx_manager: @ctx_manager
       )
     end
@@ -1626,8 +1638,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1649,8 +1659,6 @@ module Baml
       )
       Baml::BamlStream[Baml::PartialTypes::RaysData, Baml::Types::RaysData].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[Baml::PartialTypes::RaysData],
-        final_coerce: TypeCoerce[Baml::Types::RaysData],
         ctx_manager: @ctx_manager
       )
     end
@@ -1672,8 +1680,6 @@ module Baml
       )
       Baml::BamlStream[Baml::PartialTypes::OrderInfo, Baml::Types::OrderInfo].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[Baml::PartialTypes::OrderInfo],
-        final_coerce: TypeCoerce[Baml::Types::OrderInfo],
         ctx_manager: @ctx_manager
       )
     end
@@ -1695,8 +1701,27 @@ module Baml
       )
       Baml::BamlStream[Baml::PartialTypes::SearchParams, Baml::Types::SearchParams].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[Baml::PartialTypes::SearchParams],
-        final_coerce: TypeCoerce[Baml::Types::SearchParams],
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[Baml::Types::DynamicOutput])
+    }
+    def MyFunc(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "MyFunc",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::DynamicOutput, Baml::Types::DynamicOutput].new(
+        ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
     end
@@ -1718,8 +1743,6 @@ module Baml
       )
       Baml::BamlStream[T::Array[Baml::PartialTypes::OptionalTest_ReturnType], T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)]].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T::Array[Baml::PartialTypes::OptionalTest_ReturnType]],
-        final_coerce: TypeCoerce[T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)]],
         ctx_manager: @ctx_manager
       )
     end
@@ -1741,8 +1764,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1764,8 +1785,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1787,8 +1806,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1810,8 +1827,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1833,8 +1848,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1856,8 +1869,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1879,8 +1890,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1902,8 +1911,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1925,8 +1932,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1948,8 +1953,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1971,8 +1974,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -1994,8 +1995,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -2017,8 +2016,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -2040,8 +2037,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -2063,8 +2058,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -2086,8 +2079,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -2109,8 +2100,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -2132,8 +2121,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -2155,8 +2142,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -2178,8 +2163,6 @@ module Baml
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[T.nilable(String)],
-        final_coerce: TypeCoerce[String],
         ctx_manager: @ctx_manager
       )
     end
@@ -2201,8 +2184,6 @@ module Baml
       )
       Baml::BamlStream[Baml::PartialTypes::UnionTest_ReturnType, Baml::Types::UnionTest_ReturnType].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[Baml::PartialTypes::UnionTest_ReturnType],
-        final_coerce: TypeCoerce[Baml::Types::UnionTest_ReturnType],
         ctx_manager: @ctx_manager
       )
     end

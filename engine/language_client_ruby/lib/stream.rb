@@ -26,13 +26,9 @@ module Baml
 
     def initialize(
       ffi_stream:,
-      partial_coerce:,
-      final_coerce:,
       ctx_manager:
     )
       @ffi_stream = ffi_stream
-      @partial_coerce = partial_coerce
-      @final_coerce = final_coerce
       @ctx_manager = ctx_manager
 
       @final_response = nil
@@ -45,12 +41,13 @@ module Baml
     #
     # @yieldparam [PartialType] event the parsed partial response
     # @return [BamlStream] self
+    sig { params(block: T.proc.params(event: PartialType).void).returns(BamlStream)}
     def each(&block)
       # Implementing this and include-ing Enumerable allows users to treat this as a Ruby
       # collection: https://ruby-doc.org/3.1.6/Enumerable.html#module-Enumerable-label-Usage
       if @final_response == nil
         @final_response = @ffi_stream.done(@ctx_manager) do |event|
-          block.call @partial_coerce.new.from(event.parsed_using_types(Baml::PartialTypes))
+          block.call event.parsed_using_types(Baml::PartialTypes)
         end
       end
 
@@ -67,7 +64,7 @@ module Baml
         @final_response = @ffi_stream.done(@ctx_manager)
       end
 
-      @final_coerce.new.from(@final_response.parsed_using_types(Baml::Types))
+      @final_response.parsed_using_types(Baml::Types)
     end
   end
 end

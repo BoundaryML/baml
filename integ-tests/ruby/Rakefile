@@ -3,7 +3,7 @@ require "rake/testtask"
 task :generate do
   sh "ruby", \
      "-I../../engine/language_client_ruby/lib", \
-     "../../engine/language_client_ruby/bin/baml-cli.rb", \
+     "../../engine/language_client_ruby/exe/baml-cli", \
      "generate", "--from", "../baml_src"
 end
 

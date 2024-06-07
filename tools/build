@@ -269,7 +269,7 @@ case "$_path" in
   /integ-tests/ruby | /integ-tests/ruby/* )
     command="rake generate"
     if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && infisical run -- rake test"
+      command="${command} && infisical run --env=dev -- rake test"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \

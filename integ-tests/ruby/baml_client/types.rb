@@ -2,7 +2,7 @@
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ bundle add baml sorbet-runtime sorbet-coerce sorbet-struct-comparable
+#  $ bundle add baml sorbet-runtime sorbet-struct-comparable
 #
 ###############################################################################
 
@@ -13,8 +13,8 @@
 # rubocop: disable
 # formatter:off
 # typed: false
-require "sorbet-struct-comparable"
 require "sorbet-runtime"
+require "sorbet-struct-comparable"
 
 module Baml
   
@@ -137,6 +137,7 @@ module Baml
     class ClassWithImage < T::Struct; end
     class DynamicClassOne < T::Struct; end
     class DynamicClassTwo < T::Struct; end
+    class DynamicOutput < T::Struct; end
     class Education < T::Struct; end
     class Email < T::Struct; end
     class Event < T::Struct; end
@@ -179,13 +180,15 @@ module Baml
     end
     class DynamicClassOne < T::Struct
       include T::Struct::ActsAsComparable
-      const :hi, String
     end
     class DynamicClassTwo < T::Struct
       include T::Struct::ActsAsComparable
       const :hi, String
       const :some_class, Baml::Types::SomeClassNestedDynamic
       const :status, Baml::Types::DynEnumOne
+    end
+    class DynamicOutput < T::Struct
+      include T::Struct::ActsAsComparable
     end
     class Education < T::Struct
       include T::Struct::ActsAsComparable

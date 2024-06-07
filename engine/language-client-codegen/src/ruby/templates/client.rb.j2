@@ -1,6 +1,5 @@
 # typed: false
 require "baml"
-require "sorbet-coerce"
 require "sorbet-runtime"
 
 require_relative "inlined"
@@ -102,8 +101,6 @@ module Baml
       )
       Baml::BamlStream[{{fn.partial_return_type}}, {{fn.return_type}}].new(
         ffi_stream: raw,
-        partial_coerce: TypeCoerce[{{fn.partial_return_type}}],
-        final_coerce: TypeCoerce[{{fn.return_type}}],
         ctx_manager: @ctx_manager
       )
     end
