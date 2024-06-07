@@ -13,5 +13,4 @@ create_rust_makefile("ruby_ffi") do |r|
   r.env = {
     "MACOSX_DEPLOYMENT_TARGET" => "10.13",
   }
-  #r.profile = ENV.fetch("RB_SYS_CARGO_PROFILE", :dev).to_sym
 end
