@@ -1,31 +1,7 @@
 {
   "folders": [
     {
-      "path": ".github"
-    },
-    {
-      "path": "engine"
-    },
-    {
-      "path": "fiddle"
-    },
-    {
-      "path": "integ-tests"
-    },
-    {
-      "name": "typescript",
-      "path": "typescript"
-    },
-    {
-      "name": "Docs",
-      "path": "docs"
-    },
-    {
-      "path": "tools"
-    },
-    {
-      "name": "release (Release Tools)",
-      "path": "release"
+      "path": "."
     }
   ],
   "settings": {
@@ -34,7 +10,7 @@
       "editor.formatOnSave": true
     },
     "[python]": {
-      "editor.defaultFormatter": "ms-python.black-formatter"
+      "editor.defaultFormatter": "charliermarsh.ruff"
     },
     "[javascript]": {
       "editor.defaultFormatter": "biomejs.biome"
@@ -79,6 +55,7 @@
       "titleBar.activeBackground": "#8B0002",
       "titleBar.activeForeground": "#FFFBFB"
     },
+    "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome",
   },
   "extensions": {
     "recommendations": [
