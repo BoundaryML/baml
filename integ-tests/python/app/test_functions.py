@@ -313,3 +313,25 @@ async def test_dynamic_class_output():
     output = await b.MyFunc(input="My name is Harrison. My hair is black and I'm 6 feet tall.", baml_options={"tb": tb})
     print(output.model_dump_json())
     assert output.hair_color == "black"
+
+@pytest.mark.asyncio
+async def test_stream_dynamic_class_output():
+    tb = TypeBuilder()
+    tb.DynamicOutput.add_property("hair_color", tb.string())
+    print(tb.DynamicOutput.list_properties())
+    for prop in tb.DynamicOutput.list_properties():
+        print(f"Property: {prop}")
+
+    stream = b.stream.MyFunc(input="My name is Harrison. My hair is black and I'm 6 feet tall.", baml_options={"tb": tb})
+    msgs = []
+    async for msg in stream:
+        print("streamed ", msg)
+        print("streamed ", msg.model_dump())
+        msgs.append(msg)
+    final = await stream.get_final_response()
+
+    assert len(msgs) > 0, "Expected at least one streamed response but got none."
+    print("final ", final)
+    print("final ", final.model_dump())
+    print("final ", final.model_dump_json())
+    assert final.hair_color == "black"
