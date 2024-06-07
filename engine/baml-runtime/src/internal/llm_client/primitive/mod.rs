@@ -9,7 +9,9 @@ use crate::{
     RuntimeContext,
 };
 
-use self::{anthropic::AnthropicClient, openai::OpenAIClient, request::RequestBuilder};
+use self::{
+    anthropic::AnthropicClient, google::GoogleClient, openai::OpenAIClient, request::RequestBuilder,
+};
 
 use super::{
     orchestrator::{
@@ -22,12 +24,14 @@ use super::{
 };
 
 mod anthropic;
+mod google;
 mod openai;
 pub(super) mod request;
 
 pub enum LLMPrimitiveProvider {
     OpenAI(OpenAIClient),
     Anthropic(AnthropicClient),
+    Google(GoogleClient),
 }
 
 macro_rules! match_llm_provider {
@@ -36,6 +40,7 @@ macro_rules! match_llm_provider {
         match $self {
             LLMPrimitiveProvider::OpenAI(client) => client.$method($($args),*).await,
             LLMPrimitiveProvider::Anthropic(client) => client.$method($($args),*).await,
+            LLMPrimitiveProvider::Google(client) => client.$method($($args),*).await,
         }
     };
 
@@ -43,6 +48,7 @@ macro_rules! match_llm_provider {
         match $self {
             LLMPrimitiveProvider::OpenAI(client) => client.$method($($args),*),
             LLMPrimitiveProvider::Anthropic(client) => client.$method($($args),*),
+            LLMPrimitiveProvider::Google(client) => client.$method($($args),*),
         }
     };
 }
@@ -64,6 +70,9 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
             "baml-ollama-chat" | "ollama" => {
                 OpenAIClient::new_ollama(client, ctx).map(LLMPrimitiveProvider::OpenAI)
             }
+            "baml-google-chat" | "google" => {
+                GoogleClient::new(client, ctx).map(LLMPrimitiveProvider::Google)
+            }
             other => {
                 let options = [
                     "openai",
@@ -72,6 +81,7 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                     "azure-openai",
                     "fallback",
                     "round-robin",
+                    "google",
                 ];
                 anyhow::bail!(
                     "Unsupported provider: {}. Available ones are: {}",
@@ -141,6 +151,7 @@ impl std::fmt::Display for LLMPrimitiveProvider {
         match self {
             LLMPrimitiveProvider::OpenAI(_) => write!(f, "OpenAI"),
             LLMPrimitiveProvider::Anthropic(_) => write!(f, "Anthropic"),
+            LLMPrimitiveProvider::Google(_) => write!(f, "Google"),
         }
     }
 }

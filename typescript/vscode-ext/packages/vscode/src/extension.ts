@@ -297,8 +297,6 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.window.showErrorMessage('Failed to BAML localhost server. Contact support for help.')
   }
 
-  // Add a catch-all route to handle 404 errors
-
   // TODO: Reactivate linter.
   // runDiagnostics();
 }
