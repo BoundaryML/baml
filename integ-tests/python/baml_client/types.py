@@ -290,7 +290,7 @@ class UnionTest_ReturnType(BaseModel):
     
     prop1: Union[str, bool]
     prop2: List[Union[float, bool]]
-    prop3: Union[List[float], List[bool]]
+    prop3: Union[List[bool], List[int]]
 
 class WithReasoning(BaseModel):
     

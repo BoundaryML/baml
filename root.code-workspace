@@ -92,7 +92,8 @@
       "charliermarsh.ruff",
       "matangover.mypy",
       "samuelcolvin.jinjahtml",
-      "biomejs.biome"
+      "biomejs.biome",
+      "boundary.baml-extension"
     ]
   }
 }

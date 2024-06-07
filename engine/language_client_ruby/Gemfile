@@ -11,6 +11,7 @@ gem "rake-compiler", "~> 1.2"
 gem "rb_sys", "=0.9.97"
 
 group :test do
+  gem "async"
   gem "minitest-reporters"
   gem "sorbet-coerce"
   gem "sorbet-runtime"

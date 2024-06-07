@@ -20,7 +20,7 @@ impl ToRuby for FieldType {
                 TypeValue::String => "String".to_string(),
                 TypeValue::Null => "NilClass".to_string(),
                 // TODO: Create Baml::Types::Image
-                TypeValue::Image => "Baml::Types::Image".to_string(),
+                TypeValue::Image => "Baml::Image".to_string(),
             },
             FieldType::Union(inner) => format!(
                 // https://sorbet.org/docs/union-types

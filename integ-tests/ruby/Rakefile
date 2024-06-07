@@ -1,0 +1,14 @@
+require "rake/testtask"
+
+task :generate do
+  sh "ruby", \
+     "-I../../engine/language_client_ruby/lib", \
+     "../../engine/language_client_ruby/exe/baml-cli", \
+     "generate", "--from", "../baml_src"
+end
+
+Rake::TestTask.new do |t|
+  t.libs << "../../engine/language_client_ruby/lib"
+  t.libs << "baml_client"
+  t.test_files = FileList["test_*.rb"]
+end

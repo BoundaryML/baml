@@ -182,13 +182,13 @@ export class BamlClient {
   }
   
   async ExtractResume(
-      resume: string,img: Image,
+      resume: string,img?: Image | null,
       __baml_options__?: { tb?: TypeBuilder }
   ): Promise<Resume> {
     const raw = await this.runtime.callFunction(
       "ExtractResume",
       {
-        "resume": resume,"img": img
+        "resume": resume,"img": img?? null
       },
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1038,13 +1038,13 @@ class BamlStreamClient {
   }
   
   ExtractResume(
-      resume: string,img: Image,
+      resume: string,img?: Image | null,
       __baml_options__?: { tb?: TypeBuilder }
   ): BamlStream<(Partial<Resume> | null), Resume> {
     const raw = this.runtime.streamFunction(
       "ExtractResume",
       {
-        "resume": resume,"img": img
+        "resume": resume,"img": img ?? null
       },
       undefined,
       this.ctx_manager.get(),

@@ -7,4 +7,3 @@ dirs = [
 # whitespace can be either preserve, suppress, or minimize
 # suppress and minimize are both too aggressive for us
 whitespace = "preserve"
-escape = "none"

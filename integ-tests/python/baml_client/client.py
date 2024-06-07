@@ -277,7 +277,7 @@ class BamlClient:
     
     async def ExtractResume(
         self,
-        resume: str,img: baml_py.Image,
+        resume: str,img: Optional[baml_py.Image],
         baml_options: BamlCallOptions = {},
     ) -> types.Resume:
       __tb__ = baml_options.get("tb", None)
@@ -1534,7 +1534,7 @@ class BamlStreamClient:
     
     def ExtractResume(
         self,
-        resume: str,img: baml_py.Image,
+        resume: str,img: Optional[baml_py.Image],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.Resume, types.Resume]:
       __tb__ = baml_options.get("tb", None)

@@ -199,7 +199,7 @@ class UnionTest_ReturnType(BaseModel):
     
     prop1: Optional[Union[Optional[str], Optional[bool]]] = None
     prop2: List[Optional[Union[Optional[float], Optional[bool]]]]
-    prop3: Optional[Union[List[Optional[float]], List[Optional[bool]]]] = None
+    prop3: Optional[Union[List[Optional[bool]], List[Optional[int]]]] = None
 
 class WithReasoning(BaseModel):
     

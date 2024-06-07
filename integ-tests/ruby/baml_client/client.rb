@@ -2,7 +2,7 @@
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ bundle add baml sorbet-runtime sorbet-coerce sorbet-struct-comparable
+#  $ bundle add baml sorbet-runtime sorbet-struct-comparable
 #
 ###############################################################################
 
@@ -12,1409 +12,2179 @@
 # frozen_string_literal: true
 # rubocop: disable
 # formatter:off
-# typed: strict
+# typed: false
 require "baml"
 require "sorbet-runtime"
 
+require_relative "inlined"
+require_relative "partial-types"
 require_relative "types"
 
 module Baml
+  @instance = nil
+
+  def self.Client
+    if @instance.nil?
+      @instance = BamlClient.new(runtime: Baml::Ffi::BamlRuntime.from_files("baml_src", Baml::Inlined::FILE_MAP, ENV))
+    end
+  
+    @instance
+  end
 
   class BamlClient
     extend T::Sig
 
-    sig { returns(UnstableBamlClient) }
-    attr_reader :unstable
+    sig { returns(BamlStreamClient) }
+    attr_reader :stream
 
     sig {params(runtime: Baml::Ffi::BamlRuntime).void}
     def initialize(runtime:)
       @runtime = runtime
-      @unstable = T.let(UnstableBamlClient.new(runtime: runtime), UnstableBamlClient)
+      @ctx_manager = runtime.create_context_manager()
+      @stream = BamlStreamClient.new(runtime: @runtime, ctx_manager: @ctx_manager)
     end
 
     sig {params(path: String).returns(BamlClient)}
     def self.from_directory(path)
-      BamlClient.new(runtime: Baml::Ffi::BamlRuntime.from_directory(path))
+      BamlClient.new(runtime: Baml::Ffi::BamlRuntime.from_directory(path, ENV))
     end
 
     sig {
+      
       params(
         input: String,
       ).returns(Baml::Types::Category)
+      
     }
     def ClassifyMessage(
         input:
     )
       raw = @runtime.call_function(
-        function_name: "ClassifyMessage",
-        args: {
+        "ClassifyMessage",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(Baml::Types::Category).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         input: String,
       ).returns(Baml::Types::Category)
+      
     }
     def ClassifyMessage2(
         input:
     )
       raw = @runtime.call_function(
-        function_name: "ClassifyMessage2",
-        args: {
+        "ClassifyMessage2",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(Baml::Types::Category).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         input: String,
       ).returns(Baml::Types::Category)
+      
     }
     def ClassifyMessage3(
         input:
     )
       raw = @runtime.call_function(
-        function_name: "ClassifyMessage3",
-        args: {
+        "ClassifyMessage3",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(Baml::Types::Category).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        img: Baml::Types::Image,
+        img: Baml::Image,
       ).returns(String)
+      
     }
     def DescribeImage(
         img:
     )
       raw = @runtime.call_function(
-        function_name: "DescribeImage",
-        args: {
+        "DescribeImage",
+        {
           "img" => img,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Types::Image,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
       ).returns(String)
+      
     }
     def DescribeImage2(
         classWithImage:,img2:
     )
       raw = @runtime.call_function(
-        function_name: "DescribeImage2",
-        args: {
+        "DescribeImage2",
+        {
           "classWithImage" => classWithImage,"img2" => img2,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Types::Image,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
       ).returns(String)
+      
     }
     def DescribeImage3(
         classWithImage:,img2:
     )
       raw = @runtime.call_function(
-        function_name: "DescribeImage3",
-        args: {
+        "DescribeImage3",
+        {
           "classWithImage" => classWithImage,"img2" => img2,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Types::Image,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
       ).returns(String)
+      
     }
     def DescribeImage4(
         classWithImage:,img2:
     )
       raw = @runtime.call_function(
-        function_name: "DescribeImage4",
-        args: {
+        "DescribeImage4",
+        {
           "classWithImage" => classWithImage,"img2" => img2,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
+      params(
+        input: Baml::Types::DynamicClassOne,
+      ).returns(Baml::Types::DynamicClassTwo)
+      
+    }
+    def DynamicFunc(
+        input:
+    )
+      raw = @runtime.call_function(
+        "DynamicFunc",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
       params(
         input: String,
       ).returns(T::Array[String])
+      
     }
     def ExtractNames(
         input:
     )
       raw = @runtime.call_function(
-        function_name: "ExtractNames",
-        args: {
+        "ExtractNames",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(T::Array[String]).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        resume: String,
-      ).returns(Baml::Types::Resume)
+        text: String,
+      ).returns(T::Array[Baml::Types::Person])
+      
     }
-    def ExtractResume(
-        resume:
+    def ExtractPeople(
+        text:
     )
       raw = @runtime.call_function(
-        function_name: "ExtractResume",
-        args: {
-          "resume" => resume,
-        }
+        "ExtractPeople",
+        {
+          "text" => text,
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(Baml::Types::Resume).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
+      params(
+        resume: String,img: T.nilable(Baml::Image),
+      ).returns(Baml::Types::Resume)
+      
+    }
+    def ExtractResume(
+        resume:,img:
+    )
+      raw = @runtime.call_function(
+        "ExtractResume",
+        {
+          "resume" => resume,"img" => img,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
       params(
         resume: String,
       ).returns(Baml::Types::Resume)
+      
     }
     def ExtractResume2(
         resume:
     )
       raw = @runtime.call_function(
-        function_name: "ExtractResume2",
-        args: {
+        "ExtractResume2",
+        {
           "resume" => resume,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(Baml::Types::Resume).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         input: String,
-      ).returns(T.nilable(Baml::Types::ClassOptionalOutput2v2))
+      ).returns(T.nilable(Baml::Types::ClassOptionalOutput))
+      
     }
-    def FnClassOptionalOutput2_V2(
+    def FnClassOptionalOutput(
         input:
     )
       raw = @runtime.call_function(
-        function_name: "FnClassOptionalOutput2_V2",
-        args: {
+        "FnClassOptionalOutput",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(T.nilable(Baml::Types::ClassOptionalOutput2v2)).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         input: String,
-      ).returns(Baml::Types::TestClassWithEnum2)
+      ).returns(T.nilable(Baml::Types::ClassOptionalOutput2))
+      
     }
-    def FnOutputClassWithEnum_V2(
+    def FnClassOptionalOutput2(
         input:
     )
       raw = @runtime.call_function(
-        function_name: "FnOutputClassWithEnum_V2",
-        args: {
+        "FnClassOptionalOutput2",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(Baml::Types::TestClassWithEnum2).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
+      params(
+        input: String,
+      ).returns(T::Array[Baml::Types::EnumOutput])
+      
+    }
+    def FnEnumListOutput(
+        input:
+    )
+      raw = @runtime.call_function(
+        "FnEnumListOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(Baml::Types::EnumOutput)
+      
+    }
+    def FnEnumOutput(
+        input:
+    )
+      raw = @runtime.call_function(
+        "FnEnumOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        myString: T.nilable(String),
+      ).returns(String)
+      
+    }
+    def FnNamedArgsSingleStringOptional(
+        myString:
+    )
+      raw = @runtime.call_function(
+        "FnNamedArgsSingleStringOptional",
+        {
+          "myString" => myString,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(T::Boolean)
+      
+    }
+    def FnOutputBool(
+        input:
+    )
+      raw = @runtime.call_function(
+        "FnOutputBool",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(Baml::Types::TestOutputClass)
+      
+    }
+    def FnOutputClass(
+        input:
+    )
+      raw = @runtime.call_function(
+        "FnOutputClass",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(T::Array[Baml::Types::TestOutputClass])
+      
+    }
+    def FnOutputClassList(
+        input:
+    )
+      raw = @runtime.call_function(
+        "FnOutputClassList",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(Baml::Types::TestClassWithEnum)
+      
+    }
+    def FnOutputClassWithEnum(
+        input:
+    )
+      raw = @runtime.call_function(
+        "FnOutputClassWithEnum",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(Baml::Types::TestOutputClassNested)
+      
+    }
+    def FnOutputNestedClass(
+        input:
+    )
+      raw = @runtime.call_function(
+        "FnOutputNestedClass",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(T::Array[String])
+      
+    }
+    def FnOutputStringList(
+        input:
+    )
+      raw = @runtime.call_function(
+        "FnOutputStringList",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(Baml::Types::TestEnum)
+      
+    }
+    def FnTestAliasedEnumOutput(
+        input:
+    )
+      raw = @runtime.call_function(
+        "FnTestAliasedEnumOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(Baml::Types::TestClassAlias)
+      
+    }
+    def FnTestClassAlias(
+        input:
+    )
+      raw = @runtime.call_function(
+        "FnTestClassAlias",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        myArg: Baml::Types::NamedArgsSingleEnum,
+      ).returns(String)
+      
+    }
+    def FnTestNamedArgsSingleEnum(
+        myArg:
+    )
+      raw = @runtime.call_function(
+        "FnTestNamedArgsSingleEnum",
+        {
+          "myArg" => myArg,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
       params(
         text: String,
       ).returns(Baml::Types::RaysData)
+      
     }
     def GetDataType(
         text:
     )
       raw = @runtime.call_function(
-        function_name: "GetDataType",
-        args: {
+        "GetDataType",
+        {
           "text" => text,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(Baml::Types::RaysData).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         email: Baml::Types::Email,
       ).returns(Baml::Types::OrderInfo)
+      
     }
     def GetOrderInfo(
         email:
     )
       raw = @runtime.call_function(
-        function_name: "GetOrderInfo",
-        args: {
+        "GetOrderInfo",
+        {
           "email" => email,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(Baml::Types::OrderInfo).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         query: String,
       ).returns(Baml::Types::SearchParams)
+      
     }
     def GetQuery(
         query:
     )
       raw = @runtime.call_function(
-        function_name: "GetQuery",
-        args: {
+        "GetQuery",
+        {
           "query" => query,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(Baml::Types::SearchParams).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         input: String,
-      ).returns(T::Array[T.nilable(Baml::Types::OptionalTest_ReturnTypev2)])
+      ).returns(Baml::Types::DynamicOutput)
+      
     }
-    def OptionalTest_Function_V2(
+    def MyFunc(
         input:
     )
       raw = @runtime.call_function(
-        function_name: "OptionalTest_Function_V2",
-        args: {
+        "MyFunc",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(T::Array[T.nilable(Baml::Types::OptionalTest_ReturnTypev2)]).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        input: T.nilable(Baml::Types::OptionalClassv2),
+        input: String,
+      ).returns(T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)])
+      
+    }
+    def OptionalTest_Function(
+        input:
+    )
+      raw = @runtime.call_function(
+        "OptionalTest_Function",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
       ).returns(String)
+      
     }
-    def V2_FnClassOptional(
+    def PromptTestClaude(
         input:
     )
       raw = @runtime.call_function(
-        function_name: "V2_FnClassOptional",
-        args: {
+        "PromptTestClaude",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        input: Baml::Types::ClassOptionalFieldsv2,
+        input: String,
       ).returns(String)
+      
     }
-    def V2_FnClassOptional2(
+    def PromptTestClaudeChat(
         input:
     )
       raw = @runtime.call_function(
-        function_name: "V2_FnClassOptional2",
-        args: {
+        "PromptTestClaudeChat",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         input: String,
-      ).returns(T::Array[Baml::Types::EnumOutput])
-    }
-    def V2_FnEnumListOutput(
-        input:
-    )
-      raw = @runtime.call_function(
-        function_name: "V2_FnEnumListOutput",
-        args: {
-          "input" => input,
-        }
-      )
-      Baml::convert_to(T::Array[Baml::Types::EnumOutput]).from(raw.parsed)
-    end
-
-    sig {
-      params(
-        input: String,
-      ).returns(Baml::Types::EnumOutput2)
-    }
-    def V2_FnEnumOutput(
-        input:
-    )
-      raw = @runtime.call_function(
-        function_name: "V2_FnEnumOutput",
-        args: {
-          "input" => input,
-        }
-      )
-      Baml::convert_to(Baml::Types::EnumOutput2).from(raw.parsed)
-    end
-
-    sig {
-      params(
-        myString: T.nilable(String),
       ).returns(String)
+      
     }
-    def V2_FnNamedArgsSingleStringOptional(
-        myString:
-    )
-      raw = @runtime.call_function(
-        function_name: "V2_FnNamedArgsSingleStringOptional",
-        args: {
-          "myString" => myString,
-        }
-      )
-      Baml::convert_to(String).from(raw.parsed)
-    end
-
-    sig {
-      params(
-        input: String,
-      ).returns(T::Boolean)
-    }
-    def V2_FnOutputBool(
+    def PromptTestClaudeChatNoSystem(
         input:
     )
       raw = @runtime.call_function(
-        function_name: "V2_FnOutputBool",
-        args: {
+        "PromptTestClaudeChatNoSystem",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(T::Boolean).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         input: String,
-      ).returns(Baml::Types::TestOutputClass2)
-    }
-    def V2_FnOutputClass(
-        input:
-    )
-      raw = @runtime.call_function(
-        function_name: "V2_FnOutputClass",
-        args: {
-          "input" => input,
-        }
-      )
-      Baml::convert_to(Baml::Types::TestOutputClass2).from(raw.parsed)
-    end
-
-    sig {
-      params(
-        input: String,
-      ).returns(T::Array[Baml::Types::TestOutputClass])
-    }
-    def V2_FnOutputClassList(
-        input:
-    )
-      raw = @runtime.call_function(
-        function_name: "V2_FnOutputClassList",
-        args: {
-          "input" => input,
-        }
-      )
-      Baml::convert_to(T::Array[Baml::Types::TestOutputClass]).from(raw.parsed)
-    end
-
-    sig {
-      params(
-        input: String,
-      ).returns(T::Array[String])
-    }
-    def V2_FnOutputStringList(
-        input:
-    )
-      raw = @runtime.call_function(
-        function_name: "V2_FnOutputStringList",
-        args: {
-          "input" => input,
-        }
-      )
-      Baml::convert_to(T::Array[String]).from(raw.parsed)
-    end
-
-    sig {
-      params(
-        input: T.nilable(String),
       ).returns(String)
+      
     }
-    def V2_FnStringOptional(
+    def PromptTestOpenAI(
         input:
     )
       raw = @runtime.call_function(
-        function_name: "V2_FnStringOptional",
-        args: {
+        "PromptTestOpenAI",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        myArg: Baml::Types::NamedArgsSingleEnum2,
+        input: String,
       ).returns(String)
+      
     }
-    def V2_FnTestNamedArgsSingleEnum(
-        myArg:
+    def PromptTestOpenAIChat(
+        input:
     )
       raw = @runtime.call_function(
-        function_name: "V2_FnTestNamedArgsSingleEnum",
-        args: {
-          "myArg" => myArg,
-        }
+        "PromptTestOpenAIChat",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
+    def PromptTestOpenAIChatNoSystem(
+        input:
+    )
+      raw = @runtime.call_function(
+        "PromptTestOpenAIChatNoSystem",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      returns(String)
+      
+    }
+    def TestFallbackClient(
+        
+    )
+      raw = @runtime.call_function(
+        "TestFallbackClient",
+        {
+          
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
       params(
         myBool: T::Boolean,
       ).returns(String)
+      
     }
-    def V2_TestFnNamedArgsSingleBool(
+    def TestFnNamedArgsSingleBool(
         myBool:
     )
       raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleBool",
-        args: {
+        "TestFnNamedArgsSingleBool",
+        {
           "myBool" => myBool,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        myArg: Baml::Types::NamedArgsSingleClass2,
+        myArg: Baml::Types::NamedArgsSingleClass,
       ).returns(String)
+      
     }
-    def V2_TestFnNamedArgsSingleClass(
+    def TestFnNamedArgsSingleClass(
         myArg:
     )
       raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleClass",
-        args: {
+        "TestFnNamedArgsSingleClass",
+        {
           "myArg" => myArg,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        myArg: T::Array[Baml::Types::NamedArgsSingleEnumList2],
+        myArg: T::Array[Baml::Types::NamedArgsSingleEnumList],
       ).returns(String)
+      
     }
-    def V2_TestFnNamedArgsSingleEnumList(
+    def TestFnNamedArgsSingleEnumList(
         myArg:
     )
       raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleEnumList",
-        args: {
+        "TestFnNamedArgsSingleEnumList",
+        {
           "myArg" => myArg,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         myFloat: Float,
       ).returns(String)
+      
     }
-    def V2_TestFnNamedArgsSingleFloat(
+    def TestFnNamedArgsSingleFloat(
         myFloat:
     )
       raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleFloat",
-        args: {
+        "TestFnNamedArgsSingleFloat",
+        {
           "myFloat" => myFloat,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         myInt: Integer,
       ).returns(String)
+      
     }
-    def V2_TestFnNamedArgsSingleInt(
+    def TestFnNamedArgsSingleInt(
         myInt:
     )
       raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleInt",
-        args: {
+        "TestFnNamedArgsSingleInt",
+        {
           "myInt" => myInt,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         myString: String,
       ).returns(String)
+      
     }
-    def V2_TestFnNamedArgsSingleString(
+    def TestFnNamedArgsSingleString(
         myString:
     )
       raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleString",
-        args: {
+        "TestFnNamedArgsSingleString",
+        {
           "myString" => myString,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
         myStringArray: T::Array[String],
       ).returns(String)
+      
     }
-    def V2_TestFnNamedArgsSingleStringArray(
+    def TestFnNamedArgsSingleStringArray(
         myStringArray:
     )
       raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleStringArray",
-        args: {
+        "TestFnNamedArgsSingleStringArray",
+        {
           "myStringArray" => myStringArray,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        myArg: T::Array[Baml::Types::NamedArgsSingleClassList2],
+        myArg: T::Array[String],
       ).returns(String)
+      
     }
-    def V2_TestFnNamedArgsSingleStringList(
+    def TestFnNamedArgsSingleStringList(
         myArg:
     )
       raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleStringList",
-        args: {
+        "TestFnNamedArgsSingleStringList",
+        {
           "myArg" => myArg,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        var: String,var_with_underscores: String,
+        img: Baml::Image,
       ).returns(String)
+      
     }
-    def V2_TestFnNamedArgsSyntax(
-        var:,var_with_underscores:
+    def TestImageInput(
+        img:
     )
       raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSyntax",
-        args: {
-          "var" => var,"var_with_underscores" => var_with_underscores,
-        }
+        "TestImageInput",
+        {
+          "img" => img,
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(String).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
+      
       params(
-        input: T.any(String, T::Boolean),
-      ).returns(T.any(Baml::Types::UnionTest_ReturnTypev2, Baml::Types::DataType))
+        myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
+      ).returns(String)
+      
     }
-    def V2_UnionTest_Function(
+    def TestMulticlassNamedArgs(
+        myArg:,myArg2:
+    )
+      raw = @runtime.call_function(
+        "TestMulticlassNamedArgs",
+        {
+          "myArg" => myArg,"myArg2" => myArg2,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
+    def TestOllama(
         input:
     )
       raw = @runtime.call_function(
-        function_name: "V2_UnionTest_Function",
-        args: {
+        "TestOllama",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to(T.any(Baml::Types::UnionTest_ReturnTypev2, Baml::Types::DataType)).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      returns(String)
+      
+    }
+    def TestRetryConstant(
+        
+    )
+      raw = @runtime.call_function(
+        "TestRetryConstant",
+        {
+          
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      returns(String)
+      
+    }
+    def TestRetryExponential(
+        
+    )
+      raw = @runtime.call_function(
+        "TestRetryExponential",
+        {
+          
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: T.any(String, T::Boolean),
+      ).returns(Baml::Types::UnionTest_ReturnType)
+      
+    }
+    def UnionTest_Function(
+        input:
+    )
+      raw = @runtime.call_function(
+        "UnionTest_Function",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
     end
 
     
 
   end
 
-  class UnstableBamlClient
+  class BamlStreamClient
     extend T::Sig
 
-    sig {params(runtime: Baml::Ffi::BamlRuntime).void}
-    def initialize(runtime:)
+    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager).void}
+    def initialize(runtime:, ctx_manager:)
       @runtime = runtime
+      @ctx_manager = ctx_manager
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Unstable::FunctionResult[Baml::Types::Category])
+      ).returns(Baml::BamlStream[Baml::Types::Category])
     }
     def ClassifyMessage(
         input:
     )
-      raw = @runtime.call_function(
-        function_name: "ClassifyMessage",
-        args: {
+      raw = @runtime.stream_function(
+        "ClassifyMessage",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[Baml::Types::Category].new(
-        inner: raw,
-        parsed: Baml::convert_to(Baml::Types::Category).from(raw.parsed)
+      Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Unstable::FunctionResult[Baml::Types::Category])
+      ).returns(Baml::BamlStream[Baml::Types::Category])
     }
     def ClassifyMessage2(
         input:
     )
-      raw = @runtime.call_function(
-        function_name: "ClassifyMessage2",
-        args: {
+      raw = @runtime.stream_function(
+        "ClassifyMessage2",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[Baml::Types::Category].new(
-        inner: raw,
-        parsed: Baml::convert_to(Baml::Types::Category).from(raw.parsed)
+      Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Unstable::FunctionResult[Baml::Types::Category])
+      ).returns(Baml::BamlStream[Baml::Types::Category])
     }
     def ClassifyMessage3(
         input:
     )
-      raw = @runtime.call_function(
-        function_name: "ClassifyMessage3",
-        args: {
+      raw = @runtime.stream_function(
+        "ClassifyMessage3",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[Baml::Types::Category].new(
-        inner: raw,
-        parsed: Baml::convert_to(Baml::Types::Category).from(raw.parsed)
+      Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
-        img: Baml::Types::Image,
-      ).returns(Baml::Unstable::FunctionResult[String])
+        img: Baml::Image,
+      ).returns(Baml::BamlStream[String])
     }
     def DescribeImage(
         img:
     )
-      raw = @runtime.call_function(
-        function_name: "DescribeImage",
-        args: {
+      raw = @runtime.stream_function(
+        "DescribeImage",
+        {
           "img" => img,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
-        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Types::Image,
-      ).returns(Baml::Unstable::FunctionResult[String])
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+      ).returns(Baml::BamlStream[String])
     }
     def DescribeImage2(
         classWithImage:,img2:
     )
-      raw = @runtime.call_function(
-        function_name: "DescribeImage2",
-        args: {
+      raw = @runtime.stream_function(
+        "DescribeImage2",
+        {
           "classWithImage" => classWithImage,"img2" => img2,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
-        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Types::Image,
-      ).returns(Baml::Unstable::FunctionResult[String])
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+      ).returns(Baml::BamlStream[String])
     }
     def DescribeImage3(
         classWithImage:,img2:
     )
-      raw = @runtime.call_function(
-        function_name: "DescribeImage3",
-        args: {
+      raw = @runtime.stream_function(
+        "DescribeImage3",
+        {
           "classWithImage" => classWithImage,"img2" => img2,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
-        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Types::Image,
-      ).returns(Baml::Unstable::FunctionResult[String])
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+      ).returns(Baml::BamlStream[String])
     }
     def DescribeImage4(
         classWithImage:,img2:
     )
-      raw = @runtime.call_function(
-        function_name: "DescribeImage4",
-        args: {
+      raw = @runtime.stream_function(
+        "DescribeImage4",
+        {
           "classWithImage" => classWithImage,"img2" => img2,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: Baml::Types::DynamicClassOne,
+      ).returns(Baml::BamlStream[Baml::Types::DynamicClassTwo])
+    }
+    def DynamicFunc(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "DynamicFunc",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::DynamicClassTwo, Baml::Types::DynamicClassTwo].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Unstable::FunctionResult[T::Array[String]])
+      ).returns(Baml::BamlStream[T::Array[String]])
     }
     def ExtractNames(
         input:
     )
-      raw = @runtime.call_function(
-        function_name: "ExtractNames",
-        args: {
+      raw = @runtime.stream_function(
+        "ExtractNames",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[T::Array[String]].new(
-        inner: raw,
-        parsed: Baml::convert_to(T::Array[String]).from(raw.parsed)
-      )
-    end
-
-    sig {
-      params(
-        resume: String,
-      ).returns(Baml::Unstable::FunctionResult[Baml::Types::Resume])
-    }
-    def ExtractResume(
-        resume:
-    )
-      raw = @runtime.call_function(
-        function_name: "ExtractResume",
-        args: {
-          "resume" => resume,
-        }
-      )
-      Baml::Unstable::FunctionResult[Baml::Types::Resume].new(
-        inner: raw,
-        parsed: Baml::convert_to(Baml::Types::Resume).from(raw.parsed)
-      )
-    end
-
-    sig {
-      params(
-        resume: String,
-      ).returns(Baml::Unstable::FunctionResult[Baml::Types::Resume])
-    }
-    def ExtractResume2(
-        resume:
-    )
-      raw = @runtime.call_function(
-        function_name: "ExtractResume2",
-        args: {
-          "resume" => resume,
-        }
-      )
-      Baml::Unstable::FunctionResult[Baml::Types::Resume].new(
-        inner: raw,
-        parsed: Baml::convert_to(Baml::Types::Resume).from(raw.parsed)
-      )
-    end
-
-    sig {
-      params(
-        input: String,
-      ).returns(Baml::Unstable::FunctionResult[T.nilable(Baml::Types::ClassOptionalOutput2v2)])
-    }
-    def FnClassOptionalOutput2_V2(
-        input:
-    )
-      raw = @runtime.call_function(
-        function_name: "FnClassOptionalOutput2_V2",
-        args: {
-          "input" => input,
-        }
-      )
-      Baml::Unstable::FunctionResult[T.nilable(Baml::Types::ClassOptionalOutput2v2)].new(
-        inner: raw,
-        parsed: Baml::convert_to(T.nilable(Baml::Types::ClassOptionalOutput2v2)).from(raw.parsed)
-      )
-    end
-
-    sig {
-      params(
-        input: String,
-      ).returns(Baml::Unstable::FunctionResult[Baml::Types::TestClassWithEnum2])
-    }
-    def FnOutputClassWithEnum_V2(
-        input:
-    )
-      raw = @runtime.call_function(
-        function_name: "FnOutputClassWithEnum_V2",
-        args: {
-          "input" => input,
-        }
-      )
-      Baml::Unstable::FunctionResult[Baml::Types::TestClassWithEnum2].new(
-        inner: raw,
-        parsed: Baml::convert_to(Baml::Types::TestClassWithEnum2).from(raw.parsed)
+      Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         text: String,
-      ).returns(Baml::Unstable::FunctionResult[Baml::Types::RaysData])
+      ).returns(Baml::BamlStream[T::Array[Baml::Types::Person]])
     }
-    def GetDataType(
+    def ExtractPeople(
         text:
     )
-      raw = @runtime.call_function(
-        function_name: "GetDataType",
-        args: {
+      raw = @runtime.stream_function(
+        "ExtractPeople",
+        {
           "text" => text,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[Baml::Types::RaysData].new(
-        inner: raw,
-        parsed: Baml::convert_to(Baml::Types::RaysData).from(raw.parsed)
-      )
-    end
-
-    sig {
-      params(
-        email: Baml::Types::Email,
-      ).returns(Baml::Unstable::FunctionResult[Baml::Types::OrderInfo])
-    }
-    def GetOrderInfo(
-        email:
-    )
-      raw = @runtime.call_function(
-        function_name: "GetOrderInfo",
-        args: {
-          "email" => email,
-        }
-      )
-      Baml::Unstable::FunctionResult[Baml::Types::OrderInfo].new(
-        inner: raw,
-        parsed: Baml::convert_to(Baml::Types::OrderInfo).from(raw.parsed)
+      Baml::BamlStream[T::Array[Baml::PartialTypes::Person], T::Array[Baml::Types::Person]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
-        query: String,
-      ).returns(Baml::Unstable::FunctionResult[Baml::Types::SearchParams])
+        resume: String,img: T.nilable(Baml::Image),
+      ).returns(Baml::BamlStream[Baml::Types::Resume])
     }
-    def GetQuery(
-        query:
+    def ExtractResume(
+        resume:,img:
     )
-      raw = @runtime.call_function(
-        function_name: "GetQuery",
-        args: {
-          "query" => query,
-        }
+      raw = @runtime.stream_function(
+        "ExtractResume",
+        {
+          "resume" => resume,"img" => img,
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[Baml::Types::SearchParams].new(
-        inner: raw,
-        parsed: Baml::convert_to(Baml::Types::SearchParams).from(raw.parsed)
+      Baml::BamlStream[Baml::PartialTypes::Resume, Baml::Types::Resume].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
-        input: String,
-      ).returns(Baml::Unstable::FunctionResult[T::Array[T.nilable(Baml::Types::OptionalTest_ReturnTypev2)]])
+        resume: String,
+      ).returns(Baml::BamlStream[Baml::Types::Resume])
     }
-    def OptionalTest_Function_V2(
-        input:
+    def ExtractResume2(
+        resume:
     )
-      raw = @runtime.call_function(
-        function_name: "OptionalTest_Function_V2",
-        args: {
-          "input" => input,
-        }
+      raw = @runtime.stream_function(
+        "ExtractResume2",
+        {
+          "resume" => resume,
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[T::Array[T.nilable(Baml::Types::OptionalTest_ReturnTypev2)]].new(
-        inner: raw,
-        parsed: Baml::convert_to(T::Array[T.nilable(Baml::Types::OptionalTest_ReturnTypev2)]).from(raw.parsed)
-      )
-    end
-
-    sig {
-      params(
-        input: T.nilable(Baml::Types::OptionalClassv2),
-      ).returns(Baml::Unstable::FunctionResult[String])
-    }
-    def V2_FnClassOptional(
-        input:
-    )
-      raw = @runtime.call_function(
-        function_name: "V2_FnClassOptional",
-        args: {
-          "input" => input,
-        }
-      )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
-      )
-    end
-
-    sig {
-      params(
-        input: Baml::Types::ClassOptionalFieldsv2,
-      ).returns(Baml::Unstable::FunctionResult[String])
-    }
-    def V2_FnClassOptional2(
-        input:
-    )
-      raw = @runtime.call_function(
-        function_name: "V2_FnClassOptional2",
-        args: {
-          "input" => input,
-        }
-      )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[Baml::PartialTypes::Resume, Baml::Types::Resume].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Unstable::FunctionResult[T::Array[Baml::Types::EnumOutput]])
+      ).returns(Baml::BamlStream[T.nilable(Baml::Types::ClassOptionalOutput)])
     }
-    def V2_FnEnumListOutput(
+    def FnClassOptionalOutput(
         input:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_FnEnumListOutput",
-        args: {
+      raw = @runtime.stream_function(
+        "FnClassOptionalOutput",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[T::Array[Baml::Types::EnumOutput]].new(
-        inner: raw,
-        parsed: Baml::convert_to(T::Array[Baml::Types::EnumOutput]).from(raw.parsed)
+      Baml::BamlStream[Baml::PartialTypes::ClassOptionalOutput, T.nilable(Baml::Types::ClassOptionalOutput)].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Unstable::FunctionResult[Baml::Types::EnumOutput2])
+      ).returns(Baml::BamlStream[T.nilable(Baml::Types::ClassOptionalOutput2)])
     }
-    def V2_FnEnumOutput(
+    def FnClassOptionalOutput2(
         input:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_FnEnumOutput",
-        args: {
+      raw = @runtime.stream_function(
+        "FnClassOptionalOutput2",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[Baml::Types::EnumOutput2].new(
-        inner: raw,
-        parsed: Baml::convert_to(Baml::Types::EnumOutput2).from(raw.parsed)
+      Baml::BamlStream[Baml::PartialTypes::ClassOptionalOutput2, T.nilable(Baml::Types::ClassOptionalOutput2)].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[T::Array[Baml::Types::EnumOutput]])
+    }
+    def FnEnumListOutput(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "FnEnumListOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T::Array[T.nilable(Baml::Types::EnumOutput)], T::Array[Baml::Types::EnumOutput]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[Baml::Types::EnumOutput])
+    }
+    def FnEnumOutput(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "FnEnumOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(Baml::Types::EnumOutput), Baml::Types::EnumOutput].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         myString: T.nilable(String),
-      ).returns(Baml::Unstable::FunctionResult[String])
+      ).returns(Baml::BamlStream[String])
     }
-    def V2_FnNamedArgsSingleStringOptional(
+    def FnNamedArgsSingleStringOptional(
         myString:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_FnNamedArgsSingleStringOptional",
-        args: {
+      raw = @runtime.stream_function(
+        "FnNamedArgsSingleStringOptional",
+        {
           "myString" => myString,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
-      )
-    end
-
-    sig {
-      params(
-        input: String,
-      ).returns(Baml::Unstable::FunctionResult[T::Boolean])
-    }
-    def V2_FnOutputBool(
-        input:
-    )
-      raw = @runtime.call_function(
-        function_name: "V2_FnOutputBool",
-        args: {
-          "input" => input,
-        }
-      )
-      Baml::Unstable::FunctionResult[T::Boolean].new(
-        inner: raw,
-        parsed: Baml::convert_to(T::Boolean).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Unstable::FunctionResult[Baml::Types::TestOutputClass2])
+      ).returns(Baml::BamlStream[T::Boolean])
     }
-    def V2_FnOutputClass(
+    def FnOutputBool(
         input:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_FnOutputClass",
-        args: {
+      raw = @runtime.stream_function(
+        "FnOutputBool",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[Baml::Types::TestOutputClass2].new(
-        inner: raw,
-        parsed: Baml::convert_to(Baml::Types::TestOutputClass2).from(raw.parsed)
+      Baml::BamlStream[T.nilable(T::Boolean), T::Boolean].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Unstable::FunctionResult[T::Array[Baml::Types::TestOutputClass]])
+      ).returns(Baml::BamlStream[Baml::Types::TestOutputClass])
     }
-    def V2_FnOutputClassList(
+    def FnOutputClass(
         input:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_FnOutputClassList",
-        args: {
+      raw = @runtime.stream_function(
+        "FnOutputClass",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[T::Array[Baml::Types::TestOutputClass]].new(
-        inner: raw,
-        parsed: Baml::convert_to(T::Array[Baml::Types::TestOutputClass]).from(raw.parsed)
+      Baml::BamlStream[Baml::PartialTypes::TestOutputClass, Baml::Types::TestOutputClass].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         input: String,
-      ).returns(Baml::Unstable::FunctionResult[T::Array[String]])
+      ).returns(Baml::BamlStream[T::Array[Baml::Types::TestOutputClass]])
     }
-    def V2_FnOutputStringList(
+    def FnOutputClassList(
         input:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_FnOutputStringList",
-        args: {
+      raw = @runtime.stream_function(
+        "FnOutputClassList",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[T::Array[String]].new(
-        inner: raw,
-        parsed: Baml::convert_to(T::Array[String]).from(raw.parsed)
+      Baml::BamlStream[T::Array[Baml::PartialTypes::TestOutputClass], T::Array[Baml::Types::TestOutputClass]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
-        input: T.nilable(String),
-      ).returns(Baml::Unstable::FunctionResult[String])
+        input: String,
+      ).returns(Baml::BamlStream[Baml::Types::TestClassWithEnum])
     }
-    def V2_FnStringOptional(
+    def FnOutputClassWithEnum(
         input:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_FnStringOptional",
-        args: {
+      raw = @runtime.stream_function(
+        "FnOutputClassWithEnum",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[Baml::PartialTypes::TestClassWithEnum, Baml::Types::TestClassWithEnum].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
-        myArg: Baml::Types::NamedArgsSingleEnum2,
-      ).returns(Baml::Unstable::FunctionResult[String])
+        input: String,
+      ).returns(Baml::BamlStream[Baml::Types::TestOutputClassNested])
     }
-    def V2_FnTestNamedArgsSingleEnum(
+    def FnOutputNestedClass(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "FnOutputNestedClass",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::TestOutputClassNested, Baml::Types::TestOutputClassNested].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[T::Array[String]])
+    }
+    def FnOutputStringList(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "FnOutputStringList",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[Baml::Types::TestEnum])
+    }
+    def FnTestAliasedEnumOutput(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "FnTestAliasedEnumOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(Baml::Types::TestEnum), Baml::Types::TestEnum].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[Baml::Types::TestClassAlias])
+    }
+    def FnTestClassAlias(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "FnTestClassAlias",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::TestClassAlias, Baml::Types::TestClassAlias].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        myArg: Baml::Types::NamedArgsSingleEnum,
+      ).returns(Baml::BamlStream[String])
+    }
+    def FnTestNamedArgsSingleEnum(
         myArg:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_FnTestNamedArgsSingleEnum",
-        args: {
+      raw = @runtime.stream_function(
+        "FnTestNamedArgsSingleEnum",
+        {
           "myArg" => myArg,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        text: String,
+      ).returns(Baml::BamlStream[Baml::Types::RaysData])
+    }
+    def GetDataType(
+        text:
+    )
+      raw = @runtime.stream_function(
+        "GetDataType",
+        {
+          "text" => text,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::RaysData, Baml::Types::RaysData].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        email: Baml::Types::Email,
+      ).returns(Baml::BamlStream[Baml::Types::OrderInfo])
+    }
+    def GetOrderInfo(
+        email:
+    )
+      raw = @runtime.stream_function(
+        "GetOrderInfo",
+        {
+          "email" => email,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::OrderInfo, Baml::Types::OrderInfo].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        query: String,
+      ).returns(Baml::BamlStream[Baml::Types::SearchParams])
+    }
+    def GetQuery(
+        query:
+    )
+      raw = @runtime.stream_function(
+        "GetQuery",
+        {
+          "query" => query,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::SearchParams, Baml::Types::SearchParams].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[Baml::Types::DynamicOutput])
+    }
+    def MyFunc(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "MyFunc",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::DynamicOutput, Baml::Types::DynamicOutput].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)]])
+    }
+    def OptionalTest_Function(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "OptionalTest_Function",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T::Array[Baml::PartialTypes::OptionalTest_ReturnType], T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def PromptTestClaude(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "PromptTestClaude",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def PromptTestClaudeChat(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "PromptTestClaudeChat",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def PromptTestClaudeChatNoSystem(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "PromptTestClaudeChatNoSystem",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def PromptTestOpenAI(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "PromptTestOpenAI",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def PromptTestOpenAIChat(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "PromptTestOpenAIChat",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def PromptTestOpenAIChatNoSystem(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "PromptTestOpenAIChatNoSystem",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestFallbackClient(
+        
+    )
+      raw = @runtime.stream_function(
+        "TestFallbackClient",
+        {
+          
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         myBool: T::Boolean,
-      ).returns(Baml::Unstable::FunctionResult[String])
+      ).returns(Baml::BamlStream[String])
     }
-    def V2_TestFnNamedArgsSingleBool(
+    def TestFnNamedArgsSingleBool(
         myBool:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleBool",
-        args: {
+      raw = @runtime.stream_function(
+        "TestFnNamedArgsSingleBool",
+        {
           "myBool" => myBool,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
-      )
-    end
-
-    sig {
-      params(
-        myArg: Baml::Types::NamedArgsSingleClass2,
-      ).returns(Baml::Unstable::FunctionResult[String])
-    }
-    def V2_TestFnNamedArgsSingleClass(
-        myArg:
-    )
-      raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleClass",
-        args: {
-          "myArg" => myArg,
-        }
-      )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
-        myArg: T::Array[Baml::Types::NamedArgsSingleEnumList2],
-      ).returns(Baml::Unstable::FunctionResult[String])
+        myArg: Baml::Types::NamedArgsSingleClass,
+      ).returns(Baml::BamlStream[String])
     }
-    def V2_TestFnNamedArgsSingleEnumList(
+    def TestFnNamedArgsSingleClass(
         myArg:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleEnumList",
-        args: {
+      raw = @runtime.stream_function(
+        "TestFnNamedArgsSingleClass",
+        {
           "myArg" => myArg,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        myArg: T::Array[Baml::Types::NamedArgsSingleEnumList],
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestFnNamedArgsSingleEnumList(
+        myArg:
+    )
+      raw = @runtime.stream_function(
+        "TestFnNamedArgsSingleEnumList",
+        {
+          "myArg" => myArg,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         myFloat: Float,
-      ).returns(Baml::Unstable::FunctionResult[String])
+      ).returns(Baml::BamlStream[String])
     }
-    def V2_TestFnNamedArgsSingleFloat(
+    def TestFnNamedArgsSingleFloat(
         myFloat:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleFloat",
-        args: {
+      raw = @runtime.stream_function(
+        "TestFnNamedArgsSingleFloat",
+        {
           "myFloat" => myFloat,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         myInt: Integer,
-      ).returns(Baml::Unstable::FunctionResult[String])
+      ).returns(Baml::BamlStream[String])
     }
-    def V2_TestFnNamedArgsSingleInt(
+    def TestFnNamedArgsSingleInt(
         myInt:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleInt",
-        args: {
+      raw = @runtime.stream_function(
+        "TestFnNamedArgsSingleInt",
+        {
           "myInt" => myInt,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         myString: String,
-      ).returns(Baml::Unstable::FunctionResult[String])
+      ).returns(Baml::BamlStream[String])
     }
-    def V2_TestFnNamedArgsSingleString(
+    def TestFnNamedArgsSingleString(
         myString:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleString",
-        args: {
+      raw = @runtime.stream_function(
+        "TestFnNamedArgsSingleString",
+        {
           "myString" => myString,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         myStringArray: T::Array[String],
-      ).returns(Baml::Unstable::FunctionResult[String])
+      ).returns(Baml::BamlStream[String])
     }
-    def V2_TestFnNamedArgsSingleStringArray(
+    def TestFnNamedArgsSingleStringArray(
         myStringArray:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleStringArray",
-        args: {
+      raw = @runtime.stream_function(
+        "TestFnNamedArgsSingleStringArray",
+        {
           "myStringArray" => myStringArray,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
-        myArg: T::Array[Baml::Types::NamedArgsSingleClassList2],
-      ).returns(Baml::Unstable::FunctionResult[String])
+        myArg: T::Array[String],
+      ).returns(Baml::BamlStream[String])
     }
-    def V2_TestFnNamedArgsSingleStringList(
+    def TestFnNamedArgsSingleStringList(
         myArg:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSingleStringList",
-        args: {
+      raw = @runtime.stream_function(
+        "TestFnNamedArgsSingleStringList",
+        {
           "myArg" => myArg,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
-        var: String,var_with_underscores: String,
-      ).returns(Baml::Unstable::FunctionResult[String])
+        img: Baml::Image,
+      ).returns(Baml::BamlStream[String])
     }
-    def V2_TestFnNamedArgsSyntax(
-        var:,var_with_underscores:
+    def TestImageInput(
+        img:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_TestFnNamedArgsSyntax",
-        args: {
-          "var" => var,"var_with_underscores" => var_with_underscores,
-        }
+      raw = @runtime.stream_function(
+        "TestImageInput",
+        {
+          "img" => img,
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[String].new(
-        inner: raw,
-        parsed: Baml::convert_to(String).from(raw.parsed)
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestMulticlassNamedArgs(
+        myArg:,myArg2:
+    )
+      raw = @runtime.stream_function(
+        "TestMulticlassNamedArgs",
+        {
+          "myArg" => myArg,"myArg2" => myArg2,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestOllama(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "TestOllama",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestRetryConstant(
+        
+    )
+      raw = @runtime.stream_function(
+        "TestRetryConstant",
+        {
+          
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestRetryExponential(
+        
+    )
+      raw = @runtime.stream_function(
+        "TestRetryExponential",
+        {
+          
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 
     sig {
       params(
         input: T.any(String, T::Boolean),
-      ).returns(Baml::Unstable::FunctionResult[T.any(Baml::Types::UnionTest_ReturnTypev2, Baml::Types::DataType)])
+      ).returns(Baml::BamlStream[Baml::Types::UnionTest_ReturnType])
     }
-    def V2_UnionTest_Function(
+    def UnionTest_Function(
         input:
     )
-      raw = @runtime.call_function(
-        function_name: "V2_UnionTest_Function",
-        args: {
+      raw = @runtime.stream_function(
+        "UnionTest_Function",
+        {
           "input" => input,
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[T.any(Baml::Types::UnionTest_ReturnTypev2, Baml::Types::DataType)].new(
-        inner: raw,
-        parsed: Baml::convert_to(T.any(Baml::Types::UnionTest_ReturnTypev2, Baml::Types::DataType)).from(raw.parsed)
+      Baml::BamlStream[Baml::PartialTypes::UnionTest_ReturnType, Baml::Types::UnionTest_ReturnType].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 

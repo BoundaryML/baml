@@ -4,8 +4,12 @@ begin
 rescue LoadError
   require_relative "baml/ruby_ffi"
 end
+require_relative "stream"
 
 module Baml
+  # TODO: implement image support
+  class Image; end
+
   # Dynamically + idempotently define Baml::TypeConverter
   # NB: this does not respect raise_coercion_error = false
   def self.convert_to(type)

@@ -1,35 +1,51 @@
-# typed: strict
+# typed: false
 require "baml"
 require "sorbet-runtime"
 
+require_relative "inlined"
+require_relative "partial-types"
 require_relative "types"
 
 module Baml
+  @instance = nil
+
+  def self.Client
+    if @instance.nil?
+      @instance = BamlClient.new(runtime: Baml::Ffi::BamlRuntime.from_files("baml_src", Baml::Inlined::FILE_MAP, ENV))
+    end
+  
+    @instance
+  end
 
   class BamlClient
     extend T::Sig
 
-    sig { returns(UnstableBamlClient) }
-    attr_reader :unstable
+    sig { returns(BamlStreamClient) }
+    attr_reader :stream
 
     sig {params(runtime: Baml::Ffi::BamlRuntime).void}
     def initialize(runtime:)
       @runtime = runtime
-      @unstable = T.let(UnstableBamlClient.new(runtime: runtime), UnstableBamlClient)
+      @ctx_manager = runtime.create_context_manager()
+      @stream = BamlStreamClient.new(runtime: @runtime, ctx_manager: @ctx_manager)
     end
 
     sig {params(path: String).returns(BamlClient)}
     def self.from_directory(path)
-      BamlClient.new(runtime: Baml::Ffi::BamlRuntime.from_directory(path))
+      BamlClient.new(runtime: Baml::Ffi::BamlRuntime.from_directory(path, ENV))
     end
 
     {% for fn in funcs -%}
     sig {
+      {% if fn.args.len() > 0 %}
       params(
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}},
         {%- endfor %}
       ).returns({{ fn.return_type }})
+      {% else %}
+      returns({{ fn.return_type }})
+      {% endif %}
     }
     def {{fn.name}}(
         {% for (name, _) in fn.args -%}
@@ -37,26 +53,28 @@ module Baml
         {%- endfor %}
     )
       raw = @runtime.call_function(
-        function_name: "{{fn.name}}",
-        args: {
+        "{{fn.name}}",
+        {
           {% for (name, _) in fn.args -%}
           "{{name}}" => {{name}},
           {%- endfor %}
-        }
+        },
+        @ctx_manager,
       )
-      Baml::convert_to({{ fn.return_type }}).from(raw.parsed)
+      (raw.parsed_using_types(Baml::Types))
     end
 
     {% endfor %}
 
   end
 
-  class UnstableBamlClient
+  class BamlStreamClient
     extend T::Sig
 
-    sig {params(runtime: Baml::Ffi::BamlRuntime).void}
-    def initialize(runtime:)
+    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager).void}
+    def initialize(runtime:, ctx_manager:)
       @runtime = runtime
+      @ctx_manager = ctx_manager
     end
 
     {% for fn in funcs -%}
@@ -65,24 +83,25 @@ module Baml
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}},
         {%- endfor %}
-      ).returns(Baml::Unstable::FunctionResult[{{ fn.return_type }}])
+      ).returns(Baml::BamlStream[{{ fn.return_type }}])
     }
     def {{fn.name}}(
         {% for (name, _) in fn.args -%}
         {{name}}:{% if !loop.last %},{% endif %}
         {%- endfor %}
     )
-      raw = @runtime.call_function(
-        function_name: "{{fn.name}}",
-        args: {
+      raw = @runtime.stream_function(
+        "{{fn.name}}",
+        {
           {% for (name, _) in fn.args -%}
           "{{name}}" => {{name}},
           {%- endfor %}
-        }
+        },
+        @ctx_manager,
       )
-      Baml::Unstable::FunctionResult[{{ fn.return_type }}].new(
-        inner: raw,
-        parsed: Baml::convert_to({{ fn.return_type }}).from(raw.parsed)
+      Baml::BamlStream[{{fn.partial_return_type}}, {{fn.return_type}}].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
       )
     end
 

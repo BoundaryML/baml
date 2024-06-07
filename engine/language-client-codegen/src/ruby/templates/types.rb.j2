@@ -1,38 +1,37 @@
 # typed: false
-require "delegate"
-require "sorbet-coerce"
-require "sorbet-struct-comparable"
 require "sorbet-runtime"
+require "sorbet-struct-comparable"
 
 module Baml
   {# Baml::Types is reserved for generated types. #}
   module Types
+    {#- https://sorbet.org/docs/tenum #}
     {%- for enum in enums %}
-{{ enum }}
-    {%- endfor %}
-    {%- for forward_decl in forward_decls %}
-    {{ forward_decl }}
-    {%- endfor %}
-    {%- for cls in classes %}
-{{ cls }}
-    {%- endfor %}
-  end
-
-  module Unstable
-    class FunctionResult < SimpleDelegator
-      extend T::Sig
-      extend T::Generic
-
-      ParsedType = type_member
-
-      sig { returns(ParsedType) }
-      attr_reader :parsed
-
-      sig { params(inner: Baml::Ffi::FunctionResult, parsed: ParsedType).void }
-      def initialize(inner:, parsed:)
-        @inner = inner
-        @parsed = parsed
+    class {{ enum.name }} < T::Enum
+      {%- if enum.values.len() > 0 %}
+      enums do
+        {%- for value in enum.values %}
+        {{ value }} = new("{{ value }}")
+        {%- endfor %}
       end
+      {%- endif %}
     end
+    {%- endfor %}
+
+    {#- Forward declarations for types #}
+    {%- for cls in classes %}
+    class {{cls.name}} < T::Struct; end
+    {%- endfor %}
+
+    {#- https://sorbet.org/docs/tstruct #}
+    {%- for cls in classes %}
+    class {{cls.name}} < T::Struct
+      include T::Struct::ActsAsComparable
+
+      {%- for (name, type) in cls.fields %}
+      const :{{name}}, {{type}}
+      {%- endfor %}
+    end
+    {%- endfor %}
   end
 end
