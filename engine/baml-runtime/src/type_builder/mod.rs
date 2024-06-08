@@ -1,10 +1,12 @@
 use std::sync::{Arc, Mutex};
 
+use anyhow::Result;
 use baml_types::{BamlValue, FieldType};
 use indexmap::IndexMap;
 
 use crate::runtime_context::{PropertyAttributes, RuntimeClassOverride, RuntimeEnumOverride};
 
+mod json_schema;
 type MetaData = Arc<Mutex<IndexMap<String, BamlValue>>>;
 
 trait Meta {
@@ -166,6 +168,79 @@ impl TypeBuilder {
             classes: Default::default(),
             enums: Default::default(),
         }
+    }
+
+    pub fn add_json_schema(&self, schema: String) -> Result<()> {
+        let json_schema: json_schema::JsonSchema = serde_json::from_str(&schema)?;
+
+        json_schema.classes_and_enums()?;
+
+        let other: TypeBuilder = (&json_schema).try_into()?;
+
+        self.classes
+            .lock()
+            .unwrap()
+            .extend(other.classes.lock().unwrap().clone());
+        self.enums
+            .lock()
+            .unwrap()
+            .extend(other.enums.lock().unwrap().clone());
+
+        Ok(())
+    }
+
+    pub fn output_format(&self) -> Result<String> {
+        use crate::runtime_interface::InternalRuntimeInterface;
+
+        let (classes, enums) = self.to_overrides();
+
+        let ctx = crate::RuntimeContext {
+            env: HashMap::new(),
+            tags: HashMap::new(),
+            class_override: classes,
+            enum_overrides: enums,
+        };
+        let rendered = crate::BamlRuntime::from_file_content(
+            "<virtual>",
+            &[(
+                "<prompt>.baml",
+                r##"
+        class OutputFormat {
+            @@dynamic
+        }
+        function OutputFormat_Fn () -> OutputFormat { 
+            client PlaceholderClient
+            // TODO: remove prefix text and suffix text
+            prompt #"{{ ctx.output_format(prefix=null)}}"#
+        }
+        client<llm> PlaceholderClient {
+            provider ollama
+        }
+        "##,
+            )]
+            .into_iter()
+            .collect(),
+            HashMap::<String, String>::new(),
+        )?
+        .internal()
+        .render_prompt("OutputFormat_Fn", &ctx, &IndexMap::new(), None);
+
+        let Ok((rendered, _)) = rendered else {
+            anyhow::bail!("TODO internal error message (1)");
+        };
+        let internal_baml_jinja::RenderedPrompt::Chat(rendered) = rendered else {
+            anyhow::bail!("TODO internal error message (2)");
+        };
+        let rendered = rendered
+            .into_iter()
+            .flat_map(|p| p.parts)
+            .filter_map(|p| match p {
+                internal_baml_jinja::ChatMessagePart::Text(t) => Some(t),
+                _ => None,
+            })
+            .collect::<Vec<String>>()
+            .join("<internal-error-3>");
+        Ok(rendered)
     }
 
     pub fn class(&self, name: &str) -> Arc<Mutex<ClassBuilder>> {

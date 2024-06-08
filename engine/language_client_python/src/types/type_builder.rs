@@ -1,6 +1,8 @@
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::BamlValue;
-use pyo3::pymethods;
+use pyo3::{pymethods, PyRefMut, PyResult};
+
+use crate::BamlError;
 
 crate::lang_wrapper!(TypeBuilder, type_builder::TypeBuilder);
 crate::lang_wrapper!(EnumBuilder, type_builder::EnumBuilder, sync_thread_safe, name: String);
@@ -22,6 +24,20 @@ impl TypeBuilder {
     #[new]
     pub fn new() -> Self {
         type_builder::TypeBuilder::new().into()
+    }
+
+    pub fn add_json_schema<'py>(
+        slf: PyRefMut<'py, Self>,
+        json_schema: String,
+    ) -> PyResult<PyRefMut<'py, Self>> {
+        slf.inner
+            .add_json_schema(json_schema)
+            .map_err(BamlError::from_anyhow)?;
+        Ok(slf)
+    }
+
+    pub fn output_format(&self) -> PyResult<String> {
+        self.inner.output_format().map_err(BamlError::from_anyhow)
     }
 
     pub fn r#enum(&self, name: &str) -> EnumBuilder {

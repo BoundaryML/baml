@@ -2,6 +2,12 @@ mod parse_py_type;
 mod runtime;
 mod types;
 
+use std::collections::HashMap;
+
+use baml_runtime::{InternalRuntimeInterface, RenderedPrompt};
+use indexmap::IndexMap;
+use internal_baml_jinja::types::OutputFormatContent;
+use internal_baml_jinja::{RenderContext, RenderContext_Client};
 use pyo3::prelude::{pyfunction, pymodule, PyAnyMethods, PyModule, PyResult};
 use pyo3::{create_exception, wrap_pyfunction, Bound, PyErr, Python};
 
