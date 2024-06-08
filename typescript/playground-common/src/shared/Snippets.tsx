@@ -1,10 +1,13 @@
 import { atom } from 'jotai'
 import { SnippetCard } from './SnippetCard'
 import { SheetDescription, SheetHeader, SheetTitle } from '../components/ui/sheet'
+import type { BAMLProject } from '../lib/utils'
+import { BamlProjectsGroupings, loadExampleProjects } from '../lib/utils'
+import { useEffect, useState } from 'react'
 
 export const showSnippetsAtom = atom(false)
 
-export const SnippetsPage = () => {
+export const Snippets = () => {
   const [snippetGroups, setSnippetGroups] = useState<BamlProjectsGroupings | null>(null)
 
   useEffect(() => {
@@ -40,14 +43,14 @@ export const SnippetsPage = () => {
   )
 }
 
-const SnippetCarousel = ({ title, projects }: { title: string; projects: BAMLProject[] }) => {
+export const SnippetCarousel = ({ title, projects }: { title: string; projects: BAMLProject[] }) => {
   return (
     <>
       <div className='flex flex-col py-4 gap-y-3'>
         <div className='text-lg font-semibold'>{title}</div>
         <div className='flex flex-wrap gap-x-4 gap-y-4'>
           {projects.map((p) => {
-            return <SnippetCard key={p.id} project={p} />
+            return <SnippetCard key={p.id} snippet={p} />
           })}
         </div>
       </div>

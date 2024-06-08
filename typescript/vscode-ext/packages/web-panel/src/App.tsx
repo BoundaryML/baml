@@ -9,7 +9,6 @@ import { DevTools } from 'jotai-devtools'
 import { FlaskConical, FlaskConicalOff } from 'lucide-react'
 import { EventListener } from './baml_wasm_web/EventListener'
 import { Button } from './components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/dialog'
 import { Separator } from './components/ui/separator'
 // import { ASTContext, ASTProvider } from './shared/ASTProvider'
 import FunctionPanel from './shared/FunctionPanel'
@@ -18,23 +17,25 @@ import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from './shared/S
 import CustomErrorBoundary from './utils/ErrorFallback'
 import 'jotai-devtools/styles.css'
 import { SettingsIcon } from 'lucide-react'
-import { showSnippetsAtom } from './shared/Snippets'
+import { BamlProjectsGroupings, loadExampleProjects } from './lib/utils'
+import { Snippets } from './shared/Snippets'
+import { SheetTrigger, Sheet, SheetContent } from './components/ui/sheet'
 function App() {
-  const setShowSettings = useSetAtom(showSettingsAtom)
-  const setShowSnippets = useSetAtom(showSnippetsAtom)
+  // const setShowSnippets = useSetAtom(showSnippetsAtom)
   return (
     <CustomErrorBoundary>
       <DevTools />
       <Suspense fallback={<div>Loading...</div>}>
         <EventListener>
           <div className='absolute z-10 flex flex-row items-center justify-center gap-1 right-1 top-2 text-end'>
-            <Button
-              onClick={() => {
-                setShowSnippets(true)
-              }}
-            >
-              BAML Snippets
-            </Button>
+            <Sheet>
+              <SheetTrigger>
+                <Button className='bg-blue-300 text-white text-sm px-3 py-1'>Snippets</Button>
+              </SheetTrigger>
+              <SheetContent>
+                <Snippets></Snippets>
+              </SheetContent>
+            </Sheet>
 
             <VSCodeLink href='https://docs.boundaryml.com'>Docs</VSCodeLink>
             <ShowSettingsButton buttonClassName='h-10 w-10 bg-transparent p-1' iconClassName='h-7 w-7' />
