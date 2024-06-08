@@ -32,7 +32,7 @@ function App() {
               <SheetTrigger>
                 <Button className='bg-blue-300 text-white text-sm px-3 py-1'>Snippets</Button>
               </SheetTrigger>
-              <SheetContent>
+              <SheetContent className='bg-white'>
                 <Snippets></Snippets>
               </SheetContent>
             </Sheet>
