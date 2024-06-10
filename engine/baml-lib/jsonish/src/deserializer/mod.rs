@@ -1,5 +1,5 @@
 pub mod coercer;
 mod deserialize_flags;
-mod schema;
+// pub mod schema;
 mod score;
 pub mod types;

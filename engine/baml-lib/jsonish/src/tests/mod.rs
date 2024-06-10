@@ -323,11 +323,11 @@ test_deserializer!(
 
 const FOO_FILE: &str = r#"
 class Foo {
-  id string
+  id string?
 }
 "#;
 
-// This fails becaus
+// This fails because we cannot find the inner json blob
 test_deserializer!(
     test_string_from_string23,
     FOO_FILE,
@@ -341,7 +341,7 @@ test_deserializer!(
 
   "#,
     FieldType::Class("Foo".to_string()),
-    json!({"id": r#"{}"# })
+    json!({"id": null })
 );
 
 // also fails -- if you are in an object and you are casting to a string, dont do that.
@@ -361,7 +361,6 @@ test_deserializer!(
     FieldType::Class("Foo".to_string()),
     json!({"id": r#"{{hi} there"# })
 );
-
 
 const EXAMPLE_FILE: &str = r##"
 class Score {
@@ -404,7 +403,7 @@ class Score {
    
     // wordCounts WordCount[]
   }
-"##;  
+"##;
 
 test_deserializer!(
     test_string_from_string25,
@@ -486,76 +485,148 @@ test_deserializer!(
     "#,
     FieldType::Class("BookAnalysis".to_string()),
     json!({
-        "bookNames": ["brave new world", "the lord of the rings", "three body problem", "stormlight archive"],
-        "popularityOverTime": [
-          {
-            "bookName": "brave new world",
-            "scores": [
-              {
-                "year": 1932,
-                "score": 65
-              },
-              {
-                "year": 2000,
-                "score": 80
-              },
-              {
-                "year": 2021,
-                "score": 70
-              }
-            ]
-          },
-          {
-            "bookName": "the lord of the rings",
-            "scores": [
-              {
-                "year": 1954,
-                "score": 75
-              },
-              {
-                "year": 2001,
-                "score": 95
-              },
-              {
-                "year": 2021,
-                "score": 90
-              }
-            ]
-          },
-          {
-            "bookName": "three body problem",
-            "scores": [
-              {
-                "year": 2008,
-                "score": 60
-              },
-              {
-                "year": 2014,
-                "score": 79
-              },
-              {
-                "year": 2021,
-                "score": 85
-              }
-            ]
-          },
-          {
-            "bookName": "stormlight archive",
-            "scores": [
-              {
-                "year": 2010,
-                "score": 76
-              },
-              {
-                "year": 2020,
-                "score": 85
-              },
-              {
-                "year": 2021,
-                "score": 81
-              }
-            ]
-          }
-        ]
-      })  
+      "bookNames": ["brave new world", "the lord of the rings", "three body problem", "stormlight archive"],
+      "popularityOverTime": [
+        {
+          "bookName": "brave new world",
+          "scores": [
+            {
+              "year": 1932,
+              "score": 65
+            },
+            {
+              "year": 2000,
+              "score": 80
+            },
+            {
+              "year": 2021,
+              "score": 70
+            }
+          ]
+        },
+        {
+          "bookName": "the lord of the rings",
+          "scores": [
+            {
+              "year": 1954,
+              "score": 75
+            },
+            {
+              "year": 2001,
+              "score": 95
+            },
+            {
+              "year": 2021,
+              "score": 90
+            }
+          ]
+        },
+        {
+          "bookName": "three body problem",
+          "scores": [
+            {
+              "year": 2008,
+              "score": 60
+            },
+            {
+              "year": 2014,
+              "score": 79
+            },
+            {
+              "year": 2021,
+              "score": 85
+            }
+          ]
+        },
+        {
+          "bookName": "stormlight archive",
+          "scores": [
+            {
+              "year": 2010,
+              "score": 76
+            },
+            {
+              "year": 2020,
+              "score": 85
+            },
+            {
+              "year": 2021,
+              "score": 81
+            }
+          ]
+        }
+      ]
+    })
+);
+
+test_deserializer!(
+    test_string_from_string26,
+    EXAMPLE_FILE,
+    r#"
+  {
+      "bookNames": ["brave new world", "the lord of the rings"],
+      "popularityData": [
+        {
+          "bookName": "brave new world",
+          "scores": [
+            {
+              "year": 1932,
+              "score": 65
+            }
+          ]
+        },
+        {
+          "bookName": "the lord of the rings",
+          "scores": [
+            {
+              "year": 1954,
+              "score": 75
+            }
+          ]
+        },
+        {
+          "bookName": "the lord of the rings",
+          "scores": [
+            {
+              "year": 1954,
+              "score": 75
+            }
+          ]
+        }
+      ]
+    }
+  "#,
+    FieldType::Class("BookAnalysis".to_string()),
+    json!({
+      "bookNames": ["brave new world", "the lord of the rings"],
+      "popularityOverTime": [
+        {
+          "bookName": "brave new world",
+          "scores": [
+            {
+              "year": 1932,
+              "score": 65
+            }
+          ]
+        },
+        {
+          "bookName": "the lord of the rings",
+          "scores": [
+            {
+              "year": 1954,
+              "score": 75
+            }
+          ]
+        },
+        {
+          "bookName": "the lord of the rings",
+          "scores": [
+            {
+              "year": 1954,
+              "score": 75
+            }
+          ]
+        }
+      ]
+    })
 );

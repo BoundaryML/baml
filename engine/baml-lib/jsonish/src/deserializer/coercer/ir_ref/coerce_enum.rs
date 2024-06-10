@@ -36,6 +36,12 @@ impl TypeCoercer for Enum {
         target: &FieldType,
         value: Option<&crate::jsonish::Value>,
     ) -> Result<BamlValueWithFlags, ParsingError> {
+        log::debug!(
+            "scope: {scope} :: coercing to: {name} (current: {current})",
+            name = self.name.real_name(),
+            scope = ctx.display_scope(),
+            current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
+        );
         let value = match value {
             None | Some(crate::jsonish::Value::Null) => {
                 // If the value is None, we can't parse it.

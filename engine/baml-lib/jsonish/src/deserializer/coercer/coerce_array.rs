@@ -15,6 +15,13 @@ pub(super) fn coerce_array(
 ) -> Result<BamlValueWithFlags, ParsingError> {
     assert!(matches!(list_target, FieldType::List(_)));
 
+    log::debug!(
+        "scope: {scope} :: coercing to: {name} (current: {current})",
+        name = list_target.to_string(),
+        scope = ctx.display_scope(),
+        current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
+    );
+
     let inner = match list_target {
         FieldType::List(inner) => inner,
         _ => unreachable!(),
@@ -34,7 +41,7 @@ pub(super) fn coerce_array(
         }
         Some(v) => {
             flags.add_flag(Flag::SingleToArray);
-            match inner.coerce(&ctx.enter_scope("0"), inner, Some(v)) {
+            match inner.coerce(&ctx.enter_scope("<implied>"), inner, Some(v)) {
                 Ok(v) => items.push(v),
                 Err(e) => flags.add_flag(Flag::ArrayItemParseError(0, e)),
             }

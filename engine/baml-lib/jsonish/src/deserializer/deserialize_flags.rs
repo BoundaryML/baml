@@ -2,6 +2,7 @@ use super::{coercer::ParsingError, types::BamlValueWithFlags};
 
 #[derive(Debug, Clone)]
 pub enum Flag {
+    SingleFromMultiple,
     ObjectFromMarkdown(i32),
     ObjectFromFixedJson(Vec<crate::jsonish::Fixes>),
 
@@ -23,7 +24,7 @@ pub enum Flag {
     EnumOneFromMany(Vec<(usize, String)>),
 
     DefaultFromNoValue,
-    DefaultButHadValue(crate::jsonish::Value),
+    DefaultButHadValue(String),
     OptionalDefaultFromNoValue,
 
     // String -> X convertions.
@@ -67,6 +68,9 @@ impl std::fmt::Display for DeserializerConditions {
 impl std::fmt::Display for Flag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Flag::SingleFromMultiple => {
+                write!(f, "Single from multiple")?;
+            }
             Flag::OptionalDefaultFromNoValue => {
                 write!(f, "Optional Default value")?;
             }
@@ -179,5 +183,11 @@ impl DeserializerConditions {
 impl Default for DeserializerConditions {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl From<Flag> for DeserializerConditions {
+    fn from(flag: Flag) -> Self {
+        DeserializerConditions::new().with_flag(flag)
     }
 }

@@ -17,6 +17,13 @@ impl TypeCoercer for TypeValue {
         // Parsed from JSONish
         value: Option<&crate::jsonish::Value>,
     ) -> Result<BamlValueWithFlags, ParsingError> {
+        log::debug!(
+            "scope: {scope} :: coercing to: {name} (current: {current})",
+            name = target.to_string(),
+            scope = ctx.display_scope(),
+            current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
+        );
+
         match self {
             TypeValue::String => coerce_string(ctx, target, value),
             TypeValue::Int => coerce_int(ctx, target, value),
@@ -38,7 +45,7 @@ fn coerce_null(
             Ok(BamlValueWithFlags::Null(Default::default()))
         }
         Some(v) => Ok(BamlValueWithFlags::Null(
-            DeserializerConditions::new().with_flag(Flag::DefaultButHadValue(v.clone())),
+            DeserializerConditions::new().with_flag(Flag::DefaultButHadValue(format!("{:#?}", v))),
         )),
     }
 }

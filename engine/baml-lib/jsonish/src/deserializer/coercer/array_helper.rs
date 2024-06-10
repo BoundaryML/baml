@@ -44,7 +44,7 @@ pub(super) fn pick_best(
         std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
     });
 
-    log::warn!(
+    log::trace!(
         "Picking {} from {:?} items. Picked({:?}):\n{}",
         target,
         res_index,
