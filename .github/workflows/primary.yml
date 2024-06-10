@@ -27,6 +27,22 @@ permissions:
       
 jobs:
   build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Build Rust
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+        working-directory: engine
+      - name: Test Rust
+        run: cargo test --target x86_64-unknown-linux-gnu
+        working-directory: engine/
+  build-release:
     strategy:
       fail-fast: true
       matrix:
@@ -39,10 +55,9 @@ jobs:
             host: windows-latest
             node_build: pnpm build --target aarch64-pc-windows-msvc
 
-          # Skip aarch64-unknown-linux-gnu for now
-          # - target: aarch64-unknown-linux-gnu
-          #   host: ubuntu-latest
-          #   node_build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
+          - target: aarch64-unknown-linux-gnu
+            host: ubuntu-latest
+            node_build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
 
           - target: x86_64-apple-darwin
             host: macos-latest

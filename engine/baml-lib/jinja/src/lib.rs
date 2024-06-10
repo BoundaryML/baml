@@ -832,11 +832,11 @@ mod render_tests {
                     and also outputs this word 4 times
                     after giving a response: {{ haiku_subject }}
                     
-                    {{ _.chat(role=ctx.env.ROLE) }}
+                    {{ _.chat(role=ctx.tags.ROLE) }}
                     
                     Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_format }}.
                     
-                    {{ _.chat(ctx.env.ROLE) }}
+                    {{ _.chat(ctx.tags.ROLE) }}
                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
 
                     {{ _.chat("a", role="aa") }}
@@ -887,11 +887,11 @@ mod render_tests {
                     and also outputs this word 4 times
                     after giving a response: {{ haiku_subject }}
                     
-                    {{ _.chat(role=ctx.env.ROLE) }}
+                    {{ _.chat(role=ctx.tags.ROLE) }}
                     
                     Tell me a haiku about {{ haiku_subject }}. {{ ctx.output_format }}
                     
-                    {{ _.chat(ctx.env.ROLE) }}
+                    {{ _.chat(ctx.tags.ROLE) }}
                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
             "#,
             &args,

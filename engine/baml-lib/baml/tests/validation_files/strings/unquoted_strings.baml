@@ -1,4 +1,3 @@
-
 client<llm> Hello {
   provider baml-openai-chat
   options {
@@ -9,39 +8,38 @@ client<llm> Hello {
   }
 }
 
-
-// error: Error validating: This line is not a valid field or attribute definition.
+// error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
+//   -->  strings/unquoted_strings.baml:3
+//    | 
+//  2 |   provider baml-openai-chat
+//  3 |   options {
+//  4 |     thing hello'world
+//    | 
+// error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
 //   -->  strings/unquoted_strings.baml:4
 //    | 
-//  3 |   provider baml-openai-chat
-//  4 |   options {
-//  5 |     thing hello'world
+//  3 |   options {
+//  4 |     thing hello'world
+//  5 |     banned @helloworld
 //    | 
-// error: Error validating: This line is not a valid field or attribute definition.
-//   -->  strings/unquoted_strings.baml:5
+// error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
+//   -->  strings/unquoted_strings.baml:6
 //    | 
-//  4 |   options {
-//  5 |     thing hello'world
-//  6 |     banned @helloworld
+//  5 |     banned @helloworld
+//  6 |     banned2 #helloworld
+//  7 |     banned3 hello(world)
 //    | 
-// error: Error validating: This line is not a valid field or attribute definition.
+// error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
 //   -->  strings/unquoted_strings.baml:7
 //    | 
-//  6 |     banned @helloworld
-//  7 |     banned2 #helloworld
-//  8 |     banned3 hello(world)
-//    | 
-// error: Error validating: This line is not a valid field or attribute definition.
-//   -->  strings/unquoted_strings.baml:8
-//    | 
-//  7 |     banned2 #helloworld
-//  8 |     banned3 hello(world)
-//  9 |   }
+//  6 |     banned2 #helloworld
+//  7 |     banned3 hello(world)
+//  8 |   }
 //    | 
 // error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
-//   -->  strings/unquoted_strings.baml:10
+//   -->  strings/unquoted_strings.baml:9
 //    | 
-//  9 |   }
-// 10 | }
-// 11 | 
+//  8 |   }
+//  9 | }
+// 10 | 
 //    | 
