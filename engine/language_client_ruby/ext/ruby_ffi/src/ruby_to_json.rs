@@ -2,9 +2,16 @@ use baml_types::{BamlMap, BamlValue};
 use core::hash;
 use indexmap::IndexMap;
 use magnus::{
-    class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
-    scan_args::get_kwargs, value::Value, Error, Float, Integer, IntoValue, RArray, RClass, RHash,
-    RModule, RString, Ruby, Symbol,
+    class,
+    error::RubyUnavailableError,
+    exception::runtime_error,
+    function, method,
+    prelude::*,
+    scan_args::get_kwargs,
+    try_convert,
+    typed_data::{self, Obj},
+    value::Value,
+    Error, Float, Integer, IntoValue, RArray, RClass, RHash, RModule, RString, Ruby, Symbol,
 };
 use std::{collections::HashMap, result::Result};
 
@@ -96,7 +103,7 @@ impl<'rb> RubyToJson<'rb> {
         }
     }
 
-    pub fn convert_hash_to_json(from: RHash) -> crate::Result<HashMap<String, BamlValue>> {
+    pub fn convert_hash_to_json(from: RHash) -> anyhow::Result<HashMap<String, BamlValue>> {
         let ruby = Ruby::get_with(from);
         let result = RubyToJson { ruby: &ruby }.hash_to_map(from, vec![]);
 
@@ -107,14 +114,11 @@ impl<'rb> RubyToJson<'rb> {
                 for error in e {
                     errors.push(format!("  {}: {}", error.position.join("."), error.message));
                 }
-                Err(Error::new(
-                    ruby.exception_type_error(),
-                    format!(
-                        "failed to convert Ruby object to JSON, errors were:\n{}\nRuby object:\n{}",
-                        errors.join("\n"),
-                        from.inspect()
-                    ),
-                ))
+                anyhow::bail!(
+                    "Failed to convert Ruby object to JSON, errors were:\n{}\nRuby object:\n{}",
+                    errors.join("\n"),
+                    from.inspect()
+                )
             }
         }
     }
@@ -166,6 +170,12 @@ impl<'rb> RubyToJson<'rb> {
             if superclass == "T::Enum" {
                 return self.sorbet_to_json(any, field_pos);
             }
+        }
+
+        if let Ok(image) = Obj::<crate::BamlImage>::try_convert(any) {
+            use std::ops::Deref;
+
+            return Ok(Obj::deref(&image).into());
         }
 
         Err(vec![SerializationError {

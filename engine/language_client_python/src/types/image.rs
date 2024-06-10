@@ -8,44 +8,45 @@ crate::lang_wrapper!(BamlImagePy, baml_types::BamlImage);
 impl BamlImagePy {
     #[staticmethod]
     fn from_url(url: String) -> Self {
-        BamlImagePy {
-            inner: baml_types::BamlImage::Url(baml_types::ImageUrl::new(url)),
+        Self {
+            inner: baml_types::BamlImage::from_url(url),
         }
     }
 
     #[staticmethod]
     fn from_base64(media_type: String, base64: String) -> Self {
-        BamlImagePy {
-            inner: baml_types::BamlImage::Base64(baml_types::ImageBase64::new(base64, media_type)),
+        Self {
+            inner: baml_types::BamlImage::from_base64(media_type, base64),
         }
     }
 
     pub fn is_url(&self) -> bool {
-        matches!(&self.inner, baml_types::BamlImage::Url(_))
+        self.inner.is_url()
+    }
+
+    pub fn is_base64(&self) -> bool {
+        self.inner.is_base64()
     }
 
     pub fn as_url(&self) -> PyResult<String> {
-        match &self.inner {
-            baml_types::BamlImage::Url(url) => Ok(url.url.clone()),
-            _ => Err(crate::BamlError::new_err("Image is not a URL")),
-        }
+        self.inner
+            .as_url()
+            .map_err(|e| crate::BamlError::new_err(format!("{:?}", e)))
     }
 
     pub fn as_base64(&self) -> PyResult<Vec<String>> {
-        match &self.inner {
-            baml_types::BamlImage::Base64(base64) => {
-                Ok(vec![base64.base64.clone(), base64.media_type.clone()])
-            }
-            _ => Err(crate::BamlError::new_err("Image is not base64")),
-        }
+        self.inner
+            .as_base64()
+            .map(|baml_types::ImageBase64 { media_type, base64 }| vec![base64, media_type])
+            .map_err(|e| crate::BamlError::new_err(format!("{:?}", e)))
     }
 
     pub fn __repr__(&self) -> String {
         match &self.inner {
-            baml_types::BamlImage::Url(url) => format!("BamlImagePy(url={})", url.url),
+            baml_types::BamlImage::Url(url) => format!("BamlImage(url={})", url.url),
             baml_types::BamlImage::Base64(base64) => {
                 format!(
-                    "BamlImagePy(base64={}, media_type={})",
+                    "BamlImage(base64={}, media_type={})",
                     base64.base64, base64.media_type
                 )
             }

@@ -77,12 +77,19 @@ describe "ruby<->baml integration tests" do
     refute_nil myEnum
   end
 
-  #it "should work with image" do
-  #  res = b.TestImageInput(
-  #    img: Baml::Image.from_url("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png")
-  #  )
-  #  assert_includes res.downcase, "green"
-  #end
+  it "should work with image" do
+    res = b.TestImageInput(
+      img: Baml::Image.from_url("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png")
+    )
+    assert_includes res.downcase, "green"
+  end
+
+  it "always raises BamlError" do
+    assert_raises Baml::Error do
+      img = Baml::Image.from_url("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png")
+      img.as_base64()
+    end
+  end
 
   it "works with unions" do
     res = b.UnionTest_Function(input: "a")

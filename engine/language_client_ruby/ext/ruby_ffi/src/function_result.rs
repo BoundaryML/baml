@@ -22,12 +22,13 @@ impl FunctionResult {
     }
 
     #[allow(dead_code)]
-    fn raw(&self) -> Result<String> {
-        match self.inner.content() {
+    fn raw(ruby: &Ruby, rb_self: &FunctionResult) -> Result<String> {
+        match rb_self.inner.content() {
             Ok(content) => Ok(content.to_string()),
-            Err(_) => Err(Error::new(
-                runtime_error(),
-                format!("No LLM response: {}", self.inner),
+            Err(e) => Err(crate::baml_error(
+                ruby,
+                e,
+                format!("No LLM response: {}", rb_self.inner),
             )),
         }
     }
@@ -41,14 +42,16 @@ impl FunctionResult {
             Ok(parsed) => {
                 ruby_to_json::RubyToJson::serialize_baml(ruby, types, &BamlValue::from(parsed))
                     .map_err(|e| {
-                        magnus::Error::new(
-                            ruby.exception_type_error(),
-                            format!("failing inside parsed_using_types: {:?}", e),
+                        crate::baml_error(
+                            ruby,
+                            anyhow::Error::msg(format!("{:?}", e)),
+                            "Failed to convert parsed content to Ruby type",
                         )
                     })
             }
-            Err(_) => Err(Error::new(
-                ruby.exception_runtime_error(),
+            Err(e) => Err(crate::baml_error(
+                ruby,
+                e,
                 format!("Failed to parse LLM response: {}", rb_self.inner),
             )),
         }

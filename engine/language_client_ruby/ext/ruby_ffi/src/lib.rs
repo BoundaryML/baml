@@ -2,11 +2,11 @@ use baml_runtime::{BamlRuntime, RuntimeContext};
 use baml_types::BamlValue;
 use indexmap::IndexMap;
 use magnus::block::Proc;
-use magnus::IntoValue;
 use magnus::{
     class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
-    scan_args::get_kwargs, Error, RHash, Ruby,
+    scan_args::get_kwargs, Error, RClass, RHash, RModule, Ruby,
 };
+use magnus::{ExceptionClass, IntoValue};
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -14,14 +14,42 @@ use std::sync::Arc;
 
 use function_result::FunctionResult;
 use function_result_stream::FunctionResultStream;
+pub(crate) use image::BamlImage;
 use runtime_ctx_manager::RuntimeContextManager;
 
 mod function_result;
 mod function_result_stream;
+mod image;
 mod ruby_to_json;
 mod runtime_ctx_manager;
 
 type Result<T> = std::result::Result<T, magnus::Error>;
+
+pub fn baml_error_class(ruby: &Ruby) -> Result<ExceptionClass> {
+    let baml_error_type = ruby
+        .define_module("Baml")?
+        .define_class("Error", ruby.exception_runtime_error().as_r_class())?;
+
+    match ExceptionClass::from_value(baml_error_type.into_value()) {
+        Some(e) => Ok(e),
+        None => Err(Error::new(
+            ruby.exception_runtime_error(),
+            "Failed to create BamlError class",
+        )),
+    }
+}
+
+pub fn baml_error(ruby: &Ruby, e: impl Into<anyhow::Error>, msg: impl Into<String>) -> Error {
+    Error::new(
+        // NB(sam): the unwrap_or should never fall back to runtime_error
+        baml_error_class(ruby).unwrap_or(ruby.exception_runtime_error()),
+        format!("{:?}", e.into().context(msg.into())),
+    )
+}
+
+trait DefineInRuby {
+    fn define_in_ruby(module: &RModule) -> Result<()>;
+}
 
 // must be kept in sync with rb.define_class in the init() fn
 #[magnus::wrap(class = "Baml::Ffi::BamlRuntime", free_immediately, size)]
@@ -47,12 +75,7 @@ impl BamlRuntimeFfi {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .map_err(|e| {
-                Error::new(
-                    ruby.exception_runtime_error(),
-                    format!("Failed to start tokio runtime because:\n{:?}", e),
-                )
-            })
+            .map_err(|e| baml_error(ruby, e, "Failed to start tokio runtime"))
     }
 
     pub fn from_directory(
@@ -62,12 +85,7 @@ impl BamlRuntimeFfi {
     ) -> Result<BamlRuntimeFfi> {
         let baml_runtime = match BamlRuntime::from_directory(&directory, env_vars) {
             Ok(br) => br,
-            Err(e) => {
-                return Err(Error::new(
-                    ruby.exception_runtime_error(),
-                    format!("{:?}", e.context("Failed to initialize BAML runtime")),
-                ))
-            }
+            Err(e) => return Err(baml_error(ruby, e, "Failed to initialize BAML runtime")),
         };
 
         let rt = BamlRuntimeFfi {
@@ -86,12 +104,7 @@ impl BamlRuntimeFfi {
     ) -> Result<Self> {
         let baml_runtime = match BamlRuntime::from_file_content(&root_path, &files, env_vars) {
             Ok(br) => br,
-            Err(e) => {
-                return Err(Error::new(
-                    ruby.exception_runtime_error(),
-                    format!("{:?}", e.context("Failed to initialize BAML runtime")),
-                ))
-            }
+            Err(e) => return Err(baml_error(ruby, e, "Failed to initialize BAML runtime")),
         };
 
         let rt = BamlRuntimeFfi {
@@ -120,10 +133,11 @@ impl BamlRuntimeFfi {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
             Err(e) => {
-                return Err(Error::new(
-                    ruby.exception_syntax_error(),
-                    format!("error while parsing call_function args:\n{}", e),
-                ));
+                return Err(baml_error(
+                    ruby,
+                    e,
+                    "Failed to convert call_function args to JSON",
+                ))
             }
         };
 
@@ -136,12 +150,10 @@ impl BamlRuntimeFfi {
             None,
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
-            (Err(e), _) => Err(Error::new(
-                ruby.exception_runtime_error(),
-                format!(
-                    "{:?}",
-                    e.context(format!("error while calling {function_name}"))
-                ),
+            (Err(e), _) => Err(baml_error(
+                ruby,
+                e,
+                format!("error while calling {function_name}"),
             )),
         };
 
@@ -158,10 +170,11 @@ impl BamlRuntimeFfi {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
             Err(e) => {
-                return Err(Error::new(
-                    ruby.exception_syntax_error(),
-                    format!("error while parsing stream_function args:\n{}", e),
-                ));
+                return Err(baml_error(
+                    ruby,
+                    e,
+                    "Failed to convert stream_function args to JSON",
+                ))
             }
         };
 
@@ -173,12 +186,10 @@ impl BamlRuntimeFfi {
                 .stream_function(function_name.clone(), &args, &ctx.inner, None)
             {
                 Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
-                Err(e) => Err(Error::new(
-                    ruby.exception_runtime_error(),
-                    format!(
-                        "{:?}",
-                        e.context(format!("error while calling {function_name}"))
-                    ),
+                Err(e) => Err(baml_error(
+                    ruby,
+                    e,
+                    format!("error while streaming {function_name}"),
                 )),
             };
 
@@ -191,12 +202,7 @@ fn invoke_runtime_cli(ruby: &Ruby, argv0: String, argv: Vec<String>) -> Result<(
         std::iter::once(argv0).chain(argv.into_iter()).collect(),
         baml_runtime::CallerType::Ruby,
     )
-    .map_err(|e| {
-        Error::new(
-            ruby.exception_runtime_error(),
-            format!("{:?}", e.context(format!("error while invoking baml-cli"))),
-        )
-    })
+    .map_err(|e| baml_error(ruby, e, "error while invoking baml-cli"))
 }
 
 #[magnus::init(name = "ruby_ffi")]
@@ -209,7 +215,12 @@ fn init(ruby: &Ruby) -> Result<()> {
         eprintln!("Failed to initialize BAML logger: {:#}", e);
     };
 
-    let module = ruby.define_module("Baml")?.define_module("Ffi")?;
+    baml_error_class(ruby)?;
+
+    let public_module = ruby.define_module("Baml")?;
+    image::BamlImage::define_in_ruby(&public_module)?;
+
+    let module = public_module.define_module("Ffi")?;
 
     module.define_module_function("invoke_runtime_cli", function!(invoke_runtime_cli, 2))?;
 
@@ -221,7 +232,6 @@ fn init(ruby: &Ruby) -> Result<()> {
     )?;
     runtime_class
         .define_singleton_method("from_files", function!(BamlRuntimeFfi::from_files, 3))?;
-    //runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 2))?;
     runtime_class.define_method(
         "create_context_manager",
         method!(BamlRuntimeFfi::create_context_manager, 0),

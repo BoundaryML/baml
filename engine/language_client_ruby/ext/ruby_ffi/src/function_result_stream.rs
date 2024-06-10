@@ -46,9 +46,10 @@ impl FunctionResultStream {
             .block_on(rb_self.inner.borrow_mut().run(on_event, &ctx.inner, None))
         {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
-            (Err(e), _) => Err(Error::new(
-                ruby.exception_runtime_error(),
-                format!("{:?}", e),
+            (Err(e), _) => Err(crate::baml_error(
+                ruby,
+                e,
+                "Failed to get final result from stream",
             )),
         }
     }

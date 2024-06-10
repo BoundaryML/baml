@@ -7,6 +7,7 @@ description.workspace = true
 license-file.workspace = true
 
 [dependencies]
+anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
