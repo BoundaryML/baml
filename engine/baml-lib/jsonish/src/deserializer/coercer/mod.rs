@@ -7,7 +7,7 @@ mod field_type;
 mod ir_ref;
 use anyhow::Result;
 use internal_baml_jinja::types::OutputFormatContent;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use internal_baml_core::ir::{repr::IntermediateRepr, FieldType};
 
@@ -20,6 +20,13 @@ pub struct ParsingContext<'a> {
 }
 
 impl ParsingContext<'_> {
+    pub fn display_scope(&self) -> String {
+        if self.scope.is_empty() {
+            return "<root>".to_string();
+        }
+        self.scope.join(".")
+    }
+
     pub(crate) fn new<'a>(of: &'a OutputFormatContent, allow_partials: bool) -> ParsingContext<'a> {
         ParsingContext {
             scope: Vec::new(),
@@ -133,15 +140,13 @@ impl ParsingContext<'_> {
         }
     }
 
-    pub(crate) fn error_unexpected_type(
+    pub(crate) fn error_unexpected_type<T: std::fmt::Display + std::fmt::Debug>(
         &self,
         target: &FieldType,
-        got: &crate::jsonish::Value,
+        got: &T,
     ) -> ParsingError {
-        let type_of = got.r#type();
-
         ParsingError {
-            reason: format!("Expected {}, got {:#?}.\n{}", target, type_of, got),
+            reason: format!("Expected {}, got {}.\n{:#?}", target, got, got),
             scope: self.scope.clone(),
         }
     }

@@ -22,6 +22,12 @@ impl TypeCoercer for FieldType {
     ) -> Result<BamlValueWithFlags, ParsingError> {
         match value {
             Some(crate::jsonish::Value::AnyOf(candidates, primitive)) => {
+                log::debug!(
+                    "scope: {scope} :: coercing to: {name} (current: {current})",
+                    name = target.to_string(),
+                    scope = ctx.display_scope(),
+                    current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
+                );
                 if matches!(target, FieldType::Primitive(TypeValue::String)) {
                     self.coerce(
                         ctx,
@@ -38,6 +44,12 @@ impl TypeCoercer for FieldType {
                 }
             }
             Some(crate::jsonish::Value::Markdown(_t, v)) => {
+                log::debug!(
+                    "scope: {scope} :: coercing to: {name} (current: {current})",
+                    name = target.to_string(),
+                    scope = ctx.display_scope(),
+                    current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
+                );
                 self.coerce(ctx, target, Some(v)).and_then(|mut v| {
                     v.add_flag(Flag::ObjectFromMarkdown(
                         if matches!(target, FieldType::Primitive(TypeValue::String)) {
@@ -51,6 +63,12 @@ impl TypeCoercer for FieldType {
                 })
             }
             Some(crate::jsonish::Value::FixedJson(v, fixes)) => {
+                log::debug!(
+                    "scope: {scope} :: coercing to: {name} (current: {current})",
+                    name = target.to_string(),
+                    scope = ctx.display_scope(),
+                    current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
+                );
                 let mut v = self.coerce(ctx, target, Some(v))?;
                 v.add_flag(Flag::ObjectFromFixedJson(fixes.to_vec()));
                 Ok(v)

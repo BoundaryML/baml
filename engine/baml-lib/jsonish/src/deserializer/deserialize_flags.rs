@@ -2,6 +2,7 @@ use super::{coercer::ParsingError, types::BamlValueWithFlags};
 
 #[derive(Debug, Clone)]
 pub enum Flag {
+    // SingleFromMultiple,
     ObjectFromMarkdown(i32),
     ObjectFromFixedJson(Vec<crate::jsonish::Fixes>),
 
@@ -179,5 +180,11 @@ impl DeserializerConditions {
 impl Default for DeserializerConditions {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl From<Flag> for DeserializerConditions {
+    fn from(flag: Flag) -> Self {
+        DeserializerConditions::new().with_flag(flag)
     }
 }

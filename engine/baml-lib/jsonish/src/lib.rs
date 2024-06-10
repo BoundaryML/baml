@@ -24,10 +24,20 @@ pub fn from_str(
 
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.
     let value = jsonish::parse(raw_string, jsonish::ParseOptions::default())?;
+    // let schema = deserializer::schema::from_jsonish_value(&value, None);
 
-    log::info!("Parsed value: {:?}", value);
-
+    // Pick the schema that is the most specific.
+    // log::info!("Parsed: {}", schema);
     let ctx = ParsingContext::new(of, allow_partials);
+    // let res = schema.cast_to(target);
+    // log::info!("Casted: {:?}", res);
+
+    // match res {
+    //     Ok(v) => Ok(v),
+    //     Err(e) => anyhow::bail!("Failed to cast value: {}", e),
+    // }
+
+    // Determine the best way to get the desired schema from the parsed schema.
 
     // Lets try to now coerce the value into the expected schema.
     match target.coerce(&ctx, target, Some(&value)) {

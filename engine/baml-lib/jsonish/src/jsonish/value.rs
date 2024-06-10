@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use baml_types::BamlMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,8 +33,27 @@ impl Value {
             Value::Number(_) => "Number".to_string(),
             Value::Boolean(_) => "Boolean".to_string(),
             Value::Null => "Null".to_string(),
-            Value::Object(_k) => "Object".to_string(),
-            Value::Array(_i) => "Array".to_string(),
+            Value::Object(k) => {
+                let mut s = "Object{".to_string();
+                for (key, value) in k.iter() {
+                    s.push_str(&format!("{}: {}, ", key, value.r#type()));
+                }
+                s.push('}');
+                s
+            }
+            Value::Array(i) => {
+                let mut s = "Array[".to_string();
+                let items = i
+                    .iter()
+                    .map(|v| v.r#type())
+                    .collect::<HashSet<String>>()
+                    .into_iter()
+                    .collect::<Vec<String>>()
+                    .join(" | ");
+                s.push_str(&items);
+                s.push(']');
+                s
+            }
             Value::Markdown(tag, item) => {
                 format!("Markdown:{} - {}", tag, item.r#type())
             }
