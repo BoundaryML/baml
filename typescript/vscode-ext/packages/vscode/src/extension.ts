@@ -188,9 +188,16 @@ export function activate(context: vscode.ExtensionContext) {
           root_path: 'default',
           function_name: args?.functionName ?? 'default',
         })
-      }, 1000)
+
+        WebPanelView.currentPanel?.postMessage('port_number', {
+          port: port,
+        })
+      }, 2000)
       console.info('Opening BAML panel')
       requestDiagnostics()
+      WebPanelView.currentPanel?.postMessage('port_number', {
+        port: port,
+      })
     },
   )
 
@@ -247,42 +254,48 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand('baml.openBamlPanel')
   }
 
-  const app = require('express')()
-  app.use(cors())
-  var port: number
-  const server = app.listen(0, () => {
-    port = server.address().port
-    WebPanelView.currentPanel?.postMessage('port_number', {
-      port: port,
+  try {
+    const app = require('express')()
+    app.use(cors())
+    var port: number
+    const server = app.listen(0, () => {
+      port = server.address().port
+      console.log('Server started on port ' + port)
+      WebPanelView.currentPanel?.postMessage('port_number', {
+        port: port,
+      })
     })
-  })
 
-  app.use(
-    createProxyMiddleware({
-      changeOrigin: true,
-      router: (req) => {
-        // Extract the original target URL from the custom header
-        const originalUrl = req.headers['baml-original-url']
+    app.use(
+      createProxyMiddleware({
+        changeOrigin: true,
+        router: (req) => {
+          // Extract the original target URL from the custom header
+          const originalUrl = req.headers['baml-original-url']
 
-        if (typeof originalUrl === 'string') {
-          delete req.headers['baml-original-url']
-          req.headers['origin'] = `http://localhost:${port}`
-          return originalUrl
-        } else {
-          throw new Error('baml-original-url header is missing or invalid')
-        }
-      },
-      logger: console,
-      on: {
-        proxyRes: (proxyRes, req, res) => {
-          proxyRes.headers['Access-Control-Allow-Origin'] = '*'
+          if (typeof originalUrl === 'string') {
+            delete req.headers['baml-original-url']
+            req.headers['origin'] = `http://localhost:${port}`
+            return originalUrl
+          } else {
+            throw new Error('baml-original-url header is missing or invalid')
+          }
         },
-        error: (error) => {
-          console.error('proxy error:', error)
+        logger: console,
+        on: {
+          proxyRes: (proxyRes, req, res) => {
+            proxyRes.headers['Access-Control-Allow-Origin'] = '*'
+          },
+          error: (error) => {
+            console.error('proxy error:', error)
+          },
         },
-      },
-    }),
-  )
+      }),
+    )
+  } catch (error) {
+    console.error('Failed to start proxy server:', error)
+    vscode.window.showErrorMessage('Failed to BAML localhost server. Contact support for help.')
+  }
 
   // Add a catch-all route to handle 404 errors
 

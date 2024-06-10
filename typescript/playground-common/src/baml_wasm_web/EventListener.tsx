@@ -548,6 +548,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           break
 
         case 'port_number':
+          console.log('Setting port number', content.port)
           setEnvKeyValueStorage((prev) => {
             let keyExists = false
             const updated: [string, string][] = prev.map(([key, value]) => {
