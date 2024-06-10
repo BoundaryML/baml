@@ -1,7 +1,31 @@
 {
   "folders": [
     {
-      "path": "."
+      "path": ".baml"
+    },
+    {
+      "path": ".github"
+    },
+    {
+      "path": "docs"
+    },
+    {
+      "path": "engine"
+    },
+    {
+      "path": "fiddle"
+    },
+    {
+      "path": "integ-tests"
+    },
+    {
+      "path": "release"
+    },
+    {
+      "path": "tools"
+    },
+    {
+      "path": "typescript"
     }
   ],
   "settings": {
