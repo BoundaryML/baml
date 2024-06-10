@@ -32,7 +32,6 @@ impl WithScore for BamlValueWithFlags {
 impl WithScore for Flag {
     fn score(&self) -> i32 {
         match self {
-            Flag::SingleFromMultiple => 1,
             Flag::OptionalDefaultFromNoValue => 1,
             Flag::DefaultFromNoValue => 100,
             Flag::DefaultButHadValue(_) => 110,

@@ -45,7 +45,7 @@ fn coerce_null(
             Ok(BamlValueWithFlags::Null(Default::default()))
         }
         Some(v) => Ok(BamlValueWithFlags::Null(
-            DeserializerConditions::new().with_flag(Flag::DefaultButHadValue(format!("{:#?}", v))),
+            DeserializerConditions::new().with_flag(Flag::DefaultButHadValue(v.clone())),
         )),
     }
 }
