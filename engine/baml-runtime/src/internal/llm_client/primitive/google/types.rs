@@ -7,16 +7,16 @@ use std::collections::HashMap;
 pub struct GoogleRequestBody {
     pub contents: Vec<Content>,
     pub tools: Option<Vec<Tool>>,
-    pub safetySettings: Option<SafetySetting>,
-    pub generationConfig: Option<GenerationConfig>,
-    pub systemInstruction: Option<Content>,
+    pub safety_settings: Option<SafetySetting>,
+    pub generation_config: Option<GenerationConfig>,
+    pub system_instruction: Option<Content>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 
 pub struct Tool {
-    pub functionDeclarations: Option<Vec<FunctionDeclaration>>,
+    pub function_declarations: Option<Vec<FunctionDeclaration>>,
     pub retrieval: Option<Retrieval>,
 }
 
@@ -67,21 +67,21 @@ pub enum Value {
 #[serde(rename_all = "camelCase")]
 
 pub enum Type {
-    STRING,
-    NUMBER,
-    INTEGER,
-    BOOLEAN,
-    OBJECT,
-    ARRAY,
-    TYPE_UNSPECIFIED,
+    String,
+    Number,
+    Integer,
+    Boolean,
+    Object,
+    Array,
+    TypeUnspecified,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 
 pub struct Retrieval {
-    pub disableAttribution: bool,
-    pub vertexAiSearch: VertexAiSearch,
+    pub disable_attribution: bool,
+    pub vertex_ai_search: VertexAiSearch,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -98,57 +98,57 @@ pub struct SafetySetting {
 
 #[derive(Serialize, Deserialize)]
 pub enum HarmBlockThreshold {
-    HARM_BLOCK_THRESHOLD_UNSPECIFIED,
-    BLOCK_LOW_AND_ABOVE,
-    BLOCK_MEDIUM_AND_ABOVE,
-    BLOCK_ONLY_HIGH,
-    BLOCK_NONE,
+    HarmBlockThresholdUnspecified,
+    BlockLowAndAbove,
+    BlockMediumAndAbove,
+    BlockOnlyHigh,
+    BlockNone,
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum HarmBlockMethod {
-    HARM_BLOCK_METHOD_UNSPECIFIED,
-    SEVERITY,
-    PROBABILITY,
+    HarmBlockMethodUnspecified,
+    Severity,
+    Probability,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct GenerationConfig {
-    pub stopSequences: Option<Vec<String>>,
-    pub responseMimeType: Option<String>,
+    pub stop_sequences: Option<Vec<String>>,
+    pub response_mime_type: Option<String>,
     pub temperature: Option<f64>,
-    pub topP: Option<f64>,
-    pub topK: Option<i32>,
-    pub candidateCount: Option<i32>,
-    pub maxOutputTokens: Option<i32>,
-    pub presencePenalty: Option<f64>,
-    pub frequencyPenalty: Option<f64>,
-    pub responseSchema: Option<Schema>,
+    pub top_p: Option<f64>,
+    pub top_k: Option<i32>,
+    pub candidate_count: Option<i32>,
+    pub max_output_tokens: Option<i32>,
+    pub presence_penalty: Option<f64>,
+    pub frequency_penalty: Option<f64>,
+    pub response_schema: Option<Schema>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct GoogleResponse {
     pub candidates: Vec<Candidate>,
-    pub promptFeedback: Option<PromptFeedback>,
-    pub usageMetaData: UsageMetaData,
+    pub prompt_feedback: Option<PromptFeedback>,
+    pub usage_meta_data: UsageMetaData,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct PromptFeedback {
-    pub blockReason: BlockReason,
-    pub safetyRatings: Vec<SafetyRating>,
-    pub blockReasonMessage: String,
+    pub block_reason: BlockReason,
+    pub safety_ratings: Vec<SafetyRating>,
+    pub block_reason_message: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 
 pub enum BlockReason {
-    BLOCKED_REASON_UNSPECIFIED,
-    SAFETY,
-    OTHER,
-    BLOCKLIST,
-    PROHIBITED_CONTENT,
+    BlockedReasonUnspecified,
+    Safety,
+    Other,
+    Blocklist,
+    ProhibitedContent,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -157,9 +157,9 @@ pub enum BlockReason {
 pub struct SafetyRating {
     pub category: HarmCategory,
     pub probability: HarmProbability,
-    pub probabilityScore: i32,
+    pub probability_score: i32,
     pub severity: HarmSeverity,
-    pub severityScore: i32,
+    pub severity_score: i32,
     pub blocked: bool,
 }
 
@@ -167,44 +167,44 @@ pub struct SafetyRating {
 #[serde(rename_all = "camelCase")]
 
 pub enum HarmCategory {
-    HARM_CATEGORY_UNSPECIFIED,
-    HARM_CATEGORY_HATE_SPEECH,
-    HARM_CATEGORY_DANGEROUS_CONTENT,
-    HARM_CATEGORY_HARASSMENT,
-    HARM_CATEGORY_SEXUALLY_EXPLICIT,
+    HarmCategoryUnspecified,
+    HarmCategoryHateSpeech,
+    HarmCategoryDangerousContent,
+    HarmCategoryHarassment,
+    HarmCategorySexuallyExplicit,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 
 pub enum HarmProbability {
-    HARM_PROBABILITY_UNSPECIFIED,
-    NEGLIGIBLE,
-    LOW,
-    MEDIUM,
-    HIGH,
+    HarmProbabilityUnspecified,
+    Negligible,
+    Low,
+    Medium,
+    High,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 
 pub enum HarmSeverity {
-    HARM_SEVERITY_UNSPECIFIED,
-    HARM_SEVERITY_NEGLIGIBLE,
-    HARM_SEVERITY_LOW,
-    HARM_SEVERITY_MEDIUM,
-    HARM_SEVERITY_HIGH,
+    HarmSeverityUnspecified,
+    HarmSeverityNegligible,
+    HarmSeverityLow,
+    HarmSeverityMedium,
+    HarmSeverityHigh,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Candidate {
     pub index: i32,
     pub content: Content,
-    pub finishReason: Option<FinishReason>,
-    pub safetyRatings: Vec<SafetyRating>,
-    pub citationMetadata: CitationMetadata,
-    pub groundingMetadata: GroundingMetadata,
-    pub finishMessage: Option<String>,
+    pub finish_reason: Option<FinishReason>,
+    pub safety_ratings: Vec<SafetyRating>,
+    pub citation_metadata: CitationMetadata,
+    pub grounding_metadata: GroundingMetadata,
+    pub finish_message: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -217,26 +217,26 @@ pub struct Content {
 #[serde(rename_all = "snake_case")]
 pub struct Part {
     pub text: String,
-    pub inlineData: Option<Blob>,
-    pub fileData: Option<FileData>,
-    pub functionCall: Option<FunctionCall>,
-    pub functionResponse: Option<FunctionResponse>,
-    pub videoMetadata: Option<VideoMetadata>,
+    pub inline_data: Option<Blob>,
+    pub file_data: Option<FileData>,
+    pub function_call: Option<FunctionCall>,
+    pub function_response: Option<FunctionResponse>,
+    pub video_metadata: Option<VideoMetadata>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 
 pub struct Blob {
-    pub mimeType: String,
+    pub mime_type: String,
     pub data: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct FileData {
-    pub mimeType: String,
-    pub fileUri: String,
+    pub mime_type: String,
+    pub file_uri: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -258,8 +258,8 @@ pub struct FunctionResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct VideoMetadata {
-    pub startOffset: Option<Duration>,
-    pub endOffset: Option<Duration>,
+    pub start_offset: Option<Duration>,
+    pub end_offset: Option<Duration>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -271,17 +271,16 @@ pub struct Duration {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum FinishReason {
-    FINISH_REASON_UNSPECIFIED,
-    STOP,
-    MAX_TOKENS,
-    SAFETY,
-    RECITATION,
-    OTHER,
-    BLOCKLIST,
-    PROHIBITED_CONTENT,
-    SPII,
+    FinishReasonUnspecified,
+    Stop,
+    MaxTokens,
+    Safety,
+    Recitation,
+    Other,
+    Blocklist,
+    ProhibitedContent,
+    Spii,
 }
-
 #[derive(Serialize, Deserialize)]
 pub struct CitationMetadata {
     pub citations: Vec<Citation>,
@@ -291,12 +290,12 @@ pub struct CitationMetadata {
 #[serde(rename_all = "snake_case")]
 
 pub struct Citation {
-    pub startIndex: i32,
-    pub endIndex: i32,
+    pub start_index: i32,
+    pub end_index: i32,
     pub uri: String,
     pub title: String,
     pub license: String,
-    pub publicationDate: Date,
+    pub publication_date: Date,
 }
 #[derive(Serialize, Deserialize)]
 pub struct Date {
@@ -309,21 +308,21 @@ pub struct Date {
 #[serde(rename_all = "snake_case")]
 
 pub struct GroundingMetadata {
-    pub webSearchQueries: Vec<String>,
-    pub searchEntryPoint: SearchEntryPoint,
+    pub web_search_queries: Vec<String>,
+    pub search_entry_point: SearchEntryPoint,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SearchEntryPoint {
-    pub renderedContent: String,
-    pub sdkBlob: Vec<u8>,
+    pub rendered_content: String,
+    pub sdk_blob: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct UsageMetaData {
-    pub promptTokenCount: i32,
-    pub candidatesTokenCount: i32,
-    pub totalTokenCount: i32,
+    pub prompt_token_count: i32,
+    pub candidates_token_count: i32,
+    pub total_token_count: i32,
 }

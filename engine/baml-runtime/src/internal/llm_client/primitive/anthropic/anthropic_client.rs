@@ -17,7 +17,7 @@ use reqwest::Response;
 use crate::{
     internal::llm_client::{
         primitive::{
-            anthropic::types::{AnthropicErrorResponse, AnthropicMessageResponse, StopReason},
+            anthropic::types::{AnthropicMessageResponse, StopReason},
             request::{make_parsed_request, make_request, RequestBuilder},
         },
         traits::{
@@ -35,6 +35,7 @@ use crate::RuntimeContext;
 
 use super::types::MessageChunk;
 
+// stores properties required for making a post request to the API
 struct PostRequestProperities {
     default_role: String,
     base_url: String,
@@ -45,6 +46,7 @@ struct PostRequestProperities {
     properties: HashMap<String, serde_json::Value>,
 }
 
+// represents client that interacts with the Anthropic API
 pub struct AnthropicClient {
     pub name: String,
     retry_policy: Option<String>,
@@ -56,6 +58,8 @@ pub struct AnthropicClient {
     client: reqwest::Client,
 }
 
+// resolves/constructs PostRequestProperties from the client's options and runtime context, fleshing out the needed headers and parameters
+// basically just reads the client's options and matches them to needed properties or defaults them
 fn resolve_properties(
     client: &ClientWalker,
     ctx: &RuntimeContext,
@@ -131,6 +135,7 @@ fn resolve_properties(
     })
 }
 
+// getters for client info
 impl WithRetryPolicy for AnthropicClient {
     fn retry_policy_name(&self) -> Option<&str> {
         self.retry_policy.as_deref()
@@ -149,6 +154,7 @@ impl WithClient for AnthropicClient {
 
 impl WithNoCompletion for AnthropicClient {}
 
+// Manages processing response chunks from streaming response, and converting it into a structured response format
 impl SseResponseTrait for AnthropicClient {
     fn response_stream(
         &self,
@@ -285,6 +291,7 @@ impl SseResponseTrait for AnthropicClient {
     }
 }
 
+// handles streamign chat interactions, when sending prompt to API and processing response stream
 impl WithStreamChat for AnthropicClient {
     async fn stream_chat(
         &self,
@@ -300,6 +307,7 @@ impl WithStreamChat for AnthropicClient {
     }
 }
 
+// constructs base client and resolves properties based on context
 impl AnthropicClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AnthropicClient> {
         Ok(Self {
@@ -324,6 +332,7 @@ impl AnthropicClient {
     }
 }
 
+// how to build the HTTP request for requests
 impl RequestBuilder for AnthropicClient {
     fn http_client(&self) -> &reqwest::Client {
         &self.client
@@ -447,12 +456,14 @@ impl WithChat for AnthropicClient {
     }
 }
 
+// converts completion prompt into JSON body for request
 fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
     map.insert("prompt".into(), json!(prompt));
     map
 }
 
+// converts chat prompt into JSON body for request
 fn convert_chat_prompt_to_body(
     prompt: &Vec<RenderedChatMessage>,
 ) -> HashMap<String, serde_json::Value> {
@@ -511,6 +522,7 @@ fn convert_chat_prompt_to_body(
     return map;
 }
 
+// converts chat message parts into JSON content
 fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json::Value {
     if parts.len() == 1 {
         if let ChatMessagePart::Text(text) = &parts[0] {

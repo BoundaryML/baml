@@ -1,12 +1,8 @@
-use crate::client::ClientWalker;
-use crate::internal::llm_client::primitive::google::types::ChatMessagePart;
-use crate::internal::llm_client::primitive::types::BamlImage;
-use crate::internal::llm_client::RenderedChatMessage;
-use crate::internal::llm_client::RuntimeContext;
+use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
         primitive::{
-            google::types::{AnthropicErrorResponse, GoogleResponse, StopReason},
+            google::types::{FinishReason, GoogleRequestBody, GoogleResponse},
             request::{make_parsed_request, make_request, RequestBuilder},
         },
         traits::{
@@ -18,18 +14,13 @@ use crate::{
     },
     request::create_client,
 };
-use internal_baml_jinja::RenderContext_Client;
-use reqwest::Response;
+use baml_types::BamlImage;
+use internal_baml_core::ir::ClientWalker;
+use internal_baml_jinja::{
+    ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
+};
 use serde_json::json;
 use std::collections::HashMap;
-pub struct GoogleClient {
-    pub name: String,
-    pub client: reqwest::Client,
-    pub retry_policy: Option<String>,
-    pub context: RenderContext_Client,
-    pub features: ModelFeatures,
-    pub properties: PostRequestProperities,
-}
 
 struct PostRequestProperities {
     default_role: String,
@@ -37,32 +28,16 @@ struct PostRequestProperities {
     api_key: Option<String>,
     headers: HashMap<String, String>,
     proxy_url: Option<String>,
-    // These are passed directly to the Anthropic API.
     properties: HashMap<String, serde_json::Value>,
 }
 
-impl GoogleClient {
-    pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<GoogleClient, anyhow::Error> {
-        Ok(Self {
-            name: client.name().into(),
-            properties: resolve_properties(client, ctx)?,
-            context: RenderContext_Client {
-                name: client.name().into(),
-                provider: client.elem().provider.clone(),
-            },
-            features: ModelFeatures {
-                chat: true,
-                completion: false,
-                anthropic_system_constraints: true,
-            },
-            retry_policy: client
-                .elem()
-                .retry_policy_id
-                .as_ref()
-                .map(|s| s.to_string()),
-            client: create_client()?,
-        })
-    }
+pub struct GoogleClient {
+    pub name: String,
+    pub client: reqwest::Client,
+    pub retry_policy: Option<String>,
+    pub context: RenderContext_Client,
+    pub features: ModelFeatures,
+    pub properties: PostRequestProperities,
 }
 
 fn resolve_properties(
@@ -93,6 +68,8 @@ fn resolve_properties(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "system".to_string());
 
+    // https://{service-endpoint}/v1/{model}:streamGenerateContent
+    // POST https://LOCATION-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/LOCATION/publishers/google/models/MODEL_ID:GENERATE_RESPONSE_METHOD
     let base_url = properties
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
@@ -102,6 +79,11 @@ fn resolve_properties(
         .remove("api_key")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .or_else(|| ctx.env.get("GOOGLE_API_KEY").map(|s| s.to_string()));
+
+    let project_id = properties
+        .remove("project_id")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .or_else(|| ctx.env.get("GOOGLE_PROJECT_ID").map(|s| s.to_string()));
 
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
@@ -134,6 +116,199 @@ fn resolve_properties(
         properties,
         proxy_url: ctx.env.get("BOUNDARY_PROXY_URL").map(|s| s.to_string()),
     })
+}
+
+impl WithRetryPolicy for GoogleClient {
+    fn retry_policy_name(&self) -> Option<&str> {
+        self.retry_policy.as_deref()
+    }
+}
+
+impl WithClient for GoogleClient {
+    fn context(&self) -> &RenderContext_Client {
+        &self.context
+    }
+
+    fn model_features(&self) -> &ModelFeatures {
+        &self.features
+    }
+}
+
+impl WithNoCompletion for GoogleClient {}
+
+impl SseResponseTrait for GoogleClient {
+    fn response_stream(
+        &self,
+        resp: reqwest::Response,
+        prompt: &Vec<RenderedChatMessage>,
+        system_start: web_time::SystemTime,
+        instant_start: web_time::Instant,
+    ) -> StreamResponse {
+        let prompt = prompt.clone();
+        let client_name = self.context.name.clone();
+        let params = self.properties.properties.clone();
+
+        Ok(Box::pin(
+            resp.bytes_stream()
+                .inspect(|event| log::trace!("anthropic event bytes: {:#?}", event))
+                .eventsource()
+                .map(|event| -> Result<MessageChunk> { Ok(serde_json::from_str(&event?.data)?) })
+                .inspect(|event| log::trace!("anthropic eventsource: {:#?}", event))
+                .scan(
+                    Ok(LLMCompleteResponse {
+                        client: client_name.clone(),
+                        prompt: RenderedPrompt::Chat(prompt.clone()),
+                        content: "".to_string(),
+                        start_time: system_start,
+                        latency: instant_start.elapsed(),
+                        model: "".to_string(),
+                        invocation_params: params.clone(),
+                        metadata: LLMCompleteResponseMetadata {
+                            baml_is_complete: false,
+                            finish_reason: None,
+                            prompt_tokens: None,
+                            output_tokens: None,
+                            total_tokens: None,
+                        },
+                    }),
+                    move |accumulated: &mut Result<LLMCompleteResponse>, event| {
+                        let Ok(ref mut inner) = accumulated else {
+                            return std::future::ready(None);
+                        };
+                        let event = match event {
+                            Ok(event) => event,
+                            Err(e) => {
+                                return std::future::ready(Some(LLMResponse::LLMFailure(
+                                    LLMErrorResponse {
+                                        client: client_name.clone(),
+                                        model: if inner.model == "" {
+                                            None
+                                        } else {
+                                            Some(inner.model.clone())
+                                        },
+                                        prompt: internal_baml_jinja::RenderedPrompt::Chat(
+                                            prompt.clone(),
+                                        ),
+                                        invocation_params: params.clone(),
+                                        start_time: system_start,
+                                        latency: instant_start.elapsed(),
+                                        message: format!("Failed to parse event: {:#?}", e),
+                                        code: ErrorCode::Other(2),
+                                    },
+                                )));
+                            }
+                        };
+                        match event {
+                            MessageChunk::MessageStart(chunk) => {
+                                let body = chunk.message;
+                                inner.model = body.model;
+                                let ref mut inner = inner.metadata;
+                                inner.baml_is_complete = match body.stop_reason {
+                                    Some(StopReason::StopSequence) | Some(StopReason::EndTurn) => {
+                                        true
+                                    }
+                                    _ => false,
+                                };
+                                inner.finish_reason =
+                                    body.stop_reason.as_ref().map(ToString::to_string);
+                                inner.prompt_tokens = Some(body.usage.input_tokens);
+                                inner.output_tokens = Some(body.usage.output_tokens);
+                                inner.total_tokens =
+                                    Some(body.usage.input_tokens + body.usage.output_tokens);
+                            }
+                            MessageChunk::ContentBlockDelta(event) => {
+                                inner.content += &event.delta.text;
+                            }
+                            MessageChunk::ContentBlockStart(_) => (),
+                            MessageChunk::ContentBlockStop(_) => (),
+                            MessageChunk::Ping => (),
+                            MessageChunk::MessageDelta(body) => {
+                                let ref mut inner = inner.metadata;
+
+                                inner.baml_is_complete = match body.delta.stop_reason {
+                                    Some(StopReason::StopSequence) | Some(StopReason::EndTurn) => {
+                                        true
+                                    }
+                                    _ => false,
+                                };
+                                inner.finish_reason = body
+                                    .delta
+                                    .stop_reason
+                                    .as_ref()
+                                    .map(|r| serde_json::to_string(r).unwrap_or("".into()));
+                                inner.output_tokens = Some(body.usage.output_tokens);
+                                inner.total_tokens = Some(
+                                    inner.prompt_tokens.unwrap_or(0) + body.usage.output_tokens,
+                                );
+                            }
+                            MessageChunk::MessageStop => (),
+                            MessageChunk::Error(err) => {
+                                return std::future::ready(Some(LLMResponse::LLMFailure(
+                                    LLMErrorResponse {
+                                        client: client_name.clone(),
+                                        model: if inner.model == "" {
+                                            None
+                                        } else {
+                                            Some(inner.model.clone())
+                                        },
+                                        prompt: internal_baml_jinja::RenderedPrompt::Chat(
+                                            prompt.clone(),
+                                        ),
+                                        invocation_params: params.clone(),
+                                        start_time: system_start,
+                                        latency: instant_start.elapsed(),
+                                        message: err.message,
+                                        code: ErrorCode::Other(2),
+                                    },
+                                )));
+                            }
+                        };
+
+                        inner.latency = instant_start.elapsed();
+                        std::future::ready(Some(LLMResponse::Success(inner.clone())))
+                    },
+                ),
+        ))
+    }
+}
+
+impl WithStreamChat for GoogleClient {
+    async fn stream_chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<RenderedChatMessage>,
+    ) -> StreamResponse {
+        let (response, system_now, instant_now) =
+            match make_request(self, either::Either::Right(prompt), true).await {
+                Ok(v) => v,
+                Err(e) => return Err(e),
+            };
+        self.response_stream(response, prompt, system_now, instant_now)
+    }
+}
+
+impl GoogleClient {
+    pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<GoogleClient> {
+        Ok(Self {
+            name: client.name().into(),
+            properties: resolve_properties(client, ctx)?,
+            context: RenderContext_Client {
+                name: client.name().into(),
+                provider: client.elem().provider.clone(),
+            },
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                anthropic_system_constraints: false,
+            },
+            retry_policy: client
+                .elem()
+                .retry_policy_id
+                .as_ref()
+                .map(|s| s.to_string()),
+            client: create_client()?,
+        })
+    }
 }
 
 impl RequestBuilder for GoogleClient {
@@ -195,20 +370,6 @@ impl RequestBuilder for GoogleClient {
 
     fn invocation_params(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
-    }
-}
-
-impl WithClient for GoogleClient {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn context(&self) -> &RenderContext_Client {
-        &self.context
-    }
-
-    fn model_features(&self) -> &ModelFeatures {
-        &self.features
     }
 }
 
