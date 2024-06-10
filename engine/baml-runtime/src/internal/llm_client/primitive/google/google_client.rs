@@ -2,7 +2,7 @@ use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
         primitive::{
-            google::types::{FinishReason, GoogleRequestBody, GoogleResponse},
+            google::types::{FinishReason, GoogleResponse},
             request::{make_parsed_request, make_request, RequestBuilder},
         },
         traits::{
@@ -14,14 +14,15 @@ use crate::{
     },
     request::create_client,
 };
+use anyhow::{Context, Result};
 use baml_types::BamlImage;
+use eventsource_stream::Eventsource;
+use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::{
-    ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
-};
+use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
+use reqwest::Response;
 use serde_json::json;
 use std::collections::HashMap;
-
 struct PostRequestProperities {
     default_role: String,
     base_url: String,
@@ -38,6 +39,7 @@ pub struct GoogleClient {
     pub context: RenderContext_Client,
     pub features: ModelFeatures,
     pub properties: PostRequestProperities,
+    pub project_id: Option<String>,
 }
 
 fn resolve_properties(
@@ -66,24 +68,14 @@ fn resolve_properties(
     let default_role = properties
         .remove("default_role")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "system".to_string());
+        .unwrap_or_else(|| "user".to_string());
 
-    // https://{service-endpoint}/v1/{model}:streamGenerateContent
-    // POST https://LOCATION-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/LOCATION/publishers/google/models/MODEL_ID:GENERATE_RESPONSE_METHOD
-    let base_url = properties
-        .remove("base_url")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "".to_string());
+    let base_url = "";
 
     let api_key = properties
         .remove("api_key")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .or_else(|| ctx.env.get("GOOGLE_API_KEY").map(|s| s.to_string()));
-
-    let project_id = properties
-        .remove("project_id")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .or_else(|| ctx.env.get("GOOGLE_PROJECT_ID").map(|s| s.to_string()));
 
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
@@ -103,14 +95,14 @@ fn resolve_properties(
         }
     });
 
-    let mut headers = match headers {
+    let headers = match headers {
         Some(h) => h?,
         None => Default::default(),
     };
 
     Ok(PostRequestProperities {
         default_role,
-        base_url,
+        base_url: base_url.to_string(),
         api_key,
         headers,
         properties,
@@ -147,17 +139,19 @@ impl SseResponseTrait for GoogleClient {
         let prompt = prompt.clone();
         let client_name = self.context.name.clone();
         let params = self.properties.properties.clone();
-
         Ok(Box::pin(
             resp.bytes_stream()
-                .inspect(|event| log::trace!("anthropic event bytes: {:#?}", event))
                 .eventsource()
-                .map(|event| -> Result<MessageChunk> { Ok(serde_json::from_str(&event?.data)?) })
-                .inspect(|event| log::trace!("anthropic eventsource: {:#?}", event))
+                .take_while(|event| {
+                    std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))
+                })
+                .map(|event| -> Result<GoogleResponse> {
+                    Ok(serde_json::from_str::<GoogleResponse>(&event?.data)?)
+                })
                 .scan(
                     Ok(LLMCompleteResponse {
                         client: client_name.clone(),
-                        prompt: RenderedPrompt::Chat(prompt.clone()),
+                        prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                         content: "".to_string(),
                         start_time: system_start,
                         latency: instant_start.elapsed(),
@@ -173,6 +167,7 @@ impl SseResponseTrait for GoogleClient {
                     }),
                     move |accumulated: &mut Result<LLMCompleteResponse>, event| {
                         let Ok(ref mut inner) = accumulated else {
+                            // halt the stream: the last stream event failed to parse
                             return std::future::ready(None);
                         };
                         let event = match event {
@@ -189,8 +184,8 @@ impl SseResponseTrait for GoogleClient {
                                         prompt: internal_baml_jinja::RenderedPrompt::Chat(
                                             prompt.clone(),
                                         ),
-                                        invocation_params: params.clone(),
                                         start_time: system_start,
+                                        invocation_params: params.clone(),
                                         latency: instant_start.elapsed(),
                                         message: format!("Failed to parse event: {:#?}", e),
                                         code: ErrorCode::Other(2),
@@ -198,86 +193,36 @@ impl SseResponseTrait for GoogleClient {
                                 )));
                             }
                         };
-                        match event {
-                            MessageChunk::MessageStart(chunk) => {
-                                let body = chunk.message;
-                                inner.model = body.model;
-                                let ref mut inner = inner.metadata;
-                                inner.baml_is_complete = match body.stop_reason {
-                                    Some(StopReason::StopSequence) | Some(StopReason::EndTurn) => {
-                                        true
-                                    }
-                                    _ => false,
-                                };
-                                inner.finish_reason =
-                                    body.stop_reason.as_ref().map(ToString::to_string);
-                                inner.prompt_tokens = Some(body.usage.input_tokens);
-                                inner.output_tokens = Some(body.usage.output_tokens);
-                                inner.total_tokens =
-                                    Some(body.usage.input_tokens + body.usage.output_tokens);
-                            }
-                            MessageChunk::ContentBlockDelta(event) => {
-                                inner.content += &event.delta.text;
-                            }
-                            MessageChunk::ContentBlockStart(_) => (),
-                            MessageChunk::ContentBlockStop(_) => (),
-                            MessageChunk::Ping => (),
-                            MessageChunk::MessageDelta(body) => {
-                                let ref mut inner = inner.metadata;
-
-                                inner.baml_is_complete = match body.delta.stop_reason {
-                                    Some(StopReason::StopSequence) | Some(StopReason::EndTurn) => {
-                                        true
-                                    }
-                                    _ => false,
-                                };
-                                inner.finish_reason = body
-                                    .delta
-                                    .stop_reason
-                                    .as_ref()
-                                    .map(|r| serde_json::to_string(r).unwrap_or("".into()));
-                                inner.output_tokens = Some(body.usage.output_tokens);
-                                inner.total_tokens = Some(
-                                    inner.prompt_tokens.unwrap_or(0) + body.usage.output_tokens,
-                                );
-                            }
-                            MessageChunk::MessageStop => (),
-                            MessageChunk::Error(err) => {
-                                return std::future::ready(Some(LLMResponse::LLMFailure(
-                                    LLMErrorResponse {
-                                        client: client_name.clone(),
-                                        model: if inner.model == "" {
-                                            None
-                                        } else {
-                                            Some(inner.model.clone())
-                                        },
-                                        prompt: internal_baml_jinja::RenderedPrompt::Chat(
-                                            prompt.clone(),
-                                        ),
-                                        invocation_params: params.clone(),
-                                        start_time: system_start,
-                                        latency: instant_start.elapsed(),
-                                        message: err.message,
-                                        code: ErrorCode::Other(2),
-                                    },
-                                )));
-                            }
-                        };
-
+                        // if let Some(choice) = event.candidates.get(0) {
+                        //     if let Some(content) = choice.content.as_ref() {
+                        //         inner.content += content.as_str();
+                        //     }
+                        //     // inner.model = self.client;
+                        //     match choice.finish_reason.as_ref() {
+                        //         Some(FinishReason::Stop) => {
+                        //             inner.metadata.baml_is_complete = true;
+                        //             inner.metadata.finish_reason =
+                        //                 Some(FinishReason::Stop.to_string());
+                        //         }
+                        //         _ => (),
+                        //     }
+                        // }
                         inner.latency = instant_start.elapsed();
+
                         std::future::ready(Some(LLMResponse::Success(inner.clone())))
                     },
                 ),
         ))
     }
 }
-
+// makes the request to the google client, on success it triggers the response_stream function to handle continuous rendering with the response object
 impl WithStreamChat for GoogleClient {
     async fn stream_chat(
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> StreamResponse {
+        //incomplete, streaming response object is returned
         let (response, system_now, instant_now) =
             match make_request(self, either::Either::Right(prompt), true).await {
                 Ok(v) => v,
@@ -307,6 +252,7 @@ impl GoogleClient {
                 .as_ref()
                 .map(|s| s.to_string()),
             client: create_client()?,
+            project_id: ctx.env.get("GOOGLE_PROJECT_ID").map(|s| s.to_string()),
         })
     }
 }
@@ -321,24 +267,25 @@ impl RequestBuilder for GoogleClient {
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
     ) -> reqwest::RequestBuilder {
+        //disabled proxying for testing
+        // POST https://LOCATION-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/LOCATION/publishers/google/models/MODEL_ID:GENERATE_RESPONSE_METHOD
+
+        let mut should_stream = "generateContent";
+        if stream {
+            should_stream = "streamGenerateContent";
+        }
+
+        //hardcoded for testing
+        let location = "us-central1";
+
+        //hardcode modelID for now
+        let model_id = "gemini-1.5-pro-001";
+
         let mut req = self.client.post(if prompt.is_left() {
-            format!(
-                "{}/v1/complete",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
+            format!("https://{}-aiplatfomr.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}/{}", location, self.project_id.as_ref().unwrap(), location, model_id, should_stream)
+            // format!("{}/v1/complete", self.properties.base_url.as_str())
         } else {
-            format!(
-                "{}/v1/messages",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
+            format!("{}/v1/messages", self.properties.base_url.as_str())
         });
 
         for (key, value) in &self.properties.headers {
@@ -348,7 +295,7 @@ impl RequestBuilder for GoogleClient {
             req = req.header("x-api-key", key);
         }
 
-        req = req.header("baml-original-url", self.properties.base_url.as_str());
+        // req = req.header("baml-original-url", self.properties.base_url.as_str());
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
@@ -359,10 +306,6 @@ impl RequestBuilder for GoogleClient {
             either::Either::Right(messages) => {
                 body_obj.extend(convert_chat_prompt_to_body(messages));
             }
-        }
-
-        if stream {
-            body_obj.insert("stream".into(), true.into());
         }
 
         req.json(&body)
@@ -382,6 +325,7 @@ impl WithChat for GoogleClient {
     }
 
     async fn chat(&self, _ctx: &RuntimeContext, prompt: &Vec<RenderedChatMessage>) -> LLMResponse {
+        //non-streaming, complete response is returned
         let (response, system_now, instant_now) =
             match make_parsed_request::<GoogleResponse>(self, either::Either::Right(prompt), false)
                 .await
@@ -390,7 +334,7 @@ impl WithChat for GoogleClient {
                 Err(e) => return e,
             };
 
-        if response.content.len() != 1 {
+        if response.candidates.len() != 1 {
             return LLMResponse::LLMFailure(LLMErrorResponse {
                 client: self.context.name.to_string(),
                 model: None,
@@ -400,7 +344,7 @@ impl WithChat for GoogleClient {
                 latency: instant_now.elapsed(),
                 message: format!(
                     "Expected exactly one content block, got {}",
-                    response.content.len()
+                    response.candidates.len()
                 ),
                 code: ErrorCode::Other(200),
             });
@@ -409,34 +353,49 @@ impl WithChat for GoogleClient {
         LLMResponse::Success(LLMCompleteResponse {
             client: self.context.name.to_string(),
             prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-            content: response.content[0].text.clone(),
+            content: response.candidates[0].content.parts[0].text.clone(),
             start_time: system_now,
             latency: instant_now.elapsed(),
             invocation_params: self.properties.properties.clone(),
-            model: response.model,
+            model: self
+                .properties
+                .properties
+                .get("model")
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+                .or_else(|| _ctx.env.get("default model").map(|s| s.to_string()))
+                .unwrap_or_else(|| "".to_string()),
             metadata: LLMCompleteResponseMetadata {
-                baml_is_complete: match response.stop_reason {
-                    Some(StopReason::StopSequence) | Some(StopReason::EndTurn) => true,
+                baml_is_complete: match response.candidates[0].finish_reason {
+                    Some(FinishReason::Stop) => true,
                     _ => false,
                 },
-                finish_reason: response
-                    .stop_reason
+                finish_reason: response.candidates[0]
+                    .finish_reason
                     .as_ref()
                     .map(|r| serde_json::to_string(r).unwrap_or("".into())),
-                prompt_tokens: Some(response.usage.input_tokens),
-                output_tokens: Some(response.usage.output_tokens),
-                total_tokens: Some(response.usage.input_tokens + response.usage.output_tokens),
+                prompt_tokens: Some(response.usage_meta_data.prompt_token_count),
+                output_tokens: Some(response.usage_meta_data.candidates_token_count),
+                total_tokens: Some(response.usage_meta_data.total_token_count),
             },
         })
     }
 }
 
+//simple, Map with key "prompt" and value of the prompt string
 fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
-    map.insert("prompt".into(), json!(prompt));
+    let content = json!({
+        "role": "system",
+        "parts": [{
+            "type": "text",
+            "text": prompt
+        }]
+    });
+    map.insert("contents".into(), json!([content]));
     map
 }
 
+//list of chat messages into JSON body
 fn convert_chat_prompt_to_body(
     prompt: &Vec<RenderedChatMessage>,
 ) -> HashMap<String, serde_json::Value> {

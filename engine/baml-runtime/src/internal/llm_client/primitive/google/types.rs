@@ -322,7 +322,7 @@ pub struct SearchEntryPoint {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct UsageMetaData {
-    pub prompt_token_count: i32,
-    pub candidates_token_count: i32,
-    pub total_token_count: i32,
+    pub prompt_token_count: u64,
+    pub candidates_token_count: u64,
+    pub total_token_count: u64,
 }
