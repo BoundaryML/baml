@@ -37,7 +37,6 @@ import { z } from 'zod'
 // import { getVersion, getEnginesVersion } from './lib/wasm/internals'
 import BamlProjectManager from './lib/baml_project_manager'
 import type { LSOptions, LSSettings } from './lib/types'
-;(globalThis as any).crypto = require('node:crypto').webcrypto
 
 const packageJson = require('../../package.json') // eslint-disable-line
 function getConnection(options?: LSOptions): Connection {
