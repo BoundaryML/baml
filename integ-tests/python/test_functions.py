@@ -1,10 +1,10 @@
 import pytest
 
 import baml_py
-from baml_client import b
-from baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
-from baml_client.tracing import trace, set_tags, flush
-from baml_client.type_builder import TypeBuilder
+from .baml_client import b
+from .baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
+from .baml_client.tracing import trace, set_tags, flush
+from .baml_client.type_builder import TypeBuilder
 import datetime
 
 
@@ -63,13 +63,14 @@ async def accepts_subclass_of_baml_type():
             key="key", key_two=True, key_three=52, date=datetime.datetime.now()
         )
     )
+    assert res is not None
 
 
 @pytest.mark.asyncio
 async def test_should_work_for_all_outputs():
     a = "a"  # dummy
     res = await b.FnOutputBool(a)
-    assert res == True
+    assert res
 
     list = await b.FnOutputClassList(a)
     assert len(list) > 0
@@ -132,11 +133,12 @@ async def test_streaming():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
@@ -160,11 +162,12 @@ async def test_streaming_claude():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     print("msgs:")
     print(msgs[-1])
@@ -310,9 +313,13 @@ async def test_dynamic_class_output():
     for prop in tb.DynamicOutput.list_properties():
         print(f"Property: {prop}")
 
-    output = await b.MyFunc(input="My name is Harrison. My hair is black and I'm 6 feet tall.", baml_options={"tb": tb})
+    output = await b.MyFunc(
+        input="My name is Harrison. My hair is black and I'm 6 feet tall.",
+        baml_options={"tb": tb},
+    )
     print(output.model_dump_json())
     assert output.hair_color == "black"
+
 
 @pytest.mark.asyncio
 async def test_stream_dynamic_class_output():
@@ -322,7 +329,10 @@ async def test_stream_dynamic_class_output():
     for prop in tb.DynamicOutput.list_properties():
         print(f"Property: {prop}")
 
-    stream = b.stream.MyFunc(input="My name is Harrison. My hair is black and I'm 6 feet tall.", baml_options={"tb": tb})
+    stream = b.stream.MyFunc(
+        input="My name is Harrison. My hair is black and I'm 6 feet tall.",
+        baml_options={"tb": tb},
+    )
     msgs = []
     async for msg in stream:
         print("streamed ", msg)
