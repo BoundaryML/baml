@@ -38,6 +38,13 @@ import { z } from 'zod'
 import BamlProjectManager from './lib/baml_project_manager'
 import type { LSOptions, LSSettings } from './lib/types'
 
+try {
+  // only required on vscode versions 1.89 and below.
+  ;(globalThis as any).crypto = require('node:crypto').webcrypto
+} catch (e) {
+  console.log('cant load webcrypto', e)
+}
+
 const packageJson = require('../../package.json') // eslint-disable-line
 function getConnection(options?: LSOptions): Connection {
   let connection = options?.connection
