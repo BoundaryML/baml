@@ -23,7 +23,7 @@ impl RuntimeContextManager {
             ));
         };
 
-        self.inner.upsert_tags(tags);
+        self.inner.upsert_tags(tags.into_iter().collect());
         Ok(())
     }
 
