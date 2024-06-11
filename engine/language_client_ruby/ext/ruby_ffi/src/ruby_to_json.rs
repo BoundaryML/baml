@@ -96,7 +96,7 @@ impl<'rb> RubyToJson<'rb> {
         }
     }
 
-    pub fn convert_hash_to_json(from: RHash) -> crate::Result<HashMap<String, BamlValue>> {
+    pub fn convert_hash_to_json(from: RHash) -> crate::Result<IndexMap<String, BamlValue>> {
         let ruby = Ruby::get_with(from);
         let result = RubyToJson { ruby: &ruby }.hash_to_map(from, vec![]);
 
