@@ -4,6 +4,7 @@ use internal_baml_jinja::types::{Class, Enum, Name, OutputFormatContent};
 #[macro_use]
 pub mod macros;
 
+mod test_basics;
 mod test_class;
 mod test_enum;
 mod test_lists;

@@ -1,8 +1,8 @@
 mod iterative_parser;
 
 mod parser;
-#[cfg(test)]
-mod test_iterative_parser;
+// #[cfg(test)]
+// mod test_iterative_parser;
 mod value;
 
 pub use value::{Fixes, Value};

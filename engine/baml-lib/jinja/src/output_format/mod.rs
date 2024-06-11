@@ -127,7 +127,7 @@ impl minijinja::value::Object for OutputFormat {
 
         match content {
             Some(content) => Ok(Value::from_safe_string(content)),
-            None => Ok(Value::from_serializable(&None::<String>)),
+            None => Ok(Value::from_serialize("")),
         }
     }
     fn call_method(
