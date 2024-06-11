@@ -1,4 +1,3 @@
-#[macro_use]
 macro_rules! test_failing_deserializer {
     ($name:ident, $file_content:expr, $raw_string:expr, $target_type:expr) => {
         #[test_log::test]
@@ -13,7 +12,6 @@ macro_rules! test_failing_deserializer {
     };
 }
 
-#[macro_use]
 macro_rules! test_deserializer {
     ($name:ident, $file_content:expr, $raw_string:expr, $target_type:expr, $($json:tt)+) => {
         #[test_log::test]
@@ -38,12 +36,11 @@ macro_rules! test_deserializer {
 
             let expected = serde_json::json!($($json)+);
 
-            assert_eq!(json_value, expected, "Expected: {:#}, got: {:#?}", expected, value);
+            assert_json_diff::assert_json_eq!(json_value, expected);
         }
     };
 }
 
-#[macro_use]
 macro_rules! test_partial_deserializer {
     ($name:ident, $file_content:expr, $raw_string:expr, $target_type:expr, $($json:tt)+) => {
         #[test_log::test]
@@ -61,13 +58,13 @@ macro_rules! test_partial_deserializer {
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
 
             let value = result.unwrap();
-            println!("{}", value);
             let value: BamlValue = value.into();
+            println!("{:#?}", value);
             let json_value = json!(value);
 
             let expected = serde_json::json!($($json)+);
 
-            assert_eq!(json_value, expected, "Expected: {:#}, got: {:#?}", expected, value);
+            assert_json_diff::assert_json_eq!(json_value, expected);
         }
     };
 }

@@ -170,11 +170,40 @@ impl JsonParseState {
                                     '\n' => {
                                         return Some(idx);
                                     }
+                                    ' ' => {
+                                        // If after the space we have "//" or "/*" or the beginning of a key, we'll close the string
+                                        while let Some((_, c)) = next.next() {
+                                            match c {
+                                                ' ' => {}
+                                                '\n' => {
+                                                    return Some(idx);
+                                                }
+                                                '/' => match next.peek() {
+                                                    Some((_, '/')) => {
+                                                        return Some(idx);
+                                                    }
+                                                    Some((_, '*')) => {
+                                                        return Some(idx);
+                                                    }
+                                                    _ => {
+                                                        let _ = self.consume(c);
+                                                    }
+                                                },
+                                                '"' => {
+                                                    return Some(idx);
+                                                }
+                                                x => {
+                                                    let _ = self.consume(x);
+                                                }
+                                            }
+                                        }
+                                    }
                                     _ => {
                                         let _ = self.consume(c);
                                     }
                                 }
                             } else {
+                                // Don't include the comma
                                 return Some(idx);
                             }
                         }

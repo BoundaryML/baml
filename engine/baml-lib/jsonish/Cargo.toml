@@ -23,3 +23,4 @@ anyhow.workspace = true
 either = "1.10.0"
 test-log = "0.2.16"
 regex.workspace = true
+assert-json-diff = "2.0.2"
