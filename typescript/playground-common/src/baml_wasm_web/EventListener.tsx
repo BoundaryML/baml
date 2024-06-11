@@ -18,7 +18,7 @@ const defaultEnvKeyValues: [string, string][] = (() => {
     console.log('Running in nextjs')
     const domain = window?.location?.origin || ''
     // Running in a Next.js environment, proxy to nextjs rewrite
-    return [['BOUNDARY_PROXY_URL', domain + '/anthropic/']]
+    return []
   } else {
     console.log('Not running in a Next.js environment, set default value')
     // Not running in a Next.js environment, set default value

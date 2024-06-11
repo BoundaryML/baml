@@ -37,11 +37,11 @@ impl TypeCoercer for Class {
         let mut optional_values = optional
             .iter()
             .map(|(f, ..)| (f.real_name().to_string(), None))
-            .collect::<HashMap<_, _>>();
+            .collect::<BamlMap<_, _>>();
         let mut required_values = required
             .iter()
             .map(|(f, ..)| (f.real_name().to_string(), None))
-            .collect::<HashMap<_, _>>();
+            .collect::<BamlMap<_, _>>();
         let mut flags = DeserializerConditions::new();
 
         let mut completed_cls = Vec::new();
@@ -254,8 +254,8 @@ impl TypeCoercer for Class {
 }
 
 fn update_map<'a>(
-    required_values: &'a mut HashMap<String, Option<Result<BamlValueWithFlags, ParsingError>>>,
-    optional_values: &'a mut HashMap<String, Option<Result<BamlValueWithFlags, ParsingError>>>,
+    required_values: &'a mut BamlMap<String, Option<Result<BamlValueWithFlags, ParsingError>>>,
+    optional_values: &'a mut BamlMap<String, Option<Result<BamlValueWithFlags, ParsingError>>>,
     (name, t, ..): &'a FieldValue,
     value: Result<BamlValueWithFlags, ParsingError>,
 ) {

@@ -37,6 +37,6 @@ features = [
 ]
 
 [features]
-default = []
+default = ["stable_sort"]
 stable_sort = ["indexmap"]
 mini-jinja = ["minijinja"]

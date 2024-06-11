@@ -86,26 +86,6 @@ const checkFilter = (filter: Set<FilterValues>, status: TestStatusType, test_sta
   return filter.has(status)
 }
 
-const asSortedJson = (parsed: any): any => {
-  if (Array.isArray(parsed)) {
-    return parsed.map(asSortedJson)
-  }
-  if (typeof parsed !== 'object') {
-    return parsed
-  }
-  if (parsed === null || parsed === undefined) {
-    return parsed
-  }
-
-  let sorted: Record<string, any> = {}
-  Object.keys(parsed)
-    .sort()
-    .forEach((key) => {
-      sorted[key] = parsed[key]
-    })
-  return sorted
-}
-
 const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStatusType; testLatency: number }> = ({
   test,
   doneStatus,
@@ -115,7 +95,7 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
   const llm_response = test.llm_response()
   const llm_failure = test.llm_failure()
   const parsed = test.parsed_response()
-  const sorted_parsed = parsed ? asSortedJson(JSON.parse(parsed)) : undefined
+  const sorted_parsed = parsed ? JSON.parse(parsed) : undefined
 
   const latencyMs = llm_response?.latency_ms ?? llm_failure?.latency_ms
   const client = llm_response?.client_name() ?? llm_failure?.client_name()
@@ -193,7 +173,7 @@ const LLMFunctionResult: React.FC<{ test: WasmFunctionResponse }> = ({ test }) =
   const llm_response = test.llm_response()
   const llm_failure = test.llm_failure()
   const parsed = test.parsed_response()
-  const sorted_parsed = parsed ? asSortedJson(JSON.parse(parsed)) : undefined
+  const sorted_parsed = parsed ? JSON.parse(parsed) : undefined
 
   const latencyMs = llm_response?.latency_ms ?? llm_failure?.latency_ms
   const client = llm_response?.client_name() ?? llm_failure?.client_name()
