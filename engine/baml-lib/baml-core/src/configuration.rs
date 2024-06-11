@@ -25,8 +25,8 @@ pub enum GeneratorOutputType {
     PythonPydantic,
     #[strum(serialize = "typescript")]
     Typescript,
-    #[strum(serialize = "ruby")]
-    Ruby,
+    #[strum(serialize = "ruby/sorbet")]
+    RubySorbet,
 }
 
 #[derive(derive_builder::Builder, Debug, Clone)]
