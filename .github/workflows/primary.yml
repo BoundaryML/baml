@@ -26,6 +26,53 @@ permissions:
   repository-projects: read
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: |
+            typescript/**/pnpm-lock.yaml
+      - name: Install Node
+        run: pnpm install --frozen-lockfile
+        working-directory: typescript
+      - name: Check TS Lint
+        run: pnpm biome ci . --organize-imports-enabled=false
+        working-directory: typescript
+  test_node_generator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: |
+            engine/language_client_typescript/pnpm-lock.yaml
+            integ-tests/typescript/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Install Node
+        run: pnpm install --frozen-lockfile
+        working-directory: engine/language_client_typescript
+      - name: Build Node
+        run: pnpm build
+        working-directory: engine/language_client_typescript
+      - name: Install Node
+        run: pnpm install --frozen-lockfile
+        working-directory: integ-tests/typescript
+      - name: Test Node Generator
+        run: pnpm generate
+        working-directory: integ-tests/typescript
+      - name: Ensure No Changes
+        run: git diff --exit-code
   build:
     runs-on: ubuntu-latest
     steps:
@@ -36,44 +83,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      # Install node set up
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.0.6
-          run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: |
-            engine/language_client_typescript/pnpm-lock.yaml
-            typescript/**/pnpm-lock.yaml
       - name: Build Rust
         run: cargo build
         working-directory: engine
       - name: Test Rust
         run: cargo test
         working-directory: engine
-      - name: Install Node
-        run: pnpm install --frozen-lockfile
-        working-directory: engine/language_client_typescript
-      - name: Install Node
-        run: pnpm install --frozen-lockfile
-        working-directory: typescript
-      - name: Install Node
-        working-directory: integ_tests/typescript
-        run: pnpm install --frozen-lockfile
-      - name: Check TS Lint
-        run: pnpm biome ci . --organize-imports-enabled=false
-        working-directory: typescript
-      - name: Build Node
-        run: pnpm build:debug
-        working-directory: engine/language_client_typescript
-      - name: Test Node Generator
-        working-directory: integ_tests/typescript
-        run: |
-          pnpm generate
-          git diff --exit-code
   build-release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     strategy:
