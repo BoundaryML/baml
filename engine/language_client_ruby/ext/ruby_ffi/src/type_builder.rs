@@ -1,193 +1,196 @@
 use baml_runtime::type_builder::{self, WithMeta};
-use baml_types::BamlValue;
-use napi_derive::napi;
+use magnus::typed_data::Obj;
+use std::sync::{Arc, Mutex};
 
-crate::lang_wrapper!(TypeBuilder, type_builder::TypeBuilder);
-crate::lang_wrapper!(EnumBuilder, type_builder::EnumBuilder, sync_thread_safe, name: String);
-crate::lang_wrapper!(ClassBuilder, type_builder::ClassBuilder, sync_thread_safe, name: String);
-crate::lang_wrapper!(
-    EnumValueBuilder,
-    type_builder::EnumValueBuilder,
-    sync_thread_safe
-);
-crate::lang_wrapper!(
-    ClassPropertyBuilder,
-    type_builder::ClassPropertyBuilder,
-    sync_thread_safe
-);
-crate::lang_wrapper!(FieldType, baml_types::FieldType, sync_thread_safe);
+#[magnus::wrap(class = "Baml::TypeBuilder", free_immediately, size)]
+#[derive(derive_more::From)]
+struct TypeBuilder {
+    inner: type_builder::TypeBuilder,
+}
 
-#[napi]
+#[magnus::wrap(class = "Baml::EnumBuilder", free_immediately, size)]
+#[derive(derive_more::From)]
+struct EnumBuilder {
+    name: String,
+    inner: Arc<Mutex<type_builder::EnumBuilder>>,
+}
+
+#[magnus::wrap(class = "Baml::EnumValueBuilder", free_immediately, size)]
+#[derive(derive_more::From)]
+struct EnumValueBuilder {
+    inner: Arc<Mutex<type_builder::EnumValueBuilder>>,
+}
+
+#[magnus::wrap(class = "Baml::ClassBuilder", free_immediately, size)]
+#[derive(derive_more::From)]
+struct ClassBuilder {
+    name: String,
+    inner: Arc<Mutex<type_builder::ClassBuilder>>,
+}
+
+#[magnus::wrap(class = "Baml::ClassPropertyBuilder", free_immediately, size)]
+#[derive(derive_more::From)]
+struct ClassPropertyBuilder {
+    inner: Arc<Mutex<type_builder::ClassPropertyBuilder>>,
+}
+
+#[magnus::wrap(class = "Baml::FieldType", free_immediately, size)]
+#[derive(derive_more::From)]
+struct FieldType {
+    inner: Arc<Mutex<baml_types::FieldType>>,
+}
+
 impl TypeBuilder {
-    #[napi(constructor)]
     pub fn new() -> Self {
         type_builder::TypeBuilder::default().into()
     }
 
-    #[napi]
-    pub fn get_enum(&self, name: String) -> EnumBuilder {
+    pub fn add_enum(&self, name: &str) -> EnumBuilder {
         EnumBuilder {
-            inner: self.inner.r#enum(&name).into(),
-            name,
+            inner: self.inner.r#enum(name).into(),
+            name: name.to_string(),
         }
     }
 
-    #[napi]
-    pub fn get_class(&self, name: String) -> ClassBuilder {
+    pub fn add_class(&self, name: &str) -> ClassBuilder {
         ClassBuilder {
-            inner: self.inner.class(&name).into(),
-            name,
+            name: name.to_string(),
+            inner: self.inner.class(name),
         }
     }
 
-    #[napi]
     pub fn list(&self, inner: &FieldType) -> FieldType {
         inner.inner.lock().unwrap().clone().as_list().into()
     }
 
-    #[napi]
     pub fn optional(&self, inner: &FieldType) -> FieldType {
         inner.inner.lock().unwrap().clone().as_optional().into()
     }
 
-    #[napi]
     pub fn string(&self) -> FieldType {
         baml_types::FieldType::string().into()
     }
 
-    #[napi]
     pub fn int(&self) -> FieldType {
         baml_types::FieldType::int().into()
     }
 
-    #[napi]
     pub fn float(&self) -> FieldType {
         baml_types::FieldType::float().into()
     }
 
-    #[napi]
     pub fn bool(&self) -> FieldType {
         baml_types::FieldType::bool().into()
     }
 
-    #[napi]
     pub fn null(&self) -> FieldType {
         baml_types::FieldType::null().into()
     }
 }
 
-#[napi]
+impl From<baml_types::FieldType> for FieldType {
+    fn from(inner: baml_types::FieldType) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
+}
+
 impl FieldType {
-    #[napi]
     pub fn list(&self) -> FieldType {
         self.inner.lock().unwrap().clone().as_list().into()
     }
 
-    #[napi]
     pub fn optional(&self) -> FieldType {
         self.inner.lock().unwrap().clone().as_optional().into()
     }
 }
 
-#[napi]
 impl EnumBuilder {
-    #[napi]
-    pub fn value(&self, name: String) -> EnumValueBuilder {
-        self.inner.lock().unwrap().value(&name).into()
+    pub fn value(&self, name: &str) -> EnumValueBuilder {
+        self.inner.lock().unwrap().value(name).into()
     }
 
-    #[napi]
-    pub fn alias(&self, alias: Option<&str>) -> Self {
-        self.inner.lock().unwrap().with_meta(
+    pub fn alias(rb_self: Obj<Self>, alias: Option<&str>) -> Obj<Self> {
+        use std::ops::Deref;
+        Obj::deref(&rb_self).inner.lock().unwrap().with_meta(
             "alias",
             alias.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
+                baml_types::BamlValue::String(s.to_string())
             }),
         );
-        self.inner.clone().into()
+        rb_self
     }
 
-    #[napi]
     pub fn field(&self) -> FieldType {
         baml_types::FieldType::r#enum(&self.name).into()
     }
 }
 
-#[napi]
 impl EnumValueBuilder {
-    #[napi]
     pub fn alias(&self, alias: Option<&str>) -> Self {
         self.inner.lock().unwrap().with_meta(
             "alias",
             alias.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
+                baml_types::BamlValue::String(s.to_string())
             }),
         );
         self.inner.clone().into()
     }
 
-    #[napi]
     pub fn skip(&self, skip: Option<bool>) -> Self {
-        self.inner
-            .lock()
-            .unwrap()
-            .with_meta("skip", skip.map_or(BamlValue::Null, BamlValue::Bool));
+        self.inner.lock().unwrap().with_meta(
+            "skip",
+            skip.map_or(baml_types::BamlValue::Null, baml_types::BamlValue::Bool),
+        );
         self.inner.clone().into()
     }
 
-    #[napi]
     pub fn description(&self, description: Option<&str>) -> Self {
         self.inner.lock().unwrap().with_meta(
             "description",
             description.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
+                baml_types::BamlValue::String(s.to_string())
             }),
         );
         self.inner.clone().into()
     }
 }
 
-#[napi]
 impl ClassBuilder {
-    #[napi]
     pub fn field(&self) -> FieldType {
         baml_types::FieldType::class(&self.name).into()
     }
 
-    #[napi]
-    pub fn property(&self, name: String) -> ClassPropertyBuilder {
-        self.inner.lock().unwrap().property(&name).into()
+    pub fn property(&self, name: &str) -> ClassPropertyBuilder {
+        self.inner.lock().unwrap().property(name).into()
     }
 }
 
-#[napi]
 impl ClassPropertyBuilder {
-    #[napi]
-    pub fn set_type(&self, field_type: &FieldType) -> Self {
+    pub fn r#type(&self, r#type: &FieldType) -> Self {
         self.inner
             .lock()
             .unwrap()
-            .r#type(field_type.inner.lock().unwrap().clone());
+            .r#type(r#type.inner.lock().unwrap().clone());
         self.inner.clone().into()
     }
 
-    #[napi]
     pub fn alias(&self, alias: Option<&str>) -> Self {
         self.inner.lock().unwrap().with_meta(
             "alias",
             alias.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
+                baml_types::BamlValue::String(s.to_string())
             }),
         );
         self.inner.clone().into()
     }
 
-    #[napi]
     pub fn description(&self, description: Option<&str>) -> Self {
         self.inner.lock().unwrap().with_meta(
             "description",
             description.map_or(baml_types::BamlValue::Null, |s| {
-                BamlValue::String(s.to_string())
+                baml_types::BamlValue::String(s.to_string())
             }),
         );
         self.inner.clone().into()

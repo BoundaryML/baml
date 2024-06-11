@@ -1,10 +1,10 @@
 use crate::parse_py_type::parse_py_type;
-use crate::types::function_results::FunctionResult;
+use crate::types::FunctionResult;
+use crate::types::FunctionResultStream;
+use crate::types::RuntimeContextManager;
+use crate::types::TypeBuilder;
 use crate::BamlError;
 
-use super::function_result_stream::FunctionResultStream;
-use super::runtime_ctx_manager::RuntimeContextManager;
-use super::type_builder::TypeBuilder;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};

@@ -22,6 +22,7 @@ mod function_result_stream;
 mod image;
 mod ruby_to_json;
 mod runtime_ctx_manager;
+mod type_builder;
 
 type Result<T> = std::result::Result<T, magnus::Error>;
 

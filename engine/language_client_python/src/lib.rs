@@ -1,4 +1,5 @@
 mod parse_py_type;
+mod runtime;
 mod types;
 
 use pyo3::prelude::{pyfunction, pymodule, PyAnyMethods, PyModule, PyResult};
@@ -7,8 +8,8 @@ use pyo3::{create_exception, wrap_pyfunction, Bound, PyErr, Python};
 create_exception!(baml_py, BamlError, pyo3::exceptions::PyException);
 
 impl BamlError {
-    fn from_anyhow(err: anyhow::Error) -> PyErr {
-        PyErr::new::<BamlError, _>(format!("{:?}", err))
+    fn from_anyhow(err: impl Into<anyhow::Error>) -> PyErr {
+        PyErr::new::<BamlError, _>(format!("{:?}", err.into()))
     }
 }
 
@@ -33,7 +34,7 @@ fn baml_py(_: Python<'_>, m: Bound<'_, PyModule>) -> PyResult<()> {
         eprintln!("Failed to initialize BAML logger: {:#}", e);
     };
 
-    m.add_class::<types::BamlRuntime>()?;
+    m.add_class::<runtime::BamlRuntime>()?;
     m.add_class::<types::FunctionResult>()?;
     m.add_class::<types::FunctionResultStream>()?;
     m.add_class::<types::BamlImagePy>()?;

@@ -1,6 +1,8 @@
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::BamlValue;
-use pyo3::pymethods;
+use pyo3::{pymethods, PyRefMut, PyResult};
+
+use crate::BamlError;
 
 crate::lang_wrapper!(TypeBuilder, type_builder::TypeBuilder);
 crate::lang_wrapper!(EnumBuilder, type_builder::EnumBuilder, sync_thread_safe, name: String);
@@ -21,7 +23,7 @@ crate::lang_wrapper!(FieldType, baml_types::FieldType, sync_thread_safe);
 impl TypeBuilder {
     #[new]
     pub fn new() -> Self {
-        type_builder::TypeBuilder::new().into()
+        type_builder::TypeBuilder::default().into()
     }
 
     pub fn r#enum(&self, name: &str) -> EnumBuilder {
@@ -86,14 +88,14 @@ impl EnumBuilder {
         self.inner.lock().unwrap().value(name).into()
     }
 
-    pub fn alias(&self, alias: Option<&str>) -> Self {
-        self.inner.lock().unwrap().with_meta(
+    pub fn alias<'py>(slf: PyRefMut<'py, Self>, alias: Option<&str>) -> PyRefMut<'py, Self> {
+        slf.inner.lock().unwrap().with_meta(
             "alias",
             alias.map_or(baml_types::BamlValue::Null, |s| {
                 BamlValue::String(s.to_string())
             }),
         );
-        self.inner.clone().into()
+        slf
     }
 
     pub fn field(&self) -> FieldType {
@@ -146,12 +148,12 @@ impl ClassBuilder {
 
 #[pymethods]
 impl ClassPropertyBuilder {
-    pub fn r#type(&self, r#type: &FieldType) -> Self {
+    pub fn r#type(&self, r#type: &FieldType) -> PyResult<Self> {
         self.inner
             .lock()
             .unwrap()
             .r#type(r#type.inner.lock().unwrap().clone());
-        self.inner.clone().into()
+        Ok(self.inner.clone().into())
     }
 
     pub fn alias(&self, alias: Option<&str>) -> Self {

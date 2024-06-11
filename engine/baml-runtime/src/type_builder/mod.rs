@@ -121,20 +121,13 @@ impl EnumBuilder {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct TypeBuilder {
     classes: Arc<Mutex<HashMap<String, Arc<Mutex<ClassBuilder>>>>>,
     enums: Arc<Mutex<HashMap<String, Arc<Mutex<EnumBuilder>>>>>,
 }
 
 impl TypeBuilder {
-    pub fn new() -> Self {
-        Self {
-            classes: Default::default(),
-            enums: Default::default(),
-        }
-    }
-
     pub fn class(&self, name: &str) -> Arc<Mutex<ClassBuilder>> {
         Arc::clone(
             self.classes
@@ -243,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_type_builder() {
-        let builder = TypeBuilder::new();
+        let builder = TypeBuilder::default();
         let cls = builder.class("Person");
         let property = cls.lock().unwrap().property("name");
         property.lock().unwrap().r#type(FieldType::string());
