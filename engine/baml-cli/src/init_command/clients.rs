@@ -136,3 +136,12 @@ fn anthropic_clients<T: From<&'static str> + AsRef<str>>() -> Vec<ClientConfig<T
         },
     ]
 }
+
+fn google_clients<T: From<&'static str> + AsRef<str>>() -> Vec<ClientConfig<T>> {
+    vec![ClientConfig {
+        comment: None,
+        provider: "baml-google-chat".into(),
+        name: "Gemini".into(),
+        params: vec![("model_name", "gemini"), ("api_key", "env.GOOGLE_API_KEY")],
+    }]
+}

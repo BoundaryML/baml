@@ -338,8 +338,6 @@ class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
         codeActions.push(fixAction)
       }
     }
-
-    console.debug('Code actions:', codeActions)
     return codeActions
   }
 }

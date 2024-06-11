@@ -19,6 +19,8 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             "round-robin",
             "baml-fallback",
             "fallback",
+            "baml-google-chat",
+            "google",
         ];
 
         let suggestions: Vec<String> = allowed_providers
@@ -35,6 +37,8 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                 suggestions,
             ));
         }
+
+        log::info!("Validating client: {}", provider.as_str());
 
         if let Some((retry_policy, span)) = &f.properties().retry_policy {
             if ctx.db.find_retry_policy(retry_policy).is_none() {

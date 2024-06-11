@@ -67,6 +67,15 @@ client<llm> GPT35Azure {
   }
 }
 
+client<llm> Gemini {
+  provider google
+  options{
+    model "hardcoded"
+    api_key env.GOOGLE_API_KEY
+    project_id env.GOOGLE_PROJECT_ID
+  }
+}
+
 
 client<llm> Claude {
   provider anthropic

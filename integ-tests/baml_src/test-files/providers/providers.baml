@@ -1,4 +1,23 @@
+function TestAnthropic(input: string) -> string {
+  client Claude
+  prompt #"
+    Write a nice haiku about {{ input }}
+  "#
+}
 
+function TestGPT(input: string) -> string {
+  client GPT35
+  prompt #"
+    Write a nice haiku about {{ input }}
+  "#
+}
+
+function TestAzure(input: string) -> string {
+  client GPT35Azure
+  prompt #"
+    Write a nice haiku about {{ input }}
+  "#
+}
 
 function TestOllama(input: string) -> string {
   client Ollama
@@ -7,9 +26,19 @@ function TestOllama(input: string) -> string {
   "#
 }
 
+function TestGemini(input: string) -> string {
+  client Gemini
+  prompt #"
+    Write a nice haiku about {{ input }}
+  "#
+}
+
+
 test TestProvider {
-  functions [TestOllama]
+  functions [TestAnthropic, TestGPT, TestAzure, TestOllama, TestGemini]
   args {
     input "the moon"
   }
 }
+
+

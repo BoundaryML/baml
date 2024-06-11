@@ -270,6 +270,7 @@ impl RequestBuilder for GoogleClient {
         //disabled proxying for testing
         // POST https://LOCATION-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/LOCATION/publishers/google/models/MODEL_ID:GENERATE_RESPONSE_METHOD
 
+        log::info!("Building request for Google client");
         let mut should_stream = "generateContent";
         if stream {
             should_stream = "streamGenerateContent";
@@ -288,6 +289,8 @@ impl RequestBuilder for GoogleClient {
             format!("{}/v1/messages", self.properties.base_url.as_str())
         });
 
+        log::info!("Quarter-way through building request for Google client");
+
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
         }
@@ -296,6 +299,7 @@ impl RequestBuilder for GoogleClient {
         }
 
         // req = req.header("baml-original-url", self.properties.base_url.as_str());
+        log::info!("Midway through building request for Google client");
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
@@ -307,6 +311,8 @@ impl RequestBuilder for GoogleClient {
                 body_obj.extend(convert_chat_prompt_to_body(messages));
             }
         }
+        log::info!("Endway through building request for Google client");
+        log::info!("Request body: {:#?}", body);
 
         req.json(&body)
     }

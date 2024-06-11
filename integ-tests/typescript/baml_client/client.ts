@@ -586,6 +586,36 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
+  async TestAnthropic(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestAnthropic",
+      {
+        "input": input
+      },
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return raw.parsed() as string
+  }
+  
+  async TestAzure(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestAzure",
+      {
+        "input": input
+      },
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return raw.parsed() as string
+  }
+  
   async TestFallbackClient(
       
       __baml_options__?: { tb?: TypeBuilder }
@@ -714,6 +744,36 @@ export class BamlClient {
       "TestFnNamedArgsSingleStringList",
       {
         "myArg": myArg
+      },
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return raw.parsed() as string
+  }
+  
+  async TestGPT(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestGPT",
+      {
+        "input": input
+      },
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return raw.parsed() as string
+  }
+  
+  async TestGemini(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestGemini",
+      {
+        "input": input
       },
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1631,6 +1691,50 @@ class BamlStreamClient {
     )
   }
   
+  TestAnthropic(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): BamlStream<(string | null), string> {
+    const raw = this.runtime.streamFunction(
+      "TestAnthropic",
+      {
+        "input": input
+      },
+      undefined,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return new BamlStream<(string | null), string>(
+      raw,
+      (a): a is (string | null) => a,
+      (a): a is string => a,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  TestAzure(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): BamlStream<(string | null), string> {
+    const raw = this.runtime.streamFunction(
+      "TestAzure",
+      {
+        "input": input
+      },
+      undefined,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return new BamlStream<(string | null), string>(
+      raw,
+      (a): a is (string | null) => a,
+      (a): a is string => a,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
   TestFallbackClient(
       
       __baml_options__?: { tb?: TypeBuilder }
@@ -1815,6 +1919,50 @@ class BamlStreamClient {
       "TestFnNamedArgsSingleStringList",
       {
         "myArg": myArg
+      },
+      undefined,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return new BamlStream<(string | null), string>(
+      raw,
+      (a): a is (string | null) => a,
+      (a): a is string => a,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  TestGPT(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): BamlStream<(string | null), string> {
+    const raw = this.runtime.streamFunction(
+      "TestGPT",
+      {
+        "input": input
+      },
+      undefined,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return new BamlStream<(string | null), string>(
+      raw,
+      (a): a is (string | null) => a,
+      (a): a is string => a,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  TestGemini(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): BamlStream<(string | null), string> {
+    const raw = this.runtime.streamFunction(
+      "TestGemini",
+      {
+        "input": input
       },
       undefined,
       this.ctx_manager.get(),
