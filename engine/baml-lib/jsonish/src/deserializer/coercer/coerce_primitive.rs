@@ -23,6 +23,12 @@ impl TypeCoercer for TypeValue {
             scope = ctx.display_scope(),
             current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
         );
+        log::trace!(
+            "content: {}",
+            value
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "<null>".into())
+        );
 
         match self {
             TypeValue::String => coerce_string(ctx, target, value),

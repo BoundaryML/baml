@@ -7,11 +7,11 @@ pub mod macros;
 mod test_class;
 mod test_enum;
 mod test_lists;
+mod test_partials;
 mod test_unions;
 
 use std::{
     collections::{HashMap, HashSet},
-    env,
     path::PathBuf,
 };
 
