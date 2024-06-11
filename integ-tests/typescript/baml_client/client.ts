@@ -751,21 +751,6 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
-  async TestGPT(
-      input: string,
-      __baml_options__?: { tb?: TypeBuilder }
-  ): Promise<string> {
-    const raw = await this.runtime.callFunction(
-      "TestGPT",
-      {
-        "input": input
-      },
-      this.ctx_manager.get(),
-      __baml_options__?.tb?.__tb(),
-    )
-    return raw.parsed() as string
-  }
-  
   async TestGemini(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
@@ -817,6 +802,21 @@ export class BamlClient {
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestOllama",
+      {
+        "input": input
+      },
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return raw.parsed() as string
+  }
+  
+  async TestOpenAI(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestOpenAI",
       {
         "input": input
       },
@@ -1933,28 +1933,6 @@ class BamlStreamClient {
     )
   }
   
-  TestGPT(
-      input: string,
-      __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
-    const raw = this.runtime.streamFunction(
-      "TestGPT",
-      {
-        "input": input
-      },
-      undefined,
-      this.ctx_manager.get(),
-      __baml_options__?.tb?.__tb(),
-    )
-    return new BamlStream<(string | null), string>(
-      raw,
-      (a): a is (string | null) => a,
-      (a): a is string => a,
-      this.ctx_manager.get(),
-      __baml_options__?.tb?.__tb(),
-    )
-  }
-  
   TestGemini(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
@@ -2027,6 +2005,28 @@ class BamlStreamClient {
   ): BamlStream<(string | null), string> {
     const raw = this.runtime.streamFunction(
       "TestOllama",
+      {
+        "input": input
+      },
+      undefined,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return new BamlStream<(string | null), string>(
+      raw,
+      (a): a is (string | null) => a,
+      (a): a is string => a,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  TestOpenAI(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): BamlStream<(string | null), string> {
+    const raw = this.runtime.streamFunction(
+      "TestOpenAI",
       {
         "input": input
       },

@@ -68,9 +68,9 @@ client<llm> GPT35Azure {
 }
 
 client<llm> Gemini {
-  provider google
+  provider baml-google-chat
   options{
-    model "hardcoded"
+    model "gemini-1.5-pro-001"
     api_key env.GOOGLE_API_KEY
     project_id env.GOOGLE_PROJECT_ID
   }

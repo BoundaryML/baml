@@ -271,12 +271,15 @@ export function activate(context: vscode.ExtensionContext) {
         changeOrigin: true,
         router: (req) => {
           // Extract the original target URL from the custom header
-          const originalUrl = req.headers['baml-original-url']
-
+          var originalUrl = req.headers['baml-original-url']
           if (typeof originalUrl === 'string') {
             delete req.headers['baml-original-url']
             req.headers['origin'] = `http://localhost:${port}`
-            return originalUrl
+  
+          if (originalUrl.endsWith('/')) {
+            originalUrl = originalUrl.slice(0, -1);
+          }
+          return originalUrl
           } else {
             throw new Error('baml-original-url header is missing or invalid')
           }

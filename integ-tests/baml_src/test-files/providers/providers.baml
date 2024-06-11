@@ -5,7 +5,7 @@ function TestAnthropic(input: string) -> string {
   "#
 }
 
-function TestGPT(input: string) -> string {
+function TestOpenAI(input: string) -> string {
   client GPT35
   prompt #"
     Write a nice haiku about {{ input }}
@@ -35,7 +35,7 @@ function TestGemini(input: string) -> string {
 
 
 test TestProvider {
-  functions [TestAnthropic, TestGPT, TestAzure, TestOllama, TestGemini]
+  functions [TestAnthropic, TestOpenAI, TestAzure, TestOllama, TestGemini]
   args {
     input "the moon"
   }

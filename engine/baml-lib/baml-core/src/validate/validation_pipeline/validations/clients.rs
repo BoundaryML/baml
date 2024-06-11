@@ -38,8 +38,6 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             ));
         }
 
-        log::info!("Validating client: {}", provider.as_str());
-
         if let Some((retry_policy, span)) = &f.properties().retry_policy {
             if ctx.db.find_retry_policy(retry_policy).is_none() {
                 ctx.push_error(DatamodelError::new_type_not_found_error(

@@ -1111,28 +1111,6 @@ class BamlClient:
       mdl = create_model("TestFnNamedArgsSingleStringListReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
-    async def TestGPT(
-        self,
-        input: str,
-        baml_options: BamlCallOptions = {},
-    ) -> str:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb
-      else:
-        tb = None
-
-      raw = await self.__runtime.call_function(
-        "TestGPT",
-        {
-          "input": input,
-        },
-        self.__ctx_manager.get(),
-        tb,
-      )
-      mdl = create_model("TestGPTReturnType", inner=(str, ...))
-      return coerce(mdl, raw.parsed())
-    
     async def TestGemini(
         self,
         input: str,
@@ -1219,6 +1197,28 @@ class BamlClient:
         tb,
       )
       mdl = create_model("TestOllamaReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    async def TestOpenAI(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "TestOpenAI",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("TestOpenAIReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
     async def TestRetryConstant(
@@ -2836,38 +2836,6 @@ class BamlStreamClient:
         tb,
       )
     
-    def TestGPT(
-        self,
-        input: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb
-      else:
-        tb = None
-
-      raw = self.__runtime.stream_function(
-        "TestGPT",
-        {
-          "input": input,
-        },
-        None,
-        self.__ctx_manager.get(),
-        tb,
-      )
-
-      mdl = create_model("TestGPTReturnType", inner=(str, ...))
-      partial_mdl = create_model("TestGPTPartialReturnType", inner=(Optional[str], ...))
-
-      return baml_py.BamlStream[Optional[str], str](
-        raw,
-        lambda x: coerce(partial_mdl, x),
-        lambda x: coerce(mdl, x),
-        self.__ctx_manager.get(),
-        tb,
-      )
-    
     def TestGemini(
         self,
         input: str,
@@ -2988,6 +2956,38 @@ class BamlStreamClient:
 
       mdl = create_model("TestOllamaReturnType", inner=(str, ...))
       partial_mdl = create_model("TestOllamaPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
+    def TestOpenAI(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "TestOpenAI",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("TestOpenAIReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestOpenAIPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlStream[Optional[str], str](
         raw,

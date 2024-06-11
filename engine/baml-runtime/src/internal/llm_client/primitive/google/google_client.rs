@@ -30,6 +30,9 @@ struct PostRequestProperities {
     headers: HashMap<String, String>,
     proxy_url: Option<String>,
     properties: HashMap<String, serde_json::Value>,
+    project_id: Option<String>,
+    model_id: Option<String>,
+    location: Option<String>,
 }
 
 pub struct GoogleClient {
@@ -39,7 +42,6 @@ pub struct GoogleClient {
     pub context: RenderContext_Client,
     pub features: ModelFeatures,
     pub properties: PostRequestProperities,
-    pub project_id: Option<String>,
 }
 
 fn resolve_properties(
@@ -61,9 +63,6 @@ fn resolve_properties(
         })
         .collect::<Result<HashMap<_, _>>>()?;
     // this is a required field
-    properties
-        .entry("max_tokens".into())
-        .or_insert_with(|| 4096.into());
 
     let default_role = properties
         .remove("default_role")
@@ -76,6 +75,21 @@ fn resolve_properties(
         .remove("api_key")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .or_else(|| ctx.env.get("GOOGLE_API_KEY").map(|s| s.to_string()));
+
+    let project_id = properties
+        .remove("project_id")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .or_else(|| ctx.env.get("GOOGLE_PROJECT_ID").map(|s| s.to_string()));
+
+    let model_id = properties
+        .remove("model")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .or_else(|| Some("gemini-1.5-pro-001".to_string()));
+
+    let location: Option<String> = properties
+        .remove("location")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .or_else(|| Some("us-central1".to_string()));
 
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
@@ -106,6 +120,9 @@ fn resolve_properties(
         api_key,
         headers,
         properties,
+        project_id,
+        model_id,
+        location,
         proxy_url: ctx.env.get("BOUNDARY_PROXY_URL").map(|s| s.to_string()),
     })
 }
@@ -252,7 +269,6 @@ impl GoogleClient {
                 .as_ref()
                 .map(|s| s.to_string()),
             client: create_client()?,
-            project_id: ctx.env.get("GOOGLE_PROJECT_ID").map(|s| s.to_string()),
         })
     }
 }
@@ -268,50 +284,69 @@ impl RequestBuilder for GoogleClient {
         stream: bool,
     ) -> reqwest::RequestBuilder {
         //disabled proxying for testing
-        // POST https://LOCATION-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/LOCATION/publishers/google/models/MODEL_ID:GENERATE_RESPONSE_METHOD
 
         log::info!("Building request for Google client");
+
         let mut should_stream = "generateContent";
-        if stream {
-            should_stream = "streamGenerateContent";
-        }
+        // if stream {
+        //     should_stream = "streamGenerateContent";
+        // }
 
-        //hardcoded for testing
-        let location = "us-central1";
+        let location = self
+            .properties
+            .location
+            .clone()
+            .unwrap_or_else(|| "us-central1".to_string());
+        let project_id = self
+            .properties
+            .project_id
+            .clone()
+            .unwrap_or_else(|| "gloo-ai".to_string());
+        let model_id = self
+            .properties
+            .model_id
+            .clone()
+            .unwrap_or_else(|| "gemini-1.5-pro-001".to_string());
 
-        //hardcode modelID for now
-        let model_id = "gemini-1.5-pro-001";
-
-        let mut req = self.client.post(if prompt.is_left() {
-            format!("https://{}-aiplatfomr.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}/{}", location, self.project_id.as_ref().unwrap(), location, model_id, should_stream)
-            // format!("{}/v1/complete", self.properties.base_url.as_str())
-        } else {
-            format!("{}/v1/messages", self.properties.base_url.as_str())
-        });
-
-        log::info!("Quarter-way through building request for Google client");
+        let mut req = self.client.post(
+            self.properties
+                .proxy_url
+                .as_ref()
+                .unwrap_or(&self.properties.base_url)
+                .clone(),
+        );
 
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
         }
         if let Some(key) = &self.properties.api_key {
-            req = req.header("x-api-key", key);
+            req = req.header("Authorization", format!("Bearer {}", key));
         }
+        // POST https://LOCATION-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/LOCATION/publishers/google/models/MODEL_ID:GENERATE_RESPONSE_METHOD
+        // POST https://us-central-1-aiplatform.googleapis.com/v1/projects/gloo-ai/locations/us-central-1/publishers/google/models/gemini-1.5-pro-001/generateContent
 
-        // req = req.header("baml-original-url", self.properties.base_url.as_str());
-        log::info!("Midway through building request for Google client");
+        let baml_original_url = format!(
+            "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
+            location,
+            project_id,
+            location,
+            model_id,
+            should_stream
+        );
+        req = req.header("baml-original-url", baml_original_url);
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
+
         match prompt {
             either::Either::Left(prompt) => {
                 body_obj.extend(convert_completion_prompt_to_body(prompt))
             }
             either::Either::Right(messages) => {
-                body_obj.extend(convert_chat_prompt_to_body(messages));
+                body_obj.extend(convert_chat_prompt_to_body(messages))
             }
         }
-        log::info!("Endway through building request for Google client");
+
         log::info!("Request body: {:#?}", body);
 
         req.json(&body)
@@ -391,9 +426,8 @@ impl WithChat for GoogleClient {
 fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
     let content = json!({
-        "role": "system",
+        "role": "user",
         "parts": [{
-            "type": "text",
             "text": prompt
         }]
     });
@@ -406,86 +440,42 @@ fn convert_chat_prompt_to_body(
     prompt: &Vec<RenderedChatMessage>,
 ) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
-    log::debug!("converting chat prompt to body: {:#?}", prompt);
+    log::info!("converting chat prompt to body: {:#?}", prompt);
 
-    if let Some(first) = prompt.get(0) {
-        if first.role == "system" {
-            map.insert(
-                "system".into(),
-                convert_message_parts_to_content(&first.parts),
-            );
-            map.insert(
-                "messages".into(),
-                prompt
-                    .iter()
-                    .skip(1)
-                    .map(|m| {
-                        json!({
-                            "role": m.role,
-                            "content": convert_message_parts_to_content(&m.parts)
-                        })
-                    })
-                    .collect::<serde_json::Value>(),
-            );
-        } else {
-            map.insert(
-                "messages".into(),
-                prompt
-                    .iter()
-                    .map(|m| {
-                        json!({
-                            "role": m.role,
-                            "content": convert_message_parts_to_content(&m.parts)
-                        })
-                    })
-                    .collect::<serde_json::Value>(),
-            );
-        }
-    } else {
-        map.insert(
-            "messages".into(),
-            prompt
-                .iter()
-                .map(|m| {
-                    json!({
-                        "role": m.role,
-                        "content": convert_message_parts_to_content(&m.parts)
-                    })
+    map.insert(
+        "contents".into(),
+        prompt
+            .iter()
+            .map(|m| {
+                json!({
+                    "role": m.role,
+                    "parts": convert_message_parts_to_content(&m.parts)
                 })
-                .collect::<serde_json::Value>(),
-        );
-    }
+            })
+            .collect::<serde_json::Value>(),
+    );
+
     log::debug!("converted chat prompt to body: {:#?}", map);
 
     return map;
 }
 
 fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json::Value {
-    if parts.len() == 1 {
-        if let ChatMessagePart::Text(text) = &parts[0] {
-            return json!(text);
-        }
-    }
-
     parts
         .iter()
         .map(|part| match part {
             ChatMessagePart::Text(text) => json!({
-                "type": "text",
                 "text": text
             }),
             ChatMessagePart::Image(image) => match image {
                 BamlImage::Base64(image) => json!({
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": image.media_type,
+                    "inlineDATA": {
+                        "mimeType": image.media_type,
                         "data": image.base64
                     }
                 }),
                 BamlImage::Url(image) => json!({
-                    "type": "image",
-                    "source": {
+                    "fileData": {
                         "type": "url",
                         "url": image.url
                     }
