@@ -2,6 +2,7 @@ use baml_runtime::{BamlRuntime, RuntimeContext};
 use baml_types::BamlValue;
 use indexmap::IndexMap;
 use magnus::block::Proc;
+use magnus::typed_data::Obj;
 use magnus::{
     class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
     scan_args::get_kwargs, Error, RClass, RHash, RModule, Ruby,
@@ -130,6 +131,7 @@ impl BamlRuntimeFfi {
         function_name: String,
         args: RHash,
         ctx: &RuntimeContextManager,
+        dynamic_types: magnus::Value,
     ) -> Result<FunctionResult> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -144,11 +146,20 @@ impl BamlRuntimeFfi {
 
         log::debug!("Calling {function_name} with:\nargs: {args:#?}\nctx ???");
 
+        let dynamic_types = if dynamic_types.is_nil() {
+            None
+        } else {
+            Some(
+                Obj::<type_builder::TypeBuilder>::try_convert(dynamic_types)
+                    .map_err(|e| baml_error(ruby, anyhow::Error::msg(format!("{:?}", e)), format!("Expected dynamic_types to be a type_builder::TypeBuilder, but was {:?}", dynamic_types)))?,
+            )
+        };
+
         let retval = match rb_self.t.block_on(rb_self.inner.call_function(
             function_name.clone(),
             &args,
             &ctx.inner,
-            None,
+            dynamic_types.as_ref().map(|t| &t.inner),
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(baml_error(
@@ -167,6 +178,7 @@ impl BamlRuntimeFfi {
         function_name: String,
         args: RHash,
         ctx: &RuntimeContextManager,
+        dynamic_types: magnus::Value,
     ) -> Result<FunctionResultStream> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -181,18 +193,28 @@ impl BamlRuntimeFfi {
 
         log::debug!("Streaming {function_name} with:\nargs: {args:#?}\nctx ???");
 
-        let retval =
-            match rb_self
-                .inner
-                .stream_function(function_name.clone(), &args, &ctx.inner, None)
-            {
-                Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
-                Err(e) => Err(baml_error(
-                    ruby,
-                    e,
-                    format!("error while streaming {function_name}"),
-                )),
-            };
+        let dynamic_types = if dynamic_types.is_nil() {
+            None
+        } else {
+            Some(
+                Obj::<type_builder::TypeBuilder>::try_convert(dynamic_types)
+                    .map_err(|e| baml_error(ruby, anyhow::Error::msg(format!("{:?}", e)), format!("Expected dynamic_types to be a type_builder::TypeBuilder, but was {:?}", dynamic_types)))?,
+            )
+        };
+
+        let retval = match rb_self.inner.stream_function(
+            function_name.clone(),
+            &args,
+            &ctx.inner,
+            dynamic_types.as_ref().map(|t| &t.inner),
+        ) {
+            Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
+            Err(e) => Err(baml_error(
+                ruby,
+                e,
+                format!("error while streaming {function_name}"),
+            )),
+        };
 
         retval
     }
@@ -220,6 +242,12 @@ fn init(ruby: &Ruby) -> Result<()> {
 
     let public_module = ruby.define_module("Baml")?;
     image::BamlImage::define_in_ruby(&public_module)?;
+    type_builder::TypeBuilder::define_in_ruby(&public_module)?;
+    type_builder::EnumBuilder::define_in_ruby(&public_module)?;
+    type_builder::EnumValueBuilder::define_in_ruby(&public_module)?;
+    type_builder::ClassBuilder::define_in_ruby(&public_module)?;
+    type_builder::ClassPropertyBuilder::define_in_ruby(&public_module)?;
+    type_builder::FieldType::define_in_ruby(&public_module)?;
 
     let module = public_module.define_module("Ffi")?;
 
@@ -237,10 +265,10 @@ fn init(ruby: &Ruby) -> Result<()> {
         "create_context_manager",
         method!(BamlRuntimeFfi::create_context_manager, 0),
     )?;
-    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 3))?;
+    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 4))?;
     runtime_class.define_method(
         "stream_function",
-        method!(BamlRuntimeFfi::stream_function, 3),
+        method!(BamlRuntimeFfi::stream_function, 4),
     )?;
 
     FunctionResult::define_in_ruby(&module)?;
