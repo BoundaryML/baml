@@ -38,7 +38,7 @@ impl Into<GeneratorOutputType> for &LanguageClientType {
     fn into(self) -> GeneratorOutputType {
         match self {
             LanguageClientType::PythonPydantic => GeneratorOutputType::PythonPydantic,
-            LanguageClientType::Ruby => GeneratorOutputType::Ruby,
+            LanguageClientType::Ruby => GeneratorOutputType::RubySorbet,
             LanguageClientType::Typescript => GeneratorOutputType::Typescript,
         }
     }
@@ -48,7 +48,7 @@ impl Into<GeneratorOutputType> for CallerType {
     fn into(self) -> GeneratorOutputType {
         match self {
             CallerType::Python => GeneratorOutputType::PythonPydantic,
-            CallerType::Ruby => GeneratorOutputType::Ruby,
+            CallerType::Ruby => GeneratorOutputType::RubySorbet,
             CallerType::Typescript => GeneratorOutputType::Typescript,
         }
     }

@@ -108,7 +108,7 @@ impl GenerateClient for GeneratorOutputType {
         gen: &GeneratorArgs,
     ) -> Result<GenerateOutput> {
         let files = match self {
-            GeneratorOutputType::Ruby => ruby::generate(ir, gen),
+            GeneratorOutputType::RubySorbet => ruby::generate(ir, gen),
             GeneratorOutputType::PythonPydantic => python::generate(ir, gen),
             GeneratorOutputType::Typescript => typescript::generate(ir, gen),
         }?;

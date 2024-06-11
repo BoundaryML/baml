@@ -9,6 +9,6 @@ generator lang_typescript {
 }
 
 generator lang_ruby {
-  output_type ruby
+  output_type ruby/sorbet
   output_dir "../ruby"
 }
