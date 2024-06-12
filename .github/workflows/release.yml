@@ -94,9 +94,10 @@ jobs:
             host: macos-14
             node_build: pnpm build --target aarch64-apple-darwin
 
-          - target: aarch64-pc-windows-msvc
-            host: windows-latest
-            node_build: pnpm build --target aarch64-pc-windows-msvc
+          # Disabled as python is not supported on aarch64 windows
+          # - target: aarch64-pc-windows-msvc
+          #   host: windows-latest
+          #   node_build: pnpm build --target aarch64-pc-windows-msvc
 
           - target: aarch64-unknown-linux-gnu
             host: ubuntu-latest
