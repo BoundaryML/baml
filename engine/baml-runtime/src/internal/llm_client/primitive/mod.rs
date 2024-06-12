@@ -70,9 +70,7 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
             "baml-ollama-chat" | "ollama" => {
                 OpenAIClient::new_ollama(client, ctx).map(LLMPrimitiveProvider::OpenAI)
             }
-            "baml-google-chat" | "google" => {
-                GoogleClient::new(client, ctx).map(LLMPrimitiveProvider::Google)
-            }
+            "google-ai" => GoogleClient::new(client, ctx).map(LLMPrimitiveProvider::Google),
             other => {
                 let options = [
                     "openai",
@@ -81,7 +79,6 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                     "azure-openai",
                     "fallback",
                     "round-robin",
-                    "google",
                 ];
                 anyhow::bail!(
                     "Unsupported provider: {}. Available ones are: {}",
