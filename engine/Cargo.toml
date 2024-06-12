@@ -50,7 +50,6 @@ strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = "0.26.2"
 walkdir = "2.5.0"
 web-time = "1.1.0"
-async-stream = "0.3"
 baml-types = { path = "baml-lib/baml-types" }
 internal-baml-codegen = { path = "language-client-codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }

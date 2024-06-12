@@ -153,7 +153,6 @@ impl SseResponseTrait for GoogleClient {
                 .map(|event| -> Result<GoogleResponse> {
                     Ok(serde_json::from_str::<GoogleResponse>(&event?.data)?)
                 })
-                .inspect(|event| log::info!("{:#?}", event))
                 .scan(
                     Ok(LLMCompleteResponse {
                         client: client_name.clone(),
@@ -179,7 +178,6 @@ impl SseResponseTrait for GoogleClient {
                         let event = match event {
                             Ok(event) => event,
                             Err(e) => {
-                                log::info!("Failed to parse event: {:#?}", e);
                                 return std::future::ready(Some(LLMResponse::LLMFailure(
                                     LLMErrorResponse {
                                         client: client_name.clone(),
@@ -203,7 +201,6 @@ impl SseResponseTrait for GoogleClient {
 
                         if let Some(choice) = event.candidates.get(0) {
                             if let Some(content) = choice.content.parts.get(0) {
-                                log::info!("Received content: {:#?}", content);
                                 inner.content += &content.text;
                             }
                             match choice.finish_reason.as_ref() {
@@ -419,8 +416,6 @@ fn convert_chat_prompt_to_body(
             })
             .collect::<serde_json::Value>(),
     );
-
-    log::debug!("converted chat prompt to body: {:#?}", map);
 
     return map;
 }
