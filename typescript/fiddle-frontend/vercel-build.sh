@@ -8,6 +8,7 @@ source $HOME/.cargo/env
 which cargo
 
 cd ../../engine/baml-schema-wasm
+export OPENSSL_NO_VENDOR=1
 # cargo install
 rustup target add wasm32-unknown-unknown
 cargo update -p wasm-bindgen
