@@ -180,9 +180,9 @@ pub enum BlockReason {
 pub struct SafetyRating {
     pub category: HarmCategory,
     pub probability: HarmProbability,
-    pub probability_score: f64,
-    pub severity: HarmSeverity,
-    pub severity_score: f64,
+    pub probability_score: Option<f64>,
+    pub severity: Option<HarmSeverity>,
+    pub severity_score: Option<f64>,
     pub blocked: Option<bool>,
 }
 
@@ -243,7 +243,7 @@ pub struct Candidate {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Content {
-    pub role: String,
+    pub role: Option<String>,
     pub parts: Vec<Part>,
 }
 

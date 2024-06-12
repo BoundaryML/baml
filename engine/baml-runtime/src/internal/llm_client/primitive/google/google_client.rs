@@ -285,8 +285,6 @@ impl RequestBuilder for GoogleClient {
     ) -> reqwest::RequestBuilder {
         //disabled proxying for testing
 
-        log::info!("Building request for Google client");
-
         let mut should_stream = "generateContent";
         if stream {
             should_stream = "streamGenerateContent";
@@ -308,14 +306,20 @@ impl RequestBuilder for GoogleClient {
             .clone()
             .unwrap_or_else(|| "gemini-1.5-pro-001".to_string());
 
+        // let baml_original_url = format!(
+        //     "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
+        // );
+
+        let api_key = self
+            .properties
+            .api_key
+            .clone()
+            .unwrap_or_else(|| "".to_string());
         let baml_original_url = format!(
-            "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
-            location,
-            project_id,
-            location,
-            model_id,
-            should_stream
+            "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:{}?key=${}",
+            should_stream, api_key
         );
+
         let mut req = self.client.post(
             self.properties
                 .proxy_url
@@ -327,10 +331,10 @@ impl RequestBuilder for GoogleClient {
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
         }
-        if let Some(key) = &self.properties.api_key {
-            req = req.header("Authorization", format!("Bearer {}", key));
-        }
 
+        if let Some(key) = &self.properties.api_key {
+            req = req.header("x-goog-api-key", format!("{}", key));
+        }
         req = req.header("baml-original-url", baml_original_url);
 
         let mut body = json!(self.properties.properties);
@@ -344,8 +348,6 @@ impl RequestBuilder for GoogleClient {
                 body_obj.extend(convert_chat_prompt_to_body(messages))
             }
         }
-
-        log::info!("Request body: {:#?}", body);
 
         req.json(&body)
     }

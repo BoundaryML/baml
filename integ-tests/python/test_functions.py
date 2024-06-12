@@ -128,7 +128,8 @@ async def test_claude():
 @pytest.mark.asyncio
 async def test_gemini():
     geminiRes = await b.TestGemini(input= "Dr. Pepper")
-    print(geminiRes)
+    print(f'LLM output from Gemini: {geminiRes}')
+    
     assert len(geminiRes) > 0, "Expected non-empty result but got empty."
 
 

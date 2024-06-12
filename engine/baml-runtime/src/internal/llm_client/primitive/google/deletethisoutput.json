@@ -2,49 +2,38 @@
   "candidates": [
     {
       "content": {
-        "role": "model",
         "parts": [
           {
-            "text": "Sweet and spicy fizz,\nTwenty-three flavors dance light,\nA Texan delight. \n"
+            "text": "This sounds like a combination of genres, but with a strong ambient or experimental electronic music foundation. Here's a breakdown:\n\n* **Ambient/Drone:** The repetitive, low-frequency sounds create a sense of atmosphere and space, reminiscent of ambient music.\n* **Industrial:** The harsh, metallic sounds and rhythmic patterns recall the industrial music genre. \n* **Dark Ambient/Post-Industrial:** The overall mood is dark and melancholic, aligning with the styles of dark ambient and post-industrial music. \n\nThe music has a sense of unease and a slow, brooding quality, which could be interpreted as representing the gradual melting of a snowman. \n"
           }
-        ]
+        ],
+        "role": "model"
       },
       "finishReason": "STOP",
+      "index": 0,
       "safetyRatings": [
         {
-          "category": "HARM_CATEGORY_HATE_SPEECH",
-          "probability": "NEGLIGIBLE",
-          "probabilityScore": 0.045183755,
-          "severity": "HARM_SEVERITY_NEGLIGIBLE",
-          "severityScore": 0.05340333
+          "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          "probability": "NEGLIGIBLE"
         },
         {
-          "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-          "probability": "NEGLIGIBLE",
-          "probabilityScore": 0.07864238,
-          "severity": "HARM_SEVERITY_NEGLIGIBLE",
-          "severityScore": 0.09041373
+          "category": "HARM_CATEGORY_HATE_SPEECH",
+          "probability": "NEGLIGIBLE"
         },
         {
           "category": "HARM_CATEGORY_HARASSMENT",
-          "probability": "NEGLIGIBLE",
-          "probabilityScore": 0.06500873,
-          "severity": "HARM_SEVERITY_NEGLIGIBLE",
-          "severityScore": 0.051845465
+          "probability": "NEGLIGIBLE"
         },
         {
-          "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-          "probability": "NEGLIGIBLE",
-          "probabilityScore": 0.101767845,
-          "severity": "HARM_SEVERITY_NEGLIGIBLE",
-          "severityScore": 0.11066323
+          "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+          "probability": "NEGLIGIBLE"
         }
       ]
     }
   ],
   "usageMetadata": {
-    "promptTokenCount": 8,
-    "candidatesTokenCount": 20,
-    "totalTokenCount": 28
+    "promptTokenCount": 1410,
+    "candidatesTokenCount": 134,
+    "totalTokenCount": 1544
   }
 }
