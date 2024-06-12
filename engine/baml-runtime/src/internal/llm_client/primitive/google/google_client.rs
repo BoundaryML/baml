@@ -288,9 +288,9 @@ impl RequestBuilder for GoogleClient {
         log::info!("Building request for Google client");
 
         let mut should_stream = "generateContent";
-        // if stream {
-        //     should_stream = "streamGenerateContent";
-        // }
+        if stream {
+            should_stream = "streamGenerateContent";
+        }
 
         let location = self
             .properties
@@ -308,11 +308,19 @@ impl RequestBuilder for GoogleClient {
             .clone()
             .unwrap_or_else(|| "gemini-1.5-pro-001".to_string());
 
+        let baml_original_url = format!(
+            "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
+            location,
+            project_id,
+            location,
+            model_id,
+            should_stream
+        );
         let mut req = self.client.post(
             self.properties
                 .proxy_url
                 .as_ref()
-                .unwrap_or(&self.properties.base_url)
+                .unwrap_or(&baml_original_url)
                 .clone(),
         );
 
@@ -322,17 +330,7 @@ impl RequestBuilder for GoogleClient {
         if let Some(key) = &self.properties.api_key {
             req = req.header("Authorization", format!("Bearer {}", key));
         }
-        // POST https://LOCATION-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/LOCATION/publishers/google/models/MODEL_ID:GENERATE_RESPONSE_METHOD
-        // POST https://us-central-1-aiplatform.googleapis.com/v1/projects/gloo-ai/locations/us-central-1/publishers/google/models/gemini-1.5-pro-001/generateContent
 
-        let baml_original_url = format!(
-            "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
-            location,
-            project_id,
-            location,
-            model_id,
-            should_stream
-        );
         req = req.header("baml-original-url", baml_original_url);
 
         let mut body = json!(self.properties.properties);
@@ -414,9 +412,9 @@ impl WithChat for GoogleClient {
                     .finish_reason
                     .as_ref()
                     .map(|r| serde_json::to_string(r).unwrap_or("".into())),
-                prompt_tokens: Some(response.usage_meta_data.prompt_token_count),
-                output_tokens: Some(response.usage_meta_data.candidates_token_count),
-                total_tokens: Some(response.usage_meta_data.total_token_count),
+                prompt_tokens: Some(response.usage_metadata.prompt_token_count),
+                output_tokens: Some(response.usage_metadata.candidates_token_count),
+                total_tokens: Some(response.usage_metadata.total_token_count),
             },
         })
     }
@@ -440,7 +438,6 @@ fn convert_chat_prompt_to_body(
     prompt: &Vec<RenderedChatMessage>,
 ) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
-    log::info!("converting chat prompt to body: {:#?}", prompt);
 
     map.insert(
         "contents".into(),

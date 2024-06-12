@@ -36,11 +36,7 @@ pub async fn make_request(
     let (system_now, instant_now) = (web_time::SystemTime::now(), web_time::Instant::now());
     log::info!("Making request using client {}", client.context().name);
 
-    let req = match client
-        .build_request(prompt, stream)
-        .build()
-        .context("Failed to build request")
-    {
+    let req = match client.build_request(prompt, stream).build() {
         Ok(req) => req,
         Err(e) => {
             return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -98,10 +94,21 @@ pub async fn make_parsed_request<T: DeserializeOwned>(
     stream: bool,
 ) -> Result<(T, web_time::SystemTime, web_time::Instant), LLMResponse> {
     let (response, system_now, instant_now) = make_request(client, prompt, stream).await?;
-    match response.json::<T>().await.context(format!(
-        "Failed to parse into a response accepted by {}",
-        std::any::type_name::<T>()
-    )) {
+
+    let raw_response = response
+        .text()
+        .await
+        .context("Failed to read response text")
+        .unwrap_or_default();
+
+    // Attempt to parse the response JSON
+    match serde_json::from_str::<T>(&raw_response).with_context(|| {
+        format!(
+            "Failed to parse into a response accepted by {}. Response: {}",
+            std::any::type_name::<T>(),
+            raw_response
+        )
+    }) {
         Ok(response) => Ok((response, system_now, instant_now)),
         Err(e) => Err(LLMResponse::LLMFailure(LLMErrorResponse {
             client: client.context().name.to_string(),

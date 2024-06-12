@@ -18,6 +18,7 @@ maturin = "^1.5.1"
 pytest-asyncio = "^0.23.7"
 pytest = "^8.2.1"
 pydantic = "^2.7.1"
+python-dotenv = "^1.0.1"
 
 [build-system]
 requires = ["poetry-core"]

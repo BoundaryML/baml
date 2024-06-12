@@ -1,0 +1,50 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "text": "Sweet and spicy fizz,\nTwenty-three flavors dance light,\nA Texan delight. \n"
+          }
+        ]
+      },
+      "finishReason": "STOP",
+      "safetyRatings": [
+        {
+          "category": "HARM_CATEGORY_HATE_SPEECH",
+          "probability": "NEGLIGIBLE",
+          "probabilityScore": 0.045183755,
+          "severity": "HARM_SEVERITY_NEGLIGIBLE",
+          "severityScore": 0.05340333
+        },
+        {
+          "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+          "probability": "NEGLIGIBLE",
+          "probabilityScore": 0.07864238,
+          "severity": "HARM_SEVERITY_NEGLIGIBLE",
+          "severityScore": 0.09041373
+        },
+        {
+          "category": "HARM_CATEGORY_HARASSMENT",
+          "probability": "NEGLIGIBLE",
+          "probabilityScore": 0.06500873,
+          "severity": "HARM_SEVERITY_NEGLIGIBLE",
+          "severityScore": 0.051845465
+        },
+        {
+          "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          "probability": "NEGLIGIBLE",
+          "probabilityScore": 0.101767845,
+          "severity": "HARM_SEVERITY_NEGLIGIBLE",
+          "severityScore": 0.11066323
+        }
+      ]
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 8,
+    "candidatesTokenCount": 20,
+    "totalTokenCount": 28
+  }
+}

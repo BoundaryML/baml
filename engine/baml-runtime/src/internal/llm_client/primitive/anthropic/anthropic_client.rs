@@ -469,7 +469,6 @@ fn convert_chat_prompt_to_body(
     prompt: &Vec<RenderedChatMessage>,
 ) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
-    log::debug!("converting chat prompt to body: {:#?}", prompt);
 
     if let Some(first) = prompt.get(0) {
         if first.role == "system" {

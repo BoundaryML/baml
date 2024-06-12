@@ -1,0 +1,29 @@
+{
+  "candidates": [
+      {
+          "content": {
+              "role": "model",
+              "parts": [
+                  {
+                      "text": "Dark fizz, cherry bright,\nTwenty-three flavors dance light,\nA Texan delight. \n"
+                  }
+              ]
+          },
+          "finishReason": "STOP",
+          "safetyRatings": [
+              {
+                  "category": "HARM_CATEGORY_HATE_SPEECH",
+                  "probability": "NEGLIGIBLE",
+                  "probabilityScore": 0.04977345,
+                  "severity": "HARM_SEVERITY_NEGLIGIBLE",
+                  "severityScore": 0.06359858
+              }
+          ]
+      }
+  ],
+  "usageMetaData": {
+      "promptTokenCount": 8,
+      "candidatesTokenCount": 21,
+      "totalTokenCount": 29
+  }
+}
