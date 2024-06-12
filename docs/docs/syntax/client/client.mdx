@@ -212,7 +212,7 @@ client<llm> MyClient {
 ```
 
 ## Other providers
-You can use the `openai` provider if the provider you're trying to use has the same ChatML response format (i.e. HugginFace via their Inference Endpoints or local endpoint)
+You can use the `openai` provider if the provider you're trying to use has the same ChatML response format (i.e. HuggingFace via their Inference Endpoint or your own local endpoint)
 
 Some providers ask you to add a `base_url`, which you can do like this:
   
@@ -222,7 +222,7 @@ client<llm> MyClient {
   options {
     model some-custom-model
     api_key env.OPEN
-    base_url "https://some-custom-url-endpoint-here"
+    base_url "https://some-custom-url-here"
   }
 }
 ```
