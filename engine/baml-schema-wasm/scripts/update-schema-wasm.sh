@@ -36,6 +36,7 @@ fi
 printf '%s\n' "Starting build :: baml-schema-wasm"
 cargo build --release --color=always --target=wasm32-unknown-unknown --manifest-path=$baml_schema_wasm_dir/Cargo.toml
 
+
 ## Build target specific steps
 if [ "$TARGET" == "node" ]; then
     printf '%s\n' "Generating node module"

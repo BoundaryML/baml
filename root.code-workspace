@@ -13,9 +13,6 @@
       "path": "engine"
     },
     {
-      "path": "fiddle"
-    },
-    {
       "path": "integ-tests"
     },
     {
@@ -53,9 +50,7 @@
     "git.openDiffOnClick": true,
     "python.analysis.typeCheckingMode": "strict",
     "rust-analyzer.procMacro.ignored": {
-      "napi-derive": [
-        "napi"
-      ]
+      "napi-derive": ["napi"]
     },
     "sorbet.enabled": true,
     "sorbet.lspConfigs": [
@@ -79,7 +74,7 @@
       "titleBar.activeBackground": "#8B0002",
       "titleBar.activeForeground": "#FFFBFB"
     },
-    "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome",
+    "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome"
   },
   "extensions": {
     "recommendations": [

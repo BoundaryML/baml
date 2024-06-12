@@ -19,7 +19,7 @@ import { unsavedChangesAtom } from '../[project_id]/_atoms/atoms'
 export const ExampleProjectCard = ({ project }: { project: BAMLProject }) => {
   // const searchParams = useSearchParams()
   const router = useRouter()
-  const selectedId = usePathname().replace('/', '')
+  const selectedId = usePathname()?.replace('/', '')
   const isSelected = selectedId === project.id || (project.id === 'extract-verbs' && selectedId === '')
   const unsavedChanges = useAtomValue(unsavedChangesAtom)
   return (
