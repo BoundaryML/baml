@@ -141,16 +141,19 @@ impl SseResponseTrait for GoogleClient {
     ) -> StreamResponse {
         let prompt = prompt.clone();
         let client_name = self.context.name.clone();
+        let model_id = self.properties.model_id.clone().unwrap_or_default();
         let params = self.properties.properties.clone();
         Ok(Box::pin(
             resp.bytes_stream()
                 .eventsource()
+                .inspect(|event| log::info!("Received event: {:?}", event))
                 .take_while(|event| {
-                    std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))
+                    std::future::ready(event.as_ref().is_ok_and(|e| e.data != "data: \n"))
                 })
                 .map(|event| -> Result<GoogleResponse> {
                     Ok(serde_json::from_str::<GoogleResponse>(&event?.data)?)
                 })
+                .inspect(|event| log::info!("{:#?}", event))
                 .scan(
                     Ok(LLMCompleteResponse {
                         client: client_name.clone(),
@@ -158,7 +161,7 @@ impl SseResponseTrait for GoogleClient {
                         content: "".to_string(),
                         start_time: system_start,
                         latency: instant_start.elapsed(),
-                        model: "".to_string(),
+                        model: model_id,
                         invocation_params: params.clone(),
                         metadata: LLMCompleteResponseMetadata {
                             baml_is_complete: false,
@@ -176,6 +179,7 @@ impl SseResponseTrait for GoogleClient {
                         let event = match event {
                             Ok(event) => event,
                             Err(e) => {
+                                log::info!("Failed to parse event: {:#?}", e);
                                 return std::future::ready(Some(LLMResponse::LLMFailure(
                                     LLMErrorResponse {
                                         client: client_name.clone(),
@@ -196,20 +200,21 @@ impl SseResponseTrait for GoogleClient {
                                 )));
                             }
                         };
-                        // if let Some(choice) = event.candidates.get(0) {
-                        //     if let Some(content) = choice.content.as_ref() {
-                        //         inner.content += content.as_str();
-                        //     }
-                        //     // inner.model = self.client;
-                        //     match choice.finish_reason.as_ref() {
-                        //         Some(FinishReason::Stop) => {
-                        //             inner.metadata.baml_is_complete = true;
-                        //             inner.metadata.finish_reason =
-                        //                 Some(FinishReason::Stop.to_string());
-                        //         }
-                        //         _ => (),
-                        //     }
-                        // }
+
+                        if let Some(choice) = event.candidates.get(0) {
+                            if let Some(content) = choice.content.parts.get(0) {
+                                log::info!("Received content: {:#?}", content);
+                                inner.content += &content.text;
+                            }
+                            match choice.finish_reason.as_ref() {
+                                Some(FinishReason::Stop) => {
+                                    inner.metadata.baml_is_complete = true;
+                                    inner.metadata.finish_reason =
+                                        Some(FinishReason::Stop.to_string());
+                                }
+                                _ => (),
+                            }
+                        }
                         inner.latency = instant_start.elapsed();
 
                         std::future::ready(Some(LLMResponse::Success(inner.clone())))
@@ -269,9 +274,9 @@ impl RequestBuilder for GoogleClient {
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
     ) -> reqwest::RequestBuilder {
-        let mut should_stream = "generateContent";
+        let mut should_stream = "generateContent?";
         if stream {
-            should_stream = "streamGenerateContent";
+            should_stream = "streamGenerateContent?alt=sse&";
         }
 
         let api_key = self
@@ -280,7 +285,7 @@ impl RequestBuilder for GoogleClient {
             .clone()
             .unwrap_or_else(|| "".to_string());
         let baml_original_url = format!(
-            "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:{}?key={}",
+            "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:{}key={}",
             should_stream, api_key
         );
 

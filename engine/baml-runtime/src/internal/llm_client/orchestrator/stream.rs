@@ -55,39 +55,55 @@ where
 
         let (system_start, instant_start) = (web_time::SystemTime::now(), web_time::Instant::now());
         let stream_res = node.stream(ctx, &prompt).await;
+
+        match &stream_res {
+            Ok(_) => log::info!("Stream response: Success"),
+            Err(e) => log::info!("Stream response: Error {:?}", e),
+        }
         let final_response = match stream_res {
-            Ok(response) => response
-                .map(|stream_part| {
-                    if let Some(on_event) = on_event.as_ref() {
-                        match &stream_part {
-                            LLMResponse::Success(s) => {
-                                let parsed = partial_parse_fn(&s.content);
-                                on_event(FunctionResult::new(
-                                    node.scope.clone(),
-                                    LLMResponse::Success(s.clone()),
-                                    Some(parsed),
-                                ));
+            Ok(response) => {
+                log::info!("Stream started successfully");
+                response
+                    .map(|stream_part| {
+                        log::info!("Stream part received: {:?}", stream_part);
+                        if let Some(on_event) = on_event.as_ref() {
+                            match &stream_part {
+                                LLMResponse::Success(s) => {
+                                    let parsed = partial_parse_fn(&s.content);
+                                    on_event(FunctionResult::new(
+                                        node.scope.clone(),
+                                        LLMResponse::Success(s.clone()),
+                                        Some(parsed),
+                                    ));
+                                }
+                                _ => {}
                             }
-                            _ => {}
                         }
-                    }
-                    stream_part
-                })
-                .fold(None, |_, current| Some(current))
-                .await
-                .unwrap_or_else(|| {
-                    LLMResponse::LLMFailure(LLMErrorResponse {
-                        client: node.provider.name().into(),
-                        model: None,
-                        prompt,
-                        start_time: system_start,
-                        latency: instant_start.elapsed(),
-                        invocation_params: node.provider.invocation_params().clone(),
-                        message: "Stream ended without response".to_string(),
-                        code: crate::internal::llm_client::ErrorCode::from_u16(2),
+                        stream_part
                     })
-                }),
-            Err(response) => response,
+                    .fold(None, |_, current| {
+                        log::info!("Folding stream part: {:?}", current);
+                        Some(current)
+                    })
+                    .await
+                    .unwrap_or_else(|| {
+                        log::warn!("Stream ended without response");
+                        LLMResponse::LLMFailure(LLMErrorResponse {
+                            client: node.provider.name().into(),
+                            model: None,
+                            prompt,
+                            start_time: system_start,
+                            latency: instant_start.elapsed(),
+                            invocation_params: node.provider.invocation_params().clone(),
+                            message: "Stream ended without response".to_string(),
+                            code: crate::internal::llm_client::ErrorCode::from_u16(2),
+                        })
+                    })
+            }
+            Err(response) => {
+                log::error!("Stream response error: {:?}", response);
+                response
+            }
         };
 
         let parsed_response = match &final_response {

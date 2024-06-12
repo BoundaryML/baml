@@ -29,7 +29,7 @@ function TestOllama(input: string) -> string {
 function TestGemini(input: string) -> string {
   client Gemini
   prompt #"
-    Write a nice haiku about {{ input }}
+    Write a nice short story about {{ input }}
   "#
 }
 
@@ -37,7 +37,7 @@ function TestGemini(input: string) -> string {
 test TestProvider {
   functions [TestAnthropic, TestOpenAI, TestAzure, TestOllama, TestGemini]
   args {
-    input "the moon"
+    input "Donkey kong and peanut butter"
   }
 }
 
