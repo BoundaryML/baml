@@ -25,7 +25,6 @@ use serde_json::json;
 use std::collections::HashMap;
 struct PostRequestProperities {
     default_role: String,
-    base_url: String,
     api_key: Option<String>,
     headers: HashMap<String, String>,
     proxy_url: Option<String>,
@@ -39,7 +38,7 @@ pub struct GoogleClient {
     pub retry_policy: Option<String>,
     pub context: RenderContext_Client,
     pub features: ModelFeatures,
-    pub properties: PostRequestProperities,
+    properties: PostRequestProperities,
 }
 
 fn resolve_properties(
@@ -67,8 +66,6 @@ fn resolve_properties(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "user".to_string());
 
-    let base_url = "";
-
     let api_key = properties
         .remove("api_key")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
@@ -77,7 +74,7 @@ fn resolve_properties(
     let model_id = properties
         .remove("model")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .or_else(|| Some("gemini-1.5-pro-001".to_string()));
+        .or_else(|| Some("gemini-1.5-flash".to_string()));
 
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
@@ -104,7 +101,6 @@ fn resolve_properties(
 
     Ok(PostRequestProperities {
         default_role,
-        base_url: base_url.to_string(),
         api_key,
         headers,
         properties,
@@ -276,14 +272,14 @@ impl RequestBuilder for GoogleClient {
             should_stream = "streamGenerateContent?alt=sse&";
         }
 
-        let api_key = self
-            .properties
-            .api_key
-            .clone()
-            .unwrap_or_else(|| "".to_string());
         let baml_original_url = format!(
-            "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:{}key={}",
-            should_stream, api_key
+            "https://generativelanguage.googleapis.com/v1/models/{}:{}key={}",
+            self.properties.model_id.as_ref().unwrap_or(&"".to_string()),
+            should_stream,
+            self.properties
+                .api_key
+                .clone()
+                .unwrap_or_else(|| "".to_string())
         );
 
         let mut req = self.client.post(

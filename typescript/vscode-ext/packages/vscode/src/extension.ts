@@ -255,57 +255,56 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   try {
-
-
     const app = require('express')()
-app.use(cors())
-var port: number
-const server = app.listen(0, () => {
-  port = server.address().port
-  console.log('Server started on port ' + port)
-  WebPanelView.currentPanel?.postMessage('port_number', {
-    port: port,
-  })
-})
+    app.use(cors())
+    var port: number
+    const server = app.listen(0, () => {
+      port = server.address().port
+      console.log('Server started on port ' + port)
+      WebPanelView.currentPanel?.postMessage('port_number', {
+        port: port,
+      })
+    })
 
-app.use(
-  createProxyMiddleware({
-    changeOrigin: true,
-    pathRewrite: (path, req) => {
-      // Ensure the URL does not end with a slash
-      if (path.endsWith('/')) {
-        return path.slice(0, -1)
-      }
-      return path
-    },
-    router: (req) => {
-      // Extract the original target URL from the custom header
-      let originalUrl = req.headers['baml-original-url']
-      if (typeof originalUrl === 'string') {
-        delete req.headers['baml-original-url']
-        req.headers['origin'] = `http://localhost:${port}`
+    app.use(
+      createProxyMiddleware({
+        changeOrigin: true,
+        pathRewrite: (path, req) => {
+          // Ensure the URL does not end with a slash
+          if (path.endsWith('/')) {
+            return path.slice(0, -1)
+          }
+          return path
+        },
+        router: (req) => {
+          // Extract the original target URL from the custom header
+          let originalUrl = req.headers['baml-original-url']
+          if (typeof originalUrl === 'string') {
+            delete req.headers['baml-original-url']
+            req.headers['origin'] = `http://localhost:${port}`
 
-        // Ensure the URL does not end with a slash
-        if (originalUrl.endsWith('/')) {
-          originalUrl = originalUrl.slice(0, -1)
-        }
-        return originalUrl
-      } else {
-        throw new Error('baml-original-url header is missing or invalid')
-      }
-    },
-    logger: console,
-    on: {
-      proxyRes: (proxyRes, req, res) => {
-        proxyRes.headers['Access-Control-Allow-Origin'] = '*'
-      },
-      error: (error) => {
-        console.error('proxy error:', error)
-      },
-    },
-  }),
-)
-  } catch (error) {
+            // Ensure the URL does not end with a slash
+            if (originalUrl.endsWith('/')) {
+              originalUrl = originalUrl.slice(0, -1)
+            }
+            return originalUrl
+          } else {
+            throw new Error('baml-original-url header is missing or invalid')
+          }
+        },
+        logger: console,
+        on: {
+          proxyRes: (proxyRes, req, res) => {
+            proxyRes.headers['Access-Control-Allow-Origin'] = '*'
+          },
+          error: (error) => {
+            console.error('proxy error:', error)
+          },
+        },
+      }),
+    )
+  } 
+  catch (error) {
     console.error('Failed to start proxy server:', error)
     vscode.window.showErrorMessage('Failed to BAML localhost server. Contact support for help.')
   }

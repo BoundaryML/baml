@@ -1,8 +1,6 @@
+import pytest
 from dotenv import load_dotenv
 load_dotenv()
-
-import pytest
-
 import baml_py
 from baml_client import b
 from baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
@@ -133,6 +131,7 @@ async def test_gemini():
     assert len(geminiRes) > 0, "Expected non-empty result but got empty."
 
 
+
 @pytest.mark.asyncio
 async def test_streaming():
     stream = b.stream.PromptTestOpenAI(input="Programming languages are fun to create")
@@ -183,6 +182,32 @@ async def test_streaming_claude():
     print("final:")
     print(final)
     assert msgs[-1] == final, "Expected last stream message to match final response."
+
+
+@pytest.mark.asyncio
+async def test_streaming_gemini():
+    stream = b.stream.TestGemini(input="Dr.Pepper")
+    msgs = []
+    async for msg in stream:
+        msgs.append(msg)
+    final = await stream.get_final_response()
+
+    assert len(final) > 0, "Expected non-empty final but got empty."
+    assert len(msgs) > 0, "Expected at least one streamed response but got none."
+    for prev_msg, msg in zip(msgs, msgs[1:]):
+        assert msg.startswith(
+            prev_msg
+        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
+            prev_msg,
+            msg,
+        )
+    print("msgs:")
+    print(msgs[-1])
+    print("final:")
+    print(final)
+    assert msgs[-1] == final, "Expected last stream message to match final response."
+
+
 
 
 @pytest.mark.asyncio
@@ -325,3 +350,25 @@ async def test_dynamic_class_output():
     output = await b.MyFunc(input="My name is Harrison. My hair is black and I'm 6 feet tall.", baml_options={"tb": tb})
     print(output.model_dump_json())
     assert output.hair_color == "black"
+
+@pytest.mark.asyncio
+async def test_stream_dynamic_class_output():
+    tb = TypeBuilder()
+    tb.DynamicOutput.add_property("hair_color", tb.string())
+    print(tb.DynamicOutput.list_properties())
+    for prop in tb.DynamicOutput.list_properties():
+        print(f"Property: {prop}")
+
+    stream = b.stream.MyFunc(input="My name is Harrison. My hair is black and I'm 6 feet tall.", baml_options={"tb": tb})
+    msgs = []
+    async for msg in stream:
+        print("streamed ", msg)
+        print("streamed ", msg.model_dump())
+        msgs.append(msg)
+    final = await stream.get_final_response()
+
+    assert len(msgs) > 0, "Expected at least one streamed response but got none."
+    print("final ", final)
+    print("final ", final.model_dump())
+    print("final ", final.model_dump_json())
+    assert final.hair_color == "black"

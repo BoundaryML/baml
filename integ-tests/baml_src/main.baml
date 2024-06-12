@@ -8,7 +8,7 @@ generator lang_typescript {
   output_dir "../typescript"
 }
 
-// generator lang_ruby {
-//   output_type ruby/sorbet
-//   output_dir "../ruby"
-// }
+generator lang_ruby {
+  output_type ruby/sorbet
+  output_dir "../ruby"
+}
