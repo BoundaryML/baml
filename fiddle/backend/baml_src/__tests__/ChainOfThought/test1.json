@@ -1,3 +1,0 @@
-{
-  "input": "    Given the email below: fe \n\n    Email Subject: {#input.subject}\n    Email Body: {#input.body}\n\n    Explain the reasoning behind how you extract this info from the email, and then provide the extracted info in JSON format:\n    {#print_type(output)}\n\n    JSON:"
-}

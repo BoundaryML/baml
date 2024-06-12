@@ -17,8 +17,11 @@ const defaultEnvKeyValues: [string, string][] = (() => {
   if ((window as any).next?.version) {
     console.log('Running in nextjs')
     const domain = window?.location?.origin || ''
-    // Running in a Next.js environment, proxy to nextjs rewrite
-    return []
+    if (domain.includes('localhost')) {
+      // we can do somehting fancier here later if we want to test locally.
+      return [['BOUNDARY_PROXY_URL', 'https://fiddle-proxy.fly.dev']]
+    }
+    return [['BOUNDARY_PROXY_URL', 'https://fiddle-proxy.fly.dev']]
   } else {
     console.log('Not running in a Next.js environment, set default value')
     // Not running in a Next.js environment, set default value

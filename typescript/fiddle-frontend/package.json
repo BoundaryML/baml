@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_ENV=development next dev",
+    "dev": "infisical run --env=test -- next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -37,6 +37,7 @@
     "@vercel/kv": "^1.0.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
+    "http-proxy": "^1.18.1",
     "jotai": "^2.8.0",
     "jotai-location": "^0.5.4",
     "json-schema-faker": "^0.5.6",
@@ -62,6 +63,7 @@
   },
   "devDependencies": {
     "@githubocto/tailwind-vscode": "^1.0.5",
+    "@types/http-proxy": "^1.17.14",
     "@types/node": "^20.12.12",
     "@types/react": "^18",
     "@types/react-dom": "^18",

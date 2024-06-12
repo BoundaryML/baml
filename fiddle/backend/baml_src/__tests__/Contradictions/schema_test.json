@@ -1,3 +1,0 @@
-{
-  "input": "Given the following text, output an a summary using the json schema format.\n\ntext:\n{input}\n\nOutput json schema:\n{\n   summary: string\n}\n\nYAML format output:"
-}
