@@ -3,6 +3,7 @@ name: BAML Runtime
 on:
   push:
     tags:
+      - "test-release/*.*"
       - "*.*"
 
 concurrency:
@@ -196,6 +197,7 @@ jobs:
   publish-to-pypi:
     environment: release
     needs: [build-release, build-wasm]
+    if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -214,6 +216,7 @@ jobs:
   publish-to-npm:
     environment: release
     needs: [build-release, build-wasm]
+    if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -227,6 +230,7 @@ jobs:
   publish-vscode:
     environment: release
     needs: [build-release, build-wasm]
+    if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
