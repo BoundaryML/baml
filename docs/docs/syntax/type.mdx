@@ -32,6 +32,21 @@ title: Supported Types
 
 - **Syntax:** `null`
 
+### ✅  Images
+
+You can use an image like this:
+
+```rust
+function DescribeImage(myImg: image) -> string {
+  client GPT4Turbo
+  prompt #"
+    {{ _.role("user")}}
+    Describe the image in four words:
+    {{ myImg }}
+  "#
+}
+```
+
 ### ⚠️ bytes
 
 - Not yet supported. Use a `string[]` or `int[]` instead.
@@ -65,20 +80,7 @@ temperature of 32 degrees Fahrenheit or cost of $100.00.
   the unit be part of the variable name. For example, `temperature_fahrenheit`
   and `cost_usd` (see [@alias](/docs/syntax/class#alias)).
 
-### ✅  Images
 
-You can use an image like this:
-
-```rust
-function DescribeImage(myImg: image) -> string {
-  client GPT4Turbo
-  prompt #"
-    {{ _.role("user")}}
-    Describe the image in four words:
-    {{ myImg }}
-  "#
-}
-```
 
 
 ## Composite/Structured Types
