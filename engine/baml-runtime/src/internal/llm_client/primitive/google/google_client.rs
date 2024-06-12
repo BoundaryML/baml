@@ -29,10 +29,8 @@ struct PostRequestProperities {
     api_key: Option<String>,
     headers: HashMap<String, String>,
     proxy_url: Option<String>,
-    properties: HashMap<String, serde_json::Value>,
-    project_id: Option<String>,
     model_id: Option<String>,
-    location: Option<String>,
+    properties: HashMap<String, serde_json::Value>,
 }
 
 pub struct GoogleClient {
@@ -76,20 +74,10 @@ fn resolve_properties(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .or_else(|| ctx.env.get("GOOGLE_API_KEY").map(|s| s.to_string()));
 
-    let project_id = properties
-        .remove("project_id")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .or_else(|| ctx.env.get("GOOGLE_PROJECT_ID").map(|s| s.to_string()));
-
     let model_id = properties
         .remove("model")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .or_else(|| Some("gemini-1.5-pro-001".to_string()));
-
-    let location: Option<String> = properties
-        .remove("location")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .or_else(|| Some("us-central1".to_string()));
 
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
@@ -120,9 +108,7 @@ fn resolve_properties(
         api_key,
         headers,
         properties,
-        project_id,
         model_id,
-        location,
         proxy_url: ctx.env.get("BOUNDARY_PROXY_URL").map(|s| s.to_string()),
     })
 }
@@ -283,32 +269,10 @@ impl RequestBuilder for GoogleClient {
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
     ) -> reqwest::RequestBuilder {
-        //disabled proxying for testing
-
         let mut should_stream = "generateContent";
         if stream {
             should_stream = "streamGenerateContent";
         }
-
-        let location = self
-            .properties
-            .location
-            .clone()
-            .unwrap_or_else(|| "us-central1".to_string());
-        let project_id = self
-            .properties
-            .project_id
-            .clone()
-            .unwrap_or_else(|| "gloo-ai".to_string());
-        let model_id = self
-            .properties
-            .model_id
-            .clone()
-            .unwrap_or_else(|| "gemini-1.5-pro-001".to_string());
-
-        // let baml_original_url = format!(
-        //     "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
-        // );
 
         let api_key = self
             .properties
@@ -316,7 +280,7 @@ impl RequestBuilder for GoogleClient {
             .clone()
             .unwrap_or_else(|| "".to_string());
         let baml_original_url = format!(
-            "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:{}?key=${}",
+            "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:{}?key={}",
             should_stream, api_key
         );
 
@@ -332,9 +296,6 @@ impl RequestBuilder for GoogleClient {
             req = req.header(key, value);
         }
 
-        if let Some(key) = &self.properties.api_key {
-            req = req.header("x-goog-api-key", format!("{}", key));
-        }
         req = req.header("baml-original-url", baml_original_url);
 
         let mut body = json!(self.properties.properties);
