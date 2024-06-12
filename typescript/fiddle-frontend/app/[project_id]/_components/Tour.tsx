@@ -85,7 +85,8 @@ export const InitialTour = () => {
 
 export const PostTestRunTour = () => {
   //const { test_results, test_result_url, test_result_exit_status } = useSelections()
-  const { project_id } = useParams()
+  const params = useParams()
+  const project_id = params?.project_id
 
   const steps = [
     {

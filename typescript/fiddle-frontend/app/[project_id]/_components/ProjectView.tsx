@@ -285,7 +285,7 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
       onClick={async () => {
         setLoading(true)
         try {
-          let urlId = pathname.split('/')[1]
+          let urlId = pathname?.split('/')[1]
           if (!urlId) {
             urlId = await createUrl({
               ...project,
