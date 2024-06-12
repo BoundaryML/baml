@@ -791,6 +791,46 @@ module Baml
 
     sig {
       
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
+    def TestAnthropic(
+        input:
+    )
+      raw = @runtime.call_function(
+        "TestAnthropic",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
+    def TestAzure(
+        input:
+    )
+      raw = @runtime.call_function(
+        "TestAzure",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
       returns(String)
       
     }
@@ -970,6 +1010,26 @@ module Baml
     sig {
       
       params(
+        input: String,
+      ).returns(String)
+      
+    }
+    def TestGemini(
+        input:
+    )
+      raw = @runtime.call_function(
+        "TestGemini",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
         img: Baml::Image,
       ).returns(String)
       
@@ -1019,6 +1079,26 @@ module Baml
     )
       raw = @runtime.call_function(
         "TestOllama",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
+    def TestOpenAI(
+        input:
+    )
+      raw = @runtime.call_function(
+        "TestOpenAI",
         {
           "input" => input,
         },
@@ -1875,6 +1955,48 @@ module Baml
 
     sig {
       params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestAnthropic(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "TestAnthropic",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestAzure(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "TestAzure",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
         
       ).returns(Baml::BamlStream[String])
     }
@@ -2064,6 +2186,27 @@ module Baml
 
     sig {
       params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestGemini(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "TestGemini",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
         img: Baml::Image,
       ).returns(Baml::BamlStream[String])
     }
@@ -2114,6 +2257,27 @@ module Baml
     )
       raw = @runtime.stream_function(
         "TestOllama",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestOpenAI(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "TestOpenAI",
         {
           "input" => input,
         },

@@ -36,11 +36,7 @@ pub async fn make_request(
     let (system_now, instant_now) = (web_time::SystemTime::now(), web_time::Instant::now());
     log::info!("Making request using client {}", client.context().name);
 
-    let req = match client
-        .build_request(prompt, stream)
-        .build()
-        .context("Failed to build request")
-    {
+    let req = match client.build_request(prompt, stream).build() {
         Ok(req) => req,
         Err(e) => {
             return Err(LLMResponse::LLMFailure(LLMErrorResponse {

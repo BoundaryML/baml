@@ -19,6 +19,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             "round-robin",
             "baml-fallback",
             "fallback",
+            "google-ai",
         ];
 
         let suggestions: Vec<String> = allowed_providers

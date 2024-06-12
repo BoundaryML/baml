@@ -35,6 +35,7 @@ BAML ships with the following providers (you can can also write your own!):
   - `azure-openai`
   - `anthropic`
   - `ollama`
+  - `google-ai`
 - Composite client providers
   - `fallback`
   - `round-robin`
@@ -122,22 +123,49 @@ Provider names:
 
 Accepts any options as defined by [Ollama SDK](https://github.com/ollama/ollama/blob/main/docs/api.md#generate-a-chat-completion).
 
+```rust
+client<llm> MyOllamaClient {
+  provider ollama
+  options {
+    model llama2
+  }
+}
+```
 #### Requirements
-Make sure you disable CORS if you are trying to run ollama using the BAML VSCode playground:
-1. in your terminal run `OLLAMA_ORIGINS="*" ollama serve`
-2. Run `ollama run llama2` (or your model), and you should be good to go.
+
+1. For Ollama, in your terminal run `ollama serve`
+2. In another window, run `ollama run llama2` (or your model), and you should be good to go.
 
 ```rust
 client<llm> MyClient {
   provider ollama
   options {
-    model mistral
+    model llama2
     options {
       temperature 0
     }
   }
 }
 ```
+
+### Google 
+
+Provider names:
+- `google-ai`
+
+Accepts any options as defined by the [Gemini SDK](https://ai.google.dev/gemini-api/docs/api-overview).
+
+
+```rust
+client<llm> MyGoogleClient {
+  provider google-ai
+  options{
+    model "gemini-1.5-pro-001"
+    api_key env.GOOGLE_API_KEY
+  }
+}
+```
+
 
 ### Fallback
 
@@ -184,7 +212,7 @@ client<llm> MyClient {
 ```
 
 ## Other providers
-You can use the `openai` provider if the provider you're trying to use has the same ChatML response format.
+You can use the `openai` provider if the provider you're trying to use has the same ChatML response format (i.e. HuggingFace via their Inference Endpoint or your own local endpoint)
 
 Some providers ask you to add a `base_url`, which you can do like this:
   

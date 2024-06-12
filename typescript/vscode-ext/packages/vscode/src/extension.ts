@@ -269,13 +269,24 @@ export function activate(context: vscode.ExtensionContext) {
     app.use(
       createProxyMiddleware({
         changeOrigin: true,
+        pathRewrite: (path, req) => {
+          // Ensure the URL does not end with a slash
+          if (path.endsWith('/')) {
+            return path.slice(0, -1)
+          }
+          return path
+        },
         router: (req) => {
           // Extract the original target URL from the custom header
-          const originalUrl = req.headers['baml-original-url']
-
+          let originalUrl = req.headers['baml-original-url']
           if (typeof originalUrl === 'string') {
             delete req.headers['baml-original-url']
             req.headers['origin'] = `http://localhost:${port}`
+
+            // Ensure the URL does not end with a slash
+            if (originalUrl.endsWith('/')) {
+              originalUrl = originalUrl.slice(0, -1)
+            }
             return originalUrl
           } else {
             throw new Error('baml-original-url header is missing or invalid')
@@ -292,12 +303,11 @@ export function activate(context: vscode.ExtensionContext) {
         },
       }),
     )
-  } catch (error) {
+  } 
+  catch (error) {
     console.error('Failed to start proxy server:', error)
     vscode.window.showErrorMessage('Failed to BAML localhost server. Contact support for help.')
   }
-
-  // Add a catch-all route to handle 404 errors
 
   // TODO: Reactivate linter.
   // runDiagnostics();
@@ -340,8 +350,6 @@ class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
         codeActions.push(fixAction)
       }
     }
-
-    console.debug('Code actions:', codeActions)
     return codeActions
   }
 }

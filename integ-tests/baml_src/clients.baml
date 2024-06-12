@@ -67,6 +67,14 @@ client<llm> GPT35Azure {
   }
 }
 
+client<llm> Gemini {
+  provider google-ai
+  options{
+    model "gemini-1.5-pro-001"
+    api_key env.GOOGLE_API_KEY
+  }
+}
+
 
 client<llm> Claude {
   provider anthropic
