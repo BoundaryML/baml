@@ -1,0 +1,100 @@
+#!/usr/bin/env /bin/sh
+
+# Usage: bump-version
+#
+# Bumps the version of the project.
+# After you merge that in, manually set the release.
+
+set -eu
+
+show_help() {
+  cat <<EOF
+Usage: bump-version [options]
+
+Options:
+    --help         Display this help message.
+    --typescript   Bump patch for typescript
+    --python       Bump patch for python
+    --ruby         Bump patch for ruby
+    --vscode       Bump patch for vscode
+    --all          Bump all versions [default]
+EOF
+}
+
+_help_mode=0
+_ts_mode=0
+_python_mode=0
+_ruby_mode=0
+_vscode_mode=0
+_all_mode=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --help)
+            _help_mode=1
+            shift
+            ;;
+        --ts)
+            _ts_mode=1
+            shift
+            ;;
+        --python)
+            _python_mode=1
+            shift
+            ;;
+        --ruby)
+            _ruby_mode=1
+            shift
+            ;;
+        --vscode)
+            _vscode_mode=1
+            shift
+            ;;
+        --all)
+            _all_mode=1
+            shift
+            ;;
+        --) # End of all options
+            shift
+            break
+            ;;
+        *) # No more options
+            break
+            ;;
+    esac
+done
+
+if [ "$_help_mode" -eq 1 ]; then
+    show_help
+    exit 0
+fi
+
+# Ensure only one mode is enabled
+if [ "$((_ts_mode + _python_mode + _ruby_mode + _vscode_mode + _all_mode))" -gt 1 ]; then
+    echo "Error: Only one mode can be enabled."
+    exit 1
+fi
+
+# Default to all mode
+if [ "$((_ts_mode + _python_mode + _ruby_mode + _vscode_mode + _all_mode))" -eq 0 ]; then
+    _all_mode=1
+fi
+
+_repo_root="$(git rev-parse --show-toplevel)"
+cd "${_repo_root}/tools"
+
+if [ "$_all_mode" -eq 1 ]; then
+  bump2version --config-file ./versions/engine.cfg minor
+  bump2version --config-file ./versions/python.cfg minor --allow-dirty
+  bump2version --config-file ./versions/typescript.cfg minor --allow-dirty
+  bump2version --config-file ./versions/ruby.cfg minor --allow-dirty
+  bump2version --config-file ./versions/vscode.cfg minor --allow-dirty
+elif [ "$_ts_mode" -eq 1 ]; then
+  bump2version --config-file ./versions/typescript.cfg patch
+elif [ "$_python_mode" -eq 1 ]; then
+  bump2version --config-file ./versions/python.cfg patch
+elif [ "$_ruby_mode" -eq 1 ]; then
+  bump2version --config-file ./versions/ruby.cfg patch
+elif [ "$_vscode_mode" -eq 1 ]; then
+  bump2version --config-file ./versions/vscode.cfg patch
+fi
