@@ -301,8 +301,7 @@ export function activate(context: vscode.ExtensionContext) {
         },
       }),
     )
-  } 
-  catch (error) {
+  } catch (error) {
     console.error('Failed to start proxy server:', error)
     vscode.window.showErrorMessage('Failed to BAML localhost server. Contact support for help.')
   }
