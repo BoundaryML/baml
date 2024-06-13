@@ -146,4 +146,18 @@ describe "ruby<->baml integration tests" do
     end
     assert msgs.last == final, "Expected last stream message to match final response."
   end
+
+  it "allows streaming of nested" do
+    stream = b.stream.FnOutputClassNested(input: "a")
+    msgs = []
+    stream.each do |msg|
+      puts msg
+      msgs << msg
+    end
+    final = stream.get_final_response
+
+    puts final
+    assert msgs.size > 0, "Expected at least one streamed response but got none."
+    assert msgs.last == final, "Expected last stream message to match final response."
+  end
 end

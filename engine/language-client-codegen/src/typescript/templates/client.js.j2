@@ -4,6 +4,12 @@ import {
 } from "./types"
 import TypeBuilder from "./type_builder"
 
+type RecursivePartialNull<T> = T extends object
+  ? {
+      [P in keyof T]?: RecursivePartialNull<T[P]>;
+    }
+  : T | null;
+
 export class BamlClient {
   private stream_client: BamlStreamClient
 
@@ -46,7 +52,7 @@ class BamlStreamClient {
       {{name}}{% if optional %}?{% endif %}: {{type}},
       {%- endfor %}
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}> {
+  ): BamlStream<RecursivePartialNull<{{ fn.return_type }}>, {{ fn.return_type }}> {
     const raw = this.runtime.streamFunction(
       "{{fn.name}}",
       {
@@ -58,9 +64,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}>(
+    return new BamlStream<RecursivePartialNull<{{ fn.return_type }}>, {{ fn.return_type }}>(
       raw,
-      (a): a is {{ fn.partial_return_type }} => a,
+      (a): a is RecursivePartialNull<{{ fn.return_type }}> => a,
       (a): a is {{ fn.return_type }} => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),

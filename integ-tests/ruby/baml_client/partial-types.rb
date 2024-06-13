@@ -32,6 +32,8 @@ module Baml
     class Email < T::Struct; end
     class Event < T::Struct; end
     class FakeImage < T::Struct; end
+    class InnerClass < T::Struct; end
+    class InnerClass2 < T::Struct; end
     class NamedArgsSingleClass < T::Struct; end
     class OptionalTest_Prop1 < T::Struct; end
     class OptionalTest_ReturnType < T::Struct; end
@@ -42,9 +44,9 @@ module Baml
     class SearchParams < T::Struct; end
     class SomeClassNestedDynamic < T::Struct; end
     class TestClassAlias < T::Struct; end
+    class TestClassNested < T::Struct; end
     class TestClassWithEnum < T::Struct; end
     class TestOutputClass < T::Struct; end
-    class TestOutputClassNested < T::Struct; end
     class UnionTest_ReturnType < T::Struct; end
     class WithReasoning < T::Struct; end
     class Blah < T::Struct
@@ -104,6 +106,17 @@ module Baml
     class FakeImage < T::Struct
       include T::Struct::ActsAsComparable
       const :url, T.nilable(String)
+    end
+    class InnerClass < T::Struct
+      include T::Struct::ActsAsComparable
+      const :prop1, T.nilable(String)
+      const :prop2, T.nilable(String)
+      const :inner, Baml::PartialTypes::InnerClass2
+    end
+    class InnerClass2 < T::Struct
+      include T::Struct::ActsAsComparable
+      const :prop2, T.nilable(Integer)
+      const :prop3, T.nilable(Float)
     end
     class NamedArgsSingleClass < T::Struct
       include T::Struct::ActsAsComparable
@@ -168,6 +181,11 @@ module Baml
       const :key4, T.nilable(String)
       const :key5, T.nilable(String)
     end
+    class TestClassNested < T::Struct
+      include T::Struct::ActsAsComparable
+      const :prop1, T.nilable(String)
+      const :prop2, Baml::PartialTypes::InnerClass
+    end
     class TestClassWithEnum < T::Struct
       include T::Struct::ActsAsComparable
       const :prop1, T.nilable(String)
@@ -177,12 +195,6 @@ module Baml
       include T::Struct::ActsAsComparable
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(Integer)
-    end
-    class TestOutputClassNested < T::Struct
-      include T::Struct::ActsAsComparable
-      const :prop1, T.nilable(String)
-      const :prop2, T.nilable(Integer)
-      const :prop3, Baml::PartialTypes::TestOutputClass
     end
     class UnionTest_ReturnType < T::Struct
       include T::Struct::ActsAsComparable

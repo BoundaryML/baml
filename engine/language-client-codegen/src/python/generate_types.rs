@@ -140,7 +140,7 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
                         f.elem.name.as_str(),
                         add_default_value(
                             &f.elem.r#type.elem,
-                            &f.elem.r#type.elem.to_partial_type_ref(&c.db),
+                            &f.elem.r#type.elem.to_partial_type_ref(&c.db, false),
                         ),
                     )
                 })
@@ -159,7 +159,7 @@ pub fn add_default_value(node: &FieldType, type_str: &String) -> String {
 
 trait ToTypeReferenceInTypeDefinition {
     fn to_type_ref(&self, ir: &IntermediateRepr) -> String;
-    fn to_partial_type_ref(&self, ir: &IntermediateRepr) -> String;
+    fn to_partial_type_ref(&self, ir: &IntermediateRepr, wrapped: bool) -> String;
 }
 
 impl ToTypeReferenceInTypeDefinition for FieldType {
@@ -202,9 +202,15 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         }
     }
 
-    fn to_partial_type_ref(&self, ir: &IntermediateRepr) -> String {
+    fn to_partial_type_ref(&self, ir: &IntermediateRepr, wrapped: bool) -> String {
         match self {
-            FieldType::Class(name) => format!("\"{name}\""),
+            FieldType::Class(name) => {
+                if wrapped {
+                    format!("\"{name}\"")
+                } else {
+                    format!("Optional[\"{name}\"]")
+                }
+            }
             FieldType::Enum(name) => {
                 if ir
                     .find_enum(name)
@@ -216,12 +222,12 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     format!("Optional[types.{name}]")
                 }
             }
-            FieldType::List(inner) => format!("List[{}]", inner.to_partial_type_ref(ir)),
+            FieldType::List(inner) => format!("List[{}]", inner.to_partial_type_ref(ir, true)),
             FieldType::Map(key, value) => {
                 format!(
                     "Dict[{}, {}]",
                     key.to_type_ref(ir),
-                    value.to_partial_type_ref(ir)
+                    value.to_partial_type_ref(ir, false)
                 )
             }
             FieldType::Primitive(r#type) => format!("Optional[{}]", r#type.to_python()),
@@ -229,7 +235,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 "Optional[Union[{}]]",
                 inner
                     .iter()
-                    .map(|t| t.to_partial_type_ref(ir))
+                    .map(|t| t.to_partial_type_ref(ir, true))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -237,11 +243,11 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 "Optional[Tuple[{}]]",
                 inner
                     .iter()
-                    .map(|t| t.to_partial_type_ref(ir))
+                    .map(|t| t.to_partial_type_ref(ir, false))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => inner.to_partial_type_ref(ir),
+            FieldType::Optional(inner) => inner.to_partial_type_ref(ir, false),
         }
     }
 }
