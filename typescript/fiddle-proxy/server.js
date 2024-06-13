@@ -41,9 +41,9 @@ app.use(
           proxyReq.setHeader('x-api-key', process.env.ANTHROPIC_API_KEY)
         }
         if (req.headers['baml-original-url'].includes('gemini')) {
-          // if (process.env.GOOGLE_API_KEY === undefined) {
-          //   throw new Error('GOOGLE_API_KEY is missing')
-          // }
+          if (process.env.GOOGLE_API_KEY === undefined) {
+            throw new Error('GOOGLE_API_KEY is missing')
+          }
           proxyReq.setHeader('x-goog-api-key', process.env.GOOGLE_API_KEY)
         }
       },
