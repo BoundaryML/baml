@@ -207,7 +207,6 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
   )
   const _projFiles = get(projectFilesAtom(root_path))
   const filesToDelete = files.filter((f) => f.content === undefined).map((f) => f.name)
-  console.log('updateFile: files to delete', filesToDelete)
 
   let projFiles = {
     ..._projFiles,
@@ -233,10 +232,7 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
     projFiles = Object.fromEntries(filesToModify)
   }
 
-  console.log('updateFile: rootPath =', root_path)
-
   let project = get(projectFamilyAtom(root_path))
-  console.log('updateFileAtom: project', project)
   const wasm = get(wasmAtom)
   if (project && !replace_all) {
     for (const file of filesToDelete) {
@@ -247,7 +243,6 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
     console.log('file root path', root_path)
     for (const [name, content] of filesToModify) {
       if (name.startsWith(root_path)) {
-        console.log('Updating file', name)
         project.update_file(name, content)
         projFiles[name] = content
       }
@@ -258,7 +253,6 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
     )
     console.log('Creating new project', root_path, onlyRelevantFiles)
     if (wasm) {
-      console.log('Creating new project2')
       project = wasm.WasmProject.new(root_path, onlyRelevantFiles)
     }
   }
@@ -283,14 +277,10 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
   }
 
   const availableProjects = get(availableProjectsAtom)
-  console.log('availableProjects', availableProjects)
-  console.log('list_functions', rt?.list_functions())
   if (!availableProjects.includes(root_path)) {
-    console.log('Adding project to available projects', root_path)
     set(availableProjectsAtom, [...availableProjects, root_path])
   }
 
-  console.log('projfiles', projFiles, 'root_path', root_path)
   set(projectFilesAtom(root_path), projFiles)
   set(projectFamilyAtom(root_path), project)
   set(runtimeFamilyAtom(root_path), (prev) => ({
