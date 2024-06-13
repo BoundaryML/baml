@@ -517,7 +517,6 @@ name = "baml-schema-build"
 version = "0.39.0"
 dependencies = [
  "anyhow",
- "baml-fmt",
  "baml-runtime",
  "baml-types",
  "console_error_panic_hook",

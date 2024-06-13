@@ -673,7 +673,7 @@ fn visit_client<'db>(idx: ClientId, client: &'db ast::Client, ctx: &mut Context<
             }
         }
         (None, _) => ctx.push_error(DatamodelError::new_validation_error(
-            "Missing `provider` field in client. e.g. `provider baml-openai-chat`",
+            "Missing `provider` field in client. e.g. `provider openai`",
             client.span().clone(),
         )),
     }
