@@ -921,7 +921,7 @@ impl WasmFunction {
             .render_prompt(&self.name, &ctx, &params, None)
             .as_ref()
             .map(|(p, scope)| (p, scope).into())
-            .map_err(|e| wasm_bindgen::JsError::new(&e.to_string()))
+            .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
     }
 
     #[wasm_bindgen]

@@ -44,7 +44,11 @@ impl RuntimeContext {
         &self,
         expr: &Expression,
     ) -> Result<T> {
-        serde_json::from_value::<T>(super::expression_helper::to_value(self, expr)?).map_err(|e| {
+        match super::expression_helper::to_value(self, expr) {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.into()),
+            Err(e) => Err(e),
+        }
+        .map_err(|e| {
             anyhow::anyhow!(
                 "Failed to resolve expression {:?} with error: {:?}",
                 expr,
