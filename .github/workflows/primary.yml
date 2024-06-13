@@ -1,0 +1,97 @@
+name: BAML Runtime
+
+on:
+  pull_request:
+    paths:
+      - "engine/**"
+      - ".github/workflows/primary.yml"
+    branches:
+      - canary
+  push:
+    paths:
+      - "engine/**"
+      - ".github/workflows/primary.yml"
+    branches:
+      - canary
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+  repository-projects: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.6
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: |
+            typescript/**/pnpm-lock.yaml
+      - name: Install Node
+        run: pnpm install --frozen-lockfile
+        working-directory: typescript
+      - name: Check TS Lint
+        run: pnpm biome ci . --organize-imports-enabled=false
+        working-directory: typescript
+  test_node_generator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.6
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: |
+            engine/language_client_typescript/pnpm-lock.yaml
+            integ-tests/typescript/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Install Node
+        run: pnpm install --frozen-lockfile
+        working-directory: engine/language_client_typescript
+      - name: Build Node
+        run: pnpm build
+        working-directory: engine/language_client_typescript
+      - name: Install Node
+        run: pnpm install --frozen-lockfile
+        working-directory: integ-tests/typescript
+      - name: Test Node Generator
+        run: pnpm generate
+        working-directory: integ-tests/typescript
+      - name: Ensure No Changes
+        run: git diff --exit-code
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Build Rust
+        run: cargo build
+        working-directory: engine
+      - name: Test Rust
+        run: cargo test
+        working-directory: engine

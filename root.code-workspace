@@ -31,7 +31,7 @@
       "editor.formatOnSave": true
     },
     "[python]": {
-      "editor.defaultFormatter": "charliermarsh.ruff"
+      "editor.defaultFormatter": "ms-python.black-formatter"
     },
     "[javascript]": {
       "editor.defaultFormatter": "biomejs.biome"

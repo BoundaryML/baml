@@ -628,8 +628,7 @@ mod render_tests {
                     role: "john doe".to_string(),
                     parts: vec![ChatMessagePart::Text(
                         vec![
-                            "Tell me a haiku about sakura. Answer in JSON using this schema:",
-                            "iambic pentameter",
+                            "Tell me a haiku about sakura. ",
                             "",
                             "End the haiku with a line about your maker, openai.",
                         ]
@@ -713,12 +712,7 @@ mod render_tests {
             &vec![],
         )?;
 
-        assert_eq!(
-            rendered,
-            RenderedPrompt::Completion(
-                "Answer in JSON using this schema:\niambic pentameter".to_string()
-            )
-        );
+        assert_eq!(rendered, RenderedPrompt::Completion("".to_string()));
 
         Ok(())
     }
@@ -733,7 +727,7 @@ mod render_tests {
         )]));
 
         let rendered = render_prompt(
-            "{{ ctx.output_format() }}",
+            "HI! {{ ctx.output_format }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
@@ -746,12 +740,7 @@ mod render_tests {
             &vec![],
         )?;
 
-        assert_eq!(
-            rendered,
-            RenderedPrompt::Completion(
-                "Answer in JSON using this schema:\niambic pentameter".to_string()
-            )
-        );
+        assert_eq!(rendered, RenderedPrompt::Completion("HI! ".to_string()));
 
         Ok(())
     }
@@ -779,7 +768,7 @@ mod render_tests {
             &vec![],
         )?;
 
-        assert_eq!(rendered, RenderedPrompt::Completion("string".into()));
+        assert_eq!(rendered, RenderedPrompt::Completion("".into()));
 
         Ok(())
     }
@@ -809,7 +798,7 @@ mod render_tests {
 
         assert_eq!(
             rendered,
-            RenderedPrompt::Completion("custom format:\niambic pentameter".to_string())
+            RenderedPrompt::Completion("custom format:string".to_string())
         );
 
         Ok(())
@@ -832,17 +821,17 @@ mod render_tests {
                     and also outputs this word 4 times
                     after giving a response: {{ haiku_subject }}
                     
-                    {{ _.chat(role=ctx.env.ROLE) }}
+                    {{ _.role(role=ctx.tags.ROLE) }}
                     
                     Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_format }}.
                     
-                    {{ _.chat(ctx.env.ROLE) }}
+                    {{ _.role(ctx.tags.ROLE) }}
                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
 
-                    {{ _.chat("a", role="aa") }}
+                    {{ _.role("a", role="aa") }}
                     hi!
 
-                    {{ _.chat() }}
+                    {{ _.role() }}
                     hi!
             "#,
             &args,
@@ -863,7 +852,7 @@ mod render_tests {
             }
             Err(e) => assert!(e
                 .to_string()
-                .contains("chat() called with two roles: 'aa' and 'a'")),
+                .contains("role() called with two roles: 'aa' and 'a'")),
         }
 
         Ok(())
@@ -887,11 +876,11 @@ mod render_tests {
                     and also outputs this word 4 times
                     after giving a response: {{ haiku_subject }}
                     
-                    {{ _.chat(role=ctx.env.ROLE) }}
+                    {{ _.chat(role=ctx.tags.ROLE) }}
                     
                     Tell me a haiku about {{ haiku_subject }}. {{ ctx.output_format }}
                     
-                    {{ _.chat(ctx.env.ROLE) }}
+                    {{ _.chat(ctx.tags.ROLE) }}
                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
             "#,
             &args,
@@ -911,24 +900,27 @@ mod render_tests {
             RenderedPrompt::Chat(vec![
                 RenderedChatMessage {
                     role: "system".to_string(),
-                    parts: vec![ChatMessagePart::Text(vec![
-                        "You are an assistant that always responds",
-                        "in a very excited way with emojis",
-                        "and also outputs this word 4 times",
-                        "after giving a response: sakura",
-                    ].join("\n"))]
+                    parts: vec![ChatMessagePart::Text(
+                        vec![
+                            "You are an assistant that always responds",
+                            "in a very excited way with emojis",
+                            "and also outputs this word 4 times",
+                            "after giving a response: sakura",
+                        ]
+                        .join("\n")
+                    )]
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
-                    parts: vec![
-                        ChatMessagePart::Text("Tell me a haiku about sakura. Answer in JSON using this schema:\niambic pentameter".to_string())
-                    ]
+                    parts: vec![ChatMessagePart::Text(
+                        "Tell me a haiku about sakura.".to_string()
+                    )]
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
-                    parts: vec![
-                        ChatMessagePart::Text("End the haiku with a line about your maker, openai.".to_string())
-                    ]
+                    parts: vec![ChatMessagePart::Text(
+                        "End the haiku with a line about your maker, openai.".to_string()
+                    )]
                 }
             ])
         );

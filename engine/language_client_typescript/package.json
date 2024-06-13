@@ -53,7 +53,7 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "pnpm build:napi-release --release && pnpm build:ts_build",
+    "build": "pnpm build:napi-release && pnpm build:ts_build",
     "build:debug": "pnpm build:napi-debug && pnpm build:ts_build",
     "build:napi-release": "pnpm build:napi-debug --release",
     "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform",

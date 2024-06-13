@@ -123,19 +123,51 @@ impl ParsingContext<'_> {
 
     pub(crate) fn error_missing_required_field<T: AsRef<str>>(
         &self,
-        fields: &[T],
+        unparsed_fields: &[(T, T)],
+        missing_fields: &[T],
         item: Option<&crate::jsonish::Value>,
     ) -> ParsingError {
-        ParsingError {
-            reason: format!(
-                "Missing required fields: {}\nGot: {:#?}",
-                fields
+        let fields = missing_fields
+            .iter()
+            .map(|c| c.as_ref())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let missing_error = match missing_fields.len() {
+            0 => None,
+            1 => Some(format!("Missing required field: {}", fields)),
+            _ => Some(format!("Missing required fields: {}", fields)),
+        };
+
+        let unparsed = unparsed_fields
+            .iter()
+            .map(|(k, v)| format!("{}: {}", k.as_ref(), v.as_ref().replace("\n", "\n  ")))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let unparsed_error = match unparsed_fields.len() {
+            0 => None,
+            1 => Some(format!(
+                "Unparsed field: {}\n  {}",
+                unparsed_fields[0].0.as_ref(),
+                unparsed_fields[0].1.as_ref().replace("\n", "\n  ")
+            )),
+            _ => Some(format!(
+                "Unparsed fields:\n{}\n  {}",
+                unparsed_fields
                     .iter()
-                    .map(|c| c.as_ref())
+                    .map(|(k, _)| k.as_ref())
                     .collect::<Vec<_>>()
                     .join(", "),
-                item
-            ),
+                unparsed.replace("\n", "\n  ")
+            )),
+        };
+
+        ParsingError {
+            reason: match (missing_error, unparsed_error) {
+                (Some(m), Some(u)) => format!("{}\n{}", m, u),
+                (Some(m), None) => m,
+                (None, Some(u)) => u,
+                (None, None) => "Unexpected error".to_string(),
+            },
             scope: self.scope.clone(),
         }
     }

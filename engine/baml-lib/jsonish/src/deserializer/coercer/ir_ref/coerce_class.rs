@@ -187,20 +187,30 @@ impl TypeCoercer for Class {
             }
             log::trace!("----");
 
+            let unparsed_required_fields = required_values
+                .iter()
+                .filter_map(|(k, v)| match v {
+                    Some(Ok(_)) => None,
+                    Some(Err(e)) => Some((k.clone(), e.to_string())),
+                    None => None,
+                })
+                .collect::<Vec<_>>();
             let missing_required_fields = required_values
                 .iter()
-                .filter(|(_, v)| !v.as_ref().map(|v| v.is_ok()).unwrap_or(false))
-                .map(|(k, _)| k.clone())
+                .filter_map(|(k, v)| match v {
+                    Some(Ok(_)) => None,
+                    Some(Err(e)) => None,
+                    None => Some(k.clone()),
+                })
                 .collect::<Vec<_>>();
 
-            if !missing_required_fields.is_empty() {
-                log::trace!(
-                    "Missing required fields: {:?} in  {:?}",
-                    missing_required_fields,
-                    value
-                );
+            if !missing_required_fields.is_empty() || !unparsed_required_fields.is_empty() {
                 if completed_cls.is_empty() {
-                    return Err(ctx.error_missing_required_field(&missing_required_fields, value));
+                    return Err(ctx.error_missing_required_field(
+                        &unparsed_required_fields,
+                        &missing_required_fields,
+                        value,
+                    ));
                 }
             } else {
                 let merged_errors = required_values
