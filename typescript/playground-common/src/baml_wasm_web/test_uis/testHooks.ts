@@ -168,7 +168,7 @@ export const useRunHooks = () => {
 
         set(isRunningAtom, false)
       },
-      [[isRunningAtom, selectedRuntimeAtom, selectedFunctionAtom]],
+      [isRunningAtom, selectedRuntimeAtom, selectedFunctionAtom],
     ),
   )
 

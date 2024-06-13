@@ -3,11 +3,9 @@ import { type Disposable, Uri, ViewColumn, type Webview, type WebviewPanel, wind
 import * as vscode from 'vscode'
 import { getNonce } from '../utils/getNonce'
 import { getUri } from '../utils/getUri'
-import testExecutor from './execute_test'
 
 import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { URI } from 'vscode-uri'
-import { BamlDB } from '../plugins/language-server'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -48,19 +46,6 @@ export class WebPanelView {
 
     // Set an event listener to listen for messages passed from the webview context
     this._setWebviewMessageListener(this._panel.webview)
-    testExecutor.setStdoutListener((log) => {
-      this._panel.webview.postMessage({
-        command: 'test-stdout',
-        content: log,
-      })
-    })
-
-    testExecutor.setTestStateListener((testResults) => {
-      this._panel.webview.postMessage({
-        command: 'test-results',
-        content: testResults,
-      })
-    })
   }
 
   /**
@@ -180,128 +165,24 @@ export class WebPanelView {
             // Code that should run in response to the hello message command
             window.showInformationMessage(text)
             return
-          case 'selectTestCase':
-            console.log('selectTestCase', message.data)
-            const testRequest: { root_path: string; test_name: string; function_name: string } = message.data
-            vscode.commands.executeCommand('baml.selectTestCase', {
-              functionName: testRequest.function_name,
-              testCaseName: testRequest.test_name,
-            })
-            return
-          // Add more switch case statements here as more webview message commands
-          // are created within the webview context (i.e. inside media/main.js)
-          // todo: MULTI TEST
-          case 'runTest': {
-            const testRequest: { root_path: string; tests: TestRequest } = message.data
-            await testExecutor.runTest(testRequest)
-            return
-          }
-          case 'downloadTestResults': {
-            const csvData = message.data
-            vscode.window
-              .showSaveDialog({
-                filters: {
-                  CSV: ['csv'],
-                },
-              })
-              .then((uri) => {
-                if (uri) {
-                  vscode.workspace.fs.writeFile(uri, Buffer.from(csvData))
-                }
-              })
-          }
-          case 'saveTest': {
-            const saveTestRequest: {
-              root_path: string
-              funcName: string
-              testCaseName: StringSpan | undefined | string
-              params: any
-            } = message.data
-            let fileName
-            if (typeof saveTestRequest.testCaseName === 'string') {
-              if (saveTestRequest.testCaseName.length > 0) {
-                fileName = `${saveTestRequest.testCaseName}.json`
-              } else {
-                fileName = `${uniqueNamesGenerator(customConfig)}.json`
-              }
-            } else if (saveTestRequest.testCaseName?.source_file) {
-              fileName = vscode.Uri.file(saveTestRequest.testCaseName.source_file).path.split('/').pop()
-            } else {
-              fileName = `${uniqueNamesGenerator(customConfig)}.json`
-            }
 
-            if (!fileName) {
-              console.log(
-                'No file name provided for test' +
-                  saveTestRequest.funcName +
-                  ' ' +
-                  JSON.stringify(saveTestRequest.testCaseName),
-              )
-              return
-            }
-
-            const uri = vscode.Uri.joinPath(
-              URI.file(saveTestRequest.root_path),
-              '__tests__',
-              saveTestRequest.funcName,
-              fileName,
-            )
-
-            let testInputContent: any
-
-            if (saveTestRequest.params.type === 'positional') {
-              // Directly use the value if the type is 'positional'
-              try {
-                testInputContent = JSON.parse(saveTestRequest.params.value)
-              } catch (e) {
-                testInputContent = saveTestRequest.params.value
-              }
-            } else {
-              // Create an object from the entries if the type is not 'positional'
-              testInputContent = Object.fromEntries(
-                saveTestRequest.params.value.map((kv: { name: any; value: any }) => {
-                  if (kv.value === undefined || kv.value === null || kv.value === '') {
-                    return [kv.name, null]
-                  }
-                  let parsed: any
-                  try {
-                    parsed = JSON.parse(kv.value)
-                  } catch (e) {
-                    parsed = kv.value
-                  }
-                  return [kv.name, parsed]
-                }),
-              )
-            }
-
-            const testFileContent: TestFileContent = {
-              input: testInputContent,
-            }
-            try {
-              await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(testFileContent, null, 2)))
-              WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
-            } catch (e: any) {
-              console.log(e)
-            }
-            return
-          }
           case 'cancelTestRun': {
-            testExecutor.cancelExistingTestRun()
+            // testExecutor.cancelExistingTestRun()
             return
           }
           case 'removeTest': {
-            const removeTestRequest: {
-              root_path: string
-              funcName: string
-              testCaseName: StringSpan
-            } = message.data
-            const uri = vscode.Uri.file(removeTestRequest.testCaseName.source_file)
-            try {
-              await vscode.workspace.fs.delete(uri)
-              WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
-            } catch (e: any) {
-              console.log(e)
-            }
+            // const removeTestRequest: {
+            //   root_path: string
+            //   funcName: string
+            //   testCaseName: StringSpan
+            // } = message.data
+            // const uri = vscode.Uri.file(removeTestRequest.testCaseName.source_file)
+            // try {
+            //   await vscode.workspace.fs.delete(uri)
+            //   WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+            // } catch (e: any) {
+            //   console.log(e)
+            // }
             return
           }
           case 'jumpToFile': {

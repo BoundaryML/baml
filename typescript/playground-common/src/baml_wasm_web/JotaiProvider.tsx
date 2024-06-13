@@ -19,7 +19,6 @@ function setVSCodeState(state: any) {
 }
 function getLocalStorage() {
   const state = vscodeAPI()?.getState() || { localStorage: {} }
-  console.log('state', state)
   return (state as any).localStorage
 }
 

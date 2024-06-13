@@ -37,8 +37,6 @@ const intervalTimers: NodeJS.Timeout[] = []
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
 
-export const BamlDB = new Map<string, any>()
-
 export const generateTestRequest = async (test_request: TestRequest): Promise<string | undefined> => {
   return await client.sendRequest('generatePythonTests', test_request)
 }
@@ -296,21 +294,6 @@ const activateClient = (
       })
     })
 
-    client.onRequest('set_database', ({ rootPath, db }: { rootPath: string; db: ParserDatabase }) => {
-      try {
-        BamlDB.set(rootPath, db)
-        console.log('set_database')
-        WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
-      } catch (e) {
-        console.log('Error setting database', e)
-      }
-    })
-    client.onRequest('rm_database', (root_path) => {
-      // TODO: Handle errors better. But for now the playground shouldn't break.
-      // BamlDB.delete(root_path)
-      // WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
-    })
-
     // this will fail otherwise in dev mode if the config where the baml path is hasnt been picked up yet. TODO: pass the config to the server to avoid this.
     // Immediately check for updates on extension activation
     void checkForUpdates({ showIfNoUpdates: false })
@@ -393,7 +376,9 @@ const plugin: BamlVSCodePlugin = {
           pattern: '**/baml_src/**',
         },
       ],
-      synchronize: {},
+      synchronize: {
+        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json}'),
+      },
     }
 
     context.subscriptions.push(

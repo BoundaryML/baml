@@ -9,12 +9,8 @@ import { Button } from '../components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
 import SearchBarWithSelector from '../lib/searchbar'
-import { cn } from '../lib/utils'
-import { vscode } from '../utils/vscode'
-import { ASTContext } from './ASTProvider'
+
 import Link from './Link'
-import { ProjectToggle } from './ProjectPanel'
-import TypeComponent from './TypeComponent'
 
 const FunctionDropdown: React.FC = () => {
   const [open, setOpen] = useState(false)
@@ -51,32 +47,11 @@ const FunctionDropdown: React.FC = () => {
   )
 }
 
-export const FunctionArgs: React.FC<{ func: SFunction }> = ({ func }) => {
-  if (func.input.arg_type === 'positional') {
-    return (
-      <div className='flex flex-row gap-1 whitespace-nowrap'>
-        arg: <TypeComponent typeString={func.input.type} />
-      </div>
-    )
-  }
-
-  const args = func.input.values
-  return (
-    <div className='flex flex-wrap gap-1'>
-      {Array.from(args.entries()).map(([i, v]) => (
-        <div key={v.name.value} className='whitespace-nowrap'>
-          {v.name.value}: <TypeComponent typeString={v.type} /> {i < args.length - 1 && ','}
-        </div>
-      ))}
-    </div>
-  )
-}
-
 export const FunctionSelector: React.FC = () => {
   return (
     <div className='flex flex-col items-start gap-1'>
       <div className='flex flex-row items-center gap-1'>
-        <ProjectToggle />
+        {/* <ProjectToggle /> */}
 
         <FunctionDropdown />
         {/* <span className="font-light">Function</span>

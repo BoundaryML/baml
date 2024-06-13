@@ -21,9 +21,6 @@ import {
 import { useMemo, useState } from 'react'
 import { Checkbox } from '../components/ui/checkbox'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
-import Link from './Link'
-import TypeComponent from './TypeComponent'
-import { useImplCtx } from './hooks'
 
 const Whitespace: React.FC<{ char: 'space' | 'tab' }> = ({ char }) => (
   <span className='opacity-50 text-vscode-descriptionForeground'>{char === 'space' ? <>&middot;</> : <>&rarr;</>}</span>
@@ -199,7 +196,7 @@ export const Snippet: React.FC<{
   })
 
   const header = (
-    <div className='flex flex-wrap gap-4 justify-start px-2 py-2 text-xs whitespace-nowrap'>
+    <div className='flex flex-wrap justify-start gap-4 px-2 py-2 text-xs whitespace-nowrap'>
       {encodingName && (
         <PromptCheckbox checked={showTokens} onChange={(e) => setShowTokens(e)}>
           Show Tokens
@@ -215,7 +212,7 @@ export const Snippet: React.FC<{
       {showTokens && encodingName && tokenizer && (
         <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
-            <div className='flex-grow r-full ps-2 p-0'>{(tokenizer.tokens as []).length} tokens</div>
+            <div className='flex-grow p-0 r-full ps-2'>{(tokenizer.tokens as []).length} tokens</div>
           </TooltipTrigger>
           <TooltipContent className='flex flex-col gap-y-1'>
             Tokenizer {encodingName} for model {client.model}
@@ -248,7 +245,7 @@ export const Snippet: React.FC<{
     return (
       <div className={divStyle}>
         {header}
-        <pre className='p-1 w-full text-xs'>{tokenizedContent}</pre>
+        <pre className='w-full p-1 text-xs'>{tokenizedContent}</pre>
       </div>
     )
   } else {
@@ -256,7 +253,7 @@ export const Snippet: React.FC<{
     return (
       <div className={divStyle}>
         {header}
-        <pre className='p-1 w-full text-xs'>
+        <pre className='w-full p-1 text-xs'>
           {lines.map((line, index) => (
             <CodeLine
               key={index}
@@ -283,7 +280,7 @@ const PromptCheckbox = ({
   onChange: (e: any) => void
 }) => {
   return (
-    <div className='flex flex-row gap-1 items-center'>
+    <div className='flex flex-row items-center gap-1'>
       <Checkbox checked={checked} onCheckedChange={onChange} className='border-vscode-descriptionForeground' />
       <span className='text-vscode-descriptionForeground'>{children}</span>
     </div>
@@ -318,60 +315,3 @@ const PromptPreview: React.FC<{ prompt: Impl['prompt']; client: Impl['client']; 
       return <Snippet type='error' client={client} text={prompt.error} />
   }
 }
-
-const ImplPanel: React.FC<{ impl: Impl; showTab: boolean }> = ({ impl, showTab }) => {
-  const { func } = useImplCtx(impl.name.value)
-
-  if (!func) return null
-
-  return (
-    <>
-      {showTab && (
-        <VSCodePanelTab key={`tab-${impl.name.value}`} id={`tab-${func.name.value}-${impl.name.value}`}>
-          <div className='flex flex-row gap-1'>
-            <span>{impl.name.value}</span>
-          </div>
-        </VSCodePanelTab>
-      )}
-      <VSCodePanelView
-        key={`view-${impl.name.value}`}
-        id={`view-${func.name.value}-${impl.name.value}`}
-        className='tour-prompt-preview'
-      >
-        <div className='flex flex-col gap-2 w-full'>
-          <div className='flex flex-col gap-1'>
-            <div className='flex flex-col items-start text-vscode-descriptionForeground'>
-              <span className='flex flex-row gap-1 items-center text-sm font-semibold text-vscode-settings-headerForeground'>
-                <span>Prompt Preview</span>
-                <Link item={impl.name} display='Edit' />
-              </span>
-              <div className='flex flex-row gap-1'>
-                <span className='text-xs font-light'>client</span>
-                <Link item={impl.client.identifier} />
-              </div>
-              <div className='flex flex-row gap-1'>
-                {impl.prompt.test_case ? (
-                  <>
-                    <span className='text-xs font-light'>test case</span>
-                    <span className='font-semibold text-vscode-foreground'>{impl.prompt.test_case}</span>
-                  </>
-                ) : (
-                  <>
-                    {func.syntax === 'Version2' && (
-                      <span className='pt-4 text-sm text-center text-vscode-notifications-foreground'>
-                        Add a test case to see the full prompt!
-                      </span>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-            <PromptPreview prompt={impl.prompt} client={impl.client} shouldSuppressError={!impl.prompt.test_case} />
-          </div>
-        </div>
-      </VSCodePanelView>
-    </>
-  )
-}
-
-export default ImplPanel

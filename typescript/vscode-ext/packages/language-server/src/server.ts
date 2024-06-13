@@ -246,9 +246,10 @@ export function startServer(options?: LSOptions): void {
     // TODO: @hellovai be more efficient about this (only revalidate the files that changed)
     // If anything changes, then we need to revalidate all documents
     // let hasChanges = deleted_files.length > 0 || created_files.length > 0 || changed_files.length > 0;
-
+    console.log('watched files changed', params.changes)
     const hasChanges = params.changes.length > 0
     if (hasChanges) {
+      console.log('watched files: reloading project files')
       // TODO: @hellovai we should technically get all possible root paths
       // (someone could delete mutliple baml_src dirs at once)
       await bamlProjectManager.reload_project_files(URI.parse(params.changes[0].uri))
@@ -295,12 +296,6 @@ export function startServer(options?: LSOptions): void {
           connection.sendNotification('baml/showLanguageServerOutput')
         }
       })
-  }
-
-  // TODO: dont actually debounce for now or strange out of sync things happen..
-  // so we currently set to 0
-  const updateClientDB = (rootPath: URI, db: ParserDatabase) => {
-    void connection.sendRequest('set_database', { rootPath: rootPath.fsPath, db })
   }
 
   documents.onDidChangeContent(async (change: { document: TextDocument }) => {

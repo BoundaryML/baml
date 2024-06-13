@@ -2,9 +2,8 @@ import * as vscode from 'vscode'
 import axios from 'axios'
 import glooLens from './LanguageToBamlCodeLensProvider'
 import { WebPanelView } from './panels/WebPanelView'
-import testExecutor from './panels/execute_test'
 import plugins from './plugins'
-import { BamlDB, requestDiagnostics } from './plugins/language-server'
+import { requestDiagnostics } from './plugins/language-server'
 import { telemetry } from './plugins/language-server'
 import httpProxy from 'http-proxy'
 import express from 'express'
@@ -177,6 +176,8 @@ export function activate(context: vscode.ExtensionContext) {
           properties: {},
         })
       }
+      // sends project files as well to webview
+      requestDiagnostics()
 
       WebPanelView.currentPanel?.postMessage('select_function', {
         root_path: 'default',
@@ -188,13 +189,12 @@ export function activate(context: vscode.ExtensionContext) {
           root_path: 'default',
           function_name: args?.functionName ?? 'default',
         })
-
         WebPanelView.currentPanel?.postMessage('port_number', {
           port: port,
         })
-      }, 2000)
+      }, 200)
+
       console.info('Opening BAML panel')
-      requestDiagnostics()
       WebPanelView.currentPanel?.postMessage('port_number', {
         port: port,
       })
@@ -246,8 +246,6 @@ export function activate(context: vscode.ExtensionContext) {
       console.log(`${plugin.name} is Disabled`)
     }
   })
-
-  // testExecutor.start()
 
   if (process.env.VSCODE_DEBUG_MODE === 'true') {
     console.log(`vscode env: ${JSON.stringify(process.env, null, 2)}`)
@@ -315,7 +313,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate(): void {
   console.log('BAML extension deactivating')
-  // testExecutor.close()
   diagnosticsCollection.clear()
   diagnosticsCollection.dispose()
   statusBarItem.dispose()
