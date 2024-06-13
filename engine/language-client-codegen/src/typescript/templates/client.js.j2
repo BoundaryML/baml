@@ -4,7 +4,7 @@ import {
 } from "./types"
 import TypeBuilder from "./type_builder"
 
-type RecursivePartialNull<T> = T extends object
+export type RecursivePartialNull<T> = T extends object
   ? {
       [P in keyof T]?: RecursivePartialNull<T[P]>;
     }
