@@ -153,18 +153,17 @@ client<llm> MyClient {
 Provider names:
 - `google-ai`
 
-Accepts any options as defined by the [Gemini SDK](https://ai.google.dev/gemini-api/docs/api-overview).
-
+Accepts any options as defined by the [Gemini SDK](https://ai.google.dev/gemini-api/docs/get-started/tutorial?lang=rest).
 
 ```rust
 client<llm> MyGoogleClient {
   provider google-ai
   options{
     model "gemini-1.5-pro-001"
-    api_key env.GOOGLE_API_KEY
   }
 }
 ```
+This is not the Vertex AI Gemini API, but the Google Generative AI Gemini API, which supports the same models but at a different endpoint.
 
 
 ### Fallback
