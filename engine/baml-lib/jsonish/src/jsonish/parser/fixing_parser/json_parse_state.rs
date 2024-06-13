@@ -168,34 +168,42 @@ impl JsonParseState {
                             if let Some((_, next_c)) = next.peek() {
                                 match next_c {
                                     '\n' => {
+                                        log::debug!("Closing due to: newline after comma");
                                         return Some(idx);
                                     }
                                     ' ' => {
+                                        log::debug!("Testing for comment after space + comma");
                                         // If after the space we have "//" or "/*" or the beginning of a key, we'll close the string
-                                        while let Some((_, c)) = next.next() {
-                                            match c {
-                                                ' ' => {}
-                                                '\n' => {
-                                                    return Some(idx);
-                                                }
+                                        let mut buffer = ",".to_string();
+                                        while let Some((_, next_next_c)) = next.next() {
+                                            buffer.push(next_next_c);
+                                            match next_next_c {
+                                                ' ' | '\n' => {}
                                                 '/' => match next.peek() {
                                                     Some((_, '/')) => {
+                                                        // This is likely a comment
                                                         return Some(idx);
                                                     }
                                                     Some((_, '*')) => {
+                                                        // This is likely a comment
                                                         return Some(idx);
                                                     }
                                                     _ => {
-                                                        let _ = self.consume(c);
+                                                        // let _ = self.consume(c);
                                                     }
                                                 },
                                                 '"' => {
+                                                    // This is likely a new key
+                                                    log::debug!("Closing due to: new key after space + comma");
                                                     return Some(idx);
                                                 }
                                                 x => {
-                                                    let _ = self.consume(x);
+                                                    break;
                                                 }
                                             }
+                                        }
+                                        for c in buffer.chars() {
+                                            let _ = self.consume(c);
                                         }
                                     }
                                     _ => {
