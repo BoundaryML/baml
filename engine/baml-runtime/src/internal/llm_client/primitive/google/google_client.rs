@@ -267,19 +267,15 @@ impl RequestBuilder for GoogleClient {
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
     ) -> reqwest::RequestBuilder {
-        let mut should_stream = "generateContent?";
+        let mut should_stream = "generateContent";
         if stream {
-            should_stream = "streamGenerateContent?alt=sse&";
+            should_stream = "streamGenerateContent?alt=sse";
         }
 
         let baml_original_url = format!(
-            "https://generativelanguage.googleapis.com/v1/models/{}:{}key={}",
+            "https://generativelanguage.googleapis.com/v1/models/{}:{}",
             self.properties.model_id.as_ref().unwrap_or(&"".to_string()),
-            should_stream,
-            self.properties
-                .api_key
-                .clone()
-                .unwrap_or_else(|| "".to_string())
+            should_stream
         );
 
         let mut req = self.client.post(
@@ -295,6 +291,13 @@ impl RequestBuilder for GoogleClient {
         }
 
         req = req.header("baml-original-url", baml_original_url);
+        req = req.header(
+            "x-goog-api-key",
+            self.properties
+                .api_key
+                .clone()
+                .unwrap_or_else(|| "".to_string()),
+        );
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();

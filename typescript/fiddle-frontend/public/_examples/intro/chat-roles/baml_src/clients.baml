@@ -1,4 +1,6 @@
-// These are LLM clients you can use in your functions. We currently support Anthropic, OpenAI / Azure, and Ollama as providers but are expanding to many more.
+// These are LLM clients you can use in your functions. We currently support Anthropic, OpenAI / Azure, Gemini, and Ollama as providers but are expanding to many more.
+
+// We also support any other provider that follows the OpenAI API specification, such as HuggingFace.
 
 // For this playground, we have setup a few clients for you to use already with some free credits.
 
@@ -37,3 +39,12 @@ client<llm> Claude {
 
   }
 }
+
+client<llm> Gemini {
+  provider google-ai
+  options{
+    model "gemini-1.5-pro-001"
+    api_key env.GOOGLE_API_KEY
+  }
+}
+

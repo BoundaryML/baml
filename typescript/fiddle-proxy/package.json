@@ -11,11 +11,14 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@flydotio/node-demo": "^0.2.1"
+    "@flydotio/node-demo": "^0.2.1",
+    "cors": "^2.8.5"
+
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.19.2",
+    "dotenv": "16.4.5",
     "http-proxy-middleware": "^3.0.0"
   }
 }
