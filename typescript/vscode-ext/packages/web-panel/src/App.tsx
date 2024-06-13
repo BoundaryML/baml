@@ -13,7 +13,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Separator } from './components/ui/separator'
 // import { ASTContext, ASTProvider } from './shared/ASTProvider'
 import FunctionPanel from './shared/FunctionPanel'
-import { ProjectToggle } from './shared/ProjectPanel'
 import { FunctionSelector } from './shared/Selectors'
 import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from './shared/SettingsDialog'
 import CustomErrorBoundary from './utils/ErrorFallback'
@@ -29,7 +28,7 @@ function App() {
         <EventListener>
           <div className='absolute z-10 flex flex-row items-center justify-center gap-1 right-1 top-2 text-end'>
             <VSCodeLink href='https://docs.boundaryml.com'>Docs</VSCodeLink>
-            <ShowSettingsButton buttonClassName='h-12 w-12 bg-transparent p-1' iconClassName='h-8 w-8' />
+            <ShowSettingsButton buttonClassName='h-10 w-10 bg-transparent p-1' iconClassName='h-7 w-7' />
           </div>
           <SettingsDialog />
           <div className='flex flex-col w-full gap-2 px-2 pb-4'>

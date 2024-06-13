@@ -82,6 +82,15 @@ class Project {
     return rt
   }
 
+  files(): Record<string, string> {
+    const files = this.wasmProject.files()
+    return Object.fromEntries(
+      files
+        .map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string])
+        .map(([path, content]) => [URI.file(path).toString(), content]),
+    )
+  }
+
   replace_all_files(project: BamlWasm.WasmProject) {
     this.wasmProject = project
     this.last_successful_runtime = this.current_runtime
@@ -191,6 +200,10 @@ class Project {
     let runtime = this.runtime()
 
     return runtime.list_functions()
+  }
+
+  rootPath(): string {
+    return this.wasmProject.root_dir_name()
   }
 
   verifyCompletionRequest(doc: TextDocument, position: Position): boolean {
@@ -474,6 +487,7 @@ class BamlProjectManager {
     await this.wrapAsync(async () => {
       for (const project of this.projects.values()) {
         project.requestDiagnostics()
+        this.notifier({ type: 'runtime_updated', root_path: project.rootPath(), files: project.files() })
       }
     })
   }

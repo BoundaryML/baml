@@ -177,6 +177,10 @@ export const ShowSettingsButton: React.FC<{ buttonClassName: string; iconClassNa
   const setShowSettings = useSetAtom(showSettingsAtom)
   const requiredButUnset = useAtomValue(requiredButUnsetAtom)
   const requiredButUnsetCount = requiredButUnset.length
+  if ((window as any).next?.version) {
+    // dont run in nextjs
+    return null
+  }
 
   const button = (
     <Button className={buttonClassName} onClick={() => setShowSettings(true)}>
@@ -233,9 +237,7 @@ export const SettingsDialog: React.FC = () => {
         <div className='flex flex-col gap-2 gap-y-6'>
           <div className='flex flex-col gap-1'>
             <div className='flex flex-row gap-2'>
-              <span className='text-sm text-vscode-foreground'>
-                Observability {enableObservability ? 'Enabled' : 'Disabled'}
-              </span>
+              <span className='text-sm text-vscode-foreground'>Enable Boundary Studio Tracing</span>
               <Checkbox
                 className='border'
                 checked={enableObservability}
