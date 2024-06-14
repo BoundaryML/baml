@@ -352,7 +352,7 @@ dependencies = [
 
 [[package]]
 name = "baml"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "anyhow",
  "baml-lib",
@@ -393,7 +393,7 @@ dependencies = [
 
 [[package]]
 name = "baml-fmt"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "anyhow",
  "baml-lib",
@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "base64 0.13.1",
  "dissimilar",
@@ -453,7 +453,7 @@ dependencies = [
 
 [[package]]
 name = "baml-runtime"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "anyhow",
  "async-std",
@@ -514,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -545,7 +545,7 @@ dependencies = [
 
 [[package]]
 name = "baml-types"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "indexmap 2.2.6",
  "minijinja",
@@ -1766,7 +1766,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-codegen"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -1786,7 +1786,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -1820,7 +1820,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -1833,7 +1833,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -1850,7 +1850,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "baml-types",
  "colored",
@@ -1872,7 +1872,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "internal-baml-diagnostics",
  "internal-baml-schema-ast",
@@ -1884,7 +1884,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-schema-ast"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "baml-types",
  "either",
@@ -1951,7 +1951,7 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
