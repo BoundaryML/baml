@@ -12,10 +12,6 @@ patchedDependencies:
 importers:
 
   .:
-    dependencies:
-      react-slick:
-        specifier: ^0.30.2
-        version: 0.30.2(react-dom@18.3.1)(react@18.3.1)
     devDependencies:
       '@biomejs/biome':
         specifier: ^1.7.3
@@ -459,12 +455,18 @@ importers:
       react:
         specifier: ^18.2.0
         version: 18.3.1
+      react-arborist:
+        specifier: ^3.4.0
+        version: 3.4.0(@types/node@20.12.12)(@types/react@18.3.2)(react-dom@18.3.1)(react@18.3.1)
       react-error-boundary:
         specifier: ^4.0.11
         version: 4.0.13(react@18.3.1)
       react-hook-form:
         specifier: ^7.51.2
         version: 7.51.4(react@18.3.1)
+      react-icons:
+        specifier: ^5.1.0
+        version: 5.2.1(react@18.3.1)
       react-resizable-panels:
         specifier: ^2.0.16
         version: 2.0.19(react-dom@18.3.1)(react@18.3.1)
@@ -901,12 +903,18 @@ importers:
       react:
         specifier: ^18.2.0
         version: 18.3.1
+      react-arborist:
+        specifier: ^3.4.0
+        version: 3.4.0(@types/node@20.12.12)(@types/react@18.3.2)(react-dom@18.3.1)(react@18.3.1)
       react-error-boundary:
         specifier: ^4.0.11
         version: 4.0.13(react@18.3.1)
       react-hook-form:
         specifier: ^7.51.2
         version: 7.51.4(react@18.3.1)
+      react-icons:
+        specifier: ^5.1.0
+        version: 5.2.1(react@18.3.1)
       react-resizable-panels:
         specifier: ^2.0.16
         version: 2.0.19(react-dom@18.3.1)(react@18.3.1)
