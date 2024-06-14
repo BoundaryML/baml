@@ -210,9 +210,9 @@ jobs:
 
       # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
       # it is pinned to this github actions filename, so renaming this file is not safe!!
-      - name: Publish package to PyPI
-        if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
-        uses: pypa/gh-action-pypi-publish@release/v1
+      # - name: Publish package to PyPI
+      #   if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
+      #   uses: pypa/gh-action-pypi-publish@release/v1
 
   publish-to-npm:
     environment: release
@@ -246,6 +246,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: bindings-*
+          path: engine/language_client_typescript/artifacts
 
       - name: create npm dirs
         run: pnpm napi create-npm-dirs
@@ -255,13 +256,13 @@ jobs:
         run: pnpm artifacts
         working-directory: engine/language_client_typescript
 
-      - name: Publish
-        if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
-        run: |
-          npm publish --access public
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # - name: Publish
+      #   if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
+      #   run: |
+      #     npm publish --access public
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-vscode:
     environment: release
@@ -304,11 +305,11 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
         working-directory: typescript/
-      - name: Publish
-        if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
-        run: |
-          pnpm run vscode:publish --pre-release --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
-        working-directory: typescript/vscode-ext/packages
+      # - name: Publish
+      #   if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
+      #   run: |
+      #     pnpm run vscode:publish --pre-release --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
+      #   working-directory: typescript/vscode-ext/packages
 
   release-github:
     runs-on: ubuntu-latest
