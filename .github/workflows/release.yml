@@ -298,6 +298,12 @@ jobs:
           pattern: vscode-playground
           path: typescript/vscode-ext/packages/web-panel/dist
 
+      - name: setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.6
+          package_json_file: typescript/package.json
+          run_install: false
       # Set up Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
