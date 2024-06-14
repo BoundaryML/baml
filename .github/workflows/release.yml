@@ -211,7 +211,7 @@ jobs:
       # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
       # it is pinned to this github actions filename, so renaming this file is not safe!!
       - name: Publish package to PyPI
-        if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}  
+        if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
         uses: pypa/gh-action-pypi-publish@release/v1
 
   publish-to-npm:
@@ -242,11 +242,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install
         working-directory: engine/language_client_typescript
-      
+
       - uses: actions/download-artifact@v4
         with:
           name: bindings-*
-      
+
       - name: create npm dirs
         run: pnpm napi create-npm-dirs
         working-directory: engine/language_client_typescript
@@ -305,7 +305,32 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: typescript/
       - name: Publish
-        if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}  
+        if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
         run: |
           pnpm run vscode:publish --pre-release --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
         working-directory: typescript/vscode-ext/packages
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Changelog
+        uses: Bullrich/generate-release-changelog@master
+        id: Changelog
+        env:
+          REPO: ${{ github.repository }}
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+            ${{ steps.Changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
