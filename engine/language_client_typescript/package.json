@@ -61,7 +61,7 @@
     "format": "run-p format:biome format:rs format:toml",
     "format:biome": "biome --write .",
     "format:rs": "cargo fmt",
-    "prepublishOnly": "napi prepublish -t npm",
+    "prepublishOnly": "napi prepublish --skip-gh-release",
     "test": "echo no tests implemented",
     "version": "napi version"
   },
