@@ -32,7 +32,19 @@ pub fn to_value(ctx: &RuntimeContext, expr: &Expression) -> Result<serde_json::V
                 .map(|(k, v)| {
                     let k = match k {
                         Expression::String(s) => s.clone(),
-                        _ => anyhow::bail!("invalid key type"),
+                        Expression::Identifier(internal_baml_core::ir::repr::Identifier::ENV(
+                            key,
+                        )) => match ctx.env.get(key) {
+                            None => anyhow::bail!("unset env variable '{}'", key),
+                            Some(val) => val.to_string(),
+                        },
+                        Expression::Identifier(
+                            internal_baml_core::ir::repr::Identifier::Local(key),
+                        ) => key.clone(),
+                        Expression::Identifier(internal_baml_core::ir::repr::Identifier::Ref(
+                            key,
+                        )) => key.join("."),
+                        _ => anyhow::bail!("invalid key {:#?}", k),
                     };
                     let v = to_value(ctx, v)?;
                     Ok((k, v))

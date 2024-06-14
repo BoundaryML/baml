@@ -1,7 +1,8 @@
 import assert from 'assert'
 import { Image } from '@boundaryml/baml'
-import { b, NamedArgsSingleEnumList, flush, traceAsync, traceSync, setTags } from '../baml_client'
+import { b, NamedArgsSingleEnumList, flush, traceAsync, traceSync, setTags, TestClassNested } from '../baml_client'
 import TypeBuilder from "../baml_client/type_builder";
+import { RecursivePartialNull } from '../baml_client/client';
 
 describe('Integ tests', () => {
   it('should work for all inputs', async () => {
@@ -219,6 +220,19 @@ describe('Integ tests', () => {
     const res = await b.ExtractPeople("My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.", { tb })
     expect(res.length).toBeGreaterThan(0)
     console.log(res)
+  })
+
+  it('should work with nested classes', async () => {
+    let stream = b.stream.FnOutputClassNested('hi!');
+    let msgs: RecursivePartialNull<TestClassNested[]> = [];
+    for await (const msg of stream) {
+      console.log('msg', msg)
+      msgs.push(msg);
+    }
+
+    const final = await stream.getFinalResponse()
+    expect(msgs.length).toBeGreaterThan(0)
+    expect(msgs.at(-1)).toEqual(final)
   })
 })
 

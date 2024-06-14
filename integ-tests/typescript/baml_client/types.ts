@@ -188,6 +188,19 @@ export interface FakeImage {
   
 }
 
+export interface InnerClass {
+  prop1: string
+  prop2: string
+  inner: InnerClass2
+  
+}
+
+export interface InnerClass2 {
+  prop2: number
+  prop3: number
+  
+}
+
 export interface NamedArgsSingleClass {
   key: string
   key_two: boolean
@@ -263,6 +276,12 @@ export interface TestClassAlias {
   
 }
 
+export interface TestClassNested {
+  prop1: string
+  prop2: InnerClass
+  
+}
+
 export interface TestClassWithEnum {
   prop1: string
   prop2: EnumInClass
@@ -272,13 +291,6 @@ export interface TestClassWithEnum {
 export interface TestOutputClass {
   prop1: string
   prop2: number
-  
-}
-
-export interface TestOutputClassNested {
-  prop1: string
-  prop2: number
-  prop3: TestOutputClass
   
 }
 
