@@ -25,14 +25,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check for NO_CI_CHECKS
-        if: github.event_name == 'pull_request'
-        run: |
-          CHECK_PR=$(echo "${{ github.event.pull_request.body }}" | grep -c 'NO_CI_CHECKS=true')
-          if [ "$CHECK_PR" -gt 0 ]; then
-            echo "NO_CI_CHECKS=true found, skipping job."
-            exit 0
-          fi
       - uses: pnpm/action-setup@v3
         with:
           version: 9.0.6
@@ -53,14 +45,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check for NO_CI_CHECKS
-        if: github.event_name == 'pull_request'
-        run: |
-          CHECK_PR=$(echo "${{ github.event.pull_request.body }}" | grep -c 'NO_CI_CHECKS=true')
-          if [ "$CHECK_PR" -gt 0 ]; then
-            echo "NO_CI_CHECKS=true found, skipping job."
-            exit 0
-          fi
       - uses: pnpm/action-setup@v3
         with:
           version: 9.0.6
@@ -96,23 +80,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check for NO_CI_CHECKS
-        if: github.event_name == 'pull_request'
-        run: |
-          CHECK_PR=$(echo "${{ github.event.pull_request.body }}" | grep -c 'NO_CI_CHECKS=true')
-          if [ "$CHECK_PR" -gt 0 ]; then
-            echo "NO_CI_CHECKS=true found, skipping job."
-            exit 0
-          fi
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Build Rust
-        run: cargo build
-        working-directory: engine
       - name: Test Rust
         run: cargo test
         working-directory: engine
