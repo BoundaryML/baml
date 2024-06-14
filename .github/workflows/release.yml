@@ -212,6 +212,7 @@ jobs:
         with:
           pattern: wheels-*
 
+      - run: mkdir dist && mv wheels-*/* dist
       # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
       # it is pinned to this github actions filename, so renaming this file is not safe!!
       - name: Publish package to PyPI
@@ -264,6 +265,7 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
         run: |
           npm publish --access public
+        working-directory: engine/language_client_typescript
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
