@@ -312,6 +312,7 @@ jobs:
 
   release-github:
     runs-on: ubuntu-latest
+    needs: [publish-to-pypi, publish-to-npm, publish-vscode]
     steps:
       - name: Build Changelog
         id: github_release
