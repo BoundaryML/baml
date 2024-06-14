@@ -6,7 +6,7 @@ import JotaiProvider from '@baml/playground-common/baml_wasm_web/JotaiProvider'
 import dynamic from 'next/dynamic'
 import { Suspense } from 'react'
 import { BrowseSheet } from './_components/BrowseSheet'
-import { PHProvider } from './_components/PosthogProvider'
+import { PHProvider, RB2BElement } from './_components/PosthogProvider'
 import { ThemeProvider } from './_components/ThemeProvider'
 
 const PostHogPageView = dynamic(() => import('./PostHogPageView'), {
@@ -27,6 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang='en'>
+      <RB2BElement />
       <PHProvider>
         <body className={inter.className}>
           <PostHogPageView />
