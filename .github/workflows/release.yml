@@ -63,7 +63,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: baml-vscode.vsix
-          path: typescript/vscode-ext/packages/baml-${{ steps.build.outputs.version }}.vsix
+          path: typescript/vscode-ext/packages/baml-extension-${{ steps.build.outputs.version }}.vsix
+          if-no-files-found: error
 
       # Upload the artifact (helpful for debugging and manual downloads)
       - name: Upload VSCode Extension Artifact
@@ -71,6 +72,7 @@ jobs:
         with:
           name: baml-out
           path: typescript/vscode-ext/packages/vscode/out
+          if-no-files-found: error
 
       # upload the lang server artifact
       - name: Upload VSCode Lang Server Extension Artifact
@@ -78,12 +80,14 @@ jobs:
         with:
           name: language-server
           path: typescript/vscode-ext/packages/language-server/out
+          if-no-files-found: error
 
       - name: VSCode Playground Artifact
         uses: actions/upload-artifact@v4
         with:
           name: vscode-playground
           path: typescript/vscode-ext/packages/web-panel/dist
+          if-no-files-found: error
 
   build-release:
     strategy:
