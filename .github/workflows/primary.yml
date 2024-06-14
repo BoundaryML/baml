@@ -2,9 +2,6 @@ name: BAML Runtime
 
 on:
   pull_request:
-    paths:
-      - "engine/**"
-      - ".github/workflows/primary.yml"
     branches:
       - canary
   push:
@@ -89,9 +86,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Build Rust
-        run: cargo build
-        working-directory: engine
       - name: Test Rust
         run: cargo test
         working-directory: engine
