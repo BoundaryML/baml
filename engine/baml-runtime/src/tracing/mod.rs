@@ -5,7 +5,7 @@ mod threaded_tracer;
 mod wasm_tracer;
 
 use anyhow::Result;
-use baml_types::{BamlMap, BamlValue};
+use baml_types::{BamlMap, BamlMedia, BamlMediaType, BamlValue};
 use colored::Colorize;
 use internal_baml_jinja::RenderedPrompt;
 use serde_json::json;
@@ -578,11 +578,17 @@ impl From<&RenderedPrompt> for Template {
                                     ContentPart::Text(t.clone())
                                 }
                                 internal_baml_jinja::ChatMessagePart::Image(
-                                    baml_types::BamlImage::Base64(u),
+                                    baml_types::BamlMedia::Base64(BamlMediaType::Image, u),
                                 ) => ContentPart::B64Image(u.base64.clone()),
                                 internal_baml_jinja::ChatMessagePart::Image(
-                                    baml_types::BamlImage::Url(u),
+                                    baml_types::BamlMedia::Url(BamlMediaType::Image, u),
                                 ) => ContentPart::UrlImage(u.url.clone()),
+                                internal_baml_jinja::ChatMessagePart::Audio(
+                                    baml_types::BamlMedia::Base64(BamlMediaType::Audio, u),
+                                ) => ContentPart::B64Audio(u.base64.clone()),
+                                internal_baml_jinja::ChatMessagePart::Audio(
+                                    baml_types::BamlMedia::Url(BamlMediaType::Audio, u),
+                                ) => ContentPart::UrlAudio(u.url.clone()),
                             })
                             .collect::<Vec<_>>(),
                     })

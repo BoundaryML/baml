@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{bail, Result};
-use baml_types::{BamlImage, BamlMap, BamlValue};
+use baml_types::{BamlMedia, BamlMap, BamlValue};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},
@@ -59,11 +59,11 @@ enum MappedPyType {
     Float(f64),
     Bool(bool),
     None,
-    BamlImage(BamlImage),
+    BamlImage(BamlMedia),
     Unsupported(String),
 }
 
-impl TryFrom<BamlImagePy> for BamlImage {
+impl TryFrom<BamlImagePy> for BamlMedia {
     type Error = &'static str;
 
     fn try_from(value: BamlImagePy) -> Result<Self, Self::Error> {

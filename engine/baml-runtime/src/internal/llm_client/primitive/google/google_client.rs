@@ -15,7 +15,7 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
-use baml_types::BamlImage;
+use baml_types::BamlMedia;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
@@ -427,13 +427,13 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                 "text": text
             }),
             ChatMessagePart::Image(image) => match image {
-                BamlImage::Base64(image) => json!({
+                BamlMedia::Base64(image) => json!({
                     "inlineDATA": {
                         "mimeType": image.media_type,
                         "data": image.base64
                     }
                 }),
-                BamlImage::Url(image) => json!({
+                BamlMedia::Url(image) => json!({
                     "fileData": {
                         "type": "url",
                         "url": image.url

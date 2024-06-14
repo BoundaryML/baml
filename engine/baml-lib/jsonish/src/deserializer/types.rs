@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use baml_types::{BamlImage, BamlMap, BamlValue};
+use baml_types::{BamlMap, BamlMedia, BamlMediaType, BamlValue};
 
 use super::{
     deserialize_flags::{DeserializerConditions, Flag},
@@ -26,7 +26,7 @@ pub enum BamlValueWithFlags {
         BamlMap<String, BamlValueWithFlags>,
     ),
     Null(DeserializerConditions),
-    Image(ValueWithFlags<BamlImage>),
+    Image(ValueWithFlags<BamlMedia>),
 }
 
 impl BamlValueWithFlags {

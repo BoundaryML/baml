@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use baml_types::BamlImage;
+use baml_types::BamlMedia;
 use eventsource_stream::Eventsource;
 use futures::{SinkExt, StreamExt};
 use internal_baml_core::ir::ClientWalker;
@@ -538,7 +538,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                 "text": text
             }),
             ChatMessagePart::Image(image) => match image {
-                BamlImage::Base64(image) => json!({
+                BamlMedia::Base64(image) => json!({
                     "type": "image",
                     "source": {
                         "type": "base64",
@@ -546,7 +546,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                         "data": image.base64
                     }
                 }),
-                BamlImage::Url(image) => json!({
+                BamlMedia::Url(image) => json!({
                     "type": "image",
                     "source": {
                         "type": "url",

@@ -1,4 +1,4 @@
-use baml_types::{BamlMap, BamlValue, TypeValue};
+use baml_types::{BamlMap, BamlMedia, BamlMediaType, BamlValue, TypeValue};
 
 use crate::ir::{FieldType, IntermediateRepr};
 
@@ -60,13 +60,17 @@ pub fn validate_arg(
                 BamlValue::Image(v) => Some(BamlValue::Image(v.clone())),
                 BamlValue::Map(kv) => {
                     if let Some(BamlValue::String(s)) = kv.get("url") {
-                        Some(BamlValue::Image(baml_types::BamlImage::url(s.to_string())))
+                        Some(BamlValue::Image(baml_types::BamlMedia::url(
+                            BamlMediaType::Image,
+                            s.to_string(),
+                        )))
                     } else if let (
                         Some(BamlValue::String(s)),
                         Some(BamlValue::String(media_type)),
                     ) = (kv.get("base64"), kv.get("media_type"))
                     {
-                        Some(BamlValue::Image(baml_types::BamlImage::base64(
+                        Some(BamlValue::Image(baml_types::BamlMedia::base64(
+                            BamlMediaType::Image,
                             s.to_string(),
                             media_type.to_string(),
                         )))

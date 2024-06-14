@@ -1,4 +1,4 @@
-use crate::{BamlImage, BamlValue};
+use crate::{BamlMedia, BamlValue};
 
 impl From<BamlValue> for minijinja::Value {
     fn from(arg: BamlValue) -> minijinja::Value {
@@ -16,6 +16,7 @@ impl From<BamlValue> for minijinja::Value {
                 minijinja::Value::from(list)
             }
             BamlValue::Image(i) => i.into(),
+            BamlValue::Audio(i) => i.into(),
             BamlValue::Enum(_, v) => minijinja::Value::from(v),
             BamlValue::Class(_, m) => {
                 let map = m.into_iter().map(|(k, v)| (k, minijinja::Value::from(v)));
@@ -28,17 +29,17 @@ impl From<BamlValue> for minijinja::Value {
 
 #[derive(Debug)]
 struct MinijinjaBamlImage {
-    image: BamlImage,
+    image: BamlMedia,
 }
 
-impl From<BamlImage> for MinijinjaBamlImage {
-    fn from(image: BamlImage) -> MinijinjaBamlImage {
+impl From<BamlMedia> for MinijinjaBamlImage {
+    fn from(image: BamlMedia) -> MinijinjaBamlImage {
         MinijinjaBamlImage { image }
     }
 }
 
-impl From<BamlImage> for minijinja::Value {
-    fn from(arg: BamlImage) -> minijinja::Value {
+impl From<BamlMedia> for minijinja::Value {
+    fn from(arg: BamlMedia) -> minijinja::Value {
         minijinja::Value::from_object(MinijinjaBamlImage::from(arg))
     }
 }

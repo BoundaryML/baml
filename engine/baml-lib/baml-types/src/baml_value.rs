@@ -2,7 +2,8 @@ use std::{collections::HashSet, fmt};
 
 use serde::{de::Visitor, ser::SerializeStruct, Deserialize, Deserializer};
 
-use crate::{BamlImage, BamlMap};
+use crate::media::BamlMediaType;
+use crate::{BamlMap, BamlMedia};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum BamlValue {
@@ -12,7 +13,8 @@ pub enum BamlValue {
     Bool(bool),
     Map(BamlMap<String, BamlValue>),
     List(Vec<BamlValue>),
-    Image(BamlImage),
+    Image(BamlMedia),
+    Audio(BamlMedia),
     Enum(String, String),
     Class(String, BamlMap<String, BamlValue>),
     Null,
@@ -30,13 +32,28 @@ impl serde::Serialize for BamlValue {
             BamlValue::Image(i) => {
                 let mut s = serializer.serialize_struct("BamlImage", 2)?;
                 match i {
-                    BamlImage::Url(u) => {
+                    BamlMedia::Url(BamlMediaType::Image, u) => {
                         s.serialize_field("url", &u.url)?;
                     }
-                    BamlImage::Base64(b) => {
+                    BamlMedia::Base64(BamlMediaType::Image, b) => {
                         s.serialize_field("base64", &b.base64)?;
                         s.serialize_field("media_type", &b.media_type)?;
                     }
+                    _ => unreachable!(),
+                }
+                s.end()
+            }
+            BamlValue::Audio(i) => {
+                let mut s = serializer.serialize_struct("BamlAudio", 2)?;
+                match i {
+                    BamlMedia::Url(BamlMediaType::Audio, u) => {
+                        s.serialize_field("url", &u.url)?;
+                    }
+                    BamlMedia::Base64(BamlMediaType::Audio, b) => {
+                        s.serialize_field("base64", &b.base64)?;
+                        s.serialize_field("media_type", &b.media_type)?;
+                    }
+                    _ => unreachable!(),
                 }
                 s.end()
             }
@@ -83,6 +100,7 @@ impl BamlValue {
                 }
             }
             BamlValue::Image(_) => "image".into(),
+            BamlValue::Audio(_) => "audio".into(),
             BamlValue::Enum(e, _) => format!("enum {}", e),
             BamlValue::Class(c, _) => format!("class {}", c),
             BamlValue::Null => "null".into(),

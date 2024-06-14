@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::BamlImage;
+use baml_types::BamlMedia;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 
@@ -443,12 +443,12 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
         .map(|part| match part {
             ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
             ChatMessagePart::Image(image) => match image {
-                BamlImage::Url(image) => {
+                BamlMedia::Url(image) => {
                     json!({"type": "image_url", "image_url": json!({
                         "url": image.url
                     })})
                 }
-                BamlImage::Base64(image) => {
+                BamlMedia::Base64(image) => {
                     json!({"type": "image_url", "image_url": json!({
                         "base64": image.base64
                     })})

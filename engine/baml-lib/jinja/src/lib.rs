@@ -1,4 +1,4 @@
-use baml_types::{BamlImage, BamlValue};
+use baml_types::{BamlMedia, BamlMediaType, BamlValue};
 use colored::*;
 mod evaluate_type;
 mod get_vars;
@@ -216,7 +216,7 @@ fn render_minijinja(
                         .strip_suffix(":baml-end-image:")
                         .unwrap_or(part);
 
-                    match serde_json::from_str::<BamlImage>(image_data) {
+                    match serde_json::from_str::<BamlMedia>(image_data) {
                         Ok(image) => {
                             parts.push(ChatMessagePart::Image(image));
                         }
@@ -275,7 +275,8 @@ impl ImageBase64 {
 #[derive(Debug, PartialEq, Serialize, Clone)]
 pub enum ChatMessagePart {
     Text(String), // raw user-provided text
-    Image(BamlImage),
+    Image(BamlMedia),
+    Audio(BamlMedia),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -301,11 +302,18 @@ impl std::fmt::Display for RenderedPrompt {
                             .map(|p| match p {
                                 ChatMessagePart::Text(t) => t.clone(),
                                 ChatMessagePart::Image(img) => match img {
-                                    BamlImage::Url(url) =>
+                                    BamlMedia::Url(BamlMediaType::Image, url) =>
                                         format!("<image_placeholder: {}>", url.url),
-                                    BamlImage::Base64(_) =>
-                                    // TODO: print this as well?
+                                    BamlMedia::Base64(BamlMediaType::Image, _) =>
                                         "<image_placeholder base64>".to_string(),
+                                    _ => unreachable!(),
+                                },
+                                ChatMessagePart::Audio(aud) => match aud {
+                                    BamlMedia::Url(BamlMediaType::Audio, url) =>
+                                        format!("<audio_placeholder: {}>", url.url),
+                                    BamlMedia::Base64(BamlMediaType::Audio, _) =>
+                                        "<audio_placeholder base64>".to_string(),
+                                    _ => unreachable!(),
                                 },
                             })
                             .collect::<Vec<String>>()
@@ -364,7 +372,9 @@ impl RenderedPrompt {
                     .flat_map(|m| {
                         m.parts.into_iter().map(|p| match p {
                             ChatMessagePart::Text(t) => t,
-                            ChatMessagePart::Image(_) => "".to_string(), // we are choosing to ignore the image for now
+                            ChatMessagePart::Image(_) => "".to_string(),
+                            ChatMessagePart::Audio(_) => "".to_string(),
+                            // we are choosing to ignore the image for now
                         })
                     })
                     .collect::<Vec<String>>()
@@ -454,7 +464,10 @@ mod render_tests {
 
         let args = BamlValue::Map(BamlMap::from([(
             "img".to_string(),
-            BamlValue::Image(BamlImage::url("https://example.com/image.jpg".to_string())),
+            BamlValue::Image(BamlMedia::url(
+                BamlMediaType::Image,
+                "https://example.com/image.jpg".to_string(),
+            )),
         )]));
 
         let rendered = render_prompt(
@@ -478,7 +491,8 @@ mod render_tests {
                 role: "system".to_string(),
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-                    ChatMessagePart::Image(BamlImage::url(
+                    ChatMessagePart::Image(BamlMedia::url(
+                        BamlMediaType::Image,
                         "https://example.com/image.jpg".to_string()
                     ),),
                 ]
@@ -496,7 +510,10 @@ mod render_tests {
             "myObject".to_string(),
             BamlValue::Map(BamlMap::from([(
                 "img".to_string(),
-                BamlValue::Image(BamlImage::url("https://example.com/image.jpg".to_string())),
+                BamlValue::Image(BamlMedia::url(
+                    BamlMediaType::Image,
+                    "https://example.com/image.jpg".to_string(),
+                )),
             )])),
         )]));
 
@@ -521,7 +538,8 @@ mod render_tests {
                 role: "system".to_string(),
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-                    ChatMessagePart::Image(BamlImage::url(
+                    ChatMessagePart::Image(BamlMedia::url(
+                        BamlMediaType::Image,
                         "https://example.com/image.jpg".to_string()
                     ),),
                 ]
@@ -537,7 +555,10 @@ mod render_tests {
 
         let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "img".to_string(),
-            BamlValue::Image(BamlImage::url("https://example.com/image.jpg".to_string())),
+            BamlValue::Image(BamlMedia::url(
+                BamlMediaType::Image,
+                "https://example.com/image.jpg".to_string(),
+            )),
         )]));
 
         let rendered = render_prompt(
@@ -561,7 +582,8 @@ mod render_tests {
                 role: "system".to_string(),
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-                    ChatMessagePart::Image(BamlImage::url(
+                    ChatMessagePart::Image(BamlMedia::url(
+                        BamlMediaType::Image,
                         "https://example.com/image.jpg".to_string()
                     ),),
                     ChatMessagePart::Text(vec![". Please help me.",].join("\n")),

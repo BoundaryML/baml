@@ -1,5 +1,5 @@
-mod image;
 mod map;
+mod media;
 #[cfg(feature = "mini-jinja")]
 mod minijinja;
 
@@ -8,5 +8,5 @@ mod field_type;
 
 pub use baml_value::BamlValue;
 pub use field_type::{FieldType, TypeValue};
-pub use image::{BamlImage, ImageBase64, ImageUrl};
 pub use map::Map as BamlMap;
+pub use media::{BamlMedia, BamlMediaType, MediaBase64, MediaUrl};
