@@ -206,7 +206,7 @@ jobs:
           python-version: "3.8"
       - uses: actions/download-artifact@v4
         with:
-          name: wheels-*
+          pattern: wheels-*
 
       # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
       # it is pinned to this github actions filename, so renaming this file is not safe!!
@@ -245,7 +245,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: bindings-*
+          pattern: bindings-*
 
       - name: create npm dirs
         run: pnpm napi create-npm-dirs
@@ -290,7 +290,7 @@ jobs:
       - name: Get artifact
         uses: actions/download-artifact@v4
         with:
-          name: vscode-playground
+          pattern: vscode-playground
           path: typescript/vscode-ext/packages/web-panel/dist
 
       # Set up Node.js
