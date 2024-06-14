@@ -24,19 +24,15 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Check for NO_CI_CHECKS
+        if: github.event_name == 'pull_request'
         run: |
-          CHECK_COMMIT=$(echo "${{ github.event.head_commit.message }}" | grep -c 'NO_CI_CHECKS=true')
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            CHECK_PR=$(echo "${{ github.event.pull_request.body }}" | grep -c 'NO_CI_CHECKS=true')
-          else
-            CHECK_PR=0
-          fi
-          if [ "$CHECK_COMMIT" -gt 0 ] || [ "$CHECK_PR" -gt 0 ]; then
+          CHECK_PR=$(echo "${{ github.event.pull_request.body }}" | grep -c 'NO_CI_CHECKS=true')
+          if [ "$CHECK_PR" -gt 0 ]; then
             echo "NO_CI_CHECKS=true found, skipping job."
             exit 0
           fi
-      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v3
         with:
           version: 9.0.6
@@ -56,19 +52,15 @@ jobs:
   test_node_generator:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Check for NO_CI_CHECKS
+        if: github.event_name == 'pull_request'
         run: |
-          CHECK_COMMIT=$(echo "${{ github.event.head_commit.message }}" | grep -c 'NO_CI_CHECKS=true')
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            CHECK_PR=$(echo "${{ github.event.pull_request.body }}" | grep -c 'NO_CI_CHECKS=true')
-          else
-            CHECK_PR=0
-          fi
-          if [ "$CHECK_COMMIT" -gt 0 ] || [ "$CHECK_PR" -gt 0 ]; then
+          CHECK_PR=$(echo "${{ github.event.pull_request.body }}" | grep -c 'NO_CI_CHECKS=true')
+          if [ "$CHECK_PR" -gt 0 ]; then
             echo "NO_CI_CHECKS=true found, skipping job."
             exit 0
           fi
-      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v3
         with:
           version: 9.0.6
@@ -103,19 +95,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Check for NO_CI_CHECKS
+        if: github.event_name == 'pull_request'
         run: |
-          CHECK_COMMIT=$(echo "${{ github.event.head_commit.message }}" | grep -c 'NO_CI_CHECKS=true')
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            CHECK_PR=$(echo "${{ github.event.pull_request.body }}" | grep -c 'NO_CI_CHECKS=true')
-          else
-            CHECK_PR=0
-          fi
-          if [ "$CHECK_COMMIT" -gt 0 ] || [ "$CHECK_PR" -gt 0 ]; then
+          CHECK_PR=$(echo "${{ github.event.pull_request.body }}" | grep -c 'NO_CI_CHECKS=true')
+          if [ "$CHECK_PR" -gt 0 ]; then
             echo "NO_CI_CHECKS=true found, skipping job."
             exit 0
           fi
-      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
