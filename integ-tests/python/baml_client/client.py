@@ -495,6 +495,28 @@ class BamlClient:
       mdl = create_model("FnOutputClassListReturnType", inner=(List[types.TestOutputClass], ...))
       return coerce(mdl, raw.parsed())
     
+    async def FnOutputClassNested(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TestClassNested:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "FnOutputClassNested",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("FnOutputClassNestedReturnType", inner=(types.TestClassNested, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def FnOutputClassWithEnum(
         self,
         input: str,
@@ -515,28 +537,6 @@ class BamlClient:
         tb,
       )
       mdl = create_model("FnOutputClassWithEnumReturnType", inner=(types.TestClassWithEnum, ...))
-      return coerce(mdl, raw.parsed())
-    
-    async def FnOutputNestedClass(
-        self,
-        input: str,
-        baml_options: BamlCallOptions = {},
-    ) -> types.TestOutputClassNested:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb
-      else:
-        tb = None
-
-      raw = await self.__runtime.call_function(
-        "FnOutputNestedClass",
-        {
-          "input": input,
-        },
-        self.__ctx_manager.get(),
-        tb,
-      )
-      mdl = create_model("FnOutputNestedClassReturnType", inner=(types.TestOutputClassNested, ...))
       return coerce(mdl, raw.parsed())
     
     async def FnOutputStringList(
@@ -1941,6 +1941,38 @@ class BamlStreamClient:
         tb,
       )
     
+    def FnOutputClassNested(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.TestClassNested, types.TestClassNested]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "FnOutputClassNested",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("FnOutputClassNestedReturnType", inner=(types.TestClassNested, ...))
+      partial_mdl = create_model("FnOutputClassNestedPartialReturnType", inner=(partial_types.TestClassNested, ...))
+
+      return baml_py.BamlStream[partial_types.TestClassNested, types.TestClassNested](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
     def FnOutputClassWithEnum(
         self,
         input: str,
@@ -1966,38 +1998,6 @@ class BamlStreamClient:
       partial_mdl = create_model("FnOutputClassWithEnumPartialReturnType", inner=(partial_types.TestClassWithEnum, ...))
 
       return baml_py.BamlStream[partial_types.TestClassWithEnum, types.TestClassWithEnum](
-        raw,
-        lambda x: coerce(partial_mdl, x),
-        lambda x: coerce(mdl, x),
-        self.__ctx_manager.get(),
-        tb,
-      )
-    
-    def FnOutputNestedClass(
-        self,
-        input: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[partial_types.TestOutputClassNested, types.TestOutputClassNested]:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb
-      else:
-        tb = None
-
-      raw = self.__runtime.stream_function(
-        "FnOutputNestedClass",
-        {
-          "input": input,
-        },
-        None,
-        self.__ctx_manager.get(),
-        tb,
-      )
-
-      mdl = create_model("FnOutputNestedClassReturnType", inner=(types.TestOutputClassNested, ...))
-      partial_mdl = create_model("FnOutputNestedClassPartialReturnType", inner=(partial_types.TestOutputClassNested, ...))
-
-      return baml_py.BamlStream[partial_types.TestOutputClassNested, types.TestOutputClassNested](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

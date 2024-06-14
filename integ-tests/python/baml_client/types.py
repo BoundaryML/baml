@@ -191,6 +191,19 @@ class FakeImage(BaseModel):
     
     url: str
 
+class InnerClass(BaseModel):
+    
+    
+    prop1: str
+    prop2: str
+    inner: "InnerClass2"
+
+class InnerClass2(BaseModel):
+    
+    
+    prop2: int
+    prop3: float
+
 class NamedArgsSingleClass(BaseModel):
     
     
@@ -266,6 +279,12 @@ class TestClassAlias(BaseModel):
     key4: str
     key5: str
 
+class TestClassNested(BaseModel):
+    
+    
+    prop1: str
+    prop2: "InnerClass"
+
 class TestClassWithEnum(BaseModel):
     
     
@@ -277,13 +296,6 @@ class TestOutputClass(BaseModel):
     
     prop1: str
     prop2: int
-
-class TestOutputClassNested(BaseModel):
-    
-    
-    prop1: str
-    prop2: int
-    prop3: "TestOutputClass"
 
 class UnionTest_ReturnType(BaseModel):
     

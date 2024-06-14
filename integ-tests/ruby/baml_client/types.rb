@@ -142,6 +142,8 @@ module Baml
     class Email < T::Struct; end
     class Event < T::Struct; end
     class FakeImage < T::Struct; end
+    class InnerClass < T::Struct; end
+    class InnerClass2 < T::Struct; end
     class NamedArgsSingleClass < T::Struct; end
     class OptionalTest_Prop1 < T::Struct; end
     class OptionalTest_ReturnType < T::Struct; end
@@ -152,9 +154,9 @@ module Baml
     class SearchParams < T::Struct; end
     class SomeClassNestedDynamic < T::Struct; end
     class TestClassAlias < T::Struct; end
+    class TestClassNested < T::Struct; end
     class TestClassWithEnum < T::Struct; end
     class TestOutputClass < T::Struct; end
-    class TestOutputClassNested < T::Struct; end
     class UnionTest_ReturnType < T::Struct; end
     class WithReasoning < T::Struct; end
     class Blah < T::Struct
@@ -214,6 +216,17 @@ module Baml
     class FakeImage < T::Struct
       include T::Struct::ActsAsComparable
       const :url, String
+    end
+    class InnerClass < T::Struct
+      include T::Struct::ActsAsComparable
+      const :prop1, String
+      const :prop2, String
+      const :inner, Baml::Types::InnerClass2
+    end
+    class InnerClass2 < T::Struct
+      include T::Struct::ActsAsComparable
+      const :prop2, Integer
+      const :prop3, Float
     end
     class NamedArgsSingleClass < T::Struct
       include T::Struct::ActsAsComparable
@@ -278,6 +291,11 @@ module Baml
       const :key4, String
       const :key5, String
     end
+    class TestClassNested < T::Struct
+      include T::Struct::ActsAsComparable
+      const :prop1, String
+      const :prop2, Baml::Types::InnerClass
+    end
     class TestClassWithEnum < T::Struct
       include T::Struct::ActsAsComparable
       const :prop1, String
@@ -287,12 +305,6 @@ module Baml
       include T::Struct::ActsAsComparable
       const :prop1, String
       const :prop2, Integer
-    end
-    class TestOutputClassNested < T::Struct
-      include T::Struct::ActsAsComparable
-      const :prop1, String
-      const :prop2, Integer
-      const :prop3, Baml::Types::TestOutputClass
     end
     class UnionTest_ReturnType < T::Struct
       include T::Struct::ActsAsComparable

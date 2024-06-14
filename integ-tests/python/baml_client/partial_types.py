@@ -44,14 +44,14 @@ class ClassOptionalOutput2(BaseModel):
     
     prop1: Optional[str] = None
     prop2: Optional[str] = None
-    prop3: "Blah"
+    prop3: Optional["Blah"] = None
 
 class ClassWithImage(BaseModel):
     
     
     myImage: Optional[baml_py.Image] = None
     param2: Optional[str] = None
-    fake_image: "FakeImage"
+    fake_image: Optional["FakeImage"] = None
 
 class DynamicClassOne(BaseModel):
     
@@ -63,7 +63,7 @@ class DynamicClassTwo(BaseModel):
     model_config = ConfigDict(extra='allow')
     
     hi: Optional[str] = None
-    some_class: "SomeClassNestedDynamic"
+    some_class: Optional["SomeClassNestedDynamic"] = None
     status: Optional[Union[types.DynEnumOne, str]] = None
 
 class DynamicOutput(BaseModel):
@@ -100,6 +100,19 @@ class FakeImage(BaseModel):
     
     url: Optional[str] = None
 
+class InnerClass(BaseModel):
+    
+    
+    prop1: Optional[str] = None
+    prop2: Optional[str] = None
+    inner: Optional["InnerClass2"] = None
+
+class InnerClass2(BaseModel):
+    
+    
+    prop2: Optional[int] = None
+    prop3: Optional[float] = None
+
 class NamedArgsSingleClass(BaseModel):
     
     
@@ -116,7 +129,7 @@ class OptionalTest_Prop1(BaseModel):
 class OptionalTest_ReturnType(BaseModel):
     
     
-    omega_1: "OptionalTest_Prop1"
+    omega_1: Optional["OptionalTest_Prop1"] = None
     omega_2: Optional[str] = None
     omega_3: List[Optional[types.OptionalTest_CategoryType]]
 
@@ -155,8 +168,8 @@ class SearchParams(BaseModel):
     
     dateRange: Optional[int] = None
     location: List[Optional[str]]
-    jobTitle: "WithReasoning"
-    company: "WithReasoning"
+    jobTitle: Optional["WithReasoning"] = None
+    company: Optional["WithReasoning"] = None
     description: List["WithReasoning"]
     tags: List[Optional[Union[Optional[types.Tag], Optional[str]]]]
 
@@ -175,6 +188,12 @@ class TestClassAlias(BaseModel):
     key4: Optional[str] = None
     key5: Optional[str] = None
 
+class TestClassNested(BaseModel):
+    
+    
+    prop1: Optional[str] = None
+    prop2: Optional["InnerClass"] = None
+
 class TestClassWithEnum(BaseModel):
     
     
@@ -186,13 +205,6 @@ class TestOutputClass(BaseModel):
     
     prop1: Optional[str] = None
     prop2: Optional[int] = None
-
-class TestOutputClassNested(BaseModel):
-    
-    
-    prop1: Optional[str] = None
-    prop2: Optional[int] = None
-    prop3: "TestOutputClass"
 
 class UnionTest_ReturnType(BaseModel):
     

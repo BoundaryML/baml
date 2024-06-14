@@ -453,14 +453,14 @@ module Baml
       
       params(
         input: String,
-      ).returns(Baml::Types::TestClassWithEnum)
+      ).returns(Baml::Types::TestClassNested)
       
     }
-    def FnOutputClassWithEnum(
+    def FnOutputClassNested(
         input:
     )
       raw = @runtime.call_function(
-        "FnOutputClassWithEnum",
+        "FnOutputClassNested",
         {
           "input" => input,
         },
@@ -473,14 +473,14 @@ module Baml
       
       params(
         input: String,
-      ).returns(Baml::Types::TestOutputClassNested)
+      ).returns(Baml::Types::TestClassWithEnum)
       
     }
-    def FnOutputNestedClass(
+    def FnOutputClassWithEnum(
         input:
     )
       raw = @runtime.call_function(
-        "FnOutputNestedClass",
+        "FnOutputClassWithEnum",
         {
           "input" => input,
         },
@@ -1599,6 +1599,27 @@ module Baml
     sig {
       params(
         input: String,
+      ).returns(Baml::BamlStream[Baml::Types::TestClassNested])
+    }
+    def FnOutputClassNested(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "FnOutputClassNested",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::TestClassNested, Baml::Types::TestClassNested].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
       ).returns(Baml::BamlStream[Baml::Types::TestClassWithEnum])
     }
     def FnOutputClassWithEnum(
@@ -1612,27 +1633,6 @@ module Baml
         @ctx_manager,
       )
       Baml::BamlStream[Baml::PartialTypes::TestClassWithEnum, Baml::Types::TestClassWithEnum].new(
-        ffi_stream: raw,
-        ctx_manager: @ctx_manager
-      )
-    end
-
-    sig {
-      params(
-        input: String,
-      ).returns(Baml::BamlStream[Baml::Types::TestOutputClassNested])
-    }
-    def FnOutputNestedClass(
-        input:
-    )
-      raw = @runtime.stream_function(
-        "FnOutputNestedClass",
-        {
-          "input" => input,
-        },
-        @ctx_manager,
-      )
-      Baml::BamlStream[Baml::PartialTypes::TestOutputClassNested, Baml::Types::TestOutputClassNested].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

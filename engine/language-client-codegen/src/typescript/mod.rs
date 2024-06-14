@@ -19,7 +19,7 @@ struct TypescriptClient {
 }
 struct TypescriptFunction {
     name: String,
-    partial_return_type: String,
+    // partial_return_type: String,
     return_type: String,
     args: Vec<(String, bool, String)>,
 }
@@ -76,7 +76,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
                         Ok(TypescriptFunction {
                             name: f.name().to_string(),
                             return_type: f.elem().output().to_type_ref(ir),
-                            partial_return_type: f.elem().output().to_partial_type_ref(ir),
+                            // partial_return_type: f.elem().output().to_partial_type_ref(ir),
                             args: match f.inputs() {
                                 either::Either::Left(_args) => anyhow::bail!("Typescript codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
                                 either::Either::Right(args) => args
@@ -144,52 +144,52 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptIni
 trait ToTypeReferenceInClientDefinition {
     fn to_type_ref(&self, ir: &IntermediateRepr) -> String;
 
-    fn to_partial_type_ref(&self, ir: &IntermediateRepr) -> String;
+    // fn to_partial_type_ref(&self, ir: &IntermediateRepr) -> String;
 }
 
 impl ToTypeReferenceInClientDefinition for FieldType {
-    fn to_partial_type_ref(&self, ir: &IntermediateRepr) -> String {
-        match self {
-            FieldType::Enum(name) => {
-                if ir
-                    .find_enum(name)
-                    .map(|e| e.item.attributes.get("dynamic_type").is_some())
-                    .unwrap_or(false)
-                {
-                    format!("(string | {name} | null)")
-                } else {
-                    format!("({name} | null)")
-                }
-            }
-            FieldType::Class(name) => format!("(Partial<{name}> | null)"),
-            FieldType::List(inner) => format!("{}[]", inner.to_partial_type_ref(ir)),
-            FieldType::Map(key, value) => {
-                format!(
-                    "(Record<{}, {}> | null)",
-                    key.to_type_ref(ir),
-                    value.to_partial_type_ref(ir)
-                )
-            }
-            FieldType::Primitive(r#type) => format!("({} | null)", r#type.to_typescript()),
-            FieldType::Union(inner) => format!(
-                "({} | null)",
-                inner
-                    .iter()
-                    .map(|t| t.to_partial_type_ref(ir))
-                    .collect::<Vec<_>>()
-                    .join(" | ")
-            ),
-            FieldType::Tuple(inner) => format!(
-                "([{}] | null)",
-                inner
-                    .iter()
-                    .map(|t| t.to_partial_type_ref(ir))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            FieldType::Optional(inner) => format!("({} | null)", inner.to_partial_type_ref(ir)),
-        }
-    }
+    // fn to_partial_type_ref(&self, ir: &IntermediateRepr) -> String {
+    //     match self {
+    //         FieldType::Enum(name) => {
+    //             if ir
+    //                 .find_enum(name)
+    //                 .map(|e| e.item.attributes.get("dynamic_type").is_some())
+    //                 .unwrap_or(false)
+    //             {
+    //                 format!("(string | {name} | null)")
+    //             } else {
+    //                 format!("({name} | null)")
+    //             }
+    //         }
+    //         FieldType::Class(name) => format!("(RecursivePartialNull<{name}>)"),
+    //         FieldType::List(inner) => format!("{}[]", inner.to_partial_type_ref(ir)),
+    //         FieldType::Map(key, value) => {
+    //             format!(
+    //                 "(Record<{}, {}> | null)",
+    //                 key.to_type_ref(ir),
+    //                 value.to_partial_type_ref(ir)
+    //             )
+    //         }
+    //         FieldType::Primitive(r#type) => format!("({} | null)", r#type.to_typescript()),
+    //         FieldType::Union(inner) => format!(
+    //             "({} | null)",
+    //             inner
+    //                 .iter()
+    //                 .map(|t| t.to_partial_type_ref(ir))
+    //                 .collect::<Vec<_>>()
+    //                 .join(" | ")
+    //         ),
+    //         FieldType::Tuple(inner) => format!(
+    //             "([{}] | null)",
+    //             inner
+    //                 .iter()
+    //                 .map(|t| t.to_partial_type_ref(ir))
+    //                 .collect::<Vec<_>>()
+    //                 .join(", ")
+    //         ),
+    //         FieldType::Optional(inner) => format!("({} | null)", inner.to_partial_type_ref(ir)),
+    //     }
+    // }
 
     fn to_type_ref(&self, ir: &IntermediateRepr) -> String {
         match self {

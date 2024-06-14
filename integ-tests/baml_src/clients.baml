@@ -52,7 +52,6 @@ client<llm> Ollama {
   provider ollama
   options {
     model llama2
-    api_key ""
   }
 }
 
