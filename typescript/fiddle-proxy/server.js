@@ -1,12 +1,20 @@
 const cors = require('cors')
 const { createProxyMiddleware } = require('http-proxy-middleware')
 const app = require('express')()
+require('dotenv').config()
 
 app.use(cors())
 
 app.use(
   createProxyMiddleware({
     changeOrigin: true,
+    pathRewrite: (path, req) => {
+      // Ensure the URL does not end with a slash
+      if (path.endsWith('/')) {
+        return path.slice(0, -1)
+      }
+      return path
+    },
     router: (req) => {
       // Extract the original target URL from the custom header
       const originalUrl = req.headers['baml-original-url']
@@ -31,6 +39,12 @@ app.use(
             throw new Error('ANTHROPIC_API_KEY is missing')
           }
           proxyReq.setHeader('x-api-key', process.env.ANTHROPIC_API_KEY)
+        }
+        if (req.headers['baml-original-url'].includes('gemini')) {
+          if (process.env.GOOGLE_API_KEY === undefined) {
+            throw new Error('GOOGLE_API_KEY is missing')
+          }
+          proxyReq.setHeader('x-goog-api-key', process.env.GOOGLE_API_KEY)
         }
       },
       proxyRes: (proxyRes, req, res) => {

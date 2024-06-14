@@ -34,8 +34,8 @@ BAML ships with the following providers (you can can also write your own!):
   - `openai`
   - `azure-openai`
   - `anthropic`
-  - `ollama`
   - `google-ai`
+  - `ollama`
 - Composite client providers
   - `fallback`
   - `round-robin`
@@ -111,6 +111,21 @@ client<llm> MyClient {
   }
 }
 ```
+### Google 
+
+Provider names:
+- `google-ai`
+
+Accepts any options as defined by the [Gemini SDK](https://ai.google.dev/gemini-api/docs/get-started/tutorial?lang=rest#configuration).
+
+```rust
+client<llm> MyGoogleClient {
+  provider google-ai
+  options{
+    model "gemini-1.5-pro-001"
+  }
+}
+```
 
 ### Ollama
 
@@ -135,6 +150,7 @@ client<llm> MyOllamaClient {
 
 1. For Ollama, in your terminal run `ollama serve`
 2. In another window, run `ollama run llama2` (or your model), and you should be good to go.
+3. If your Ollama port is not 11434, you can specify the endpoint manually.
 
 ```rust
 client<llm> MyClient {
@@ -143,28 +159,14 @@ client<llm> MyClient {
     model llama2
     options {
       temperature 0
+      base_url "http://localhost:<ollama_port>" // Default is 11434
     }
   }
 }
 ```
 
-### Google 
 
-Provider names:
-- `google-ai`
-
-Accepts any options as defined by the [Gemini SDK](https://ai.google.dev/gemini-api/docs/api-overview).
-
-
-```rust
-client<llm> MyGoogleClient {
-  provider google-ai
-  options{
-    model "gemini-1.5-pro-001"
-    api_key env.GOOGLE_API_KEY
-  }
-}
-```
+This is not the Vertex AI Gemini API, but the Google Generative AI Gemini API, which supports the same models but at a different endpoint.
 
 
 ### Fallback
