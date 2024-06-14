@@ -11,8 +11,6 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
   })
 }
 
-const RB2BId = process.env.NEXT_PUBLIC_RB2B_ID ?? ''
-
 export function PHProvider({ children }: { children: React.ReactNode }) {
   return <PostHogProvider client={posthog}>{children}</PostHogProvider>
 }
@@ -20,7 +18,7 @@ export function PHProvider({ children }: { children: React.ReactNode }) {
 export function RB2BElement() {
   useEffect(() => {
     // Directly adding your script content here
-    function f() {
+    function foo() {
       // @ts-ignore
       var reb2b = (window.reb2b = window.reb2b || [])
       if (reb2b.invoked) return
@@ -44,15 +42,13 @@ export function RB2BElement() {
         script.async = true
         script.src = 'https://s3-us-west-2.amazonaws.com/b2bjsstore/b/' + key + '/reb2b.js.gz'
         var first = document.getElementsByTagName('script')[0]
-        first.parentNode?.insertBefore(script, first)
+        first.parentNode!.insertBefore(script, first)
       }
       reb2b.SNIPPET_VERSION = '1.0.1'
-      if (RB2BId) {
-        reb2b.load(RB2BId)
-      }
+      reb2b.load('1VN080H5R86J')
     }
 
-    f()
+    foo()
   }, [])
 
   return <></>
