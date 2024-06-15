@@ -23,8 +23,9 @@ const renderIcon = (path: string) => {
 const Node = ({ node, style, dragHandle }: NodeRendererProps<any>) => {
   const setActiveFile = useSetAtom(activeFileAtom)
 
+
   useEffect(() => {
-    if (node.isSelected) {
+    if (node.isSelected && (!node.children || node.children.length === 0)) {
       setActiveFile(node.id)
     }
   }, [node.isSelected])
@@ -41,7 +42,7 @@ const Node = ({ node, style, dragHandle }: NodeRendererProps<any>) => {
       <div className='flex flex-row items-center w-full gap-x-2' onClick={() => node.isInternal && node.toggle()}>
         <span className='arrow'>{node.isLeaf ? null : (node.isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}</span>
         <span className='node-text'>
-          {renderIcon(node.id)}
+          {/* {renderIcon(node.id)} */}
           {node.data.name}
         </span>
       </div>

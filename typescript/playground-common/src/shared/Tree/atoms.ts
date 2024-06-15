@@ -1,2 +1,2 @@
 import { atom } from 'jotai'
-export const activeFileAtom = atom<string | null>(null)
+export const activeFileAtom = atom<string | null>('jinja-prompts')

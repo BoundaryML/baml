@@ -21,7 +21,6 @@ import { BamlProjectsGroupings, loadExampleProjects } from './lib/utils'
 import { Snippets } from './shared/Snippets'
 import { Dialog, DialogTrigger, DialogContent} from './components/ui/dialog'
 function App() {
-  // const setShowSnippets = useSetAtom(showSnippetsAtom)
   return (
     <CustomErrorBoundary>
       <DevTools />

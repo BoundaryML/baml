@@ -6,6 +6,7 @@ import Node from './Node';
 export const data = [
   {
     id: 'jinja_dir',
+    icon: 'jinja', 
     name: 'jinja',
     children: [{ id: 'jinja_prompts', name: 'jinja_prompts' }],
   },
@@ -14,7 +15,7 @@ export const data = [
     name: 'clients',
     children: [
       { id: 'dynamic_clients', name: 'dynamic_clients' },
-      { id: 'c2-2', name: 'index.js' },
+      { id: 'client_options', name: 'client_options' },
       { id: 'c2-3', name: 'styles.css' },
     ],
   },
@@ -31,7 +32,7 @@ export const FileViewer = () => {
         ref={treeRef}
         openByDefault={true}
         data={data}
-        rowHeight={60} // Increased from 24 to 32 for better spacing
+        rowHeight={45} // Increased from 24 to 32 for better spacing
         className='tree-container' // Custom class for further styling
       >
         {Node}

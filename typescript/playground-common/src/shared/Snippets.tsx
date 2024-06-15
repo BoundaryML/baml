@@ -23,7 +23,7 @@ export const Snippets = () => {
   }, [])
 
   return (
-    <div className='flex flex-col w-full h-full'>
+    <div className='flex flex-col w-full h-full overflow-auto'>
       <DialogHeader>
         <DialogTitle className='text-2xl '>BAML Snippets</DialogTitle>
         <DialogDescription className='text-base text-white-500'>
@@ -31,25 +31,28 @@ export const Snippets = () => {
         </DialogDescription>
       </DialogHeader>
 
+      
 
       {/* Use flex-row to layout the FileViewer alongside the snippet carousels */}
-      <div className='flex flex-row w-full h-full'>
+      <div className='flex flex-row w-full h-full items-start'>
         {/* Adjust the flex property to control space allocation */}
-        <div className='flex-none overflow-hidden w-48'>
+        <div className='flex-none overflow-hidden w-48 pt-7'>
           <FileViewer />
         </div>
-        < div className='flex-grow overflow-x-auto'>
-        <TextComponentList selectedId={useAtom(activeFileAtom)[0] || ""} />
 
-        </div>
-        <div className='flex-grow overflow-y-auto'>
-          {snippetGroups ? (
-            <div className='flex flex-col gap-y-4'>
- 
-            </div>
-          ) : (
-            <div>Loading...</div>
-          )}
+        <div className='w-4' />
+
+        <div className='flex-grow overflow-x-auto flex w-full pt-7'>
+          <TextComponentList selectedId={useAtom(activeFileAtom)[0] || "starting_page"} />
+          <div className='flex-grow overflow-y-auto'>
+            {snippetGroups ? (
+              <div className='flex flex-col gap-y-4 overflow-auto'>
+   
+              </div>
+            ) : (
+              <div>Loading...</div>
+            )}
+          </div>
         </div>
       </div>
     </div>
