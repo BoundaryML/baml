@@ -1,5 +1,9 @@
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::{
+    cell::RefCell,
+    sync::mpsc::{Receiver, Sender, TryRecvError},
+};
 
+// use crate::log_callback_event::LogEvent
 use anyhow::Result;
 use web_time::Duration;
 
@@ -93,6 +97,8 @@ pub(super) struct ThreadedTracer {
     rx: std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<RxEventSignal>>>,
     #[allow(dead_code)]
     join_handle: std::thread::JoinHandle<()>,
+    log_event_callback:
+        std::sync::Arc<std::sync::Mutex<Option<Box<dyn Fn(LogSchema) -> Result<()> + Send>>>>,
 }
 
 impl ThreadedTracer {
@@ -112,12 +118,17 @@ impl ThreadedTracer {
         (tx, stop_rx, join_handle)
     }
 
-    pub fn new(api_config: &APIWrapper, max_batch_size: usize) -> Self {
+    pub fn new(
+        api_config: &APIWrapper,
+        max_batch_size: usize,
+        log_event_callback: Option<Box<dyn Fn(LogSchema) -> Result<()> + Send + Sync>>,
+    ) -> Self {
         let (tx, rx, join_handle) = Self::start_worker(api_config.clone(), max_batch_size);
         Self {
             tx: std::sync::Arc::new(std::sync::Mutex::new(tx)),
             rx: std::sync::Arc::new(std::sync::Mutex::new(rx)),
             join_handle,
+            log_event_callback: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -143,8 +154,25 @@ impl ThreadedTracer {
         }
     }
 
+    pub fn set_log_event_callback(
+        &self,
+        log_event_callback: Box<dyn Fn(LogSchema) -> Result<()> + Send + Sync>,
+    ) {
+        // Get a mutable lock on the log_event_callback
+        let mut callback_lock = self.log_event_callback.lock().unwrap();
+
+        // Set the new callback
+        *callback_lock = Some(log_event_callback);
+    }
+
     pub fn submit(&self, event: LogSchema) -> Result<()> {
         log::info!("Submitting work {}", event.event_id);
+
+        let callback = self.log_event_callback.lock().unwrap();
+        if let Some(ref callback) = *callback {
+            callback(event.clone())?;
+        }
+
         let tx = self
             .tx
             .lock()

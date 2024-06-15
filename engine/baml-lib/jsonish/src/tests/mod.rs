@@ -632,6 +632,7 @@ test_deserializer!(
     })
 );
 
+<<<<<<< HEAD
 const EXAMPLE_FILE_ORDERED_CLASS: &str = r##"
   class OrderedClass {
     one string?
@@ -660,3 +661,25 @@ test_deserializer!(
       "four": "four"
     })
 );
+=======
+
+test_deserializer!(
+    test_new_lines,
+    EMPTY_FILE,
+    r#"
+    {
+“thoughts”: “To address the issue where pressing the ‘Escape’ key does not trigger the onCancel function, we need to ensure that the event listener is correctly scoped to the dialog component and that it is properly removed when the dialog is closed. We will also verify that the onCancel function is correctly passed and bound.”,
+“action”: “answer”,
+“answer”: “To ensure that pressing the ‘Escape’ key triggers the onCancel function only when the dialog is open, you can modify your code as follows:\n\njsx\nimport * as React from \"react\";\nimport Button from \"@mui/material/Button\";\nimport Dialog from \"@mui/material/Dialog\";\nimport DialogActions from \"@mui/material/DialogActions\";\nimport DialogContent from \"@mui/material/DialogContent\";\nimport DialogContentText from \"@mui/material/DialogContentText\";\nimport DialogTitle from \"@mui/material/DialogTitle\";\nimport Paper from \"@mui/material/Paper\";\nimport Draggable from \"react-draggable\";\n\nfunction PaperComponent(props) {\n return (\n <Draggable\n handle=\"#draggable-dialog-title\"\n cancel={'[class*=\"MuiDialogContent-root\"]'}\n >\n <Paper {...props} />\n </Draggable>\n );\n}\n\nexport default function DraggableDialog({\n open,\n confirmationButtonText,\n cancellationButtonText,\n title,\n content,\n onConfirm,\n onCancel,\n}) {\n React.useEffect(() => {\n const handleKeyDown = (event) => {\n if (event.key === 'Escape') {\n onCancel();\n }\n };\n if (open) {\n document.addEventListener('keydown', handleKeyDown);\n } else {\n document.removeEventListener('keydown', handleKeyDown);\n }\n return () => {\n document.removeEventListener('keydown', handleKeyDown);\n };\n }, [open, onCancel]);\n\n return (\n <React.Fragment>\n <Dialog\n open={open}\n PaperComponent={PaperComponent}\n aria-labelledby=\"draggable-dialog-title\"\n >\n <DialogTitle style={{ cursor: \"move\" }} id=\"draggable-dialog-title\">\n {title}\n </DialogTitle>\n <DialogContent>\n <DialogContentText>{content}</DialogContentText>\n </DialogContent>\nn <DialogActions>\nn {onCancel && cancellationButtonText && (\nn <Button autoFocus onClick={onCancel}>\nn {cancellationButtonText}\nn </Button>\nn )}\nn <Button onClick={onConfirm}>{confirmationButtonText}</Button>\nn </DialogActions>\nn </Dialog>\nn </React.Fragment>\nn );\nn}\nn\nn### Explanation:\nn1. Scoped Event Listener: The React.useEffect hook now adds the keydown event listener only when the dialog is open and removes it when the dialog is closed.\nn2. Binding onCancel: Ensure that onCancel is correctly passed as a prop and bound to the cancel button.\nnThis should ensure that onCancel fires correctly when you hit cancel and that the keypress event listener only affects the relevant component.”
+}
+    "#,
+    FieldType::Primitive(TypeValue::String),
+    json!(
+      {
+        "thoughts": "To address the issue where pressing the ‘Escape’ key does not trigger the onCancel function, we need to ensure that the event listener is correctly scoped to the dialog component and that it is properly removed when the dialog is closed. We will also verify that the onCancel function is correctly passed and bound.",
+        "action": "answer",
+        "answer": "To ensure that pressing the ‘Escape’ key triggers the onCancel function only when the dialog is open, you can modify your code as follows:\n\njsx\nimport * as React from \"react\";\nimport Button from \"@mui/material/Button\";\nimport Dialog from \"@mui/material/Dialog\";\nimport DialogActions from \"@mui/material/DialogActions\";\nimport DialogContent from \"@mui/material/DialogContent\";\nimport DialogContentText from \"@mui/material/DialogContentText\";\nimport DialogTitle from \"@mui/material/DialogTitle\";\nimport Paper from \"@mui/material/Paper\";\nimport Draggable from \"react-draggable\";\n\nfunction PaperComponent(props) {\n return (\n <Draggable\n handle=\"#draggable-dialog-title\"\n cancel={'[class*=\"MuiDialogContent-root\"]'}\n >\n <Paper {...props} />\n </Draggable>\n );\n}\n\nexport default function DraggableDialog({\n open,\n confirmationButtonText,\n cancellationButtonText,\n title,\n content,\n onConfirm,\n onCancel,\n}) {\n React.useEffect(() => {\n const handleKeyDown = (event) => {\n if (event.key === 'Escape') {\n onCancel();\n }\n };\n if (open) {\n document.addEventListener('keydown', handleKeyDown);\n } else {\n document.removeEventListener('keydown', handleKeyDown);\n }\n return () => {\n document.removeEventListener('keydown', handleKeyDown);\n };\n }, [open, onCancel]);\n\n return (\n <React.Fragment>\n <Dialog\n open={open}\n PaperComponent={PaperComponent}\n aria-labelledby=\"draggable-dialog-title\"\n >\n <DialogTitle style={{ cursor: \"move\" }} id=\"draggable-dialog-title\">\n {title}\n </DialogTitle>\n <DialogContent>\n <DialogContentText>{content}</DialogContentText>\n </DialogContent>\nn <DialogActions>\nn {onCancel && cancellationButtonText && (\nn <Button autoFocus onClick={onCancel}>\nn {cancellationButtonText}\nn </Button>\nn )}\nn <Button onClick={onConfirm}>{confirmationButtonText}</Button>\nn </DialogActions>\nn </Dialog>\nn </React.Fragment>\nn );\nn}\nn\nn### Explanation:\nn1. Scoped Event Listener: The React.useEffect hook now adds the keydown event listener only when the dialog is open and removes it when the dialog is closed.\nn2. Binding onCancel: Ensure that onCancel is correctly passed as a prop and bound to the cancel button.\nnThis should ensure that onCancel fires correctly when you hit cancel and that the keypress event listener only affects the relevant component."
+        }
+    )
+)
+>>>>>>> 2a820408 (working implementation)

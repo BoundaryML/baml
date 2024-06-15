@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "build": "cd ../../clients/ts && npm run build && cd - && pnpm i",
+    "build:debug": "cd ../../engine/language_client_typescript && pnpm run build:debug && cd - && pnpm i",
+    "build": "cd ../../engine/language_client_typescript && npm run build && cd - && pnpm i",
     "integ-tests": "BAML_LOG=baml_events infisical run --env=test -- pnpm test -- --silent false --testTimeout 30000",
     "integ-tests:dotenv": "BAML_LOG=baml_events dotenv -e ../.env -- pnpm test -- --silent false --testTimeout 30000",
     "generate": "baml-cli generate --from ../baml_src"

@@ -2,7 +2,7 @@ mod env_setup;
 
 use anyhow::Result;
 pub(super) mod api_interface;
-pub(super) mod core_types;
+pub(crate) mod core_types;
 use instant::Duration;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::{json, Value};

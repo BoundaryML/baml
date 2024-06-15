@@ -1,4 +1,4 @@
-mod api_wrapper;
+pub mod api_wrapper;
 #[cfg(not(target_arch = "wasm32"))]
 mod threaded_tracer;
 #[cfg(target_arch = "wasm32")]
@@ -62,6 +62,7 @@ impl BamlTracer {
                 Some(TracerImpl::new(
                     &options,
                     if options.stage() == "test" { 1 } else { 20 },
+                    None,
                 ))
             } else {
                 None
@@ -70,6 +71,16 @@ impl BamlTracer {
             options,
         };
         tracer
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn set_log_event_callback(
+        &self,
+        log_event_callback: Box<dyn Fn(LogSchema) -> Result<()> + Send + Sync>,
+    ) {
+        if let Some(tracer) = &self.tracer {
+            tracer.set_log_event_callback(log_event_callback);
+        }
     }
 
     pub(crate) fn flush(&self) -> Result<()> {

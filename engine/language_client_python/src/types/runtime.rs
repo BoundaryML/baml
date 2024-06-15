@@ -8,11 +8,13 @@ use super::type_builder::TypeBuilder;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
+use pyo3::types::{PyDict, PyTuple};
 use pyo3::{PyObject, Python, ToPyObject};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe);
+crate::lang_wrapper!(LogEvent, baml_runtime::on_log_event::LogEvent, clone_safe);
 
 #[pymethods]
 impl BamlRuntime {
@@ -121,5 +123,30 @@ impl BamlRuntime {
     #[pyo3()]
     fn flush(&self) -> PyResult<()> {
         self.inner.flush().map_err(BamlError::from_anyhow)
+    }
+
+    #[pyo3()]
+    fn set_log_event_callback(&self, callback: PyObject) -> PyResult<()> {
+        let callback = callback.clone();
+        let baml_runtime = self.inner.clone();
+
+        let res = baml_runtime
+            .as_ref()
+            .set_log_event_callback(Box::new(move |_| {
+                Python::with_gil(|py| {
+                    // Ensure GIL is acquired before calling Python code
+                    // let callback = callback.as_ref(py);
+                    let any: PyObject = PyDict::new_bound(py).into();
+                    match callback.call1(py, (any,)) {
+                        Ok(_) => Ok(()),
+                        Err(e) => {
+                            log::error!("Error calling log_event_callback: {:?}", e);
+                            Err(anyhow::Error::new(e).into()) // Proper error handling
+                        }
+                    }
+                })
+            }));
+
+        Ok(())
     }
 }
