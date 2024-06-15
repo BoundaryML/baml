@@ -1,35 +1,46 @@
 // TextComponent.js
 import React from 'react';
 import './App.css';
-import { CodeBlock , vs2015} from "react-code-blocks";
+import { CodeBlock , vs2015, atomOneLight, atomOneDark} from "react-code-blocks";
 
 
-const SnippetCard = ({ text: text1, text2 }: { text: string; text2: string }) => {
+const SnippetCard = ({ title, description, code }: { title: string, description: string; code: string }) => {
   return (
     <div className="w-full h-full">
-      <SnippetContent text={text1} />
+      <SnippetTitle text={title} />
+      <div className="h-1" />
+      <SnippetContent text={description} />
       <div className="h-3" />
-      <SnippetCode text={text2} />
+      <SnippetCode text={code} />
     </div>
   );
 };
 
 
+const SnippetTitle = ({ text }: { text: string }) => {
+  return (
+    <div className="bg-zinc-900 text-3xl text-white m-0 ">
+      {text}
+    </div>
+  );
+  
+}
+
 const SnippetContent = ({ text }: { text: string }) => {
   return (
-    <div className="bg-zinc-800 text-lg text-white border border-white rounded-md p-4">
+    <div className="bg-zinc-900 text-lg text-white ">
       {text}
     </div>
   );
 }
 const SnippetCode = ({ text }: { text: string }) => {
   return (
-    <div className="bg-zinc-800 text-lg text-white border border-white rounded-md p-4" >
+    <div className="text-lg text-white" >
       <CodeBlock
       text={text}
       language='rust'
       showLineNumbers={false}
-      theme= {vs2015}
+      theme= {atomOneLight} 
       startingLineNumber={10}
       codeBlock={{ lineNumbers: false, wrapLines: true }}
       

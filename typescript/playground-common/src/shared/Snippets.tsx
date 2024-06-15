@@ -31,8 +31,7 @@ export const Snippets = () => {
         </DialogDescription>
       </DialogHeader>
 
-      
-
+    
       {/* Use flex-row to layout the FileViewer alongside the snippet carousels */}
       <div className='flex flex-row w-full h-full items-start'>
         {/* Adjust the flex property to control space allocation */}
@@ -42,7 +41,7 @@ export const Snippets = () => {
 
         <div className='w-4' />
 
-        <div className='flex-grow overflow-x-auto flex w-full pt-7'>
+        <div className='flex-grow overflow-x-auto flex w-full max-w-2xl pt-7'>
           <TextComponentList selectedId={useAtom(activeFileAtom)[0] || "starting_page"} />
           <div className='flex-grow overflow-y-auto'>
             {snippetGroups ? (

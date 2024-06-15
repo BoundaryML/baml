@@ -5,20 +5,57 @@ import Node from './Node';
 
 export const data = [
   {
-    id: 'jinja_dir',
-    icon: 'jinja', 
-    name: 'jinja',
-    children: [{ id: 'jinja_prompts', name: 'jinja_prompts' }],
+    id: 'prompt-engineering', 
+    icon: 'star',
+    name: 'Prompt engineering',
+    children: [{ id: 'system_user_prompts', name: 'Prompt roles' }],
   },
   {
-    id: 'clients_dir',
-    name: 'clients',
+    id: 'testing',
+    icon: 'beakers',
+    name: 'Testing',
     children: [
-      { id: 'dynamic_clients', name: 'dynamic_clients' },
-      { id: 'client_options', name: 'client_options' },
-      { id: 'c2-3', name: 'styles.css' },
+      { id: 'test_ai_function', name: 'Test an AI function' },
+      { id: 'evaluate_results', name: 'Evaluate results' },
     ],
   },
+  {
+    id: 'resilience_reliability',
+    icon: 'shield',
+    name: 'Resilence / Reliability',
+    children: [
+      { id: 'add_retries', name: 'Function retries' },
+      { id: 'fall_back', name: 'Model fall-back' },
+    ],
+  },
+  {
+    id: 'observability',
+    icon: 'graph',
+    name: 'Observability',
+    children: [
+      { id: 'tracing_tagging', name: 'Tracing functions' }
+      
+    ],
+  },
+  {
+    id: 'improve_llm_results',
+    icon: 'lightning-bolt',
+    name: 'Improve LLM results',
+    children: [
+      { id: 'improve_prompt_auto', name: 'Auto-Improve prompt' },
+      { id: 'fine-tune', name: 'Fine-tune a model' },
+    ],
+  },
+  {
+    id: 'streaming_dir',
+    icon: 'waves',
+    name: 'Streaming',
+    children: [
+      { id: 'streaming_structured', name: 'Structured streaming' },
+    ],
+  },
+  
+  
   // { id: '3', name: 'package.json' },
   // { id: '4', name: 'README.md' },
 ];
@@ -32,7 +69,7 @@ export const FileViewer = () => {
         ref={treeRef}
         openByDefault={true}
         data={data}
-        rowHeight={45} // Increased from 24 to 32 for better spacing
+        rowHeight={32} // Increased from 24 to 32 for better spacing
         className='tree-container' // Custom class for further styling
       >
         {Node}
