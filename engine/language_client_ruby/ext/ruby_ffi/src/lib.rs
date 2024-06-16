@@ -134,6 +134,7 @@ impl BamlRuntimeFfi {
             &args,
             &ctx.inner,
             None,
+            None,
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(
@@ -167,20 +168,22 @@ impl BamlRuntimeFfi {
 
         log::debug!("Streaming {function_name} with:\nargs: {args:#?}\nctx ???");
 
-        let retval =
-            match rb_self
-                .inner
-                .stream_function(function_name.clone(), &args, &ctx.inner, None)
-            {
-                Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
-                Err(e) => Err(Error::new(
-                    ruby.exception_runtime_error(),
-                    format!(
-                        "{:?}",
-                        e.context(format!("error while calling {function_name}"))
-                    ),
-                )),
-            };
+        let retval = match rb_self.inner.stream_function(
+            function_name.clone(),
+            &args,
+            &ctx.inner,
+            None,
+            None,
+        ) {
+            Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
+            Err(e) => Err(Error::new(
+                ruby.exception_runtime_error(),
+                format!(
+                    "{:?}",
+                    e.context(format!("error while calling {function_name}"))
+                ),
+            )),
+        };
 
         retval
     }

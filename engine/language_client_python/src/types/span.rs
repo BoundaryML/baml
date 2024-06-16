@@ -31,7 +31,7 @@ impl BamlSpan {
             return Err(BamlError::new_err("Failed to parse args"));
         };
 
-        let (span, _) = runtime
+        let span = runtime
             .inner
             .start_span(function_name, &args_map, &ctx.inner);
 

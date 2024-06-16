@@ -1,3 +1,4 @@
+use crate::client_builder::ClientProperty;
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
@@ -42,25 +43,9 @@ pub struct GoogleClient {
 }
 
 fn resolve_properties(
-    client: &ClientWalker,
+    mut properties: HashMap<String, serde_json::Value>,
     ctx: &RuntimeContext,
 ) -> Result<PostRequestProperities, anyhow::Error> {
-    let mut properties = (&client.item.elem.options)
-        .iter()
-        .map(|(k, v)| {
-            Ok((
-                k.into(),
-                ctx.resolve_expression::<serde_json::Value>(v)
-                    .context(format!(
-                        "client {} could not resolve options.{}",
-                        client.name(),
-                        k
-                    ))?,
-            ))
-        })
-        .collect::<Result<HashMap<_, _>>>()?;
-    // this is a required field
-
     let default_role = properties
         .remove("default_role")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
@@ -234,10 +219,11 @@ impl WithStreamChat for GoogleClient {
 }
 
 impl GoogleClient {
-    pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<GoogleClient> {
+    pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<Self> {
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
         Ok(Self {
             name: client.name().into(),
-            properties: resolve_properties(client, ctx)?,
+            properties: resolve_properties(properties, ctx)?,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
@@ -252,6 +238,31 @@ impl GoogleClient {
                 .retry_policy_id
                 .as_ref()
                 .map(|s| s.to_string()),
+            client: create_client()?,
+        })
+    }
+
+    pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<Self> {
+        Ok(Self {
+            name: client.name.clone(),
+            properties: resolve_properties(
+                client
+                    .options
+                    .iter()
+                    .map(|(k, v)| Ok((k.clone(), json!(v))))
+                    .collect::<Result<HashMap<_, _>>>()?,
+                ctx,
+            )?,
+            context: RenderContext_Client {
+                name: client.name.clone(),
+                provider: client.provider.clone(),
+            },
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                anthropic_system_constraints: false,
+            },
+            retry_policy: client.retry_policy.clone(),
             client: create_client()?,
         })
     }

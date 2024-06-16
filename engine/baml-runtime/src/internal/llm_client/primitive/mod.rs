@@ -5,8 +5,8 @@ use baml_types::BamlValue;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 
 use crate::{
-    internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
-    RuntimeContext,
+    client_builder::ClientProperty, internal::prompt_renderer::PromptRenderer,
+    runtime_interface::InternalClientLookup, RuntimeContext,
 };
 
 use self::{
@@ -53,6 +53,42 @@ macro_rules! match_llm_provider {
     };
 }
 
+impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
+    type Error = anyhow::Error;
+
+    fn try_from((value, ctx): (&ClientProperty, &RuntimeContext)) -> Result<Self> {
+        match value.provider.as_str() {
+            "openai" => OpenAIClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::OpenAI),
+            "azure-openai" => {
+                OpenAIClient::dynamic_new_azure(value, ctx).map(LLMPrimitiveProvider::OpenAI)
+            }
+            "ollama" => {
+                OpenAIClient::dynamic_new_ollama(value, ctx).map(LLMPrimitiveProvider::OpenAI)
+            }
+            "anthropic" => {
+                AnthropicClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Anthropic)
+            }
+            "google-ai" => GoogleClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Google),
+            other => {
+                let options = [
+                    "openai",
+                    "anthropic",
+                    "ollama",
+                    "google-ai",
+                    "azure-openai",
+                    "fallback",
+                    "round-robin",
+                ];
+                anyhow::bail!(
+                    "Unsupported provider: {}. Available ones are: {}",
+                    other,
+                    options.join(", ")
+                )
+            }
+        }
+    }
+}
+
 impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
     type Error = anyhow::Error;
 
@@ -76,6 +112,7 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                     "openai",
                     "anthropic",
                     "ollama",
+                    "google-ai",
                     "azure-openai",
                     "fallback",
                     "round-robin",
@@ -176,3 +213,5 @@ impl RequestBuilder for LLMPrimitiveProvider {
         match_llm_provider!(self, build_request, prompt, stream)
     }
 }
+
+use super::resolve_properties_walker;

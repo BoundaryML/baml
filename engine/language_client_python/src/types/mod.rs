@@ -1,5 +1,6 @@
 mod lang_wrapper;
 
+mod client_builder;
 mod function_result_stream;
 mod function_results;
 mod image;
@@ -8,6 +9,7 @@ mod runtime_ctx_manager;
 mod span;
 mod type_builder;
 
+pub use client_builder::ClientBuilder;
 pub use function_result_stream::FunctionResultStream;
 pub use function_results::FunctionResult;
 pub use image::BamlImagePy;

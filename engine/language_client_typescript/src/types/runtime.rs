@@ -1,3 +1,4 @@
+use super::client_builder::ClientBuilder;
 use super::function_result_stream::FunctionResultStream;
 use super::runtime_ctx_manager::RuntimeContextManager;
 use super::type_builder::TypeBuilder;
@@ -24,7 +25,7 @@ impl BamlRuntime {
     ) -> napi::Result<Self> {
         let directory = PathBuf::from(directory);
         Ok(CoreRuntime::from_directory(&directory, env_vars)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?
             .into())
     }
 
@@ -35,7 +36,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
     ) -> napi::Result<Self> {
         Ok(CoreRuntime::from_file_content(&root_path, &files, env_vars)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?
             .into())
     }
 
@@ -54,6 +55,7 @@ impl BamlRuntime {
         #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
+        cb: Option<&ClientBuilder>,
     ) -> napi::Result<JsObject> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -70,16 +72,25 @@ impl BamlRuntime {
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
 
         let fut = async move {
             let result = baml_runtime
-                .call_function(function_name, &args_map, &ctx_mng, tb.as_ref())
+                .call_function(
+                    function_name.clone(),
+                    &args_map,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                )
                 .await;
 
-            result
-                .0
-                .map(FunctionResult::from)
-                .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+            result.0.map(FunctionResult::from).map_err(|e| {
+                napi::Error::new(
+                    napi::Status::GenericFailure,
+                    format!("Failed to call function: {function_name}\n{:?}", e),
+                )
+            })
         };
 
         env.execute_tokio_future(fut, |&mut _, data| Ok(data))
@@ -91,9 +102,12 @@ impl BamlRuntime {
         env: Env,
         function_name: String,
         #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
-        #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] cb: Option<JsFunction>,
+        #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] callback: Option<
+            JsFunction,
+        >,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
+        cb: Option<&ClientBuilder>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -109,23 +123,35 @@ impl BamlRuntime {
 
         let ctx = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
         let stream = self
             .inner
-            .stream_function(function_name, &args_map, &ctx, tb.as_ref())
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
+            .stream_function(
+                function_name.clone(),
+                &args_map,
+                &ctx,
+                tb.as_ref(),
+                cb.as_ref(),
+            )
+            .map_err(|e| {
+                napi::Error::new(
+                    napi::Status::GenericFailure,
+                    format!("Failed to create stream for {function_name}\n{:?}", e),
+                )
+            })?;
 
-        let cb = match cb {
+        let callback = match callback {
             Some(cb) => Some(env.create_reference(cb)?),
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, tb))
+        Ok(FunctionResultStream::new(stream, callback, tb, cb))
     }
 
     #[napi]
     pub fn flush(&self) -> napi::Result<()> {
         self.inner
             .flush()
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))
     }
 }

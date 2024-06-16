@@ -5,6 +5,7 @@ use crate::BamlError;
 use super::function_result_stream::FunctionResultStream;
 use super::runtime_ctx_manager::RuntimeContextManager;
 use super::type_builder::TypeBuilder;
+use super::ClientBuilder;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
@@ -43,7 +44,7 @@ impl BamlRuntime {
             .into()
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb))]
     fn call_function(
         &self,
         py: Python<'_>,
@@ -51,6 +52,7 @@ impl BamlRuntime {
         args: PyObject,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
+        cb: Option<&ClientBuilder>,
     ) -> PyResult<PyObject> {
         let Some(args) = parse_py_type(args.into_bound(py).to_object(py), false)? else {
             return Err(BamlError::new_err(
@@ -65,11 +67,12 @@ impl BamlRuntime {
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
 
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let ctx_mng = ctx_mng;
             let result = baml_runtime
-                .call_function(function_name, &args_map, &ctx_mng, tb.as_ref())
+                .call_function(function_name, &args_map, &ctx_mng, tb.as_ref(), cb.as_ref())
                 .await;
 
             result
@@ -80,7 +83,7 @@ impl BamlRuntime {
         .map(|f| f.into())
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb))]
     fn stream_function(
         &self,
         py: Python<'_>,
@@ -89,6 +92,7 @@ impl BamlRuntime {
         on_event: Option<PyObject>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
+        cb: Option<&ClientBuilder>,
     ) -> PyResult<FunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).to_object(py), false)? else {
             return Err(BamlError::new_err(
@@ -108,6 +112,7 @@ impl BamlRuntime {
                 args_map,
                 &ctx,
                 tb.map(|tb| tb.inner.clone()).as_ref(),
+                cb.map(|cb| cb.inner.clone()).as_ref(),
             )
             .map_err(BamlError::from_anyhow)?;
 
@@ -115,6 +120,7 @@ impl BamlRuntime {
             stream,
             on_event,
             tb.map(|tb| tb.inner.clone()),
+            cb.map(|cb| cb.inner.clone()),
         ))
     }
 

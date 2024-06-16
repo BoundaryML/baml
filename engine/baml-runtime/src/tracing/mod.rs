@@ -14,9 +14,9 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{
-    internal::llm_client::LLMResponse, tracing::api_wrapper::core_types::Role,
-    type_builder::TypeBuilder, FunctionResult, RuntimeContext, RuntimeContextManager, SpanCtx,
-    TestResponse,
+    client_builder::ClientBuilder, internal::llm_client::LLMResponse,
+    tracing::api_wrapper::core_types::Role, type_builder::TypeBuilder, FunctionResult,
+    RuntimeContext, RuntimeContextManager, SpanCtx, TestResponse,
 };
 
 use self::api_wrapper::{
@@ -84,12 +84,11 @@ impl BamlTracer {
         &self,
         function_name: &str,
         ctx: &RuntimeContextManager,
-        tb: Option<&TypeBuilder>,
         params: &BamlMap<String, BamlValue>,
-    ) -> (Option<TracingSpan>, RuntimeContext) {
+    ) -> Option<TracingSpan> {
         let span_id = ctx.enter(function_name);
         if !self.enabled {
-            return (None, ctx.create_ctx(tb));
+            return None;
         }
         let span = TracingSpan {
             span_id,
@@ -97,7 +96,7 @@ impl BamlTracer {
             start_time: web_time::SystemTime::now(),
         };
 
-        (Some(span), ctx.create_ctx(tb))
+        Some(span)
     }
 
     #[cfg(target_arch = "wasm32")]

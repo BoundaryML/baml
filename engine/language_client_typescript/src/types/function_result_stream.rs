@@ -13,8 +13,9 @@ crate::lang_wrapper!(
     custom_finalize,
     no_from,
     thread_safe,
-    cb: Option<napi::Ref<()>>,
-    tb: Option<baml_runtime::type_builder::TypeBuilder>
+    callback: Option<napi::Ref<()>>,
+    tb: Option<baml_runtime::type_builder::TypeBuilder>,
+    cb: Option<baml_runtime::client_builder::ClientBuilder>
 );
 
 impl FunctionResultStream {
@@ -22,11 +23,13 @@ impl FunctionResultStream {
         inner: baml_runtime::FunctionResultStream,
         event: Option<napi::Ref<()>>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
+        cb: Option<baml_runtime::client_builder::ClientBuilder>,
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),
-            cb: event,
+            callback: event,
             tb,
+            cb,
         }
     }
 }
@@ -40,11 +43,11 @@ impl FunctionResultStream {
         #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] func: JsFunction,
     ) -> napi::Result<JsUndefined> {
         let cb = env.create_reference(func)?;
-        let prev = self.cb.take();
+        let prev = self.callback.take();
         if let Some(mut old_cb) = prev {
             old_cb.unref(env)?;
         }
-        self.cb = Some(cb);
+        self.callback = Some(cb);
         env.get_undefined()
     }
 
@@ -52,7 +55,7 @@ impl FunctionResultStream {
     pub fn done(&self, env: Env, rctx: &RuntimeContextManager) -> napi::Result<JsObject> {
         let inner = self.inner.clone();
 
-        let on_event = match &self.cb {
+        let on_event = match &self.callback {
             Some(cb) => {
                 let cb = env.get_reference_value::<JsFunction>(cb)?;
                 let tsfn = env.create_threadsafe_function(
@@ -75,17 +78,18 @@ impl FunctionResultStream {
 
         let ctx_mng = rctx.inner.clone();
         let tb = self.tb.as_ref().map(|tb| tb.clone());
+        let cb = self.cb.as_ref().map(|cb| cb.clone());
 
         let fut = async move {
             let ctx_mng = ctx_mng;
             let res = inner
                 .lock()
                 .await
-                .run(on_event, &ctx_mng, tb.as_ref())
+                .run(on_event, &ctx_mng, tb.as_ref(), cb.as_ref())
                 .await;
             res.0
                 .map(FunctionResult::from)
-                .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+                .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))
         };
 
         env.execute_tokio_future(fut, |&mut _, data| Ok(data))
@@ -94,7 +98,7 @@ impl FunctionResultStream {
 
 impl ObjectFinalize for FunctionResultStream {
     fn finalize(mut self, env: Env) -> napi::Result<()> {
-        if let Some(mut cb) = self.cb.take() {
+        if let Some(mut cb) = self.callback.take() {
             cb.unref(env)?;
         }
         Ok(())

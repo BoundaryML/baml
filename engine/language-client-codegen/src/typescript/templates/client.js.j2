@@ -1,4 +1,4 @@
-import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image } from "@boundaryml/baml"
+import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image, ClientBuilder } from "@boundaryml/baml"
 import { 
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%} 
 } from "./types"
@@ -26,7 +26,7 @@ export class BamlClient {
       {% for (name, optional, type) in fn.args -%}
       {{name}}{% if optional %}?{% endif %}: {{type}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder }
+      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
   ): Promise<{{fn.return_type}}> {
     const raw = await this.runtime.callFunction(
       "{{fn.name}}",
@@ -37,6 +37,7 @@ export class BamlClient {
       },
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
+      __baml_options__?.cb,
     )
     return raw.parsed() as {{fn.return_type}}
   }
@@ -51,7 +52,7 @@ class BamlStreamClient {
       {% for (name, optional, type) in fn.args -%}
       {{name}}{% if optional %}?{% endif %}: {{type}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder }
+      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
   ): BamlStream<RecursivePartialNull<{{ fn.return_type }}>, {{ fn.return_type }}> {
     const raw = this.runtime.streamFunction(
       "{{fn.name}}",
@@ -63,6 +64,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
+      __baml_options__?.cb,
     )
     return new BamlStream<RecursivePartialNull<{{ fn.return_type }}>, {{ fn.return_type }}>(
       raw,

@@ -45,6 +45,7 @@ fn baml_py(_: Python<'_>, m: Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::EnumValueBuilder>()?;
     m.add_class::<types::ClassPropertyBuilder>()?;
     m.add_class::<types::FieldType>()?;
+    m.add_class::<types::ClientBuilder>()?;
 
     m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;
 

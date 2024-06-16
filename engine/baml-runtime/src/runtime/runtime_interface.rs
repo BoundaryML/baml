@@ -43,6 +43,14 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
         client_name: &str,
         ctx: &RuntimeContext,
     ) -> Result<Arc<LLMProvider>> {
+        if let Some(client) = ctx
+            .client_overrides
+            .as_ref()
+            .and_then(|(_, c)| c.get(client_name))
+        {
+            return Ok(client.clone());
+        }
+
         #[cfg(target_arch = "wasm32")]
         let mut clients = self.clients.lock().unwrap();
         #[cfg(not(target_arch = "wasm32"))]

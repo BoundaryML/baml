@@ -3,7 +3,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use internal_baml_core::ir::ClientWalker;
 
-use crate::{runtime_interface::InternalClientLookup, RuntimeContext};
+use crate::{
+    client_builder::ClientProperty, runtime_interface::InternalClientLookup, RuntimeContext,
+};
 
 use super::{
     orchestrator::{
@@ -18,6 +20,15 @@ use super::{
 pub enum LLMProvider {
     Primitive(Arc<LLMPrimitiveProvider>),
     Strategy(LLMStrategyProvider),
+}
+
+impl std::fmt::Debug for LLMProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LLMProvider::Primitive(provider) => write!(f, "Primitive({})", provider),
+            LLMProvider::Strategy(provider) => write!(f, "Strategy({})", provider),
+        }
+    }
 }
 
 impl WithRetryPolicy for LLMProvider {
@@ -37,7 +48,22 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMProvider {
             "baml-fallback" | "fallback" | "baml-round-robin" | "round-robin" => {
                 LLMStrategyProvider::try_from((client, ctx)).map(LLMProvider::Strategy)
             }
-            name => LLMPrimitiveProvider::try_from((client, ctx))
+            _ => LLMPrimitiveProvider::try_from((client, ctx))
+                .map(Arc::new)
+                .map(LLMProvider::Primitive),
+        }
+    }
+}
+
+impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMProvider {
+    type Error = anyhow::Error;
+
+    fn try_from(value: (&ClientProperty, &RuntimeContext)) -> Result<Self> {
+        match value.0.provider.as_str() {
+            "baml-fallback" | "fallback" | "baml-round-robin" | "round-robin" => {
+                LLMStrategyProvider::try_from(value).map(LLMProvider::Strategy)
+            }
+            _ => LLMPrimitiveProvider::try_from(value)
                 .map(Arc::new)
                 .map(LLMProvider::Primitive),
         }

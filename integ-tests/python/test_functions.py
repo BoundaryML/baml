@@ -384,3 +384,11 @@ async def test_nested_class_streaming():
 
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     print("final ", final.model_dump(mode='json'))
+
+@pytest.mark.asyncio
+async def test_dynamic_clients():
+    cb = baml_py.baml_py.ClientBuilder()
+    cb.add_client("MyClient", "openai", { "model": "gpt-3.5-turbo" })
+    cb.set_primary("MyClient")
+
+    await b.TestOllama(input="My name is Harrison. My hair is black and I'm 6 feet tall.", baml_options={"client_builder": cb})

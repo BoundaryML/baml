@@ -3,16 +3,17 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use anyhow::{Context, Result};
 use baml_types::BamlValue;
 use std::fmt;
 
-use crate::{type_builder::TypeBuilder, RuntimeContext, SpanCtx};
+use crate::{client_builder::ClientBuilder, type_builder::TypeBuilder, RuntimeContext, SpanCtx};
 
-type Context = (uuid::Uuid, String, HashMap<String, BamlValue>);
+type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
 
 #[derive(Default, Clone)]
 pub struct RuntimeContextManager {
-    context: Arc<Mutex<Vec<Context>>>,
+    context: Arc<Mutex<Vec<BamlContext>>>,
     env_vars: HashMap<String, String>,
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
 }
@@ -94,7 +95,11 @@ impl RuntimeContextManager {
         Some((id, prev, tags))
     }
 
-    pub fn create_ctx(&self, tb: Option<&TypeBuilder>) -> RuntimeContext {
+    pub fn create_ctx(
+        &self,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientBuilder>,
+    ) -> Result<RuntimeContext> {
         let mut tags = self.global_tags.lock().unwrap().clone();
         let ctx_tags = {
             self.context
@@ -114,12 +119,25 @@ impl RuntimeContextManager {
 
         let (cls, enm) = tb.map(|tb| tb.to_overrides()).unwrap_or_default();
 
-        RuntimeContext {
+        let mut ctx = RuntimeContext {
             env: self.env_vars.clone(),
             tags,
+            client_overrides: Default::default(),
             class_override: cls,
             enum_overrides: enm,
-        }
+        };
+
+        let client_overrides = match cb {
+            Some(cb) => Some(
+                cb.to_clients(&ctx)
+                    .with_context(|| "Failed to create clients from client_builder")?,
+            ),
+            None => None,
+        };
+
+        ctx.client_overrides = client_overrides;
+
+        Ok(ctx)
     }
 
     pub fn create_ctx_with_default<T: AsRef<str>>(
@@ -135,6 +153,7 @@ impl RuntimeContextManager {
         RuntimeContext {
             env: env_vars.collect(),
             tags: ctx.last().map(|(.., x)| x).cloned().unwrap_or_default(),
+            client_overrides: Default::default(),
             class_override: Default::default(),
             enum_overrides: Default::default(),
         }

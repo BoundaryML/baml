@@ -20,7 +20,6 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
     __ctx_manager: RuntimeContextManager
     __task: Optional[asyncio.Task[FunctionResult]]
     __event_queue: asyncio.Queue[Optional[FunctionResult]]
-    __tb: Optional[TypeBuilder]
 
     def __init__(
         self,
@@ -36,7 +35,6 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         self.__ctx_manager = ctx_manager
         self.__task = None
         self.__event_queue = asyncio.Queue()
-        self.__tb = tb
 
     def __enqueue(self, data: FunctionResult) -> None:
         self.__event_queue.put_nowait(data)

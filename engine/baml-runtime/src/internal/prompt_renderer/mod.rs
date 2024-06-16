@@ -41,7 +41,10 @@ impl PromptRenderer {
 
         Ok(PromptRenderer {
             function_name: function.name().into(),
-            client_name: config.client.clone(),
+            client_name: match &ctx.client_overrides {
+                Some((Some(client), _)) => client.clone(),
+                _ => config.client.clone(),
+            },
             output_defs: render_output_format(ir, ctx, &func_v2.output.elem)?,
             output_type: func_v2.output.elem.clone(),
         })

@@ -15,6 +15,7 @@ use internal_baml_jinja::{
 use reqwest::Response;
 
 use crate::{
+    client_builder::ClientProperty,
     internal::llm_client::{
         primitive::{
             anthropic::types::{AnthropicMessageResponse, StopReason},
@@ -61,23 +62,9 @@ pub struct AnthropicClient {
 // resolves/constructs PostRequestProperties from the client's options and runtime context, fleshing out the needed headers and parameters
 // basically just reads the client's options and matches them to needed properties or defaults them
 fn resolve_properties(
-    client: &ClientWalker,
+    mut properties: HashMap<String, serde_json::Value>,
     ctx: &RuntimeContext,
 ) -> Result<PostRequestProperities> {
-    let mut properties = (&client.item.elem.options)
-        .iter()
-        .map(|(k, v)| {
-            Ok((
-                k.into(),
-                ctx.resolve_expression::<serde_json::Value>(v)
-                    .context(format!(
-                        "client {} could not resolve options.{}",
-                        client.name(),
-                        k
-                    ))?,
-            ))
-        })
-        .collect::<Result<HashMap<_, _>>>()?;
     // this is a required field
     properties
         .entry("max_tokens".into())
@@ -309,10 +296,36 @@ impl WithStreamChat for AnthropicClient {
 
 // constructs base client and resolves properties based on context
 impl AnthropicClient {
+    pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<Self> {
+        Ok(Self {
+            name: client.name.clone(),
+            properties: resolve_properties(
+                client
+                    .options
+                    .iter()
+                    .map(|(k, v)| Ok((k.clone(), json!(v))))
+                    .collect::<Result<HashMap<_, _>>>()?,
+                ctx,
+            )?,
+            context: RenderContext_Client {
+                name: client.name.clone(),
+                provider: client.provider.clone(),
+            },
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                anthropic_system_constraints: true,
+            },
+            retry_policy: client.retry_policy.clone(),
+            client: create_client()?,
+        })
+    }
+
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AnthropicClient> {
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
         Ok(Self {
             name: client.name().into(),
-            properties: resolve_properties(client, ctx)?,
+            properties: resolve_properties(properties, ctx)?,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),

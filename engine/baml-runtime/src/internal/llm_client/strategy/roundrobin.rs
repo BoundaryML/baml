@@ -1,9 +1,13 @@
 use anyhow::{Context, Result};
-use std::sync::{atomic::AtomicUsize, Arc};
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicUsize, Arc},
+};
 
 use internal_baml_core::ir::ClientWalker;
 
 use crate::{
+    client_builder::ClientProperty,
     internal::llm_client::orchestrator::{
         ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState,
         OrchestratorNodeIterator,
@@ -32,72 +36,91 @@ impl RoundRobinStrategy {
     }
 }
 
+impl TryFrom<(&ClientProperty, &RuntimeContext)> for RoundRobinStrategy {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        (client, ctx): (&ClientProperty, &RuntimeContext),
+    ) -> std::result::Result<Self, Self::Error> {
+        let (strategy, start) = resolve_properties(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), serde_json::json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            ctx,
+        )?;
+
+        Ok(RoundRobinStrategy {
+            name: client.name.clone(),
+            retry_policy: client.retry_policy.clone(),
+            clients: strategy,
+            current_index: AtomicUsize::new(start),
+        })
+    }
+}
+
+fn resolve_properties(
+    mut properties: HashMap<String, serde_json::Value>,
+    _ctx: &RuntimeContext,
+) -> Result<(Vec<String>, usize)> {
+    let strategy = properties
+        .remove("strategy")
+        .map(|v| serde_json::from_value::<Vec<String>>(v))
+        .transpose()
+        .context("Failed to resolve strategy into string[]")?;
+
+    let strategy = if let Some(strategy) = strategy {
+        if strategy.is_empty() {
+            anyhow::bail!("Empty strategy array, at least one client is required");
+        }
+        strategy
+    } else {
+        anyhow::bail!("Missing a strategy field");
+    };
+
+    let start = properties
+        .remove("start")
+        .map(|v| serde_json::from_value::<usize>(v))
+        .transpose()
+        .context("Invalid start index (not a number)")?;
+
+    if !properties.is_empty() {
+        let supported_keys = ["strategy", "start"];
+        let unknown_keys = properties.keys().map(String::from).collect::<Vec<_>>();
+        anyhow::bail!(
+            "Unknown keys: {}. Supported keys are: {}",
+            unknown_keys.join(", "),
+            supported_keys.join(", ")
+        );
+    }
+
+    let start = match start {
+        Some(start) => start % strategy.len(),
+        None => {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                fastrand::usize(..strategy.len())
+            }
+
+            // For VSCode, we don't want a random start point,
+            // as it can make rendering inconsistent
+            #[cfg(target_arch = "wasm32")]
+            {
+                0
+            }
+        }
+    };
+
+    Ok((strategy, start))
+}
+
 impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for RoundRobinStrategy {
     type Error = anyhow::Error;
 
     fn try_from((client, ctx): (&ClientWalker, &RuntimeContext)) -> Result<Self> {
-        let properties = &client.item.elem.options;
-
-        let mut unknown_keys = vec![];
-
-        let mut start = None;
-        let mut strategy = None;
-        for (key, value) in properties {
-            match key.as_str() {
-                "start" => {
-                    let start_expr = ctx
-                        .resolve_expression::<usize>(value)
-                        .context("Invalid start index (not a number)");
-                    start = Some(start_expr);
-                }
-                "strategy" => {
-                    let clients = ctx
-                        .resolve_expression::<Vec<String>>(value)
-                        .context("Failed to resolve strategy expression into string[]");
-                    strategy = Some(clients);
-                }
-                other => unknown_keys.push(other),
-            };
-        }
-
-        if !unknown_keys.is_empty() {
-            let supported_keys = ["start", "strategy"];
-            anyhow::bail!(
-                "Unknown keys: {}. Supported keys are: {}",
-                unknown_keys.join(", "),
-                supported_keys.join(", ")
-            );
-        }
-
-        let strategy = match strategy {
-            Some(Ok(strategy)) => {
-                if strategy.is_empty() {
-                    anyhow::bail!("Empty strategy array, at least one client is required");
-                }
-                strategy
-            }
-            Some(Err(e)) => return Err(e),
-            None => anyhow::bail!("Missing a strategy field"),
-        };
-
-        let start = match start {
-            Some(Ok(start)) => start % strategy.len(),
-            Some(Err(e)) => return Err(e),
-            None => {
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    fastrand::usize(..strategy.len())
-                }
-
-                // For VSCode, we don't want a random start point,
-                // as it can make rendering inconsistent
-                #[cfg(target_arch = "wasm32")]
-                {
-                    0
-                }
-            }
-        };
-
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
+        let (strategy, start) = resolve_properties(properties, ctx)?;
         Ok(Self {
             name: client.item.elem.name.clone(),
             retry_policy: client.retry_policy().as_ref().map(String::from),

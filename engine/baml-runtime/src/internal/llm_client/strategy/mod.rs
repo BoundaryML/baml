@@ -6,7 +6,9 @@ pub mod roundrobin;
 
 use internal_baml_core::ir::ClientWalker;
 
-use crate::{runtime_interface::InternalClientLookup, RuntimeContext};
+use crate::{
+    client_builder::ClientProperty, runtime_interface::InternalClientLookup, RuntimeContext,
+};
 
 use self::{fallback::FallbackStrategy, roundrobin::RoundRobinStrategy};
 
@@ -22,11 +24,47 @@ pub enum LLMStrategyProvider {
     Fallback(FallbackStrategy),
 }
 
+impl std::fmt::Display for LLMStrategyProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LLMStrategyProvider::RoundRobin(strategy) => {
+                write!(f, "RoundRobin({})", strategy.name)
+            }
+            LLMStrategyProvider::Fallback(strategy) => {
+                write!(f, "Fallback({})", strategy.name)
+            }
+        }
+    }
+}
+
 impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMStrategyProvider {
     type Error = anyhow::Error;
 
     fn try_from((client, ctx): (&ClientWalker, &RuntimeContext)) -> Result<Self> {
         match client.elem().provider.as_str() {
+            "baml-round-robin" | "round-robin" => RoundRobinStrategy::try_from((client, ctx))
+                .map(Arc::new)
+                .map(LLMStrategyProvider::RoundRobin),
+            "baml-fallback" | "fallback" => {
+                FallbackStrategy::try_from((client, ctx)).map(LLMStrategyProvider::Fallback)
+            }
+            other => {
+                let options = ["round-robin", "fallback"];
+                anyhow::bail!(
+                    "Unsupported strategy provider: {}. Available ones are: {}",
+                    other,
+                    options.join(", ")
+                )
+            }
+        }
+    }
+}
+
+impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMStrategyProvider {
+    type Error = anyhow::Error;
+
+    fn try_from((client, ctx): (&ClientProperty, &RuntimeContext)) -> Result<Self> {
+        match client.provider.as_str() {
             "baml-round-robin" | "round-robin" => RoundRobinStrategy::try_from((client, ctx))
                 .map(Arc::new)
                 .map(LLMStrategyProvider::RoundRobin),

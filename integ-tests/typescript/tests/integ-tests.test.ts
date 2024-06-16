@@ -1,5 +1,5 @@
 import assert from 'assert'
-import { Image } from '@boundaryml/baml'
+import { Image, ClientBuilder } from '@boundaryml/baml'
 import { b, NamedArgsSingleEnumList, flush, traceAsync, traceSync, setTags, TestClassNested } from '../baml_client'
 import TypeBuilder from "../baml_client/type_builder";
 import { RecursivePartialNull } from '../baml_client/client';
@@ -234,6 +234,18 @@ describe('Integ tests', () => {
     expect(msgs.length).toBeGreaterThan(0)
     expect(msgs.at(-1)).toEqual(final)
   })
+
+  it('should work with dynamic client', async () => {
+    const clientBuilder = new ClientBuilder()
+    clientBuilder.addClient('myClient', 'openai', {
+      model: 'gpt-3.5-turbo',
+    });
+    clientBuilder.setPrimary('myClient');
+
+    await b.TestOllama("hi", {
+      cb: clientBuilder,
+    });
+  });
 })
 
 function asyncDummyFunc(myArg: string): Promise<MyInterface> {

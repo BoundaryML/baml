@@ -366,6 +366,7 @@ module.exports.BamlRuntime = nativeBinding.BamlRuntime
 module.exports.BamlSpan = nativeBinding.BamlSpan
 module.exports.ClassBuilder = nativeBinding.ClassBuilder
 module.exports.ClassPropertyBuilder = nativeBinding.ClassPropertyBuilder
+module.exports.ClientBuilder = nativeBinding.ClientBuilder
 module.exports.EnumBuilder = nativeBinding.EnumBuilder
 module.exports.EnumValueBuilder = nativeBinding.EnumValueBuilder
 module.exports.FieldType = nativeBinding.FieldType
