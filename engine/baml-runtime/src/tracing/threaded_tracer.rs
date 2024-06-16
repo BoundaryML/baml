@@ -7,6 +7,11 @@ use std::{
 use anyhow::Result;
 use web_time::Duration;
 
+use crate::{
+    on_log_event::{LogEvent, LogEventCallbackSync, LogEventMetadata},
+    tracing::api_wrapper::core_types::{MetadataType, Template},
+};
+
 use super::api_wrapper::{core_types::LogSchema, APIWrapper, BoundaryAPI};
 
 enum TxEventSignal {
@@ -97,8 +102,7 @@ pub(super) struct ThreadedTracer {
     rx: std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<RxEventSignal>>>,
     #[allow(dead_code)]
     join_handle: std::thread::JoinHandle<()>,
-    log_event_callback:
-        std::sync::Arc<std::sync::Mutex<Option<Box<dyn Fn(LogSchema) -> Result<()> + Send>>>>,
+    log_event_callback: std::sync::Arc<std::sync::Mutex<Option<LogEventCallbackSync>>>,
 }
 
 impl ThreadedTracer {
@@ -154,10 +158,7 @@ impl ThreadedTracer {
         }
     }
 
-    pub fn set_log_event_callback(
-        &self,
-        log_event_callback: Box<dyn Fn(LogSchema) -> Result<()> + Send + Sync>,
-    ) {
+    pub fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) {
         // Get a mutable lock on the log_event_callback
         let mut callback_lock = self.log_event_callback.lock().unwrap();
 
@@ -166,11 +167,63 @@ impl ThreadedTracer {
     }
 
     pub fn submit(&self, event: LogSchema) -> Result<()> {
-        log::info!("Submitting work {}", event.event_id);
+        log::debug!("Submitting work {:#?}", event.event_id);
 
         let callback = self.log_event_callback.lock().unwrap();
         if let Some(ref callback) = *callback {
-            callback(event.clone())?;
+            let event = event.clone();
+            let llm_output_model = event.metadata.as_ref().and_then(|m| match m {
+                MetadataType::Single(llm_event) => Some(llm_event),
+                // take the last element in the vector
+                MetadataType::Multi(llm_events) => llm_events.last().clone(),
+            });
+
+            let log_event_result = callback(LogEvent {
+                metadata: LogEventMetadata {
+                    event_id: event.event_id.clone(),
+                    parent_id: event.parent_event_id.clone(),
+                    root_event_id: event.root_event_id.clone(),
+                },
+                prompt: llm_output_model.and_then(|llm_event| {
+                    match llm_event.clone().input.prompt.template {
+                        Template::Single(text) => Some(text),
+                        Template::Multiple(chat_prompt) => {
+                            serde_json::to_string_pretty(&chat_prompt).ok().or_else(|| {
+                                log::info!(
+                                    "Failed to serialize chat prompt for event {}",
+                                    event.event_id
+                                );
+                                None
+                            })
+                        }
+                    }
+                }),
+                raw_output: llm_output_model.and_then(|llm_event| {
+                    llm_event
+                        .clone()
+                        .output
+                        .and_then(|output| Some(output.raw_text))
+                }),
+                parsed_output: event.io.output.and_then(|output| {
+                    serde_json::to_string(&output.value).ok().or_else(|| {
+                        log::info!(
+                            "Failed to serialize output value for event {}",
+                            event.event_id
+                        );
+                        None
+                    })
+                }),
+                start_time: event.context.start_time,
+            });
+
+            if log_event_result.is_err() {
+                log::error!(
+                    "Error calling log_event_callback for event id: {}",
+                    event.event_id
+                );
+            }
+
+            log_event_result?;
         }
 
         let tx = self

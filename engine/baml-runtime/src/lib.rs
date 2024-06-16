@@ -31,6 +31,7 @@ use baml_types::BamlMap;
 use baml_types::BamlValue;
 use indexmap::IndexMap;
 use internal_baml_core::configuration::GeneratorOutputType;
+use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -332,10 +333,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn set_log_event_callback(
-        &self,
-        log_event_callback: Box<dyn Fn(LogSchema) -> Result<()> + Send + Sync>,
-    ) -> Result<()> {
+    fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) -> Result<()> {
         self.tracer.set_log_event_callback(log_event_callback);
         Ok(())
     }

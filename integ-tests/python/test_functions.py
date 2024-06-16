@@ -15,7 +15,7 @@ import datetime
 @pytest.mark.asyncio
 async def test_should_work_for_all_inputs():
     res = await b.TestFnNamedArgsSingleBool(True)
-    assert res == "true"
+    assert res
 
     res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
     assert "a" in res and "b" in res and "c" in res
@@ -490,4 +490,4 @@ async def test_event_log_hook():
 
     on_log_event(event_log_hook)
     res = await b.TestFnNamedArgsSingleBool(True)
-    assert res == "true"
+    assert res

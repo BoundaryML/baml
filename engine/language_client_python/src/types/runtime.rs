@@ -9,12 +9,47 @@ use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
 use pyo3::types::{PyDict, PyTuple};
-use pyo3::{PyObject, Python, ToPyObject};
+use pyo3::{pyclass, PyObject, Python, ToPyObject};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe);
-crate::lang_wrapper!(LogEvent, baml_runtime::on_log_event::LogEvent, clone_safe);
+
+#[derive(Debug, Clone)]
+#[pyclass]
+pub struct BamlLogEvent {
+    pub metadata: LogEventMetadata,
+    pub prompt: Option<String>,
+    pub raw_output: Option<String>,
+    // json structure or a string
+    pub parsed_output: Option<String>,
+    pub start_time: String,
+}
+
+#[derive(Debug, Clone)]
+#[pyclass]
+pub struct LogEventMetadata {
+    pub event_id: String,
+    pub parent_id: Option<String>,
+    pub root_event_id: String,
+}
+
+#[pymethods]
+impl BamlLogEvent {
+    fn __repr__(&self) -> String {
+        format!(
+            "BamlLogEvent {{ metadata: {:?}, prompt: {:?}, raw_output: {:?}, parsed_output: {:?}, start_time: {:?} }}",
+            self.metadata, self.prompt, self.raw_output, self.parsed_output, self.start_time
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "BamlLogEvent {{ \nmetadata: {:?}, \nprompt: {:#?}, \nraw_output: {:?}, \nparsed_output: {:#?}, \nstart_time: {:?} }}",
+            self.metadata, self.prompt, self.raw_output, self.parsed_output, self.start_time
+        )
+    }
+}
 
 #[pymethods]
 impl BamlRuntime {
@@ -132,12 +167,24 @@ impl BamlRuntime {
 
         let res = baml_runtime
             .as_ref()
-            .set_log_event_callback(Box::new(move |_| {
+            .set_log_event_callback(Box::new(move |log_event| {
                 Python::with_gil(|py| {
                     // Ensure GIL is acquired before calling Python code
                     // let callback = callback.as_ref(py);
-                    let any: PyObject = PyDict::new_bound(py).into();
-                    match callback.call1(py, (any,)) {
+                    match callback.call1(
+                        py,
+                        (BamlLogEvent {
+                            metadata: LogEventMetadata {
+                                event_id: log_event.metadata.event_id.clone(),
+                                parent_id: log_event.metadata.parent_id.clone(),
+                                root_event_id: log_event.metadata.root_event_id.clone(),
+                            },
+                            prompt: log_event.prompt.clone(),
+                            raw_output: log_event.raw_output.clone(),
+                            parsed_output: log_event.parsed_output.clone(),
+                            start_time: log_event.start_time.clone(),
+                        },),
+                    ) {
                         Ok(_) => Ok(()),
                         Err(e) => {
                             log::error!("Error calling log_event_callback: {:?}", e);

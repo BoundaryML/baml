@@ -11,6 +11,7 @@ use crate::internal::llm_client::orchestrator::{OrchestrationScope, Orchestrator
 use crate::tracing::api_wrapper::core_types::LogSchema;
 use crate::tracing::{BamlTracer, TracingSpan};
 use crate::type_builder::TypeBuilder;
+use crate::types::on_log_event::LogEventCallbackSync;
 use crate::RuntimeContextManager;
 use crate::{
     internal::{ir_features::IrFeatures, llm_client::retry_policy::CallablePolicy},
@@ -97,10 +98,7 @@ pub trait ExperimentalTracingInterface {
     fn flush(&self) -> Result<()>;
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn set_log_event_callback(
-        &self,
-        callback: Box<dyn Fn(LogSchema) -> Result<()> + Send + Sync>,
-    ) -> Result<()>;
+    fn set_log_event_callback(&self, callback: LogEventCallbackSync) -> Result<()>;
 }
 
 pub trait InternalClientLookup<'a> {
