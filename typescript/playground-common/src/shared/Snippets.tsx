@@ -1,6 +1,7 @@
 import { atom } from 'jotai'
 import SnippetCard from "./SnippetCard"
 import { DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog'
+import { Button } from '../components/ui/button'
 import type { BAMLProject } from '../lib/utils'
 import { BamlProjectsGroupings, loadExampleProjects } from '../lib/utils'
 import { useEffect, useState } from 'react'
@@ -53,6 +54,16 @@ export const Snippets = () => {
             )}
           </div>
         </div>
+      </div>
+      <div className='flex justify-center'>
+        <a href="https://docs.boundaryml.com" target="_blank" rel="noopener noreferrer">
+          <Button
+            variant={'ghost'}
+            className='flex flex-row items-center px-2 py-1 text-base whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foreground mr-2'
+          >
+            <span className='whitespace-nowrap'>View our full docs!</span>
+          </Button>
+        </a>
       </div>
     </div>
   )
