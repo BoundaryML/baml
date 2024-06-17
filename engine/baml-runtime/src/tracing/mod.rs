@@ -577,18 +577,32 @@ impl From<&RenderedPrompt> for Template {
                                 internal_baml_jinja::ChatMessagePart::Text(t) => {
                                     ContentPart::Text(t.clone())
                                 }
-                                internal_baml_jinja::ChatMessagePart::Image(
-                                    baml_types::BamlMedia::Base64(BamlMediaType::Image, u),
-                                ) => ContentPart::B64Image(u.base64.clone()),
-                                internal_baml_jinja::ChatMessagePart::Image(
-                                    baml_types::BamlMedia::Url(BamlMediaType::Image, u),
-                                ) => ContentPart::UrlImage(u.url.clone()),
-                                internal_baml_jinja::ChatMessagePart::Audio(
-                                    baml_types::BamlMedia::Base64(BamlMediaType::Audio, u),
-                                ) => ContentPart::B64Audio(u.base64.clone()),
-                                internal_baml_jinja::ChatMessagePart::Audio(
-                                    baml_types::BamlMedia::Url(BamlMediaType::Audio, u),
-                                ) => ContentPart::UrlAudio(u.url.clone()),
+                                internal_baml_jinja::ChatMessagePart::Image(media)
+                                | internal_baml_jinja::ChatMessagePart::Audio(media) => match media
+                                {
+                                    baml_types::BamlMedia::Base64(media_type, data) => {
+                                        match media_type {
+                                            BamlMediaType::Image => {
+                                                ContentPart::B64Image(data.base64.clone())
+                                            }
+                                            BamlMediaType::Audio => {
+                                                ContentPart::B64Audio(data.base64.clone())
+                                            }
+                                            _ => panic!("Unsupported media type"),
+                                        }
+                                    }
+                                    baml_types::BamlMedia::Url(media_type, data) => {
+                                        match media_type {
+                                            BamlMediaType::Image => {
+                                                ContentPart::UrlImage(data.url.clone())
+                                            }
+                                            BamlMediaType::Audio => {
+                                                ContentPart::UrlAudio(data.url.clone())
+                                            }
+                                            _ => panic!("Unsupported media type"),
+                                        }
+                                    }
+                                },
                             })
                             .collect::<Vec<_>>(),
                     })

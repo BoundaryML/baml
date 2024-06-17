@@ -2,7 +2,7 @@ use baml_runtime::{
     internal::llm_client::orchestrator::OrchestrationScope, ChatMessagePart, RenderedPrompt,
 };
 
-use baml_types::BamlMedia;
+use baml_types::{BamlMedia, BamlMediaType};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(getter_with_clone)]
@@ -65,8 +65,9 @@ impl WasmChatMessagePart {
     pub fn as_image(&self) -> Option<String> {
         if let ChatMessagePart::Image(s) = &self.part {
             Some(match s {
-                BamlMedia::Url(u) => u.url.clone(),
-                BamlMedia::Base64(b) => b.base64.clone(),
+                BamlMedia::Url(BamlMediaType::Image, u) => u.url.clone(),
+                BamlMedia::Base64(BamlMediaType::Image, b) => b.base64.clone(),
+                _ => return None, // This will match any other case and return None
             })
         } else {
             None

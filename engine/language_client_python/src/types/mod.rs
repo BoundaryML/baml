@@ -11,6 +11,7 @@ mod type_builder;
 pub use function_result_stream::FunctionResultStream;
 pub use function_results::FunctionResult;
 pub use image::BamlImagePy;
+// pub use media::Media;
 pub use runtime::BamlRuntime;
 pub use runtime_ctx_manager::RuntimeContextManager;
 pub use span::BamlSpan;

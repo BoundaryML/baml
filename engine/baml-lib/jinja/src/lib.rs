@@ -217,9 +217,16 @@ fn render_minijinja(
                         .unwrap_or(part);
 
                     match serde_json::from_str::<BamlMedia>(image_data) {
-                        Ok(image) => {
-                            parts.push(ChatMessagePart::Image(image));
-                        }
+                        Ok(media) => match media {
+                            BamlMedia::Url(media_type, _) => match media_type {
+                                BamlMediaType::Image => parts.push(ChatMessagePart::Image(media)),
+                                BamlMediaType::Audio => parts.push(ChatMessagePart::Audio(media)),
+                            },
+                            BamlMedia::Base64(media_type, _) => match media_type {
+                                BamlMediaType::Image => parts.push(ChatMessagePart::Image(media)),
+                                BamlMediaType::Audio => parts.push(ChatMessagePart::Audio(media)),
+                            },
+                        },
                         Err(_) => {
                             Err(minijinja::Error::new(
                                 ErrorKind::CannotUnpack,
@@ -301,14 +308,14 @@ impl std::fmt::Display for RenderedPrompt {
                             .iter()
                             .map(|p| match p {
                                 ChatMessagePart::Text(t) => t.clone(),
-                                ChatMessagePart::Image(img) => match img {
+                                ChatMessagePart::Image(media) => match media {
                                     BamlMedia::Url(BamlMediaType::Image, url) =>
                                         format!("<image_placeholder: {}>", url.url),
                                     BamlMedia::Base64(BamlMediaType::Image, _) =>
                                         "<image_placeholder base64>".to_string(),
                                     _ => unreachable!(),
                                 },
-                                ChatMessagePart::Audio(aud) => match aud {
+                                ChatMessagePart::Audio(media) => match media {
                                     BamlMedia::Url(BamlMediaType::Audio, url) =>
                                         format!("<audio_placeholder: {}>", url.url),
                                     BamlMedia::Base64(BamlMediaType::Audio, _) =>
@@ -372,8 +379,7 @@ impl RenderedPrompt {
                     .flat_map(|m| {
                         m.parts.into_iter().map(|p| match p {
                             ChatMessagePart::Text(t) => t,
-                            ChatMessagePart::Image(_) => "".to_string(),
-                            ChatMessagePart::Audio(_) => "".to_string(),
+                            ChatMessagePart::Image(_) | ChatMessagePart::Audio(_) => "".to_string(),
                             // we are choosing to ignore the image for now
                         })
                     })
@@ -494,7 +500,7 @@ mod render_tests {
                     ChatMessagePart::Image(BamlMedia::url(
                         BamlMediaType::Image,
                         "https://example.com/image.jpg".to_string()
-                    ),),
+                    )),
                 ]
             },])
         );
@@ -541,7 +547,7 @@ mod render_tests {
                     ChatMessagePart::Image(BamlMedia::url(
                         BamlMediaType::Image,
                         "https://example.com/image.jpg".to_string()
-                    ),),
+                    )),
                 ]
             },])
         );
@@ -585,7 +591,7 @@ mod render_tests {
                     ChatMessagePart::Image(BamlMedia::url(
                         BamlMediaType::Image,
                         "https://example.com/image.jpg".to_string()
-                    ),),
+                    )),
                     ChatMessagePart::Text(vec![". Please help me.",].join("\n")),
                 ]
             },])

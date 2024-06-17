@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::BamlMedia;
+use baml_types::{BamlMedia, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 
@@ -443,16 +443,32 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
         .map(|part| match part {
             ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
             ChatMessagePart::Image(image) => match image {
-                BamlMedia::Url(image) => {
+                BamlMedia::Url(BamlMediaType::Image, image) => {
                     json!({"type": "image_url", "image_url": json!({
                         "url": image.url
                     })})
                 }
-                BamlMedia::Base64(image) => {
+                BamlMedia::Base64(BamlMediaType::Image, image) => {
                     json!({"type": "image_url", "image_url": json!({
-                        "base64": image.base64
+                       "url" : format!("data:image/{};base64,{}", image.media_type, image.base64)
                     })})
                 }
+                _ => None.unwrap(),
+            },
+            ChatMessagePart::Audio(audio) => match audio {
+                // handle audio case here
+                // replace the following line with your actual implementation
+                BamlMedia::Url(BamlMediaType::Audio, audio) => {
+                    json!({"type": "audio_url", "audio_url": json!({
+                        "url": audio.url
+                    })})
+                }
+                BamlMedia::Base64(BamlMediaType::Audio, audio) => {
+                    json!({"type": "audio_url", "audio_url": json!({
+                        "url": audio.base64
+                    })})
+                }
+                _ => None.unwrap(),
             },
         })
         .collect();
