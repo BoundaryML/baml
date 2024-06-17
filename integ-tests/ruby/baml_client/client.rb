@@ -812,6 +812,26 @@ module Baml
     sig {
       
       params(
+        img: Baml::Image,
+      ).returns(String)
+      
+    }
+    def TestAudioInput(
+        img:
+    )
+      raw = @runtime.call_function(
+        "TestAudioInput",
+        {
+          "img" => img,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
         input: String,
       ).returns(String)
       
@@ -1965,6 +1985,27 @@ module Baml
         "TestAnthropic",
         {
           "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        img: Baml::Image,
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestAudioInput(
+        img:
+    )
+      raw = @runtime.stream_function(
+        "TestAudioInput",
+        {
+          "img" => img,
         },
         @ctx_manager,
       )

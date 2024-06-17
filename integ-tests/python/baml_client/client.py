@@ -891,6 +891,28 @@ class BamlClient:
       mdl = create_model("TestAnthropicReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    async def TestAudioInput(
+        self,
+        img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "TestAudioInput",
+        {
+          "img": img,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("TestAudioInputReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def TestAzure(
         self,
         input: str,
@@ -2508,6 +2530,38 @@ class BamlStreamClient:
 
       mdl = create_model("TestAnthropicReturnType", inner=(str, ...))
       partial_mdl = create_model("TestAnthropicPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
+    def TestAudioInput(
+        self,
+        img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "TestAudioInput",
+        {
+          "img": img,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("TestAudioInputReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestAudioInputPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlStream[Optional[str], str](
         raw,

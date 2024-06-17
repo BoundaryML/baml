@@ -607,6 +607,21 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
+  async TestAudioInput(
+      img: Image,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestAudioInput",
+      {
+        "img": img
+      },
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return raw.parsed() as string
+  }
+  
   async TestAzure(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
@@ -1713,6 +1728,28 @@ class BamlStreamClient {
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
       (a): a is RecursivePartialNull<string> => a,
+      (a): a is string => a,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  TestAudioInput(
+      img: Image,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): BamlStream<(string | null), string> {
+    const raw = this.runtime.streamFunction(
+      "TestAudioInput",
+      {
+        "img": img
+      },
+      undefined,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return new BamlStream<(string | null), string>(
+      raw,
+      (a): a is (string | null) => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
