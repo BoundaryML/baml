@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@baml/common": "workspace:^",
+    "@baml/codemirror-lang": "workspace:*",
+
     "@gloo-ai/baml-schema-wasm-web": "workspace:*",
     "@hookform/resolvers": "^3.3.4",
     "@radix-ui/react-accordion": "^1.1.2",
@@ -35,6 +37,7 @@
     "@rjsf/validator-ajv8": "^5.15.0",
     "@tanstack/react-table": "^8.10.7",
     "@tanstack/react-virtual": "^3.4.0",
+    "@uiw/react-codemirror": "^4.21.25",
     "@vscode/webview-ui-toolkit": "^1.2.2",
     "allotment": "^1.19.3",
     "anser": "^2.1.1",
@@ -76,6 +79,8 @@
     "react-dom": "^18.2.0",
     "tailwindcss": "^3.4.1",
     "typescript": "^4.4.4",
+    "@uiw/react-codemirror": "^4.21.25",
+
     "vite": "^5.0.12",
     "vite-plugin-top-level-await": "^1.4.1",
     "vite-plugin-wasm": "^3.3.0"

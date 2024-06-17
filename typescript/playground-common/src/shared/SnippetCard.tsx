@@ -2,6 +2,8 @@
 import React from 'react';
 import './App.css';
 import { CodeBlock , vs2015, atomOneLight, atomOneDark} from "react-code-blocks";
+import {CodeMirrorViewer} from './CodeMirrorViewer';
+import { Code } from 'lucide-react';
 
 
 const SnippetCard = ({ title, description, code }: { title: string, description: string; code: string }) => {
@@ -34,19 +36,7 @@ const SnippetContent = ({ text }: { text: string }) => {
   );
 }
 const SnippetCode = ({ text }: { text: string }) => {
-  return (
-    <div className="text-lg text-white" >
-      <CodeBlock
-      text={text}
-      language='rust'
-      showLineNumbers={false}
-      theme= {atomOneLight} 
-      startingLineNumber={10}
-      codeBlock={{ lineNumbers: false, wrapLines: true }}
-      
-    />
-      </div>
-  );
+  return CodeMirrorViewer({fileContent: text});
 };
 
 export default SnippetCard;

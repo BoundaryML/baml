@@ -341,6 +341,9 @@ importers:
 
   playground-common:
     dependencies:
+      '@baml/codemirror-lang':
+        specifier: workspace:*
+        version: link:../codemirror-lang-baml
       '@baml/common':
         specifier: workspace:^
         version: link:../common
@@ -416,6 +419,9 @@ importers:
       '@types/react-syntax-highlighter':
         specifier: ^15.5.13
         version: 15.5.13
+      '@uiw/react-codemirror':
+        specifier: ^4.21.25
+        version: 4.22.1(@babel/runtime@7.24.5)(@codemirror/autocomplete@6.16.0)(@codemirror/language@6.10.1)(@codemirror/lint@6.7.1)(@codemirror/search@6.5.6)(@codemirror/state@6.4.1)(@codemirror/theme-one-dark@6.1.2)(@codemirror/view@6.26.3)(codemirror@6.0.1)(react-dom@18.3.1)(react@18.3.1)
       '@vscode/webview-ui-toolkit':
         specifier: ^1.2.2
         version: 1.4.0(react@18.3.1)
@@ -792,6 +798,9 @@ importers:
 
   vscode-ext/packages/web-panel:
     dependencies:
+      '@baml/codemirror-lang':
+        specifier: workspace:*
+        version: link:../../../codemirror-lang-baml
       '@baml/common':
         specifier: workspace:^
         version: link:../../../common
@@ -864,6 +873,9 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.4.0
         version: 3.5.0(react-dom@18.3.1)(react@18.3.1)
+      '@uiw/react-codemirror':
+        specifier: ^4.21.25
+        version: 4.22.1(@babel/runtime@7.24.5)(@codemirror/autocomplete@6.16.0)(@codemirror/language@6.10.1)(@codemirror/lint@6.7.1)(@codemirror/search@6.5.6)(@codemirror/state@6.4.1)(@codemirror/theme-one-dark@6.1.2)(@codemirror/view@6.26.3)(codemirror@6.0.1)(react-dom@18.3.1)(react@18.3.1)
       '@vscode/webview-ui-toolkit':
         specifier: ^1.2.2
         version: 1.4.0(react@18.3.1)
