@@ -193,7 +193,7 @@ pub fn jsunknown_to_baml_value(
         ValueType::External => {
             let external = unsafe { item.cast::<JsExternal>() };
             if let Ok(img) = env.get_value_external::<BamlImage>(&external) {
-                BamlValue::Image(img.inner.clone())
+                BamlValue::Image35(img.inner.clone())
             } else {
                 if skip_unsupported {
                     return Ok(None);

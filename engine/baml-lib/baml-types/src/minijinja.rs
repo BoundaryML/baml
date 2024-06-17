@@ -15,8 +15,8 @@ impl From<BamlValue> for minijinja::Value {
                 let list: Vec<minijinja::Value> = l.into_iter().map(|v| v.into()).collect();
                 minijinja::Value::from(list)
             }
-            BamlValue::Image(i) => i.into(),
-            BamlValue::Audio(i) => i.into(),
+            BamlValue::Image35(i) => i.into(),
+            BamlValue::Audio35(i) => i.into(),
             BamlValue::Enum(_, v) => minijinja::Value::from(v),
             BamlValue::Class(_, m) => {
                 let map = m.into_iter().map(|(k, v)| (k, minijinja::Value::from(v)));

@@ -114,7 +114,7 @@ impl From<BamlValueWithFlags> for BamlValue {
                 BamlValue::Class(s, m.into_iter().map(|(k, v)| (k, v.into())).collect())
             }
             BamlValueWithFlags::Null(_) => BamlValue::Null,
-            BamlValueWithFlags::Image(i) => BamlValue::Image(i.value),
+            BamlValueWithFlags::Image(i) => BamlValue::Image35(i.value),
         }
     }
 }
@@ -140,7 +140,7 @@ impl From<&BamlValueWithFlags> for BamlValue {
                 m.into_iter().map(|(k, v)| (k.clone(), v.into())).collect(),
             ),
             BamlValueWithFlags::Null(_) => BamlValue::Null,
-            BamlValueWithFlags::Image(i) => BamlValue::Image(i.value.clone()),
+            BamlValueWithFlags::Image(i) => BamlValue::Image35(i.value.clone()),
         }
     }
 }

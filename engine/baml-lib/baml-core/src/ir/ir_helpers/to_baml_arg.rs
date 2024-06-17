@@ -57,10 +57,10 @@ pub fn validate_arg(
             TypeValue::Bool if matches!(value, BamlValue::Bool(_)) => Some(value.clone()),
             TypeValue::Null if matches!(value, BamlValue::Null) => Some(value.clone()),
             TypeValue::Image => match value {
-                BamlValue::Image(v) => Some(BamlValue::Image(v.clone())),
+                BamlValue::Image35(v) => Some(BamlValue::Image35(v.clone())),
                 BamlValue::Map(kv) => {
                     if let Some(BamlValue::String(s)) = kv.get("url") {
-                        Some(BamlValue::Image(baml_types::BamlMedia::url(
+                        Some(BamlValue::Image35(baml_types::BamlMedia::url(
                             BamlMediaType::Image,
                             s.to_string(),
                         )))
@@ -69,7 +69,7 @@ pub fn validate_arg(
                         Some(BamlValue::String(media_type)),
                     ) = (kv.get("base64"), kv.get("media_type"))
                     {
-                        Some(BamlValue::Image(baml_types::BamlMedia::base64(
+                        Some(BamlValue::Image35(baml_types::BamlMedia::base64(
                             BamlMediaType::Image,
                             s.to_string(),
                             media_type.to_string(),

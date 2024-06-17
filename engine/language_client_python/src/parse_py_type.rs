@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{bail, Result};
-use baml_types::{BamlMedia, BamlMap, BamlValue};
+use baml_types::{BamlMap, BamlMedia, BamlValue};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},
@@ -180,7 +180,7 @@ where
         MappedPyType::Int(v) => BamlValue::Int(v),
         MappedPyType::Float(v) => BamlValue::Float(v),
         MappedPyType::Bool(v) => BamlValue::Bool(v),
-        MappedPyType::BamlImage(v) => BamlValue::Image(v),
+        MappedPyType::BamlImage(v) => BamlValue::Image35(v),
         MappedPyType::None => BamlValue::Null,
         MappedPyType::Unsupported(r#type) => {
             return if matches!(handle_unknown_types, UnknownTypeHandler::Ignore) {

@@ -470,7 +470,7 @@ mod render_tests {
 
         let args = BamlValue::Map(BamlMap::from([(
             "img".to_string(),
-            BamlValue::Image(BamlMedia::url(
+            BamlValue::Image35(BamlMedia::url(
                 BamlMediaType::Image,
                 "https://example.com/image.jpg".to_string(),
             )),
@@ -516,7 +516,7 @@ mod render_tests {
             "myObject".to_string(),
             BamlValue::Map(BamlMap::from([(
                 "img".to_string(),
-                BamlValue::Image(BamlMedia::url(
+                BamlValue::Image35(BamlMedia::url(
                     BamlMediaType::Image,
                     "https://example.com/image.jpg".to_string(),
                 )),
@@ -561,7 +561,7 @@ mod render_tests {
 
         let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "img".to_string(),
-            BamlValue::Image(BamlMedia::url(
+            BamlValue::Image35(BamlMedia::url(
                 BamlMediaType::Image,
                 "https://example.com/image.jpg".to_string(),
             )),
