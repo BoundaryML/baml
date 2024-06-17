@@ -225,7 +225,7 @@ Here's how BAML differs from these frameworks:
 
 **Aliasing object fields in Zod**
 
-```
+```typescript
 const UserSchema = z.object({
   first_name: z.string(),
 }).transform((user) => ({
@@ -247,7 +247,7 @@ Zod: not possible
 
 Pydantic:
 
-```
+```python
 class Sentiment(Enum):
   HAPPY = ("ecstatic")
   SAD = ("sad")
