@@ -1,19 +1,17 @@
 // TextComponent.js
 import React from 'react';
 import './App.css';
-import { CodeBlock , vs2015, atomOneLight, atomOneDark} from "react-code-blocks";
 import {CodeMirrorViewer} from './CodeMirrorViewer';
-import { Code } from 'lucide-react';
 
 
-const SnippetCard = ({ title, description, code }: { title: string, description: string; code: string }) => {
+const SnippetCard = ({ title, description, code, lang }: { title: string, description: string; code: string; lang:string }) => {
   return (
     <div className="w-full h-full">
       <SnippetTitle text={title} />
       <div className="h-1" />
       <SnippetContent text={description} />
       <div className="h-3" />
-      <SnippetCode text={code} />
+      <SnippetCode text={code} lang={lang} />
     </div>
   );
 };
@@ -29,14 +27,15 @@ const SnippetTitle = ({ text }: { text: string }) => {
 }
 
 const SnippetContent = ({ text }: { text: string }) => {
+  const formattedText = text.replace(/\n/g, '<br/>').replace(/\t/g, '&emsp;');
   return (
-    <div className="bg-zinc-900 text-lg text-white ">
-      {text}
-    </div>
+    <div className="bg-zinc-900 text-lg text-white " dangerouslySetInnerHTML={{ __html: formattedText }} />
   );
 }
-const SnippetCode = ({ text }: { text: string }) => {
-  return CodeMirrorViewer({fileContent: text});
+
+
+const SnippetCode = ({ text, lang }: { text: string; lang: string }) => {
+  return CodeMirrorViewer({fileContent: text, lang: lang});
 };
 
 export default SnippetCard;

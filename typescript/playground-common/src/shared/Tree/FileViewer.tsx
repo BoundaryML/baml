@@ -16,7 +16,7 @@ export const data = [
     name: 'Testing',
     children: [
       { id: 'test_ai_function', name: 'Test an AI function' },
-      { id: 'evaluate_results', name: 'Evaluate results' },
+      { id: 'evaluate_results', name: 'Evaluate LLM results' },
     ],
   },
   {
@@ -28,24 +28,24 @@ export const data = [
       { id: 'fall_back', name: 'Model fall-back' },
     ],
   },
-  {
-    id: 'observability',
-    icon: 'graph',
-    name: 'Observability',
-    children: [
-      { id: 'tracing_tagging', name: 'Tracing functions' }
+  // {
+  //   id: 'observability',
+  //   icon: 'graph',
+  //   name: 'Observability',
+  //   children: [
+  //     { id: 'tracing_tagging', name: 'Tracing functions' }
       
-    ],
-  },
-  {
-    id: 'improve_llm_results',
-    icon: 'lightning-bolt',
-    name: 'Improve LLM results',
-    children: [
-      { id: 'improve_prompt_auto', name: 'Auto-Improve prompt' },
-      { id: 'fine-tune', name: 'Fine-tune a model' },
-    ],
-  },
+  //   ],
+  // },
+  // {
+  //   id: 'improve_llm_results',
+  //   icon: 'lightning-bolt',
+  //   name: 'Improve LLM results',
+  //   children: [
+  //     { id: 'improve_prompt_auto', name: 'Auto-Improve prompt' },
+  //     { id: 'fine-tune', name: 'Fine-tune a model' },
+  //   ],
+  // },
   {
     id: 'streaming_dir',
     icon: 'waves',

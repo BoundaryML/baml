@@ -1,12 +1,27 @@
 'use client'
 import React from 'react';
-import { BAML, theme } from '@baml/codemirror-lang'
+import { BAML, theme} from '@baml/codemirror-lang'
+import {python} from '@codemirror/lang-python'
+import {javascript} from '@codemirror/lang-javascript'
+
 import CodeMirror, {EditorView} from '@uiw/react-codemirror'
 
 
-const extensions = [BAML(), EditorView.lineWrapping]
+const extensions = [EditorView.lineWrapping]
 
-export const CodeMirrorViewer = ({ fileContent }: { fileContent: string }) => {
+export const CodeMirrorViewer = ({ fileContent, lang}: { fileContent: string; lang:string }) => {
+
+
+  if (lang === 'python'){
+    extensions.push(python());
+  }
+  else if (lang === 'javascript'){
+    extensions.push(javascript());
+  }
+  else {
+    extensions.push(BAML());
+  }
+
   return (
     <div className='w-full'>
       <div

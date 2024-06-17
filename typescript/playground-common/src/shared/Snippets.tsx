@@ -37,13 +37,14 @@ export const Snippets = () => {
       <div className='flex flex-row w-full h-full items-start'>
         {/* Adjust the flex property to control space allocation */}
         <div className='flex-none overflow-hidden w-48 pt-7'>
+          <div className='text-white-500 text-lg px-4'>Table of Contents</div>
           <FileViewer />
         </div>
 
-        <div className='w-4' />
+        <div className='w-6' />
 
         <div className='flex-grow overflow-x-auto flex w-full max-w-2xl pt-7'>
-          <TextComponentList selectedId={useAtom(activeFileAtom)[0] || "starting_page"} />
+          <TextComponentList selectedId={useAtom(activeFileAtom)[0] || "system_user_prompts"} />
           <div className='flex-grow overflow-y-auto'>
             {snippetGroups ? (
               <div className='flex flex-col gap-y-4 overflow-auto'>
@@ -59,7 +60,7 @@ export const Snippets = () => {
         <a href="https://docs.boundaryml.com" target="_blank" rel="noopener noreferrer">
           <Button
             variant={'ghost'}
-            className='flex flex-row items-center px-2 py-1 text-base whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foreground mr-2'
+            className='flex flex-row items-center px-2 py-1 text-base whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foreground mr-2 mt-3'
           >
             <span className='whitespace-nowrap'>View our full docs!</span>
           </Button>
