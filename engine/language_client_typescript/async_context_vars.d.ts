@@ -1,3 +1,4 @@
+import { BamlLogEvent } from '../native';
 import { BamlSpan, RuntimeContextManager, BamlRuntime } from './native';
 export declare class CtxManager {
     private rt;
@@ -9,6 +10,7 @@ export declare class CtxManager {
     startTraceAsync(name: string, args: Record<string, any>): BamlSpan;
     endTrace(span: BamlSpan, response: any): void;
     flush(): void;
+    onLogEvent(callback: (error: any, event: BamlLogEvent) => void): void;
     traceFnSync<ReturnType, F extends (...args: any[]) => ReturnType>(name: string, func: F): F;
     traceFnAync<ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(name: string, func: F): F;
 }

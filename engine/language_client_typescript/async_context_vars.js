@@ -49,6 +49,9 @@ class CtxManager {
     flush() {
         this.rt.flush();
     }
+    onLogEvent(callback) {
+        this.rt.setLogEventCallback(callback);
+    }
     traceFnSync(name, func) {
         return ((...args) => {
             const params = args.reduce((acc, arg, i) => ({

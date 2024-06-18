@@ -2,9 +2,18 @@ import assert from 'assert'
 import { image_b64, audio_b64 } from './base64_test_data'
 import { Image} from '@boundaryml/baml'
 import { Audio } from '@boundaryml/baml'
-import { b, NamedArgsSingleEnumList, flush, traceAsync, traceSync, setTags, TestClassNested } from '../baml_client'
-import TypeBuilder from "../baml_client/type_builder";
-import { RecursivePartialNull } from '../baml_client/client';
+import {
+  b,
+  NamedArgsSingleEnumList,
+  flush,
+  traceAsync,
+  traceSync,
+  setTags,
+  TestClassNested,
+  onLogEvent,
+} from '../baml_client'
+import TypeBuilder from '../baml_client/type_builder'
+import { RecursivePartialNull } from '../baml_client/client'
 
 
 describe('Integ tests', () => {
@@ -179,8 +188,6 @@ describe('Integ tests', () => {
     expect(msgs.at(-1)).toEqual(final)
   })
 
-  
-
   it('supports tracing sync', async () => {
     const blah = 'blah'
 
@@ -231,29 +238,44 @@ describe('Integ tests', () => {
   })
 
   it('should work with dynamics', async () => {
-    let tb = new TypeBuilder();
-    tb.Person.addProperty("last_name", tb.string().optional());
-    tb.Person.addProperty("height", tb.float().optional()).description("Height in meters");
-    tb.Hobby.addValue("CHESS")
+    let tb = new TypeBuilder()
+    tb.Person.addProperty('last_name', tb.string().optional())
+    tb.Person.addProperty('height', tb.float().optional()).description('Height in meters')
+    tb.Hobby.addValue('CHESS')
     tb.Hobby.listValues().map(([name, v]) => v.alias(name.toLowerCase()))
-    tb.Person.addProperty("hobbies", tb.Hobby.type().list().optional()).description("Some suggested hobbies they might be good at");
+    tb.Person.addProperty('hobbies', tb.Hobby.type().list().optional()).description(
+      'Some suggested hobbies they might be good at',
+    )
 
-    const res = await b.ExtractPeople("My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.", { tb })
+    const res = await b.ExtractPeople(
+      "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
+      { tb },
+    )
     expect(res.length).toBeGreaterThan(0)
     console.log(res)
   })
 
   it('should work with nested classes', async () => {
-    let stream = b.stream.FnOutputClassNested('hi!');
-    let msgs: RecursivePartialNull<TestClassNested[]> = [];
+    let stream = b.stream.FnOutputClassNested('hi!')
+    let msgs: RecursivePartialNull<TestClassNested[]> = []
     for await (const msg of stream) {
       console.log('msg', msg)
-      msgs.push(msg);
+      msgs.push(msg)
     }
 
     const final = await stream.getFinalResponse()
     expect(msgs.length).toBeGreaterThan(0)
     expect(msgs.at(-1)).toEqual(final)
+  })
+
+  it("should work with 'onLogEvent'", async () => {
+    onLogEvent((msg, param2) => {
+      console.log('msg', msg, 'param2', param2)
+    })
+    const res = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
+    expect(res).toContain('a')
+    const res2 = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
+    expect(res2).toContain('a')
   })
 })
 

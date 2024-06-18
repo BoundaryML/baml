@@ -162,7 +162,6 @@ impl ThreadedTracer {
         // Get a mutable lock on the log_event_callback
         let mut callback_lock = self.log_event_callback.lock().unwrap();
 
-        // Set the new callback
         *callback_lock = Some(log_event_callback);
     }
 
@@ -225,6 +224,8 @@ impl ThreadedTracer {
 
             log_event_result?;
         }
+
+        // TODO: do the redaction
 
         let tx = self
             .tx
