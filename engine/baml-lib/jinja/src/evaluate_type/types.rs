@@ -26,6 +26,7 @@ pub enum Type {
     ClassRef(String),
     FunctionRef(String),
     Image,
+    Audio,
 }
 
 impl PartialEq for Type {
@@ -72,6 +73,7 @@ impl Type {
             Type::ClassRef(name) => format!("class {}", name),
             Type::FunctionRef(name) => format!("function {}", name),
             Type::Image => "image".into(),
+            Type::Audio => "audio".into(),
         }
     }
 

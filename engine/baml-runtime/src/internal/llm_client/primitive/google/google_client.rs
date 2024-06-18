@@ -448,7 +448,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
             },
             ChatMessagePart::Audio(audio) => match audio {
                 BamlMedia::Base64(media_type, data) => match media_type {
-                    BamlMediaType::Image => json!({
+                    BamlMediaType::Audio => json!({
                         "inlineData": {
                             "mimeType": format!("audio/{}", data.media_type),
                             "data": data.base64
@@ -457,7 +457,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                     _ => panic!("Unsupported media type"),
                 },
                 BamlMedia::Url(media_type, data) => match media_type {
-                    BamlMediaType::Image => json!({
+                    BamlMediaType::Audio => json!({
                         "fileData": {
                             // "mimeType": image.media_type,
                             "data": data.url

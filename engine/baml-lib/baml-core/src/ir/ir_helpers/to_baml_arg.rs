@@ -57,26 +57,57 @@ pub fn validate_arg(
             TypeValue::Bool if matches!(value, BamlValue::Bool(_)) => Some(value.clone()),
             TypeValue::Null if matches!(value, BamlValue::Null) => Some(value.clone()),
             TypeValue::Image => match value {
-                BamlValue::Image35(v) => Some(BamlValue::Image35(v.clone())),
+                BamlValue::Media(v) => Some(BamlValue::Media(v.clone())),
                 BamlValue::Map(kv) => {
                     if let Some(BamlValue::String(s)) = kv.get("url") {
-                        Some(BamlValue::Image35(baml_types::BamlMedia::url(
+                        Some(BamlValue::Media(baml_types::BamlMedia::url(
                             BamlMediaType::Image,
                             s.to_string(),
                         )))
                     } else if let (
                         Some(BamlValue::String(s)),
-                        Some(BamlValue::String(media_type)),
+                        Some(BamlValue::String(media_type_str)),
                     ) = (kv.get("base64"), kv.get("media_type"))
                     {
-                        Some(BamlValue::Image35(baml_types::BamlMedia::base64(
+                        Some(BamlValue::Media(baml_types::BamlMedia::base64(
                             BamlMediaType::Image,
                             s.to_string(),
-                            media_type.to_string(),
+                            media_type_str.to_string(),
                         )))
                     } else {
                         scope.push_error(format!(
                                 "Invalid image: expected `url` or (`base64` and `media_type`), got `{}`",
+                                value
+                            ));
+                        None
+                    }
+                }
+                _ => {
+                    scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                    None
+                }
+            },
+            TypeValue::Audio => match value {
+                BamlValue::Media(v) => Some(BamlValue::Media(v.clone())),
+                BamlValue::Map(kv) => {
+                    if let Some(BamlValue::String(s)) = kv.get("url") {
+                        Some(BamlValue::Media(baml_types::BamlMedia::url(
+                            BamlMediaType::Audio,
+                            s.to_string(),
+                        )))
+                    } else if let (
+                        Some(BamlValue::String(s)),
+                        Some(BamlValue::String(media_type_str)),
+                    ) = (kv.get("base64"), kv.get("media_type"))
+                    {
+                        Some(BamlValue::Media(baml_types::BamlMedia::base64(
+                            BamlMediaType::Audio,
+                            s.to_string(),
+                            media_type_str.to_string(),
+                        )))
+                    } else {
+                        scope.push_error(format!(
+                                "Invalid audio: expected `url` or (`base64` and `media_type`), got `{}`",
                                 value
                             ));
                         None

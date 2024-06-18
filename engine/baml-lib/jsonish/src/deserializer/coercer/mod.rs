@@ -120,6 +120,12 @@ impl ParsingContext<'_> {
             scope: self.scope.clone(),
         }
     }
+    pub(crate) fn error_audio_not_supported(&self) -> ParsingError {
+        ParsingError {
+            reason: "Audio type is not supported here".to_string(),
+            scope: self.scope.clone(),
+        }
+    }
 
     pub(crate) fn error_missing_required_field<T: AsRef<str>>(
         &self,

@@ -812,7 +812,7 @@ module Baml
     sig {
       
       params(
-        img: Baml::Image,
+        img: Baml::Audio,
       ).returns(String)
       
     }
@@ -1996,7 +1996,7 @@ module Baml
 
     sig {
       params(
-        img: Baml::Image,
+        img: Baml::Audio,
       ).returns(Baml::BamlStream[String])
     }
     def TestAudioInput(

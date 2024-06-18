@@ -13,8 +13,7 @@ pub enum BamlValue {
     Bool(bool),
     Map(BamlMap<String, BamlValue>),
     List(Vec<BamlValue>),
-    Image35(BamlMedia),
-    Audio35(BamlMedia),
+    Media(BamlMedia),
     Enum(String, String),
     Class(String, BamlMap<String, BamlValue>),
     Null,
@@ -29,7 +28,7 @@ impl serde::Serialize for BamlValue {
             BamlValue::Bool(b) => serializer.serialize_bool(*b),
             BamlValue::Map(m) => m.serialize(serializer),
             BamlValue::List(l) => l.serialize(serializer),
-            BamlValue::Image35(i) | BamlValue::Audio35(i) => match i {
+            BamlValue::Media(i) => match i {
                 BamlMedia::Url(BamlMediaType::Image, u) => {
                     let mut s = serializer.serialize_struct("BamlImage", 2)?;
                     s.serialize_field("url", &u.url)?;
@@ -98,8 +97,12 @@ impl BamlValue {
                     format!("list<{}>", value_type)
                 }
             }
-            BamlValue::Image35(_) => "image".into(),
-            BamlValue::Audio35(_) => "audio".into(),
+            BamlValue::Media(m) => match m {
+                BamlMedia::Url(BamlMediaType::Image, _) => "image".into(),
+                BamlMedia::Base64(BamlMediaType::Image, _) => "image".into(),
+                BamlMedia::Url(BamlMediaType::Audio, _) => "audio".into(),
+                BamlMedia::Base64(BamlMediaType::Audio, _) => "audio".into(),
+            },
             BamlValue::Enum(e, _) => format!("enum {}", e),
             BamlValue::Class(c, _) => format!("class {}", c),
             BamlValue::Null => "null".into(),

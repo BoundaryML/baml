@@ -608,7 +608,7 @@ export class BamlClient {
   }
   
   async TestAudioInput(
-      img: Image,
+      img: Audio,
       __baml_options__?: { tb?: TypeBuilder }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
@@ -1735,7 +1735,7 @@ class BamlStreamClient {
   }
   
   TestAudioInput(
-      img: Image,
+      img: Audio,
       __baml_options__?: { tb?: TypeBuilder }
   ): BamlStream<(string | null), string> {
     const raw = this.runtime.streamFunction(

@@ -9,6 +9,7 @@ pub enum TypeValue {
     // Char,
     Null,
     Image,
+    Audio,
 }
 
 impl std::fmt::Display for TypeValue {
@@ -20,6 +21,7 @@ impl std::fmt::Display for TypeValue {
             TypeValue::Bool => write!(f, "bool"),
             TypeValue::Null => write!(f, "null"),
             TypeValue::Image => write!(f, "image"),
+            TypeValue::Audio => write!(f, "audio"),
         }
     }
 }
