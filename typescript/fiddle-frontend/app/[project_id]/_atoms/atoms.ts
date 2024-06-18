@@ -49,6 +49,7 @@ export const activeFileContentAtom = atom((get) => {
 
 export const emptyDirsAtom = atom<string[]>([])
 export const exploreProjectsOpenAtom = atom<boolean>(false)
+export const libraryOpenAtom = atom<boolean>(false)
 
 export const productTourDoneAtom = atomWithStorage<boolean>('initial_tutorial_v1', false)
 export const productTourTestDoneAtom = atomWithStorage<boolean>('test_tour_v1', false)
