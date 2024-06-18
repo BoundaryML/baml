@@ -1,0 +1,77 @@
+---
+title: "Python Installation"
+---
+
+Here's a sample repository: 
+https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter
+
+To set up BAML in typescript do the following:
+
+<Steps>
+  <Step title="Install BAML VSCode Extension">
+      https://marketplace.visualstudio.com/items?itemName=boundary.BAML
+
+      - syntax highlighting
+      - testing playground
+      - prompt previews
+
+      <Tip>
+      In your VSCode User Settings, highly recommend adding this to get better autocomplete for python in general, not just BAML.
+
+      ```json
+      {
+        "python.analysis.typeCheckingMode": "basic"
+      }
+      ```
+      </Tip>
+  </Step>
+  <Step title="Install baml">
+        ```bash
+        pip install baml-py
+        ```
+  </Step>
+  <Step title="Add some starter code">
+      This will give you some starter BAML code in a `baml_src` directory.
+
+      ```bash
+      baml-cli init
+      ```
+  </Step>
+  <Step title="Generate python code from .baml files">
+
+    This command will help you convert `.baml` files to `.py` files. Everytime you modify your `.baml` files,
+    you must re-run this command, and regenerate the `baml_client` folder.
+
+    <Tip>
+      If you download our [VSCode extension](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension), it will automatically generate `baml_client` on save!
+    </Tip>
+
+    ```bash
+    baml-cli generate
+    ```
+  </Step>
+  <Step title="Use a baml function in python!">
+    <Tip>If `baml_client` doesn't exist, make sure to run the previous step!</Tip>
+
+    ```python main.py
+    from baml_client import b
+    from baml_client.types import Resume
+
+    async def example(raw_resume: str) -> Resume: 
+      # BAML's internal parser guarantees ExtractResume
+      # to be always return a Resume type
+      response = await b.ExtractResume(raw_resume)
+      return response
+
+    async def example_stream(raw_resume: str) -> Resume:
+      stream = b.stream.ExtractResume(raw_resume)
+      async for msg in stream:
+        print(msg) # This will be a PartialResume type
+      
+      # This will be a Resume type
+      final = stream.get_final_response()
+
+      return final
+    ```
+  </Step>
+</Steps>

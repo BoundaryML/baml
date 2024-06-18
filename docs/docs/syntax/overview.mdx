@@ -41,12 +41,6 @@ await b.YourAIFunction();
 
 </CodeGroup>
 
-3. `baml_src/__tests__/` are where your unit tests live. The `.json` files
-   store the test inputs that can be loaded, deleted, created, and ran using
-   the BAML VSCode extension. You can also write programmatic python/TS tests
-   anywhere you like. See [here](/v3/syntax/function-testing) for more
-   information.
-
 <Warning>
   **You should never edit any files inside baml_client directory** as the whole
   directory gets regenerated on every `baml build` (auto runs on save if using

@@ -20,46 +20,42 @@
   },
   "anchors": [
     {
+      "name": "Guides & Examples",
+      "icon": "cubes",
+      "url": "docs/guides"
+    },
+    {
+      "name": "Reference",
+      "icon": "book",
+      "url": "docs/syntax"
+    },
+    {
       "name": "Open Boundary Studio",
       "icon": "sparkles",
       "url": "https://app.boundaryml.com"
     },
     {
-      "name": "Join our Discord",
+      "name": "Community",
       "icon": "discord",
       "url": "https://discord.gg/BTNBeXGuaS"
-    },
-    {
-      "name": "Schedule a call",
-      "icon": "phone",
-      "url": "https://calendly.com/boundaryml/meeting-with-founders"
     }
   ],
   "topbarCtaButton": {
     "type": "github",
     "url": "https://github.com/boundaryml/baml"
   },
-  "tabs": [
-    {
-      "name": "Guides & Examples",
-      "url": "docs/guides"
-    },
-    {
-      "name": "BAML Syntax Reference",
-      "url": "docs/syntax"
-    }
-  ],
   "navigation": [
     {
-      "group": "Overview",
-      "pages": ["docs/home/overview", "docs/home/faq"]
+      "group": "Get started",
+      "pages": ["docs/home/overview", "docs/home/demo"]
     },
     {
-      "group": "Quickstart",
+      "group": "Setup",
       "pages": [
-        "docs/home/installation",
-        "docs/home/baml-in-2-min",
-        "docs/home/roadmap"
+        "docs/home/example_nextjs",
+        "docs/home/example_python",
+        "docs/home/example_ruby",
+        "docs/home/baml-in-2-min"
       ]
     },
     {
@@ -93,9 +89,7 @@
     },
     {
       "group": "prompt",
-      "pages": [
-        "docs/syntax/prompt_engineering/overview"
-      ]
+      "pages": ["docs/syntax/prompt_engineering/overview"]
     },
 
     {
@@ -106,7 +100,7 @@
         "docs/syntax/client/redundancy"
       ]
     },
-   
+
     {
       "group": "How-to Guides",
       "pages": [
