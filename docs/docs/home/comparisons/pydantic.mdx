@@ -342,10 +342,7 @@ Here we use a "GPT4" client, but you can use any model. See [client docs](/docs/
 </Note>
 {/* 
 ```rust
-function ExtractResume {
-  input (resume_text: string)
-  output Resume
-}
+
 
 class Education {
   school string
@@ -359,18 +356,18 @@ class Resume {
   education Education[]
 }
 
-impl<llm, ExtractResume> version1 {
+function ExtractResume(resume_text: string) -> Resume {
   client GPT4
   prompt #"
     Parse the following resume and return a structured representation of the data in the schema below.
 
     Resume:
     ---
-    {#input.resume_text}
+    {{ input.resume_text }}
     ---
 
     Output in this JSON format:
-    {#print_type(output)}
+    {{ ctx.output_format }}
 
     Output JSON:
   "#

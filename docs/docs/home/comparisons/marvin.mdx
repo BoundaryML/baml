@@ -77,12 +77,7 @@ enum RequestType {
   INQUIRY @alias("general inquiry")
 }
 
-function ClassifyRequest {
-  input string
-  output RequestType
-}
-
-impl<llm, ClassifyRequest> {
+function ClassifyRequest(input: string) -> RequestType {
   client GPT4 // choose even open source models
   prompt #"
     You are an expert classifier that always maintains as much semantic meaning
@@ -91,11 +86,10 @@ impl<llm, ClassifyRequest> {
 
     TEXT:
     ---
-    Reset my password
+    {{ input }}
     ---
 
-    LABELS:
-    {#print_enum(RequestType)}
+    {{ ctx.output_format }}
 
     The best label for the text is:
   "#
@@ -129,5 +123,3 @@ Marvin was a big source of inspiration for us -- their approach is simple and el
 BAML does have some limitations we are continuously working on. Here are a few of them:
 1. It is a new language. However, it is fully open source and getting started takes less than 10 minutes. We are on-call 24/7 to help with any issues (and even provide prompt engineering tips)
 1. Developing requires VSCode. You _could_ use vim and we have workarounds but we don't recommend it.
-1. Explicitly defining system / and user prompts. We have worked with many customers across healthcare and finance and have not seen any issues but we will support this soon.
-1. BAML does not support images. Until this is available you can definitely use BAML alongside other frameworks.

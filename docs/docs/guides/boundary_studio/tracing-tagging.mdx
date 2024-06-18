@@ -29,10 +29,10 @@ async def pre_process_text(text):
 
 @trace
 async def full_analysis(book: Book):
-    sentiment = await baml.ClassifySentiment.get_impl("v1").run(
+    sentiment = await baml.ClassifySentiment(
         pre_process_text(book.content)
     )
-    book_analysis = await baml.AnalyzeBook.get_impl("v1").run(book)
+    book_analysis = await baml.AnalyzeBook(book)
     return book_analysis
 
 
