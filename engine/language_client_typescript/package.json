@@ -16,7 +16,7 @@
     "node-addon-api"
   ],
   "bin": {
-    "baml-cli": "./cli.js"
+    "baml-cli": "cli.js"
   },
   "files": [
     "./cli.js",
@@ -61,13 +61,13 @@
     "format": "run-p format:biome format:rs format:toml",
     "format:biome": "biome --write .",
     "format:rs": "cargo fmt",
-    "prepublishOnly": "napi prepublish -t npm",
+    "prepublishOnly": "napi prepublish --no-gh-release",
     "test": "echo no tests implemented",
     "version": "napi version"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",
-    "@napi-rs/cli": "^3.0.0-alpha.54",
+    "@napi-rs/cli": "3.0.0-alpha.54",
     "@types/node": "^20.12.11",
     "npm-run-all2": "^6.1.2",
     "ts-node": "^10.9.2",
