@@ -61,13 +61,13 @@
     "format": "run-p format:biome format:rs format:toml",
     "format:biome": "biome --write .",
     "format:rs": "cargo fmt",
-    "prepublishOnly": "napi prepublish --skip-gh-release",
+    "prepublishOnly": "napi prepublish --no-gh-release",
     "test": "echo no tests implemented",
     "version": "napi version"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",
-    "@napi-rs/cli": "^3.0.0-alpha.54",
+    "@napi-rs/cli": "3.0.0-alpha.54",
     "@types/node": "^20.12.11",
     "npm-run-all2": "^6.1.2",
     "ts-node": "^10.9.2",
@@ -78,5 +78,13 @@
     "url": "https://github.com/BoundaryML/baml/issues"
   },
   "homepage": "https://github.com/BoundaryML/baml#readme",
-  "author": ""
+  "author": "",
+  "optionalDependencies": {
+    "@boundaryml/baml-darwin-arm64": "0.40.0",
+    "@boundaryml/baml-win32-arm64-msvc": "0.40.0",
+    "@boundaryml/baml-linux-arm64-gnu": "0.40.0",
+    "@boundaryml/baml-darwin-x64": "0.40.0",
+    "@boundaryml/baml-win32-x64-msvc": "0.40.0",
+    "@boundaryml/baml-linux-x64-gnu": "0.40.0"
+  }
 }

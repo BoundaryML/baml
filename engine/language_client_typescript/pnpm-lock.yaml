@@ -9,7 +9,7 @@ devDependencies:
     specifier: ^1.7.3
     version: 1.7.3
   '@napi-rs/cli':
-    specifier: ^3.0.0-alpha.54
+    specifier: 3.0.0-alpha.54
     version: 3.0.0-alpha.54
   '@types/node':
     specifier: ^20.12.11
