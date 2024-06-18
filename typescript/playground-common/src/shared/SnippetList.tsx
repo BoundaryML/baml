@@ -20,12 +20,12 @@ const textComponents = [
        
     lang: 'baml',
     text2: `test MyTest {
-      functions [ExtractResume]
-      args {
-        resume_text "hello"
-      }
+    functions [ExtractResume]
+    args {
+      resume_text "hello"
     }
-    
+    }
+
     `
   },
   { 
@@ -33,7 +33,7 @@ const textComponents = [
     name: 'Fallbacks and redundancy', 
     text1: `Many LLMs are subject to fail due to transient errors. \nSetting up a fallback allows you to switch to a different LLM when prior LLMs fail (e.g. outage, high latency, rate limits, etc).`,
     lang: 'baml',
-    text2: 'client<llm> MySafeClient {\n\tprovider baml-fallback\n\toptions {\n\t\t// First try GPT4 client, if it fails, try GPT35 client.\n\t\tstrategy [\n\t\t\tGPT4,\n\t\t\tGPT35\n\t\t\t// If you had more clients, you could add them here.\n\t\t\t// Anthropic\n\t\t]\n\t}\n}\n\nclient<llm> GPT4 {\n\tprovider baml-openai-chat\n\toptions {\n\t\t// ...\n\t}\n}\n\nclient<llm> GPT35 {\n\tprovider baml-openai-chat\n\toptions {\n\t\t// ...\n\t}\n}'
+    text2: 'client<llm> MySafeClient {\n\tprovider baml-fallback\n\toptions {\n\t\t// First try GPT4 client, if it fails, try GPT35 client.\n\t\tstrategy [\n\t\t\tGPT4,\n\t\t\tGPT35\n\t\t\t// If you had more clients, you could add them here.\n\t\t\t// Anthropic\n\t\t]\n\t}\n}\n\nclient<llm> GPT4 {\n\tprovider openai\n\toptions {\n\t\t// ...\n\t}\n}\n\nclient<llm> GPT35 {\n\tprovider openai\n\toptions {\n\t\t// ...\n\t}\n}'
 
   },
   {
@@ -48,7 +48,7 @@ const textComponents = [
     name: 'Evaluate LLM Results',
     text1: 'To add assertions to your tests, or add more complex testing scenarios, you can use pytest to test your functions, since Playground BAML tests don’t currently support assertions.', 
     lang: 'python',
-    text2: 'from baml_client import baml as b\n  from baml_client.types import Email\n  from baml_client.testing import baml_test\n  import pytest\n\n  # Run `poetry run pytest -m baml_test` in this directory.\n  # Setup Boundary Studio to see test details!\n  @pytest.mark.asyncio\n  async def test_get_order_info():\n    order_info = await b.GetOrderInfo(Email(\n        subject="Order #1234",\n        body="Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99"\n    ))\n\n    assert order_info.cost == 999.99\n\n'
+    text2: 'from baml_client import baml as b\nfrom baml_client.types import Email\nfrom baml_client.testing import baml_test\nimport pytest\n\n# Run `poetry run pytest -m baml_test` in this directory.\n# Setup Boundary Studio to see test details!\n@pytest.mark.asyncio\nasync def test_get_order_info():\n  order_info = await b.GetOrderInfo(Email(\n      subject="Order #1234",\n      body="Your order has been shipped. It will arrive on 1st Jan 2022. Product: iPhone 13. Cost: $999.99"\n  ))\n\nassert order_info.cost == 999.99\n\n'
   },
 
   {

@@ -19,7 +19,7 @@ const SnippetCard = ({ title, description, code, lang }: { title: string, descri
 
 const SnippetTitle = ({ text }: { text: string }) => {
   return (
-    <div className="bg-zinc-900 text-3xl text-white m-0 ">
+    <div className="bg-zinc-900 text-xl text-white m-0 ">
       {text}
     </div>
   );
@@ -29,7 +29,7 @@ const SnippetTitle = ({ text }: { text: string }) => {
 const SnippetContent = ({ text }: { text: string }) => {
   const formattedText = text.replace(/\n/g, '<br/>').replace(/\t/g, '&emsp;');
   return (
-    <div className="bg-zinc-900 text-lg text-white " dangerouslySetInnerHTML={{ __html: formattedText }} />
+    <div className="bg-zinc-900 text-s text-white " dangerouslySetInnerHTML={{ __html: formattedText }} />
   );
 }
 

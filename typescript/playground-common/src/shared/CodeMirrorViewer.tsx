@@ -7,9 +7,9 @@ import {javascript} from '@codemirror/lang-javascript'
 import CodeMirror, {EditorView} from '@uiw/react-codemirror'
 
 
-const extensions = [EditorView.lineWrapping]
 
 export const CodeMirrorViewer = ({ fileContent, lang}: { fileContent: string; lang:string }) => {
+  let extensions = [EditorView.lineWrapping]
 
 
   if (lang === 'python'){
