@@ -44,30 +44,30 @@ To set up BAML in typescript do the following:
     <Tip>If `baml_client` doesn't exist, make sure to run the previous step!</Tip>
 
     ```ruby main.rb
-	require_relative "baml_client/client"
+    require_relative "baml_client/client"
 
-	def example(raw_resume)
-		# r is an instance of Baml::Types::Resume, defined in baml_client/types
-		r = Baml.Client.ExtractResume(resume: raw_resume)
+    def example(raw_resume)
+        # r is an instance of Baml::Types::Resume, defined in baml_client/types
+        r = Baml.Client.ExtractResume(resume: raw_resume)
 
-		puts "ExtractResume response:"
-		puts r.inspect
-	end
+        puts "ExtractResume response:"
+        puts r.inspect
+    end
 
-	def example_stream(raw_resume)
-		stream = Baml.Client.stream.ExtractResume(resume: raw_resume)
+    def example_stream(raw_resume)
+        stream = Baml.Client.stream.ExtractResume(resume: raw_resume)
 
-		stream.each do |msg|
-			#msg is an instance of Baml::PartialTypes::Resume
-			# defined in baml_client/partial_types
-			puts msg.inspect
-		end
+        stream.each do |msg|
+            #msg is an instance of Baml::PartialTypes::Resume
+            # defined in baml_client/partial_types
+            puts msg.inspect
+        end
 
-		stream.get_final_response
-	end
+        stream.get_final_response
+    end
 
-	example 'Grace Hopper created COBOL'
-	example_stream 'Grace Hopper created COBOL'
+    example 'Grace Hopper created COBOL'
+    example_stream 'Grace Hopper created COBOL'
     ```
   </Step>
 </Steps>
