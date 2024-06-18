@@ -40,13 +40,15 @@ const Node = ({ node, style, dragHandle }: NodeRendererProps<any>) => {
     <div
       className={clsx(
         'group relative px-2 py-1 cursor-pointer overflow-x-clip flex flex-col text-xs',
-        node.state.isSelected ? 'bg-zinc-600 text-white' : 'text-muted-foreground'
+        node.state.isSelected ? 'bg-zinc-600 text-white' : 'text-muted-foreground',
       )}
       style={style}
       ref={dragHandle}
     >
       <div className='flex flex-row items-center w-full pl-2 gap-x-1' onClick={() => node.isInternal && node.toggle()}>
-        <span className='arrow'>{node.isLeaf ? null : (node.isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />)}</span>
+        <span className='arrow'>
+          {node.isLeaf ? null : node.isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        </span>
         <span className='node-text'>
           {renderIcon(node.id)}
           {node.data.name}

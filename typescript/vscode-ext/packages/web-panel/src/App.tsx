@@ -19,7 +19,7 @@ import 'jotai-devtools/styles.css'
 import { SettingsIcon } from 'lucide-react'
 import { BamlProjectsGroupings, loadExampleProjects } from './lib/utils'
 import { Snippets } from './shared/Snippets'
-import { Dialog, DialogTrigger, DialogContent} from './components/ui/dialog'
+import { Dialog, DialogTrigger, DialogContent } from './components/ui/dialog'
 function App() {
   return (
     <CustomErrorBoundary>
@@ -29,19 +29,18 @@ function App() {
           <div className='absolute z-10 flex flex-row items-center justify-center gap-1 right-1 top-2 text-end'>
             <Dialog>
               <DialogTrigger>
-              <Button
+                <Button
                   variant={'ghost'}
                   className='flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foreground mr-2'
                 >
                   <Compass size={16} strokeWidth={2} />
                   <span className='whitespace-nowrap'>Explore Examples</span>
-                </Button>             
+                </Button>
               </DialogTrigger>
 
               <DialogContent className='fullWidth min-w-full h-full border-zinc-900 bg-zinc-900'>
                 <Snippets></Snippets>
               </DialogContent>
-
             </Dialog>
 
             <VSCodeLink href='https://docs.boundaryml.com'>Docs</VSCodeLink>

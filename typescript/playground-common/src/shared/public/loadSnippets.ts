@@ -48,21 +48,21 @@ export async function loadExampleProject(
 const getSnippetFile = async (projectPath: string): Promise<EditorFile> => {
   const examplesPath = path.join(process.cwd(), 'snippetFiles')
   const filePath = path.join(examplesPath, projectPath)
-  
-  let fileContent: string | null = null;
-  let error: Error | null = null;
+
+  let fileContent: string | null = null
+  let error: Error | null = null
 
   try {
-    fileContent = await fs.readFile(filePath, 'utf8');
+    fileContent = await fs.readFile(filePath, 'utf8')
   } catch (err) {
-    error = err as Error;
+    error = err as Error
   }
 
   if (!fileContent) {
-    throw new Error(`No file found at path ${filePath}`);
+    throw new Error(`No file found at path ${filePath}`)
   }
 
-  return { path: filePath, content: fileContent };
+  return { path: filePath, content: fileContent }
 }
 
 export type BamlSnippetsGroupings = {
@@ -71,37 +71,35 @@ export type BamlSnippetsGroupings = {
 
 export async function loadExampleProjects(): Promise<BamlSnippetsGroupings> {
   const exampleProjects: BamlSnippetsGroupings = {
-      snippets: [
-        
-          { 
-            id: "system_user_prompts", 
-            name: 'System vs user prompts',
-            description: `Configuring roles in LLM prompts enhances the effectiveness and reliability of interactions with language models. Use the {{ _.role()}} keyword to get started.`,             
-            filePath: 'system_user_prompts',
-            // : 'function ClassifyMessage(input: string) -> Category {\n    client GPT4Turbo\n  \n    prompt #"\n      {# _.role("system") starts a system message #}\n      {{ _.role("system") }}\n  \n      Classify the following INPUT into ONE\n      of the following categories:\n  \n      {{ ctx.output_format }}\n  \n      {# This starts a user message #}\n      {{ _.role("user") }}\n  \n      INPUT: {{ input }}\n  \n      Response:\n    "#\n  }' 
-          },
-          // { 
-          //   id: "test_ai_function", 
-          //   name: 'Test an AI function', 
-          //   text1: `There are two types of tests you may want to run on your AI functions: - Unit Tests: Tests a single AI function (using the playground) - Integration Tests: Tests a pipeline of AI functions and potentially business logic`, 
-          //   text2: 'dynamic_clients Text 2' 
-          // },
-          // { 
-          //   id: "evaluate_results", 
-          //   name: 'Evaluate results with assertions or LLM Evals', 
-          //   text1: 'Third client_options Text 1', 
-          //   text2: 'Third client_options Text 2' 
-          // },
-          // {
-          //   id: "starting_page", 
-          //   name: '', 
-          //   text1: 'SPs Text 1', 
-          //   text2: 'Third client_options Text 2' 
-          // },
-          // Add more components as neededstarting_page
-        
-      ]
-    }
-      // Add more components as neededstarting_p
+    snippets: [
+      {
+        id: 'system_user_prompts',
+        name: 'System vs user prompts',
+        description: `Configuring roles in LLM prompts enhances the effectiveness and reliability of interactions with language models. Use the {{ _.role()}} keyword to get started.`,
+        filePath: 'system_user_prompts',
+        // : 'function ClassifyMessage(input: string) -> Category {\n    client GPT4Turbo\n  \n    prompt #"\n      {# _.role("system") starts a system message #}\n      {{ _.role("system") }}\n  \n      Classify the following INPUT into ONE\n      of the following categories:\n  \n      {{ ctx.output_format }}\n  \n      {# This starts a user message #}\n      {{ _.role("user") }}\n  \n      INPUT: {{ input }}\n  \n      Response:\n    "#\n  }'
+      },
+      // {
+      //   id: "test_ai_function",
+      //   name: 'Test an AI function',
+      //   text1: `There are two types of tests you may want to run on your AI functions: - Unit Tests: Tests a single AI function (using the playground) - Integration Tests: Tests a pipeline of AI functions and potentially business logic`,
+      //   text2: 'dynamic_clients Text 2'
+      // },
+      // {
+      //   id: "evaluate_results",
+      //   name: 'Evaluate results with assertions or LLM Evals',
+      //   text1: 'Third client_options Text 1',
+      //   text2: 'Third client_options Text 2'
+      // },
+      // {
+      //   id: "starting_page",
+      //   name: '',
+      //   text1: 'SPs Text 1',
+      //   text2: 'Third client_options Text 2'
+      // },
+      // Add more components as neededstarting_page
+    ],
+  }
+  // Add more components as neededstarting_p
   return exampleProjects
 }
