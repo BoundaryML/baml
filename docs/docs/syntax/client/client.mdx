@@ -7,7 +7,7 @@ A **client** is the mechanism by which a function calls an LLM.
 ## Syntax
 
 ```rust
-client<CLIENT_TYPE> Name {
+client<llm> Name {
     provider ProviderName
     options {
       // ...
@@ -15,7 +15,6 @@ client<CLIENT_TYPE> Name {
 }
 ```
 
-- `CLIENT_TYPE`: What type of AI model will be used. Currently must be `llm`
 - `Name`: The name of the client (can be any [a-zA-Z], numbers or `_`). Must start with a letter.
 
 ## Properties
