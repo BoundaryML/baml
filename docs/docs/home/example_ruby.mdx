@@ -58,7 +58,7 @@ To set up BAML in typescript do the following:
         stream = Baml.Client.stream.ExtractResume(resume: raw_resume)
 
         stream.each do |msg|
-            #msg is an instance of Baml::PartialTypes::Resume
+            # msg is an instance of Baml::PartialTypes::Resume
             # defined in baml_client/partial_types
             puts msg.inspect
         end
