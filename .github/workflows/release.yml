@@ -11,9 +11,12 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
-
+env:
+  DEBUG: napi:*
+  APP_NAME: baml
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
 jobs:
   build-wasm:
     runs-on: ubuntu-latest
@@ -39,7 +42,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           cache: "pnpm"
-          node-version: 18
+          node-version: 20
           cache-dependency-path: |
             typescript/**/pnpm-lock.yaml
       - name: Install Dependencies
@@ -63,7 +66,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: baml-vscode.vsix
-          path: typescript/vscode-ext/packages/baml-${{ steps.build.outputs.version }}.vsix
+          path: typescript/vscode-ext/packages/baml-extension-${{ steps.build.outputs.version }}.vsix
+          if-no-files-found: error
 
       # Upload the artifact (helpful for debugging and manual downloads)
       - name: Upload VSCode Extension Artifact
@@ -71,6 +75,7 @@ jobs:
         with:
           name: baml-out
           path: typescript/vscode-ext/packages/vscode/out
+          if-no-files-found: error
 
       # upload the lang server artifact
       - name: Upload VSCode Lang Server Extension Artifact
@@ -78,12 +83,14 @@ jobs:
         with:
           name: language-server
           path: typescript/vscode-ext/packages/language-server/out
+          if-no-files-found: error
 
       - name: VSCode Playground Artifact
         uses: actions/upload-artifact@v4
         with:
           name: vscode-playground
           path: typescript/vscode-ext/packages/web-panel/dist
+          if-no-files-found: error
 
   build-release:
     strategy:
@@ -135,7 +142,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: |
             engine/language_client_typescript/pnpm-lock.yaml
-            typescript/**/pnpm-lock.yaml
       # Install rust
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -206,8 +212,9 @@ jobs:
           python-version: "3.8"
       - uses: actions/download-artifact@v4
         with:
-          name: wheels-*
+          pattern: wheels-*
 
+      - run: mkdir dist && mv wheels-*/* dist
       # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
       # it is pinned to this github actions filename, so renaming this file is not safe!!
       - name: Publish package to PyPI
@@ -218,6 +225,8 @@ jobs:
     environment: release
     needs: [build-release, build-wasm]
     runs-on: ubuntu-latest
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -245,7 +254,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: bindings-*
+          pattern: bindings-*
+          path: engine/language_client_typescript/artifacts
 
       - name: create npm dirs
         run: pnpm napi create-npm-dirs
@@ -259,6 +269,7 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
         run: |
           npm publish --access public
+        working-directory: engine/language_client_typescript
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -290,15 +301,21 @@ jobs:
       - name: Get artifact
         uses: actions/download-artifact@v4
         with:
-          name: vscode-playground
+          pattern: vscode-playground
           path: typescript/vscode-ext/packages/web-panel/dist
 
+      - name: setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.6
+          package_json_file: typescript/package.json
+          run_install: false
       # Set up Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           cache: "pnpm"
-          node-version: 18
+          node-version: 20
           cache-dependency-path: typescript/pnpm-lock.yaml
 
       - name: Install Dependencies
@@ -307,7 +324,7 @@ jobs:
       - name: Publish
         if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
         run: |
-          pnpm run vscode:publish --pre-release --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
+          pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
         working-directory: typescript/vscode-ext/packages
 
   release-github:
