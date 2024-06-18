@@ -440,6 +440,3 @@ class HobbyValues:
         if name not in self.__values:
             raise AttributeError(f"Value {name} not found.")
         return self.__bldr.value(name)
-
-
-__all__ = ["TypeBuilder"]
