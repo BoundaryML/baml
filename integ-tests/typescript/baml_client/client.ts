@@ -37,6 +37,21 @@ export class BamlClient {
   }  
 
   
+  async AudioInput(
+      aud: Audio,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "AudioInput",
+      {
+        "aud": aud
+      },
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return raw.parsed() as string
+  }
+  
   async ClassifyMessage(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
@@ -607,21 +622,6 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
-  async TestAudioInput(
-      img: Audio,
-      __baml_options__?: { tb?: TypeBuilder }
-  ): Promise<string> {
-    const raw = await this.runtime.callFunction(
-      "TestAudioInput",
-      {
-        "img": img
-      },
-      this.ctx_manager.get(),
-      __baml_options__?.tb?.__tb(),
-    )
-    return raw.parsed() as string
-  }
-  
   async TestAzure(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
@@ -897,6 +897,28 @@ export class BamlClient {
 class BamlStreamClient {
   constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
 
+  
+  AudioInput(
+      aud: Audio,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): BamlStream<(string | null), string> {
+    const raw = this.runtime.streamFunction(
+      "AudioInput",
+      {
+        "aud": aud
+      },
+      undefined,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return new BamlStream<(string | null), string>(
+      raw,
+      (a): a is (string | null) => a,
+      (a): a is string => a,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
   
   ClassifyMessage(
       input: string,
@@ -1728,28 +1750,6 @@ class BamlStreamClient {
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
       (a): a is RecursivePartialNull<string> => a,
-      (a): a is string => a,
-      this.ctx_manager.get(),
-      __baml_options__?.tb?.__tb(),
-    )
-  }
-  
-  TestAudioInput(
-      img: Audio,
-      __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
-    const raw = this.runtime.streamFunction(
-      "TestAudioInput",
-      {
-        "img": img
-      },
-      undefined,
-      this.ctx_manager.get(),
-      __baml_options__?.tb?.__tb(),
-    )
-    return new BamlStream<(string | null), string>(
-      raw,
-      (a): a is (string | null) => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),

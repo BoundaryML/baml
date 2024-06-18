@@ -180,7 +180,7 @@ where
         MappedPyType::Int(v) => BamlValue::Int(v),
         MappedPyType::Float(v) => BamlValue::Float(v),
         MappedPyType::Bool(v) => BamlValue::Bool(v),
-        MappedPyType::BamlImage(v) => BamlValue::Image35(v),
+        MappedPyType::BamlImage(v) => BamlValue::Media(v),
         MappedPyType::None => BamlValue::Null,
         MappedPyType::Unsupported(r#type) => {
             return if matches!(handle_unknown_types, UnknownTypeHandler::Ignore) {

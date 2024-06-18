@@ -32,7 +32,7 @@ title: Supported Types
 
 - **Syntax:** `null`
 
-### ✅  Images
+### ✅ Images
 
 You can use an image like this:
 
@@ -46,6 +46,23 @@ function DescribeImage(myImg: image) -> string {
   "#
 }
 ```
+
+
+### ✅ Audio
+We support audio for existing models that support it, such as Gemini Pro and Flash. 
+You can use audio like this:
+
+```rust
+function DescribeAudio(myAudio: audio) -> string {
+  client GPT4Turbo
+  prompt #"
+    {{ _.role("user")}}
+    Describe the tone of this song in four words:
+    {{ myAudio }}
+  "#
+}
+```
+
 
 ### ⚠️ bytes
 

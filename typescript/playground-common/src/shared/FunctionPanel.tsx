@@ -1,13 +1,44 @@
 /// Content once a function has been selected.
 
 import { useAtomValue } from 'jotai'
-import { useId, useRef } from 'react'
+import { useId, useRef, useState } from 'react'
 import { renderPromptAtom, selectedFunctionAtom } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
 import { Snippet } from './ImplPanel'
 import FunctionTestSnippet from './TestSnippet'
+
+import { useWavesurfer } from '@wavesurfer/react';
+
+const AudioPlayer = ({ url }: { url: string }) => {
+  const containerRef = useRef(null);
+
+  const { wavesurfer, isReady, isPlaying, currentTime } = useWavesurfer({
+    container: containerRef,
+    url: url, // use the passed prop url
+    waveColor: 'purple',
+    height: 100,
+  });
+
+  const onPlayPause = () => {
+    if (wavesurfer) {
+      wavesurfer.playPause();
+    }
+  };
+
+  return (
+    <>
+      <div ref={containerRef} style={{ width: '100%', height: '100px' }} /> {/* Ensure some dimensions are set */}
+
+      <button onClick={onPlayPause}>
+        {isPlaying ? 'Pause' : 'Play'}
+      </button>
+    </>
+  );
+};
+
+
 
 const PromptPreview: React.FC = () => {
   const promptPreview = useAtomValue(renderPromptAtom)
@@ -61,7 +92,25 @@ const PromptPreview: React.FC = () => {
                   }}
                 />
               )
-            if (part.is_image()) return <img key={idx} src={part.as_image()} className='max-w-40' />
+            if (part.is_image()) {
+              const imageUrl = part.as_audio();
+              console.log(`imageUrl: ${imageUrl}`)
+              
+              return <img key={idx} src={part.as_image()} className='max-w-40' />
+            }
+            if (part.is_audio()) {
+              const audioUrl = part.as_audio();
+              console.log(`audioUrl: ${audioUrl}`)
+              if (audioUrl) {
+                // return <h1> Audio Component! </h1>
+                return (<audio controls key={audioUrl + idx} >
+                  <source src={audioUrl}/>
+                  Your browser does not support the audio element.
+
+              </audio>)
+
+              }
+            }
             return null
           })}
         </div>

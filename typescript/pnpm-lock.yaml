@@ -431,6 +431,9 @@ importers:
       '@vscode/webview-ui-toolkit':
         specifier: ^1.2.2
         version: 1.4.0(react@18.3.1)
+      '@wavesurfer/react':
+        specifier: ^1.0.6
+        version: 1.0.6(react@18.3.1)(wavesurfer.js@7.7.15)
       allotment:
         specifier: ^1.19.3
         version: 1.20.1(react-dom@18.3.1)(react@18.3.1)
@@ -467,12 +470,18 @@ importers:
       react:
         specifier: ^18.2.0
         version: 18.3.1
+<<<<<<< HEAD
       react-arborist:
         specifier: ^3.4.0
         version: 3.4.0(@types/node@20.12.12)(@types/react@18.3.2)(react-dom@18.3.1)(react@18.3.1)
       react-code-blocks:
         specifier: ^0.1.6
         version: 0.1.6(react-dom@18.3.1)(react@18.3.1)
+=======
+      react-audio-player:
+        specifier: ^0.17.0
+        version: 0.17.0(react-dom@18.3.1)(react@18.3.1)
+>>>>>>> cdb84ce3 (audio rendering works in playground)
       react-error-boundary:
         specifier: ^4.0.11
         version: 4.0.13(react@18.3.1)
@@ -506,6 +515,9 @@ importers:
       unique-names-generator:
         specifier: ^4.7.1
         version: 4.7.1
+      wavesurfer.js:
+        specifier: ^7.7.15
+        version: 7.7.15
       zod:
         specifier: ^3.22.4
         version: 3.23.8
@@ -894,6 +906,9 @@ importers:
       '@vscode/webview-ui-toolkit':
         specifier: ^1.2.2
         version: 1.4.0(react@18.3.1)
+      '@wavesurfer/react':
+        specifier: ^1.0.6
+        version: 1.0.6(react@18.3.1)(wavesurfer.js@7.7.15)
       allotment:
         specifier: ^1.19.3
         version: 1.20.1(react-dom@18.3.1)(react@18.3.1)
@@ -933,12 +948,18 @@ importers:
       react:
         specifier: ^18.2.0
         version: 18.3.1
+<<<<<<< HEAD
       react-arborist:
         specifier: ^3.4.0
         version: 3.4.0(@types/node@20.12.12)(@types/react@18.3.2)(react-dom@18.3.1)(react@18.3.1)
       react-code-blocks:
         specifier: ^0.1.6
         version: 0.1.6(react-dom@18.3.1)(react@18.3.1)
+=======
+      react-audio-player:
+        specifier: ^0.17.0
+        version: 0.17.0(react-dom@18.3.1)(react@18.3.1)
+>>>>>>> cdb84ce3 (audio rendering works in playground)
       react-error-boundary:
         specifier: ^4.0.11
         version: 4.0.13(react@18.3.1)
@@ -966,6 +987,9 @@ importers:
       unique-names-generator:
         specifier: ^4.7.1
         version: 4.7.1
+      wavesurfer.js:
+        specifier: ^7.7.15
+        version: 7.7.15
       zod:
         specifier: ^3.22.4
         version: 3.23.8
@@ -5547,6 +5571,16 @@ packages:
       '@microsoft/fast-react-wrapper': 0.3.24(react@18.3.1)
       react: 18.3.1
       tslib: 2.6.2
+    dev: false
+
+  /@wavesurfer/react@1.0.6(react@18.3.1)(wavesurfer.js@7.7.15):
+    resolution: {integrity: sha512-ooDSebxs2Z00S6h7nGrA8SSXmins6MnJF944MiUVrnVeaoNDDIgursBIXo3MtZ9QLN3Vlt3cNLU3u16vsZZCJg==}
+    peerDependencies:
+      react: ^18.2.0
+      wavesurfer.js: '>=7.7.14'
+    dependencies:
+      react: 18.3.1
+      wavesurfer.js: 7.7.15
     dev: false
 
   /@webassemblyjs/ast@1.12.1:
@@ -11510,6 +11544,17 @@ packages:
       - '@types/react'
     dev: false
 
+  /react-audio-player@0.17.0(react-dom@18.3.1)(react@18.3.1):
+    resolution: {integrity: sha512-aCZgusPxA9HK7rLZcTdhTbBH9l6do9vn3NorgoDZRxRxJlOy9uZWzPaKjd7QdcuP2vXpxGA/61JMnnOEY7NXeA==}
+    peerDependencies:
+      react: '>=16'
+      react-dom: '>=16'
+    dependencies:
+      prop-types: 15.8.1
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+    dev: false
+
   /react-base16-styling@0.9.1:
     resolution: {integrity: sha512-1s0CY1zRBOQ5M3T61wetEpvQmsYSNtWEcdYzyZNxKa8t7oDvaOn9d21xrGezGAHFWLM7SHcktPuPTrvoqxSfKw==}
     dependencies:
@@ -13781,6 +13826,10 @@ packages:
       glob-to-regexp: 0.4.1
       graceful-fs: 4.2.11
     dev: true
+
+  /wavesurfer.js@7.7.15:
+    resolution: {integrity: sha512-qJE7sZ5qnFG9wBtU9+jBpYn7faWXZHEz1I25Xnf4EhGqqS2rFj/hxTtbIaETynalPajxC1xXd/9TnDHWO+mARA==}
+    dev: false
 
   /web-streams-polyfill@3.3.3:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}

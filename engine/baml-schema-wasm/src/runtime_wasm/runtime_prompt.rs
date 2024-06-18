@@ -2,7 +2,7 @@ use baml_runtime::{
     internal::llm_client::orchestrator::OrchestrationScope, ChatMessagePart, RenderedPrompt,
 };
 
-use baml_types::{BamlMedia, BamlMediaType};
+use baml_types::{BamlMedia, BamlMediaType, MediaBase64};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(getter_with_clone)]
@@ -53,6 +53,11 @@ impl WasmChatMessagePart {
     }
 
     #[wasm_bindgen]
+    pub fn is_audio(&self) -> bool {
+        matches!(self.part, ChatMessagePart::Audio(_))
+    }
+
+    #[wasm_bindgen]
     pub fn as_text(&self) -> Option<String> {
         if let ChatMessagePart::Text(s) = &self.part {
             Some(s.clone())
@@ -67,6 +72,21 @@ impl WasmChatMessagePart {
             Some(match s {
                 BamlMedia::Url(BamlMediaType::Image, u) => u.url.clone(),
                 BamlMedia::Base64(BamlMediaType::Image, b) => b.base64.clone(),
+                _ => return None, // This will match any other case and return None
+            })
+        } else {
+            None
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn as_audio(&self) -> Option<String> {
+        if let ChatMessagePart::Audio(s) = &self.part {
+            Some(match s {
+                BamlMedia::Url(BamlMediaType::Audio, u) => u.url.clone(),
+                BamlMedia::Base64(_, MediaBase64 { base64, media_type }) => {
+                    format!("data:audio/{};base64,{}", media_type, base64.clone())
+                }
                 _ => return None, // This will match any other case and return None
             })
         } else {
