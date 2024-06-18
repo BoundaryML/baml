@@ -11,7 +11,6 @@ To add assertions to your tests, or add more complex testing scenarios, you can 
 ```python test_file.py
 from baml_client import baml as b
 from baml_client.types import Email
-from baml_client.testing import baml_test
 import pytest
 
 # Run `poetry run pytest -m baml_test` in this directory.
@@ -55,21 +54,15 @@ enum ProfessionalismRating {
   BAD
 }
 
-function ValidateProfessionalism {
-  // The string to validate
-  input string
-  output ProfessionalismRating
-}
-
-impl<llm, ValidateProfessionalism> v1 {
+function ValidateProfessionalism(input: string) -> ProfessionalismRating {
   client GPT4
   prompt #"
     Is this text professional-sounding?
 
     Use the following scale:
-    {#print_enum(ProfessionalismRating)}
+    {{ ctx.output_format }}
 
-    Sentence: {#input}
+    Sentence: {{ input }}
 
     ProfessionalismRating:
   "#
@@ -79,9 +72,9 @@ impl<llm, ValidateProfessionalism> v1 {
 ```python
 from baml_client import baml as b
 from baml_client.types import Email, ProfessionalismRating
-from baml_client.testing import baml_test
+import pytest
 
-@baml_test
+@pytest.mark.asyncio
 async def test_message_professionalism():
   order_info = await b.GetOrderInfo(Email(
       subject="Order #1234",
