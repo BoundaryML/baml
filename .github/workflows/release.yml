@@ -139,7 +139,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: |
             engine/language_client_typescript/pnpm-lock.yaml
-            typescript/**/pnpm-lock.yaml
       # Install rust
       - uses: dtolnay/rust-toolchain@stable
         with:

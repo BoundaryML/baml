@@ -78,13 +78,5 @@
     "url": "https://github.com/BoundaryML/baml/issues"
   },
   "homepage": "https://github.com/BoundaryML/baml#readme",
-  "author": "",
-  "optionalDependencies": {
-    "@boundaryml/baml-darwin-arm64": "0.40.0",
-    "@boundaryml/baml-win32-arm64-msvc": "0.40.0",
-    "@boundaryml/baml-linux-arm64-gnu": "0.40.0",
-    "@boundaryml/baml-darwin-x64": "0.40.0",
-    "@boundaryml/baml-win32-x64-msvc": "0.40.0",
-    "@boundaryml/baml-linux-x64-gnu": "0.40.0"
-  }
+  "author": ""
 }
