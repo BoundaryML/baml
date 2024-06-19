@@ -2,8 +2,7 @@
 title: "Ruby Installation"
 ---
 
-Here's a sample repository: 
-https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter
+Here's a sample repository: [`BoundaryML/baml-examples`](https://github.com/BoundaryML/baml-examples/tree/main/ruby-example)
 
 To set up BAML in typescript do the following:
 
@@ -14,32 +13,23 @@ To set up BAML in typescript do the following:
       - syntax highlighting
       - testing playground
       - prompt previews
-
-      <Tip>
-      In your VSCode User Settings, highly recommend adding this to get better autocomplete for python in general, not just BAML.
-
-      ```json
-      {
-        "python.analysis.typeCheckingMode": "basic"
-      }
-      ```
-      </Tip>
   </Step>
   <Step title="Install baml">
         ```bash
-        pip install baml-py
+        bundle init
+        bundle add baml sorbet-runtime sorbet-struct-comparable
         ```
   </Step>
   <Step title="Add some starter code">
       This will give you some starter BAML code in a `baml_src` directory.
 
       ```bash
-      baml-cli init
+      bundle exec baml-cli init
       ```
   </Step>
   <Step title="Generate python code from .baml files">
 
-    This command will help you convert `.baml` files to `.py` files. Everytime you modify your `.baml` files,
+    This command will help you convert `.baml` files to `.rb` files. Everytime you modify your `.baml` files,
     you must re-run this command, and regenerate the `baml_client` folder.
 
     <Tip>
@@ -47,31 +37,37 @@ To set up BAML in typescript do the following:
     </Tip>
 
     ```bash
-    baml-cli generate
+    bundle exec baml-cli generate
     ```
   </Step>
-  <Step title="Use a baml function in python!">
+  <Step title="Use a baml function in Ruby!">
     <Tip>If `baml_client` doesn't exist, make sure to run the previous step!</Tip>
 
-    ```python main.py
-    from baml_client import b
-    from baml_client.types import Resume
+    ```ruby main.rb
+    require_relative "baml_client/client"
 
-    async def example(raw_resume: str) -> Resume: 
-      # BAML's internal parser guarantees ExtractResume
-      # to be always return a Resume type
-      response = await b.ExtractResume(raw_resume)
-      return response
+    def example(raw_resume)
+        # r is an instance of Baml::Types::Resume, defined in baml_client/types
+        r = Baml.Client.ExtractResume(resume: raw_resume)
 
-    async def example_stream(raw_resume: str) -> Resume:
-      stream = b.stream.ExtractResume(raw_resume)
-      async for msg in stream:
-        print(msg) # This will be a PartialResume type
-      
-      # This will be a Resume type
-      final = stream.get_final_response()
+        puts "ExtractResume response:"
+        puts r.inspect
+    end
 
-      return final
+    def example_stream(raw_resume)
+        stream = Baml.Client.stream.ExtractResume(resume: raw_resume)
+
+        stream.each do |msg|
+            # msg is an instance of Baml::PartialTypes::Resume
+            # defined in baml_client/partial_types
+            puts msg.inspect
+        end
+
+        stream.get_final_response
+    end
+
+    example 'Grace Hopper created COBOL'
+    example_stream 'Grace Hopper created COBOL'
     ```
   </Step>
 </Steps>
