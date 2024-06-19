@@ -470,18 +470,15 @@ importers:
       react:
         specifier: ^18.2.0
         version: 18.3.1
-<<<<<<< HEAD
       react-arborist:
         specifier: ^3.4.0
         version: 3.4.0(@types/node@20.12.12)(@types/react@18.3.2)(react-dom@18.3.1)(react@18.3.1)
-      react-code-blocks:
-        specifier: ^0.1.6
-        version: 0.1.6(react-dom@18.3.1)(react@18.3.1)
-=======
       react-audio-player:
         specifier: ^0.17.0
         version: 0.17.0(react-dom@18.3.1)(react@18.3.1)
->>>>>>> cdb84ce3 (audio rendering works in playground)
+      react-code-blocks:
+        specifier: ^0.1.6
+        version: 0.1.6(react-dom@18.3.1)(react@18.3.1)
       react-error-boundary:
         specifier: ^4.0.11
         version: 4.0.13(react@18.3.1)
@@ -948,18 +945,15 @@ importers:
       react:
         specifier: ^18.2.0
         version: 18.3.1
-<<<<<<< HEAD
       react-arborist:
         specifier: ^3.4.0
         version: 3.4.0(@types/node@20.12.12)(@types/react@18.3.2)(react-dom@18.3.1)(react@18.3.1)
-      react-code-blocks:
-        specifier: ^0.1.6
-        version: 0.1.6(react-dom@18.3.1)(react@18.3.1)
-=======
       react-audio-player:
         specifier: ^0.17.0
         version: 0.17.0(react-dom@18.3.1)(react@18.3.1)
->>>>>>> cdb84ce3 (audio rendering works in playground)
+      react-code-blocks:
+        specifier: ^0.1.6
+        version: 0.1.6(react-dom@18.3.1)(react@18.3.1)
       react-error-boundary:
         specifier: ^4.0.11
         version: 4.0.13(react@18.3.1)
