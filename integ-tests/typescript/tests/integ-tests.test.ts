@@ -1,12 +1,8 @@
 import assert from 'assert'
-<<<<<<< HEAD
-import { Image } from '@boundaryml/baml'
-import { b, NamedArgsSingleEnumList, flush, traceAsync, traceSync, setTags, TestClassNested } from '../baml_client'
-=======
+
 import { Image} from '@boundaryml/baml'
 import { Audio } from '@boundaryml/baml'
-import { b, NamedArgsSingleEnumList, flush, traceAsync, traceSync, setTags } from '../baml_client'
->>>>>>> f0874f2a (added ts integ test)
+import { b, NamedArgsSingleEnumList, flush, traceAsync, traceSync, setTags, TestClassNested } from '../baml_client'
 import TypeBuilder from "../baml_client/type_builder";
 import { RecursivePartialNull } from '../baml_client/client';
 
