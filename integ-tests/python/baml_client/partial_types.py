@@ -44,14 +44,14 @@ class ClassOptionalOutput2(BaseModel):
     
     prop1: Optional[str] = None
     prop2: Optional[str] = None
-    prop3: Optional["Blah"] = None
+    prop3: "Blah"
 
 class ClassWithImage(BaseModel):
     
     
     myImage: Optional[baml_py.Image] = None
     param2: Optional[str] = None
-    fake_image: Optional["FakeImage"] = None
+    fake_image: "FakeImage"
 
 class DynamicClassOne(BaseModel):
     
@@ -63,7 +63,7 @@ class DynamicClassTwo(BaseModel):
     model_config = ConfigDict(extra='allow')
     
     hi: Optional[str] = None
-    some_class: Optional["SomeClassNestedDynamic"] = None
+    some_class: "SomeClassNestedDynamic"
     status: Optional[Union[types.DynEnumOne, str]] = None
 
 class DynamicOutput(BaseModel):
@@ -105,7 +105,7 @@ class InnerClass(BaseModel):
     
     prop1: Optional[str] = None
     prop2: Optional[str] = None
-    inner: Optional["InnerClass2"] = None
+    inner: "InnerClass2"
 
 class InnerClass2(BaseModel):
     
@@ -129,7 +129,7 @@ class OptionalTest_Prop1(BaseModel):
 class OptionalTest_ReturnType(BaseModel):
     
     
-    omega_1: Optional["OptionalTest_Prop1"] = None
+    omega_1: "OptionalTest_Prop1"
     omega_2: Optional[str] = None
     omega_3: List[Optional[types.OptionalTest_CategoryType]]
 
@@ -168,8 +168,8 @@ class SearchParams(BaseModel):
     
     dateRange: Optional[int] = None
     location: List[Optional[str]]
-    jobTitle: Optional["WithReasoning"] = None
-    company: Optional["WithReasoning"] = None
+    jobTitle: "WithReasoning"
+    company: "WithReasoning"
     description: List["WithReasoning"]
     tags: List[Optional[Union[Optional[types.Tag], Optional[str]]]]
 
@@ -192,7 +192,7 @@ class TestClassNested(BaseModel):
     
     
     prop1: Optional[str] = None
-    prop2: Optional["InnerClass"] = None
+    prop2: "InnerClass"
 
 class TestClassWithEnum(BaseModel):
     
