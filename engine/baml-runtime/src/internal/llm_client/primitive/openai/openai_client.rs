@@ -455,21 +455,8 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                 }
                 _ => None.unwrap(),
             },
-            ChatMessagePart::Audio(audio) => match audio {
-                // handle audio case here
-                // replace the following line with your actual implementation
-                BamlMedia::Url(BamlMediaType::Audio, audio) => {
-                    json!({"type": "audio_url", "audio_url": json!({
-                        "url": audio.url
-                    })})
-                }
-                BamlMedia::Base64(BamlMediaType::Audio, audio) => {
-                    json!({"type": "audio_url", "audio_url": json!({
-                        "url": audio.base64
-                    })})
-                }
-                _ => None.unwrap(),
-            },
+            // OpenAI does not yet support audio
+            _ => None.unwrap(),
         })
         .collect();
 

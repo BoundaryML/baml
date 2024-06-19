@@ -1,9 +1,20 @@
 use serde::{Deserialize, Serialize};
 
+use std::fmt;
+
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum BamlMediaType {
     Image,
     Audio,
+}
+
+impl fmt::Display for BamlMediaType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            BamlMediaType::Image => write!(f, "Image"),
+            BamlMediaType::Audio => write!(f, "Audio"),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

@@ -537,12 +537,11 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                 "type": "text",
                 "text": text
             }),
-            ChatMessagePart::Image(media) | ChatMessagePart::Audio(media) => match media {
+
+            ChatMessagePart::Image(media) => match media {
                 BamlMedia::Base64(media_type, data) => json!({
-                    "type": match media_type {
-                        BamlMediaType::Image => "image",
-                        BamlMediaType::Audio => "audio",
-                    },
+                    "type":  "image",
+
                     "source": {
                         "type": "base64",
                         "media_type": data.media_type,
@@ -550,16 +549,16 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                     }
                 }),
                 BamlMedia::Url(media_type, data) => json!({
-                    "type": match media_type {
-                        BamlMediaType::Image => "image",
-                        BamlMediaType::Audio => "audio",
-                    },
+                    "type": "image",
+
+
                     "source": {
                         "type": "url",
                         "url": data.url
                     }
                 }),
             },
+            _ => None.unwrap(),
         })
         .collect()
 }

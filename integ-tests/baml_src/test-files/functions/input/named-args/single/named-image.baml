@@ -7,7 +7,7 @@ function TestImageInput(img: image) -> string{
   "#
 }
 
-test TestImageInput {
+test  TestImageInput {
   functions [TestImageInput]
   args {
     img {
@@ -16,7 +16,7 @@ test TestImageInput {
   }
 }
 
-test shrek {
+test  shrek {
   functions [TestImageInput]
   args {
     img {

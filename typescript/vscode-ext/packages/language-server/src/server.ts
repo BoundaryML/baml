@@ -634,7 +634,7 @@ export function startServer(options?: LSOptions): void {
       return undefined
     }
   })
-  
+
   connection.onRequest(
     'getBAMLFunctions',
     async (): Promise<
