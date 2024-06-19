@@ -9,7 +9,7 @@ use pyo3::{
     PyClass, PyErr, PyObject, PyResult, Python, ToPyObject,
 };
 
-use crate::types::BamlImagePy;
+use crate::types::{BamlAudioPy, BamlImagePy};
 
 struct SerializationError {
     position: Vec<String>,
@@ -60,6 +60,7 @@ enum MappedPyType {
     Bool(bool),
     None,
     BamlImage(BamlMedia),
+    BamlAudio(BamlMedia),
     Unsupported(String),
 }
 
@@ -67,6 +68,14 @@ impl TryFrom<BamlImagePy> for BamlMedia {
     type Error = &'static str;
 
     fn try_from(value: BamlImagePy) -> Result<Self, Self::Error> {
+        Ok(value.inner.clone())
+    }
+}
+
+impl TryFrom<BamlAudioPy> for BamlMedia {
+    type Error = &'static str;
+
+    fn try_from(value: BamlAudioPy) -> Result<Self, Self::Error> {
         Ok(value.inner.clone())
     }
 }
@@ -181,6 +190,7 @@ where
         MappedPyType::Float(v) => BamlValue::Float(v),
         MappedPyType::Bool(v) => BamlValue::Bool(v),
         MappedPyType::BamlImage(v) => BamlValue::Media(v),
+        MappedPyType::BamlAudio(v) => BamlValue::Media(v),
         MappedPyType::None => BamlValue::Null,
         MappedPyType::Unsupported(r#type) => {
             return if matches!(handle_unknown_types, UnknownTypeHandler::Ignore) {
@@ -284,6 +294,9 @@ pub fn parse_py_type(
             } else if let Ok(b) = any.downcast_bound::<BamlImagePy>(py) {
                 let b = b.borrow();
                 Ok(MappedPyType::BamlImage(b.inner.clone()))
+            } else if let Ok(b) = any.downcast_bound::<BamlAudioPy>(py) {
+                let b = b.borrow();
+                Ok(MappedPyType::BamlAudio(b.inner.clone()))
             } else {
                 if matches!(unknown_type_handler, UnknownTypeHandler::SerializeAsStr) {
                     // Call the __str__ method on the object

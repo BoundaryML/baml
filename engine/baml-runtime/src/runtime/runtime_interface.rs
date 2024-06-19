@@ -297,6 +297,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         params: &BamlMap<String, BamlValue>,
         ctx: RuntimeContext,
     ) -> Result<crate::FunctionResult> {
+        log::trace!("Calling function: {} with {:?}", function_name, params);
         let func = self.get_function(&function_name, &ctx)?;
         let baml_args = self.ir().check_function_params(&func, &params, false)?;
 

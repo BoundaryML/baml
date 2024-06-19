@@ -57,7 +57,7 @@ class BamlClient:
     
     async def AudioInput(
         self,
-        aud: baml_py.Image,
+        aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
@@ -1321,7 +1321,7 @@ class BamlStreamClient:
     
     def AudioInput(
         self,
-        aud: baml_py.Image,
+        aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
       __tb__ = baml_options.get("tb", None)
