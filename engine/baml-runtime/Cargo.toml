@@ -41,7 +41,6 @@ web-time.workspace = true
 static_assertions.workspace = true
 mime_guess = "2.0.4"
 mime = "0.3.17"
-
 # For tracing
 envy = "0.4.2"
 chrono = "0.4.38"
@@ -55,7 +54,6 @@ pin-project-lite = "0.2.14"
 async-trait = "0.1.80"
 cfg-if = "1.0.0"
 include_dir = "0.7.3"
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 serde-wasm-bindgen = "0.6.5"
 wasm-bindgen = { version = "^0.2.74", features = ["serde-serialize"] }
