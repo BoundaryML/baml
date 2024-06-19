@@ -19,6 +19,12 @@ import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image } from "
 import {Blah, ClassOptionalOutput, ClassOptionalOutput2, ClassWithImage, DynamicClassOne, DynamicClassTwo, DynamicOutput, Education, Email, Event, FakeImage, InnerClass, InnerClass2, NamedArgsSingleClass, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, Person, RaysData, Resume, SearchParams, SomeClassNestedDynamic, TestClassAlias, TestClassNested, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning, Category, Category2, Category3, Color, DataType, DynEnumOne, DynEnumTwo, EnumInClass, EnumOutput, Hobby, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OrderStatus, Tag, TestEnum} from "./types"
 import TypeBuilder from "./type_builder"
 
+export type RecursivePartialNull<T> = T extends object
+  ? {
+      [P in keyof T]?: RecursivePartialNull<T[P]>;
+    }
+  : T | null;
+
 export class BamlClient {
   private stream_client: BamlStreamClient
 
@@ -895,7 +901,7 @@ class BamlStreamClient {
   AudioInput(
       aud: Audio,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "AudioInput",
       {
@@ -905,9 +911,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -917,7 +923,7 @@ class BamlStreamClient {
   ClassifyMessage(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Category | null), Category> {
+  ): BamlStream<RecursivePartialNull<Category>, Category> {
     const raw = this.runtime.streamFunction(
       "ClassifyMessage",
       {
@@ -927,9 +933,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Category | null), Category>(
+    return new BamlStream<RecursivePartialNull<Category>, Category>(
       raw,
-      (a): a is (Category | null) => a,
+      (a): a is RecursivePartialNull<Category> => a,
       (a): a is Category => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -939,7 +945,7 @@ class BamlStreamClient {
   ClassifyMessage2(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Category | null), Category> {
+  ): BamlStream<RecursivePartialNull<Category>, Category> {
     const raw = this.runtime.streamFunction(
       "ClassifyMessage2",
       {
@@ -949,9 +955,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Category | null), Category>(
+    return new BamlStream<RecursivePartialNull<Category>, Category>(
       raw,
-      (a): a is (Category | null) => a,
+      (a): a is RecursivePartialNull<Category> => a,
       (a): a is Category => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -961,7 +967,7 @@ class BamlStreamClient {
   ClassifyMessage3(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Category | null), Category> {
+  ): BamlStream<RecursivePartialNull<Category>, Category> {
     const raw = this.runtime.streamFunction(
       "ClassifyMessage3",
       {
@@ -971,9 +977,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Category | null), Category>(
+    return new BamlStream<RecursivePartialNull<Category>, Category>(
       raw,
-      (a): a is (Category | null) => a,
+      (a): a is RecursivePartialNull<Category> => a,
       (a): a is Category => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -983,7 +989,7 @@ class BamlStreamClient {
   DescribeImage(
       img: Image,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "DescribeImage",
       {
@@ -993,9 +999,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1005,7 +1011,7 @@ class BamlStreamClient {
   DescribeImage2(
       classWithImage: ClassWithImage,img2: Image,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "DescribeImage2",
       {
@@ -1015,9 +1021,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1027,7 +1033,7 @@ class BamlStreamClient {
   DescribeImage3(
       classWithImage: ClassWithImage,img2: Image,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "DescribeImage3",
       {
@@ -1037,9 +1043,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1049,7 +1055,7 @@ class BamlStreamClient {
   DescribeImage4(
       classWithImage: ClassWithImage,img2: Image,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "DescribeImage4",
       {
@@ -1059,9 +1065,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1071,7 +1077,7 @@ class BamlStreamClient {
   DynamicFunc(
       input: DynamicClassOne,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<DynamicClassTwo> | null), DynamicClassTwo> {
+  ): BamlStream<RecursivePartialNull<DynamicClassTwo>, DynamicClassTwo> {
     const raw = this.runtime.streamFunction(
       "DynamicFunc",
       {
@@ -1081,9 +1087,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<DynamicClassTwo> | null), DynamicClassTwo>(
+    return new BamlStream<RecursivePartialNull<DynamicClassTwo>, DynamicClassTwo>(
       raw,
-      (a): a is (Partial<DynamicClassTwo> | null) => a,
+      (a): a is RecursivePartialNull<DynamicClassTwo> => a,
       (a): a is DynamicClassTwo => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1093,7 +1099,7 @@ class BamlStreamClient {
   ExtractNames(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null)[], string[]> {
+  ): BamlStream<RecursivePartialNull<string[]>, string[]> {
     const raw = this.runtime.streamFunction(
       "ExtractNames",
       {
@@ -1103,9 +1109,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null)[], string[]>(
+    return new BamlStream<RecursivePartialNull<string[]>, string[]>(
       raw,
-      (a): a is (string | null)[] => a,
+      (a): a is RecursivePartialNull<string[]> => a,
       (a): a is string[] => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1115,7 +1121,7 @@ class BamlStreamClient {
   ExtractPeople(
       text: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<Person> | null)[], Person[]> {
+  ): BamlStream<RecursivePartialNull<Person[]>, Person[]> {
     const raw = this.runtime.streamFunction(
       "ExtractPeople",
       {
@@ -1125,9 +1131,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<Person> | null)[], Person[]>(
+    return new BamlStream<RecursivePartialNull<Person[]>, Person[]>(
       raw,
-      (a): a is (Partial<Person> | null)[] => a,
+      (a): a is RecursivePartialNull<Person[]> => a,
       (a): a is Person[] => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1137,7 +1143,7 @@ class BamlStreamClient {
   ExtractResume(
       resume: string,img?: Image | null,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<Resume> | null), Resume> {
+  ): BamlStream<RecursivePartialNull<Resume>, Resume> {
     const raw = this.runtime.streamFunction(
       "ExtractResume",
       {
@@ -1147,9 +1153,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<Resume> | null), Resume>(
+    return new BamlStream<RecursivePartialNull<Resume>, Resume>(
       raw,
-      (a): a is (Partial<Resume> | null) => a,
+      (a): a is RecursivePartialNull<Resume> => a,
       (a): a is Resume => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1159,7 +1165,7 @@ class BamlStreamClient {
   ExtractResume2(
       resume: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<Resume> | null), Resume> {
+  ): BamlStream<RecursivePartialNull<Resume>, Resume> {
     const raw = this.runtime.streamFunction(
       "ExtractResume2",
       {
@@ -1169,9 +1175,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<Resume> | null), Resume>(
+    return new BamlStream<RecursivePartialNull<Resume>, Resume>(
       raw,
-      (a): a is (Partial<Resume> | null) => a,
+      (a): a is RecursivePartialNull<Resume> => a,
       (a): a is Resume => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1181,7 +1187,7 @@ class BamlStreamClient {
   FnClassOptionalOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<((Partial<ClassOptionalOutput> | null) | null), ClassOptionalOutput | null> {
+  ): BamlStream<RecursivePartialNull<ClassOptionalOutput | null>, ClassOptionalOutput | null> {
     const raw = this.runtime.streamFunction(
       "FnClassOptionalOutput",
       {
@@ -1191,9 +1197,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<((Partial<ClassOptionalOutput> | null) | null), ClassOptionalOutput | null>(
+    return new BamlStream<RecursivePartialNull<ClassOptionalOutput | null>, ClassOptionalOutput | null>(
       raw,
-      (a): a is ((Partial<ClassOptionalOutput> | null) | null) => a,
+      (a): a is RecursivePartialNull<ClassOptionalOutput | null> => a,
       (a): a is ClassOptionalOutput | null => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1203,7 +1209,7 @@ class BamlStreamClient {
   FnClassOptionalOutput2(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<((Partial<ClassOptionalOutput2> | null) | null), ClassOptionalOutput2 | null> {
+  ): BamlStream<RecursivePartialNull<ClassOptionalOutput2 | null>, ClassOptionalOutput2 | null> {
     const raw = this.runtime.streamFunction(
       "FnClassOptionalOutput2",
       {
@@ -1213,9 +1219,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<((Partial<ClassOptionalOutput2> | null) | null), ClassOptionalOutput2 | null>(
+    return new BamlStream<RecursivePartialNull<ClassOptionalOutput2 | null>, ClassOptionalOutput2 | null>(
       raw,
-      (a): a is ((Partial<ClassOptionalOutput2> | null) | null) => a,
+      (a): a is RecursivePartialNull<ClassOptionalOutput2 | null> => a,
       (a): a is ClassOptionalOutput2 | null => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1225,7 +1231,7 @@ class BamlStreamClient {
   FnEnumListOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(EnumOutput | null)[], EnumOutput[]> {
+  ): BamlStream<RecursivePartialNull<EnumOutput[]>, EnumOutput[]> {
     const raw = this.runtime.streamFunction(
       "FnEnumListOutput",
       {
@@ -1235,9 +1241,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(EnumOutput | null)[], EnumOutput[]>(
+    return new BamlStream<RecursivePartialNull<EnumOutput[]>, EnumOutput[]>(
       raw,
-      (a): a is (EnumOutput | null)[] => a,
+      (a): a is RecursivePartialNull<EnumOutput[]> => a,
       (a): a is EnumOutput[] => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1247,7 +1253,7 @@ class BamlStreamClient {
   FnEnumOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(EnumOutput | null), EnumOutput> {
+  ): BamlStream<RecursivePartialNull<EnumOutput>, EnumOutput> {
     const raw = this.runtime.streamFunction(
       "FnEnumOutput",
       {
@@ -1257,9 +1263,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(EnumOutput | null), EnumOutput>(
+    return new BamlStream<RecursivePartialNull<EnumOutput>, EnumOutput>(
       raw,
-      (a): a is (EnumOutput | null) => a,
+      (a): a is RecursivePartialNull<EnumOutput> => a,
       (a): a is EnumOutput => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1269,7 +1275,7 @@ class BamlStreamClient {
   FnNamedArgsSingleStringOptional(
       myString?: string | null,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "FnNamedArgsSingleStringOptional",
       {
@@ -1279,9 +1285,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1291,7 +1297,7 @@ class BamlStreamClient {
   FnOutputBool(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(boolean | null), boolean> {
+  ): BamlStream<RecursivePartialNull<boolean>, boolean> {
     const raw = this.runtime.streamFunction(
       "FnOutputBool",
       {
@@ -1301,9 +1307,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(boolean | null), boolean>(
+    return new BamlStream<RecursivePartialNull<boolean>, boolean>(
       raw,
-      (a): a is (boolean | null) => a,
+      (a): a is RecursivePartialNull<boolean> => a,
       (a): a is boolean => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1313,7 +1319,7 @@ class BamlStreamClient {
   FnOutputClass(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<TestOutputClass> | null), TestOutputClass> {
+  ): BamlStream<RecursivePartialNull<TestOutputClass>, TestOutputClass> {
     const raw = this.runtime.streamFunction(
       "FnOutputClass",
       {
@@ -1323,9 +1329,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<TestOutputClass> | null), TestOutputClass>(
+    return new BamlStream<RecursivePartialNull<TestOutputClass>, TestOutputClass>(
       raw,
-      (a): a is (Partial<TestOutputClass> | null) => a,
+      (a): a is RecursivePartialNull<TestOutputClass> => a,
       (a): a is TestOutputClass => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1335,7 +1341,7 @@ class BamlStreamClient {
   FnOutputClassList(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<TestOutputClass> | null)[], TestOutputClass[]> {
+  ): BamlStream<RecursivePartialNull<TestOutputClass[]>, TestOutputClass[]> {
     const raw = this.runtime.streamFunction(
       "FnOutputClassList",
       {
@@ -1345,9 +1351,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<TestOutputClass> | null)[], TestOutputClass[]>(
+    return new BamlStream<RecursivePartialNull<TestOutputClass[]>, TestOutputClass[]>(
       raw,
-      (a): a is (Partial<TestOutputClass> | null)[] => a,
+      (a): a is RecursivePartialNull<TestOutputClass[]> => a,
       (a): a is TestOutputClass[] => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1357,7 +1363,7 @@ class BamlStreamClient {
   FnOutputClassNested(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<TestClassNested> | null), TestClassNested> {
+  ): BamlStream<RecursivePartialNull<TestClassNested>, TestClassNested> {
     const raw = this.runtime.streamFunction(
       "FnOutputClassNested",
       {
@@ -1367,9 +1373,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<TestClassNested> | null), TestClassNested>(
+    return new BamlStream<RecursivePartialNull<TestClassNested>, TestClassNested>(
       raw,
-      (a): a is (Partial<TestClassNested> | null) => a,
+      (a): a is RecursivePartialNull<TestClassNested> => a,
       (a): a is TestClassNested => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1379,7 +1385,7 @@ class BamlStreamClient {
   FnOutputClassWithEnum(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<TestClassWithEnum> | null), TestClassWithEnum> {
+  ): BamlStream<RecursivePartialNull<TestClassWithEnum>, TestClassWithEnum> {
     const raw = this.runtime.streamFunction(
       "FnOutputClassWithEnum",
       {
@@ -1389,9 +1395,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<TestClassWithEnum> | null), TestClassWithEnum>(
+    return new BamlStream<RecursivePartialNull<TestClassWithEnum>, TestClassWithEnum>(
       raw,
-      (a): a is (Partial<TestClassWithEnum> | null) => a,
+      (a): a is RecursivePartialNull<TestClassWithEnum> => a,
       (a): a is TestClassWithEnum => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1401,7 +1407,7 @@ class BamlStreamClient {
   FnOutputStringList(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null)[], string[]> {
+  ): BamlStream<RecursivePartialNull<string[]>, string[]> {
     const raw = this.runtime.streamFunction(
       "FnOutputStringList",
       {
@@ -1411,9 +1417,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null)[], string[]>(
+    return new BamlStream<RecursivePartialNull<string[]>, string[]>(
       raw,
-      (a): a is (string | null)[] => a,
+      (a): a is RecursivePartialNull<string[]> => a,
       (a): a is string[] => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1423,7 +1429,7 @@ class BamlStreamClient {
   FnTestAliasedEnumOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(TestEnum | null), TestEnum> {
+  ): BamlStream<RecursivePartialNull<TestEnum>, TestEnum> {
     const raw = this.runtime.streamFunction(
       "FnTestAliasedEnumOutput",
       {
@@ -1433,9 +1439,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(TestEnum | null), TestEnum>(
+    return new BamlStream<RecursivePartialNull<TestEnum>, TestEnum>(
       raw,
-      (a): a is (TestEnum | null) => a,
+      (a): a is RecursivePartialNull<TestEnum> => a,
       (a): a is TestEnum => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1445,7 +1451,7 @@ class BamlStreamClient {
   FnTestClassAlias(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<TestClassAlias> | null), TestClassAlias> {
+  ): BamlStream<RecursivePartialNull<TestClassAlias>, TestClassAlias> {
     const raw = this.runtime.streamFunction(
       "FnTestClassAlias",
       {
@@ -1455,9 +1461,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<TestClassAlias> | null), TestClassAlias>(
+    return new BamlStream<RecursivePartialNull<TestClassAlias>, TestClassAlias>(
       raw,
-      (a): a is (Partial<TestClassAlias> | null) => a,
+      (a): a is RecursivePartialNull<TestClassAlias> => a,
       (a): a is TestClassAlias => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1467,7 +1473,7 @@ class BamlStreamClient {
   FnTestNamedArgsSingleEnum(
       myArg: NamedArgsSingleEnum,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "FnTestNamedArgsSingleEnum",
       {
@@ -1477,9 +1483,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1489,7 +1495,7 @@ class BamlStreamClient {
   GetDataType(
       text: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<RaysData> | null), RaysData> {
+  ): BamlStream<RecursivePartialNull<RaysData>, RaysData> {
     const raw = this.runtime.streamFunction(
       "GetDataType",
       {
@@ -1499,9 +1505,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<RaysData> | null), RaysData>(
+    return new BamlStream<RecursivePartialNull<RaysData>, RaysData>(
       raw,
-      (a): a is (Partial<RaysData> | null) => a,
+      (a): a is RecursivePartialNull<RaysData> => a,
       (a): a is RaysData => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1511,7 +1517,7 @@ class BamlStreamClient {
   GetOrderInfo(
       email: Email,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<OrderInfo> | null), OrderInfo> {
+  ): BamlStream<RecursivePartialNull<OrderInfo>, OrderInfo> {
     const raw = this.runtime.streamFunction(
       "GetOrderInfo",
       {
@@ -1521,9 +1527,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<OrderInfo> | null), OrderInfo>(
+    return new BamlStream<RecursivePartialNull<OrderInfo>, OrderInfo>(
       raw,
-      (a): a is (Partial<OrderInfo> | null) => a,
+      (a): a is RecursivePartialNull<OrderInfo> => a,
       (a): a is OrderInfo => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1533,7 +1539,7 @@ class BamlStreamClient {
   GetQuery(
       query: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<SearchParams> | null), SearchParams> {
+  ): BamlStream<RecursivePartialNull<SearchParams>, SearchParams> {
     const raw = this.runtime.streamFunction(
       "GetQuery",
       {
@@ -1543,9 +1549,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<SearchParams> | null), SearchParams>(
+    return new BamlStream<RecursivePartialNull<SearchParams>, SearchParams>(
       raw,
-      (a): a is (Partial<SearchParams> | null) => a,
+      (a): a is RecursivePartialNull<SearchParams> => a,
       (a): a is SearchParams => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1555,7 +1561,7 @@ class BamlStreamClient {
   MyFunc(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<DynamicOutput> | null), DynamicOutput> {
+  ): BamlStream<RecursivePartialNull<DynamicOutput>, DynamicOutput> {
     const raw = this.runtime.streamFunction(
       "MyFunc",
       {
@@ -1565,9 +1571,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<DynamicOutput> | null), DynamicOutput>(
+    return new BamlStream<RecursivePartialNull<DynamicOutput>, DynamicOutput>(
       raw,
-      (a): a is (Partial<DynamicOutput> | null) => a,
+      (a): a is RecursivePartialNull<DynamicOutput> => a,
       (a): a is DynamicOutput => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1577,7 +1583,7 @@ class BamlStreamClient {
   OptionalTest_Function(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<((Partial<OptionalTest_ReturnType> | null) | null)[], (OptionalTest_ReturnType | null)[]> {
+  ): BamlStream<RecursivePartialNull<(OptionalTest_ReturnType | null)[]>, (OptionalTest_ReturnType | null)[]> {
     const raw = this.runtime.streamFunction(
       "OptionalTest_Function",
       {
@@ -1587,9 +1593,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<((Partial<OptionalTest_ReturnType> | null) | null)[], (OptionalTest_ReturnType | null)[]>(
+    return new BamlStream<RecursivePartialNull<(OptionalTest_ReturnType | null)[]>, (OptionalTest_ReturnType | null)[]>(
       raw,
-      (a): a is ((Partial<OptionalTest_ReturnType> | null) | null)[] => a,
+      (a): a is RecursivePartialNull<(OptionalTest_ReturnType | null)[]> => a,
       (a): a is (OptionalTest_ReturnType | null)[] => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1599,7 +1605,7 @@ class BamlStreamClient {
   PromptTestClaude(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestClaude",
       {
@@ -1609,9 +1615,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1621,7 +1627,7 @@ class BamlStreamClient {
   PromptTestClaudeChat(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestClaudeChat",
       {
@@ -1631,9 +1637,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1643,7 +1649,7 @@ class BamlStreamClient {
   PromptTestClaudeChatNoSystem(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestClaudeChatNoSystem",
       {
@@ -1653,9 +1659,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1665,7 +1671,7 @@ class BamlStreamClient {
   PromptTestOpenAI(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestOpenAI",
       {
@@ -1675,9 +1681,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1687,7 +1693,7 @@ class BamlStreamClient {
   PromptTestOpenAIChat(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestOpenAIChat",
       {
@@ -1697,9 +1703,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1709,7 +1715,7 @@ class BamlStreamClient {
   PromptTestOpenAIChatNoSystem(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestOpenAIChatNoSystem",
       {
@@ -1719,9 +1725,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1731,7 +1737,7 @@ class BamlStreamClient {
   TestAnthropic(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestAnthropic",
       {
@@ -1741,9 +1747,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1753,7 +1759,7 @@ class BamlStreamClient {
   TestAzure(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestAzure",
       {
@@ -1763,9 +1769,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1775,7 +1781,7 @@ class BamlStreamClient {
   TestFallbackClient(
       
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFallbackClient",
       {
@@ -1785,9 +1791,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1797,7 +1803,7 @@ class BamlStreamClient {
   TestFnNamedArgsSingleBool(
       myBool: boolean,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleBool",
       {
@@ -1807,9 +1813,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1819,7 +1825,7 @@ class BamlStreamClient {
   TestFnNamedArgsSingleClass(
       myArg: NamedArgsSingleClass,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleClass",
       {
@@ -1829,9 +1835,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1841,7 +1847,7 @@ class BamlStreamClient {
   TestFnNamedArgsSingleEnumList(
       myArg: NamedArgsSingleEnumList[],
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleEnumList",
       {
@@ -1851,9 +1857,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1863,7 +1869,7 @@ class BamlStreamClient {
   TestFnNamedArgsSingleFloat(
       myFloat: number,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleFloat",
       {
@@ -1873,9 +1879,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1885,7 +1891,7 @@ class BamlStreamClient {
   TestFnNamedArgsSingleInt(
       myInt: number,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleInt",
       {
@@ -1895,9 +1901,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1907,7 +1913,7 @@ class BamlStreamClient {
   TestFnNamedArgsSingleString(
       myString: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleString",
       {
@@ -1917,9 +1923,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1929,7 +1935,7 @@ class BamlStreamClient {
   TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleStringArray",
       {
@@ -1939,9 +1945,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1951,7 +1957,7 @@ class BamlStreamClient {
   TestFnNamedArgsSingleStringList(
       myArg: string[],
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleStringList",
       {
@@ -1961,9 +1967,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1973,7 +1979,7 @@ class BamlStreamClient {
   TestGemini(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestGemini",
       {
@@ -1983,9 +1989,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -1995,7 +2001,7 @@ class BamlStreamClient {
   TestImageInput(
       img: Image,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestImageInput",
       {
@@ -2005,9 +2011,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -2017,7 +2023,7 @@ class BamlStreamClient {
   TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestMulticlassNamedArgs",
       {
@@ -2027,9 +2033,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -2039,7 +2045,7 @@ class BamlStreamClient {
   TestOllama(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestOllama",
       {
@@ -2049,9 +2055,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -2061,7 +2067,7 @@ class BamlStreamClient {
   TestOpenAI(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestOpenAI",
       {
@@ -2071,9 +2077,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -2083,7 +2089,7 @@ class BamlStreamClient {
   TestRetryConstant(
       
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestRetryConstant",
       {
@@ -2093,9 +2099,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -2105,7 +2111,7 @@ class BamlStreamClient {
   TestRetryExponential(
       
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(string | null), string> {
+  ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestRetryExponential",
       {
@@ -2115,9 +2121,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(string | null), string>(
+    return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
-      (a): a is (string | null) => a,
+      (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
@@ -2127,7 +2133,7 @@ class BamlStreamClient {
   UnionTest_Function(
       input: string | boolean,
       __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<(Partial<UnionTest_ReturnType> | null), UnionTest_ReturnType> {
+  ): BamlStream<RecursivePartialNull<UnionTest_ReturnType>, UnionTest_ReturnType> {
     const raw = this.runtime.streamFunction(
       "UnionTest_Function",
       {
@@ -2137,9 +2143,9 @@ class BamlStreamClient {
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
-    return new BamlStream<(Partial<UnionTest_ReturnType> | null), UnionTest_ReturnType>(
+    return new BamlStream<RecursivePartialNull<UnionTest_ReturnType>, UnionTest_ReturnType>(
       raw,
-      (a): a is (Partial<UnionTest_ReturnType> | null) => a,
+      (a): a is RecursivePartialNull<UnionTest_ReturnType> => a,
       (a): a is UnionTest_ReturnType => a,
       this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
