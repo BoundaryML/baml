@@ -450,7 +450,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                 }
                 BamlMedia::Base64(BamlMediaType::Image, image) => {
                     json!({"type": "image_url", "image_url": json!({
-                       "url" : format!("data:image/{};base64,{}", image.media_type, image.base64)
+                       "url" : format!("data:{};base64,{}", image.media_type, image.base64)
                     })})
                 }
                 _ => None.unwrap(),

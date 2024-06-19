@@ -540,7 +540,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
 
             ChatMessagePart::Image(media) => match media {
                 BamlMedia::Base64(media_type, data) => json!({
-                    "type":  "image",
+                    "type":  media_type,
 
                     "source": {
                         "type": "base64",
@@ -549,7 +549,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                     }
                 }),
                 BamlMedia::Url(media_type, data) => json!({
-                    "type": "image",
+                    "type": media_type,
 
 
                     "source": {

@@ -434,13 +434,13 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
 
 fn convert_media_to_content(media: &BamlMedia, media_type: &str) -> serde_json::Value {
     match media {
-        BamlMedia::Base64(media_type, data) => json!({
+        BamlMedia::Base64(_, data) => json!({
             "inlineData": {
-                "mimeType": format!("{}/{}", media_type, data.media_type),
+                "mimeType": format!("{}", data.media_type),
                 "data": data.base64
             }
         }),
-        BamlMedia::Url(media_type, data) => json!({
+        BamlMedia::Url(_, data) => json!({
             "fileData": {
                 "data": data.url
             }

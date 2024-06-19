@@ -85,7 +85,7 @@ impl WasmChatMessagePart {
             Some(match s {
                 BamlMedia::Url(BamlMediaType::Audio, u) => u.url.clone(),
                 BamlMedia::Base64(_, MediaBase64 { base64, media_type }) => {
-                    format!("data:audio/{};base64,{}", media_type, base64.clone())
+                    format!("data:{};base64,{}", media_type, base64.clone())
                 }
                 _ => return None, // This will match any other case and return None
             })
