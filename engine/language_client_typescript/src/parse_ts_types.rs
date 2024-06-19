@@ -11,6 +11,7 @@ use napi::JsString;
 use napi::JsUnknown;
 use napi::NapiRaw;
 
+use crate::types::audio::BamlAudio;
 use crate::types::image::BamlImage;
 
 struct SerializationError {
@@ -194,6 +195,8 @@ pub fn jsunknown_to_baml_value(
             let external = unsafe { item.cast::<JsExternal>() };
             if let Ok(img) = env.get_value_external::<BamlImage>(&external) {
                 BamlValue::Media(img.inner.clone())
+            } else if let Ok(audio) = env.get_value_external::<BamlAudio>(&external) {
+                BamlValue::Media(audio.inner.clone())
             } else {
                 if skip_unsupported {
                     return Ok(None);
