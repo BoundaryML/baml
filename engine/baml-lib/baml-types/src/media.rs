@@ -11,8 +11,8 @@ pub enum BamlMediaType {
 impl fmt::Display for BamlMediaType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            BamlMediaType::Image => write!(f, "image"),
-            BamlMediaType::Audio => write!(f, "audio"),
+            BamlMediaType::Image => write!(f, "Image"),
+            BamlMediaType::Audio => write!(f, "Audio"),
         }
     }
 }
