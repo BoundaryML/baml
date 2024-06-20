@@ -212,7 +212,7 @@ impl RequestBuilder for OpenAIClient {
         &self.client
     }
 
-    async fn build_request(
+    fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,

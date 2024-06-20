@@ -8,7 +8,7 @@ use serde::de::DeserializeOwned;
 use crate::internal::llm_client::{traits::WithClient, ErrorCode, LLMErrorResponse, LLMResponse};
 
 pub trait RequestBuilder {
-    async fn build_request(
+    fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
@@ -36,7 +36,7 @@ pub async fn make_request(
     let (system_now, instant_now) = (web_time::SystemTime::now(), web_time::Instant::now());
     log::info!("Making request using client {}", client.context().name);
 
-    let req = match client.build_request(prompt, stream).await.build() {
+    let req = match client.build_request(prompt, stream).build() {
         Ok(req) => req,
         Err(e) => {
             return Err(LLMResponse::LLMFailure(LLMErrorResponse {

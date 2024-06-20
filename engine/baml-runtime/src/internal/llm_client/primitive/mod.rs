@@ -168,11 +168,11 @@ impl RequestBuilder for LLMPrimitiveProvider {
         match_llm_provider!(self, invocation_params)
     }
 
-    async fn build_request(
+    fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<internal_baml_jinja::RenderedChatMessage>>,
         stream: bool,
     ) -> reqwest::RequestBuilder {
-        match_llm_provider!(self, build_request, async, prompt, stream)
+        match_llm_provider!(self, build_request, prompt, stream)
     }
 }
