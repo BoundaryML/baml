@@ -18,7 +18,7 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
 pub fn on_wasm_init() {
-    match console_log::init_with_level(log::Level::Trace) {
+    match console_log::init_with_level(log::Level::Warn) {
         Ok(_) => web_sys::console::log_1(&"Initialized BAML runtime logging".into()),
         Err(e) => web_sys::console::log_1(
             &format!("Failed to initialize BAML runtime logging: {:?}", e).into(),
@@ -306,6 +306,7 @@ pub struct WasmFunctionResponse {
 pub struct WasmTestResponse {
     test_response: anyhow::Result<baml_runtime::TestResponse>,
     span: Option<uuid::Uuid>,
+    tracing_project_id: Option<String>,
 }
 
 #[wasm_bindgen]
@@ -483,7 +484,10 @@ impl WasmTestResponse {
             .ok_or(anyhow::anyhow!("Function call has no span ID"))?
             .to_string();
 
-        Ok(format!("https://app.boundaryml.com/dashboard/projects/{}/drilldown?start_time={start_time}&eid={event_span_id}&s_eid={subevent_span_id}&test=false&onlyRootEvents=true", "proj_7a9833d3-e585-4ac0-8e21-ff5cfe46f556" ))
+        Ok(format!(
+            "https://app.boundaryml.com/dashboard/projects/{}/drilldown?start_time={start_time}&eid={event_span_id}&s_eid={subevent_span_id}&test=false&onlyRootEvents=true",
+            self.tracing_project_id.as_ref().ok_or(anyhow::anyhow!("No project ID specified"))?
+        ))
     }
 
     #[wasm_bindgen]
@@ -998,6 +1002,7 @@ impl WasmFunction {
         Ok(WasmTestResponse {
             test_response,
             span,
+            tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
         })
     }
 }
