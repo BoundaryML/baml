@@ -42,6 +42,9 @@
     "[typescriptreact]": {
       "editor.defaultFormatter": "biomejs.biome"
     },
+    "files.associations": {
+      "*.baml.j2": "jinja"
+    },
     "editor.colorDecoratorsLimit": 2000,
     "editor.formatOnSaveMode": "file",
     "editor.formatOnSave": true,
