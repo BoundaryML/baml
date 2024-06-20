@@ -4,7 +4,7 @@ edition = "2021"
 version = "0.1.0"
 authors.workspace = true
 description = "BAML python bindings (Cargo.toml)"
-license-file.workspace = true
+license = "Apache-2.0"
 
 [lib]
 name = "baml_py"
