@@ -1,5 +1,7 @@
 import pytest
 from dotenv import load_dotenv
+from base64_test_data import image_b64, audio_b64
+
 
 load_dotenv()
 import baml_py
@@ -93,13 +95,35 @@ async def test_should_work_for_all_outputs():
 
 
 @pytest.mark.asyncio
-async def test_should_work_with_image():
+async def test_should_work_with_image_url():
     res = await b.TestImageInput(
         img=baml_py.Image.from_url(
             "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
         )
     )
     assert "green" in res.lower()
+
+
+@pytest.mark.asyncio
+async def test_should_work_with_image_base64():
+    res = await b.TestImageInput(img=baml_py.Image.from_base64("image/png", image_b64))
+    assert "green" in res.lower()
+
+
+@pytest.mark.asyncio
+async def test_should_work_with_audio_base64():
+    res = await b.AudioInput(aud=baml_py.Audio.from_base64("audio/mp3", audio_b64))
+    assert "yes" in res.lower()
+
+
+@pytest.mark.asyncio
+async def test_should_work_with_audio_url():
+    res = await b.AudioInput(
+        aud=baml_py.Audio.from_url(
+            "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg"
+        )
+    )
+    assert "no" in res.lower()
 
 
 @pytest.mark.asyncio
@@ -128,6 +152,9 @@ async def test_gemini():
     geminiRes = await b.TestGemini(input="Dr. Pepper")
     print(f"LLM output from Gemini: {geminiRes}")
 
+    geminiRes = await b.TestGemini(input="Dr. Pepper")
+    print(f"LLM output from Gemini: {geminiRes}")
+
     assert len(geminiRes) > 0, "Expected non-empty result but got empty."
 
 
@@ -142,11 +169,12 @@ async def test_streaming():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
@@ -170,11 +198,12 @@ async def test_streaming_claude():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     print("msgs:")
     print(msgs[-1])
@@ -194,11 +223,12 @@ async def test_streaming_gemini():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     print("msgs:")
     print(msgs[-1])
@@ -348,8 +378,13 @@ async def test_dynamic_class_output():
         input="My name is Harrison. My hair is black and I'm 6 feet tall.",
         baml_options={"tb": tb},
     )
+    output = await b.MyFunc(
+        input="My name is Harrison. My hair is black and I'm 6 feet tall.",
+        baml_options={"tb": tb},
+    )
     print(output.model_dump_json())
     assert output.hair_color == "black"
+
 
 @pytest.mark.asyncio
 async def test_dynamic_class_nested_output_no_stream():
@@ -373,7 +408,10 @@ async def test_dynamic_class_nested_output_no_stream():
     )
     print(output.model_dump_json())
     # assert the order of the properties inside output dict:
-    assert(output.model_dump_json() == '{"name":{"first_name":"Mark","last_name":"Gonzalez","middle_name":null},"address":null,"hair_color":"black","height":6.0}')
+    assert (
+        output.model_dump_json()
+        == '{"name":{"first_name":"Mark","last_name":"Gonzalez","middle_name":null},"address":null,"hair_color":"black","height":6.0}'
+    )
 
 
 @pytest.mark.asyncio
@@ -400,7 +438,10 @@ async def test_dynamic_class_nested_output_stream():
 
     print(output.model_dump_json())
     # assert the order of the properties inside output dict:
-    assert(output.model_dump_json() == '{"name":{"first_name":"Mark","last_name":"Gonzalez"},"hair_color":"black"}')
+    assert (
+        output.model_dump_json()
+        == '{"name":{"first_name":"Mark","last_name":"Gonzalez"},"hair_color":"black"}'
+    )
 
 
 @pytest.mark.asyncio

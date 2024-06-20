@@ -62,6 +62,17 @@ const PromptPreview: React.FC = () => {
                 />
               )
             if (part.is_image()) return <img key={idx} src={part.as_image()} className='max-w-40' />
+            if (part.is_audio()) {
+              const audioUrl = part.as_audio()
+              if (audioUrl) {
+                return (
+                  <audio controls key={audioUrl + idx}>
+                    <source src={audioUrl} />
+                    Your browser does not support the audio element.
+                  </audio>
+                )
+              }
+            }
             return null
           })}
         </div>

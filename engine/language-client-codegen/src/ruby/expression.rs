@@ -48,6 +48,7 @@ impl ToRuby for TypeValue {
             TypeValue::String => "string".to_string(),
             TypeValue::Null => "null".to_string(),
             TypeValue::Image => "Image".to_string(),
+            TypeValue::Audio => "Audio".to_string(),
         }
     }
 }

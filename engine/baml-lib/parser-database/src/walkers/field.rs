@@ -114,6 +114,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                         baml_types::TypeValue::String => "string",
                         baml_types::TypeValue::Null => "null",
                         baml_types::TypeValue::Image => "image",
+                        baml_types::TypeValue::Audio => "audio",
                     }
                 })
             }

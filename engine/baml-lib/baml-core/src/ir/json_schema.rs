@@ -193,6 +193,17 @@ impl<'db> WithJsonSchema for FieldType {
                     "required": ["url"],
 
                 }),
+                TypeValue::Audio => json!({
+                    // anyOf either an object that has a uri, or it has a base64 string
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            // "format": "uri",
+                        }
+                    },
+                    "required": ["url"],
+                }),
             },
             FieldType::List(item) => json!({
                 "type": "array",

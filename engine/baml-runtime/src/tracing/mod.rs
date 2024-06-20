@@ -5,7 +5,7 @@ mod threaded_tracer;
 mod wasm_tracer;
 
 use anyhow::Result;
-use baml_types::{BamlMap, BamlValue};
+use baml_types::{BamlMap, BamlMedia, BamlMediaType, BamlValue};
 use colored::Colorize;
 use internal_baml_jinja::RenderedPrompt;
 use serde_json::json;
@@ -577,12 +577,32 @@ impl From<&RenderedPrompt> for Template {
                                 internal_baml_jinja::ChatMessagePart::Text(t) => {
                                     ContentPart::Text(t.clone())
                                 }
-                                internal_baml_jinja::ChatMessagePart::Image(
-                                    baml_types::BamlImage::Base64(u),
-                                ) => ContentPart::B64Image(u.base64.clone()),
-                                internal_baml_jinja::ChatMessagePart::Image(
-                                    baml_types::BamlImage::Url(u),
-                                ) => ContentPart::UrlImage(u.url.clone()),
+                                internal_baml_jinja::ChatMessagePart::Image(media)
+                                | internal_baml_jinja::ChatMessagePart::Audio(media) => match media
+                                {
+                                    baml_types::BamlMedia::Base64(media_type, data) => {
+                                        match media_type {
+                                            BamlMediaType::Image => {
+                                                ContentPart::B64Image(data.base64.clone())
+                                            }
+                                            BamlMediaType::Audio => {
+                                                ContentPart::B64Audio(data.base64.clone())
+                                            }
+                                            _ => panic!("Unsupported media type"),
+                                        }
+                                    }
+                                    baml_types::BamlMedia::Url(media_type, data) => {
+                                        match media_type {
+                                            BamlMediaType::Image => {
+                                                ContentPart::UrlImage(data.url.clone())
+                                            }
+                                            BamlMediaType::Audio => {
+                                                ContentPart::UrlAudio(data.url.clone())
+                                            }
+                                            _ => panic!("Unsupported media type"),
+                                        }
+                                    }
+                                },
                             })
                             .collect::<Vec<_>>(),
                     })

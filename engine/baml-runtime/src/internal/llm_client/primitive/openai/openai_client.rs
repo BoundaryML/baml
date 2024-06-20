@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::BamlImage;
+use baml_types::{BamlMedia, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 
@@ -393,15 +393,18 @@ macro_rules! make_openai_client {
     ($client:ident, $properties:ident) => {
         Ok(Self {
             name: $client.name().into(),
-            properties: $properties,
+
             context: RenderContext_Client {
                 name: $client.name().into(),
                 provider: $client.elem().provider.clone(),
+                default_role: $properties.default_role.clone(),
             },
+            properties: $properties,
             features: ModelFeatures {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
+                resolve_media_urls: false,
             },
             retry_policy: $client
                 .elem()
@@ -443,17 +446,20 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
         .map(|part| match part {
             ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
             ChatMessagePart::Image(image) => match image {
-                BamlImage::Url(image) => {
+                BamlMedia::Url(BamlMediaType::Image, image) => {
                     json!({"type": "image_url", "image_url": json!({
                         "url": image.url
                     })})
                 }
-                BamlImage::Base64(image) => {
+                BamlMedia::Base64(BamlMediaType::Image, image) => {
                     json!({"type": "image_url", "image_url": json!({
-                        "base64": image.base64
+                       "url" : format!("data:{};base64,{}", image.media_type, image.base64)
                     })})
                 }
+                _ => json!({}), // return an empty JSON object or any other default value
             },
+            // OpenAI does not yet support audio
+            _ => json!({}), // return an empty JSON object or any other default value
         })
         .collect();
 

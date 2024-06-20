@@ -560,6 +560,9 @@ fn get_dummy_value(
                 baml_runtime::TypeValue::Image => {
                     "{ url \"https://imgs.xkcd.com/comics/standards.png\"}".to_string()
                 }
+                baml_runtime::TypeValue::Audio => {
+                    "{ url \"https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg\"}".to_string()
+                }
             };
 
             Some(dummy)

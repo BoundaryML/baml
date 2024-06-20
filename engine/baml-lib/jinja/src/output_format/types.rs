@@ -251,6 +251,12 @@ impl OutputFormatContent {
                         "Image type is not supported in outputs",
                     ))
                 }
+                TypeValue::Audio => {
+                    return Err(minijinja::Error::new(
+                        minijinja::ErrorKind::BadSerialization,
+                        "Audio type is not supported in outputs",
+                    ))
+                }
             },
             FieldType::Enum(e) => {
                 let Some(enm) = self.enums.get(e) else {

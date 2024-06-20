@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use baml_types::BamlImage;
+use baml_types::{BamlMedia, BamlMediaType};
 use eventsource_stream::Eventsource;
 use futures::{SinkExt, StreamExt};
 use internal_baml_core::ir::ClientWalker;
@@ -310,17 +310,22 @@ impl WithStreamChat for AnthropicClient {
 // constructs base client and resolves properties based on context
 impl AnthropicClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AnthropicClient> {
+        let post_properties = resolve_properties(client, ctx)?;
+        let default_role = post_properties.default_role.clone(); // clone before moving
+
         Ok(Self {
             name: client.name().into(),
-            properties: resolve_properties(client, ctx)?,
+            properties: post_properties,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
+                default_role: default_role,
             },
             features: ModelFeatures {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: true,
+                resolve_media_urls: true,
             },
             retry_policy: client
                 .elem()
@@ -537,23 +542,29 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                 "type": "text",
                 "text": text
             }),
-            ChatMessagePart::Image(image) => match image {
-                BamlImage::Base64(image) => json!({
-                    "type": "image",
+
+            ChatMessagePart::Image(media) => match media {
+                BamlMedia::Base64(media_type, data) => json!({
+                    "type":  media_type.to_string(),
+
                     "source": {
                         "type": "base64",
-                        "media_type": image.media_type,
-                        "data": image.base64
+                        "media_type": data.media_type,
+                        "data": data.base64
                     }
                 }),
-                BamlImage::Url(image) => json!({
-                    "type": "image",
-                    "source": {
-                        "type": "url",
-                        "url": image.url
-                    }
-                }),
+                _ => panic!("Unsupported media type"),
+                //never executes, keep for future if anthropic supports urls
+                // BamlMedia::Url(media_type, data) => json!({
+                //     "type": "image",
+
+                //     "source": {
+                //         "type": "url",
+                //         "url": data.url
+                //     }
+                // }),
             },
+            _ => json!({}),
         })
         .collect()
 }

@@ -52,6 +52,26 @@ module Baml
     sig {
       
       params(
+        aud: Baml::Audio,
+      ).returns(String)
+      
+    }
+    def AudioInput(
+        aud:
+    )
+      raw = @runtime.call_function(
+        "AudioInput",
+        {
+          "aud" => aud,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
         input: String,
       ).returns(Baml::Types::Category)
       
@@ -1174,6 +1194,27 @@ module Baml
     def initialize(runtime:, ctx_manager:)
       @runtime = runtime
       @ctx_manager = ctx_manager
+    end
+
+    sig {
+      params(
+        aud: Baml::Audio,
+      ).returns(Baml::BamlStream[String])
+    }
+    def AudioInput(
+        aud:
+    )
+      raw = @runtime.stream_function(
+        "AudioInput",
+        {
+          "aud" => aud,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
     end
 
     sig {

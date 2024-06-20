@@ -15,7 +15,7 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
-use baml_types::BamlImage;
+use baml_types::{BamlMedia, BamlMediaType};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
@@ -235,17 +235,22 @@ impl WithStreamChat for GoogleClient {
 
 impl GoogleClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<GoogleClient> {
+        let post_properties = resolve_properties(client, ctx)?;
+        let default_role = post_properties.default_role.clone(); // clone before moving
+
         Ok(Self {
             name: client.name().into(),
-            properties: resolve_properties(client, ctx)?,
+            properties: post_properties,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
+                default_role: default_role,
             },
             features: ModelFeatures {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
+                resolve_media_urls: true,
             },
             retry_policy: client
                 .elem()
@@ -301,19 +306,17 @@ impl RequestBuilder for GoogleClient {
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
-
         match prompt {
             either::Either::Left(prompt) => {
                 body_obj.extend(convert_completion_prompt_to_body(prompt))
             }
             either::Either::Right(messages) => {
-                body_obj.extend(convert_chat_prompt_to_body(messages))
+                body_obj.extend(convert_chat_prompt_to_body(messages));
             }
         }
 
         req.json(&body)
     }
-
     fn invocation_params(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
     }
@@ -376,14 +379,13 @@ impl WithChat for GoogleClient {
                     .finish_reason
                     .as_ref()
                     .map(|r| serde_json::to_string(r).unwrap_or("".into())),
-                prompt_tokens: Some(response.usage_metadata.prompt_token_count),
-                output_tokens: Some(response.usage_metadata.candidates_token_count),
-                total_tokens: Some(response.usage_metadata.total_token_count),
+                prompt_tokens: response.usage_metadata.prompt_token_count,
+                output_tokens: response.usage_metadata.candidates_token_count,
+                total_tokens: response.usage_metadata.total_token_count,
             },
         })
     }
 }
-
 //simple, Map with key "prompt" and value of the prompt string
 fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
@@ -426,20 +428,20 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
             ChatMessagePart::Text(text) => json!({
                 "text": text
             }),
-            ChatMessagePart::Image(image) => match image {
-                BamlImage::Base64(image) => json!({
-                    "inlineDATA": {
-                        "mimeType": image.media_type,
-                        "data": image.base64
-                    }
-                }),
-                BamlImage::Url(image) => json!({
-                    "fileData": {
-                        "type": "url",
-                        "url": image.url
-                    }
-                }),
-            },
+            ChatMessagePart::Image(image) => convert_media_to_content(image, "image"),
+            ChatMessagePart::Audio(audio) => convert_media_to_content(audio, "audio"),
         })
         .collect()
+}
+
+fn convert_media_to_content(media: &BamlMedia, media_type: &str) -> serde_json::Value {
+    match media {
+        BamlMedia::Base64(_, data) => json!({
+            "inlineData": {
+                "mimeType": format!("{}", data.media_type),
+                "data": data.base64
+            }
+        }),
+        _ => panic!("Unsupported media type"),
+    }
 }

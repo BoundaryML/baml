@@ -364,9 +364,9 @@ pub struct SearchEntryPoint {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageMetaData {
-    pub prompt_token_count: u64,
-    pub candidates_token_count: u64,
-    pub total_token_count: u64,
+    pub prompt_token_count: Option<u64>,
+    pub candidates_token_count: Option<u64>,
+    pub total_token_count: Option<u64>,
 }
 
 #[cfg(test)]
