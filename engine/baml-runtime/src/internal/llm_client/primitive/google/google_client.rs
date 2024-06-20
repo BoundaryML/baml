@@ -263,7 +263,7 @@ impl RequestBuilder for GoogleClient {
         &self.client
     }
 
-    async fn build_request(
+    fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
@@ -326,7 +326,7 @@ impl WithChat for GoogleClient {
         ))
     }
 
-    fn chat(&self, _ctx: &RuntimeContext, prompt: &Vec<RenderedChatMessage>) -> LLMResponse {
+    async fn chat(&self, _ctx: &RuntimeContext, prompt: &Vec<RenderedChatMessage>) -> LLMResponse {
         //non-streaming, complete response is returned
         let (response, system_now, instant_now) =
             match make_parsed_request::<GoogleResponse>(self, either::Either::Right(prompt), false)
@@ -382,7 +382,6 @@ impl WithChat for GoogleClient {
         })
     }
 }
-
 //simple, Map with key "prompt" and value of the prompt string
 fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
