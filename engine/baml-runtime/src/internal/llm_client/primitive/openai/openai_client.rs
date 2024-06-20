@@ -272,7 +272,13 @@ impl RequestBuilder for OpenAIClient {
         }
 
         if stream {
-            body_obj.insert("stream".into(), true.into());
+            body_obj.insert("stream".into(), json!(true));
+            body_obj.insert(
+                "stream_options".into(),
+                json!({
+                    "include_usage": true,
+                }),
+            );
         }
 
         req.json(&body)
@@ -366,6 +372,11 @@ impl SseResponseTrait for OpenAIClient {
                             }
                         }
                         inner.latency = instant_start.elapsed();
+                        if let Some(usage) = event.usage.as_ref() {
+                            inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
+                            inner.metadata.output_tokens = Some(usage.completion_tokens);
+                            inner.metadata.total_tokens = Some(usage.total_tokens);
+                        }
 
                         std::future::ready(Some(LLMResponse::Success(inner.clone())))
                     },
