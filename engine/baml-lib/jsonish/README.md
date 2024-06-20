@@ -5,7 +5,12 @@
 This library exposes an interface:
 
 ```rust
-fn parse(input: &str, schema: JSONSchema) -> Result<serde_json::Value, DeserializationError>
+pub fn from_str(
+    of: &OutputFormatContent,
+    target: &FieldType,
+    raw_string: &str,
+    allow_partials: bool,
+) -> Result<BamlValueWithFlags>
 ```
 
 It provides a guarantee that the schema is able to be flexibly parsed out from the input.
