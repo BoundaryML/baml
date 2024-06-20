@@ -246,12 +246,21 @@ impl TypeCoercer for Class {
                     }))
                     .collect::<BamlMap<String, _>>();
 
+                // Create a BamlMap ordered according to self.fields
+                let mut ordered_valid_fields = BamlMap::new();
+                for field in self.fields.iter() {
+                    let key = field.0.real_name();
+                    if let Some(value) = valid_fields.get(key) {
+                        ordered_valid_fields.insert(key.to_string(), value.clone());
+                    }
+                }
+
                 completed_cls.insert(
                     0,
                     Ok(BamlValueWithFlags::Class(
                         self.name.real_name().into(),
                         flags,
-                        valid_fields,
+                        ordered_valid_fields,
                     )),
                 );
             }
