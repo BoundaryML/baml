@@ -67,7 +67,7 @@ impl BamlImage {
                 "base64": base64.base64,
                 "media_type": base64.media_type
             }),
-            _ => format!("Unknown BamlImagePy variant"),
+            _ => format!("Unknown BamlImagePy variant").into(),
         })
     }
 }

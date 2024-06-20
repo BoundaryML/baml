@@ -67,7 +67,7 @@ impl BamlAudio {
                 "base64": base64.base64,
                 "media_type": base64.media_type
             }),
-            _ => format!("Unknown BamlAudioPy variant"),
+            _ => format!("Unknown BamlAudioPy variant").into(),
         })
     }
 }
