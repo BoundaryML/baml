@@ -310,12 +310,16 @@ impl WithStreamChat for AnthropicClient {
 // constructs base client and resolves properties based on context
 impl AnthropicClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AnthropicClient> {
+        let post_properties = resolve_properties(client, ctx)?;
+        let default_role = post_properties.default_role.clone(); // clone before moving
+
         Ok(Self {
             name: client.name().into(),
-            properties: resolve_properties(client, ctx)?,
+            properties: post_properties,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
+                default_role: default_role,
             },
             features: ModelFeatures {
                 chat: true,
@@ -545,7 +549,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
 
                     "source": {
                         "type": "base64",
-                        "media_type": data.media_type,
+                        "media_type": data.media_type.split('/').last().unwrap(),
                         "data": data.base64
                     }
                 }),
@@ -559,7 +563,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                     }
                 }),
             },
-            _ => None.unwrap(),
+            _ => json!({}),
         })
         .collect()
 }

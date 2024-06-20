@@ -74,6 +74,7 @@ pub fn validate_template(
 pub struct RenderContext_Client {
     pub name: String,
     pub provider: String,
+    pub default_role: String,
 }
 
 #[derive(Debug)]
@@ -97,6 +98,7 @@ fn render_minijinja(
     args: &minijinja::Value,
     mut ctx: RenderContext,
     template_string_macros: &[TemplateStringMacro],
+    default_role: String,
 ) -> Result<RenderedPrompt, minijinja::Error> {
     let mut env = get_env();
 
@@ -241,7 +243,7 @@ fn render_minijinja(
                 }
             }
             chat_messages.push(RenderedChatMessage {
-                role: role.unwrap_or("system").to_string(),
+                role: role.unwrap_or(&default_role).to_string(),
                 parts,
             });
         }
@@ -427,8 +429,14 @@ pub fn render_prompt(
     }
 
     let minijinja_args: Value = args.clone().into();
-
-    let rendered = render_minijinja(template, &minijinja_args, ctx, template_string_macros);
+    let default_role = ctx.client.default_role.clone();
+    let rendered = render_minijinja(
+        template,
+        &minijinja_args,
+        ctx,
+        template_string_macros,
+        default_role,
+    );
 
     match rendered {
         Ok(r) => Ok(r),

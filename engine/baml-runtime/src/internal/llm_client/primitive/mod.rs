@@ -76,6 +76,7 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                     "openai",
                     "anthropic",
                     "ollama",
+                    "google-ai",
                     "azure-openai",
                     "fallback",
                     "round-robin",

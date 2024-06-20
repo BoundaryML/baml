@@ -312,6 +312,26 @@ module Baml
     sig {
       
       params(
+        resume_text: Baml::Image,
+      ).returns(Baml::Types::Character)
+      
+    }
+    def ExtractResume5(
+        resume_text:
+    )
+      raw = @runtime.call_function(
+        "ExtractResume5",
+        {
+          "resume_text" => resume_text,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
         input: String,
       ).returns(T.nilable(Baml::Types::ClassOptionalOutput))
       
@@ -1464,6 +1484,27 @@ module Baml
         @ctx_manager,
       )
       Baml::BamlStream[Baml::PartialTypes::Resume, Baml::Types::Resume].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        resume_text: Baml::Image,
+      ).returns(Baml::BamlStream[Baml::Types::Character])
+    }
+    def ExtractResume5(
+        resume_text:
+    )
+      raw = @runtime.stream_function(
+        "ExtractResume5",
+        {
+          "resume_text" => resume_text,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::Character, Baml::Types::Character].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

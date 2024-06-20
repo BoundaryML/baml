@@ -21,7 +21,7 @@ const defaultEnvKeyValues: [string, string][] = (() => {
       // we can do somehting fancier here later if we want to test locally.
       return [['BOUNDARY_PROXY_URL', 'https://fiddle-proxy.fly.dev']]
     }
-    return [['BOUNDARY_PROXY_URL', 'https://fiddle-proxy.fly.dev']]
+    return [['BOUNDARY_PROXY_URL', 'https://localhost:3000']]
   } else {
     console.log('Not running in a Next.js environment, set default value')
     // Not running in a Next.js environment, set default value

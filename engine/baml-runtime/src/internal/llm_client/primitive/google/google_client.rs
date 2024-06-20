@@ -235,12 +235,16 @@ impl WithStreamChat for GoogleClient {
 
 impl GoogleClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<GoogleClient> {
+        let post_properties = resolve_properties(client, ctx)?;
+        let default_role = post_properties.default_role.clone(); // clone before moving
+
         Ok(Self {
             name: client.name().into(),
-            properties: resolve_properties(client, ctx)?,
+            properties: post_properties,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
+                default_role: default_role,
             },
             features: ModelFeatures {
                 chat: true,
@@ -436,12 +440,6 @@ fn convert_media_to_content(media: &BamlMedia, media_type: &str) -> serde_json::
             "inlineData": {
                 "mimeType": format!("{}", data.media_type),
                 "data": data.base64
-            }
-        }),
-        BamlMedia::Url(_, data) => json!({
-            "fileData": {
-                "mimeType": "audio/mp4",
-                "data": data.url
             }
         }),
         _ => panic!("Unsupported media type"),

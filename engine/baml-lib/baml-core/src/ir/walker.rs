@@ -340,6 +340,10 @@ impl<'a> Walker<'a, &'a Client> {
     pub fn span(&self) -> Option<&crate::Span> {
         self.item.attributes.span.as_ref()
     }
+
+    pub fn options(&self) -> &Vec<(String, Expression)> {
+        &self.elem().options
+    }
 }
 
 impl<'a> Walker<'a, &'a RetryPolicy> {

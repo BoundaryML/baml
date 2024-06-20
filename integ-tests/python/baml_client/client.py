@@ -341,6 +341,28 @@ class BamlClient:
       mdl = create_model("ExtractResume2ReturnType", inner=(types.Resume, ...))
       return coerce(mdl, raw.parsed())
     
+    async def ExtractResume5(
+        self,
+        resume_text: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Character:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "ExtractResume5",
+        {
+          "resume_text": resume_text,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("ExtractResume5ReturnType", inner=(types.Character, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def FnClassOptionalOutput(
         self,
         input: str,
@@ -1732,6 +1754,38 @@ class BamlStreamClient:
       partial_mdl = create_model("ExtractResume2PartialReturnType", inner=(partial_types.Resume, ...))
 
       return baml_py.BamlStream[partial_types.Resume, types.Resume](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
+    def ExtractResume5(
+        self,
+        resume_text: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.Character, types.Character]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "ExtractResume5",
+        {
+          "resume_text": resume_text,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("ExtractResume5ReturnType", inner=(types.Character, ...))
+      partial_mdl = create_model("ExtractResume5PartialReturnType", inner=(partial_types.Character, ...))
+
+      return baml_py.BamlStream[partial_types.Character, types.Character](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

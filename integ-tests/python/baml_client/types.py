@@ -124,6 +124,12 @@ class Blah(BaseModel):
     
     prop4: Optional[str] = None
 
+class Character(BaseModel):
+    
+    
+    color: str
+    clothing: str
+
 class ClassOptionalOutput(BaseModel):
     
     

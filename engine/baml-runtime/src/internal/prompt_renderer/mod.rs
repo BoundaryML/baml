@@ -6,7 +6,7 @@ use anyhow::Result;
 use baml_types::{BamlValue, FieldType};
 use internal_baml_core::{
     error_unsupported,
-    ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
+    ir::{repr::IntermediateRepr, Expression, FunctionWalker, IRHelper},
 };
 use internal_baml_jinja::{
     types::OutputFormatContent, RenderContext, RenderContext_Client, RenderedPrompt,
@@ -68,6 +68,7 @@ impl PromptRenderer {
         client_ctx: &RenderContext_Client,
     ) -> Result<RenderedPrompt> {
         let func = ir.find_function(&self.function_name)?;
+
         let Some(func_v2) = func.as_v2() else {
             error_unsupported!(
                 "function",

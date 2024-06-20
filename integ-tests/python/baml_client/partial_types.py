@@ -33,6 +33,12 @@ class Blah(BaseModel):
     
     prop4: Optional[str] = None
 
+class Character(BaseModel):
+    
+    
+    color: Optional[str] = None
+    clothing: Optional[str] = None
+
 class ClassOptionalOutput(BaseModel):
     
     

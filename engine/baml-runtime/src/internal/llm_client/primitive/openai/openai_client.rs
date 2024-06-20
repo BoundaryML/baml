@@ -393,11 +393,13 @@ macro_rules! make_openai_client {
     ($client:ident, $properties:ident) => {
         Ok(Self {
             name: $client.name().into(),
-            properties: $properties,
+            // properties: $properties,
             context: RenderContext_Client {
                 name: $client.name().into(),
                 provider: $client.elem().provider.clone(),
+                default_role: $properties.default_role.clone(),
             },
+            properties: $properties,
             features: ModelFeatures {
                 chat: true,
                 completion: false,
@@ -454,10 +456,10 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                        "url" : format!("data:{};base64,{}", image.media_type, image.base64)
                     })})
                 }
-                _ => None.unwrap(),
+                _ => json!({}), // return an empty JSON object or any other default value
             },
             // OpenAI does not yet support audio
-            _ => None.unwrap(),
+            _ => json!({}), // return an empty JSON object or any other default value
         })
         .collect();
 
