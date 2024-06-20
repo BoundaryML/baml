@@ -28,7 +28,7 @@ const Node = ({ node, style, dragHandle }: NodeRendererProps<any>) => {
         <span className='arrow'>
           {node.isLeaf ? null : node.isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </span>
-        <span className='node-text'>{node.data.name}</span>
+        <span className='text-sm'>{node.data.name}</span>
       </div>
     </div>
   )

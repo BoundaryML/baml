@@ -28,6 +28,7 @@ pub fn from_str(
 
     // Pick the schema that is the most specific.
     // log::info!("Parsed: {}", schema);
+    log::debug!("Parsed JSONish (step 1 of parsing): {:#?}", value);
     let ctx = ParsingContext::new(of, allow_partials);
     // let res = schema.cast_to(target);
     // log::info!("Casted: {:?}", res);

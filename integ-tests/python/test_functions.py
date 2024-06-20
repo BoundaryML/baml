@@ -1,5 +1,6 @@
 import pytest
 from dotenv import load_dotenv
+
 load_dotenv()
 import baml_py
 from baml_client import b
@@ -7,7 +8,6 @@ from baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
 from baml_client.tracing import trace, set_tags, flush
 from baml_client.type_builder import TypeBuilder
 import datetime
-
 
 
 @pytest.mark.asyncio
@@ -125,11 +125,10 @@ async def test_claude():
 
 @pytest.mark.asyncio
 async def test_gemini():
-    geminiRes = await b.TestGemini(input= "Dr. Pepper")
-    print(f'LLM output from Gemini: {geminiRes}')
-    
-    assert len(geminiRes) > 0, "Expected non-empty result but got empty."
+    geminiRes = await b.TestGemini(input="Dr. Pepper")
+    print(f"LLM output from Gemini: {geminiRes}")
 
+    assert len(geminiRes) > 0, "Expected non-empty result but got empty."
 
 
 @pytest.mark.asyncio
@@ -206,8 +205,6 @@ async def test_streaming_gemini():
     print("final:")
     print(final)
     assert msgs[-1] == final, "Expected last stream message to match final response."
-
-
 
 
 @pytest.mark.asyncio
@@ -347,9 +344,64 @@ async def test_dynamic_class_output():
     for prop in tb.DynamicOutput.list_properties():
         print(f"Property: {prop}")
 
-    output = await b.MyFunc(input="My name is Harrison. My hair is black and I'm 6 feet tall.", baml_options={"tb": tb})
+    output = await b.MyFunc(
+        input="My name is Harrison. My hair is black and I'm 6 feet tall.",
+        baml_options={"tb": tb},
+    )
     print(output.model_dump_json())
     assert output.hair_color == "black"
+
+@pytest.mark.asyncio
+async def test_dynamic_class_nested_output_no_stream():
+    tb = TypeBuilder()
+    nested_class = tb.add_class("Name")
+    nested_class.add_property("first_name", tb.string())
+    nested_class.add_property("last_name", tb.string().optional())
+    nested_class.add_property("middle_name", tb.string().optional())
+
+    other_nested_class = tb.add_class("Address")
+
+    # name should be first in the prompt schema
+    tb.DynamicOutput.add_property("name", nested_class.type().optional())
+    tb.DynamicOutput.add_property("address", other_nested_class.type().optional())
+    tb.DynamicOutput.add_property("hair_color", tb.string()).alias("hairColor")
+    tb.DynamicOutput.add_property("height", tb.float().optional())
+
+    output = await b.MyFunc(
+        input="My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
+        baml_options={"tb": tb},
+    )
+    print(output.model_dump_json())
+    # assert the order of the properties inside output dict:
+    assert(output.model_dump_json() == '{"name":{"first_name":"Mark","last_name":"Gonzalez","middle_name":null},"address":null,"hair_color":"black","height":6.0}')
+
+
+@pytest.mark.asyncio
+async def test_dynamic_class_nested_output_stream():
+    tb = TypeBuilder()
+    nested_class = tb.add_class("Name")
+    nested_class.add_property("first_name", tb.string())
+    nested_class.add_property("last_name", tb.string().optional())
+
+    # name should be first in the prompt schema
+    tb.DynamicOutput.add_property("name", nested_class.type().optional())
+    tb.DynamicOutput.add_property("hair_color", tb.string())
+
+    stream = b.stream.MyFunc(
+        input="My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
+        baml_options={"tb": tb},
+    )
+    msgs = []
+    async for msg in stream:
+        print("streamed ", msg)
+        print("streamed ", msg.model_dump())
+        msgs.append(msg)
+    output = await stream.get_final_response()
+
+    print(output.model_dump_json())
+    # assert the order of the properties inside output dict:
+    assert(output.model_dump_json() == '{"name":{"first_name":"Mark","last_name":"Gonzalez"},"hair_color":"black"}')
+
 
 @pytest.mark.asyncio
 async def test_stream_dynamic_class_output():
@@ -359,7 +411,10 @@ async def test_stream_dynamic_class_output():
     for prop in tb.DynamicOutput.list_properties():
         print(f"Property: {prop}")
 
-    stream = b.stream.MyFunc(input="My name is Harrison. My hair is black and I'm 6 feet tall.", baml_options={"tb": tb})
+    stream = b.stream.MyFunc(
+        input="My name is Harrison. My hair is black and I'm 6 feet tall.",
+        baml_options={"tb": tb},
+    )
     msgs = []
     async for msg in stream:
         print("streamed ", msg)
@@ -373,14 +428,17 @@ async def test_stream_dynamic_class_output():
     print("final ", final.model_dump_json())
     assert final.hair_color == "black"
 
+
 @pytest.mark.asyncio
 async def test_nested_class_streaming():
-    stream = b.stream.FnOutputClassNested(input="My name is Harrison. My hair is black and I'm 6 feet tall.")
+    stream = b.stream.FnOutputClassNested(
+        input="My name is Harrison. My hair is black and I'm 6 feet tall."
+    )
     msgs = []
     async for msg in stream:
-        print("streamed ", msg.model_dump(mode='json'))
+        print("streamed ", msg.model_dump(mode="json"))
         msgs.append(msg)
     final = await stream.get_final_response()
 
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
-    print("final ", final.model_dump(mode='json'))
+    print("final ", final.model_dump(mode="json"))
