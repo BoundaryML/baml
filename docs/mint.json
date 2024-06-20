@@ -20,21 +20,6 @@
   },
   "anchors": [
     {
-      "name": "Guides & Examples",
-      "icon": "cubes",
-      "url": "docs/guides"
-    },
-    {
-      "name": "Reference",
-      "icon": "book",
-      "url": "docs/syntax"
-    },
-    {
-      "name": "Open Boundary Studio",
-      "icon": "sparkles",
-      "url": "https://app.boundaryml.com"
-    },
-    {
       "name": "Community",
       "icon": "discord",
       "url": "https://discord.gg/BTNBeXGuaS"
@@ -47,104 +32,111 @@
   "navigation": [
     {
       "group": "Get started",
-      "pages": ["docs/home/overview", "docs/home/demo"]
-    },
-    {
-      "group": "Setup",
       "pages": [
-        "docs/home/example_nextjs",
-        "docs/home/example_python",
-        "docs/home/example_ruby",
-        "docs/home/baml-in-2-min"
-      ]
-    },
-    {
-      "group": "Comparisons",
-      "pages": [
-        "docs/home/comparisons/marvin",
-        "docs/home/comparisons/pydantic"
-      ]
-    },
-    {
-      "group": "Hello World",
-      "pages": [
-        "docs/guides/hello_world/writing-ai-functions",
-        "docs/guides/hello_world/testing-ai-functions",
-        "docs/guides/hello_world/baml-project-structure"
-      ]
-    },
-    {
-      "group": "Overview",
-      "pages": [
-        "docs/syntax/overview",
-        "docs/syntax/generator",
-        "docs/syntax/comments",
-        "docs/syntax/strings",
-        "docs/syntax/function"
-      ]
-    },
-    {
-      "group": "Types",
-      "pages": ["docs/syntax/type", "docs/syntax/enum", "docs/syntax/class"]
-    },
-    {
-      "group": "prompt",
-      "pages": ["docs/syntax/prompt_engineering/overview"]
-    },
-
-    {
-      "group": "client",
-      "pages": [
-        "docs/syntax/client/client",
-        "docs/syntax/client/retry",
-        "docs/syntax/client/redundancy"
-      ]
-    },
-
-    {
-      "group": "How-to Guides",
-      "pages": [
-        "docs/guides/overview",
+        "docs/get-started/what-is-baml",
+        "docs/get-started/interactive-demos",
         {
-          "group": "Prompt engineering",
-          "icon": "sparkles",
-          "pages": ["docs/guides/prompt_engineering/chat-prompts"]
-        },
-        {
-          "group": "Testing",
+          "group": "Quickstart",
           "pages": [
-            "docs/guides/testing/unit_test",
-            "docs/guides/testing/test_with_assertions"
-          ],
-          "icon": "flask-vial"
+            "docs/get-started/quickstart/python",
+            "docs/get-started/quickstart/typescript",
+            "docs/get-started/quickstart/ruby",
+            "docs/get-started/quickstart/vscode-playground"
+          ]
         },
         {
-          "group": "Resilience / Reliability",
+          "group": "Debugging",
           "pages": [
-            "docs/guides/resilience/retries",
-            "docs/guides/resilience/fallback"
-          ],
-          "icon": "shield-check"
+            "docs/get-started/debugging/vscode-playground",
+            "docs/get-started/debugging/enable-logging"
+          ]
         },
         {
-          "group": "Observability",
-          "icon": "chart-mixed",
-          "pages": ["docs/guides/boundary_studio/tracing-tagging"]
-        },
-        {
-          "group": "Improve LLM results",
+          "group": "Deploying BAML Projects",
           "pages": [
-            "docs/guides/improve_results/diagnose",
-            "docs/guides/improve_results/fine_tune"
-          ],
-          "icon": "bolt"
-        },
-        {
-          "group": "Streaming",
-          "icon": "water",
-          "pages": ["docs/guides/streaming/streaming"]
+            "docs/get-started/deploying/docker",
+            "docs/get-started/deploying/nextjs"
+          ]
         }
       ]
+    },
+    {
+      "group": "BAML Snippets",
+      "pages": [
+        {
+          "group": "General BAML Syntax",
+          "pages": [
+            "docs/snippets/syntax/comments",
+            "docs/snippets/syntax/strings",
+            "docs/snippets/syntax/lists",
+            "docs/snippets/syntax/dictionaries"
+          ]
+        },
+        "docs/snippets/supported-types",
+        {
+          "group": "LLM Clients",
+          "pages": [
+            "docs/snippets/clients/overview",
+            {
+              "group": "providers",
+              "pages": [
+                "docs/snippets/clients/providers/openai",
+                "docs/snippets/clients/providers/anthropic",
+                "docs/snippets/clients/providers/azure",
+                "docs/snippets/clients/providers/ollama",
+                "docs/snippets/clients/providers/gemini",
+                "docs/snippets/clients/providers/vertex",
+                "docs/snippets/clients/providers/bedrock"
+              ]
+            },
+            "docs/snippets/clients/retry",
+            "docs/snippets/clients/fallback"
+          ]
+        },
+        {
+          "group": "Functions",
+          "pages": [
+            "docs/snippets/functions/overview",
+            "docs/snippets/functions/test-cases",
+            "docs/snippets/functions/classification",
+            "docs/snippets/functions/extraction",
+            "docs/snippets/functions/function-calling"
+          ]
+        },
+        "docs/snippets/template-string",
+        "docs/snippets/class",
+        "docs/snippets/enum",
+        {
+          "group": "Prompt Syntax",
+          "pages": [
+            "docs/snippets/prompt-syntax/what-is-jinja",
+            "docs/snippets/prompt-syntax/output-format",
+            "docs/snippets/prompt-syntax/roles",
+            "docs/snippets/prompt-syntax/variables",
+            "docs/snippets/prompt-syntax/conditionals",
+            "docs/snippets/prompt-syntax/loops",
+            "docs/snippets/prompt-syntax/comments"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Running BAML functions",
+      "pages": [
+        "generate-baml-client",
+        "setting-env-vars",
+        "calling-functions",
+        "streaming",
+        "parallel-calls",
+        "multi-modal",
+        "dynamic-types",
+        "dynamic-clients"
+      ]
+    },
+
+    {
+      "group": "Comparisons",
+      "pages": ["docs/comparisons/marvin", "docs/comparisons/pydantic"]
     }
   ],
   "footerSocials": {
