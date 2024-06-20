@@ -63,29 +63,44 @@ where
                         .map(|part| async move {
                             log::info!("Processing chat message part");
                             match part {
-                                ChatMessagePart::Image(BamlMedia::Url(media_type, media_url))
-                                | ChatMessagePart::Audio(BamlMedia::Url(media_type, media_url)) => {
-                                    let response = match get(&media_url.url).await {
-                                        Ok(response) => response,
-                                        Err(e) => {
-                                            return Err(LLMResponse::OtherFailure(
-                                                "Failed to fetch image due to CORS issue"
-                                                    .to_string(),
-                                            ))
-                                        } // replace with your error conversion logic
-                                    };
-                                    let bytes = match response.bytes().await {
-                                        Ok(bytes) => bytes,
-                                        Err(e) => {
-                                            return Err(LLMResponse::OtherFailure(e.to_string()))
-                                        } // replace with your error conversion logic
-                                    };
-                                    let base64 = encode(&bytes);
-                                    let inferred_type = infer::get(&bytes);
-                                    let mime_type: String = inferred_type.map_or_else(
-                                        || "application/octet-stream".into(),
-                                        |t| t.extension().into(),
-                                    );
+                                ChatMessagePart::Image(BamlMedia::Url(_, media_url))
+                                | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
+                                    let mut base64 = "".to_string();
+                                    let mut mime_type = "".to_string();
+                                    if media_url.url.starts_with("data:") {
+                                        let parts: Vec<&str> =
+                                            media_url.url.splitn(2, ',').collect();
+                                        base64 = parts.get(1).unwrap().to_string();
+                                        let prefix = parts.get(0).unwrap();
+                                        mime_type =
+                                            prefix.splitn(2, ':').next().unwrap().to_string();
+                                        mime_type =
+                                            mime_type.split('/').last().unwrap().to_string();
+                                    } else {
+                                        let response = match get(&media_url.url).await {
+                                            Ok(response) => response,
+                                            Err(e) => {
+                                                return Err(LLMResponse::OtherFailure(
+                                                    "Failed to fetch image due to CORS issue"
+                                                        .to_string(),
+                                                ))
+                                            } // replace with your error conversion logic
+                                        };
+                                        let bytes = match response.bytes().await {
+                                            Ok(bytes) => bytes,
+                                            Err(e) => {
+                                                return Err(LLMResponse::OtherFailure(
+                                                    e.to_string(),
+                                                ))
+                                            } // replace with your error conversion logic
+                                        };
+                                        base64 = encode(&bytes);
+                                        let inferred_type = infer::get(&bytes);
+                                        mime_type = inferred_type.map_or_else(
+                                            || "application/octet-stream".into(),
+                                            |t| t.extension().into(),
+                                        );
+                                    }
 
                                     Ok(if matches!(part, ChatMessagePart::Image(_)) {
                                         ChatMessagePart::Image(BamlMedia::Base64(
@@ -257,28 +272,49 @@ where
                             match part {
                                 ChatMessagePart::Image(BamlMedia::Url(media_type, media_url))
                                 | ChatMessagePart::Audio(BamlMedia::Url(media_type, media_url)) => {
-                                    let response = match get(&media_url.url).await {
-                                        Ok(response) => response,
-                                        Err(e) => {
-                                            return Err(LLMResponse::OtherFailure(
-                                                "Failed to fetch image due to CORS issue"
-                                                    .to_string(),
-                                            ))
-                                        } // replace with your error conversion logic
-                                    };
-                                    let bytes = match response.bytes().await {
-                                        Ok(bytes) => bytes,
-                                        Err(e) => {
-                                            return Err(LLMResponse::OtherFailure(e.to_string()))
-                                        } // replace with your error conversion logic
-                                    };
-                                    let base64 = encode(&bytes);
-                                    let inferred_type = infer::get(&bytes);
-                                    let mime_type: String = inferred_type.map_or_else(
-                                        || "application/octet-stream".into(),
-                                        |t| t.extension().into(),
-                                    );
-
+                                    let mut base64 = "".to_string();
+                                    let mut mime_type = "".to_string();
+                                    if media_url.url.starts_with("data:") {
+                                        let parts: Vec<&str> =
+                                            media_url.url.splitn(2, ',').collect();
+                                        base64 = parts.get(1).unwrap().to_string();
+                                        let prefix = parts.get(0).unwrap();
+                                        mime_type = prefix
+                                            .splitn(2, ':')
+                                            .last()
+                                            .unwrap() // Get the part after "data:"
+                                            .split('/')
+                                            .last()
+                                            .unwrap() // Get the part after "image/"
+                                            .split(';')
+                                            .next()
+                                            .unwrap() // Get the part before ";base64"
+                                            .to_string();
+                                    } else {
+                                        let response = match get(&media_url.url).await {
+                                            Ok(response) => response,
+                                            Err(e) => {
+                                                return Err(LLMResponse::OtherFailure(
+                                                    "Failed to fetch image due to CORS issue"
+                                                        .to_string(),
+                                                ))
+                                            } // replace with your error conversion logic
+                                        };
+                                        let bytes = match response.bytes().await {
+                                            Ok(bytes) => bytes,
+                                            Err(e) => {
+                                                return Err(LLMResponse::OtherFailure(
+                                                    e.to_string(),
+                                                ))
+                                            } // replace with your error conversion logic
+                                        };
+                                        base64 = encode(&bytes);
+                                        let inferred_type = infer::get(&bytes);
+                                        mime_type = inferred_type.map_or_else(
+                                            || "application/octet-stream".into(),
+                                            |t| t.extension().into(),
+                                        );
+                                    }
                                     Ok(if matches!(part, ChatMessagePart::Image(_)) {
                                         ChatMessagePart::Image(BamlMedia::Base64(
                                             BamlMediaType::Image,

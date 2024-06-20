@@ -379,9 +379,9 @@ impl WithChat for GoogleClient {
                     .finish_reason
                     .as_ref()
                     .map(|r| serde_json::to_string(r).unwrap_or("".into())),
-                prompt_tokens: Some(response.usage_metadata.prompt_token_count),
-                output_tokens: Some(response.usage_metadata.candidates_token_count),
-                total_tokens: Some(response.usage_metadata.total_token_count),
+                prompt_tokens: response.usage_metadata.prompt_token_count,
+                output_tokens: response.usage_metadata.candidates_token_count,
+                total_tokens: response.usage_metadata.total_token_count,
             },
         })
     }

@@ -1,5 +1,5 @@
 function TestImageInput(img: image) -> string{
-  client GPT4o
+  client Claude
   prompt #"
     {{ _.role("user") }}
 
@@ -24,6 +24,7 @@ test  shrek {
     }
   }
 }
+
 
 
 // double check this before adding it. Probably n ot right.

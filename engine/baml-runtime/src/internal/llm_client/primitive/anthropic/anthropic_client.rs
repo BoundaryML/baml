@@ -545,23 +545,24 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
 
             ChatMessagePart::Image(media) => match media {
                 BamlMedia::Base64(media_type, data) => json!({
-                    "type":  media_type,
+                    "type":  media_type.to_string(),
 
                     "source": {
                         "type": "base64",
-                        "media_type": data.media_type.split('/').last().unwrap(),
+                        "media_type": data.media_type,
                         "data": data.base64
                     }
                 }),
-                BamlMedia::Url(media_type, data) => json!({
-                    "type": media_type,
+                _ => panic!("Unsupported media type"),
+                //never executes, keep for future if anthropic supports urls
+                // BamlMedia::Url(media_type, data) => json!({
+                //     "type": "image",
 
-
-                    "source": {
-                        "type": "url",
-                        "url": data.url
-                    }
-                }),
+                //     "source": {
+                //         "type": "url",
+                //         "url": data.url
+                //     }
+                // }),
             },
             _ => json!({}),
         })

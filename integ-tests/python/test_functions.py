@@ -120,7 +120,7 @@ async def test_should_work_with_audio_base64():
 async def test_should_work_with_audio_url():
     res = await b.AudioInput(
         aud=baml_py.Audio.from_url(
-            "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"
+            "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg"
         )
     )
     assert "no" in res.lower()

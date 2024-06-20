@@ -121,7 +121,7 @@ describe('Integ tests', () => {
   })
 
   it('should work with audio from url', async () => {
-    let res = await b.AudioInput(Audio.fromUrl("http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"))
+    let res = await b.AudioInput(Audio.fromUrl("https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg"))
 
     expect(res.toLowerCase()).toContain('no')
   })
