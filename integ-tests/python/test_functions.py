@@ -111,9 +111,19 @@ async def test_should_work_with_image_base64():
 
 
 @pytest.mark.asyncio
-async def test_should_work_with_audio():
+async def test_should_work_with_audio_base64():
     res = await b.AudioInput(aud=baml_py.Audio.from_base64("audio/mp3", audio_b64))
-    assert "yes" in res.lower()
+    assert "monster" not in res.lower()
+
+
+@pytest.mark.asyncio
+async def test_should_work_with_audio_url():
+    res = await b.AudioInput(
+        aud=baml_py.Audio.from_url(
+            "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"
+        )
+    )
+    assert "monster" in res.lower()
 
 
 @pytest.mark.asyncio

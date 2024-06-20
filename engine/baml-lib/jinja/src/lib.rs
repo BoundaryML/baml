@@ -472,7 +472,8 @@ mod render_tests {
             "img".to_string(),
             BamlValue::Media(BamlMedia::url(
                 BamlMediaType::Image,
-                "https://example.com/image.jpg".to_string(),
+                ("https://example.com/image.jpg".to_string()),
+                None,
             )),
         )]));
 
@@ -499,7 +500,8 @@ mod render_tests {
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
                     ChatMessagePart::Image(BamlMedia::url(
                         BamlMediaType::Image,
-                        "https://example.com/image.jpg".to_string()
+                        "https://example.com/image.jpg".to_string(),
+                        None
                     )),
                 ]
             },])
@@ -519,6 +521,7 @@ mod render_tests {
                 BamlValue::Media(BamlMedia::url(
                     BamlMediaType::Image,
                     "https://example.com/image.jpg".to_string(),
+                    None,
                 )),
             )])),
         )]));
@@ -546,7 +549,8 @@ mod render_tests {
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
                     ChatMessagePart::Image(BamlMedia::url(
                         BamlMediaType::Image,
-                        "https://example.com/image.jpg".to_string()
+                        "https://example.com/image.jpg".to_string(),
+                        None
                     )),
                 ]
             },])
@@ -564,6 +568,7 @@ mod render_tests {
             BamlValue::Media(BamlMedia::url(
                 BamlMediaType::Image,
                 "https://example.com/image.jpg".to_string(),
+                None,
             )),
         )]));
 
@@ -590,7 +595,8 @@ mod render_tests {
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
                     ChatMessagePart::Image(BamlMedia::url(
                         BamlMediaType::Image,
-                        "https://example.com/image.jpg".to_string()
+                        "https://example.com/image.jpg".to_string(),
+                        None
                     )),
                     ChatMessagePart::Text(vec![". Please help me.",].join("\n")),
                 ]

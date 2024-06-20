@@ -122,7 +122,7 @@ export const selectedFunctionAtom = atom(
       if (functions.find((f) => f.name === func)) {
         set(selectedFunctionStorageAtom, func)
       } else {
-        console.error(`Function ${func} not found in ${functions.map((f) => f.name).join(', ')}`)
+        // console.error(`Function ${func} not found in ${functions.map((f) => f.name).join(', ')}`)
       }
     }
   },

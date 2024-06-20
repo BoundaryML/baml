@@ -321,6 +321,7 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: true,
+                resolve_media_urls: true,
             },
             retry_policy: client
                 .elem()
@@ -338,7 +339,7 @@ impl RequestBuilder for AnthropicClient {
         &self.client
     }
 
-    fn build_request(
+    async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,

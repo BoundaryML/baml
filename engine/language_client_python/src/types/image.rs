@@ -9,7 +9,10 @@ impl BamlImagePy {
     #[staticmethod]
     fn from_url(url: String) -> Self {
         BamlImagePy {
-            inner: baml_types::BamlMedia::Url(BamlMediaType::Image, baml_types::MediaUrl::new(url)),
+            inner: baml_types::BamlMedia::Url(
+                BamlMediaType::Image,
+                baml_types::MediaUrl::new(url, None),
+            ),
         }
     }
 

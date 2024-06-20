@@ -246,6 +246,7 @@ impl GoogleClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
+                resolve_media_urls: true,
             },
             retry_policy: client
                 .elem()
@@ -262,7 +263,7 @@ impl RequestBuilder for GoogleClient {
         &self.client
     }
 
-    fn build_request(
+    async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
@@ -301,19 +302,61 @@ impl RequestBuilder for GoogleClient {
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
-
         match prompt {
             either::Either::Left(prompt) => {
                 body_obj.extend(convert_completion_prompt_to_body(prompt))
             }
             either::Either::Right(messages) => {
-                body_obj.extend(convert_chat_prompt_to_body(messages))
+                body_obj.extend(convert_chat_prompt_to_body(messages));
+
+                if let Some(contents) = body_obj.get_mut("contents").and_then(|c| c.as_array_mut())
+                {
+                    for content in contents.iter_mut() {
+                        if let Some(parts) = content.get_mut("parts").and_then(|p| p.as_array_mut())
+                        {
+                            for part in parts.iter_mut() {
+                                if let Some(file_data) = part.get_mut("fileData") {
+                                    log::info!("found fileData key: {:?}", file_data);
+                                    if let Some(data_url) =
+                                        file_data.get("data").and_then(|d| d.as_str())
+                                    {
+                                        log::info!("data field");
+
+                                        // Make a curl request to get the media file
+                                        let response = reqwest::get(data_url).await.unwrap();
+                                        let bytes = response.bytes().await.unwrap();
+                                        // Base64 encode the media file
+                                        let base64_encoded = base64::encode(&bytes);
+
+                                        // Replace the fileData block with inlineData
+                                        let mut inline_data = serde_json::Map::new();
+
+                                        if let Some(mime_type) = file_data.get("mimeType") {
+                                            inline_data
+                                                .insert("mimeType".to_string(), mime_type.clone());
+                                        }
+
+                                        inline_data
+                                            .insert("data".to_string(), json!(base64_encoded));
+
+                                        part.as_object_mut()
+                                            .unwrap()
+                                            .insert("inlineData".to_string(), json!(inline_data));
+                                        part.as_object_mut().unwrap().remove("fileData");
+
+                                        // log::info!("replaced fileData with inlineData");
+                                        // log::info!("new request body: {:?}", part);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
         req.json(&body)
     }
-
     fn invocation_params(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
     }
@@ -442,6 +485,7 @@ fn convert_media_to_content(media: &BamlMedia, media_type: &str) -> serde_json::
         }),
         BamlMedia::Url(_, data) => json!({
             "fileData": {
+                "mimeType": "audio/mp4",
                 "data": data.url
             }
         }),

@@ -14,6 +14,7 @@ use anyhow::Result;
 
 use internal_baml_jinja::RenderedPrompt;
 use serde::Serialize;
+use std::error::Error;
 
 use reqwest::StatusCode;
 
@@ -25,6 +26,7 @@ pub struct ModelFeatures {
     pub completion: bool,
     pub chat: bool,
     pub anthropic_system_constraints: bool,
+    pub resolve_media_urls: bool,
 }
 
 #[derive(Debug)]
@@ -40,6 +42,8 @@ pub enum LLMResponse {
     LLMFailure(LLMErrorResponse),
     OtherFailure(String),
 }
+
+impl Error for LLMResponse {}
 
 impl std::fmt::Display for LLMResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

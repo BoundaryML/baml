@@ -63,6 +63,7 @@ pub fn validate_arg(
                         Some(BamlValue::Media(baml_types::BamlMedia::url(
                             BamlMediaType::Image,
                             s.to_string(),
+                            None,
                         )))
                     } else if let (
                         Some(BamlValue::String(s)),
@@ -94,6 +95,7 @@ pub fn validate_arg(
                         Some(BamlValue::Media(baml_types::BamlMedia::url(
                             BamlMediaType::Audio,
                             s.to_string(),
+                            None,
                         )))
                     } else if let (
                         Some(BamlValue::String(s)),

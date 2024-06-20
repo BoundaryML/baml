@@ -1,5 +1,5 @@
 function TestImageInput(img: image) -> string{
-  client GPT4o
+  client Gemini
   prompt #"
     {{ _.role("user") }}
 

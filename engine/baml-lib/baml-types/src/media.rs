@@ -25,8 +25,11 @@ pub enum BamlMedia {
 }
 
 impl BamlMedia {
-    pub fn url(t: BamlMediaType, url: String) -> BamlMedia {
-        BamlMedia::Url(t, MediaUrl::new(url))
+    pub fn url(t: BamlMediaType, url: String, media_type: Option<String>) -> BamlMedia {
+        BamlMedia::Url(
+            t,
+            MediaUrl::new(url, Some(media_type.unwrap_or_else(|| "".to_string()))),
+        )
     }
 
     pub fn base64(t: BamlMediaType, base64: String, media_type: String) -> BamlMedia {
@@ -37,11 +40,18 @@ impl BamlMedia {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct MediaUrl {
     pub url: String,
+    pub media_type: Option<String>,
 }
 
 impl MediaUrl {
-    pub fn new(url: String) -> Self {
-        Self { url }
+    pub fn new(url: String, media_type: Option<String>) -> Self {
+        Self { url, media_type }
+    }
+}
+
+impl fmt::Display for MediaUrl {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.url)
     }
 }
 

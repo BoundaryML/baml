@@ -212,7 +212,7 @@ impl RequestBuilder for OpenAIClient {
         &self.client
     }
 
-    fn build_request(
+    async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
@@ -402,6 +402,7 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
+                resolve_media_urls: false,
             },
             retry_policy: $client
                 .elem()

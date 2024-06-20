@@ -9,7 +9,10 @@ impl BamlAudioPy {
     #[staticmethod]
     fn from_url(url: String) -> Self {
         BamlAudioPy {
-            inner: baml_types::BamlMedia::Url(BamlMediaType::Audio, baml_types::MediaUrl::new(url)),
+            inner: baml_types::BamlMedia::Url(
+                BamlMediaType::Audio,
+                baml_types::MediaUrl::new(url, None),
+            ),
         }
     }
 
