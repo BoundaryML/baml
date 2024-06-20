@@ -121,12 +121,6 @@ export interface Blah {
   
 }
 
-export interface Character {
-  color: string
-  clothing: string
-  
-}
-
 export interface ClassOptionalOutput {
   prop1: string
   prop2: string

@@ -22,7 +22,6 @@ module Baml
   
   module PartialTypes
     class Blah < T::Struct; end
-    class Character < T::Struct; end
     class ClassOptionalOutput < T::Struct; end
     class ClassOptionalOutput2 < T::Struct; end
     class ClassWithImage < T::Struct; end
@@ -53,11 +52,6 @@ module Baml
     class Blah < T::Struct
       include T::Struct::ActsAsComparable
       const :prop4, T.nilable(String)
-    end
-    class Character < T::Struct
-      include T::Struct::ActsAsComparable
-      const :color, T.nilable(String)
-      const :clothing, T.nilable(String)
     end
     class ClassOptionalOutput < T::Struct
       include T::Struct::ActsAsComparable
