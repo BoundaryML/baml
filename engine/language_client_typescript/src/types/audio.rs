@@ -9,7 +9,10 @@ impl BamlAudio {
     #[napi(ts_return_type = "BamlAudio")]
     pub fn from_url(url: String) -> External<BamlAudio> {
         let aud = BamlAudio {
-            inner: baml_types::BamlMedia::Url(BamlMediaType::Audio, baml_types::MediaUrl::new(url)),
+            inner: baml_types::BamlMedia::Url(
+                BamlMediaType::Audio,
+                baml_types::MediaUrl::new(url, None),
+            ),
         };
         External::new(aud)
     }

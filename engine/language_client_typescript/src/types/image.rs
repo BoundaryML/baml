@@ -9,7 +9,10 @@ impl BamlImage {
     #[napi(ts_return_type = "BamlImage")]
     pub fn from_url(url: String) -> External<BamlImage> {
         let img = BamlImage {
-            inner: baml_types::BamlMedia::Url(BamlMediaType::Image, baml_types::MediaUrl::new(url)),
+            inner: baml_types::BamlMedia::Url(
+                BamlMediaType::Image,
+                baml_types::MediaUrl::new(url, None),
+            ),
         };
         External::new(img)
     }
