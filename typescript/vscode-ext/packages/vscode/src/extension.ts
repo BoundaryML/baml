@@ -194,6 +194,14 @@ export function activate(context: vscode.ExtensionContext) {
         })
       }, 200)
 
+      // adding the select_function here causes glitches (cause it's way too delayed)
+      // for now lets resend only the port until we have a more reliable way to request this data.
+      setTimeout(() => {
+        WebPanelView.currentPanel?.postMessage('port_number', {
+          port: port,
+        })
+      }, 1000)
+
       console.info('Opening BAML panel')
       WebPanelView.currentPanel?.postMessage('port_number', {
         port: port,

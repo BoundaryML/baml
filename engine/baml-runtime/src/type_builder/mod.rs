@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use baml_types::{BamlValue, FieldType};
+use indexmap::IndexMap;
 
 use crate::runtime_context::{PropertyAttributes, RuntimeClassOverride, RuntimeEnumOverride};
 
-type MetaData = Arc<Mutex<HashMap<String, BamlValue>>>;
+type MetaData = Arc<Mutex<IndexMap<String, BamlValue>>>;
 
 trait Meta {
     fn meta(&self) -> MetaData;
@@ -55,7 +56,7 @@ impl<T: Meta> From<&Arc<Mutex<T>>> for PropertyAttributes {
 }
 
 pub struct ClassBuilder {
-    properties: Arc<Mutex<HashMap<String, Arc<Mutex<ClassPropertyBuilder>>>>>,
+    properties: Arc<Mutex<IndexMap<String, Arc<Mutex<ClassPropertyBuilder>>>>>,
     meta: MetaData,
 }
 impl_meta!(ClassBuilder);
@@ -121,10 +122,43 @@ impl EnumBuilder {
     }
 }
 
+impl std::fmt::Debug for TypeBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Start the debug printout with the struct name
+        write!(f, "TypeBuilder {{\n")?;
+
+        // Safely attempt to acquire the lock and print classes
+        write!(f, "  classes: ")?;
+        match self.classes.lock() {
+            Ok(classes) => {
+                // We iterate through the keys only to avoid deadlocks and because we might not be able to print the values
+                // safely without deep control over locking mechanisms
+                let keys: Vec<_> = classes.keys().collect();
+                write!(f, "{:?},\n", keys)?
+            }
+            Err(_) => write!(f, "Cannot acquire lock,\n")?,
+        }
+
+        // Safely attempt to acquire the lock and print enums
+        write!(f, "  enums: ")?;
+        match self.enums.lock() {
+            Ok(enums) => {
+                // Similarly, print only the keys
+                let keys: Vec<_> = enums.keys().collect();
+                write!(f, "{:?}\n", keys)?
+            }
+            Err(_) => write!(f, "Cannot acquire lock,\n")?,
+        }
+
+        // Close the struct printout
+        write!(f, "}}")
+    }
+}
+
 #[derive(Clone)]
 pub struct TypeBuilder {
-    classes: Arc<Mutex<HashMap<String, Arc<Mutex<ClassBuilder>>>>>,
-    enums: Arc<Mutex<HashMap<String, Arc<Mutex<EnumBuilder>>>>>,
+    classes: Arc<Mutex<IndexMap<String, Arc<Mutex<ClassBuilder>>>>>,
+    enums: Arc<Mutex<IndexMap<String, Arc<Mutex<EnumBuilder>>>>>,
 }
 
 impl TypeBuilder {
@@ -158,8 +192,8 @@ impl TypeBuilder {
     pub fn to_overrides(
         &self,
     ) -> (
-        HashMap<String, RuntimeClassOverride>,
-        HashMap<String, RuntimeEnumOverride>,
+        IndexMap<String, RuntimeClassOverride>,
+        IndexMap<String, RuntimeEnumOverride>,
     ) {
         log::debug!("Converting types to overrides");
         let cls = self
@@ -232,7 +266,11 @@ impl TypeBuilder {
                 )
             })
             .collect();
-
+        log::debug!(
+            "Dynamic types: \n {:#?} \n Dynamic enums\n {:#?} enums",
+            cls,
+            enm
+        );
         (cls, enm)
     }
 }
