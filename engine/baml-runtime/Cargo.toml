@@ -55,9 +55,7 @@ pin-project-lite = "0.2.14"
 async-trait = "0.1.80"
 cfg-if = "1.0.0"
 include_dir = "0.7.3"
-futures-lite = "2.3.0"
 infer = "0.16.0"
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 serde-wasm-bindgen = "0.6.5"
 wasm-bindgen = { version = "^0.2.74", features = ["serde-serialize"] }

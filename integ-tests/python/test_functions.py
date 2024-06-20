@@ -456,10 +456,6 @@ async def test_stream_dynamic_class_output():
         input="My name is Harrison. My hair is black and I'm 6 feet tall.",
         baml_options={"tb": tb},
     )
-    stream = b.stream.MyFunc(
-        input="My name is Harrison. My hair is black and I'm 6 feet tall.",
-        baml_options={"tb": tb},
-    )
     msgs = []
     async for msg in stream:
         print("streamed ", msg)

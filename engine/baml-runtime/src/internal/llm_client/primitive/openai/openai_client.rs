@@ -393,7 +393,7 @@ macro_rules! make_openai_client {
     ($client:ident, $properties:ident) => {
         Ok(Self {
             name: $client.name().into(),
-            // properties: $properties,
+
             context: RenderContext_Client {
                 name: $client.name().into(),
                 provider: $client.elem().provider.clone(),

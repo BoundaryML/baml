@@ -475,7 +475,6 @@ dependencies = [
  "expect-test",
  "fastrand 2.1.0",
  "futures",
- "futures-lite 2.3.0",
  "hostname",
  "include_dir",
  "indexmap 2.2.6",
