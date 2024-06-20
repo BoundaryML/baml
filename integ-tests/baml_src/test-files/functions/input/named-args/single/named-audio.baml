@@ -3,7 +3,7 @@ function AudioInput(aud: audio) -> string{
   prompt #"
     {{ _.role("user") }}
 
-   What is this person? Answer with a single word and no other characters.
+   Does this sound like a dinosaur? Yes or no? One word no other characters.
     
     {{ aud }}
   "#
