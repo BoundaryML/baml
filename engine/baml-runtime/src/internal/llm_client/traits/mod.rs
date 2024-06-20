@@ -9,7 +9,7 @@ pub use self::{
 };
 use super::{retry_policy::CallablePolicy, LLMResponse, ModelFeatures};
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
-use baml_types::{BamlMedia, BamlMediaType, BamlValue, MediaBase64, MediaUrl};
+use baml_types::{BamlMedia, BamlMediaType, BamlValue, MediaBase64};
 use base64::encode;
 use futures::stream::{StreamExt, TryStreamExt};
 use infer;
@@ -49,19 +49,13 @@ where
 {
     #[allow(async_fn_in_trait)]
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse {
-        log::info!("Starting stream");
         if self.model_features().resolve_media_urls {
-            log::info!("Resolving media URLs");
-
             if let RenderedPrompt::Chat(ref chat) = prompt {
-                log::info!("Processing chat prompt");
                 let messages_result = futures::stream::iter(chat.iter().map(|p| {
-                    log::info!("Processing chat message");
                     let new_parts = p
                         .parts
                         .iter()
                         .map(|part| async move {
-                            log::info!("Processing chat message part");
                             match part {
                                 ChatMessagePart::Image(BamlMedia::Url(_, media_url))
                                 | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
@@ -120,15 +114,11 @@ where
                                         ))
                                     })
                                 }
-                                _ => {
-                                    log::info!("Processing text part");
-                                    Ok(part.clone())
-                                }
+                                _ => Ok(part.clone()),
                             }
                         })
                         .collect::<Vec<_>>();
                     async move {
-                        log::info!("Collecting new parts");
                         let new_parts = futures::stream::iter(new_parts)
                             .then(|f| f)
                             .collect::<Vec<_>>()
@@ -136,7 +126,6 @@ where
 
                         let new_parts = new_parts.into_iter().collect::<Result<Vec<_>, _>>()?;
 
-                        log::info!("Creating rendered chat message");
                         Ok::<_, anyhow::Error>(RenderedChatMessage {
                             role: p.role.clone(),
                             parts: new_parts,
@@ -152,23 +141,16 @@ where
                 let messages = match messages_result {
                     Ok(messages) => messages,
                     Err(e) => {
-                        log::error!("Error occurred: {}", e);
                         return LLMResponse::OtherFailure(format!("Error occurred: {}", e));
                     }
                 };
                 return self.chat(ctx, &messages).await;
             }
         }
-        log::info!("Processing prompt");
+
         match prompt {
-            RenderedPrompt::Chat(p) => {
-                log::info!("Streaming chat");
-                self.chat(ctx, p).await
-            }
-            RenderedPrompt::Completion(p) => {
-                log::info!("Streaming completion");
-                self.completion(ctx, p).await
-            }
+            RenderedPrompt::Chat(p) => self.chat(ctx, p).await,
+            RenderedPrompt::Completion(p) => self.completion(ctx, p).await,
         }
     }
 }
@@ -187,7 +169,6 @@ where
         let features = self.model_features();
 
         let prompt = renderer.render_prompt(ir, ctx, params, self.context())?;
-        log::debug!("WithPrompt.render_prompt => {:#?}", prompt);
 
         let mut prompt = match (features.completion, features.chat) {
             (true, false) => {
@@ -256,22 +237,16 @@ where
 {
     #[allow(async_fn_in_trait)]
     async fn stream(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> StreamResponse {
-        log::info!("Starting stream");
         if self.model_features().resolve_media_urls {
-            log::info!("Resolving media URLs");
-
             if let RenderedPrompt::Chat(ref chat) = prompt {
-                log::info!("Processing chat prompt");
                 let messages = futures::stream::iter(chat.iter().map(|p| {
-                    log::info!("Processing chat message");
                     let new_parts = p
                         .parts
                         .iter()
                         .map(|part| async move {
-                            log::info!("Processing chat message part");
                             match part {
-                                ChatMessagePart::Image(BamlMedia::Url(media_type, media_url))
-                                | ChatMessagePart::Audio(BamlMedia::Url(media_type, media_url)) => {
+                                ChatMessagePart::Image(BamlMedia::Url(_, media_url))
+                                | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
                                     let mut base64 = "".to_string();
                                     let mut mime_type = "".to_string();
                                     if media_url.url.starts_with("data:") {
@@ -333,15 +308,11 @@ where
                                         ))
                                     })
                                 }
-                                _ => {
-                                    log::info!("Processing text part");
-                                    Ok(part.clone())
-                                }
+                                _ => Ok(part.clone()),
                             }
                         })
                         .collect::<Vec<_>>();
                     async move {
-                        log::info!("Collecting new parts");
                         let new_parts = futures::stream::iter(new_parts)
                             .then(|f| f)
                             .collect::<Vec<_>>()
@@ -349,7 +320,6 @@ where
 
                         let new_parts = new_parts.into_iter().collect::<Result<Vec<_>, _>>()?;
 
-                        log::info!("Creating rendered chat message");
                         Ok(RenderedChatMessage {
                             role: p.role.clone(),
                             parts: new_parts,
@@ -361,20 +331,14 @@ where
                 .await
                 .into_iter()
                 .collect::<Result<Vec<_>, _>>()?;
-                log::info!("Streaming chat");
+
                 return self.stream_chat(ctx, &messages).await;
             }
         }
-        log::info!("Processing prompt");
+
         match prompt {
-            RenderedPrompt::Chat(p) => {
-                log::info!("Streaming chat");
-                self.stream_chat(ctx, p).await
-            }
-            RenderedPrompt::Completion(p) => {
-                log::info!("Streaming completion");
-                self.stream_completion(ctx, p).await
-            }
+            RenderedPrompt::Chat(p) => self.stream_chat(ctx, p).await,
+            RenderedPrompt::Completion(p) => self.stream_completion(ctx, p).await,
         }
     }
 }

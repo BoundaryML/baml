@@ -561,7 +561,7 @@ fn get_dummy_value(
                     "{ url \"https://imgs.xkcd.com/comics/standards.png\"}".to_string()
                 }
                 baml_runtime::TypeValue::Audio => {
-                    "{ url \"https://www.soundjay.com/button/beep-07.wav\"}".to_string()
+                    "{ url \"https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg\"}".to_string()
                 }
             };
 
