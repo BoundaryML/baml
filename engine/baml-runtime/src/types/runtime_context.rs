@@ -1,5 +1,6 @@
 use anyhow::Result;
 use baml_types::BamlValue;
+use indexmap::IndexMap;
 use internal_baml_core::ir::{repr::Expression, FieldType};
 use serde;
 use serde_json;
@@ -15,28 +16,28 @@ pub struct SpanCtx {
 pub struct PropertyAttributes {
     pub(crate) alias: Option<BamlValue>,
     pub(crate) skip: Option<bool>,
-    pub(crate) meta: HashMap<String, BamlValue>,
+    pub(crate) meta: IndexMap<String, BamlValue>,
 }
 
 #[derive(Debug)]
 pub struct RuntimeEnumOverride {
     pub(crate) alias: Option<BamlValue>,
-    pub(crate) values: HashMap<String, PropertyAttributes>,
+    pub(crate) values: IndexMap<String, PropertyAttributes>,
 }
 
 #[derive(Debug)]
 pub struct RuntimeClassOverride {
     pub(crate) alias: Option<BamlValue>,
-    pub(crate) new_fields: HashMap<String, (FieldType, PropertyAttributes)>,
-    pub(crate) update_fields: HashMap<String, PropertyAttributes>,
+    pub(crate) new_fields: IndexMap<String, (FieldType, PropertyAttributes)>,
+    pub(crate) update_fields: IndexMap<String, PropertyAttributes>,
 }
 
 #[derive(Debug)]
 pub struct RuntimeContext {
     pub env: HashMap<String, String>,
     pub tags: HashMap<String, BamlValue>,
-    pub class_override: HashMap<String, RuntimeClassOverride>,
-    pub enum_overrides: HashMap<String, RuntimeEnumOverride>,
+    pub class_override: IndexMap<String, RuntimeClassOverride>,
+    pub enum_overrides: IndexMap<String, RuntimeEnumOverride>,
 }
 
 impl RuntimeContext {
