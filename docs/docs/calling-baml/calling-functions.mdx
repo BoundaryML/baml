@@ -2,14 +2,18 @@
 title: "Calling BAML Functions"
 ---
 
+Once you've [generated the BAML client] and set your environment variables,
+you can call BAML functions from your code.
+
 <Tip>You can check out more examples in the [BAML Examples] repo.</Tip>
 
+[generated the BAML client]: /docs/calling-baml/generate-baml-client
 [BAML Examples]: https://github.com/BoundaryML/baml-examples/tree/main
 
 For a BAML function defined like this:
 
 ```rust
-enum MessageCategory {
+enum Category {
     Refund
     CancelOrder
     TechnicalSupport
@@ -17,15 +21,20 @@ enum MessageCategory {
     Question
 }
 
-function ClassifyMessage(...) -> MessageCategory {
+function ClassifyMessage(input: string) -> Category {
   client GPT4Turbo
   prompt #"..."#
 }
 ```
 
-<CodeGroup>
+<Tabs>
+<Tab title="Python">
 
-```python Python
+A function of that same name will be generated on `baml_client.b`, and
+for every BAML type, a corresponding Python type will be generated in
+`baml_client.types`:
+
+```python main.py
 import asyncio
 
 from baml_client import b
@@ -33,27 +42,58 @@ from baml_client.types import Category
 
 async def main():
     category = await b.ClassifyMessage("I want to cancel my order")
-    assert category == MessageCategory.CancelOrder
+    print(category)
+    assert category == Category.CancelOrder
 
 if __name__ == '__main__':
     asyncio.run(main())
 ```
+</Tab>
 
-```ts TypeScript
-import { b, traceAsync } from "baml_client"
-import { MessageCategory } from "baml_client"
+<Tab title="TypeScript">
 
-async def main():
-    category = await b.ClassifyMessage("I want to cancel my order")
-    assert category == MessageCategory.CancelOrder
+A function of that same name will be generated on `baml_client.b`, and
+for every BAML type, a corresponding TypeScript type will be generated in
+`baml_client.types`:
 
-if __name__ == '__main__':
-    asyncio.run(main())
+```ts main.ts
+import { b } from './baml_client'
+import { Category } from './baml_client/types'
+import assert from 'assert'
+
+const main = async () => {
+  const category = await b.ClassifyMessage('I want to cancel my order')
+  console.log(category)
+  assert(category == Category.CancelOrder)
+}
+
+if (require.main === module) {
+  main()
+}
+
+```
+</Tab>
+
+<Tab title="Ruby">
+
+A function of that same name will be generated on `Baml.Client`, and
+for every BAML type, a corresponding Ruby type will be generated in
+`Baml::Types`:
+
+```ruby main.rb
+require_relative "baml_client/client"
+
+def main
+    category = Baml.Client.ClassifyMessage(input: "I want to cancel my order")
+    puts category
+    category == Baml::Types::Category::CancelOrder
+end
+
+if __FILE__ == $0
+  puts main
+end
+
 ```
 
-```ruby Ruby
-bundle add baml
-bundle exec baml-cli generate --from path/to/baml_src
-```
-
-</CodeGroup>
+</Tab>
+</Tabs>

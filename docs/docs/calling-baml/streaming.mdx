@@ -1,0 +1,87 @@
+---
+title: "Streaming BAML Functions"
+---
+
+Now that we know how to [call BAML functions], let's learn how to stream
+BAML function calls.
+
+<Tip>You can check out more examples in the [BAML Examples] repo.</Tip>
+
+[call BAML functions]: /docs/calling-baml/calling-functions
+[BAML Examples]: https://github.com/BoundaryML/baml-examples/tree/main
+
+This time, we'll need a slightly more complex function as an example:
+
+```rust
+```
+
+<Tabs>
+<Tab title="Python">
+
+A function of that same name will be generated on `baml_client.b`, and
+for every BAML type, a corresponding Python type will be generated in
+`baml_client.types`:
+
+```python main.py
+import asyncio
+
+from baml_client import b
+from baml_client.types import Category
+
+async def main():
+    category = await b.ClassifyMessage("I want to cancel my order")
+    print(category)
+    assert category == Category.CancelOrder
+
+if __name__ == '__main__':
+    asyncio.run(main())
+```
+</Tab>
+
+<Tab title="TypeScript">
+
+A function of that same name will be generated on `baml_client.b`, and
+for every BAML type, a corresponding TypeScript type will be generated in
+`baml_client.types`:
+
+```ts main.ts
+import { b } from './baml_client'
+import { Category } from './baml_client/types'
+import assert from 'assert'
+
+const main = async () => {
+  const category = await b.ClassifyMessage('I want to cancel my order')
+  console.log(category)
+  assert(category == Category.CancelOrder)
+}
+
+if (require.main === module) {
+  main()
+}
+
+```
+</Tab>
+
+<Tab title="Ruby">
+
+A function of that same name will be generated on `Baml.Client`, and
+for every BAML type, a corresponding Ruby type will be generated in
+`Baml::Types`:
+
+```ruby main.rb
+require_relative "baml_client/client"
+
+def main
+    category = Baml.Client.ClassifyMessage(input: "I want to cancel my order")
+    puts category
+    category == Baml::Types::Category::CancelOrder
+end
+
+if __FILE__ == $0
+  puts main
+end
+
+```
+
+</Tab>
+</Tabs>
