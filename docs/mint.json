@@ -22,13 +22,19 @@
     {
       "name": "Community",
       "icon": "discord",
-      "url": "https://discord.gg/BTNBeXGuaS"
+      "url": "/discord"
     }
   ],
   "topbarCtaButton": {
     "type": "github",
     "url": "https://github.com/boundaryml/baml"
   },
+  "redirects": [
+    {
+      "source": "/discord",
+      "destination": "https://discord.gg/BTNBeXGuaS"
+    }
+  ],
   "navigation": [
     {
       "group": "Get started",
@@ -41,7 +47,8 @@
             "docs/get-started/quickstart/python",
             "docs/get-started/quickstart/typescript",
             "docs/get-started/quickstart/ruby",
-            "docs/get-started/quickstart/vscode-playground"
+            "docs/get-started/quickstart/editors-vscode",
+            "docs/get-started/quickstart/editors-other"
           ]
         },
         {
@@ -103,7 +110,6 @@
             "docs/snippets/functions/function-calling"
           ]
         },
-        "docs/snippets/template-string",
         "docs/snippets/class",
         "docs/snippets/enum",
         {
@@ -117,26 +123,31 @@
             "docs/snippets/prompt-syntax/loops",
             "docs/snippets/prompt-syntax/comments"
           ]
-        }
+        },
+        "docs/snippets/template-string"
       ]
     },
     {
-      "group": "Running BAML functions",
+      "group": "Calling BAML Functions",
       "pages": [
-        "generate-baml-client",
-        "setting-env-vars",
-        "calling-functions",
-        "streaming",
-        "parallel-calls",
-        "multi-modal",
-        "dynamic-types",
-        "dynamic-clients"
+        "docs/calling-baml/generate-baml-client",
+        "docs/calling-baml/set-env-vars",
+        "docs/calling-baml/calling-functions",
+        "docs/calling-baml/streaming",
+        "docs/calling-baml/parallel-calls",
+        "docs/calling-baml/multi-modal",
+        "docs/calling-baml/dynamic-types",
+        "docs/calling-baml/dynamic-clients"
       ]
     },
 
     {
       "group": "Comparisons",
       "pages": ["docs/comparisons/marvin", "docs/comparisons/pydantic"]
+    },
+    {
+      "group": "Reference",
+      "pages": ["contact"]
     }
   ],
   "footerSocials": {

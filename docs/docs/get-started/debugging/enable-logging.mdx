@@ -1,0 +1,10 @@
+You can add logging to determine what the BAML runtime is doing.
+
+To enable logging, set the `BAML_LOG` environment variable:
+```
+BAML_LOG=info
+```
+
+BAML uses the rust `log` crate for logging. You can see more information on how to better configure the `log` crate [here](https://rust-lang-nursery.github.io/rust-cookbook/development_tools/debugging/config_log.html).
+
+Just instead of using the `RUST_LOG` environment variable, use the `BAML_LOG` environment variable.

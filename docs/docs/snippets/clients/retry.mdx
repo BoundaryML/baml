@@ -1,0 +1,32 @@
+---
+title: retry_policy
+---
+
+A retry policy can be attached to any `client<llm>` and will attempt to retry requests that fail due to a network error.
+
+```rust BAML
+retry_policy MyPolicyName {
+  max_retries 3
+}
+```
+
+Usage:
+```rust BAML
+client<llm> MyClient {
+  provider anthropic
+  retry_policy MyPolicyName
+  options {
+    model "claude-3-sonnet-20240229"
+    api_key env.ANTHROPIC_API_KEY
+  }
+}
+```
+
+## Fields
+<ParamField
+  path="max_retries"
+  type="int"
+  required
+>
+  Number of **additional** retries to attempt after the initial request fails.
+</ParamField>

@@ -1,0 +1,59 @@
+---
+title: "Calling BAML Functions"
+---
+
+<Tip>You can check out more examples in the [BAML Examples] repo.</Tip>
+
+[BAML Examples]: https://github.com/BoundaryML/baml-examples/tree/main
+
+For a BAML function defined like this:
+
+```rust
+enum MessageCategory {
+    Refund
+    CancelOrder
+    TechnicalSupport
+    AccountIssue
+    Question
+}
+
+function ClassifyMessage(...) -> MessageCategory {
+  client GPT4Turbo
+  prompt #"..."#
+}
+```
+
+<CodeGroup>
+
+```python Python
+import asyncio
+
+from baml_client import b
+from baml_client.types import Category
+
+async def main():
+    category = await b.ClassifyMessage("I want to cancel my order")
+    assert category == MessageCategory.CancelOrder
+
+if __name__ == '__main__':
+    asyncio.run(main())
+```
+
+```ts TypeScript
+import { b, traceAsync } from "baml_client"
+import { MessageCategory } from "baml_client"
+
+async def main():
+    category = await b.ClassifyMessage("I want to cancel my order")
+    assert category == MessageCategory.CancelOrder
+
+if __name__ == '__main__':
+    asyncio.run(main())
+```
+
+```ruby Ruby
+bundle add baml
+bundle exec baml-cli generate --from path/to/baml_src
+```
+
+</CodeGroup>

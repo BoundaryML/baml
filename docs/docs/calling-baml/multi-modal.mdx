@@ -1,0 +1,47 @@
+
+## Multi-modal input
+
+### Images 
+Calling a function with an image type:
+<CodeGroup>
+```python Python
+from baml_py import Image
+from baml_client import b
+
+async def test_image_input():
+  # from URL
+  res = await b.TestImageInput(
+      img=Image.from_url(
+          "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+      )
+  )
+
+  # Base64 image
+  image_b64 = "iVBORw0K...."
+  res = await b.TestImageInput(
+    img=Image.from_base64("image/png", image_b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Image } from "@boundaryml/baml"
+...
+
+  // URL
+  let res = await b.TestImageInput(
+    Image.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png'),
+  )
+
+  // Base64
+  let res = await b.TestImageInput(
+    Image.fromBase64('image/png', image_b64),
+  )
+  
+```
+
+```ruby Ruby
+we're working on it!
+```
+</CodeGroup>
+

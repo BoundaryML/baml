@@ -1,0 +1,81 @@
+---
+title: "class"
+---
+
+Classes consist of a name, a list of properties, and their [types](/docs/snippets/supported-types).
+In the context of LLMs, classes describe the type of the variables you can inject into prompts and extract out from the response.
+
+<Warning>
+  Note properties have no `:`
+</Warning>
+
+<CodeGroup>
+```llvm Baml
+class Foo {
+  property1 string
+  property2 int?
+  property3 Bar[]
+  property4 MyEnum
+}
+```
+
+```python Python Equivalent
+from pydantic import BaseModel
+from path.to.bar import Bar
+from path.to.my_enum import MyEnum
+
+class Foo(BaseModel):
+  property1: str
+  property2: Optional[int]= None
+  property3: List[Bar]
+  property4: MyEnum
+```
+
+```typescript Typescript Equivalent
+import z from "zod";
+import { BarZod } from "./path/to/bar";
+import { MyEnumZod } from "./path/to/my_enum";
+
+const FooZod = z.object({
+  property1: z.string(),
+  property2: z.number().int().nullable().optional(),
+  property3: z.array(BarZod),
+  property4: MyEnumZod,
+});
+
+type Foo = z.infer<typeof FooZod>;
+```
+
+</CodeGroup>
+
+## aliases, descriptions
+
+When prompt engineering, you can also alias fields  and add descriptions:
+```rust
+class Foo {
+  summary string @alias("complete_summary") @description("Answer in 2 sentences")
+}
+```
+Aliasing renames the field for the llm to potentially "understand" your property better, while keeping the original name in your code, so you don't need to change your code everytime.
+
+See more in [prompt syntax docs](./prompt_engineering/class)
+
+## Constraints
+
+Classes may have any number of properties.
+Property names must follow these rules:
+- Must start with a letter
+- Must contain only letters, numbers, and underscores
+- Must be unique within the class
+- classes cannot be self-referential (cannot have a property of the same type as the class itself)
+
+The type of a property can be any [supported type](/docs/snippets/supported-types)
+
+### Default values
+
+- Not yet supported. For optional properties, the default value is `None` in python.
+
+## Inheritance
+
+Not supported. Like rust, we take the stance that [composition is better than inheritance](https://www.digitalocean.com/community/tutorials/composition-vs-inheritance).
+

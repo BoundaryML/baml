@@ -1,0 +1,230 @@
+---
+title: Supported Types
+---
+
+Here's a list of all the types you can extract from LLMs with BAML:
+
+## Primitive types
+* `bool`
+* `int`
+* `float`
+* `string`
+* `null`
+
+## Multimodal Types
+See [calling a function with multimodal types](/docs/snippets/calling-baml/multi-modal)
+
+### `image`
+
+You can use an image like this for models that support them:
+
+```rust
+function DescribeImage(myImg: image) -> string {
+  client GPT4Turbo
+  prompt #"
+    {{ _.role("user")}}
+    Describe the image in four words:
+    {{ myImg }}
+  "#
+}
+```
+You cannot name as variable "image" at the moment as it is a reserved keyword.
+
+Calling a function with an image type:
+<CodeGroup>
+```python Python
+from baml_py import Image
+from baml_client import b
+
+async def test_image_input():
+  # from URL
+  res = await b.TestImageInput(
+      img=Image.from_url(
+          "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+      )
+  )
+
+  # Base64 image
+  image_b64 = "iVBORw0K...."
+  res = await b.TestImageInput(
+    img=Image.from_base64("image/png", image_b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Image } from "@boundaryml/baml"
+...
+
+  // URL
+  let res = await b.TestImageInput(
+    Image.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png'),
+  )
+
+  // Base64
+  let res = await b.TestImageInput(
+    Image.fromBase64('image/png', image_b64),
+  )
+```
+
+```ruby Ruby
+(we're working on it!)
+```
+</CodeGroup>
+
+
+## Composite/Structured Types
+
+### enum
+
+**See also:** [Enum](/docs/syntax/enum)
+
+A user-defined type consisting of a set of named constants.
+Use it when you need a model to choose from a known set of values, like in classification problems
+
+```rust
+enum Name {
+  Value1
+  Value2 @description("My optional description annotation")
+}
+```
+### class
+
+**See also:** [Class](/docs/syntax/class)
+
+Classes are for user-defined complex data structures.
+
+Use when you need an LLM to call another function (e.g. OpenAI's function calling), you can model the function's parameters as a class. You can also get models to return complex structured data by using a class.
+
+**Example:**
+Note that properties have no `:`
+```rust
+class Car {
+  model string
+  year int @description("Year of manufacture")
+}
+```
+
+### Optional (?)
+A type that represents a value that might or might not be present.
+
+Useful when a variable might not have a value and you want to explicitly handle its absence.
+**Syntax:** `<type>?`
+
+**Example:** `int?` or `(MyClass | int)?`
+
+### Union (|)
+
+A type that can hold one of several specified types.
+
+This can be helpful with **function calling**, where you want to return different types of data depending on which function should be called.
+- **Syntax:** `<type>|<type>`
+- **Example:** `int | string` or `(int | string) | MyClass` or `string | MyClass | int[]`
+  <Warning>
+    Order is important. `int | string` is not the same as `string | int`.
+    <br />
+    For example, if you have a `"1"` string, it will be parsed as an `int` if
+    you use `int | string`, but as a `string` if you use `string | int`.
+  </Warning>
+
+### List/Array ([])
+A collection of elements of the same type.
+- **Syntax:** `<type>[]`
+- **Example:** `string[]` or `(int | string)[]` or `int[][]`
+
+<Tip>
+  <ul>
+    <li>Array types can be nested to create multi-dimensional arrays</li>
+    <li>An array type cannot be optional</li>
+  </ul>
+</Tip>
+
+### ❌ Dictionary
+
+- Not yet supported. Use a `class` instead.
+
+### ❌ Set
+
+- Not yet supported. Use a `List` instead.
+
+### ❌ Tuple
+
+- Not yet supported. Use a `class` instead.
+
+## Examples and Equivalents
+
+Here are some examples and what their equivalents are in different languages.
+
+### Example 1
+
+<CodeGroup>
+```baml Baml
+int?|string[]|MyClass
+````
+
+```python Python Equivalent
+Union[Optional[int], List[str], MyClass]
+```
+
+```typescript TypeScript Equivalent
+(number | null) | string[] | MyClass
+```
+
+</CodeGroup>
+
+### Example 2
+
+<CodeGroup>
+```baml Baml
+string[]
+```
+
+```python Python Equivalent
+List[str]
+```
+
+```typescript TypeScript Equivalent
+string[]
+```
+
+</CodeGroup>
+
+### Example 3
+
+<CodeGroup>
+```baml Baml
+(int|float)[]
+```
+```python Python Equivalent
+List[Union[int, float]]
+```
+
+```typescript TypeScript Equivalent
+number[]
+```
+
+</CodeGroup>
+
+### Example 4
+
+<CodeGroup>
+```baml Baml
+(int? | string[] | MyClass)[]
+```
+
+```python Python Equivalent
+Optional[List[Union[Optional[int], List[str], MyClass]]]
+```
+
+```typescript TypeScript Equivalent
+((number | null) | string[] | MyClass)[]
+```
+
+</CodeGroup>
+
+## ⚠️ Unsupported
+- `bytes` - Not yet supported. Use a `string[]` or `int[]` instead.
+- `any/json` - Not supported. We don't want to encourage its use as it defeats the purpose of having a type system. if you really need it, for now use `string` and call `json.parse` yourself. Also, message us on discord so we can understand your use case and consider supporting it.
+- `datetime` - Not yet supported. Use a `string` or `int` (milliseconds since epoch) instead.
+- `duration` - Not yet supported. Use an `int` (milliseconds) instead.
+- `units (currency, temperature)` - Not yet supported. Use a number (`int` or `float`) and have the unit be part of the variable name. For example, `temperature_fahrenheit` and `cost_usd` (see [@alias](/docs/snippets/class#aliases-descriptions))

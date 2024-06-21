@@ -1,0 +1,90 @@
+Here's a sample repository: 
+https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter
+
+To set up BAML in typescript do the following:
+
+<Steps>
+  <Step title="Install BAML VSCode Extension">
+      https://marketplace.visualstudio.com/items?itemName=boundary.BAML
+
+      - syntax highlighting
+      - testing playground
+      - prompt previews
+  </Step>
+  <Step title="Install baml">
+      <CodeGroup>
+        ```bash npm
+        npm install @boundaryml/baml
+        ```
+        
+        ```bash pnpm
+        pnpm add @boundaryml/baml
+        ```
+
+        ```bash yarn
+        yarn add @boundaryml/baml
+        ```
+    </CodeGroup>
+  </Step>
+  <Step title="Add some starter code">
+      This will give you some starter BAML code in a `baml_src` directory.
+      <CodeGroup>
+        ```bash npm
+        npx baml-cli init
+        ```
+        
+        ```bash pnpm
+        pnpx baml-cli init
+        ```
+
+        ```bash yarn
+        yarn baml-cli init
+        ```
+    </CodeGroup>
+  </Step>
+  <Step title="Update your package.json">
+
+    This command will help you convert `.baml` files to `.ts` files. Everytime you modify your `.baml` files,
+    you must re-run this command, and regenerate the `baml_client` folder.
+
+    <Tip>
+      If you download our [VSCode extension](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension), it will automatically generate `baml_client` on save!
+    </Tip>
+
+    ```json package.json
+    {
+      "scripts": {
+        // Add a new command
+        "baml-generate": "baml-cli generate",
+        // Always call baml-generate on every build.
+        "build": "npm run baml-generate && tsc --build",
+      }
+    }
+    ```
+  </Step>
+  <Step title="Use a baml function in typescript!">
+    <Tip>If `baml_client` doesn't exist, make sure to run `npm run baml-generate`</Tip>
+
+    ```typescript index.ts
+    import {b} from "baml_client"
+    import type {Resume} from "baml_client/types"
+
+    async function Example(raw_resume: string): Resume {
+      // BAML's internal parser guarantees ExtractResume
+      // to be always return a Resume type
+      const response = await b.ExtractResume(raw_resume);
+      return response;
+    }
+
+    async function ExampleStream(raw_resume: string): Resume {
+      const stream = b.stream.ExtractResume(raw_resume);
+      for await (const msg of stream) {
+        console.log(msg) // This will be a Partial<Resume> type
+      }
+
+      // This is guaranteed to be a Resume type.
+      return await stream.get_final_response();
+    }
+    ```
+  </Step>
+</Steps>

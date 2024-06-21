@@ -1,0 +1,34 @@
+Dictionaries in BAML have this syntax. You'll see them mainly in `tests` declared in BAML, and `clients`.
+
+```baml BAML
+{
+  key1 value1
+  key2 {
+    nestedKey1 nestedValue1
+  }
+}
+```
+Note they do not use `:`
+
+You can use unquoted or quoted strings, booleans, numbers and nested dictionaries as values.
+
+```rust BAML
+{
+  key1 "value1"
+  key2 {
+    nestedKey1 1
+    nestedKey2 true
+  }
+}
+```
+
+**Dictionary with multiline string as a value**:
+
+```rust BAML
+{
+  key1 #"
+    This is a 
+    multiline string
+  "#
+}
+```
