@@ -42,38 +42,41 @@ const TestStatusMessage: React.FC<{ testStatus: DoneTestStatusType }> = ({ testS
   }
 }
 
-const TestStatusIcon: React.FC<{ testRunStatus: TestStatusType; testStatus?: DoneTestStatusType; traceUrl?: string }> =
-  ({ testRunStatus, testStatus, traceUrl }) => {
-    const testStatusIcon = (
-      <div className='text-vscode-descriptionForeground'>
+const TestStatusIcon: React.FC<{
+  testRunStatus: TestStatusType
+  testStatus?: DoneTestStatusType
+  traceUrl?: string
+}> = ({ testRunStatus, testStatus, traceUrl }) => {
+  const testStatusIcon = (
+    <div className='text-vscode-descriptionForeground'>
+      {
         {
-          {
-            queued: 'Queued',
-            running: <VSCodeProgressRing className='h-4' />,
-            done: (
-              <div className='flex flex-row items-center gap-1'>
-                {testStatus && <TestStatusMessage testStatus={testStatus} />}
-                {traceUrl && <Link2Icon className='hover:underline icon-link w-3 h-3 inline text-center' />}
-              </div>
-            ),
-            error: (
-              <div className='flex flex-row items-center gap-1'>
-                <div className='text-vscode-testing-iconFailed'>Unable to run</div>
-              </div>
-            ),
-          }[testRunStatus]
-        }
-      </div>
-    )
+          queued: 'Queued',
+          running: <VSCodeProgressRing className='h-4' />,
+          done: (
+            <div className='flex flex-row items-center gap-1'>
+              {testStatus && <TestStatusMessage testStatus={testStatus} />}
+              {traceUrl && <Link2Icon className='hover:underline icon-link w-3 h-3 inline text-center' />}
+            </div>
+          ),
+          error: (
+            <div className='flex flex-row items-center gap-1'>
+              <div className='text-vscode-testing-iconFailed'>Unable to run</div>
+            </div>
+          ),
+        }[testRunStatus]
+      }
+    </div>
+  )
 
-    return traceUrl ? (
-      <a className='hover:underline' href={traceUrl}>
-        {testStatusIcon}
-      </a>
-    ) : (
-      testStatusIcon
-    )
-  }
+  return traceUrl ? (
+    <a className='hover:underline' href={traceUrl}>
+      {testStatusIcon}
+    </a>
+  ) : (
+    testStatusIcon
+  )
+}
 
 type FilterValues = 'queued' | 'running' | 'error' | 'llm_failed' | 'parse_failed' | 'passed'
 const filterAtom = atom(new Set<FilterValues>(['running', 'error', 'llm_failed', 'parse_failed', 'passed']))
