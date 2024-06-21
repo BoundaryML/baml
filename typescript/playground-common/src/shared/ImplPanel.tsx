@@ -1,4 +1,5 @@
 /// Content once a function has been selected.
+import { useAppState } from './AppStateContext'
 
 import { TestStatus } from '@baml/common'
 import type { Impl } from '@baml/common'
@@ -169,14 +170,12 @@ class TokenEncoderCache {
   }
 }
 
-export const Snippet: React.FC<{
-  text: string
-  type?: 'preview' | 'error'
-  client: Impl['client']
-}> = ({ text, type = 'preview', client }) => {
-  const [showTokens, setShowTokens] = useState(false)
-  const [showWhitespace, setShowWhitespace] = useState(false)
-  const [wrapText, setWrapText] = useState(true)
+export const Snippet: React.FC<{ text: string; type?: 'preview' | 'error'; client: Impl['client'] }> = ({
+  text,
+  type = 'preview',
+  client,
+}) => {
+  const { showTokens, showWhitespace, wrapText } = useAppState()
 
   const encodingName = client.model
     ? TokenEncoderCache.getEncodingNameForModel(client.provider, client.model)
@@ -194,33 +193,6 @@ export const Snippet: React.FC<{
     'bg-vscode-input-background': type === 'preview',
     'bg-vscode-inputValidation-errorBackground': type === 'error',
   })
-
-  const header = (
-    <div className='flex flex-wrap justify-start gap-4 px-2 py-2 text-xs whitespace-nowrap'>
-      {encodingName && (
-        <PromptCheckbox checked={showTokens} onChange={(e) => setShowTokens(e)}>
-          Show Tokens
-        </PromptCheckbox>
-      )}
-      <PromptCheckbox checked={wrapText} onChange={(e) => setWrapText(e)}>
-        Wrap Text
-      </PromptCheckbox>
-      <PromptCheckbox checked={showWhitespace} onChange={(e) => setShowWhitespace(e)}>
-        Whitespace
-      </PromptCheckbox>
-
-      {showTokens && encodingName && tokenizer && (
-        <Tooltip delayDuration={0}>
-          <TooltipTrigger asChild>
-            <div className='flex-grow p-0 r-full ps-2'>{(tokenizer.tokens as []).length} tokens</div>
-          </TooltipTrigger>
-          <TooltipContent className='flex flex-col gap-y-1'>
-            Tokenizer {encodingName} for model {client.model}
-          </TooltipContent>
-        </Tooltip>
-      )}
-    </div>
-  )
 
   if (showTokens && tokenizer) {
     const tokenized = Array.from(tokenizer.tokens as number[]).map((token) => tokenizer.enc.decode([token]))
@@ -244,7 +216,6 @@ export const Snippet: React.FC<{
     ))
     return (
       <div className={divStyle}>
-        {header}
         <pre className='w-full p-1 text-xs'>{tokenizedContent}</pre>
       </div>
     )
@@ -252,7 +223,6 @@ export const Snippet: React.FC<{
     const lines = text.split('\n')
     return (
       <div className={divStyle}>
-        {header}
         <pre className='w-full p-1 text-xs'>
           {lines.map((line, index) => (
             <CodeLine
@@ -267,51 +237,5 @@ export const Snippet: React.FC<{
         </pre>
       </div>
     )
-  }
-}
-
-const PromptCheckbox = ({
-  children,
-  checked,
-  onChange,
-}: {
-  children: React.ReactNode
-  checked: boolean
-  onChange: (e: any) => void
-}) => {
-  return (
-    <div className='flex flex-row items-center gap-1'>
-      <Checkbox checked={checked} onCheckedChange={onChange} className='border-vscode-descriptionForeground' />
-      <span className='text-vscode-descriptionForeground'>{children}</span>
-    </div>
-  )
-}
-
-const PromptPreview: React.FC<{ prompt: Impl['prompt']; client: Impl['client']; shouldSuppressError: boolean }> = ({
-  prompt,
-  client,
-  shouldSuppressError,
-}) => {
-  switch (prompt.type) {
-    case 'Completion':
-      return <Snippet client={client} text={prompt.completion} />
-    case 'Chat':
-      return (
-        <div className='flex flex-col gap-2'>
-          {prompt.chat.map(({ role, message }, index: number) => (
-            <div className='flex flex-col'>
-              <div className='text-xs'>
-                <span className='text-muted-foreground'>Role:</span> <span className='font-bold'>{role}</span>
-              </div>
-              <Snippet key={index} client={client} text={message} />
-            </div>
-          ))}
-        </div>
-      )
-    case 'Error':
-      if (shouldSuppressError) {
-        return null
-      }
-      return <Snippet type='error' client={client} text={prompt.error} />
   }
 }

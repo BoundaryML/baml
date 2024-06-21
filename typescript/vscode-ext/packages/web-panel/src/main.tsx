@@ -1,19 +1,18 @@
 import React from 'react'
-import ReactDOM from 'react-dom'
-import { ErrorBoundary } from 'react-error-boundary'
+import { createRoot } from 'react-dom/client'
 import App from './App'
-import CustomErrorBoundary from './utils/ErrorFallback'
+import { AppStateProvider } from './shared/AppStateContext'
+import './App.css'
 
-try {
-  ReactDOM.render(
-    <React.StrictMode>
-      <CustomErrorBoundary>
-        <App />
-      </CustomErrorBoundary>
-    </React.StrictMode>,
-    document.getElementById('root'),
-  )
-} catch (error) {
-  console.error(error)
-  console.error('REACT error:' + JSON.stringify(error, null, 2))
-}
+// Create a root.
+const container = document.getElementById('root')
+const root = createRoot(container!) // TypeScript non-null assertion
+
+// Initial render: Render your app inside the AppStateProvider.
+root.render(
+  <React.StrictMode>
+    <AppStateProvider>
+      <App />
+    </AppStateProvider>
+  </React.StrictMode>,
+)
