@@ -91,7 +91,9 @@
     "@types/react-slick": "^0.23.13",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@uiw/react-codemirror": "^4.21.25",
+    "@vercel/kv": "^1.0.1",
     "@vscode/webview-ui-toolkit": "^1.2.2",
+    "@wavesurfer/react": "^1.0.6",
     "allotment": "^1.19.3",
     "anser": "^2.1.1",
     "class-variance-authority": "^0.7.0",
@@ -104,6 +106,7 @@
     "papaparse": "^5.4.1",
     "react": "^18.2.0",
     "react-arborist": "^3.4.0",
+    "react-audio-player": "^0.17.0",
     "react-code-blocks": "^0.1.6",
     "react-error-boundary": "^4.0.11",
     "react-hook-form": "^7.51.2",
@@ -116,6 +119,7 @@
     "tailwind-merge": "^2.0.0",
     "tailwindcss-animate": "^1.0.7",
     "unique-names-generator": "^4.7.1",
+    "wavesurfer.js": "^7.7.15",
     "zod": "^3.22.4"
   },
   "peerDependencies": {

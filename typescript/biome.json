@@ -16,7 +16,7 @@
       "quoteStyle": "single",
       "jsxQuoteStyle": "single",
       "semicolons": "asNeeded",
-      "trailingComma": "all"
+      "trailingCommas": "all"
     }
   },
   "json": {

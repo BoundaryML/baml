@@ -68,6 +68,7 @@ impl PromptRenderer {
         client_ctx: &RenderContext_Client,
     ) -> Result<RenderedPrompt> {
         let func = ir.find_function(&self.function_name)?;
+
         let Some(func_v2) = func.as_v2() else {
             error_unsupported!(
                 "function",

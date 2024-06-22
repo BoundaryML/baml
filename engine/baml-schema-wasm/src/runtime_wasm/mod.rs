@@ -306,6 +306,7 @@ pub struct WasmFunctionResponse {
 pub struct WasmTestResponse {
     test_response: anyhow::Result<baml_runtime::TestResponse>,
     span: Option<uuid::Uuid>,
+    tracing_project_id: Option<String>,
 }
 
 #[wasm_bindgen]
@@ -324,6 +325,9 @@ pub struct WasmLLMResponse {
     pub content: String,
     pub start_time_unix_ms: u64,
     pub latency_ms: u64,
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub total_tokens: Option<u64>,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -450,6 +454,46 @@ impl WasmTestResponse {
             Err(e) => Some(e.to_string()),
         }
     }
+
+    fn _trace_url(&self) -> anyhow::Result<String> {
+        let test_response = match self.test_response.as_ref() {
+            Ok(t) => t,
+            Err(e) => anyhow::bail!("Failed to get test response: {:?}", e),
+        };
+        let start_time = match test_response.function_response.llm_response() {
+            LLMResponse::Success(s) => s.start_time,
+            LLMResponse::LLMFailure(f) => f.start_time,
+            _ => anyhow::bail!("Test has no start time"),
+        };
+        let start_time = time::OffsetDateTime::from_unix_timestamp(
+            start_time
+                .duration_since(web_time::UNIX_EPOCH)?
+                .as_secs()
+                .try_into()?,
+        )?
+        .format(&time::format_description::well_known::Rfc3339)?;
+
+        let event_span_id = self
+            .span
+            .as_ref()
+            .ok_or(anyhow::anyhow!("Test has no span ID"))?
+            .to_string();
+        let subevent_span_id = test_response
+            .function_span
+            .as_ref()
+            .ok_or(anyhow::anyhow!("Function call has no span ID"))?
+            .to_string();
+
+        Ok(format!(
+            "https://app.boundaryml.com/dashboard/projects/{}/drilldown?start_time={start_time}&eid={event_span_id}&s_eid={subevent_span_id}&test=false&onlyRootEvents=true",
+            self.tracing_project_id.as_ref().ok_or(anyhow::anyhow!("No project ID specified"))?
+        ))
+    }
+
+    #[wasm_bindgen]
+    pub fn trace_url(&self) -> Option<String> {
+        self._trace_url().ok()
+    }
 }
 
 fn llm_response_to_wasm_error(
@@ -500,6 +544,9 @@ impl IntoWasm
                     .unwrap_or(web_time::Duration::ZERO)
                     .as_millis() as u64,
                 latency_ms: s.latency.as_millis() as u64,
+                input_tokens: s.metadata.prompt_tokens,
+                output_tokens: s.metadata.output_tokens,
+                total_tokens: s.metadata.total_tokens,
             }),
             _ => None,
         }
@@ -559,6 +606,9 @@ fn get_dummy_value(
                 baml_runtime::TypeValue::Null => "null".to_string(),
                 baml_runtime::TypeValue::Image => {
                     "{ url \"https://imgs.xkcd.com/comics/standards.png\"}".to_string()
+                }
+                baml_runtime::TypeValue::Audio => {
+                    "{ url \"https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg\"}".to_string()
                 }
             };
 
@@ -952,6 +1002,7 @@ impl WasmFunction {
         Ok(WasmTestResponse {
             test_response,
             span,
+            tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
         })
     }
 }

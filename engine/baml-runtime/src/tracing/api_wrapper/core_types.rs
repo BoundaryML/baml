@@ -152,6 +152,10 @@ pub(crate) enum ContentPart {
     UrlImage(String),
     #[serde(rename = "b64_image")]
     B64Image(String),
+    #[serde(rename = "url_audio")]
+    UrlAudio(String),
+    #[serde(rename = "b64_audio")]
+    B64Audio(String),
 }
 
 #[derive(Serialize, Debug, Deserialize)]

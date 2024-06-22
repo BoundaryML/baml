@@ -361,6 +361,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
+module.exports.BamlAudio = nativeBinding.BamlAudio
 module.exports.BamlImage = nativeBinding.BamlImage
 module.exports.BamlRuntime = nativeBinding.BamlRuntime
 module.exports.BamlSpan = nativeBinding.BamlSpan
