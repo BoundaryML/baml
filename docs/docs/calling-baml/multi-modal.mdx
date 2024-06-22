@@ -2,7 +2,7 @@
 ## Multi-modal input
 
 ### Images 
-Calling a function with an image type:
+Calling a BAML function with an `image` input argument type:
 <CodeGroup>
 ```python Python
 from baml_py import Image
@@ -34,6 +34,7 @@ import { Image } from "@boundaryml/baml"
   )
 
   // Base64
+  const image_b64 = "iVB0R..."
   let res = await b.TestImageInput(
     Image.fromBase64('image/png', image_b64),
   )
@@ -43,5 +44,51 @@ import { Image } from "@boundaryml/baml"
 ```ruby Ruby
 we're working on it!
 ```
-</CodeGroup>
 
+</CodeGroup>
+ 
+### Audio
+Calling functions that have `audio` types.
+
+<CodeGroup>
+```python Python
+from baml_py import Audio
+from baml_client import b
+
+async def run():
+  # from URL
+  res = await b.TestAudioInput(
+      img=Audio.from_url(
+          "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+      )
+  )
+
+  # Base64
+  b64 = "iVBORw0K...."
+  res = await b.TestAudioInput(
+    img=Audio.from_base64("image/png", b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Audio } from "@boundaryml/baml"
+...
+
+  // URL
+  let res = await b.TestAudioInput(
+    Audio.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.mp4'),
+  )
+
+  // Base64
+  const audio_base64 = ".."
+  let res = await b.TestAudioInput(
+    Audio.fromBase64('image/png', audio_base64),
+  )
+  
+```
+
+```ruby Ruby
+we're working on it!
+```
+</CodeGroup>

@@ -1,0 +1,94 @@
+---
+title: openai
+---
+
+The `openai` provider supports all APIs that use the same interface for the `/chat` endpoint.
+
+<Tip>
+  For `ollama` ([Docs](ollama)) or `azure-openai` ([Docs](azure)) we recommend
+  using the respective provider instead.
+</Tip>
+
+Example:
+
+```rust BAML
+client<llm> MyClient {
+  provider openai
+  options {
+    api_key env.MY_OPENAI_KEY
+    model "gpt-3.5-turbo"
+    temperature 0.1
+  }
+}
+```
+
+The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
+
+## Non-forwarded options
+
+<ParamField path="api_key" type="string">
+  Will be passed as a bearer token. **Default: `env.OPENAI_API_KEY`**
+  `Authorization: Bearer $api_key`
+</ParamField>
+
+<ParamField path="base_url" type="string">
+  The base URL for the API. **Default: `https://api.openai.com/v1`**
+</ParamField>
+
+<ParamField path="default_role" type="string">
+  The default role for any prompts that don't specify a role. **Default:
+  `system`** We don't have any checks for this field, you can pass any string
+  you wish.
+</ParamField>
+
+<ParamField path="headers" type="object">
+  Additional headers to send with the request.
+
+Example:
+
+```rust BAML
+client<llm> MyClient {
+  provider openai
+  options {
+    api_key env.MY_OPENAI_KEY
+    model "gpt-3.5-turbo"
+    headers {
+      "X-My-Header" "my-value"
+    }
+  }
+}
+```
+
+</ParamField>
+
+## Forwarded options
+
+<ParamField
+   path="messages"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you from the prompt
+</ParamField>
+<ParamField
+   path="stream"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you based on how you call the client in your code
+</ParamField>
+<ParamField
+  path="model"
+  type="string"
+>
+  The model to use.
+
+| Model           | Description                    |
+| --------------- | ------------------------------ |
+| `gpt-3.5-turbo` | Fastest + Cheapest             |
+| `gpt-4o`        | Fast + text + image            |
+| `gpt-4-turbo`   | Smartest + text + image + code |
+
+See openai docs for the list of openai models. You can pass any model name you wish, we will not check if it exists.
+
+</ParamField>
+
+For all other options, see the [official OpenAI API documentation](https://platform.openai.com/docs/api-reference/chat/create).

@@ -10,77 +10,219 @@ BAML function calls.
 [call BAML functions]: /docs/calling-baml/calling-functions
 [BAML Examples]: https://github.com/BoundaryML/baml-examples/tree/main
 
-This time, we'll need a slightly more complex function as an example:
+This time, we'll use `function ExtractReceiptInfo(email: string) -> ReceiptInfo` for our example:
+
+<Accordion title="extract-receipt-info.baml">
 
 ```rust
+class ReceiptItem {
+  name string
+  description string?
+  quantity int
+  price float
+}
+
+class ReceiptInfo {
+    items ReceiptItem[]
+    total_cost float?
+}
+
+function ExtractReceiptInfo(email: string) -> ReceiptInfo {
+  client GPT4o
+  prompt #"
+    Given the receipt below:
+
+    {{ email }}
+
+    {{ ctx.output_format }}
+  "#
+}
 ```
+</Accordion>
 
 <Tabs>
-<Tab title="Python">
 
-A function of that same name will be generated on `baml_client.b`, and
-for every BAML type, a corresponding Python type will be generated in
-`baml_client.types`:
+<Tab title="Python">
+BAML will generate `b.stream.ExtractReceiptInfo()` for you, which you can use like so:
 
 ```python main.py
 import asyncio
+from baml_client import b, partial_types, types
 
-from baml_client import b
-from baml_client.types import Category
+# Using both async iteration and get_final_response() from a stream
+async def example1(receipt: str):
+    stream = b.stream.ExtractReceiptInfo(receipt)
 
-async def main():
-    category = await b.ClassifyMessage("I want to cancel my order")
-    print(category)
-    assert category == Category.CancelOrder
+    async for partial in stream:
+        print(f"partial: parsed {len(partial.items)} items (object: {partial})")
+
+    final = await stream.get_final_response()
+    print(f"final: {len(final.items)} items (object: {final})")
+
+# Using only async iteration of a stream
+async def example2(receipt: str):
+    async for partial in b.stream.ExtractReceiptInfo(receipt):
+        print(f"partial: parsed {len(partial.items)} items (object: {partial})")
+
+# Using only get_final_response() of a stream
+#
+# In this case, you should just use b.ExtractReceiptInfo(receipt) instead,
+# which is faster and more efficient.
+async def example3(receipt: str):
+    final = await b.stream.ExtractReceiptInfo(receipt).get_final_response()
+    print(f"final: {len(final.items)} items (object: {final})")
+
+receipt = """
+04/14/2024 1:05 pm
+
+Ticket: 220000082489
+Register: Shop Counter
+Employee: Connor
+Customer: Sam
+Item	#	Price
+Guide leash (1 Pair) uni UNI
+1	$34.95
+The Index Town Walls
+1	$35.00
+Boot Punch
+3	$60.00
+Subtotal	$129.95
+Tax ($129.95 @ 9%)	$11.70
+Total Tax	$11.70
+Total	$141.65
+"""
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    asyncio.run(example1(receipt))
+    asyncio.run(example2(receipt))
+    asyncio.run(example3(receipt))
 ```
 </Tab>
 
 <Tab title="TypeScript">
-
-A function of that same name will be generated on `baml_client.b`, and
-for every BAML type, a corresponding TypeScript type will be generated in
-`baml_client.types`:
+BAML will generate `b.stream.ExtractReceiptInfo()` for you, which you can use like so:
 
 ```ts main.ts
 import { b } from './baml_client'
-import { Category } from './baml_client/types'
-import assert from 'assert'
 
-const main = async () => {
-  const category = await b.ClassifyMessage('I want to cancel my order')
-  console.log(category)
-  assert(category == Category.CancelOrder)
+// Using both async iteration and getFinalResponse() from a stream
+const example1 = async (receipt: string) => {
+  const stream = b.stream.ExtractReceiptInfo(receipt)
+
+  for await (const partial of stream) {
+    console.log(`partial: ${partial.items?.length} items (object: ${partial})`)
+  }
+
+  const final = await stream.getFinalResponse()
+  console.log(`final: ${final.items.length} items (object: ${final})`)
 }
+
+// Using only async iteration of a stream
+const example2 = async (receipt: string) => {
+  for await (const partial of b.stream.ExtractReceiptInfo(receipt)) {
+    console.log(`partial: ${partial.items?.length} items (object: ${partial})`)
+  }
+}
+
+// Using only getFinalResponse() of a stream
+//
+// In this case, you should just use b.ExtractReceiptInfo(receipt) instead,
+// which is faster and more efficient.
+const example3 = async (receipt: string) => {
+  const final = await b.stream.ExtractReceiptInfo(receipt).getFinalResponse()
+  console.log(`final: ${final.items.length} items (object: ${final})`)
+}
+
+const receipt = `
+04/14/2024 1:05 pm
+
+Ticket: 220000082489
+Register: Shop Counter
+Employee: Connor
+Customer: Sam
+Item	#	Price
+Guide leash (1 Pair) uni UNI
+1	$34.95
+The Index Town Walls
+1	$35.00
+Boot Punch
+3	$60.00
+Subtotal	$129.95
+Tax ($129.95 @ 9%)	$11.70
+Total Tax	$11.70
+Total	$141.65
+`
 
 if (require.main === module) {
-  main()
+  example1(receipt)
+  example2(receipt)
+  example3(receipt)
 }
-
 ```
 </Tab>
 
 <Tab title="Ruby">
-
-A function of that same name will be generated on `Baml.Client`, and
-for every BAML type, a corresponding Ruby type will be generated in
-`Baml::Types`:
+BAML will generate `Baml.Client.stream.ExtractReceiptInfo()` for you,
+which you can use like so:
 
 ```ruby main.rb
 require_relative "baml_client/client"
 
-def main
-    category = Baml.Client.ClassifyMessage(input: "I want to cancel my order")
-    puts category
-    category == Baml::Types::Category::CancelOrder
+$b = Baml.Client
+
+# Using both iteration and get_final_response() from a stream
+def example1(receipt)
+  stream = $b.stream.ExtractReceiptInfo(receipt)
+
+  stream.each do |partial|
+    puts "partial: #{partial.items&.length} items"
+  end
+
+  final = stream.get_final_response
+  puts "final: #{final.items.length} items"
 end
+
+# Using only iteration of a stream
+def example2(receipt)
+  $b.stream.ExtractReceiptInfo(receipt).each do |partial|
+    puts "partial: #{partial.items&.length} items"
+  end
+end
+
+# Using only get_final_response() of a stream
+#
+# In this case, you should just use BamlClient.ExtractReceiptInfo(receipt) instead,
+# which is faster and more efficient.
+def example3(receipt)
+  final = $b.stream.ExtractReceiptInfo(receipt).get_final_response
+  puts "final: #{final.items.length} items"
+end
+
+receipt = <<~RECEIPT
+  04/14/2024 1:05 pm
+
+  Ticket: 220000082489
+  Register: Shop Counter
+  Employee: Connor
+  Customer: Sam
+  Item  #  Price
+  Guide leash (1 Pair) uni UNI
+  1 $34.95
+  The Index Town Walls
+  1 $35.00
+  Boot Punch
+  3 $60.00
+  Subtotal $129.95
+  Tax ($129.95 @ 9%) $11.70
+  Total Tax $11.70
+  Total $141.65
+RECEIPT
 
 if __FILE__ == $0
-  puts main
+  example1(receipt)
+  example2(receipt)
+  example3(receipt)
 end
-
 ```
 
 </Tab>

@@ -48,17 +48,51 @@ type Foo = z.infer<typeof FooZod>;
 
 </CodeGroup>
 
-## aliases, descriptions
+## Class Attributes
 
-When prompt engineering, you can also alias fields  and add descriptions:
-```rust
-class Foo {
-  summary string @alias("complete_summary") @description("Answer in 2 sentences")
+<ParamField
+  path="@@dynamic"
+>
+If set, will allow you to add fields to the class dynamically at runtime (in your python/ts/etc code). See [dynamic classes](/docs/calling-baml/dynamic-types) for more information.
+</ParamField>
+
+
+```rust BAML
+class MyClass {
+  property1 string
+  property2 int?
+
+  @@dynamic // allows me to later propert3 float[] at runtime
 }
 ```
-Aliasing renames the field for the llm to potentially "understand" your property better, while keeping the original name in your code, so you don't need to change your code everytime.
 
-See more in [prompt syntax docs](./prompt_engineering/class)
+## Field Attributes
+
+When prompt engineering, you can also alias values and add descriptions.
+
+<ParamField
+  path="@alias"
+  type="string"
+>
+Aliasing renames the field for the llm to potentially "understand" your value better, while keeping the original name in your code, so you don't need to change your downstream code everytime.
+
+This will also be used for parsing the output of the LLM back into the original object.
+</ParamField>
+
+<ParamField
+  path="@description"
+  type="string"
+>
+This adds some additional context to the field in the prompt.
+</ParamField>
+
+
+```rust BAML
+class MyClass {
+  property1 string @alias("name") @description("The name of the object")
+  age int? @description("The age of the object")
+}
+```
 
 ## Constraints
 
@@ -77,5 +111,5 @@ The type of a property can be any [supported type](/docs/snippets/supported-type
 
 ## Inheritance
 
-Not supported. Like rust, we take the stance that [composition is better than inheritance](https://www.digitalocean.com/community/tutorials/composition-vs-inheritance).
+Never supported. Like rust, we take the stance that [composition is better than inheritance](https://www.digitalocean.com/community/tutorials/composition-vs-inheritance).
 

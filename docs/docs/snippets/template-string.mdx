@@ -1,8 +1,8 @@
-Writing prompts requires a lot of string manipulation. We created a `template_string` to let you combine different string templates together. Under-the-hood they use [jinja](/docs/snippets/prompt-syntax/what-is-jinja) to evaluate the string and its inputs.
+Writing prompts requires a lot of string manipulation. BAML has a `template_string` to let you combine different string templates together. Under-the-hood they use [jinja](/docs/snippets/prompt-syntax/what-is-jinja) to evaluate the string and its inputs.
 
 Think of template strings as functions that have variables, and return a string. They can be used to define reusable parts of a prompt, or to make the prompt more readable by breaking it into smaller parts.
 
-It looks like:
+Example
 ```rust BAML
 // Inject a list of "system" or "user" messages into the prompt.
 template_string PrintMessages(messages: Message[]) #"

@@ -1,0 +1,30 @@
+
+When you develop with BAML, the BAML VScode extension generates a `baml_client` directory (on every save) with all the generated code you need to use your AI functions in your application.
+
+We recommend you add `baml_client` to your `.gitignore` file to avoid committing generated code to your repository, and re-generate the client code when you build and deploy your application.
+
+You _could_ commit the generated code if you're starting out to not deal with this, just make sure the VSCode extension version matches your baml package dependency version (e.g. `baml-py` for python and `@boundaryml/baml` for TS) so there are no compatibility issues.
+
+To build your client you can use the following command. See also [Generating Clients](/docs/calling-baml/generate-baml-client):
+  
+<CodeGroup>
+
+```dockerfile python Dockerfile
+RUN baml-cli generate --from path-to-baml_src
+```
+
+```dockerfile TypeScript Dockerfile
+# Do this early on in the dockerfile script before transpiling to JS
+RUN npx baml-cli generate --from path-to-baml_src
+```
+
+```dockerfile Ruby Dockerfile
+RUN bundle add baml
+RUN bundle exec baml-cli generate --from path/to/baml_src
+```
+</CodeGroup>
+
+
+### Current limitations
+- We do not yet support `alpine` images. BAML will not properly build for those platforms. Let us know if you need to support lighter weight alpine images, and we'll prioritize it.
+

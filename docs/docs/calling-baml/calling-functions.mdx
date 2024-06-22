@@ -10,8 +10,9 @@ you can call BAML functions from your code.
 [generated the BAML client]: /docs/calling-baml/generate-baml-client
 [BAML Examples]: https://github.com/BoundaryML/baml-examples/tree/main
 
-For a BAML function defined like this:
+We’ll use `function ClassifyMessage(input: string) -> Category` for our example:
 
+<Accordion title="classify-message.baml">
 ```rust
 enum Category {
     Refund
@@ -22,17 +23,25 @@ enum Category {
 }
 
 function ClassifyMessage(input: string) -> Category {
-  client GPT4Turbo
-  prompt #"..."#
+  client GPT4o
+  prompt #"
+    Classify the following INPUT into ONE
+    of the following categories:
+
+    INPUT: {{ input }}
+
+    {{ ctx.output_format }}
+
+    Response:
+  "#
 }
 ```
+</Accordion>
 
 <Tabs>
 <Tab title="Python">
 
-A function of that same name will be generated on `baml_client.b`, and
-for every BAML type, a corresponding Python type will be generated in
-`baml_client.types`:
+BAML will generate `b.ClassifyMessage()` for you, which you can use like so:
 
 ```python main.py
 import asyncio
@@ -52,9 +61,7 @@ if __name__ == '__main__':
 
 <Tab title="TypeScript">
 
-A function of that same name will be generated on `baml_client.b`, and
-for every BAML type, a corresponding TypeScript type will be generated in
-`baml_client.types`:
+BAML will generate `b.ClassifyMessage()` for you, which you can use like so:
 
 ```ts main.ts
 import { b } from './baml_client'
@@ -76,15 +83,15 @@ if (require.main === module) {
 
 <Tab title="Ruby">
 
-A function of that same name will be generated on `Baml.Client`, and
-for every BAML type, a corresponding Ruby type will be generated in
-`Baml::Types`:
+BAML will generate `Baml.Client.ClassifyMessage()` for you, which you can use like so:
 
 ```ruby main.rb
 require_relative "baml_client/client"
 
+$b = Baml.Client
+
 def main
-    category = Baml.Client.ClassifyMessage(input: "I want to cancel my order")
+    category = $b.ClassifyMessage(input: "I want to cancel my order")
     puts category
     category == Baml::Types::Category::CancelOrder
 end
