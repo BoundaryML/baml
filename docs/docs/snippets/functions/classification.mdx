@@ -1,0 +1,77 @@
+You can write functions to classify elements using [Enums](/docs/snippets/enum).
+
+Here is such an example:
+
+```rust BAML
+enum Category {
+    Refund
+    CancelOrder @description("some description")
+    TechnicalSupport @alias("technical-help") // or alias the name
+    AccountIssue
+    Question
+}
+
+function ClassifyMessage(input: string) -> Category {
+  client GPT4Turbo
+  prompt #"
+    {# 
+      This automatically injects good instructions 
+      for classification since BAML knows
+      Category is an enum.
+    #}
+    {{ ctx.output_format }}
+
+    {{ _.role('user') }}
+    {{ input }}
+
+    {{ _.role('assistant') }}
+    Response:
+  "#
+}
+```
+If you use BAML Playground, you can see what we inject into the prompt, with full transparency.
+
+The neat part about BAML is that you don't need to parse the enums out of the answer yourself. It _will just work_. BAML's fuzzy parsing detects when the LLM prints something like:
+```text
+Based on the information provided, I think the answer is Refund
+```
+and will give you the actual `Category.Refund` when you call the function. We will add more knobs so you can make this parsing more or less strict. 
+
+## Usage
+<CodeGroup>
+```python python
+from baml_client import b
+from baml_client.types import Category
+
+...
+  result = await b.ClassifyMessage("I want to cancel my order")
+  assert result == Category.CancelOrder
+```
+
+```typescript typescript
+import b from 'baml_client'
+import { Category } from 'baml_client/types'
+
+...
+  const result = await b.ClassifyMessage("I want to cancel my order")
+  assert(result === Category.Cancel)
+
+```ruby ruby
+require_relative "baml_client/client"
+
+$b = Baml.Client
+
+def main
+    category = $b.ClassifyMessage(input: "I want to cancel my order")
+    puts category == Baml::Types::Category::CancelOrder
+end
+
+if __FILE__ == $0
+  main
+end
+```
+</CodeGroup>
+
+## Handling Dynamic Categories (e.g. user-provided, or from a database)
+To handle dynamic categories you can use [dynamic enums](/docs/calling-baml/dynamic-types) to build your enum at runtime.
+

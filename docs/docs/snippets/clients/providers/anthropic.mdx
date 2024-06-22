@@ -1,0 +1,117 @@
+---
+title: anthropic
+---
+
+The `anthropic` provider supports all APIs that use the same interface for the `/v1/messages` endpoint.
+
+<Tip>For `ollama` ([Docs](ollama)) or `azure` ([Docs](azure)) we recommend using the respective provider instead as there are more checks.</Tip>
+
+Example:
+```rust BAML
+client<llm> MyClient {
+  provider anthropic
+  options {
+    model "claude-3-5-sonnet-20240620"
+    temperature 0
+  }
+}
+```
+
+The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
+
+## Non-forwarded options
+<ParamField
+  path="api_key"
+  type="string"
+>
+  Will be passed as a bearer token. **Default: `env.ANTHROPIC_API_KEY`**
+  
+  `Authorization: Bearer $api_key`
+</ParamField>
+
+<ParamField
+  path="base_url"
+  type="string"
+>
+  The base URL for the API. **Default: `https://api.anthropic.com`**
+</ParamField>
+
+<ParamField
+  path="default_role"
+  type="string"
+>
+  The default role for any prompts that don't specify a role. **Default: `system`**
+
+  We don't have any checks for this field, you can pass any string you wish.
+</ParamField>
+
+<ParamField path="headers" type="object">
+  Additional headers to send with the request.
+
+  Unless specified with a different value, we inject in the following headers:
+  ```
+  "anthropic-version" "2023-06-01"
+  ```
+
+Example:
+```rust
+client<llm> MyClient {
+  provider anthropic
+  options {
+    api_key env.MY_ANTHROPIC_KEY
+    model "claude-3-5-sonnet-20240620"
+    headers {
+      "X-My-Header" "my-value"
+    }
+  }
+}
+```
+</ParamField>
+
+## Forwarded options
+<ParamField
+   path="system"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you from the prompt, if necessary.
+  Only the first system message will be used, all subsequent ones will be cast to the `assistant` role.
+</ParamField>
+
+<ParamField
+   path="messages"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you from the prompt
+</ParamField>
+
+<ParamField
+   path="stream"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you based on how you call the client in your code
+</ParamField>
+
+<ParamField
+  path="model"
+  type="string"
+>
+  The model to use.
+
+| Model | Description |
+| --- | --- |
+| `claude-3-5-sonnet-20240620` |  |
+| `claude-3-opus-20240229` |  |
+| `claude-3-sonnet-20240229` |  |
+| `claude-3-haiku-20240307` |  |
+
+<img src="https://mintlify.s3-us-west-1.amazonaws.com/anthropic/images/3-5-sonnet-curve.png" />
+
+See anthropic docs for the latest list of all models. You can pass any model name you wish, we will not check if it exists.
+</ParamField>
+
+<ParamField path="max_tokens" type="int">
+  The maximum number of tokens to generate. **Default: `4069`**
+</ParamField>
+
+
+For all other options, see the [official anthropic API documentation](https://docs.anthropic.com/en/api/messages).

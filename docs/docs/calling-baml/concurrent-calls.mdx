@@ -1,0 +1,85 @@
+---
+title: "Concurrent function calls"
+---
+
+We’ll use `function ClassifyMessage(input: string) -> Category` for our example:
+
+<Accordion title="classify-message.baml">
+```rust
+enum Category {
+    Refund
+    CancelOrder
+    TechnicalSupport
+    AccountIssue
+    Question
+}
+
+function ClassifyMessage(input: string) -> Category {
+  client GPT4o
+  prompt #"
+    Classify the following INPUT into ONE
+    of the following categories:
+
+    INPUT: {{ input }}
+
+    {{ ctx.output_format }}
+
+    Response:
+  "#
+}
+```
+</Accordion>
+
+<Tabs>
+<Tab title="Python">
+
+You can make concurrent `b.ClassifyMessage()` calls like so:
+
+```python main.py
+import asyncio
+
+from baml_client import b
+from baml_client.types import Category
+
+async def main():
+    await asyncio.gather(
+        b.ClassifyMessage("I want to cancel my order"),
+        b.ClassifyMessage("I want a refund")
+    )
+
+if __name__ == '__main__':
+    asyncio.run(main())
+```
+</Tab>
+
+<Tab title="TypeScript">
+
+You can make concurrent `b.ClassifyMessage()` calls like so:
+
+```ts main.ts
+import { b } from './baml_client'
+import { Category } from './baml_client/types'
+import assert from 'assert'
+
+const main = async () => {
+  const category = await Promise.all(
+    b.ClassifyMessage('I want to cancel my order'),
+    b.ClassifyMessage('I want a refund'),
+  )
+}
+
+if (require.main === module) {
+  main()
+}
+
+```
+</Tab>
+
+<Tab title="Ruby">
+
+BAML Ruby does not currently support async/concurrent calls.
+
+Please [contact us](/contact) if this is something you need.
+
+</Tab>
+</Tabs>

@@ -1,0 +1,82 @@
+---
+title: What is Jinja / Cookbook
+---
+
+BAML Prompt strings are essentially [Jinja](https://jinja.palletsprojects.com/en/3.1.x/templates/) templates, which offer the ability to express logic and data manipulation within strings. Jinja is a very popular and mature templating language amongst python developers, so github copilot or GPT4 can already help you write most of the logic you want.
+
+## Jinja Cookbook
+
+When in doubt -- use the BAML VSCode Playground preview. It will show you the fully rendered prompt, even when it has complex logic.
+
+### Basic Syntax
+
+- `{% ... %}`: Use for executing statements such as for-loops or conditionals.
+- `{{ ... }}`: Use for outputting expressions or variables.
+- `{# ... #}`: Use for comments within the template, which will not be rendered.
+
+### Loops / Iterating Over Lists
+
+Here's how you can iterate over a list of items, accessing each item's attributes:
+
+```jinja2
+function MyFunc(messages: Message[]) -> string {
+  prompt #"
+    {% for message in messages %}
+      {{ message.user_name }}: {{ message.content }}
+    {% endfor %}
+  "#
+}
+```
+
+### Conditional Statements
+
+Use conditional statements to control the flow and output of your templates based on conditions:
+
+```jinja2
+function MyFunc(user: User) -> string {
+  prompt #"
+    {% if user.is_active %}
+      Welcome back, {{ user.name }}!
+    {% else %}
+      Please activate your account.
+    {% endif %}
+  "#
+}
+```
+
+### Setting Variables
+
+You can define and use variables within your templates to simplify expressions or manage data:
+
+```jinja2
+function MyFunc(items: Item[]) -> string {
+  prompt #"
+    {% set total_price = 0 %}
+    {% for item in items %}
+      {% set total_price = total_price + item.price %}
+    {% endfor %}
+    Total price: {{ total_price }}
+  "#
+}
+```
+
+### Including other Templates
+
+To promote reusability, you can include other templates within a template. See [template strings](/docs/snippets/template-string):
+
+```rust
+template_string PrintUserInfo(arg1: string, arg2: User) #"
+  {{ arg1 }}
+  The user's name is: {{ arg2.name }}
+"#
+
+function MyFunc(arg1: string, user: User) -> string {
+  prompt #"
+    Here is the user info:
+    {{ PrintUserInfo(arg1, user) }}
+  "#
+}
+```
+
+### Built-in filters
+See [jinja docs](https://jinja.palletsprojects.com/en/3.1.x/templates/#list-of-builtin-filters)

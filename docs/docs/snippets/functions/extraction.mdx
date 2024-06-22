@@ -1,0 +1,75 @@
+Here is how we can get structured data from a chunk of text or even an image (using a union input type):
+
+```rust BAML
+class CharacterDescription {
+  name string
+  clothingItems string[]
+  hairColor string? @description(#"
+    The color of the character's hair.
+  "#)
+  spells Spells[]
+}
+
+class Spells {
+  name string
+  description string
+} 
+
+function DescribeCharacter(image_or_paragraph: image | string) -> CharacterDescription {
+  client GPT4o
+  prompt #"
+    {{ _.role("user")}}
+    
+    Describe this character according to the schema provided:
+    {{ image_or_paragraph }}
+
+
+    {{ ctx.output_format }}
+
+    Before you answer, explain your reasoning in 3 sentences.
+  "#
+}
+```
+
+If you open up the **VSCode Playground** you will be able to test this function instantly.
+
+## Usage
+
+See [image docs](/docs/snippets/supported-types#image)
+
+<CodeGroup>
+```python python
+from baml_client import b
+from baml_client.types import CharacterDescription
+from baml_py import Image
+
+...
+  result = await b.DescribeCharacter("...")
+  assert isinstance(result, CharacterDescription)
+
+  result_from_image = await b.DescribeCharacter(Image.from_url("http://..."))
+```
+
+```typescript typescript
+import { Image } from "@boundaryml/baml"
+import b from 'baml_client'
+import { Category } from 'baml_client/types'
+
+...
+  const result = await b.DescribeCharacter("...")
+  // result == interface CharacterDescription
+
+  const result_from_image = await b.DescribeCharacter(Image.fromUrl("http://..."))
+```
+
+```ruby ruby
+require_relative "baml_client/client"
+
+$b = Baml.Client
+
+# images are not supported in Ruby
+def example
+  stream = $b.DescribeCharacter("Bob the builder wears overalls")
+end
+```
+</CodeGroup>

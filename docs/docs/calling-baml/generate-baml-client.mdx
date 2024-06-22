@@ -1,0 +1,133 @@
+---
+title: "Generate the BAML Client"
+---
+
+<Info>This page assumes you've already defined a function in BAML. If you
+haven't done that yet, check out [how to define a function].</Info>
+
+[how to define a function]: /docs/snippets/functions
+
+Once you've defined a function in BAML, you need to generate code in your
+language of choice to call that function: we call this generating the BAML client.
+
+If you use VSCode, the [BAML extension] will re-generate the client every time
+you save a BAML file. Otherwise, you can generate the client manually:
+
+[BAML extension]: https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension
+
+<CodeGroup>
+
+```bash Python
+pipx run baml-cli generate --from path/to/baml_src
+
+# If using your local installation, venv or conda:
+pip install baml-py
+baml-cli generate --from path/to/baml_src
+
+# If using poetry:
+poetry add baml-py
+poetry run baml-cli generate --from path/to/baml_src
+
+# If using pipenv:
+pipenv install baml-py
+pipenv run baml-cli generate --from path/to/baml_src
+```
+
+```bash TypeScript
+npx @boundaryml/baml generate --from path/to/baml_src
+
+# If using npm:
+npm install @boundaryml/baml
+npm run baml-cli generate --from path/to/baml_src
+
+# If using pnpm:
+pnpm install @boundaryml/baml
+pnpm run baml-cli generate --from path/to/baml_src
+
+# If using pnpm:
+yarn add @boundaryml/baml
+yarn run baml-cli generate --from path/to/baml_src
+```
+
+```bash Ruby
+bundle add baml
+bundle exec baml-cli generate --from path/to/baml_src
+```
+
+</CodeGroup>
+
+## Best Practices
+
+### Define a `generator` clause
+
+<Tip>If you created your project using `baml-cli init`, then one has already been generated for you!</Tip>
+
+Each `generator` that you define in your BAML project will tell `baml-cli
+generate` to generate code for a specific target language. You can define
+multiple `generator` clauses in your BAML project, and `baml-cli generate` will
+generate code for each of them.
+
+<CodeGroup>
+
+```rust Python
+generator target {
+    // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
+    output_type "python/pydantic"
+    // Where the generated code will be saved (relative to baml_src/)
+    output_dir "../"
+}
+```
+
+```rust TypeScript
+generator target {
+    // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
+    output_type "typescript"
+    // Where the generated code will be saved (relative to baml_src/)
+    output_dir "../"
+}
+```
+
+```rust Python
+generator target {
+    // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
+    output_type "ruby/sorbet"
+    // Where the generated code will be saved (relative to baml_src/)
+    output_dir "../"
+}
+```
+
+</CodeGroup>
+         
+
+### Generate the BAML client on-demand
+
+Although you can check in the generated BAML client, we recommend that you 
+instead add it to your `.gitignore` and generate it on-demand when you
+build/release your code:
+
+  - this will make your PRs more readable;
+  - this will save you from handling merge conflicts in generated code; and
+  - this will ensure a single source-of-truth for your BAML code (and prevent
+    your client from falling out of sync with your BAML code).
+
+To add the generated client to your `.gitignore`, you can run:
+
+```bash
+echo "baml_client" >> .gitignore
+```
+
+and then you just need to run `baml-cli generate` in your CI/CD build/release
+workflows. Here's what that might look like in a GitHub Actions workflow file:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Install your Python/Node/Ruby dependencies here
+
+      - name: Generate BAML client
+        run: baml-cli generate --from baml_src
+```

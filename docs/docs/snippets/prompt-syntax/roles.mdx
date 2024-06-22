@@ -1,0 +1,83 @@
+---
+title: _.role
+---
+
+BAML prompts are compiled into a `messages` array (or equivalent) that most LLM providers use:
+
+BAML Prompt -> `[{ role: "user": content: "hi there"}, { role: "assistant", ...}]`
+
+By default, BAML puts everything into a single message with the `system` role if available (or whichever one is best for the provider you have selected). 
+When in doubt, the playground always shows you the current role for each message.
+
+To specify a role explicitly, add the `{{ _.role("user")}}` syntax to the prompt
+```jinja2
+prompt #"
+  {{ _.role("system") }} Everything after
+  this element will be a system prompt!
+
+  {{ _.role("user")}} 
+  And everything after this
+  will be a user role
+"#
+```
+Try it out in [PromptFiddle](https://www.promptfiddle.com)
+
+<Note>
+  BAML may change the default role to `user` if using specific APIs that only support user prompts, like when using prompts with images.
+</Note>
+
+We use `_` as the prefix of `_.role()` since we plan on adding more helpers here in the future.
+
+## Example -- Using `_.role()` in for-loops
+
+Here's how you can inject a list of user/assistant messages and mark each as a user or assistant role:
+
+```rust BAML
+class Message {
+  role string
+  message string
+}
+
+function ChatWithAgent(input: Message[]) -> string {
+  client GPT4o
+  prompt #"
+    {% for m in messages %}
+      {{ _.role(m.role) }}
+      {{ m.message }}
+    {% endfor %}
+  "#
+}
+```
+
+```rust BAML
+function ChatMessages(messages: string[]) -> string {
+  client GPT4o
+  prompt #"
+    {% for m in messages %}
+      {{ _.role("user" if loop.index % 2 == 1 else "assistant") }}
+      {{ m }}
+    {% endfor %}
+  "#
+}
+```
+
+## Example -- Using `_.role()` in a template string
+
+```rust BAML
+template_strings YouAreA(name: string, job: string) #"
+  {{ _.role("system") }} 
+  You are an expert {{ name }}. {{ job }}
+
+  {{ ctx.output_format }}
+  {{ _.role("user") }}
+"#
+
+function CheckJobPosting(post: string) -> bool {
+  client GPT4o
+  prompt #"
+    {{ YouAreA("hr admin", "You're role is to ensure every job posting is bias free.") }}
+
+    {{ post }}
+  "#
+}
+```

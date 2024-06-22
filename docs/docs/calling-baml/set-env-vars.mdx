@@ -1,0 +1,81 @@
+---
+title: "Set Environment Variables"
+---
+
+
+The generated BAML client will capture all environment variables when you import it,
+and will not be able to see any environment variables you load after importing
+the BAML client.
+
+Any of the following strategies are compatible with BAML:
+
+  - set environment variables in your `Dockerfile`
+  - set environment variables in your `next.config.js`
+  - set environment variables in your Kubernetes manifest
+  - load environment variables from secrets-store.csi.k8s.io
+  - load environment variables from a secrets provider such as [Infisical](https://infisical.com/) / [Doppler](https://www.doppler.com/)
+  - dotenv (`.env` file) cli (e.g. `dotenv -e .env python myscript.py`)
+
+<Tip>If BAML doesn't work for your use case, please [contact us]!</Tip>
+
+
+## Loading env variables in your program
+
+If you do anything to load environment variables in-process - e.g. using a
+`.env` file - make sure to do it before importing the BAML client.
+
+<CodeGroup>
+
+```python Python
+import dotenv
+dotenv.load_dotenv()
+
+# Wait to import the BAML client until after loading environment variables
+from baml_client import b
+```
+
+```typescript TypeScript
+import dotenv from 'dotenv'
+dotenv.config()
+
+// Wait to import the BAML client until after loading environment variables
+import { b } from 'baml-client'
+```
+
+```ruby Ruby
+require 'dotenv/load'
+
+# Wait to import the BAML client until after loading environment variables
+require 'baml_client'
+```
+
+
+</CodeGroup>
+
+
+## Environment Variables in BAML
+
+Environment variables are primarily used in clients to propagate authorization
+credentials, such as API keys, like so:
+
+```rust
+
+client<llm> GPT4o {
+  provider baml-openai-chat
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+  }
+}
+```
+
+We do not currently support any other mechanisms for providing authorization
+credentials, including but not limited to:
+
+  - exchanging refresh tokens for ephemeral authorization tokens
+  - fetching credentials from a secret storage service, such as AWS Secrets
+    Manager or HashiCorp Vault
+
+Please [contact us] if you need support for these use cases.
+
+[contact us]: /contact
