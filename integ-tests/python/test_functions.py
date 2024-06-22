@@ -449,7 +449,7 @@ async def test_stream_dynamic_class_output():
     tb = TypeBuilder()
     tb.DynamicOutput.add_property("hair_color", tb.string())
     print(tb.DynamicOutput.list_properties())
-    for prop in tb.DynamicOutput.list_properties():
+    for prop, _ in tb.DynamicOutput.list_properties():
         print(f"Property: {prop}")
 
     stream = b.stream.MyFunc(

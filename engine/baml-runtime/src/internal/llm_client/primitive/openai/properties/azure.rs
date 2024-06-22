@@ -98,6 +98,10 @@ pub fn resolve_properties(
         }
     };
 
+    properties
+        .entry("max_tokens".into())
+        .or_insert_with(|| 4096.into());
+
     Ok(PostRequestProperities {
         default_role,
         base_url,
