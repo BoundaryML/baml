@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use baml_types::{BamlValue, FieldType};
@@ -94,7 +93,7 @@ impl ClassBuilder {
 }
 
 pub struct EnumBuilder {
-    values: Arc<Mutex<HashMap<String, Arc<Mutex<EnumValueBuilder>>>>>,
+    values: Arc<Mutex<IndexMap<String, Arc<Mutex<EnumValueBuilder>>>>>,
     meta: MetaData,
 }
 impl_meta!(EnumBuilder);
