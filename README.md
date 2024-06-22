@@ -177,7 +177,7 @@ Python: `baml-cli init`
 ### 4. OR use these starter projects:
 
 - [NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
-- [FastAPI](https://github.com/BoundaryML/baml-examples/tree/main/fastapi-starter)
+- [FastAPI](https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter)
 
 ## Observability
 
