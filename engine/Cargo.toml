@@ -48,6 +48,7 @@ serde = { version = "1", features = ["derive"] }
 static_assertions = "1.1.0"
 strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = "0.26.2"
+time = { version = "0.3.36", features = ["formatting"] }
 walkdir = "2.5.0"
 web-time = "1.1.0"
 baml-types = { path = "baml-lib/baml-types" }

@@ -41,15 +41,15 @@ function PromptTestClaudeChatNoSystem(input: string) -> string {
   "#
 }
 
-test PromptTestOpenAIChat {
+test TestSystemAndNonSystemChat1 {
   functions [PromptTestClaude, PromptTestOpenAI, PromptTestOpenAIChat, PromptTestOpenAIChatNoSystem, PromptTestClaudeChat, PromptTestClaudeChatNoSystem]
   args {
     input "cats"
   }
 }
 
-test TestClaude {
-  functions [PromptTestClaudeChatNoSystem]
+test TestSystemAndNonSystemChat2 {
+  functions [PromptTestClaude, PromptTestOpenAI, PromptTestOpenAIChat, PromptTestOpenAIChatNoSystem, PromptTestClaudeChat, PromptTestClaudeChatNoSystem]
   args {
     input "lion"
   }

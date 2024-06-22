@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { VSCodeButton, VSCodeProgressRing, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
+import { VSCodeButton, VSCodeLink, VSCodeProgressRing, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { PropsWithChildren, useEffect, useMemo, useState } from 'react'
 import {
@@ -22,7 +22,7 @@ import {
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import JsonView from 'react18-json-view'
 import clsx from 'clsx'
-import { Filter, Pin, Play, Plus } from 'lucide-react'
+import { FilterIcon, Link2Icon, PlayIcon, PlusIcon } from 'lucide-react'
 import { selectedFunctionAtom, selectedTestCaseAtom } from '../EventListener'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import FunctionTestSnippet from '../../shared/TestSnippet'
@@ -42,11 +42,12 @@ const TestStatusMessage: React.FC<{ testStatus: DoneTestStatusType }> = ({ testS
   }
 }
 
-const TestStatusIcon: React.FC<{ testRunStatus: TestStatusType; testStatus?: DoneTestStatusType }> = ({
-  testRunStatus,
-  testStatus,
-}) => {
-  return (
+const TestStatusIcon: React.FC<{
+  testRunStatus: TestStatusType
+  testStatus?: DoneTestStatusType
+  traceUrl?: string
+}> = ({ testRunStatus, testStatus, traceUrl }) => {
+  const testStatusIcon = (
     <div className='text-vscode-descriptionForeground'>
       {
         {
@@ -55,6 +56,7 @@ const TestStatusIcon: React.FC<{ testRunStatus: TestStatusType; testStatus?: Don
           done: (
             <div className='flex flex-row items-center gap-1'>
               {testStatus && <TestStatusMessage testStatus={testStatus} />}
+              {traceUrl && <Link2Icon className='hover:underline icon-link w-3 h-3 inline text-center' />}
             </div>
           ),
           error: (
@@ -65,6 +67,14 @@ const TestStatusIcon: React.FC<{ testRunStatus: TestStatusType; testStatus?: Don
         }[testRunStatus]
       }
     </div>
+  )
+
+  return traceUrl ? (
+    <a className='hover:underline' href={traceUrl}>
+      {testStatusIcon}
+    </a>
+  ) : (
+    testStatusIcon
   )
 }
 
@@ -101,6 +111,23 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
   const client = llm_response?.client_name() ?? llm_failure?.client_name()
   const model = llm_response?.model ?? llm_failure?.model
   const bamlOverheadLatency = testLatency - (latencyMs ? Number(latencyMs) : 0)
+  console.log('llm response', {
+    latency_ms: llm_response?.latency_ms,
+    output_tokens: llm_response?.output_tokens,
+    model: llm_response?.model,
+  })
+
+  const details = [
+    [llm_response?.model, `${llm_response?.model}`],
+    [
+      llm_response?.input_tokens && llm_response?.output_tokens,
+      `${llm_response?.input_tokens} input tokens → ${llm_response?.output_tokens} output tokens`,
+    ],
+  ]
+    .filter((x) => x[0] !== undefined)
+    .map((x) => x[1])
+
+  const detailsText = details.length > 0 ? ` (${details.join(', ')})` : ''
 
   return (
     <div className='flex flex-col w-full gap-1'>
@@ -111,12 +138,15 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
       {(llm_response || llm_failure) && (
         <div className='w-full text-xs text-vscode-descriptionForeground'>
           <div>
-            <b>{latencyMs?.toString()}ms</b> using <b>{client}</b> {model && <>(model: {model})</>}{' '}
-            {latencyMs !== undefined && bamlOverheadLatency > 0 && <>(+ {bamlOverheadLatency}ms for BAML)</>}
+            <b>{latencyMs?.toString()}ms</b> using <b>{client}</b>
+            {detailsText}
+            {latencyMs !== undefined && bamlOverheadLatency > 0 && <> (+ {bamlOverheadLatency}ms for BAML)</>}
           </div>
           <div className='grid grid-cols-2 gap-2'>
             <div className='flex flex-col'>
-              Raw LLM Response:
+              {llm_response?.output_tokens === undefined
+                ? 'Raw LLM Response:'
+                : `Raw LLM Response (${llm_response?.output_tokens} tokens):`}
               <div className='px-1 py-2'>
                 {llm_response && (
                   <pre className='px-1 py-2 whitespace-pre-wrap rounded-sm bg-vscode-input-background max-h-[200px] overflow-y-auto'>
@@ -259,6 +289,7 @@ const TestRow: React.FC<{ name: string }> = ({ name }) => {
           <TestStatusIcon
             testRunStatus={test.status}
             testStatus={test.status === 'done' ? test.response_status : undefined}
+            traceUrl={test.status === 'done' ? test.response.trace_url() : undefined}
           />
         </div>
         {test.status === 'error' && <div className='text-xs text-vscode-errorForeground'>{test.message}</div>}
@@ -318,7 +349,7 @@ const TestStatusBanner: React.FC = () => {
 
   return (
     <div className='flex flex-row flex-wrap items-center gap-2'>
-      <Filter size={16} />
+      <FilterIcon size={16} />
       <FilterButton
         selected={filter.has('queued')}
         name='Queued'
@@ -416,7 +447,7 @@ const TestCaseActions: React.FC<{ testName: string }> = ({ testName }) => {
           run([testName])
         }}
       >
-        <Play size={10} />
+        <PlayIcon size={10} />
       </Button>
       {/* {selectedTestCase?.name === testName ? (
         <Button
@@ -455,7 +486,7 @@ const NewTestCaseDialog: React.FC = () => {
     <Dialog open={show} onOpenChange={setShow}>
       <DialogTrigger asChild={true}>
         <Button variant='outline' className='p-1 text-xs truncate w-fit h-fit border-vscode-textSeparator-foreground'>
-          <Plus size={16} /> New Test
+          <PlusIcon size={16} /> New Test
         </Button>
       </DialogTrigger>
       <DialogContent className='max-h-screen min-h-[50%] overflow-y-auto bg-purple-400 bg-vscode-editorWidget-background border-vscode-textSeparator-foreground overflow-x-clip'>
@@ -483,7 +514,7 @@ const TestCaseList: React.FC = () => {
       <div className='flex flex-wrap items-start items-center gap-2 h-fit'>
         <div className='flex flex-col'>
           <div className='flex flex-wrap items-center gap-2'>
-            <Filter size={16} />
+            <FilterIcon size={16} />
             <VSCodeTextField
               placeholder='Filter test cases'
               className='w-32 shrink'
@@ -512,7 +543,7 @@ const TestCaseList: React.FC = () => {
               }}
             >
               <div className='flex flex-row items-center gap-1'>
-                <Play size={10} />
+                <PlayIcon size={10} />
                 Run {filter ? testCases.length : 'all'} tests
               </div>
             </Button>
