@@ -4,6 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+// use crate::internal::llm_client::primitive::request::RequestBuilder;
 use crate::{
     internal::{
         ir_features::{IrFeatures, WithInternal},
@@ -26,7 +27,6 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
-
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
     ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
@@ -147,6 +147,39 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             .provider
             .render_prompt(self.ir(), &renderer, ctx, &baml_args)
             .map(|prompt| (prompt, node.scope));
+    }
+
+    async fn render_raw_curl(
+        &self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+        prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
+        stream: bool,
+        node_index: Option<usize>,
+    ) -> Result<String> {
+        let func = self.get_function(function_name, ctx)?;
+
+        let renderer = PromptRenderer::from_function(&func, &self.ir(), ctx)?;
+        let client_name = renderer.client_name().to_string();
+
+        let client = self.get_llm_provider(&client_name, ctx)?;
+        let mut selected =
+            client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self);
+        // let node_index = node_index.unwrap_or(0);
+
+        let node_index = node_index.unwrap_or(0);
+
+        if node_index >= selected.len() {
+            return Err(anyhow::anyhow!(
+                "Execution Node out of bounds: {} >= {} for client {}",
+                node_index,
+                selected.len(),
+                client_name
+            ));
+        }
+
+        let node = selected.swap_remove(node_index);
+        return node.provider.render_raw_curl(ctx, prompt, stream).await;
     }
 
     fn get_function<'ir>(

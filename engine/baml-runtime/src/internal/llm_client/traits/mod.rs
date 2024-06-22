@@ -1,13 +1,16 @@
 use std::{fmt::format, pin::Pin};
 
 use anyhow::Result;
+use async_std::stream;
 mod chat;
 mod completion;
 pub use self::{
     chat::{WithChat, WithStreamChat},
     completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
 };
-use super::{retry_policy::CallablePolicy, LLMResponse, ModelFeatures};
+use super::{
+    primitive::request::RequestBuilder, retry_policy::CallablePolicy, LLMResponse, ModelFeatures,
+};
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 use baml_types::{BamlMedia, BamlMediaType, BamlValue, MediaBase64};
 use base64::encode;
@@ -17,6 +20,10 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
 use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
 use reqwest::get;
+use reqwest::Url;
+use reqwest::{Request, Response};
+use std::io::Write;
+use std::str::FromStr; // Add this line at the top of your file // Add this line at the top of your file
 
 pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;
@@ -27,6 +34,14 @@ pub trait WithSingleCallable {
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse;
 }
 
+pub trait WithCurl {
+    #[allow(async_fn_in_trait)]
+    async fn curl_call(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &RenderedPrompt,
+    ) -> Result<Vec<RenderedChatMessage>, LLMResponse>;
+}
 pub trait WithClient {
     fn context(&self) -> &RenderContext_Client;
 
@@ -41,8 +56,33 @@ pub trait WithPrompt<'ir> {
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<RenderedPrompt>;
-}
 
+    async fn render_raw_curl(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<RenderedChatMessage>,
+        stream: bool,
+    ) -> Result<String>;
+}
+fn request_to_string(request: &Request) -> Result<String, reqwest::Error> {
+    let mut result = String::new();
+
+    // Add method and URL
+    result.push_str(&format!("{} {}\n", request.method(), request.url()));
+    // Add headers
+    for (key, value) in request.headers() {
+        result.push_str(&format!("{}: {:?}\n", key, value));
+    }
+
+    // Add body
+    if let Some(body) = request.body() {
+        let body_bytes = body.as_bytes().unwrap_or_default();
+        let body_str = String::from_utf8_lossy(body_bytes);
+        result.push_str(&format!("\n\n{}", body_str));
+    }
+
+    Ok(result)
+}
 impl<T> WithSingleCallable for T
 where
     T: WithClient + WithChat + WithCompletion,
@@ -155,9 +195,126 @@ where
     }
 }
 
-impl<'ir, T> WithPrompt<'ir> for T
+impl<T> WithCurl for T
 where
     T: WithClient + WithChat + WithCompletion,
+{
+    #[allow(async_fn_in_trait)]
+    async fn curl_call(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &RenderedPrompt,
+    ) -> Result<Vec<RenderedChatMessage>, LLMResponse> {
+        if self.model_features().resolve_media_urls {
+            if let RenderedPrompt::Chat(ref chat) = prompt {
+                let messages_result = futures::stream::iter(chat.iter().map(|p| {
+                    let new_parts = p
+                        .parts
+                        .iter()
+                        .map(|part| async move {
+                            match part {
+                                ChatMessagePart::Image(BamlMedia::Url(_, media_url))
+                                | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
+                                    let mut base64 = "".to_string();
+                                    let mut mime_type = "".to_string();
+                                    if media_url.url.starts_with("data:") {
+                                        let parts: Vec<&str> =
+                                            media_url.url.splitn(2, ',').collect();
+                                        base64 = parts.get(1).unwrap().to_string();
+                                        let prefix = parts.get(0).unwrap();
+                                        mime_type =
+                                            prefix.splitn(2, ':').next().unwrap().to_string();
+                                        mime_type =
+                                            mime_type.split('/').last().unwrap().to_string();
+                                    } else {
+                                        let response = match get(&media_url.url).await {
+                                            Ok(response) => response,
+                                            Err(e) => {
+                                                return Err(LLMResponse::OtherFailure(
+                                                    "Failed to fetch image due to CORS issue"
+                                                        .to_string(),
+                                                ))
+                                            } // replace with your error conversion logic
+                                        };
+                                        let bytes = match response.bytes().await {
+                                            Ok(bytes) => bytes,
+                                            Err(e) => {
+                                                return Err(LLMResponse::OtherFailure(
+                                                    e.to_string(),
+                                                ))
+                                            } // replace with your error conversion logic
+                                        };
+                                        base64 = encode(&bytes);
+                                        let inferred_type = infer::get(&bytes);
+                                        mime_type = inferred_type.map_or_else(
+                                            || "application/octet-stream".into(),
+                                            |t| t.extension().into(),
+                                        );
+                                    }
+
+                                    Ok(if matches!(part, ChatMessagePart::Image(_)) {
+                                        ChatMessagePart::Image(BamlMedia::Base64(
+                                            BamlMediaType::Image,
+                                            MediaBase64 {
+                                                base64: base64,
+                                                media_type: format!("image/{}", mime_type),
+                                            },
+                                        ))
+                                    } else {
+                                        ChatMessagePart::Audio(BamlMedia::Base64(
+                                            BamlMediaType::Audio,
+                                            MediaBase64 {
+                                                base64: base64,
+                                                media_type: format!("audio/{}", mime_type),
+                                            },
+                                        ))
+                                    })
+                                }
+                                _ => Ok(part.clone()),
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    async move {
+                        let new_parts = futures::stream::iter(new_parts)
+                            .then(|f| f)
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        let new_parts = new_parts.into_iter().collect::<Result<Vec<_>, _>>()?;
+
+                        Ok::<_, anyhow::Error>(RenderedChatMessage {
+                            role: p.role.clone(),
+                            parts: new_parts,
+                        })
+                    }
+                }))
+                .then(|f| f)
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>();
+
+                let messages = match messages_result {
+                    Ok(messages) => messages,
+                    Err(e) => {
+                        return Err(LLMResponse::OtherFailure(format!("Error occurred: {}", e)));
+                    }
+                };
+                return Ok(messages);
+            }
+        }
+
+        match prompt {
+            RenderedPrompt::Chat(p) => Ok(p.clone()),
+            RenderedPrompt::Completion(p) => Err(LLMResponse::OtherFailure(
+                "Completion prompts are not supported by this provider".to_string(),
+            )),
+        }
+    }
+}
+impl<'ir, T> WithPrompt<'ir> for T
+where
+    T: WithClient + WithChat + WithCompletion + RequestBuilder,
 {
     fn render_prompt(
         &'ir self,
@@ -204,6 +361,40 @@ where
         }
 
         Ok(prompt)
+    }
+
+    async fn render_raw_curl(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
+        stream: bool,
+    ) -> Result<String> {
+        let rendered_prompt = RenderedPrompt::Chat(prompt.clone());
+
+        let chat_messages = self.curl_call(ctx, &rendered_prompt).await?;
+        let request_builder = self.build_request(either::Right(&chat_messages), false);
+        let mut request = request_builder.build()?;
+        let url_header_value = {
+            let headers = request.headers_mut();
+            let url_header_value = headers
+                .get("baml-original-url")
+                .ok_or(anyhow::anyhow!("Missing header 'baml-original-url'"))?;
+            url_header_value.to_owned()
+        };
+
+        let url_str = url_header_value
+            .to_str()
+            .map_err(|_| anyhow::anyhow!("Invalid header 'baml-original-url'"))?;
+        let new_url = Url::from_str(url_str)?;
+        *request.url_mut() = new_url;
+
+        {
+            let headers = request.headers_mut();
+            headers.remove("baml-original-url");
+        }
+
+        let request_str = request_to_string(&request)?;
+        Ok(request_str)
     }
 }
 

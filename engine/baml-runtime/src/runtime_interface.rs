@@ -139,6 +139,15 @@ pub trait InternalRuntimeInterface {
         node_index: Option<usize>,
     ) -> Result<(RenderedPrompt, OrchestrationScope)>;
 
+    async fn render_raw_curl(
+        &self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+        prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
+        stream: bool,
+        node_index: Option<usize>,
+    ) -> Result<String>;
+
     fn ir(&self) -> &IntermediateRepr;
 
     fn get_test_params(

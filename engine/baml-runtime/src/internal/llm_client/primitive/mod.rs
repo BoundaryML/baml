@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use async_std::stream;
 use baml_types::BamlValue;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 
@@ -100,6 +101,15 @@ impl<'ir> WithPrompt<'ir> for LLMPrimitiveProvider {
         params: &BamlValue,
     ) -> Result<internal_baml_jinja::RenderedPrompt> {
         match_llm_provider!(self, render_prompt, ir, renderer, ctx, params)
+    }
+
+    async fn render_raw_curl(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
+        stream: bool,
+    ) -> Result<String> {
+        match_llm_provider!(self, render_raw_curl, async, ctx, prompt, stream)
     }
 }
 

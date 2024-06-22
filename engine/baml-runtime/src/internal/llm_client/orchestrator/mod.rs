@@ -4,11 +4,12 @@ mod stream;
 use anyhow::Result;
 use baml_types::BamlValue;
 
+use either::Either;
+use instant::Duration;
 use internal_baml_core::ir::repr::IntermediateRepr;
+use internal_baml_jinja::RenderedChatMessage;
 use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, sync::Arc};
-
-use instant::Duration;
 
 use crate::{
     internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
@@ -178,6 +179,16 @@ impl<'ir> WithPrompt<'ir> for OrchestratorNode {
         params: &BamlValue,
     ) -> Result<RenderedPrompt> {
         self.provider.render_prompt(ir, renderer, ctx, params)
+    }
+
+    //todo, fn render_raw_curl
+    async fn render_raw_curl(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<RenderedChatMessage>,
+        stream: bool,
+    ) -> Result<String> {
+        self.provider.render_raw_curl(ctx, prompt, stream).await
     }
 }
 

@@ -19,16 +19,7 @@ const PromptCheckbox = ({
 }
 
 export const CheckboxHeader = () => {
-  const {
-    showTokens,
-    setShowTokens,
-    showWhitespace,
-    setShowWhitespace,
-    wrapText,
-    setWrapText,
-    showCurlRequest,
-    setShowCurl,
-  } = useAppState()
+  const { showTokens, setShowTokens, showWhitespace, setShowWhitespace, showCurlRequest, setShowCurl } = useAppState()
 
   return (
     <div className='flex flex-wrap justify-start gap-4 px-2 py-2 text-xs whitespace-nowrap'>

@@ -8,10 +8,13 @@ use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
 use baml_types::{BamlMap, BamlValue};
+use either::Either;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use wasm_bindgen::convert::IntoWasmAbi;
 use wasm_bindgen::prelude::*;
+
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 // Node is run using: wasm-pack test --node --features internal,wasm
@@ -971,6 +974,41 @@ impl WasmFunction {
             .render_prompt(&self.name, &ctx, &params, None)
             .as_ref()
             .map(|(p, scope)| (p, scope).into())
+            .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
+    }
+
+    #[wasm_bindgen]
+    pub async fn render_raw_curl(
+        &self,
+        rt: &WasmRuntime,
+        params: JsValue,
+        stream: bool,
+    ) -> Result<String, wasm_bindgen::JsError> {
+        let params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
+        let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
+
+        let ctx = rt
+            .runtime
+            .create_ctx_manager(BamlValue::String("wasm".to_string()))
+            .create_ctx_with_default(missing_env_vars.iter());
+
+        let result = rt
+            .runtime
+            .internal()
+            .render_prompt(&self.name, &ctx, &params, None);
+
+        let final_prompt = match result {
+            Ok((prompt, _)) => match prompt {
+                RenderedPrompt::Chat(chat_messages) => chat_messages,
+                RenderedPrompt::Completion(_) => vec![], // or handle this case differently
+            },
+            Err(e) => return Err(wasm_bindgen::JsError::new(format!("{:?}", e).as_str())),
+        };
+
+        rt.runtime
+            .internal()
+            .render_raw_curl(&self.name, &ctx, &final_prompt, stream, None)
+            .await
             .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
     }
 

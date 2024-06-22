@@ -36,6 +36,7 @@ serde_json.workspace = true
 log = "0.4.14"
 strsim = "0.11.1"
 colored = "2.1.0"
+wasm-bindgen = "0.2.92"
 
 [dev-dependencies]
 env_logger = "0.11.3"

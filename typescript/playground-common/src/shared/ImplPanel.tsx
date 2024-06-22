@@ -170,12 +170,12 @@ class TokenEncoderCache {
   }
 }
 
-export const Snippet: React.FC<{ text: string; type?: 'preview' | 'error'; client: Impl['client'] }> = ({
+export const PromptChunk: React.FC<{ text: string; type?: 'preview' | 'error'; client: Impl['client'] }> = ({
   text,
   type = 'preview',
   client,
 }) => {
-  const { showTokens, showWhitespace, wrapText } = useAppState()
+  const { showTokens, showWhitespace, showCurlRequest } = useAppState()
 
   const encodingName = client.model
     ? TokenEncoderCache.getEncodingNameForModel(client.provider, client.model)
@@ -231,7 +231,7 @@ export const Snippet: React.FC<{ text: string; type?: 'preview' | 'error'; clien
               line={line}
               lineNumber={index + 1}
               showWhitespace={showWhitespace}
-              wrapText={wrapText}
+              wrapText={true}
             />
           ))}
         </pre>

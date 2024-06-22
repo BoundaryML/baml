@@ -5,7 +5,8 @@ use colored::*;
 mod common;
 pub mod llm_provider;
 pub mod orchestrator;
-mod primitive;
+pub mod primitive;
+
 pub mod retry_policy;
 mod strategy;
 pub mod traits;
