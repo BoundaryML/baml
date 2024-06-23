@@ -1,6 +1,11 @@
 ---
 title: ctx (accessing metadata)
+hide-toc: true
+hide-nav-links: true
+layout: reference
+slug: docs/snippets/prompt-syntax/ctx
 ---
+
 
 If you try rendering `{{ ctx }}` into the prompt (literally just write that out!), you'll see all the metadata we inject to run this prompt within the playground preview.
 
@@ -9,7 +14,7 @@ In the earlier tutorial we mentioned `ctx.output_format`, which contains the sch
 
 ## Usecase: Conditionally render based on client provider
 
-In this example, we render the list of messages in XML tags if the provider is Anthropic (as they recommend using them as delimiters). See also  [template_string](/docs/snippets/template-string) as it's used in here.
+In this example, we render the list of messages in XML tags if the provider is Anthropic (as they recommend using them as delimiters). See also  [template_string](../template-string.mdx) as it's used in here.
 
 ```jinja2
 template_string RenderConditionally(messages: Message[]) #"

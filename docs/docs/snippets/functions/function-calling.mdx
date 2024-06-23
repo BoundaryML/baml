@@ -1,6 +1,11 @@
 ---
 title: Function Calling / Tools
+hide-toc: true
+hide-nav-links: true
+layout: reference
+slug: docs/snippets/functions/function-calling
 ---
+
 "Function calling" is a technique for getting an LLM to choose a function to call for you.
 
 The way it works is:
@@ -42,7 +47,7 @@ function UseTool(user_message: string) -> WeatherAPI | MyOtherAPI {
 }
 ```
 
-<Tip>If you use [VSCode Playground](/docs/get-started/quickstart/editors-vscode), you can see what we inject into the prompt, with full transparency.</Tip>
+<Tip>If you use [VSCode Playground](../../get-started/quickstart/editors-vscode.mdx), you can see what we inject into the prompt, with full transparency.</Tip>
 
 ## Choosing N Tools
 To choose many tools, you can use a union of a list:

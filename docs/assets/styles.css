@@ -1,0 +1,34 @@
+.fern-sidebar-link-content {
+    padding-top: 0.2rem;
+    padding-bottom: 0.2rem;
+}
+
+.fern-sidebar-link-container {
+    min-height: 26px;
+}
+
+.fern-sidebar-link-container[data-state=active] .fern-sidebar-link  {
+    background-color: transparent;
+}
+
+body {
+    font-size: 1rem !important;
+}
+
+.fern-main {
+    margin-left: 14%;
+    margin-right: 14%;
+}
+
+.fern-sidebar-group li {
+    margin-top: 0px !important;
+}
+
+.group\/sidebar {
+    z-index: 1000;
+    padding-top: 20px;
+}
+
+.fern-search-bar {
+    margin-bottom: 10px;
+}

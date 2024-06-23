@@ -1,8 +1,13 @@
 ---
-title: "class"
+title: class
+hide-toc: true
+hide-nav-links: true
+layout: reference
+slug: docs/snippets/class
 ---
 
-Classes consist of a name, a list of properties, and their [types](/docs/snippets/supported-types).
+
+Classes consist of a name, a list of properties, and their [types](supported-types.mdx).
 In the context of LLMs, classes describe the type of the variables you can inject into prompts and extract out from the response.
 
 <Warning>
@@ -53,7 +58,7 @@ type Foo = z.infer<typeof FooZod>;
 <ParamField
   path="@@dynamic"
 >
-If set, will allow you to add fields to the class dynamically at runtime (in your python/ts/etc code). See [dynamic classes](/docs/calling-baml/dynamic-types) for more information.
+If set, will allow you to add fields to the class dynamically at runtime (in your python/ts/etc code). See [dynamic classes](../calling-baml/dynamic-types.mdx) for more information.
 </ParamField>
 
 
@@ -103,7 +108,7 @@ Property names must follow these rules:
 - Must be unique within the class
 - classes cannot be self-referential (cannot have a property of the same type as the class itself)
 
-The type of a property can be any [supported type](/docs/snippets/supported-types)
+The type of a property can be any [supported type](supported-types.mdx)
 
 ### Default values
 
@@ -112,4 +117,3 @@ The type of a property can be any [supported type](/docs/snippets/supported-type
 ## Inheritance
 
 Never supported. Like rust, we take the stance that [composition is better than inheritance](https://www.digitalocean.com/community/tutorials/composition-vs-inheritance).
-

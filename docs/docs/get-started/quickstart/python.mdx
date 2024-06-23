@@ -1,10 +1,17 @@
+---
+hide-toc: true
+hide-nav-links: true
+layout: reference
+slug: docs/get-started/quickstart/python
+---
+
 Here's a sample repository: 
 https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter
 
 To set up BAML in python do the following:
 
 <Steps>
-  <Step title="Install BAML VSCode Extension">
+### Install BAML VSCode Extension
       https://marketplace.visualstudio.com/items?itemName=boundary.BAML
 
       - syntax highlighting
@@ -20,20 +27,18 @@ To set up BAML in python do the following:
       }
       ```
       </Tip>
-  </Step>
-  <Step title="Install baml">
+
+### Install baml
         ```bash
         pip install baml-py
         ```
-  </Step>
-  <Step title="Add some starter code">
+### Add some starter code
       This will give you some starter BAML code in a `baml_src` directory.
 
       ```bash
       baml-cli init
       ```
-  </Step>
-  <Step title="Generate python code from .baml files">
+### Generate python code from .baml files
 
     This command will help you convert `.baml` files to `.py` files. Everytime you modify your `.baml` files,
     you must re-run this command, and regenerate the `baml_client` folder.
@@ -45,8 +50,7 @@ To set up BAML in python do the following:
     ```bash
     baml-cli generate
     ```
-  </Step>
-  <Step title="Use a baml function in python!">
+### Use a baml function in python!
     <Tip>If `baml_client` doesn't exist, make sure to run the previous step!</Tip>
 
     ```python main.py
@@ -69,5 +73,4 @@ To set up BAML in python do the following:
 
       return final
     ```
-  </Step>
 </Steps>

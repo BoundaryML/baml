@@ -1,3 +1,10 @@
+---
+hide-toc: true
+hide-nav-links: true
+layout: reference
+slug: docs/snippets/clients/overview
+---
+
 Clients are used to configure how LLMs are called.
 
 Here's an example of a client configuration:
@@ -32,19 +39,19 @@ The configuration modifies the URL request BAML runtime makes.
 
 | Provider Name  | Docs                             | Notes                                                      |
 | -------------- | -------------------------------- | ---------------------------------------------------------- |
-| `openai`       | [OpenAI](providers/openai)       | Anything that follows openai's API exactly                 |
-| `ollama`       | [Ollama](providers/ollama)       | Alias for an openai client but with default ollama options |
-| `azure-openai` | [Azure OpenAI](providers/azure)  |                                                            |
-| `anthropic`    | [Anthropic](providers/anthropic) |                                                            |
-| `google-ai`    | [Google AI](providers/gemini)    |                                                            |
-| `fallback`     | [Fallback](fallback)             | Used to chain models conditional on failures               |
-| `round-robin`  | [Round Robin](round-robin)       | Used to load balance                                       |
+| `openai`       | [OpenAI](providers/openai.mdx)       | Anything that follows openai's API exactly                 |
+| `ollama`       | [Ollama](providers/ollama.mdx)       | Alias for an openai client but with default ollama options |
+| `azure-openai` | [Azure OpenAI](providers/azure.mdx)  |                                                            |
+| `anthropic`    | [Anthropic](providers/anthropic.mdx) |                                                            |
+| `google-ai`    | [Google AI](providers/gemini.mdx)    |                                                            |
+| `fallback`     | [Fallback](fallback.mdx)             | Used to chain models conditional on failures               |
+| `round-robin`  | [Round Robin](round-robin.mdx)       | Used to load balance                                       |
 
 </ParamField>
 
 <ParamField path="retry_policy">
   The name of the retry policy. See [Retry
-  Policy](/docs/snippets/clients/retry).
+  Policy](retry.mdx).
 </ParamField>
 
 <ParamField path="options">

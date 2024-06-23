@@ -1,6 +1,11 @@
 ---
-title: "enum"
+title: enum
+hide-toc: true
+hide-nav-links: true
+layout: reference
+slug: docs/snippets/enum
 ---
+
 
 Enums are useful for classification tasks. BAML has helper functions that can help you serialize an enum into your prompt in a neatly formatted list (more on that later).
 
@@ -51,7 +56,7 @@ This is the name of the enum rendered in the prompt.
 <ParamField
   path="@@dynamic"
 >
-If set, will allow you to add/remove/modify values to the enum dynamically at runtime (in your python/ts/etc code). See [dynamic enums](/docs/calling-baml/dynamic-types) for more information.
+If set, will allow you to add/remove/modify values to the enum dynamically at runtime (in your python/ts/etc code). See [dynamic enums](../calling-baml/dynamic-types.mdx) for more information.
 </ParamField>
 
 
@@ -106,4 +111,4 @@ enum MyEnum {
 ```
 
 
-See more in [prompt syntax docs](prompt-syntax/what-is-jinja)
+See more in [prompt syntax docs](prompt-syntax/what-is-jinja.mdx)

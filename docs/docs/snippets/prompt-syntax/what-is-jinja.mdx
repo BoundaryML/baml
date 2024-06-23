@@ -1,6 +1,11 @@
 ---
 title: What is Jinja / Cookbook
+hide-toc: true
+hide-nav-links: true
+layout: reference
+slug: docs/snippets/prompt-syntax/what-is-jinja
 ---
+
 
 BAML Prompt strings are essentially [Jinja](https://jinja.palletsprojects.com/en/3.1.x/templates/) templates, which offer the ability to express logic and data manipulation within strings. Jinja is a very popular and mature templating language amongst python developers, so github copilot or GPT4 can already help you write most of the logic you want.
 
@@ -62,7 +67,7 @@ function MyFunc(items: Item[]) -> string {
 
 ### Including other Templates
 
-To promote reusability, you can include other templates within a template. See [template strings](/docs/snippets/template-string):
+To promote reusability, you can include other templates within a template. See [template strings](../template-string.mdx):
 
 ```rust
 template_string PrintUserInfo(arg1: string, arg2: User) #"

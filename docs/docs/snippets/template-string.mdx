@@ -1,4 +1,11 @@
-Writing prompts requires a lot of string manipulation. BAML has a `template_string` to let you combine different string templates together. Under-the-hood they use [jinja](/docs/snippets/prompt-syntax/what-is-jinja) to evaluate the string and its inputs.
+---
+hide-toc: true
+hide-nav-links: true
+layout: reference
+slug: docs/snippets/template-string
+---
+
+Writing prompts requires a lot of string manipulation. BAML has a `template_string` to let you combine different string templates together. Under-the-hood they use [jinja](prompt-syntax/what-is-jinja.mdx) to evaluate the string and its inputs.
 
 Think of template strings as functions that have variables, and return a string. They can be used to define reusable parts of a prompt, or to make the prompt more readable by breaking it into smaller parts.
 
@@ -24,7 +31,7 @@ function ClassifyConversation(messages: Message[]) -> Category[] {
 }
 ```
 
-In this example we can call the template_string `PrintMessages` to subdivide the prompt into "user" or "system" messages using `_.role()` (see [message roles](/docs/snippets/prompt-syntax/roles)). This allows us to reuse the logic for printing messages in multiple prompts. 
+In this example we can call the template_string `PrintMessages` to subdivide the prompt into "user" or "system" messages using `_.role()` (see [message roles](prompt-syntax/roles.mdx)). This allows us to reuse the logic for printing messages in multiple prompts. 
 
 You can nest as many template strings inside each other and call them however many times you want.
 
@@ -32,4 +39,3 @@ You can nest as many template strings inside each other and call them however ma
   The BAML linter may give you a warning when you use template strings due to a static analysis limitation. You can ignore this warning. If it renders in the playground, you're good!
 </Warning>
 Use the playground preview to ensure your template string is being evaluated correctly!
-
