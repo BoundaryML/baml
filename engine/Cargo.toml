@@ -32,6 +32,7 @@ default-members = [
 anyhow = "1.0"
 askama = "0.12.1"
 base64 = "0.22.1"
+bytes = "1.6.0"
 cfg-if = "1.0.0"
 dashmap = "5.5.3"
 derive_builder = "0.20.0"
@@ -39,9 +40,9 @@ either = "1.8.1"
 env_logger = "0.11.3"
 futures = { version = "0.3.30", features = ["executor"] }
 log = "0.4.20"
+http-body = "1.0.0"
 indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.1"
-instant = "0.1"
 regex = "1.10.4"
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde = { version = "1", features = ["derive"] }
@@ -49,8 +50,10 @@ static_assertions = "1.1.0"
 strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = "0.26.2"
 time = { version = "0.3.36", features = ["formatting"] }
+pin-project-lite = "0.2.14"
 walkdir = "2.5.0"
 web-time = "1.1.0"
+
 baml-types = { path = "baml-lib/baml-types" }
 internal-baml-codegen = { path = "language-client-codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }

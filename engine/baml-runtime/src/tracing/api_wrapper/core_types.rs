@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Serialize, Debug)]
-pub struct UpdateTestCase {
+#[allow(dead_code)]
+pub(crate) struct UpdateTestCase {
     pub project_id: Option<String>,
     pub test_cycle_id: String,
     pub test_dataset_name: String,
@@ -173,7 +174,7 @@ pub enum Role {
 #[derive(Serialize, Debug, Clone)]
 pub(crate) struct LLMEventInput {
     pub prompt: LLMEventInputPrompt,
-    pub invocation_params: HashMap<String, Value>,
+    pub request_options: HashMap<String, Value>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -187,7 +188,8 @@ pub struct LLMEventSchema {
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
-pub enum MetadataType {
+pub(crate) enum MetadataType {
+    #[allow(dead_code)]
     Single(LLMEventSchema),
     Multi(Vec<LLMEventSchema>),
 }

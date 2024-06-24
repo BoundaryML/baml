@@ -250,6 +250,20 @@ class RaysData(BaseModel):
     dataType: "DataType"
     value: Union["Resume", "Event"]
 
+class ReceiptInfo(BaseModel):
+    
+    
+    items: List["ReceiptItem"]
+    total_cost: Optional[float] = None
+
+class ReceiptItem(BaseModel):
+    
+    
+    name: str
+    description: Optional[str] = None
+    quantity: int
+    price: float
+
 class Resume(BaseModel):
     
     

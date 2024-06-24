@@ -37,7 +37,7 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMProvider {
             "baml-fallback" | "fallback" | "baml-round-robin" | "round-robin" => {
                 LLMStrategyProvider::try_from((client, ctx)).map(LLMProvider::Strategy)
             }
-            name => LLMPrimitiveProvider::try_from((client, ctx))
+            _name => LLMPrimitiveProvider::try_from((client, ctx))
                 .map(Arc::new)
                 .map(LLMProvider::Primitive),
         }

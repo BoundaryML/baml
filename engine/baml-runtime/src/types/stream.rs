@@ -1,6 +1,5 @@
 use anyhow::Result;
 
-use futures::{stream::StreamExt, Stream};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_core::ir::IRHelper;
 use internal_baml_jinja::Type;
@@ -9,18 +8,12 @@ use std::sync::Arc;
 
 use crate::{
     internal::{
-        llm_client::{
-            orchestrator::{
-                self, orchestrate_stream, LLMPrimitiveProvider, OrchestrationScope,
-                OrchestratorNodeIterator,
-            },
-            ErrorCode, LLMErrorResponse,
-        },
+        llm_client::orchestrator::{orchestrate_stream, OrchestratorNodeIterator},
         prompt_renderer::PromptRenderer,
     },
     tracing::BamlTracer,
     type_builder::TypeBuilder,
-    FunctionResult, RuntimeContext, RuntimeContextManager,
+    FunctionResult, RuntimeContextManager,
 };
 
 use super::response::LLMResponse;

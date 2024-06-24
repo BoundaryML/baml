@@ -45,7 +45,6 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         self.__future = concurrent.futures.Future()  # Initialize the future here
 
     def __enqueue(self, data: FunctionResult) -> None:
-        
         self.__event_queue.put_nowait(data)
 
     async def __drive_to_completion(self) -> FunctionResult:
@@ -74,9 +73,7 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
     async def __aiter__(self):
         self.__drive_to_completion_in_bg()
         while True:
-            
-            event = self.__event_queue.get()
-            
+            event = await self.__event_queue.get()
             if event is None:
             
                 break

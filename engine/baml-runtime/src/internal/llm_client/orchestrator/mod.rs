@@ -4,11 +4,11 @@ mod stream;
 use anyhow::Result;
 use baml_types::BamlValue;
 
-use instant::Duration;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::RenderedChatMessage;
 use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, sync::Arc};
+use web_time::Duration;
 
 use crate::{
     internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,

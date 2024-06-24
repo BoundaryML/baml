@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use baml_types::{BamlMedia, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
@@ -80,7 +80,7 @@ impl WithNoCompletion for OpenAIClient {}
 //                 prompt: internal_baml_jinja::RenderedPrompt::Completion(prompt.clone()),
 //                 start_time: system_start,
 //                 latency: instant_start.elapsed(),
-//                 invocation_params: self.properties.properties.clone(),
+//                 request_options: self.properties.properties.clone(),
 //                 message: format!(
 //                     "Expected exactly one choices block, got {}",
 //                     response.choices.len()
@@ -98,7 +98,7 @@ impl WithNoCompletion for OpenAIClient {}
 //             start_time: system_start,
 //             latency: instant_start.elapsed(),
 //             model: response.model,
-//             invocation_params: self.properties.properties.clone(),
+//             request_options: self.properties.properties.clone(),
 //             metadata: LLMCompleteResponseMetadata {
 //                 baml_is_complete: match response.choices.get(0) {
 //                     Some(c) => match c.finish_reason {
@@ -150,7 +150,7 @@ impl WithChat for OpenAIClient {
                 prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                 start_time: system_start,
                 latency: instant_start.elapsed(),
-                invocation_params: self.properties.properties.clone(),
+                request_options: self.properties.properties.clone(),
                 message: format!(
                     "Expected exactly one choices block, got {}",
                     response.choices.len()
@@ -173,7 +173,7 @@ impl WithChat for OpenAIClient {
             start_time: system_start,
             latency: instant_start.elapsed(),
             model: response.model,
-            invocation_params: self.properties.properties.clone(),
+            request_options: self.properties.properties.clone(),
             metadata: LLMCompleteResponseMetadata {
                 baml_is_complete: match response.choices.get(0) {
                     Some(c) => match c.finish_reason {
@@ -212,12 +212,21 @@ impl RequestBuilder for OpenAIClient {
         &self.client
     }
 
-    fn build_request(
+    async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
-    ) -> reqwest::RequestBuilder {
-        let mut req = self.client.post({
+    ) -> Result<reqwest::RequestBuilder> {
+        let mut req = self.client.post(if prompt.is_left() {
+            format!(
+                "{}/completions",
+                self.properties
+                    .proxy_url
+                    .as_ref()
+                    .unwrap_or(&self.properties.base_url)
+                    .clone()
+            )
+        } else {
             format!(
                 "{}/chat/completions",
                 self.properties
@@ -276,10 +285,10 @@ impl RequestBuilder for OpenAIClient {
             );
         }
 
-        req.json(&body)
+        Ok(req.json(&body))
     }
 
-    fn invocation_params(&self) -> &HashMap<String, serde_json::Value> {
+    fn request_options(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
     }
 }
@@ -315,7 +324,7 @@ impl SseResponseTrait for OpenAIClient {
                         start_time: system_start,
                         latency: instant_start.elapsed(),
                         model: "".to_string(),
-                        invocation_params: params.clone(),
+                        request_options: params.clone(),
                         metadata: LLMCompleteResponseMetadata {
                             baml_is_complete: false,
                             finish_reason: None,
@@ -344,7 +353,7 @@ impl SseResponseTrait for OpenAIClient {
                                             prompt.clone(),
                                         ),
                                         start_time: system_start,
-                                        invocation_params: params.clone(),
+                                        request_options: params.clone(),
                                         latency: instant_start.elapsed(),
                                         message: format!("Failed to parse event: {:#?}", e),
                                         code: ErrorCode::Other(2),
@@ -383,7 +392,7 @@ impl SseResponseTrait for OpenAIClient {
 impl WithStreamChat for OpenAIClient {
     async fn stream_chat(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> StreamResponse {
         let (resp, system_start, instant_start) =

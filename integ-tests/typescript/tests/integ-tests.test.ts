@@ -180,6 +180,27 @@ describe('Integ tests', () => {
     expect(msgs.at(-1)).toEqual(final)
   })
 
+  it('should support AWS', async () => {
+    const res = await b.TestAws('Dr. Pepper')
+    expect(res.length).toBeGreaterThan(0)
+  })
+
+  it('should support streaming in AWS', async () => {
+    const stream = b.stream.TestAws('Dr. Pepper')
+    const msgs: string[] = []
+    for await (const msg of stream) {
+      msgs.push(msg ?? '')
+    }
+    const final = await stream.getFinalResponse()
+
+    expect(final.length).toBeGreaterThan(0)
+    expect(msgs.length).toBeGreaterThan(0)
+    for (let i = 0; i < msgs.length - 2; i++) {
+      expect(msgs[i + 1].startsWith(msgs[i])).toBeTruthy()
+    }
+    expect(msgs.at(-1)).toEqual(final)
+  })
+
   it('should support streaming without iterating', async () => {
     const final = await b.stream.PromptTestStreaming('Mt Rainier is tall').getFinalResponse()
     expect(final.length).toBeGreaterThan(0)

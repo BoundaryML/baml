@@ -6,7 +6,7 @@ use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},
     types::{PyBool, PyBoolMethods, PyList},
-    PyClass, PyErr, PyObject, PyResult, Python, ToPyObject,
+    PyErr, PyObject, PyResult, Python, ToPyObject,
 };
 
 use crate::types::{BamlAudioPy, BamlImagePy};

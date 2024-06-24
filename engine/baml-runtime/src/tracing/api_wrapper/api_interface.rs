@@ -6,6 +6,7 @@ use serde_json::Value;
 
 use super::core_types::{LLMOutputModel, LogSchema, Template, TestCaseStatus};
 
+#[allow(dead_code)]
 pub(crate) trait BoundaryAPI {
     async fn check_cache(&self, payload: &CacheRequest) -> Result<Option<CacheResponse>>;
     async fn log_schema(&self, payload: &LogSchema) -> Result<()>;
@@ -15,6 +16,7 @@ pub(crate) trait BoundaryAPI {
 
 // This is a trait that is used to define the API for the BoundaryTestAPI
 // It assumes the implementor with manage state
+#[allow(dead_code)]
 pub(crate) trait BoundaryTestAPI {
     async fn register_test_cases<T: IntoIterator<Item = (String, String)>>(
         &self,
@@ -38,6 +40,7 @@ pub(crate) struct CreateSessionResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 pub(crate) struct UpdateTestCaseRequest {
     pub test_suite: String,
     pub test_case: String,
@@ -45,6 +48,7 @@ pub(crate) struct UpdateTestCaseRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 pub(crate) struct CacheRequest {
     provider: String,
     prompt: Template,
@@ -53,6 +57,7 @@ pub(crate) struct CacheRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 pub(crate) struct CacheResponse {
     model_name: String,
     llm_output: LLMOutputModel,

@@ -25,6 +25,7 @@ use super::{
 };
 
 mod anthropic;
+mod aws;
 mod google;
 mod openai;
 pub(super) mod request;
@@ -33,6 +34,7 @@ pub enum LLMPrimitiveProvider {
     OpenAI(OpenAIClient),
     Anthropic(AnthropicClient),
     Google(GoogleClient),
+    Aws(aws::AwsClient),
 }
 
 macro_rules! match_llm_provider {
@@ -42,6 +44,7 @@ macro_rules! match_llm_provider {
             LLMPrimitiveProvider::OpenAI(client) => client.$method($($args),*).await,
             LLMPrimitiveProvider::Anthropic(client) => client.$method($($args),*).await,
             LLMPrimitiveProvider::Google(client) => client.$method($($args),*).await,
+            LLMPrimitiveProvider::Aws(client) => client.$method($($args),*).await,
         }
     };
 
@@ -50,6 +53,7 @@ macro_rules! match_llm_provider {
             LLMPrimitiveProvider::OpenAI(client) => client.$method($($args),*),
             LLMPrimitiveProvider::Anthropic(client) => client.$method($($args),*),
             LLMPrimitiveProvider::Google(client) => client.$method($($args),*),
+            LLMPrimitiveProvider::Aws(client) => client.$method($($args),*),
         }
     };
 }
@@ -72,6 +76,7 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                 OpenAIClient::new_ollama(client, ctx).map(LLMPrimitiveProvider::OpenAI)
             }
             "google-ai" => GoogleClient::new(client, ctx).map(LLMPrimitiveProvider::Google),
+            "aws-bedrock" => aws::AwsClient::new(client, ctx).map(LLMPrimitiveProvider::Aws),
             other => {
                 let options = [
                     "openai",
@@ -81,6 +86,7 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                     "azure-openai",
                     "fallback",
                     "round-robin",
+                    "aws-bedrock",
                 ];
                 anyhow::bail!(
                     "Unsupported provider: {}. Available ones are: {}",
@@ -160,6 +166,7 @@ impl std::fmt::Display for LLMPrimitiveProvider {
             LLMPrimitiveProvider::OpenAI(_) => write!(f, "OpenAI"),
             LLMPrimitiveProvider::Anthropic(_) => write!(f, "Anthropic"),
             LLMPrimitiveProvider::Google(_) => write!(f, "Google"),
+            LLMPrimitiveProvider::Aws(_) => write!(f, "AWS"),
         }
     }
 }
@@ -168,22 +175,8 @@ impl LLMPrimitiveProvider {
     pub fn name(&self) -> &str {
         &match_llm_provider!(self, context).name
     }
-}
 
-impl RequestBuilder for LLMPrimitiveProvider {
-    fn http_client(&self) -> &reqwest::Client {
-        match_llm_provider!(self, http_client)
-    }
-
-    fn invocation_params(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        match_llm_provider!(self, invocation_params)
-    }
-
-    fn build_request(
-        &self,
-        prompt: either::Either<&String, &Vec<internal_baml_jinja::RenderedChatMessage>>,
-        stream: bool,
-    ) -> reqwest::RequestBuilder {
-        match_llm_provider!(self, build_request, prompt, stream)
+    pub fn request_options(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        match_llm_provider!(self, request_options)
     }
 }

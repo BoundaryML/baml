@@ -3,9 +3,9 @@ mod env_setup;
 use anyhow::Result;
 pub(super) mod api_interface;
 pub(crate) mod core_types;
-use instant::Duration;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::{json, Value};
+use web_time::Duration;
 
 use crate::request::create_client;
 
@@ -201,6 +201,7 @@ impl CompleteAPIConfig {
 
 #[derive(Deserialize)]
 struct LogResponse {
+    #[allow(dead_code)]
     status: Option<String>,
 }
 

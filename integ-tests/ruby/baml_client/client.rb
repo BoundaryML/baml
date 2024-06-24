@@ -312,6 +312,26 @@ module Baml
     sig {
       
       params(
+        email: String,
+      ).returns(Baml::Types::ReceiptInfo)
+      
+    }
+    def ExtractReceiptInfo(
+        email:
+    )
+      raw = @runtime.call_function(
+        "ExtractReceiptInfo",
+        {
+          "email" => email,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
         resume: String,img: T.nilable(Baml::Image),
       ).returns(Baml::Types::Resume)
       
@@ -876,6 +896,26 @@ module Baml
       ).returns(String)
       
     }
+    def TestAws(
+        input:
+    )
+      raw = @runtime.call_function(
+        "TestAws",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
     def TestAzure(
         input:
     )
@@ -1159,6 +1199,26 @@ module Baml
     )
       raw = @runtime.call_function(
         "TestOpenAI",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
+    def TestOpenAILegacyProvider(
+        input:
+    )
+      raw = @runtime.call_function(
+        "TestOpenAILegacyProvider",
         {
           "input" => input,
         },
@@ -1504,6 +1564,27 @@ module Baml
         @ctx_manager,
       )
       Baml::BamlStream[T::Array[Baml::PartialTypes::Person], T::Array[Baml::Types::Person]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        email: String,
+      ).returns(Baml::BamlStream[Baml::Types::ReceiptInfo])
+    }
+    def ExtractReceiptInfo(
+        email:
+    )
+      raw = @runtime.stream_function(
+        "ExtractReceiptInfo",
+        {
+          "email" => email,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::ReceiptInfo, Baml::Types::ReceiptInfo].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -2102,6 +2183,27 @@ module Baml
         input: String,
       ).returns(Baml::BamlStream[String])
     }
+    def TestAws(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "TestAws",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
     def TestAzure(
         input:
     )
@@ -2401,6 +2503,27 @@ module Baml
     )
       raw = @runtime.stream_function(
         "TestOpenAI",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestOpenAILegacyProvider(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "TestOpenAILegacyProvider",
         {
           "input" => input,
         },

@@ -247,6 +247,20 @@ export interface RaysData {
   
 }
 
+export interface ReceiptInfo {
+  items: ReceiptItem[]
+  total_cost?: number | null
+  
+}
+
+export interface ReceiptItem {
+  name: string
+  description?: string | null
+  quantity: number
+  price: number
+  
+}
+
 export interface Resume {
   name: string
   email: string

@@ -41,6 +41,8 @@ module Baml
     class OrderInfo < T::Struct; end
     class Person < T::Struct; end
     class RaysData < T::Struct; end
+    class ReceiptInfo < T::Struct; end
+    class ReceiptItem < T::Struct; end
     class Resume < T::Struct; end
     class SearchParams < T::Struct; end
     class SomeClassNestedDynamic < T::Struct; end
@@ -155,6 +157,18 @@ module Baml
       include T::Struct::ActsAsComparable
       const :dataType, T.nilable(Baml::Types::DataType)
       const :value, T.nilable(T.any(Baml::PartialTypes::Resume, Baml::PartialTypes::Event))
+    end
+    class ReceiptInfo < T::Struct
+      include T::Struct::ActsAsComparable
+      const :items, T::Array[Baml::PartialTypes::ReceiptItem]
+      const :total_cost, T.nilable(Float)
+    end
+    class ReceiptItem < T::Struct
+      include T::Struct::ActsAsComparable
+      const :name, T.nilable(String)
+      const :description, T.nilable(String)
+      const :quantity, T.nilable(Integer)
+      const :price, T.nilable(Float)
     end
     class Resume < T::Struct
       include T::Struct::ActsAsComparable

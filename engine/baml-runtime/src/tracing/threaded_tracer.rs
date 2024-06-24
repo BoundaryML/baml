@@ -15,6 +15,7 @@ use crate::{
 use super::api_wrapper::{core_types::LogSchema, APIConfig, APIWrapper, BoundaryAPI};
 
 enum TxEventSignal {
+    #[allow(dead_code)]
     Stop,
     Flush,
     Submit(LogSchema),
