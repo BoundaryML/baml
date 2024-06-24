@@ -46,6 +46,8 @@ import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from '@baml/play
 import { SettingsIcon } from 'lucide-react'
 import FileViewer from './Tree/FileViewer'
 import { Toaster } from '@/components/ui/toaster'
+import { AppStateProvider } from '@baml/playground-common/shared/AppStateContext' // Import the AppStateProvider
+import { CheckboxHeader } from '@baml/playground-common/shared/CheckBoxHeader'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(updateFileAtom)
@@ -364,29 +366,32 @@ const PlaygroundView = () => {
   //<TestToggle />
   return (
     <>
-      <CustomErrorBoundary>
-        <Suspense fallback={<div>Loading...</div>}>
-          <EventListener>
-            <SettingsDialog />
-            <div className='relative flex flex-col w-full gap-2 pr-0'>
-              <div className='relative flex flex-row gap-2'>
-                <FunctionSelector />
-                <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
-                  <ShowSettingsButton
-                    buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
-                    iconClassName='h-5'
-                  />
+      <AppStateProvider>
+        <CustomErrorBoundary>
+          <Suspense fallback={<div>Loading...</div>}>
+            <EventListener>
+              <SettingsDialog />
+              <div className='relative flex flex-col w-full gap-2 pr-0'>
+                <div className='relative flex flex-row gap-2'>
+                  <FunctionSelector />
+                  <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
+                    <ShowSettingsButton
+                      buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
+                      iconClassName='h-5'
+                    />
+                  </div>
                 </div>
-              </div>
+                <CheckboxHeader />
 
-              {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
-              <FunctionPanel />
-            </div>
-            <InitialTour />
-            <PostTestRunTour />
-          </EventListener>
-        </Suspense>
-      </CustomErrorBoundary>
+                {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
+                <FunctionPanel />
+              </div>
+              <InitialTour />
+              <PostTestRunTour />
+            </EventListener>
+          </Suspense>
+        </CustomErrorBoundary>
+      </AppStateProvider>
     </>
   )
 }

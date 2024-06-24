@@ -8,6 +8,7 @@ import { Suspense } from 'react'
 import { BrowseSheet } from './_components/BrowseSheet'
 import { PHProvider, RB2BElement } from './_components/PosthogProvider'
 import { ThemeProvider } from './_components/ThemeProvider'
+import { AppStateProvider } from '@baml/playground-common/shared/AppStateContext'
 
 const PostHogPageView = dynamic(() => import('./PostHogPageView'), {
   ssr: false,
