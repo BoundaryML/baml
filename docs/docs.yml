@@ -1,5 +1,13 @@
 instances:
   - url: https://boundary.docs.buildwithfern.com
+    # vv example custom domain configuration vv
+    # custom-domain: docs.boundaryml.com
+    edit-this-page:
+      github:
+        owner: BoundaryML
+        repo: baml
+        branch: canary
+
 title: BAML Documentation
 
 navigation:
@@ -149,9 +157,13 @@ navigation:
         path: docs/contact.mdx
 
 navbar-links:
-  - type: primary
+  - type: filled
+    text: Community
+    url: https://discord.gg/8Q7Q5b8Q
+  - type: outlined
     text: GitHub
     url: https://github.com/boundaryml/baml
+  
 
 colors:
   accentPrimary:
@@ -164,14 +176,15 @@ colors:
     light: "#fafafa"
     dark: "#14191f"
 logo:
-  light: assets/logo-light-mode.svg
-  dark: assets/logo-dark-mode.svg
+  light: assets/favicon.png
+  dark: assets/favicon.png
   height: 40
 favicon: assets/favicon.png
 css: assets/styles.css
 layout:
   page-width: full
-  disable-header: true
+  disable-header: false
+  searchbar-placement: header
   header-height: 73px
 typography:
   bodyFont:
