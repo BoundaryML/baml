@@ -13,10 +13,18 @@ pub struct Config {
     pub stage: String,
     #[serde(default = "default_host_name")]
     pub host_name: String,
+    #[serde(default)] // default is false
+    pub log_redaction_enabled: bool,
+    #[serde(default = "default_redaction_placeholder")]
+    pub log_redaction_placeholder: String,
 }
 
 fn default_base_url() -> String {
     "https://app.boundaryml.com/api".to_string()
+}
+
+fn default_redaction_placeholder() -> String {
+    "<BAML_LOG_REDACTED>".to_string()
 }
 
 fn default_sessions_id() -> String {

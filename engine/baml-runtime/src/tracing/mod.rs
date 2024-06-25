@@ -63,7 +63,6 @@ impl BamlTracer {
                 Some(TracerImpl::new(
                     &options,
                     if options.stage() == "test" { 1 } else { 20 },
-                    None,
                 ))
             } else {
                 None

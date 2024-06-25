@@ -269,13 +269,13 @@ describe('Integ tests', () => {
   })
 
   it("should work with 'onLogEvent'", async () => {
-    onLogEvent((msg, param2) => {
-      console.log('msg', msg, 'param2', param2)
+    onLogEvent((error: any, param2) => {
+      console.log('msg', error, 'param2', param2)
     })
     const res = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
     expect(res).toContain('a')
-    const res2 = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
-    expect(res2).toContain('a')
+    const res2 = await b.TestFnNamedArgsSingleStringList(['d', 'e', 'f'])
+    expect(res2).toContain('d')
   })
 })
 

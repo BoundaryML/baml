@@ -3,7 +3,7 @@ use super::runtime_ctx_manager::RuntimeContextManager;
 use super::type_builder::TypeBuilder;
 use crate::parse_ts_types;
 use crate::types::function_results::FunctionResult;
-use baml_runtime::on_log_event::LogEventCallbackSync;
+use baml_runtime::on_log_event::{LogEvent, LogEventCallbackSync};
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreRuntime;
 use baml_types::BamlValue;
@@ -32,7 +32,7 @@ pub struct LogEventMetadata {
     pub root_event_id: String,
 }
 
-#[napi]
+#[napi(object)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BamlLogEvent {
     pub metadata: LogEventMetadata,
@@ -164,19 +164,20 @@ impl BamlRuntime {
         self.callback = Some(cb);
 
         let res = match &self.callback {
-            Some(cb) => {
-                let cb = env.get_reference_value::<JsFunction>(cb)?;
-                let tsfn = env.create_threadsafe_function(
+            Some(callback_ref) => {
+                let cb = env.get_reference_value::<JsFunction>(callback_ref)?;
+                let mut tsfn = env.create_threadsafe_function(
                     &cb,
                     0,
                     |ctx: ThreadSafeCallContext<BamlLogEvent>| {
                         Ok(vec![BamlLogEvent::from(ctx.value)])
                     },
                 )?;
+                let tsfn_clone = tsfn.clone();
 
                 let res = self
                     .inner
-                    .set_log_event_callback(move |event| {
+                    .set_log_event_callback(Box::new(move |event: LogEvent| {
                         // let env = callback.env;
                         let event = BamlLogEvent {
                             metadata: LogEventMetadata {
@@ -202,7 +203,7 @@ impl BamlRuntime {
 
                         // cb.call(None, &[event.into()]);
 
-                        let res = tsfn.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
+                        let res = tsfn_clone.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
                         if res != napi::Status::Ok {
                             log::error!("Error calling on_log_event callback: {:?}", res);
                         }
@@ -210,6 +211,7 @@ impl BamlRuntime {
                         Ok(())
                     }))
                     .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()));
+                let _ = tsfn.unref(&env);
 
                 match res {
                     Ok(_) => Ok(()),
@@ -241,19 +243,10 @@ impl BamlRuntime {
 
     #[napi]
     pub fn flush(&mut self, env: Env) -> napi::Result<()> {
-        log::info!("flushing \n");
-
         let res = self
             .inner
             .flush()
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()));
-
-        if let Some(mut cb) = self.callback.take() {
-            match cb.unref(env) {
-                Ok(_) => (),
-                Err(e) => log::error!("Error unrefing callback: {:?}\n", e),
-            }
-        }
 
         res
     }
@@ -261,7 +254,6 @@ impl BamlRuntime {
 
 impl ObjectFinalize for BamlRuntime {
     fn finalize(mut self, env: Env) -> napi::Result<()> {
-        log::info!("Finalizing BamlRuntime \n");
         if let Some(mut cb) = self.callback.take() {
             match cb.unref(env) {
                 Ok(_) => (),

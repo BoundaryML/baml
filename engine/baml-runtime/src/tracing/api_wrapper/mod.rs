@@ -14,11 +14,11 @@ use self::core_types::{TestCaseStatus, UpdateTestCase};
 
 #[derive(Debug, Clone)]
 pub struct APIWrapper {
-    config: APIConfig,
+    pub(super) config: APIConfig,
 }
 
 #[derive(Debug, Clone)]
-enum APIConfig {
+pub(super) enum APIConfig {
     LocalOnly(PartialAPIConfig),
     Web(CompleteAPIConfig),
 }
@@ -59,6 +59,20 @@ impl APIConfig {
         }
     }
 
+    pub fn log_redaction_enabled(&self) -> bool {
+        match self {
+            Self::LocalOnly(config) => config.log_redaction_enabled,
+            Self::Web(config) => config.log_redaction_enabled,
+        }
+    }
+
+    pub fn log_redaction_placeholder(&self) -> &str {
+        match self {
+            Self::LocalOnly(config) => &config.log_redaction_placeholder,
+            Self::Web(config) => &config.log_redaction_placeholder,
+        }
+    }
+
     #[allow(dead_code)]
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn copy_from(
@@ -69,6 +83,8 @@ impl APIConfig {
         sessions_id: Option<&str>,
         stage: Option<&str>,
         host_name: Option<&str>,
+        log_redaction_enabled: Option<bool>,
+        log_redaction_placeholder: Option<String>,
         _debug_level: Option<bool>,
     ) -> Self {
         let base_url = base_url.unwrap_or(match self {
@@ -95,6 +111,14 @@ impl APIConfig {
             Self::LocalOnly(config) => &config.host_name,
             Self::Web(config) => &config.host_name,
         });
+        let log_redaction_enabled = log_redaction_enabled.unwrap_or_else(|| match self {
+            Self::LocalOnly(config) => config.log_redaction_enabled,
+            Self::Web(config) => config.log_redaction_enabled,
+        });
+        let log_redaction_placeholder = log_redaction_placeholder.unwrap_or_else(|| match self {
+            Self::LocalOnly(config) => config.log_redaction_placeholder.clone(),
+            Self::Web(config) => config.log_redaction_placeholder.clone(),
+        });
 
         match (api_key, project_id) {
             (Some(api_key), Some(project_id)) => Self::Web(CompleteAPIConfig {
@@ -105,6 +129,8 @@ impl APIConfig {
                 sessions_id: sessions_id.to_string(),
                 host_name: host_name.to_string(),
                 client: create_client().unwrap(),
+                log_redaction_enabled,
+                log_redaction_placeholder,
             }),
             _ => Self::LocalOnly(PartialAPIConfig {
                 base_url: base_url.to_string(),
@@ -113,6 +139,8 @@ impl APIConfig {
                 stage: stage.to_string(),
                 sessions_id: sessions_id.to_string(),
                 host_name: host_name.to_string(),
+                log_redaction_enabled,
+                log_redaction_placeholder,
             }),
         }
     }
@@ -126,6 +154,8 @@ pub(super) struct CompleteAPIConfig {
     pub stage: String,
     pub sessions_id: String,
     pub host_name: String,
+    pub log_redaction_enabled: bool,
+    pub log_redaction_placeholder: String,
 
     client: reqwest::Client,
 }
@@ -140,6 +170,8 @@ pub(super) struct PartialAPIConfig {
     stage: String,
     sessions_id: String,
     host_name: String,
+    log_redaction_enabled: bool,
+    log_redaction_placeholder: String,
 }
 
 impl CompleteAPIConfig {
@@ -318,6 +350,9 @@ impl BoundaryTestAPI for APIWrapper {
 impl APIWrapper {
     pub fn from_env_vars<T: AsRef<str>>(value: impl Iterator<Item = (T, T)>) -> Self {
         let config = env_setup::Config::from_env_vars(value).unwrap();
+        if config.log_redaction_enabled {
+            log::info!("Redaction enabled: {}", config.log_redaction_enabled);
+        }
         match (&config.secret, &config.project_id) {
             (Some(api_key), Some(project_id)) => Self {
                 config: APIConfig::Web(CompleteAPIConfig {
@@ -328,6 +363,8 @@ impl APIWrapper {
                     sessions_id: config.sessions_id,
                     host_name: config.host_name,
                     client: create_client().unwrap(),
+                    log_redaction_enabled: config.log_redaction_enabled,
+                    log_redaction_placeholder: config.log_redaction_placeholder,
                 }),
             },
             _ => Self {
@@ -338,6 +375,8 @@ impl APIWrapper {
                     stage: config.stage,
                     sessions_id: config.sessions_id,
                     host_name: config.host_name,
+                    log_redaction_enabled: config.log_redaction_enabled,
+                    log_redaction_placeholder: config.log_redaction_placeholder,
                 }),
             },
         }

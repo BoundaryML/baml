@@ -489,5 +489,5 @@ async def test_event_log_hook():
         print("Event log event ", event)
 
     on_log_event(event_log_hook)
-    res = await b.TestFnNamedArgsSingleBool(True)
+    res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
     assert res

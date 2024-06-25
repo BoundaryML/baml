@@ -9,10 +9,10 @@ use web_time::Duration;
 
 use crate::{
     on_log_event::{LogEvent, LogEventCallbackSync, LogEventMetadata},
-    tracing::api_wrapper::core_types::{MetadataType, Template},
+    tracing::api_wrapper::core_types::{ContentPart, MetadataType, Template, ValueType},
 };
 
-use super::api_wrapper::{core_types::LogSchema, APIWrapper, BoundaryAPI};
+use super::api_wrapper::{core_types::LogSchema, APIConfig, APIWrapper, BoundaryAPI};
 
 enum TxEventSignal {
     Stop,
@@ -88,6 +88,7 @@ fn batch_processor(
                 Ok(_) => {}
                 Err(e) => {
                     println!("Error sending flush signal: {:?}", e);
+                    log::error!("Error sending flush signal: {:?}", e);
                 }
             }
         }
@@ -98,6 +99,7 @@ fn batch_processor(
 }
 
 pub(super) struct ThreadedTracer {
+    api_config: APIWrapper,
     tx: std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Sender<TxEventSignal>>>,
     rx: std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<RxEventSignal>>>,
     #[allow(dead_code)]
@@ -122,13 +124,10 @@ impl ThreadedTracer {
         (tx, stop_rx, join_handle)
     }
 
-    pub fn new(
-        api_config: &APIWrapper,
-        max_batch_size: usize,
-        log_event_callback: Option<Box<dyn Fn(LogSchema) -> Result<()> + Send + Sync>>,
-    ) -> Self {
+    pub fn new(api_config: &APIWrapper, max_batch_size: usize) -> Self {
         let (tx, rx, join_handle) = Self::start_worker(api_config.clone(), max_batch_size);
         Self {
+            api_config: api_config.clone(),
             tx: std::sync::Arc::new(std::sync::Mutex::new(tx)),
             rx: std::sync::Arc::new(std::sync::Mutex::new(rx)),
             join_handle,
@@ -165,7 +164,7 @@ impl ThreadedTracer {
         *callback_lock = Some(log_event_callback);
     }
 
-    pub fn submit(&self, event: LogSchema) -> Result<()> {
+    pub fn submit(&self, mut event: LogSchema) -> Result<()> {
         log::debug!("Submitting work {:#?}", event.event_id);
 
         let callback = self.log_event_callback.lock().unwrap();
@@ -203,14 +202,25 @@ impl ThreadedTracer {
                         .output
                         .and_then(|output| Some(output.raw_text))
                 }),
-                parsed_output: event.io.output.and_then(|output| {
-                    serde_json::to_string(&output.value).ok().or_else(|| {
-                        log::info!(
-                            "Failed to serialize output value for event {}",
-                            event.event_id
-                        );
-                        None
-                    })
+                parsed_output: event.io.output.and_then(|output| match output.value {
+                    // so the string value looks something like:
+                    // '"[\"d\", \"e\", \"f\"]"'
+                    // so we need to unescape it once and turn it into a normal json
+                    // and then stringify it to get:
+                    // '["d", "e", "f"]'
+                    ValueType::String(value) => serde_json::from_str::<serde_json::Value>(&value)
+                        .ok()
+                        .and_then(|json_value| json_value.as_str().map(|s| s.to_string()))
+                        .or_else(|| Some(value)),
+                    _ => serde_json::to_string_pretty(&output.value)
+                        .ok()
+                        .or_else(|| {
+                            log::info!(
+                                "Failed to serialize output value for event {}",
+                                event.event_id
+                            );
+                            None
+                        }),
                 }),
                 start_time: event.context.start_time,
             });
@@ -227,11 +237,92 @@ impl ThreadedTracer {
 
         // TODO: do the redaction
 
+        // Redact the event
+        event = redact_event(event, &self.api_config.config);
+
         let tx = self
             .tx
             .lock()
             .map_err(|e| anyhow::anyhow!("Error submitting work: {:?}", e))?;
         tx.send(TxEventSignal::Submit(event))?;
         Ok(())
+    }
+}
+
+fn redact_event(mut event: LogSchema, api_config: &APIConfig) -> LogSchema {
+    let redaction_enabled = api_config.log_redaction_enabled();
+    let placeholder = api_config.log_redaction_placeholder();
+
+    if !redaction_enabled {
+        return event;
+    }
+
+    let placeholder = placeholder
+        .replace("{root_event.id}", &event.root_event_id)
+        .replace("{event.id}", &event.event_id);
+
+    // Redact LLMOutputModel raw_text
+    if let Some(metadata) = &mut event.metadata {
+        match metadata {
+            MetadataType::Single(llm_event) => {
+                if let Some(output) = &mut llm_event.output {
+                    output.raw_text = placeholder.clone();
+                }
+            }
+            MetadataType::Multi(llm_events) => {
+                for llm_event in llm_events {
+                    if let Some(output) = &mut llm_event.output {
+                        output.raw_text = placeholder.clone();
+                    }
+                }
+            }
+        }
+    }
+
+    // Redact input IO
+    if let Some(input) = &mut event.io.input {
+        match &mut input.value {
+            ValueType::String(s) => *s = placeholder.clone(),
+            ValueType::List(v) => v.iter_mut().for_each(|s| *s = placeholder.clone()),
+        }
+    }
+
+    // Redact output IO
+    if let Some(output) = &mut event.io.output {
+        match &mut output.value {
+            ValueType::String(s) => *s = placeholder.clone(),
+            ValueType::List(v) => v.iter_mut().for_each(|s| *s = placeholder.clone()),
+        }
+    }
+
+    // Redact LLMEventInput Template
+    if let Some(metadata) = &mut event.metadata {
+        match metadata {
+            MetadataType::Single(llm_event) => {
+                redact_template(&mut llm_event.input.prompt.template, &placeholder);
+            }
+            MetadataType::Multi(llm_events) => {
+                for llm_event in llm_events {
+                    redact_template(&mut llm_event.input.prompt.template, &placeholder);
+                }
+            }
+        }
+    }
+
+    event
+}
+
+fn redact_template(template: &mut Template, placeholder: &str) {
+    match template {
+        Template::Single(s) => *s = placeholder.to_string(),
+        Template::Multiple(chats) => {
+            for chat in chats {
+                for part in &mut chat.content {
+                    if let ContentPart::Text(s) = part {
+                        *s = placeholder.to_string();
+                    }
+                }
+            }
+        }
     }
 }

@@ -19,4 +19,4 @@ pub struct LogEventMetadata {
     pub root_event_id: String,
 }
 
-pub type LogEventCallbackSync = Box<dyn Fn(LogEvent) -> Result<(), Error> + Send>;
+pub type LogEventCallbackSync = Box<dyn Fn(LogEvent) -> Result<(), Error> + Send + Sync>;

@@ -38,15 +38,34 @@ pub struct LogEventMetadata {
 impl BamlLogEvent {
     fn __repr__(&self) -> String {
         format!(
-            "BamlLogEvent {{ metadata: {:?}, prompt: {:?}, raw_output: {:?}, parsed_output: {:?}, start_time: {:?} }}",
+            "BamlLogEvent {{\n    metadata: {:?},\n    prompt: {:?},\n    raw_output: {:?},\n    parsed_output: {:?},\n    start_time: {:?}\n}}",
             self.metadata, self.prompt, self.raw_output, self.parsed_output, self.start_time
         )
     }
 
     fn __str__(&self) -> String {
+        let prompt = self
+            .prompt
+            .as_ref()
+            .map_or("None".to_string(), |p| format!("\"{p}\""));
+        let raw_output = self
+            .raw_output
+            .as_ref()
+            .map_or("None".to_string(), |r| format!("\"{r}\""));
+        let parsed_output = self
+            .parsed_output
+            .as_ref()
+            .map_or("None".to_string(), |p| format!("\"{p}\""));
+
         format!(
-            "BamlLogEvent {{ \nmetadata: {:?}, \nprompt: {:#?}, \nraw_output: {:?}, \nparsed_output: {:#?}, \nstart_time: {:?} }}",
-            self.metadata, self.prompt, self.raw_output, self.parsed_output, self.start_time
+            "BamlLogEvent {{\n    metadata: {{\n        event_id: \"{}\",\n        parent_id: {},\n        root_event_id: \"{}\"\n    }},\n    prompt: {},\n    raw_output: {},\n    parsed_output: {},\n    start_time: \"{}\"\n}}",
+            self.metadata.event_id,
+            self.metadata.parent_id.as_ref().map_or("None".to_string(), |id| format!("\"{}\"", id)),
+            self.metadata.root_event_id,
+            prompt,
+            raw_output,
+            parsed_output,
+            self.start_time
         )
     }
 }
