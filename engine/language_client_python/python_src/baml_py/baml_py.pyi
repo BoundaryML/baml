@@ -79,6 +79,27 @@ class BamlRuntime:
     ) -> FunctionResultStream: ...
     def create_context_manager(self) -> RuntimeContextManager: ...
     def flush(self) -> None: ...
+    def set_log_event_callback(self, handler: Callable[[BamlLogEvent], None]) -> None: ...
+
+
+class LogEventMetadata:
+    event_id: str
+    parent_id: Optional[str]
+    root_event_id: str
+
+    def __init__(self, event_id: str, parent_id: Optional[str], root_event_id: str) -> None:
+        ...
+
+class BamlLogEvent:
+    metadata: LogEventMetadata
+    prompt: Optional[str]
+    raw_output: Optional[str]
+    parsed_output: Optional[str]
+    start_time: str
+
+    def __init__(self, metadata: LogEventMetadata, prompt: Optional[str], raw_output: Optional[str], parsed_output: Optional[str], start_time: str) -> None:
+        ...
+
 
 class BamlSpan:
     @staticmethod

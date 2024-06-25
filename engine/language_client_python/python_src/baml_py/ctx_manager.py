@@ -65,6 +65,9 @@ class CtxManager:
     def flush(self) -> None:
         self.rt.flush()
 
+    def on_log_event(self, handler: typing.Callable[[str], None]) -> None:
+        self.rt.set_log_event_callback(handler)
+
     def trace_fn(self, func: F) -> F:
         func_name = func.__name__
         signature = inspect.signature(func).parameters

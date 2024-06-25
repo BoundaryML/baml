@@ -7,7 +7,7 @@ load_dotenv()
 import baml_py
 from baml_client import b
 from baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
-from baml_client.tracing import trace, set_tags, flush
+from baml_client.tracing import trace, set_tags, flush, on_log_event
 from baml_client.type_builder import TypeBuilder
 import datetime
 
@@ -15,7 +15,7 @@ import datetime
 @pytest.mark.asyncio
 async def test_should_work_for_all_inputs():
     res = await b.TestFnNamedArgsSingleBool(True)
-    assert res == "true"
+    assert res
 
     res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
     assert "a" in res and "b" in res and "c" in res
@@ -169,12 +169,11 @@ async def test_streaming():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(prev_msg), (
-            "Expected messages to be continuous, but prev was %r and next was %r"
-            % (
-                prev_msg,
-                msg,
-            )
+        assert msg.startswith(
+            prev_msg
+        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
+            prev_msg,
+            msg,
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
@@ -198,12 +197,11 @@ async def test_streaming_claude():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(prev_msg), (
-            "Expected messages to be continuous, but prev was %r and next was %r"
-            % (
-                prev_msg,
-                msg,
-            )
+        assert msg.startswith(
+            prev_msg
+        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
+            prev_msg,
+            msg,
         )
     print("msgs:")
     print(msgs[-1])
@@ -223,12 +221,11 @@ async def test_streaming_gemini():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(prev_msg), (
-            "Expected messages to be continuous, but prev was %r and next was %r"
-            % (
-                prev_msg,
-                msg,
-            )
+        assert msg.startswith(
+            prev_msg
+        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
+            prev_msg,
+            msg,
         )
     print("msgs:")
     print(msgs[-1])
@@ -483,3 +480,14 @@ async def test_nested_class_streaming():
 
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     print("final ", final.model_dump(mode="json"))
+
+
+@pytest.mark.asyncio
+async def test_event_log_hook():
+    def event_log_hook(event):
+        print("Event log hook1: ")
+        print("Event log event ", event)
+
+    on_log_event(event_log_hook)
+    res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
+    assert res

@@ -24,6 +24,7 @@ export class BamlRuntime {
   createContextManager(): RuntimeContextManager
   callFunction(functionName: string, args: { [string]: any }, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null): Promise<FunctionResult>
   streamFunction(functionName: string, args: { [string]: any }, cb: (err: any, param: FunctionResult) => void, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null): FunctionResultStream
+  setLogEventCallback(func: (err: any, param: BamlLogEvent) => void): void
   flush(): void
 }
 
@@ -87,5 +88,19 @@ export class TypeBuilder {
   null(): FieldType
 }
 
+export interface BamlLogEvent {
+  metadata: LogEventMetadata
+  prompt?: string
+  rawOutput?: string
+  parsedOutput?: string
+  startTime: string
+}
+
 export function invoke_runtime_cli(params: Array<string>): void
+
+export interface LogEventMetadata {
+  eventId: string
+  parentId?: string
+  rootEventId: string
+}
 

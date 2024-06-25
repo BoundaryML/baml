@@ -1,9 +1,10 @@
-mod api_wrapper;
+pub mod api_wrapper;
 #[cfg(not(target_arch = "wasm32"))]
 mod threaded_tracer;
 #[cfg(target_arch = "wasm32")]
 mod wasm_tracer;
 
+use crate::on_log_event::LogEventCallbackSync;
 use anyhow::Result;
 use baml_types::{BamlMap, BamlMedia, BamlMediaType, BamlValue};
 use colored::Colorize;
@@ -70,6 +71,13 @@ impl BamlTracer {
             options,
         };
         tracer
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) {
+        if let Some(tracer) = &self.tracer {
+            tracer.set_log_event_callback(log_event_callback);
+        }
     }
 
     pub(crate) fn flush(&self) -> Result<()> {

@@ -8,8 +8,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
+use crate::tracing::api_wrapper::core_types::LogSchema;
 use crate::tracing::{BamlTracer, TracingSpan};
 use crate::type_builder::TypeBuilder;
+use crate::types::on_log_event::LogEventCallbackSync;
 use crate::RuntimeContextManager;
 use crate::{
     internal::{ir_features::IrFeatures, llm_client::retry_policy::CallablePolicy},
@@ -94,6 +96,9 @@ pub trait ExperimentalTracingInterface {
     ) -> Result<Option<uuid::Uuid>>;
 
     fn flush(&self) -> Result<()>;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn set_log_event_callback(&self, callback: LogEventCallbackSync) -> Result<()>;
 }
 
 pub trait InternalClientLookup<'a> {

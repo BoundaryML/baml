@@ -31,6 +31,7 @@ use baml_types::BamlMap;
 use baml_types::BamlValue;
 use indexmap::IndexMap;
 use internal_baml_core::configuration::GeneratorOutputType;
+use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -38,6 +39,7 @@ pub use cli::CallerType;
 use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
 use runtime_interface::RuntimeInterface;
+use tracing::api_wrapper::core_types::LogSchema;
 use tracing::{BamlTracer, TracingSpan};
 use type_builder::TypeBuilder;
 pub use types::*;
@@ -328,5 +330,11 @@ impl ExperimentalTracingInterface for BamlRuntime {
 
     fn flush(&self) -> Result<()> {
         self.tracer.flush()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) -> Result<()> {
+        self.tracer.set_log_event_callback(log_event_callback);
+        Ok(())
     }
 }
