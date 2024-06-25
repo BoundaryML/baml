@@ -188,8 +188,6 @@ impl BamlRuntime {
             .as_ref()
             .set_log_event_callback(Box::new(move |log_event| {
                 Python::with_gil(|py| {
-                    // Ensure GIL is acquired before calling Python code
-                    // let callback = callback.as_ref(py);
                     match callback.call1(
                         py,
                         (BamlLogEvent {

@@ -190,18 +190,6 @@ impl BamlRuntime {
                             parsed_output: event.parsed_output,
                             start_time: event.start_time,
                         };
-                        // let js_obj = env.to_js_value(&event);
-                        // let _ = match js_obj {
-                        //     Ok(js_obj) => {
-                        //         let _ = cb.call(None, &[js_obj]);
-                        //     }
-                        //     Err(e) => {
-                        //         log::error!("Error converting BamlLogEvent to js object: {:?}", e);
-                        //         return Ok(());
-                        //     }
-                        // };
-
-                        // cb.call(None, &[event.into()]);
 
                         let res = tsfn_clone.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
                         if res != napi::Status::Ok {
@@ -231,12 +219,6 @@ impl BamlRuntime {
                 Err(e)
             }
         };
-
-        // let tsfn = env.create_threadsafe_function(
-        //     &func,
-        //     0,
-        //     |ctx: ThreadSafeCallContext<BamlLogEvent>| Ok(vec![BamlLogEvent::from(ctx.value)]),
-        // )?;
 
         env.get_undefined()
     }
