@@ -53,7 +53,7 @@ Share your creations and ask questions in our [Discord](https://discord.gg/BTNBe
 ## Starter projects
 
 - [BAML + NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
-- [BAML + FastAPI + Streaming](https://github.com/BoundaryML/baml-examples/tree/main/fastapi-starter)
+- [BAML + FastAPI + Streaming](https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter)
 
 ## A BAML LLM Function
 
