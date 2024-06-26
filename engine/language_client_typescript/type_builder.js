@@ -3,10 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.EnumBuilder = exports.ClassBuilder = exports.TypeBuilder = void 0;
 const native_1 = require("./native");
 class TypeBuilder {
+    tb;
     classes;
     enums;
-    tb;
-    constructor(classes, enums) {
+    constructor({ classes, enums }) {
         this.classes = classes;
         this.enums = enums;
         this.tb = new native_1.TypeBuilder();
@@ -36,6 +36,7 @@ class TypeBuilder {
         return new EnumBuilder(this.tb, name, new Set(values));
     }
     addClass(name) {
+        console.log('name', name, this.classes, this.enums, '\n');
         if (this.classes.has(name)) {
             throw new Error(`Class ${name} already exists`);
         }
@@ -46,6 +47,7 @@ class TypeBuilder {
         return new ClassBuilder(this.tb, name);
     }
     addEnum(name) {
+        console.log('name', name, this.classes, this.enums, '\n');
         if (this.classes.has(name)) {
             throw new Error(`Class ${name} already exists`);
         }
