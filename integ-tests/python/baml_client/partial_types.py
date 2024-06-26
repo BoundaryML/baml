@@ -53,6 +53,12 @@ class ClassWithImage(BaseModel):
     param2: Optional[str] = None
     fake_image: Optional["FakeImage"] = None
 
+class DynInputOutput(BaseModel):
+    
+    model_config = ConfigDict(extra='allow')
+    
+    testKey: Optional[str] = None
+
 class DynamicClassOne(BaseModel):
     
     model_config = ConfigDict(extra='allow')

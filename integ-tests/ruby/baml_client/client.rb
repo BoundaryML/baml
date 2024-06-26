@@ -232,6 +232,46 @@ module Baml
     sig {
       
       params(
+        input: Baml::Types::DynInputOutput,
+      ).returns(Baml::Types::DynInputOutput)
+      
+    }
+    def DynamicInputOutput(
+        input:
+    )
+      raw = @runtime.call_function(
+        "DynamicInputOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: T::Array[Baml::Types::DynInputOutput],
+      ).returns(T::Array[Baml::Types::DynInputOutput])
+      
+    }
+    def DynamicListInputOutput(
+        input:
+    )
+      raw = @runtime.call_function(
+        "DynamicListInputOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
         input: String,
       ).returns(T::Array[String])
       
@@ -1380,6 +1420,48 @@ module Baml
         @ctx_manager,
       )
       Baml::BamlStream[Baml::PartialTypes::DynamicClassTwo, Baml::Types::DynamicClassTwo].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: Baml::Types::DynInputOutput,
+      ).returns(Baml::BamlStream[Baml::Types::DynInputOutput])
+    }
+    def DynamicInputOutput(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "DynamicInputOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::DynInputOutput, Baml::Types::DynInputOutput].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: T::Array[Baml::Types::DynInputOutput],
+      ).returns(Baml::BamlStream[T::Array[Baml::Types::DynInputOutput]])
+    }
+    def DynamicListInputOutput(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "DynamicListInputOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T::Array[Baml::PartialTypes::DynInputOutput], T::Array[Baml::Types::DynInputOutput]].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

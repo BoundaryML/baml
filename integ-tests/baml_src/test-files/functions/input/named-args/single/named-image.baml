@@ -3,7 +3,7 @@ function TestImageInput(img: image) -> string{
   prompt #"
     {{ _.role("user") }}
 
-    Describe this in 4 words {{img}}
+    Describe this in 4 words. One word must be the color {{img}}
   "#
 }
 

@@ -27,7 +27,7 @@ impl ParameterError {
 pub fn validate_arg(
     ir: &IntermediateRepr,
     field_type: &FieldType,
-    value: &BamlValue,
+    value: &BamlValue, // original value passed in by user
     scope: &mut ScopeStack,
     allow_implicit_cast_to_string: bool,
 ) -> Option<BamlValue> {
@@ -158,6 +158,7 @@ pub fn validate_arg(
             BamlValue::Class(_, obj) | BamlValue::Map(obj) => match ir.find_class(name) {
                 Ok(c) => {
                     let mut fields = BamlMap::new();
+
                     for f in c.walk_fields() {
                         if let Some(v) = obj.get(f.name()) {
                             if let Some(v) = validate_arg(
@@ -177,6 +178,26 @@ pub fn validate_arg(
                             ));
                         }
                     }
+                    let is_dynamic = c.item.attributes.get("dynamic_type").is_some();
+                    if is_dynamic {
+                        for (key, value) in obj {
+                            if !fields.contains_key(key) {
+                                fields.insert(key.clone(), value.clone());
+                            }
+                        }
+                    } else {
+                        // throw an error if there are remaining fields
+                        // instead of dropping them silently
+                        for key in obj.keys() {
+                            if !fields.contains_key(key) {
+                                scope.push_error(format!(
+                                    "Unexpected field `{}` for class {}. Mark the class as @@dynamic if you want to allow additional fields.",
+                                    key, name
+                                ));
+                            }
+                        }
+                    }
+
                     Some(BamlValue::Class(name.to_string(), fields))
                 }
                 Err(_) => {

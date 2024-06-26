@@ -391,7 +391,7 @@ impl RequestBuilder for AnthropicClient {
         if stream {
             body_obj.insert("stream".into(), true.into());
         }
-        log::info!("Request body: {:#?}", body);
+        log::debug!("Request body: {:#?}", body);
 
         req.json(&body)
     }

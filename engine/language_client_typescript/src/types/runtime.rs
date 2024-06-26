@@ -84,6 +84,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
     ) -> napi::Result<JsObject> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
+
         if !args.is_map() {
             return Err(napi::Error::new(
                 napi::Status::GenericFailure,

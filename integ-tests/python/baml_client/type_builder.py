@@ -19,11 +19,16 @@ from baml_py.type_builder import FieldType, TypeBuilder as _TypeBuilder, ClassPr
 class TypeBuilder(_TypeBuilder):
     def __init__(self):
         super().__init__(classes=set(
-          ["Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","DynamicClassOne","DynamicClassTwo","DynamicOutput","Education","Email","Event","FakeImage","InnerClass","InnerClass2","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","RaysData","Resume","SearchParams","SomeClassNestedDynamic","TestClassAlias","TestClassNested","TestClassWithEnum","TestOutputClass","UnionTest_ReturnType","WithReasoning",]
+          ["Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","Education","Email","Event","FakeImage","InnerClass","InnerClass2","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","RaysData","Resume","SearchParams","SomeClassNestedDynamic","TestClassAlias","TestClassNested","TestClassWithEnum","TestOutputClass","UnionTest_ReturnType","WithReasoning",]
         ), enums=set(
           ["Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumTwo","EnumInClass","EnumOutput","Hobby","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",]
         ))
 
+
+
+    @property
+    def DynInputOutput(self) -> "DynInputOutputBuilder":
+        return DynInputOutputBuilder(self)
 
 
     @property
@@ -73,6 +78,42 @@ class TypeBuilder(_TypeBuilder):
         return HobbyBuilder(self)
 
 
+class DynInputOutputBuilder:
+    def __init__(self, tb: _TypeBuilder):
+        self.__bldr = tb._tb.class_("DynInputOutput")
+        self.__properties = set([ "testKey", ])
+        self.__props = DynInputOutputProperties(self.__bldr, self.__properties)
+
+    def type(self) -> FieldType:
+        return self.__bldr.field()
+
+    @property
+    def props(self) -> "DynInputOutputProperties":
+        return self.__props
+    
+    def list_properties(self) -> typing.List[typing.Tuple[str, ClassPropertyBuilder]]:
+        return [(name, self.__bldr.property(name)) for name in self.__properties]
+
+    def add_property(self, name: str, type: FieldType) -> ClassPropertyBuilder:
+        if name in self.__properties:
+            raise ValueError(f"Property {name} already exists.")
+        return ClassPropertyBuilder(self.__bldr.property(name).type(type))
+
+class DynInputOutputProperties:
+    def __init__(self, cls_bldr: ClassBuilder, properties: typing.Set[str]):
+        self.__bldr = cls_bldr
+        self.__properties = properties
+
+    
+
+    @property
+    def testKey(self) -> ClassPropertyBuilder:
+        return self.__bldr.property("testKey")
+
+    def __getattr__(self, name: str) -> ClassPropertyBuilder:
+        if name not in self.__properties:
+            raise AttributeError(f"Property {name} not found.")
+        return ClassPropertyBuilder(self.__bldr.property(name))
 class DynamicClassOneBuilder:
     def __init__(self, tb: _TypeBuilder):
         self.__bldr = tb._tb.class_("DynamicClassOne")
