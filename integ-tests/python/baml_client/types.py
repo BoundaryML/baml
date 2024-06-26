@@ -144,6 +144,12 @@ class ClassWithImage(BaseModel):
     param2: str
     fake_image: "FakeImage"
 
+class DynInputOutput(BaseModel):
+    
+    model_config = ConfigDict(extra='allow')
+    
+    testKey: str
+
 class DynamicClassOne(BaseModel):
     
     model_config = ConfigDict(extra='allow')

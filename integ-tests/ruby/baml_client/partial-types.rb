@@ -25,6 +25,7 @@ module Baml
     class ClassOptionalOutput < T::Struct; end
     class ClassOptionalOutput2 < T::Struct; end
     class ClassWithImage < T::Struct; end
+    class DynInputOutput < T::Struct; end
     class DynamicClassOne < T::Struct; end
     class DynamicClassTwo < T::Struct; end
     class DynamicOutput < T::Struct; end
@@ -69,6 +70,10 @@ module Baml
       const :myImage, T.nilable(Baml::Image)
       const :param2, T.nilable(String)
       const :fake_image, Baml::PartialTypes::FakeImage
+    end
+    class DynInputOutput < T::Struct
+      include T::Struct::ActsAsComparable
+      const :testKey, T.nilable(String)
     end
     class DynamicClassOne < T::Struct
       include T::Struct::ActsAsComparable

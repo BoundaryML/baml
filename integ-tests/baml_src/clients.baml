@@ -16,7 +16,7 @@ retry_policy Foo {
 client<llm> GPT4 {
   provider baml-openai-chat
   options {
-    model gpt-4
+    model gpt-4o
     api_key env.OPENAI_API_KEY
   }
 } 

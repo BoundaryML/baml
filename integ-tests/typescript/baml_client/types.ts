@@ -141,6 +141,12 @@ export interface ClassWithImage {
   
 }
 
+export interface DynInputOutput {
+  testKey: string
+  
+  [key: string]: any;
+}
+
 export interface DynamicClassOne {
   
   [key: string]: any;

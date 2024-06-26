@@ -253,6 +253,50 @@ class BamlClient:
       mdl = create_model("DynamicFuncReturnType", inner=(types.DynamicClassTwo, ...))
       return coerce(mdl, raw.parsed())
     
+    async def DynamicInputOutput(
+        self,
+        input: types.DynInputOutput,
+        baml_options: BamlCallOptions = {},
+    ) -> types.DynInputOutput:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "DynamicInputOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("DynamicInputOutputReturnType", inner=(types.DynInputOutput, ...))
+      return coerce(mdl, raw.parsed())
+    
+    async def DynamicListInputOutput(
+        self,
+        input: List[types.DynInputOutput],
+        baml_options: BamlCallOptions = {},
+    ) -> List[types.DynInputOutput]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "DynamicListInputOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("DynamicListInputOutputReturnType", inner=(List[types.DynInputOutput], ...))
+      return coerce(mdl, raw.parsed())
+    
     async def ExtractNames(
         self,
         input: str,
@@ -1603,6 +1647,70 @@ class BamlStreamClient:
       partial_mdl = create_model("DynamicFuncPartialReturnType", inner=(partial_types.DynamicClassTwo, ...))
 
       return baml_py.BamlStream[partial_types.DynamicClassTwo, types.DynamicClassTwo](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
+    def DynamicInputOutput(
+        self,
+        input: types.DynInputOutput,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.DynInputOutput, types.DynInputOutput]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "DynamicInputOutput",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("DynamicInputOutputReturnType", inner=(types.DynInputOutput, ...))
+      partial_mdl = create_model("DynamicInputOutputPartialReturnType", inner=(partial_types.DynInputOutput, ...))
+
+      return baml_py.BamlStream[partial_types.DynInputOutput, types.DynInputOutput](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
+    def DynamicListInputOutput(
+        self,
+        input: List[types.DynInputOutput],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "DynamicListInputOutput",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("DynamicListInputOutputReturnType", inner=(List[types.DynInputOutput], ...))
+      partial_mdl = create_model("DynamicListInputOutputPartialReturnType", inner=(List[partial_types.DynInputOutput], ...))
+
+      return baml_py.BamlStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

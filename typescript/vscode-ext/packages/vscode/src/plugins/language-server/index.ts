@@ -231,7 +231,7 @@ const activateClient = (
       // need to append line for the show to work for some reason.
       // dont delete this.
       client.outputChannel.appendLine('baml/showLanguageServerOutput')
-      client.outputChannel.show()
+      //client.outputChannel.show()
     })
     client.onNotification('baml/message', (message: BAMLMessage) => {
       client.outputChannel.appendLine('baml/message' + JSON.stringify(message, null, 2))

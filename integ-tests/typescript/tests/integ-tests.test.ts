@@ -237,7 +237,7 @@ describe('Integ tests', () => {
     })('hi', 10)
   })
 
-  it('should work with dynamics', async () => {
+  it('should work with dynamic types', async () => {
     let tb = new TypeBuilder()
     tb.Person.addProperty('last_name', tb.string().optional())
     tb.Person.addProperty('height', tb.float().optional()).description('Height in meters')
@@ -254,6 +254,28 @@ describe('Integ tests', () => {
     expect(res.length).toBeGreaterThan(0)
     console.log(res)
   })
+
+
+  it('should work with dynamic inputs class', async () => {
+    let tb = new TypeBuilder()
+    tb.DynInputOutput.addProperty('new-key', tb.string().optional())
+
+    const res = await b.DynamicInputOutput({ 'new-key': 'hi', testKey: "myTest" }, { tb })
+    expect(res["new-key"]).toEqual('hi')
+    expect(res["testKey"]).toEqual('myTest')
+  })
+
+  it('should work with dynamic inputs list', async () => {
+    let tb = new TypeBuilder()
+    tb.DynInputOutput.addProperty('new-key', tb.string().optional())
+
+    const res = await b.DynamicListInputOutput([{ 'new-key': 'hi', testKey: "myTest" }], { tb })
+    expect(res[0]["new-key"]).toEqual('hi')
+    expect(res[0]["testKey"]).toEqual('myTest')
+  })
+
+  // test with extra list, boolean in the input as well.
+
 
   it('should work with nested classes', async () => {
     let stream = b.stream.FnOutputClassNested('hi!')
