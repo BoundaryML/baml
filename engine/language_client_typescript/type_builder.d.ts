@@ -5,10 +5,13 @@ type CheckNever<T, TypeName extends string, Value extends string> = [T] extends 
 type ExcludeFrom<T, U> = T extends U ? never : T;
 type RestrictNot<Name extends string, Value extends string, T extends string> = IsLiteral<T> extends true ? CheckNever<ExcludeFrom<Value, T>, Name, Value> : Value;
 export declare class TypeBuilder {
-    protected classes: Set<String>;
-    protected enums: Set<String>;
     private tb;
-    constructor(classes: Set<String>, enums: Set<String>);
+    protected classes: Set<string>;
+    protected enums: Set<string>;
+    constructor({ classes, enums }: {
+        classes: Set<string>;
+        enums: Set<string>;
+    });
     _tb(): _TypeBuilder;
     string(): FieldType;
     int(): FieldType;

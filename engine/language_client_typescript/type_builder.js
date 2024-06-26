@@ -3,10 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.EnumBuilder = exports.ClassBuilder = exports.TypeBuilder = void 0;
 const native_1 = require("./native");
 class TypeBuilder {
+    tb;
     classes;
     enums;
-    tb;
-    constructor(classes, enums) {
+    constructor({ classes, enums }) {
         this.classes = classes;
         this.enums = enums;
         this.tb = new native_1.TypeBuilder();

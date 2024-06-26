@@ -1,6 +1,6 @@
 import assert from 'assert'
 import { image_b64, audio_b64 } from './base64_test_data'
-import { Image} from '@boundaryml/baml'
+import { Image } from '@boundaryml/baml'
 import { Audio } from '@boundaryml/baml'
 import {
   b,
@@ -14,7 +14,6 @@ import {
 } from '../baml_client'
 import TypeBuilder from '../baml_client/type_builder'
 import { RecursivePartialNull } from '../baml_client/client'
-
 
 describe('Integ tests', () => {
   it('should work for all inputs', async () => {
@@ -118,19 +117,19 @@ describe('Integ tests', () => {
   })
 
   it('should work with image from base 64', async () => {
-    let res = await b.TestImageInput(
-      Image.fromBase64('image/png', image_b64),
-    )
+    let res = await b.TestImageInput(Image.fromBase64('image/png', image_b64))
     expect(res.toLowerCase()).toContain('green')
   })
 
   it('should work with audio base 64', async () => {
-    let res = await b.AudioInput(Audio.fromBase64('audio/mp3',audio_b64))
+    let res = await b.AudioInput(Audio.fromBase64('audio/mp3', audio_b64))
     expect(res.toLowerCase()).toContain('yes')
   })
 
   it('should work with audio from url', async () => {
-    let res = await b.AudioInput(Audio.fromUrl("https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg"))
+    let res = await b.AudioInput(
+      Audio.fromUrl('https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg'),
+    )
 
     expect(res.toLowerCase()).toContain('no')
   })
@@ -237,7 +236,7 @@ describe('Integ tests', () => {
     })('hi', 10)
   })
 
-  it('should work with dynamic types', async () => {
+  it('should work with dynamic types single', async () => {
     let tb = new TypeBuilder()
     tb.Person.addProperty('last_name', tb.string().optional())
     tb.Person.addProperty('height', tb.float().optional()).description('Height in meters')
@@ -255,27 +254,55 @@ describe('Integ tests', () => {
     console.log(res)
   })
 
+  it('should work with dynamic types enum', async () => {
+    let tb = new TypeBuilder()
+    const fieldEnum = tb.addEnum('Animal')
+    const animals = ['giraffe', 'elephant', 'lion']
+    for (const animal of animals) {
+      fieldEnum.addValue(animal.toUpperCase())
+    }
+    tb.Person.addProperty('animalLiked', fieldEnum.type())
+    const res = await b.ExtractPeople(
+      "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+      { tb },
+    )
+    expect(res.length).toBeGreaterThan(0)
+    expect(res[0]['animalLiked']).toEqual('GIRAFFE')
+  })
+
+  it('should work with dynamic types class', async () => {
+    let tb = new TypeBuilder()
+    const animalClass = tb.addClass('Animal')
+    animalClass.addProperty('animal', tb.string()).description('The animal mentioned, in singular form.')
+    tb.Person.addProperty('animalLiked', animalClass.type())
+    const res = await b.ExtractPeople(
+      "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+      { tb },
+    )
+    expect(res.length).toBeGreaterThan(0)
+    const animalLiked = res[0]['animalLiked']
+    expect(animalLiked['animal']).toContain('giraffe')
+  })
 
   it('should work with dynamic inputs class', async () => {
     let tb = new TypeBuilder()
     tb.DynInputOutput.addProperty('new-key', tb.string().optional())
 
-    const res = await b.DynamicInputOutput({ 'new-key': 'hi', testKey: "myTest" }, { tb })
-    expect(res["new-key"]).toEqual('hi')
-    expect(res["testKey"]).toEqual('myTest')
+    const res = await b.DynamicInputOutput({ 'new-key': 'hi', testKey: 'myTest' }, { tb })
+    expect(res['new-key']).toEqual('hi')
+    expect(res['testKey']).toEqual('myTest')
   })
 
   it('should work with dynamic inputs list', async () => {
     let tb = new TypeBuilder()
     tb.DynInputOutput.addProperty('new-key', tb.string().optional())
 
-    const res = await b.DynamicListInputOutput([{ 'new-key': 'hi', testKey: "myTest" }], { tb })
-    expect(res[0]["new-key"]).toEqual('hi')
-    expect(res[0]["testKey"]).toEqual('myTest')
+    const res = await b.DynamicListInputOutput([{ 'new-key': 'hi', testKey: 'myTest' }], { tb })
+    expect(res[0]['new-key']).toEqual('hi')
+    expect(res[0]['testKey']).toEqual('myTest')
   })
 
   // test with extra list, boolean in the input as well.
-
 
   it('should work with nested classes', async () => {
     let stream = b.stream.FnOutputClassNested('hi!')

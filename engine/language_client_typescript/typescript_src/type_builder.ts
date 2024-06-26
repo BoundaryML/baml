@@ -19,11 +19,12 @@ type RestrictNot<Name extends string, Value extends string, T extends string> = 
 
 export class TypeBuilder {
   private tb: _TypeBuilder
+  protected classes: Set<string>
+  protected enums: Set<string>
 
-  constructor(
-    protected classes: Set<String>,
-    protected enums: Set<String>,
-  ) {
+  constructor({ classes, enums }: { classes: Set<string>; enums: Set<string> }) {
+    this.classes = classes
+    this.enums = enums
     this.tb = new _TypeBuilder()
   }
 

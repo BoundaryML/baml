@@ -58,10 +58,10 @@ export default class TypeBuilder {
     }
 
     addClass<Name extends string>(name: Name): ClassBuilder<Name> {
-        this.tb.addClass(name);
+        return this.tb.addClass(name);
     }
 
     addEnum<Name extends string>(name: Name): EnumBuilder<Name> {
-        this.tb.addEnum(name);
+        return this.tb.addEnum(name);
     }
 }
