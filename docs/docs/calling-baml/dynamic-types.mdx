@@ -1,3 +1,193 @@
 
 
-Sometimes you have a schemas that change at runtime -- for example if you have a list of Categories that you need to classify that come from a database, or from a user input.
+Sometimes you have a **output schemas that change at runtime** -- for example if you have a list of Categories that you need to classify that come from a database, or your schema is user-provided.
+
+
+**Dynamic types are types that can be modified at runtime**, which means you can change the output schema of a function at runtime.
+
+Here are the steps to make this work:
+1. Add `@@dynamic` to the class or enum definition to mark it as dynamic
+
+```rust baml
+enum Category {
+  VALUE1 // normal static enum values that don't change
+  VALUE2
+  @@dynamic // this enum can have more values added at runtime
+} 
+
+function DynamicCategorizer(input: string) -> Category {
+  client GPT4
+  prompt #"
+    Given a string, classify it into a category
+    {{ input }}
+     
+    {{ ctx.output_format }}
+  "#
+}
+
+```
+
+2. Create a TypeBuilder and modify the existing type. All dynamic types you define in BAML will be available as properties of `TypeBuilder`. Think of the typebuilder as a registry of modified runtime types that the baml function will read from when building the output schema in the prompt.
+
+<CodeGroup>
+
+```python python
+from baml_client.type_builder import TypeBuilder
+from baml_client import b
+
+async def run():
+  tb = TypeBuilder()
+  tb.Category.add_value('VALUE3')
+  tb.Category.add_value('VALUE4')
+  # Pass the typebuilder in the baml_options argument -- the last argument of the function.
+  res = await b.DynamicCategorizer("some input", { "tb": tb })
+  # Now res can be VALUE1, VALUE2, VALUE3, or VALUE4
+  print(res)
+
+```
+
+```typescript TypeScript
+import TypeBuilder from '../baml_client/type_builder'
+import {
+  b
+} from '../baml_client'
+
+async function run() {
+  const tb = new TypeBuilder()
+  tb.Category.addValue('VALUE3')
+  tb.Category.addValue('VALUE4')
+  const res = await b.DynamicCategorizer("some input", { tb: tb })
+  // Now res can be VALUE1, VALUE2, VALUE3, or VALUE4
+  console.log(res)
+}
+```
+
+
+```ruby Ruby
+Not available yet
+```
+</CodeGroup>
+
+### Dynamic BAML Classes
+Existing BAML classes marked with @@dynamic will be available as properties of `TypeBuilder`.
+
+```rust BAML
+class User {
+  name string
+  age int
+  @@dynamic
+}
+
+function DynamicUserCreator(user_info: string) -> User {
+  client GPT4
+  prompt #"
+    Extract the information from this chunk of text:
+    "{{ user_info }}"
+     
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+Modify the `User` schema at runtime:
+
+<CodeGroup>
+
+```python python
+from baml_client.type_builder import TypeBuilder
+from baml_client import b
+
+async def run():
+  tb = TypeBuilder()
+  tb.User.add_property('email', 'string')
+  tb.User.add_property('address', 'string')
+  res = await b.DynamicUserCreator("some user info", { "tb": tb })
+  # Now res can have email and address fields
+  print(res)
+
+```
+
+```typescript TypeScript
+import TypeBuilder from '../baml_client/type_builder'
+import {
+  b
+} from '../baml_client'
+
+async function run() {
+  const tb = new TypeBuilder()
+  tb.User.add_property('email', tb.string())
+  tb.User.add_property('address', tb.string())
+  const res = await b.DynamicUserCreator("some user info", { tb: tb })
+  // Now res can have email and address fields
+  console.log(res)
+}
+```
+</CodeGroup>
+
+### Creating new dynamic classes or enums not in BAML
+Here we create a new `Hobbies` enum, and a new class called `Address`.
+
+
+<CodeGroup>
+
+```python python
+from baml_client.type_builder import TypeBuilder
+from baml_client import b
+
+async def run():
+  tb = TypeBuilder()
+  const hobbiesEnum = tb.add_enum('Hobbies')
+  hobbiesEnum.add_value('Soccer')
+  hobbiesEnum.add_value('Reading')
+
+  address_class = tb.add_class('Address')
+  address_class.add_property('street', tb.string())
+
+  tb.User.add_property('hobby', hobbiesEnum.type().optional())
+  tb.User.add_property('address', addressClass.type().optional())
+  res = await b.DynamicUserCreator("some user info", { "tb": tb })
+  # Now res might have the hobby property, which can be Soccer or Reading
+  print(res)
+
+```
+
+```typescript TypeScript
+import TypeBuilder from '../baml_client/type_builder'
+import {
+  b
+} from '../baml_client'
+
+async function run() {
+  const tb = new TypeBuilder()
+  const hobbiesEnum = tb.addEnum('Hobbies')
+  hobbiesEnum.addValue('Soccer')
+  hobbiesEnum.addValue('Reading')
+
+  const addressClass = tb.addClass('Address')
+  addressClass.addProperty('street', tb.string())
+
+
+  tb.User.addProperty('hobby', hobbiesEnum.type().optional())
+  tb.User.addProperty('address', addressClass.type())
+  const res = await b.DynamicUserCreator("some user info", { tb: tb })
+  // Now res might have the hobby property, which can be Soccer or Reading
+  console.log(res)
+}
+```
+</CodeGroup>
+
+### Adding descriptions to dynamic types
+
+<CodeGroup>
+
+```python python
+tb = TypeBuilder()
+tb.User.add_property("email", tb.string()).description("The user's email")
+```
+
+```typescript TypeScript
+const tb = new TypeBuilder()
+tb.User.addProperty("email", tb.string()).description("The user's email")
+```
+
+</CodeGroup>
