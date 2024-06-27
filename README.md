@@ -8,10 +8,9 @@
 
 # BAML
 
+**BAML is a domain-specific-language to write and test LLM functions.**
+
 An LLM function is a prompt template with some defined input variables, and a specific output type like a class, enum, union, optional string, etc.
-
-**BAML is a configuration file format to write better and cleaner LLM functions.**
-
 With BAML you can write and test a complex LLM function in 1/10 of the time it takes to setup a python LLM testing environment.
 
 ## Try it out in the playground -- [PromptFiddle.com](https://promptfiddle.com)
