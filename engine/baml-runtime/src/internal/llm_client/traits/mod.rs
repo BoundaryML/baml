@@ -22,15 +22,13 @@ use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
 use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
 use reqwest::get;
 use reqwest::header::HeaderMap;
-use reqwest::Body;
+
 use reqwest::Url;
 use reqwest::{Request, Response};
-use serde_json::to_string_pretty;
-use serde_json::Value;
-use serde_json::{json, ser::PrettyFormatter};
+
 use shell_escape::escape;
 use std::borrow::Cow;
-use std::io::Write;
+
 use std::str::FromStr; // Add this line at the top of your file // Add this line at the top of your file
 pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;

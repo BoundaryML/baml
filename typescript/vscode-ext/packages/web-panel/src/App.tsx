@@ -23,8 +23,6 @@ function App() {
       <Suspense fallback={<div>Loading...</div>}>
         <EventListener>
           <AppStateProvider>
-            {' '}
-            {/* Wrap your application with AppStateProvider */}
             <div className='absolute z-10 flex flex-row items-center justify-center gap-1 right-1 top-2 text-end'>
               <Dialog>
                 <DialogTrigger asChild>
@@ -50,7 +48,6 @@ function App() {
               <FunctionPanel />
             </div>
           </AppStateProvider>{' '}
-          {/* End of AppStateProvider */}
         </EventListener>
       </Suspense>
     </CustomErrorBoundary>

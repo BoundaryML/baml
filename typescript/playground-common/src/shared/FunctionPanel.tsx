@@ -1,12 +1,7 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
 import { useAtomValue, useSetAtom } from 'jotai'
-import {
-  renderPromptAtom,
-  selectedFunctionAtom,
-  rawCurlAtom,
-  generateCurlCommand,
-} from '../baml_wasm_web/EventListener'
+import { renderPromptAtom, selectedFunctionAtom, rawCurlAtom } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
@@ -32,7 +27,6 @@ const PromptPreview: React.FC = () => {
   }
 
   if (showCurlRequest) {
-    // const curlPreview = generateCurlCommand(rawCurl ?? 'No curl request available')
     const curlPreview = rawCurl ?? 'No curl request available'
     return (
       <div>

@@ -52,11 +52,9 @@ const replaceWhitespace = (char: string, key: string) => {
 const renderLine = ({
   text,
   showWhitespace,
-  wrapText,
 }: {
   text: string
   showWhitespace: boolean
-  wrapText: boolean
 }) => {
   // Split the text into segments
   const segments = text.split(whitespaceRegexp)
@@ -75,9 +73,11 @@ const renderLine = ({
     }
   })
   return showWhitespace ? (
-    <div className={clsx('inline-flex text-xs', { 'flex-wrap': wrapText })}>{formattedText}</div>
+    <div className={clsx('inline-flex text-xs break-words [overflow-wrap:anywhere]', { 'flex-wrap': true })}>
+      {formattedText}
+    </div>
   ) : (
-    <div className='whitespace-pre-wrap'>{formattedText}</div>
+    <div className='whitespace-pre-wrap break-words [overflow-wrap:anywhere]'>{formattedText}</div>
   )
 }
 
@@ -86,9 +86,8 @@ const CodeLine: React.FC<{
   line: string | [string, number][]
   lineNumber: number
   showWhitespace: boolean
-  wrapText: boolean
   maxLineNumber: number
-}> = ({ line, lineNumber, showWhitespace, wrapText, maxLineNumber }) => {
+}> = ({ line, lineNumber, showWhitespace, maxLineNumber }) => {
   // Function to render whitespace characters and invisible UTF characters with special styling
   const lineNumberSpan = (
     <span className='pr-1 font-mono text-xs text-right text-gray-500 select-none'>
@@ -106,14 +105,18 @@ const CodeLine: React.FC<{
         <div className='text-wrap'>
           {line.map(([token, tokenIndex], index) => (
             <span
-              className={clsx('inline-flex font-mono text-xs', TOKEN_BG_STYLES[tokenIndex % TOKEN_BG_STYLES.length], {
-                'whitespace-pre-wrap': wrapText || isTokenized,
-                'text-white': isTokenized,
-                "after:content-['↵']": index === line.length - 1,
-                'after:opacity-50': index === line.length - 1,
-              })}
+              className={clsx(
+                'inline-flex font-mono text-xs break-words [overflow-wrap:anywhere]',
+                TOKEN_BG_STYLES[tokenIndex % TOKEN_BG_STYLES.length],
+                {
+                  'whitespace-pre-wrap': true || isTokenized,
+                  'text-white': isTokenized,
+                  "after:content-['↵']": index === line.length - 1,
+                  'after:opacity-50': index === line.length - 1,
+                },
+              )}
             >
-              {renderLine({ text: token, showWhitespace, wrapText })}
+              {renderLine({ text: token, showWhitespace })}
             </span>
           ))}
         </div>
@@ -124,8 +127,8 @@ const CodeLine: React.FC<{
   return (
     <div className='flex flex-row items-start'>
       {lineNumberSpan}
-      <span className={clsx('inline-block font-mono text-xs', { 'whitespace-pre-wrap': wrapText })}>
-        {renderLine({ text: line, showWhitespace, wrapText })}
+      <span className={clsx('inline-block font-mono text-xs whitespace-pre-wrap break-words [overflow-wrap:anywhere]')}>
+        {renderLine({ text: line, showWhitespace })}
       </span>
     </div>
   )
@@ -194,10 +197,6 @@ export const PromptChunk: React.FC<{
     'bg-vscode-inputValidation-errorBackground': type === 'error',
   })
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text)
-  }
-
   if (showTokens && tokenizer) {
     const tokenized = Array.from(tokenizer.tokens as number[]).map((token) => tokenizer.enc.decode([token]))
     const tokenizedLines: [string, number][][] = [[]]
@@ -215,7 +214,6 @@ export const PromptChunk: React.FC<{
         lineNumber={lineIndex + 1}
         maxLineNumber={tokenizedLines.length}
         showWhitespace={false}
-        wrapText={false}
       />
     ))
     return (
@@ -235,7 +233,6 @@ export const PromptChunk: React.FC<{
               line={line}
               lineNumber={index + 1}
               showWhitespace={showWhitespace}
-              wrapText={true}
             />
           ))}
         </pre>

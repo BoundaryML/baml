@@ -21,7 +21,7 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
 pub fn on_wasm_init() {
-    match console_log::init_with_level(log::Level::Info) {
+    match console_log::init_with_level(log::Level::Warn) {
         Ok(_) => web_sys::console::log_1(&"Initialized BAML runtime logging".into()),
         Err(e) => web_sys::console::log_1(
             &format!("Failed to initialize BAML runtime logging: {:?}", e).into(),
@@ -60,14 +60,6 @@ pub struct SymbolLocation {
     pub end_line: usize,
     pub end_character: usize,
 }
-
-// impl std::error::Error for WasmDiagnosticError {}
-
-// impl std::fmt::Display for WasmDiagnosticError {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{:?}", self.errors)
-//     }
-// }
 
 #[wasm_bindgen]
 impl WasmDiagnosticError {

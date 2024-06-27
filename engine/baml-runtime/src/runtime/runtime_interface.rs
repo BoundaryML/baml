@@ -4,7 +4,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-// use crate::internal::llm_client::primitive::request::RequestBuilder;
 use crate::{
     internal::{
         ir_features::{IrFeatures, WithInternal},

@@ -181,7 +181,6 @@ impl<'ir> WithPrompt<'ir> for OrchestratorNode {
         self.provider.render_prompt(ir, renderer, ctx, params)
     }
 
-    //todo, fn render_raw_curl
     async fn render_raw_curl(
         &self,
         ctx: &RuntimeContext,

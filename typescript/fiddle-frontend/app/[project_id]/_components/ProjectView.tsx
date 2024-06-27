@@ -39,13 +39,12 @@ import {
   unsavedChangesAtom,
 } from '../_atoms/atoms'
 import { CodeMirrorEditor } from './CodeMirrorEditor'
-import { ExploreProjects } from './ExploreProjects'
+
 import { GithubStars } from './GithubStars'
 import { InitialTour, PostTestRunTour } from './Tour'
 import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from '@baml/playground-common/shared/SettingsDialog'
-import { SettingsIcon } from 'lucide-react'
+
 import FileViewer from './Tree/FileViewer'
-import { Toaster } from '@/components/ui/toaster'
 import { AppStateProvider } from '@baml/playground-common/shared/AppStateContext' // Import the AppStateProvider
 import { CheckboxHeader } from '@baml/playground-common/shared/CheckBoxHeader'
 
@@ -328,42 +327,6 @@ const DummyHydrate = ({ files }: { files: EditorFile[] }) => {
 }
 
 const PlaygroundView = () => {
-  const setShowSettings = useSetAtom(showSettingsAtom)
-  // const [parserDb] = useAtom(currentParserDbAtom)
-  // usePlaygroundListener()
-  // const testRunOutput = useAtomValue(testRunOutputAtom)
-
-  // useEffect(() => {
-  //   if (!parserDb) {
-  //     return
-  //   }
-  //   const newParserDb = { ...parserDb }
-
-  //   window.postMessage({
-  //     command: 'setDb',
-  //     content: [[BAML_DIR, newParserDb]],
-  //   })
-  // }, [parserDb])
-
-  // useEffect(() => {
-  //   if (testRunOutput) {
-  //     window.postMessage({
-  //       command: 'test-results',
-  //       content: testRunOutput.testState,
-  //     })
-  //     window.postMessage({
-  //       command: 'test-stdout',
-  //       content: testRunOutput.outputLogs.join('\n'),
-  //     })
-  //   }
-  // }, [testRunOutput])
-  // return (
-  //   <>
-  //     <CustomErrorBoundary>TODO, implement playground view</CustomErrorBoundary>
-  //   </>
-  // )
-
-  //<TestToggle />
   return (
     <>
       <AppStateProvider>
@@ -395,29 +358,5 @@ const PlaygroundView = () => {
     </>
   )
 }
-
-//const TestToggle = () => {
-//  const { setSelection } = useContext(ASTContext)
-//  const { showTests, func } = useSelections()
-//
-//  // useEffect(() => {
-//  //   setSelection(undefined, undefined, undefined, undefined, false)
-//  // }, [])
-//  const numTests = func?.test_cases?.length ?? 0
-//
-//  return (
-//    <Button
-//      variant='outline'
-//      className={clsx(
-//        'tour-test-button p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground bg-vscode-button-background gap-x-2 pr-2',
-//        [!showTests ? 'bg-vscode-button-background' : 'bg-vscode-panel-background'],
-//      )}
-//      onClick={() => setSelection(undefined, undefined, undefined, undefined, !showTests)}
-//    >
-//      <FlaskConical size={16} />
-//      <span>{showTests ? 'Hide tests' : `Show  ${numTests > 0 ? numTests : ''} tests`}</span>
-//    </Button>
-//  )
-//}
 
 export default ProjectView
