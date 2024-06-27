@@ -37,7 +37,7 @@ const PromptPreview: React.FC = () => {
     return (
       <div>
         <div className='flex justify-end'>
-          <Button onClick={handleCopy(curlPreview)} className='copy-button bg-transparent  hover:bg-indigo-500'>
+          <Button onClick={handleCopy(curlPreview)} className='copy-button bg-transparent m-0 py-0 hover:bg-indigo-500'>
             <FiCopy />
           </Button>
         </div>
