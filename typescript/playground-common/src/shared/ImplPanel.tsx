@@ -177,7 +177,6 @@ export const PromptChunk: React.FC<{
   client: Impl['client']
   showCopy?: boolean
 }> = ({ text, type = 'preview', client, showCopy = false }) => {
-  // Default showCopy to false
   const { showTokens, showWhitespace, showCurlRequest } = useAppState()
 
   const encodingName = client.model

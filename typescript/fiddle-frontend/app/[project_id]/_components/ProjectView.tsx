@@ -101,7 +101,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   <FileViewer />
                 </div>
               </ResizablePanel>
-              {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
 
               <ResizableHandle className='bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder' />
               <ResizablePanel className='flex flex-col items-center w-full pt-2 tour-templates'></ResizablePanel>
@@ -169,14 +168,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                 <></>
               )}
 
-              {/* <div className="flex flex-row justify-center gap-x-1 item-center">
-                <Button variant={'ghost'} className="h-full py-1" asChild>
-                  <Link target="_blank" href="https://docs.boundaryml.com">
-                    Docs
-                  </Link>
-                </Button>
-              </div> */}
-
               <div className='flex flex-row items-center justify-end w-full pr-4 gap-x-8'>
                 <div className='flex h-full'>
                   <Link
@@ -201,7 +192,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   >
                     <div className='flex flex-row items-center text-xs 2xl:text-sm gap-x-4 grayscale hover:grayscale-0'>
                       <Image src='/vscode_logo.svg' width={18} height={18} alt='VSCode extension' />
-                      {/* <div className='whitespace-nowrap'></div> */}
                     </div>
                   </Link>
                 </div>
@@ -232,7 +222,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                     >
                       <textarea
                         className='w-[95%] ml-2 px-2 text-sm border-none text-vscode-descriptionForeground'
-                        // type="text"
                         ref={descriptionInputRef}
                         name='task'
                         placeholder='Write a description'
@@ -265,7 +254,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
 export const ProjectView = ({ project }: { project: BAMLProject }) => {
   return (
     <>
-      {/* <DummyHydrate files={project.files} /> */}
       <ProjectViewImpl project={project} />
     </>
   )
@@ -274,7 +262,7 @@ export const ProjectView = ({ project }: { project: BAMLProject }) => {
 const ShareButton = ({ project, projectName }: { project: BAMLProject; projectName: string }) => {
   const [loading, setLoading] = useState(false)
   const editorFiles = useAtomValue(currentEditorFilesAtom)
-  // const runTestOutput = useAtomValue(testRunOutputAtom)
+
   const pathname = usePathname()
   const [unsavedChanges, setUnsavedChanges] = useAtom(unsavedChangesAtom)
 

@@ -1,7 +1,7 @@
 function TestAnthropic(input: string) -> string {
   client Claude
   prompt #"
-    Write a nice haiku 'about {{ input }}
+    Write a nice haiku about {{ input }}
   "#
 }
 
