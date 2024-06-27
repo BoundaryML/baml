@@ -49,7 +49,7 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         self.__event_queue.put_nowait(data)
 
     async def __drive_to_completion(self) -> FunctionResult:
-        print("Drive to completion")
+        
         try:
             retval = await self.__ffi_stream.done(self.__ctx_manager)
             self.__future.set_result(retval)
@@ -73,9 +73,9 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
     async def __aiter__(self):
         self.__drive_to_completion_in_bg()
         while True:
-            print("Loop iteration")
+            
             event = self.__event_queue.get()
-            print("Event")
+            
             if event is None:
                 break
             yield self.__partial_coerce(event.parsed())
