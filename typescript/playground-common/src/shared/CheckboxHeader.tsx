@@ -30,7 +30,7 @@ export const CheckboxHeader = () => {
         Whitespace
       </PromptCheckbox>
       <PromptCheckbox checked={showCurlRequest} onChange={setShowCurl}>
-        Raw Curl
+        Raw cURL
       </PromptCheckbox>
     </div>
   )

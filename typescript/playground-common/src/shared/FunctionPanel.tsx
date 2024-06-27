@@ -1,13 +1,22 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { renderPromptAtom, selectedFunctionAtom, rawCurlAtom } from '../baml_wasm_web/EventListener'
+import {
+  renderPromptAtom,
+  selectedFunctionAtom,
+  rawCurlAtom,
+  generateCurlCommand,
+} from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
 import { PromptChunk } from './ImplPanel'
 import FunctionTestSnippet from './TestSnippet'
-
+import { FiCopy } from 'react-icons/fi'
+import { Button } from '../components/ui/button'
+const handleCopy = (text: string) => () => {
+  navigator.clipboard.writeText(text)
+}
 const PromptPreview: React.FC = () => {
   const promptPreview = useAtomValue(renderPromptAtom)
   const rawCurl = useAtomValue(rawCurlAtom)
@@ -22,23 +31,33 @@ const PromptPreview: React.FC = () => {
     )
   }
 
-  if (showCurlRequest)
+  if (showCurlRequest) {
+    // const curlPreview = generateCurlCommand(rawCurl ?? 'No curl request available')
+    const curlPreview = rawCurl ?? 'No curl request available'
     return (
-      <PromptChunk
-        text={rawCurl ?? 'No curl request available'}
-        type='error'
-        client={{
-          identifier: {
-            end: 0,
-            source_file: '',
-            start: 0,
-            value: 'Curl Request',
-          },
-          provider: '',
-          model: '',
-        }}
-      />
+      <div>
+        <div className='flex justify-end'>
+          <Button onClick={handleCopy(curlPreview)} className='copy-button bg-transparent  hover:bg-indigo-500'>
+            <FiCopy />
+          </Button>
+        </div>
+        <PromptChunk
+          text={curlPreview}
+          client={{
+            identifier: {
+              end: 0,
+              source_file: '',
+              start: 0,
+              value: 'Curl Request',
+            },
+            provider: '',
+            model: '',
+          }}
+          showCopy={true}
+        />
+      </div>
     )
+  }
 
   if (typeof promptPreview === 'string')
     return (

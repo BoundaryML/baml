@@ -165,7 +165,6 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let client = self.get_llm_provider(&client_name, ctx)?;
         let mut selected =
             client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self);
-        // let node_index = node_index.unwrap_or(0);
 
         let node_index = node_index.unwrap_or(0);
 

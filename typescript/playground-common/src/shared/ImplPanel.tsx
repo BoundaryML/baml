@@ -20,8 +20,6 @@ import {
   getEncodingNameForModel,
 } from 'js-tiktoken'
 import { useMemo, useState } from 'react'
-import { Checkbox } from '../components/ui/checkbox'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 
 const Whitespace: React.FC<{ char: 'space' | 'tab' }> = ({ char }) => (
   <span className='opacity-50 text-vscode-descriptionForeground'>{char === 'space' ? <>&middot;</> : <>&rarr;</>}</span>
@@ -71,7 +69,7 @@ const renderLine = ({
       if (segment == '/') {
         return segment
       }
-      return <InvisibleUtf key={index} text={segment} />
+      return segment
     } else {
       return segment
     }
@@ -170,11 +168,13 @@ class TokenEncoderCache {
   }
 }
 
-export const PromptChunk: React.FC<{ text: string; type?: 'preview' | 'error'; client: Impl['client'] }> = ({
-  text,
-  type = 'preview',
-  client,
-}) => {
+export const PromptChunk: React.FC<{
+  text: string
+  type?: 'preview' | 'error'
+  client: Impl['client']
+  showCopy?: boolean
+}> = ({ text, type = 'preview', client, showCopy = false }) => {
+  // Default showCopy to false
   const { showTokens, showWhitespace, showCurlRequest } = useAppState()
 
   const encodingName = client.model
@@ -193,6 +193,10 @@ export const PromptChunk: React.FC<{ text: string; type?: 'preview' | 'error'; c
     'bg-vscode-input-background': type === 'preview',
     'bg-vscode-inputValidation-errorBackground': type === 'error',
   })
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text)
+  }
 
   if (showTokens && tokenizer) {
     const tokenized = Array.from(tokenizer.tokens as number[]).map((token) => tokenizer.enc.decode([token]))

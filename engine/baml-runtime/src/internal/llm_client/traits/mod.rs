@@ -11,6 +11,7 @@ pub use self::{
 use super::{
     primitive::request::RequestBuilder, retry_policy::CallablePolicy, LLMResponse, ModelFeatures,
 };
+use crate::HashMap;
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 use baml_types::{BamlMedia, BamlMediaType, BamlValue, MediaBase64};
 use base64::encode;
@@ -20,11 +21,17 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
 use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
 use reqwest::get;
+use reqwest::header::HeaderMap;
+use reqwest::Body;
 use reqwest::Url;
 use reqwest::{Request, Response};
+use serde_json::to_string_pretty;
+use serde_json::Value;
+use serde_json::{json, ser::PrettyFormatter};
+use shell_escape::escape;
+use std::borrow::Cow;
 use std::io::Write;
 use std::str::FromStr; // Add this line at the top of your file // Add this line at the top of your file
-
 pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;
 }
@@ -312,6 +319,31 @@ where
         }
     }
 }
+
+fn escape_single_quotes(s: &str) -> String {
+    escape(Cow::Borrowed(s)).to_string()
+}
+
+fn to_curl_command(url: &str, method: &str, headers: &HeaderMap, body: Vec<u8>) -> String {
+    let mut curl_command = format!("curl -X {} '{}'", method, url);
+
+    for (key, value) in headers.iter() {
+        let header = format!(" -H '{}: {}'", key.as_str(), value.to_str().unwrap());
+        curl_command.push_str(&header);
+    }
+
+    let body_json = String::from_utf8_lossy(&body).to_string(); // Convert body to string
+    let pretty_body_json = match serde_json::from_str::<serde_json::Value>(&body_json) {
+        Ok(json_value) => serde_json::to_string_pretty(&json_value).unwrap_or(body_json),
+        Err(_) => body_json,
+    };
+    let fully_escaped_body_json = escape_single_quotes(&pretty_body_json);
+    let body_part = format!(" -d {}", fully_escaped_body_json);
+    curl_command.push_str(&body_part);
+
+    curl_command
+}
+
 impl<'ir, T> WithPrompt<'ir> for T
 where
     T: WithClient + WithChat + WithCompletion + RequestBuilder,
@@ -377,7 +409,7 @@ where
         let url_header_value = {
             let headers = request.headers_mut();
             let url_header_value = headers
-                .get("baml-original-url")
+                .get("baml-render-url")
                 .ok_or(anyhow::anyhow!("Missing header 'baml-original-url'"))?;
             url_header_value.to_owned()
         };
@@ -391,9 +423,15 @@ where
         {
             let headers = request.headers_mut();
             headers.remove("baml-original-url");
+            headers.remove("baml-render-url");
         }
 
-        let request_str = request_to_string(&request)?;
+        let body = request
+            .body()
+            .map(|b| b.as_bytes().unwrap_or_default().to_vec())
+            .unwrap_or_default(); // Add this line to handle the Option
+        let request_str = to_curl_command(url_str, "POST", request.headers(), body);
+
         Ok(request_str)
     }
 }

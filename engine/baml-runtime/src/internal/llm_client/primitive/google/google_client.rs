@@ -295,7 +295,8 @@ impl RequestBuilder for GoogleClient {
             req = req.header(key, value);
         }
 
-        req = req.header("baml-original-url", baml_original_url);
+        req = req.header("baml-original-url", baml_original_url.clone());
+        req = req.header("baml-render-url", baml_original_url);
         req = req.header(
             "x-goog-api-key",
             self.properties

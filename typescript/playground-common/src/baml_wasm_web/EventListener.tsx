@@ -338,6 +338,30 @@ export const availableFunctionsAtom = atom((get) => {
   }
   return runtime.list_functions()
 })
+export function generateCurlCommand(inputString: string): string {
+  // Split the input string into lines
+  const lines = inputString.split('\n')
+
+  console.log('Lines:', lines)
+  // Extract the URL
+  const url = lines[0].replace('POST ', '').replace(/U\+002f/g, '/')
+  console.log(`URL: ${url}`)
+  // Extract headers
+  const authorization = lines[1].replace('authorization: ', '').replace(/"/g, '')
+  const contentType = lines[2].replace('content-type: ', '').replace(/"/g, '')
+  console.log(`Authorization: ${authorization}`)
+  // Extract JSON payload and ensure it's correctly escaped
+  const jsonPayload = JSON.stringify(JSON.parse(lines[5]), null, 2)
+  console.log(`JSON Payload: ${jsonPayload}`)
+  // Construct the curl command
+  const curlCommand = `curl -X POST ${url} \\
+-H "Authorization: ${authorization}" \\
+-H "Content-Type: ${contentType}" \\
+-d '${jsonPayload}'
+  `
+
+  return curlCommand
+}
 
 export const rawCurlAtom = atom((get) => {
   const runtime = get(selectedRuntimeAtom)

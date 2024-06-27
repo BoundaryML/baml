@@ -3,7 +3,7 @@
 function TestFnNamedArgsSingleBool(myBool: bool) -> string{
   client GPT35
   prompt #"
-    Return this value back to me: {{myBool}}
+    Return this val'ue "back to me: {{myBool}}
   "#
 }
 
