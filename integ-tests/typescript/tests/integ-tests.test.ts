@@ -14,6 +14,8 @@ import {
 } from '../baml_client'
 import TypeBuilder from '../baml_client/type_builder'
 import { RecursivePartialNull } from '../baml_client/client'
+import { config } from 'dotenv'
+config()
 
 describe('Integ tests', () => {
   it('should work for all inputs', async () => {
@@ -135,15 +137,24 @@ describe('Integ tests', () => {
   })
 
   it('should support streaming in OpenAI', async () => {
-    const stream = b.stream.PromptTestOpenAI('Mt Rainier is tall')
+    const stream = b.stream.PromptTestStreaming('Mt Rainier is tall')
     const msgs: string[] = []
+    const startTime = performance.now()
+
+    let firstMsgTime: number | null = null
     for await (const msg of stream) {
       msgs.push(msg ?? '')
+      if (firstMsgTime === null) {
+        firstMsgTime = performance.now()
+      }
     }
     const final = await stream.getFinalResponse()
 
     expect(final.length).toBeGreaterThan(0)
     expect(msgs.length).toBeGreaterThan(0)
+    expect(firstMsgTime).not.toBeNull()
+    expect(firstMsgTime! - startTime).toBeLessThanOrEqual(1500) // 1.5 seconds
+
     for (let i = 0; i < msgs.length - 2; i++) {
       expect(msgs[i + 1].startsWith(msgs[i])).toBeTruthy()
     }
@@ -167,7 +178,7 @@ describe('Integ tests', () => {
   })
 
   it('should support streaming without iterating', async () => {
-    const final = await b.stream.PromptTestOpenAI('Mt Rainier is tall').getFinalResponse()
+    const final = await b.stream.PromptTestStreaming('Mt Rainier is tall').getFinalResponse()
     expect(final.length).toBeGreaterThan(0)
   })
 
