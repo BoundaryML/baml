@@ -52,6 +52,7 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         
         try:
             retval = await self.__ffi_stream.done(self.__ctx_manager)
+        
             self.__future.set_result(retval)
             return retval
         except Exception as e:
@@ -77,6 +78,7 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
             event = self.__event_queue.get()
             
             if event is None:
+            
                 break
             yield self.__partial_coerce(event.parsed())
 

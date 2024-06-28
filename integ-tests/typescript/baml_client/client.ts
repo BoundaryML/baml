@@ -592,21 +592,6 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
-  async PromptTestOpenAI(
-      input: string,
-      __baml_options__?: { tb?: TypeBuilder }
-  ): Promise<string> {
-    const raw = await this.runtime.callFunction(
-      "PromptTestOpenAI",
-      {
-        "input": input
-      },
-      this.ctx_manager.get(),
-      __baml_options__?.tb?.__tb(),
-    )
-    return raw.parsed() as string
-  }
-  
   async PromptTestOpenAIChat(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
@@ -628,6 +613,21 @@ export class BamlClient {
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "PromptTestOpenAIChatNoSystem",
+      {
+        "input": input
+      },
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return raw.parsed() as string
+  }
+  
+  async PromptTestStreaming(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "PromptTestStreaming",
       {
         "input": input
       },
@@ -1742,28 +1742,6 @@ class BamlStreamClient {
     )
   }
   
-  PromptTestOpenAI(
-      input: string,
-      __baml_options__?: { tb?: TypeBuilder }
-  ): BamlStream<RecursivePartialNull<string>, string> {
-    const raw = this.runtime.streamFunction(
-      "PromptTestOpenAI",
-      {
-        "input": input
-      },
-      undefined,
-      this.ctx_manager.get(),
-      __baml_options__?.tb?.__tb(),
-    )
-    return new BamlStream<RecursivePartialNull<string>, string>(
-      raw,
-      (a): a is RecursivePartialNull<string> => a,
-      (a): a is string => a,
-      this.ctx_manager.get(),
-      __baml_options__?.tb?.__tb(),
-    )
-  }
-  
   PromptTestOpenAIChat(
       input: string,
       __baml_options__?: { tb?: TypeBuilder }
@@ -1792,6 +1770,28 @@ class BamlStreamClient {
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestOpenAIChatNoSystem",
+      {
+        "input": input
+      },
+      undefined,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return new BamlStream<RecursivePartialNull<string>, string>(
+      raw,
+      (a): a is RecursivePartialNull<string> => a,
+      (a): a is string => a,
+      this.ctx_manager.get(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  PromptTestStreaming(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder }
+  ): BamlStream<RecursivePartialNull<string>, string> {
+    const raw = this.runtime.streamFunction(
+      "PromptTestStreaming",
       {
         "input": input
       },
