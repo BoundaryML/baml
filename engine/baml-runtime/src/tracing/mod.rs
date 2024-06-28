@@ -6,10 +6,9 @@ mod wasm_tracer;
 
 use crate::on_log_event::LogEventCallbackSync;
 use anyhow::Result;
-use baml_types::{BamlMap, BamlMedia, BamlMediaType, BamlValue};
+use baml_types::{BamlMap, BamlMediaType, BamlValue};
 use colored::Colorize;
 use internal_baml_jinja::RenderedPrompt;
-use serde_json::json;
 use std::collections::HashMap;
 
 use uuid::Uuid;
@@ -517,7 +516,7 @@ impl From<&LLMResponse> for LLMEventSchema {
                         template_args: Default::default(),
                         r#override: None,
                     },
-                    invocation_params: Default::default(),
+                    request_options: Default::default(),
                 },
                 output: None,
                 error: Some(s.clone()),
@@ -531,7 +530,7 @@ impl From<&LLMResponse> for LLMEventSchema {
                         template_args: Default::default(),
                         r#override: None,
                     },
-                    invocation_params: s.invocation_params.clone(),
+                    request_options: s.request_options.clone(),
                 },
                 output: Some(LLMOutputModel {
                     raw_text: s.content.clone(),
@@ -555,7 +554,7 @@ impl From<&LLMResponse> for LLMEventSchema {
                         template_args: Default::default(),
                         r#override: None,
                     },
-                    invocation_params: s.invocation_params.clone(),
+                    request_options: s.request_options.clone(),
                 },
                 output: None,
                 error: Some(s.message.clone()),

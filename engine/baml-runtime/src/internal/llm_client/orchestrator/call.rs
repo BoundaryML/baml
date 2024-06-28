@@ -1,6 +1,6 @@
 use anyhow::Result;
 use baml_types::BamlValue;
-use instant::Duration;
+use web_time::Duration;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
 

@@ -1,6 +1,5 @@
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
-use cfg_if::cfg_if;
 use internal_baml_core::internal_baml_diagnostics::Diagnostics;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
@@ -8,16 +7,14 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
-use crate::tracing::api_wrapper::core_types::LogSchema;
 use crate::tracing::{BamlTracer, TracingSpan};
-use crate::type_builder::TypeBuilder;
 use crate::types::on_log_event::LogEventCallbackSync;
 use crate::RuntimeContextManager;
 use crate::{
     internal::{ir_features::IrFeatures, llm_client::retry_policy::CallablePolicy},
     runtime::InternalBamlRuntime,
     types::FunctionResultStream,
-    FunctionResult, RuntimeContext, TestResponse,
+    FunctionResult, RuntimeContext,
 };
 
 pub(crate) trait RuntimeConstructor {

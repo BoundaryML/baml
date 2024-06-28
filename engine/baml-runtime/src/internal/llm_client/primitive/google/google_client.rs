@@ -15,12 +15,11 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
-use baml_types::{BamlMedia, BamlMediaType};
+use baml_types::{BamlMedia};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use reqwest::Response;
 use serde_json::json;
 use std::collections::HashMap;
 struct PostRequestProperities {
@@ -157,7 +156,7 @@ impl SseResponseTrait for GoogleClient {
                         start_time: system_start,
                         latency: instant_start.elapsed(),
                         model: model_id,
-                        invocation_params: params.clone(),
+                        request_options: params.clone(),
                         metadata: LLMCompleteResponseMetadata {
                             baml_is_complete: false,
                             finish_reason: None,
@@ -186,7 +185,7 @@ impl SseResponseTrait for GoogleClient {
                                             prompt.clone(),
                                         ),
                                         start_time: system_start,
-                                        invocation_params: params.clone(),
+                                        request_options: params.clone(),
                                         latency: instant_start.elapsed(),
                                         message: format!("Failed to parse event: {:#?}", e),
                                         code: ErrorCode::Other(2),
@@ -220,7 +219,7 @@ impl SseResponseTrait for GoogleClient {
 impl WithStreamChat for GoogleClient {
     async fn stream_chat(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> StreamResponse {
         //incomplete, streaming response object is returned
@@ -267,11 +266,11 @@ impl RequestBuilder for GoogleClient {
         &self.client
     }
 
-    fn build_request(
+    async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
-    ) -> reqwest::RequestBuilder {
+    ) -> Result<reqwest::RequestBuilder> {
         let mut should_stream = "generateContent";
         if stream {
             should_stream = "streamGenerateContent?alt=sse";
@@ -316,9 +315,9 @@ impl RequestBuilder for GoogleClient {
             }
         }
 
-        req.json(&body)
+        Ok(req.json(&body))
     }
-    fn invocation_params(&self) -> &HashMap<String, serde_json::Value> {
+    fn request_options(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
     }
 }
@@ -347,7 +346,7 @@ impl WithChat for GoogleClient {
                 model: None,
                 prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                 start_time: system_now,
-                invocation_params: self.properties.properties.clone(),
+                request_options: self.properties.properties.clone(),
                 latency: instant_now.elapsed(),
                 message: format!(
                     "Expected exactly one content block, got {}",
@@ -363,7 +362,7 @@ impl WithChat for GoogleClient {
             content: response.candidates[0].content.parts[0].text.clone(),
             start_time: system_now,
             latency: instant_now.elapsed(),
-            invocation_params: self.properties.properties.clone(),
+            request_options: self.properties.properties.clone(),
             model: self
                 .properties
                 .properties

@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc},
 };
 
 use crate::{
@@ -10,19 +10,17 @@ use crate::{
         llm_client::{
             llm_provider::LLMProvider,
             orchestrator::{
-                orchestrate_call, IterOrchestrator, LLMPrimitiveProvider, OrchestrationScope,
+                orchestrate_call, IterOrchestrator, OrchestrationScope,
                 OrchestratorNode,
             },
             retry_policy::CallablePolicy,
-            traits::WithPrompt,
+            traits::{WithPrompt, WithRenderRawCurl},
         },
         prompt_renderer::PromptRenderer,
     },
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
-    tracing::{BamlTracer, TracingSpan},
-    type_builder::TypeBuilder,
-    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RuntimeContext,
-    RuntimeContextManager, RuntimeInterface, TestResponse,
+    tracing::{BamlTracer},
+    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RuntimeContext, RuntimeInterface,
 };
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};

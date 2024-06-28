@@ -341,6 +341,28 @@ class BamlClient:
       mdl = create_model("ExtractPeopleReturnType", inner=(List[types.Person], ...))
       return coerce(mdl, raw.parsed())
     
+    async def ExtractReceiptInfo(
+        self,
+        email: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.ReceiptInfo:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "ExtractReceiptInfo",
+        {
+          "email": email,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("ExtractReceiptInfoReturnType", inner=(types.ReceiptInfo, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def ExtractResume(
         self,
         resume: str,img: Optional[baml_py.Image],
@@ -957,6 +979,28 @@ class BamlClient:
       mdl = create_model("TestAnthropicReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    async def TestAws(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "TestAws",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("TestAwsReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def TestAzure(
         self,
         input: str,
@@ -1285,6 +1329,28 @@ class BamlClient:
         tb,
       )
       mdl = create_model("TestOpenAIReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    async def TestOpenAILegacyProvider(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "TestOpenAILegacyProvider",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("TestOpenAILegacyProviderReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
     async def TestRetryConstant(
@@ -1775,6 +1841,38 @@ class BamlStreamClient:
       partial_mdl = create_model("ExtractPeoplePartialReturnType", inner=(List[partial_types.Person], ...))
 
       return baml_py.BamlStream[List[partial_types.Person], List[types.Person]](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
+    def ExtractReceiptInfo(
+        self,
+        email: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.ReceiptInfo, types.ReceiptInfo]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "ExtractReceiptInfo",
+        {
+          "email": email,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("ExtractReceiptInfoReturnType", inner=(types.ReceiptInfo, ...))
+      partial_mdl = create_model("ExtractReceiptInfoPartialReturnType", inner=(partial_types.ReceiptInfo, ...))
+
+      return baml_py.BamlStream[partial_types.ReceiptInfo, types.ReceiptInfo](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
@@ -2679,6 +2777,38 @@ class BamlStreamClient:
         tb,
       )
     
+    def TestAws(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "TestAws",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("TestAwsReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestAwsPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
     def TestAzure(
         self,
         input: str,
@@ -3150,6 +3280,38 @@ class BamlStreamClient:
 
       mdl = create_model("TestOpenAIReturnType", inner=(str, ...))
       partial_mdl = create_model("TestOpenAIPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
+    def TestOpenAILegacyProvider(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "TestOpenAILegacyProvider",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("TestOpenAILegacyProviderReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestOpenAILegacyProviderPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlStream[Optional[str], str](
         raw,

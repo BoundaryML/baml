@@ -1,10 +1,10 @@
 function DescribeImage(img: image) -> string {
-  client GPT4Turbo
+  client AwsBedrock
   prompt #"
     {{ _.role("user") }}
 
 
-    Describe the image below in 5 words:
+    Describe the image below in 20 words:
     {{ img }}
   "#
 
@@ -60,4 +60,11 @@ function DescribeImage4(classWithImage: ClassWithImage, img2: image) -> string {
     Tell me also what's happening here in one sentence and relate it to the word {{ classWithImage.param2 }}:
     {{ img2 }}
   "#
+}
+
+test TestName {
+  functions [DescribeImage]
+  args {
+    img { url "https://imgs.xkcd.com/comics/standards.png"}
+  }
 }

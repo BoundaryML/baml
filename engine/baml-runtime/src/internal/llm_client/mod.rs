@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
 use colored::*;
-// mod anthropic;
-mod common;
 pub mod llm_provider;
 pub mod orchestrator;
 pub mod primitive;
@@ -71,7 +69,7 @@ pub struct LLMErrorResponse {
     pub client: String,
     pub model: Option<String>,
     pub prompt: RenderedPrompt,
-    pub invocation_params: HashMap<String, serde_json::Value>,
+    pub request_options: HashMap<String, serde_json::Value>,
     pub start_time: web_time::SystemTime,
     pub latency: web_time::Duration,
 
@@ -136,7 +134,7 @@ pub struct LLMCompleteResponse {
     pub client: String,
     pub model: String,
     pub prompt: RenderedPrompt,
-    pub invocation_params: HashMap<String, serde_json::Value>,
+    pub request_options: HashMap<String, serde_json::Value>,
     pub content: String,
     pub start_time: web_time::SystemTime,
     pub latency: web_time::Duration,

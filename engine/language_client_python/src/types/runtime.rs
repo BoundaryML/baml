@@ -8,7 +8,6 @@ use super::type_builder::TypeBuilder;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
-use pyo3::types::{PyDict, PyTuple};
 use pyo3::{pyclass, PyObject, Python, ToPyObject};
 use std::collections::HashMap;
 use std::path::PathBuf;

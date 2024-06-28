@@ -1,18 +1,15 @@
 use std::{
     collections::HashMap,
-    fmt::format,
-    sync::{Arc, Mutex},
 };
 
 use anyhow::{Context, Result};
-use baml_types::{BamlMedia, BamlMediaType};
+use baml_types::{BamlMedia};
 use eventsource_stream::Eventsource;
-use futures::{SinkExt, StreamExt};
+use futures::{StreamExt};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{
     ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
 };
-use reqwest::Response;
 
 use crate::{
     internal::llm_client::{
@@ -98,26 +95,20 @@ fn resolve_properties(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .or_else(|| ctx.env.get("ANTHROPIC_API_KEY").map(|s| s.to_string()));
 
-    let headers = properties.remove("headers").map(|v| {
-        if let Some(v) = v.as_object() {
-            v.iter()
-                .map(|(k, v)| {
-                    Ok((
-                        k.to_string(),
-                        match v {
-                            serde_json::Value::String(s) => s.to_string(),
-                            _ => anyhow::bail!("Header '{k}' must be a string"),
-                        },
-                    ))
-                })
-                .collect::<Result<HashMap<String, String>>>()
-        } else {
-            Ok(Default::default())
-        }
-    });
-
-    let mut headers = match headers {
-        Some(h) => h?,
+    let mut headers = match properties.remove("headers") {
+        Some(headers) => headers
+            .as_object()
+            .context("headers must be a map of strings to strings")?
+            .iter()
+            .map(|(k, v)| {
+                Ok((
+                    k.to_string(),
+                    v.as_str()
+                        .context(format!("Header '{}' must be a string", k))?
+                        .to_string(),
+                ))
+            })
+            .collect::<Result<HashMap<_, _>>>()?,
         None => Default::default(),
     };
 
@@ -181,7 +172,7 @@ impl SseResponseTrait for AnthropicClient {
                         start_time: system_start,
                         latency: instant_start.elapsed(),
                         model: "".to_string(),
-                        invocation_params: params.clone(),
+                        request_options: params.clone(),
                         metadata: LLMCompleteResponseMetadata {
                             baml_is_complete: false,
                             finish_reason: None,
@@ -208,7 +199,7 @@ impl SseResponseTrait for AnthropicClient {
                                         prompt: internal_baml_jinja::RenderedPrompt::Chat(
                                             prompt.clone(),
                                         ),
-                                        invocation_params: params.clone(),
+                                        request_options: params.clone(),
                                         start_time: system_start,
                                         latency: instant_start.elapsed(),
                                         message: format!("Failed to parse event: {:#?}", e),
@@ -273,7 +264,7 @@ impl SseResponseTrait for AnthropicClient {
                                         prompt: internal_baml_jinja::RenderedPrompt::Chat(
                                             prompt.clone(),
                                         ),
-                                        invocation_params: params.clone(),
+                                        request_options: params.clone(),
                                         start_time: system_start,
                                         latency: instant_start.elapsed(),
                                         message: err.message,
@@ -295,7 +286,7 @@ impl SseResponseTrait for AnthropicClient {
 impl WithStreamChat for AnthropicClient {
     async fn stream_chat(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> StreamResponse {
         let (response, system_now, instant_now) =
@@ -343,12 +334,21 @@ impl RequestBuilder for AnthropicClient {
         &self.client
     }
 
-    fn build_request(
+    async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
-    ) -> reqwest::RequestBuilder {
-        let mut req = self.client.post({
+    ) -> Result<reqwest::RequestBuilder> {
+        let mut req = self.client.post(if prompt.is_left() {
+            format!(
+                "{}/v1/complete",
+                self.properties
+                    .proxy_url
+                    .as_ref()
+                    .unwrap_or(&self.properties.base_url)
+                    .clone()
+            )
+        } else {
             format!(
                 "{}/v1/messages",
                 self.properties
@@ -388,10 +388,10 @@ impl RequestBuilder for AnthropicClient {
         }
         log::debug!("Request body: {:#?}", body);
 
-        req.json(&body)
+        Ok(req.json(&body))
     }
 
-    fn invocation_params(&self) -> &HashMap<String, serde_json::Value> {
+    fn request_options(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
     }
 }
@@ -422,7 +422,7 @@ impl WithChat for AnthropicClient {
                 model: None,
                 prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                 start_time: system_now,
-                invocation_params: self.properties.properties.clone(),
+                request_options: self.properties.properties.clone(),
                 latency: instant_now.elapsed(),
                 message: format!(
                     "Expected exactly one content block, got {}",
@@ -438,7 +438,7 @@ impl WithChat for AnthropicClient {
             content: response.content[0].text.clone(),
             start_time: system_now,
             latency: instant_now.elapsed(),
-            invocation_params: self.properties.properties.clone(),
+            request_options: self.properties.properties.clone(),
             model: response.model,
             metadata: LLMCompleteResponseMetadata {
                 baml_is_complete: match response.stop_reason {

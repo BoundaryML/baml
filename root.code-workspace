@@ -78,6 +78,7 @@
       "titleBar.activeForeground": "#FFFBFB"
     },
     "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome"
+    
   },
   "extensions": {
     "recommendations": [

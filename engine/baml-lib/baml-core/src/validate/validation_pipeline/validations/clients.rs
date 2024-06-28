@@ -1,4 +1,4 @@
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
+use internal_baml_diagnostics::{DatamodelError};
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -20,6 +20,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             "baml-fallback",
             "fallback",
             "google-ai",
+            "aws-bedrock",
         ];
 
         let suggestions: Vec<String> = allowed_providers

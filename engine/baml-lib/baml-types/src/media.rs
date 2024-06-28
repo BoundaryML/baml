@@ -58,6 +58,8 @@ impl fmt::Display for MediaUrl {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct MediaBase64 {
     pub base64: String,
+    /// Explicitly specified by the 'type' field on img and audio structs in BAML files.
+    /// example: "image/png", "image/jpeg", "audio/mp3"
     pub media_type: String,
 }
 

@@ -1,5 +1,5 @@
 function TestImageInput(img: image) -> string{
-  client Claude
+  client AwsBedrock
   prompt #"
     {{ _.role("user") }}
 

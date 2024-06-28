@@ -12,6 +12,13 @@ function TestOpenAI(input: string) -> string {
   "#
 }
 
+function TestOpenAILegacyProvider(input: string) -> string {
+  client GPT35LegacyProvider
+  prompt #"
+    Write a nice haiku about {{ input }}
+  "#
+}
+
 function TestAzure(input: string) -> string {
   client GPT35Azure
   prompt #"
@@ -33,9 +40,16 @@ function TestGemini(input: string) -> string {
   "#
 }
 
+function TestAws(input: string) -> string {
+  client AwsBedrock
+  prompt #"
+    Write a nice short story about {{ input }}
+  "#
+}
+
 
 test TestProvider {
-  functions [TestAnthropic, TestOpenAI, TestAzure, TestOllama, TestGemini]
+  functions [TestAnthropic, TestOpenAI, TestAzure, TestOllama, TestGemini, TestAws]
   args {
     input "Donkey kong and peanut butter"
   }

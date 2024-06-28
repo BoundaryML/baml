@@ -151,11 +151,24 @@ async def test_claude():
 async def test_gemini():
     geminiRes = await b.TestGemini(input="Dr. Pepper")
     print(f"LLM output from Gemini: {geminiRes}")
+    assert len(geminiRes) > 0, "Expected non-empty result but got empty."
 
-    geminiRes = await b.TestGemini(input="Dr. Pepper")
+@pytest.mark.asyncio
+async def test_gemini_streaming():
+    geminiRes = await b.stream.TestGemini(input="Dr. Pepper").get_final_response()
     print(f"LLM output from Gemini: {geminiRes}")
 
     assert len(geminiRes) > 0, "Expected non-empty result but got empty."
+
+@pytest.mark.asyncio
+async def test_aws():
+    res = await b.TestAws(input="Mt Rainier is tall")
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+@pytest.mark.asyncio
+async def test_aws_streaming():
+    res = await b.stream.TestAws(input="Mt Rainier is tall").get_final_response()
+    assert len(res) > 0, "Expected non-empty result but got empty."
 
 
 @pytest.mark.asyncio
@@ -491,7 +504,6 @@ async def test_nested_class_streaming():
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     print("final ", final.model_dump(mode="json"))
 
-
 @pytest.mark.asyncio
 async def test_event_log_hook():
     def event_log_hook(event):
@@ -501,3 +513,20 @@ async def test_event_log_hook():
     on_log_event(event_log_hook)
     res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
     assert res
+
+@pytest.mark.asyncio
+async def test_aws_bedrock():
+    ## unstreamed
+    # res = await b.TestAws("lightning in a rock")
+    # print("unstreamed", res)
+
+
+    ## streamed
+    stream = b.stream.TestAws("lightning in a rock")
+
+    async for msg in stream:
+        print("streamed ", repr(msg[-100:]))
+
+    res = await stream.get_final_response()
+    print("streamed final", res)
+    assert len(res) > 0, "Expected non-empty result but got empty."

@@ -1,16 +1,14 @@
-use std::ops::Deref;
 
 use anyhow::Result;
 use async_std::stream::StreamExt;
 use baml_types::BamlValue;
-use instant::Duration;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
+use web_time::Duration;
 
 use crate::{
     internal::{
         llm_client::{
-            primitive::request::RequestBuilder,
             traits::{WithPrompt, WithStreamable},
             LLMErrorResponse, LLMResponse,
         },
@@ -83,7 +81,7 @@ where
                         prompt,
                         start_time: system_start,
                         latency: instant_start.elapsed(),
-                        invocation_params: node.provider.invocation_params().clone(),
+                        request_options: node.provider.request_options().clone(),
                         message: "Stream ended without response".to_string(),
                         code: crate::internal::llm_client::ErrorCode::from_u16(2),
                     })

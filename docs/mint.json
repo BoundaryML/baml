@@ -88,13 +88,13 @@
             {
               "group": "providers",
               "pages": [
-                "docs/snippets/clients/providers/openai",
-                "docs/snippets/clients/providers/azure",
-                "docs/snippets/clients/providers/ollama",
                 "docs/snippets/clients/providers/anthropic",
+                "docs/snippets/clients/providers/aws-bedrock",
+                "docs/snippets/clients/providers/azure",
                 "docs/snippets/clients/providers/gemini",
+                "docs/snippets/clients/providers/ollama",
+                "docs/snippets/clients/providers/openai",
                 "docs/snippets/clients/providers/vertex",
-                "docs/snippets/clients/providers/bedrock",
                 "docs/snippets/clients/providers/other"
               ]
             },

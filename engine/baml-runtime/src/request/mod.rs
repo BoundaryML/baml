@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use instant::Duration;
+use web_time::Duration;
 
 pub(crate) fn create_client() -> Result<reqwest::Client> {
     cfg_if::cfg_if! {

@@ -7,9 +7,8 @@ mod field_type;
 mod ir_ref;
 use anyhow::Result;
 use internal_baml_jinja::types::OutputFormatContent;
-use std::{collections::HashMap, fmt::Display};
 
-use internal_baml_core::ir::{repr::IntermediateRepr, FieldType};
+use internal_baml_core::ir::{FieldType};
 
 use super::types::BamlValueWithFlags;
 

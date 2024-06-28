@@ -854,7 +854,7 @@ impl WasmRuntime {
         if let Ok(walker) = runtime.find_class(symbol) {
             let elem = walker.span().unwrap();
 
-            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let _uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
             return Some(SymbolLocation {
                 uri: elem.file.path().to_string(), // Use the variable here
@@ -868,7 +868,7 @@ impl WasmRuntime {
         if let Ok(walker) = runtime.find_function(symbol) {
             let elem = walker.span().unwrap();
 
-            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let _uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
             return Some(SymbolLocation {
                 uri: elem.file.path().to_string(), // Use the variable here
@@ -882,7 +882,7 @@ impl WasmRuntime {
         if let Ok(walker) = runtime.find_client(symbol) {
             let elem = walker.span().unwrap();
 
-            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let _uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
 
             return Some(SymbolLocation {
@@ -897,7 +897,7 @@ impl WasmRuntime {
         if let Ok(walker) = runtime.find_retry_policy(symbol) {
             let elem = walker.span().unwrap();
 
-            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let _uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
             return Some(SymbolLocation {
                 uri: elem.file.path().to_string(), // Use the variable here
@@ -910,7 +910,7 @@ impl WasmRuntime {
 
         if let Ok(walker) = runtime.find_template_string(symbol) {
             let elem = walker.span().unwrap();
-            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let _uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
             return Some(SymbolLocation {
                 uri: elem.file.path().to_string(), // Use the variable here

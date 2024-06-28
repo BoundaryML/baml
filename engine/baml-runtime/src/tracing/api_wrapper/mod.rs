@@ -3,7 +3,6 @@ mod env_setup;
 use anyhow::Result;
 pub(super) mod api_interface;
 pub(crate) mod core_types;
-use instant::Duration;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::{json, Value};
 
@@ -201,6 +200,7 @@ impl CompleteAPIConfig {
 
 #[derive(Deserialize)]
 struct LogResponse {
+    #[allow(dead_code)]
     status: Option<String>,
 }
 

@@ -1,4 +1,4 @@
-use std::{fmt::format, pin::Pin};
+use std::pin::Pin;
 
 use anyhow::Result;
 
@@ -12,14 +12,12 @@ use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
 
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 use baml_types::{BamlMedia, BamlMediaType, BamlValue, MediaBase64};
-use base64::encode;
-use futures::stream::StreamExt;
+use base64::{prelude::BASE64_STANDARD, Engine};
+use futures::stream::{StreamExt, TryStreamExt};
 use infer;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
 use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
-use reqwest::get;
-use reqwest::header::HeaderMap;
 
 use reqwest::Url;
 
@@ -27,6 +25,11 @@ use shell_escape::escape;
 use std::borrow::Cow;
 
 use std::str::FromStr; // Add this line at the top of your file // Add this line at the top of your file
+
+// #[enum_dispatch]
+
+// #[delegatable_trait]
+// #[enum_dispatch]
 pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;
 }
@@ -58,7 +61,12 @@ pub trait WithPrompt<'ir> {
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<RenderedPrompt>;
+}
 
+// #[delegatable_trait]
+// #[enum_dispatch]
+pub trait WithRenderRawCurl {
+    #[allow(async_fn_in_trait)]
     async fn render_raw_curl(
         &self,
         ctx: &RuntimeContext,
@@ -83,24 +91,27 @@ where
                             match part {
                                 ChatMessagePart::Image(BamlMedia::Url(_, media_url))
                                 | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
-                                    let mut base64 = "".to_string();
-                                    let mut mime_type = "".to_string();
-                                    if media_url.url.starts_with("data:") {
+                                    let (base64, mime_type) = if media_url.url.starts_with("data:") {
                                         let parts: Vec<&str> =
                                             media_url.url.splitn(2, ',').collect();
-                                        base64 = parts.get(1).unwrap().to_string();
+                                        let base64 = parts.get(1).unwrap().to_string();
                                         let prefix = parts.get(0).unwrap();
-                                        mime_type =
-                                            prefix.splitn(2, ':').next().unwrap().to_string();
-                                        mime_type =
-                                            mime_type.split('/').last().unwrap().to_string();
+                                        let mime_type =
+                                            prefix.splitn(2, ':').next().unwrap().to_string()
+                                            .split('/').last().unwrap().to_string();
+
+                                        (base64, mime_type)
                                     } else {
-                                        let response = match get(&media_url.url).await {
+                                        let client = reqwest::Client::new();
+                                        let response = match client.get(&media_url.url)
+                                            // NB(sam): this would workaround CORS issues, but https://github.com/seanmonstar/reqwest/issues/1401
+                                            //.fetch_mode_no_cors()
+                                            .send().await
+                                        {
                                             Ok(response) => response,
                                             Err(e) => {
                                                 return Err(LLMResponse::OtherFailure(
-                                                    "Failed to fetch image due to CORS issue"
-                                                        .to_string(),
+                                                    format!("Failed to fetch image due to CORS issue: {e:?}")
                                                 ))
                                             } // replace with your error conversion logic
                                         };
@@ -109,16 +120,17 @@ where
                                             Err(e) => {
                                                 return Err(LLMResponse::OtherFailure(
                                                     e.to_string(),
-                                                ))
+                                                ));
                                             } // replace with your error conversion logic
                                         };
-                                        base64 = encode(&bytes);
+                                        let base64 = BASE64_STANDARD.encode(&bytes);
                                         let inferred_type = infer::get(&bytes);
-                                        mime_type = inferred_type.map_or_else(
+                                        let mime_type = inferred_type.map_or_else(
                                             || "application/octet-stream".into(),
                                             |t| t.extension().into(),
                                         );
-                                    }
+                                        (base64, mime_type)
+                                    };
 
                                     Ok(if matches!(part, ChatMessagePart::Image(_)) {
                                         ChatMessagePart::Image(BamlMedia::Base64(
@@ -211,7 +223,9 @@ where
                                         mime_type =
                                             mime_type.split('/').last().unwrap().to_string();
                                     } else {
-                                        let response = match get(&media_url.url).await {
+                                        let client = reqwest::Client::new();
+                                        let response = match client.get(&media_url.url).send().await
+                                        {
                                             Ok(response) => response,
                                             Err(e) => {
                                                 return Err(LLMResponse::OtherFailure(
@@ -228,7 +242,7 @@ where
                                                 ))
                                             } // replace with your error conversion logic
                                         };
-                                        base64 = encode(&bytes);
+                                        base64 = BASE64_STANDARD.encode(&bytes);
                                         let inferred_type = infer::get(&bytes);
                                         mime_type = inferred_type.map_or_else(
                                             || "application/octet-stream".into(),
@@ -301,7 +315,12 @@ fn escape_single_quotes(s: &str) -> String {
     escape(Cow::Borrowed(s)).to_string()
 }
 
-fn to_curl_command(url: &str, method: &str, headers: &HeaderMap, body: Vec<u8>) -> String {
+fn to_curl_command(
+    url: &str,
+    method: &str,
+    headers: &reqwest::header::HeaderMap,
+    body: Vec<u8>,
+) -> String {
     let mut curl_command = format!("curl -X {} '{}'", method, url);
 
     for (key, value) in headers.iter() {
@@ -323,7 +342,7 @@ fn to_curl_command(url: &str, method: &str, headers: &HeaderMap, body: Vec<u8>) 
 
 impl<'ir, T> WithPrompt<'ir> for T
 where
-    T: WithClient + WithChat + WithCompletion + RequestBuilder,
+    T: WithClient + WithChat + WithCompletion,
 {
     fn render_prompt(
         &'ir self,
@@ -371,7 +390,12 @@ where
 
         Ok(prompt)
     }
+}
 
+impl<T> WithRenderRawCurl for T
+where
+    T: WithClient + WithChat + WithCompletion + RequestBuilder,
+{
     async fn render_raw_curl(
         &self,
         ctx: &RuntimeContext,
@@ -381,7 +405,9 @@ where
         let rendered_prompt = RenderedPrompt::Chat(prompt.clone());
 
         let chat_messages = self.curl_call(ctx, &rendered_prompt).await?;
-        let request_builder = self.build_request(either::Right(&chat_messages), stream);
+        let request_builder = self
+            .build_request(either::Right(&chat_messages), stream)
+            .await?;
         let mut request = request_builder.build()?;
         let url_header_value = {
             let headers = request.headers_mut();
@@ -472,7 +498,14 @@ where
                                             .unwrap() // Get the part before ";base64"
                                             .to_string();
                                     } else {
-                                        let response = match get(&media_url.url).await {
+                                        let client = reqwest::Client::new();
+                                        let response = match client
+                                            .get(&media_url.url)
+                                            // NB(sam): this would workaround CORS issues, but https://github.com/seanmonstar/reqwest/issues/1401
+                                            //.fetch_mode_no_cors()
+                                            .send()
+                                            .await
+                                        {
                                             Ok(response) => response,
                                             Err(e) => {
                                                 return Err(LLMResponse::OtherFailure(
@@ -489,7 +522,7 @@ where
                                                 ))
                                             } // replace with your error conversion logic
                                         };
-                                        base64 = encode(&bytes);
+                                        base64 = BASE64_STANDARD.encode(&bytes);
                                         let inferred_type = infer::get(&bytes);
                                         mime_type = inferred_type.map_or_else(
                                             || "application/octet-stream".into(),

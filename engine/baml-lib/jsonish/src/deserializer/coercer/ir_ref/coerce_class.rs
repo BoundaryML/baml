@@ -1,10 +1,8 @@
-use std::{collections::HashMap, iter};
 
 use anyhow::Result;
 use baml_types::BamlMap;
 use internal_baml_core::{
-    ast::Field,
-    ir::{ClassFieldWalker, ClassWalker, FieldType},
+    ir::{FieldType},
 };
 use internal_baml_jinja::types::{Class, Name};
 
