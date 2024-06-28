@@ -142,11 +142,13 @@ describe('Integ tests', () => {
     const startTime = performance.now()
 
     let firstMsgTime: number | null = null
+    let lastMsgTime = startTime
     for await (const msg of stream) {
       msgs.push(msg ?? '')
       if (firstMsgTime === null) {
         firstMsgTime = performance.now()
       }
+      lastMsgTime = performance.now()
     }
     const final = await stream.getFinalResponse()
 
@@ -154,6 +156,7 @@ describe('Integ tests', () => {
     expect(msgs.length).toBeGreaterThan(0)
     expect(firstMsgTime).not.toBeNull()
     expect(firstMsgTime! - startTime).toBeLessThanOrEqual(1500) // 1.5 seconds
+    expect(lastMsgTime - startTime).toBeGreaterThan(1000) // 1.0 seconds
 
     for (let i = 0; i < msgs.length - 2; i++) {
       expect(msgs[i + 1].startsWith(msgs[i])).toBeTruthy()
