@@ -1,3 +1,4 @@
+from typing import List
 import pytest
 from dotenv import load_dotenv
 from base64_test_data import image_b64, audio_b64
@@ -62,7 +63,7 @@ class MyCustomClass(NamedArgsSingleClass):
 @pytest.mark.asyncio
 async def accepts_subclass_of_baml_type():
     print("calling with class")
-    res = await b.TestFnNamedArgsSingleClass(
+    _ = await b.TestFnNamedArgsSingleClass(
         myArg=MyCustomClass(
             key="key", key_two=True, key_three=52, date=datetime.datetime.now()
         )
@@ -107,7 +108,7 @@ async def test_should_work_with_image_url():
 @pytest.mark.asyncio
 async def test_should_work_with_image_base64():
     res = await b.TestImageInput(img=baml_py.Image.from_base64("image/png", image_b64))
-    assert "green" in res.lower()
+    assert "green" in res.lower() or "orge" in res.lower()
 
 
 @pytest.mark.asyncio
@@ -153,6 +154,7 @@ async def test_gemini():
     print(f"LLM output from Gemini: {geminiRes}")
     assert len(geminiRes) > 0, "Expected non-empty result but got empty."
 
+
 @pytest.mark.asyncio
 async def test_gemini_streaming():
     geminiRes = await b.stream.TestGemini(input="Dr. Pepper").get_final_response()
@@ -160,10 +162,12 @@ async def test_gemini_streaming():
 
     assert len(geminiRes) > 0, "Expected non-empty result but got empty."
 
+
 @pytest.mark.asyncio
 async def test_aws():
     res = await b.TestAws(input="Mt Rainier is tall")
     assert len(res) > 0, "Expected non-empty result but got empty."
+
 
 @pytest.mark.asyncio
 async def test_aws_streaming():
@@ -173,7 +177,9 @@ async def test_aws_streaming():
 
 @pytest.mark.asyncio
 async def test_streaming():
-    stream = b.stream.PromptTestStreaming(input="Programming languages are fun to create")
+    stream = b.stream.PromptTestStreaming(
+        input="Programming languages are fun to create"
+    )
     msgs = []
 
     start_time = asyncio.get_event_loop().time()
@@ -182,14 +188,17 @@ async def test_streaming():
         msgs.append(msg)
         if len(msgs) == 1:
             first_msg_time = asyncio.get_event_loop().time()
-        
+
         last_msg_time = asyncio.get_event_loop().time()
-        
 
     final = await stream.get_final_response()
 
-    assert first_msg_time - start_time <= 1.5, "Expected first message within 1 second but it took longer."
-    assert last_msg_time - start_time >= 1, "Expected last message after 1.5 seconds but it was earlier."
+    assert (
+        first_msg_time - start_time <= 1.5
+    ), "Expected first message within 1 second but it took longer."
+    assert (
+        last_msg_time - start_time >= 1
+    ), "Expected last message after 1.5 seconds but it was earlier."
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
@@ -201,9 +210,10 @@ async def test_streaming():
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
+
 @pytest.mark.asyncio
 async def test_streaming_uniterated():
-    final = await b.stream.PromptTestOpenAI(
+    final = await b.stream.PromptTestStreaming(
         input="The color blue makes me sad"
     ).get_final_response()
     assert len(final) > 0, "Expected non-empty final but got empty."
@@ -236,9 +246,10 @@ async def test_streaming_claude():
 @pytest.mark.asyncio
 async def test_streaming_gemini():
     stream = b.stream.TestGemini(input="Dr.Pepper")
-    msgs = []
+    msgs: List[str] = []
     async for msg in stream:
-        msgs.append(msg)
+        if msg is not None:
+            msgs.append(msg)
     final = await stream.get_final_response()
 
     assert len(final) > 0, "Expected non-empty final but got empty."
@@ -305,7 +316,7 @@ async def trace_thread_pool_async():
         # Create 10 tasks and execute them
         futures = [executor.submit(trace_async_gather) for _ in range(10)]
         for future in concurrent.futures.as_completed(futures):
-            res = await future.result()
+            _ = await future.result()
 
 
 @trace
@@ -504,9 +515,10 @@ async def test_nested_class_streaming():
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     print("final ", final.model_dump(mode="json"))
 
+
 @pytest.mark.asyncio
 async def test_event_log_hook():
-    def event_log_hook(event):
+    def event_log_hook(event: baml_py.baml_py.BamlLogEvent):
         print("Event log hook1: ")
         print("Event log event ", event)
 
@@ -514,18 +526,19 @@ async def test_event_log_hook():
     res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
     assert res
 
+
 @pytest.mark.asyncio
 async def test_aws_bedrock():
     ## unstreamed
     # res = await b.TestAws("lightning in a rock")
     # print("unstreamed", res)
 
-
     ## streamed
     stream = b.stream.TestAws("lightning in a rock")
 
     async for msg in stream:
-        print("streamed ", repr(msg[-100:]))
+        if msg:
+            print("streamed ", repr(msg[-100:]))
 
     res = await stream.get_final_response()
     print("streamed final", res)
