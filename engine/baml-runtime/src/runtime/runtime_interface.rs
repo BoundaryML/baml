@@ -14,7 +14,7 @@ use crate::{
                 OrchestratorNode,
             },
             retry_policy::CallablePolicy,
-            traits::WithPrompt,
+            traits::{WithPrompt, WithRenderRawCurl},
         },
         prompt_renderer::PromptRenderer,
     },

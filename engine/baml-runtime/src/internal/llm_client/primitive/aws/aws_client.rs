@@ -219,6 +219,15 @@ impl AwsClient {
 
         Ok(content)
     }
+
+    pub async fn render_raw_curl(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
+        stream: bool,
+    ) -> Result<String> {
+        Ok(format!("aws bedrock converse {}", "--messages"))
+    }
 }
 
 // getters for client info

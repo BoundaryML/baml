@@ -20,7 +20,10 @@ use super::{
         OrchestratorNodeIterator,
     },
     retry_policy::CallablePolicy,
-    traits::{WithClient, WithPrompt, WithRetryPolicy, WithSingleCallable, WithStreamable},
+    traits::{
+        WithClient, WithPrompt, WithRenderRawCurl, WithRetryPolicy, WithSingleCallable,
+        WithStreamable,
+    },
     LLMResponse,
 };
 
@@ -108,7 +111,9 @@ impl<'ir> WithPrompt<'ir> for LLMPrimitiveProvider {
     ) -> Result<internal_baml_jinja::RenderedPrompt> {
         match_llm_provider!(self, render_prompt, ir, renderer, ctx, params)
     }
+}
 
+impl WithRenderRawCurl for LLMPrimitiveProvider {
     async fn render_raw_curl(
         &self,
         ctx: &RuntimeContext,

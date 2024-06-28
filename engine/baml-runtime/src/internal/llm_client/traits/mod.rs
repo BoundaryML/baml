@@ -56,7 +56,9 @@ pub trait WithPrompt<'ir> {
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<RenderedPrompt>;
+}
 
+pub trait WithRenderRawCurl {
     async fn render_raw_curl(
         &self,
         ctx: &RuntimeContext,
@@ -213,7 +215,9 @@ where
                                         mime_type =
                                             mime_type.split('/').last().unwrap().to_string();
                                     } else {
-                                        let response = match get(&media_url.url).await {
+                                        let client = reqwest::Client::new();
+                                        let response = match client.get(&media_url.url).send().await
+                                        {
                                             Ok(response) => response,
                                             Err(e) => {
                                                 return Err(LLMResponse::OtherFailure(
@@ -230,7 +234,7 @@ where
                                                 ))
                                             } // replace with your error conversion logic
                                         };
-                                        base64 = encode(&bytes);
+                                        base64 = BASE64_STANDARD.encode(&bytes);
                                         let inferred_type = infer::get(&bytes);
                                         mime_type = inferred_type.map_or_else(
                                             || "application/octet-stream".into(),
@@ -303,7 +307,12 @@ fn escape_single_quotes(s: &str) -> String {
     escape(Cow::Borrowed(s)).to_string()
 }
 
-fn to_curl_command(url: &str, method: &str, headers: &reqwest::HeaderMap, body: Vec<u8>) -> String {
+fn to_curl_command(
+    url: &str,
+    method: &str,
+    headers: &reqwest::header::HeaderMap,
+    body: Vec<u8>,
+) -> String {
     let mut curl_command = format!("curl -X {} '{}'", method, url);
 
     for (key, value) in headers.iter() {
@@ -325,7 +334,7 @@ fn to_curl_command(url: &str, method: &str, headers: &reqwest::HeaderMap, body: 
 
 impl<'ir, T> WithPrompt<'ir> for T
 where
-    T: WithClient + WithChat + WithCompletion + RequestBuilder,
+    T: WithClient + WithChat + WithCompletion,
 {
     fn render_prompt(
         &'ir self,
@@ -373,7 +382,12 @@ where
 
         Ok(prompt)
     }
+}
 
+impl<T> WithRenderRawCurl for T
+where
+    T: WithClient + WithChat + WithCompletion + RequestBuilder,
+{
     async fn render_raw_curl(
         &self,
         ctx: &RuntimeContext,
@@ -383,7 +397,9 @@ where
         let rendered_prompt = RenderedPrompt::Chat(prompt.clone());
 
         let chat_messages = self.curl_call(ctx, &rendered_prompt).await?;
-        let request_builder = self.build_request(either::Right(&chat_messages), stream);
+        let request_builder = self
+            .build_request(either::Right(&chat_messages), stream)
+            .await?;
         let mut request = request_builder.build()?;
         let url_header_value = {
             let headers = request.headers_mut();

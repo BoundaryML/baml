@@ -15,6 +15,7 @@ use crate::{
     RuntimeContext,
 };
 
+use super::traits::WithRenderRawCurl;
 use super::{
     strategy::roundrobin::RoundRobinStrategy,
     traits::{StreamResponse, WithPrompt, WithSingleCallable, WithStreamable},
@@ -179,7 +180,9 @@ impl<'ir> WithPrompt<'ir> for OrchestratorNode {
     ) -> Result<RenderedPrompt> {
         self.provider.render_prompt(ir, renderer, ctx, params)
     }
+}
 
+impl WithRenderRawCurl for OrchestratorNode {
     async fn render_raw_curl(
         &self,
         ctx: &RuntimeContext,
