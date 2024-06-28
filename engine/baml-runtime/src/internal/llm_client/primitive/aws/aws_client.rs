@@ -1,6 +1,6 @@
 use std::{
     alloc::System,
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     fmt::format,
     sync::{Arc, Mutex},
 };
@@ -12,10 +12,11 @@ use aws_credential_types::{provider::ProvideCredentials, Credentials};
 use aws_sdk_bedrockruntime::{
     self as bedrock,
     config::SharedHttpClient,
-    operation::converse::{builders::ConverseFluentBuilder, ConverseInput, ConverseOutput},
+    operation::converse::{self, builders::ConverseFluentBuilder, ConverseInput, ConverseOutput},
 };
 
 use anyhow::{Context, Result};
+use aws_smithy_json::serialize::{JsonArrayWriter, JsonObjectWriter};
 use aws_smithy_runtime_api::{client::result::SdkError, http::StatusCode};
 use aws_smithy_types::Blob;
 use baml_types::{BamlMedia, BamlMediaType};
@@ -32,10 +33,10 @@ use web_time::{Duration, Instant};
 
 use crate::{
     internal::llm_client::{
-        primitive::request::{make_parsed_request, make_request, RequestBuilder},
+        primitive::request::{self, RequestBuilder},
         traits::{
             SseResponseTrait, StreamResponse, WithChat, WithClient, WithNoCompletion,
-            WithRetryPolicy, WithStreamChat,
+            WithRenderRawCurl, WithRetryPolicy, WithStreamChat,
         },
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
         ModelFeatures,
@@ -220,13 +221,76 @@ impl AwsClient {
         Ok(content)
     }
 
-    pub async fn render_raw_curl(
+    fn build_request(
+        &self,
+        ctx: &RuntimeContext,
+        chat_messages: &Vec<RenderedChatMessage>,
+    ) -> Result<bedrock::operation::converse::ConverseInput> {
+        let mut system_message = None;
+        let mut chat_slice = chat_messages.as_slice();
+
+        if let Some((first, remainder_slice)) = chat_slice.split_first() {
+            if first.role == "system" {
+                system_message = Some(first.parts.iter()
+                .map(|part| match part {
+                    ChatMessagePart::Text(text) => Ok(bedrock::types::SystemContentBlock::Text(text.clone())),
+                    _ => anyhow::bail!("AWS Bedrock only supports text blocks for system messages, but got {:#?}", part),
+                })
+                .collect::<Result<_>>()?);
+                chat_slice = remainder_slice;
+            }
+        }
+
+        let converse_messages = chat_slice
+            .iter()
+            .map(|m| AwsChatMessage(m).try_into())
+            .collect::<Result<Vec<_>>>()?;
+
+        bedrock::operation::converse::ConverseInput::builder()
+            .set_inference_config(self.properties.inference_config.clone())
+            .set_model_id(Some(self.properties.model_id.clone()))
+            .set_system(system_message)
+            .set_messages(Some(converse_messages))
+            .build()
+            .context("Failed to convert BAML prompt to AWS Bedrock request")
+    }
+}
+
+fn try_to_json<
+    Ser: Fn(
+        &mut JsonObjectWriter,
+        &T,
+    ) -> Result<(), ::aws_smithy_types::error::operation::SerializationError>,
+    T,
+>(
+    shape: Ser,
+    input: &T,
+) -> Result<String> {
+    let mut out = String::new();
+    let mut object = JsonObjectWriter::new(&mut out);
+    shape(&mut object, input)?;
+    object.finish();
+
+    Ok(out)
+}
+
+impl WithRenderRawCurl for AwsClient {
+    async fn render_raw_curl(
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-        stream: bool,
+        _stream: bool,
     ) -> Result<String> {
-        Ok(format!("aws bedrock converse {}", "--messages"))
+        let converse_input = self.build_request(ctx, prompt)?;
+
+        // TODO(sam): this is fucked up. The SDK actually hides all the serializers inside the crate and doesn't let the user access them.
+
+        Ok(format!(
+            "aws bedrock converse --model-id {} --messages {} {}",
+            converse_input.model_id.unwrap_or("<model_id>".to_string()),
+            "<messages>",
+            "TODO"
+        ))
     }
 }
 
@@ -276,12 +340,8 @@ impl WithStreamChat for AwsClient {
             }
         };
 
-        let converse_messages = match chat_messages
-            .iter()
-            .map(|m| AwsChatMessage(m).try_into())
-            .collect::<Result<Vec<_>>>()
-        {
-            Ok(m) => m,
+        let request = match self.build_request(ctx, chat_messages) {
+            Ok(r) => r,
             Err(e) => {
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
                     client,
@@ -298,9 +358,10 @@ impl WithStreamChat for AwsClient {
 
         let request = aws_client
             .converse_stream()
-            .set_inference_config(self.properties.inference_config.clone())
-            .set_model_id(Some(self.properties.model_id.clone()))
-            .set_messages(Some(converse_messages));
+            .set_model_id(request.model_id)
+            .set_inference_config(request.inference_config)
+            .set_system(request.system)
+            .set_messages(request.messages);
 
         let system_start = SystemTime::now();
         let instant_start = Instant::now();
@@ -366,7 +427,7 @@ impl WithStreamChat for AwsClient {
                 }),
                 response,
             ),
-            move |(mut initial_state, mut response)| {
+            move |(initial_state, mut response)| {
                 async move {
                     let Some(mut new_state) = initial_state else {
                         return None;
@@ -536,12 +597,8 @@ impl WithChat for AwsClient {
             }
         };
 
-        let converse_messages = match chat_messages
-            .iter()
-            .map(|m| AwsChatMessage(m).try_into())
-            .collect::<Result<Vec<_>>>()
-        {
-            Ok(m) => m,
+        let request = match self.build_request(_ctx, chat_messages) {
+            Ok(r) => r,
             Err(e) => {
                 return LLMResponse::LLMFailure(LLMErrorResponse {
                     client,
@@ -557,9 +614,10 @@ impl WithChat for AwsClient {
         };
         let request = aws_client
             .converse()
-            .set_inference_config(self.properties.inference_config.clone())
-            .set_model_id(Some(self.properties.model_id.clone()))
-            .set_messages(Some(converse_messages));
+            .set_model_id(request.model_id)
+            .set_inference_config(request.inference_config)
+            .set_system(request.system)
+            .set_messages(request.messages);
 
         let system_start = SystemTime::now();
         let instant_start = Instant::now();

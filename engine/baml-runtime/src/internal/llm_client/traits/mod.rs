@@ -24,7 +24,16 @@ use reqwest::Url;
 use shell_escape::escape;
 use std::borrow::Cow;
 
+use enum_dispatch::enum_dispatch;
 use std::str::FromStr; // Add this line at the top of your file // Add this line at the top of your file
+
+// #[enum_dispatch]
+use crate::internal::llm_client::primitive::LLMPrimitiveProvider;
+
+use ambassador::delegatable_trait;
+
+// #[delegatable_trait]
+// #[enum_dispatch]
 pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;
 }
@@ -58,6 +67,8 @@ pub trait WithPrompt<'ir> {
     ) -> Result<RenderedPrompt>;
 }
 
+// #[delegatable_trait]
+// #[enum_dispatch]
 pub trait WithRenderRawCurl {
     async fn render_raw_curl(
         &self,

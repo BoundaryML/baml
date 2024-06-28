@@ -11,7 +11,8 @@ use crate::{
 };
 
 use self::{
-    anthropic::AnthropicClient, google::GoogleClient, openai::OpenAIClient, request::RequestBuilder,
+    anthropic::AnthropicClient, aws::AwsClient, google::GoogleClient, openai::OpenAIClient,
+    request::RequestBuilder,
 };
 
 use super::{
@@ -33,12 +34,46 @@ mod google;
 mod openai;
 pub(super) mod request;
 
+// use crate::internal::llm_client::traits::ambassador_impl_WithRenderRawCurl;
+// use crate::internal::llm_client::traits::ambassador_impl_WithRetryPolicy;
+use ambassador::Delegate;
+use enum_dispatch::enum_dispatch;
+
+#[enum_dispatch(WithRetryPolicy)]
+pub enum LLMPrimitive2 {
+    OpenAIClient,
+    AnthropicClient,
+    GoogleClient,
+    AwsClient,
+}
+
+// #[derive(Delegate)]
+// #[delegate(WithRetryPolicy, WithRenderRawCurl)]
 pub enum LLMPrimitiveProvider {
     OpenAI(OpenAIClient),
     Anthropic(AnthropicClient),
     Google(GoogleClient),
     Aws(aws::AwsClient),
 }
+
+// impl WithRetryPolicy for LLMPrimitiveProvider {
+//     fn retry_policy_name(&self) -> Option<&str> {
+//         match self {
+//             LLMPrimitiveProvider::OpenAI(client) => {
+//                 LLMPrimitive2::OpenAIClient(client).retry_policy_name()
+//             }
+//             LLMPrimitiveProvider::Anthropic(client) => {
+//                 LLMPrimitive2::AnthropicClient(client).retry_policy_name()
+//             }
+//             LLMPrimitiveProvider::Google(client) => {
+//                 LLMPrimitive2::GoogleClient(client).retry_policy_name()
+//             }
+//             LLMPrimitiveProvider::Aws(client) => {
+//                 LLMPrimitive2::AwsClient(client).retry_policy_name()
+//             }
+//         }
+//     }
+// }
 
 macro_rules! match_llm_provider {
     // Define the variants inside the macro
@@ -59,6 +94,12 @@ macro_rules! match_llm_provider {
             LLMPrimitiveProvider::Aws(client) => client.$method($($args),*),
         }
     };
+}
+
+impl WithRetryPolicy for LLMPrimitiveProvider {
+    fn retry_policy_name(&self) -> Option<&str> {
+        match_llm_provider!(self, retry_policy_name)
+    }
 }
 
 impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
@@ -121,12 +162,6 @@ impl WithRenderRawCurl for LLMPrimitiveProvider {
         stream: bool,
     ) -> Result<String> {
         match_llm_provider!(self, render_raw_curl, async, ctx, prompt, stream)
-    }
-}
-
-impl WithRetryPolicy for LLMPrimitiveProvider {
-    fn retry_policy_name(&self) -> Option<&str> {
-        match_llm_provider!(self, retry_policy_name)
     }
 }
 
