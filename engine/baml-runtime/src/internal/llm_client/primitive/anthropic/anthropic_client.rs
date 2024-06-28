@@ -1,18 +1,15 @@
 use std::{
     collections::HashMap,
-    fmt::format,
-    sync::{Arc, Mutex},
 };
 
 use anyhow::{Context, Result};
-use baml_types::{BamlMedia, BamlMediaType};
+use baml_types::{BamlMedia};
 use eventsource_stream::Eventsource;
-use futures::{SinkExt, StreamExt};
+use futures::{StreamExt};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{
     ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
 };
-use reqwest::Response;
 
 use crate::{
     internal::llm_client::{

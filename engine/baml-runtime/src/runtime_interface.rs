@@ -7,9 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
-use crate::tracing::api_wrapper::core_types::LogSchema;
 use crate::tracing::{BamlTracer, TracingSpan};
-use crate::type_builder::TypeBuilder;
 use crate::types::on_log_event::LogEventCallbackSync;
 use crate::RuntimeContextManager;
 use crate::{

@@ -6,10 +6,9 @@ mod wasm_tracer;
 
 use crate::on_log_event::LogEventCallbackSync;
 use anyhow::Result;
-use baml_types::{BamlMap, BamlMedia, BamlMediaType, BamlValue};
+use baml_types::{BamlMap, BamlMediaType, BamlValue};
 use colored::Colorize;
 use internal_baml_jinja::RenderedPrompt;
-use serde_json::json;
 use std::collections::HashMap;
 
 use uuid::Uuid;

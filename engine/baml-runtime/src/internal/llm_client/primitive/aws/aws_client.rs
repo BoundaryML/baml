@@ -1,49 +1,29 @@
-use std::{
-    alloc::System,
-    collections::{HashMap, VecDeque},
-    fmt::format,
-    sync::{Arc, Mutex},
-};
+use std::collections::HashMap;
 
-use aws_config::{
-    identity::IdentityCache, retry::RetryConfig, BehaviorVersion, ConfigLoader, SdkConfig,
-};
-use aws_credential_types::{provider::ProvideCredentials, Credentials};
-use aws_sdk_bedrockruntime::{
-    self as bedrock,
-    config::SharedHttpClient,
-    operation::converse::{self, builders::ConverseFluentBuilder, ConverseInput, ConverseOutput},
-};
+use aws_config::{identity::IdentityCache, retry::RetryConfig, BehaviorVersion, ConfigLoader};
+use aws_sdk_bedrockruntime::{self as bedrock, operation::converse::ConverseOutput};
 
 use anyhow::{Context, Result};
-use aws_smithy_json::serialize::{JsonArrayWriter, JsonObjectWriter};
-use aws_smithy_runtime_api::{client::result::SdkError, http::StatusCode};
+use aws_smithy_json::serialize::JsonObjectWriter;
+use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types::Blob;
 use baml_types::{BamlMedia, BamlMediaType};
-use eventsource_stream::Eventsource;
-use futures::{future::Future, stream, SinkExt, StreamExt};
+use futures::{stream, SinkExt, StreamExt};
 use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::{
-    ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
-};
-use reqwest::{header, Response};
+use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use serde::Deserialize;
+use web_time::Instant;
 use web_time::SystemTime;
-use web_time::{Duration, Instant};
 
-use crate::{
-    internal::llm_client::{
-        primitive::request::{self, RequestBuilder},
-        traits::{
-            SseResponseTrait, StreamResponse, WithChat, WithClient, WithNoCompletion,
-            WithRenderRawCurl, WithRetryPolicy, WithStreamChat,
-        },
-        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-        ModelFeatures,
+use crate::internal::llm_client::{
+    primitive::request::RequestBuilder,
+    traits::{
+        StreamResponse, WithChat, WithClient, WithNoCompletion, WithRenderRawCurl, WithRetryPolicy,
+        WithStreamChat,
     },
-    request::create_client,
+    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+    ModelFeatures,
 };
-use serde_json::json;
 
 use crate::RuntimeContext;
 
@@ -151,6 +131,7 @@ impl AwsClient {
             cfg_if::cfg_if! {
                 if #[cfg(target_arch = "wasm32")] {
                     use aws_config::Region;
+                    use aws_credential_types::Credentials;
 
                     let (aws_region, aws_access_key_id, aws_secret_access_key) = match (
                         self.properties.ctx_env.get("AWS_REGION"),

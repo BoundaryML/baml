@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_std::stream;
 use baml_types::BamlValue;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 
@@ -20,7 +19,6 @@ use super::{
         ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState, OrchestratorNode,
         OrchestratorNodeIterator,
     },
-    retry_policy::CallablePolicy,
     traits::{
         WithClient, WithPrompt, WithRenderRawCurl, WithRetryPolicy, WithSingleCallable,
         WithStreamable,
@@ -36,7 +34,6 @@ pub(super) mod request;
 
 // use crate::internal::llm_client::traits::ambassador_impl_WithRenderRawCurl;
 // use crate::internal::llm_client::traits::ambassador_impl_WithRetryPolicy;
-use ambassador::Delegate;
 use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch(WithRetryPolicy)]

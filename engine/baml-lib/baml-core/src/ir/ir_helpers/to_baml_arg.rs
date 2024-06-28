@@ -1,4 +1,4 @@
-use baml_types::{BamlMap, BamlMedia, BamlMediaType, BamlValue, TypeValue};
+use baml_types::{BamlMap, BamlMediaType, BamlValue, TypeValue};
 
 use crate::ir::{FieldType, IntermediateRepr};
 

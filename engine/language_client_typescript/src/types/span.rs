@@ -1,6 +1,5 @@
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_types::BamlValue;
-use futures::executor::block_on;
 use napi_derive::napi;
 
 use super::runtime::BamlRuntime;

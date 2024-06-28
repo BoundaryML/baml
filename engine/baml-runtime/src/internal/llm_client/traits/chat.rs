@@ -2,11 +2,11 @@ use anyhow::Result;
 use internal_baml_jinja::{ChatOptions, RenderedChatMessage};
 
 use crate::{
-    internal::llm_client::{LLMErrorResponse, LLMResponse},
+    internal::llm_client::{LLMResponse},
     RuntimeContext,
 };
 
-use super::{SseResponseTrait, StreamResponse};
+use super::{StreamResponse};
 
 pub trait WithChat: Sync + Send {
     fn chat_options(&self, ctx: &RuntimeContext) -> Result<ChatOptions>;

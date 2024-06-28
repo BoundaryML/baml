@@ -15,12 +15,11 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
-use baml_types::{BamlMedia, BamlMediaType};
+use baml_types::{BamlMedia};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use reqwest::Response;
 use serde_json::json;
 use std::collections::HashMap;
 struct PostRequestProperities {

@@ -4,7 +4,6 @@ mod python_language_features;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use askama::Template;
 use either::Either;
 use indexmap::IndexMap;
 use internal_baml_core::ir::{repr::IntermediateRepr, FieldType, IRHelper};

@@ -1,4 +1,3 @@
-use std::ops::Deref;
 
 use anyhow::Result;
 use async_std::stream::StreamExt;

@@ -39,7 +39,6 @@ pub use cli::CallerType;
 use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
 use runtime_interface::RuntimeInterface;
-use tracing::api_wrapper::core_types::LogSchema;
 use tracing::{BamlTracer, TracingSpan};
 use type_builder::TypeBuilder;
 pub use types::*;

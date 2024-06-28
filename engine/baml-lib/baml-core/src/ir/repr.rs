@@ -10,7 +10,7 @@ use internal_baml_parser_database::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
         FunctionWalker, TemplateStringWalker, VariantWalker,
     },
-    ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes, WithSerialize,
+    ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes,
     WithStaticRenames,
 };
 
@@ -294,7 +294,7 @@ impl WithRepr<FieldType> for ast::FieldType {
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
         Ok(match self {
             ast::FieldType::Identifier(arity, idn) => type_with_arity(
-                (match idn {
+                match idn {
                     ast::Identifier::Primitive(t, ..) => FieldType::Primitive(*t),
                     ast::Identifier::Local(name, _) => match db.find_type(idn) {
                         Some(Either::Left(_class_walker)) => Ok(FieldType::Class(name.clone())),
@@ -302,7 +302,7 @@ impl WithRepr<FieldType> for ast::FieldType {
                         None => Err(anyhow!("Field type uses unresolvable local identifier")),
                     }?,
                     _ => bail!("Field type uses unsupported identifier type"),
-                }),
+                },
                 arity,
             ),
             ast::FieldType::List(ft, dims, _) => {

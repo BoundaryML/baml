@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     sync::mpsc::{Receiver, Sender, TryRecvError},
 };
 

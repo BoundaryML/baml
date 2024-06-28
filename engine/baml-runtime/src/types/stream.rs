@@ -1,8 +1,6 @@
 use anyhow::Result;
 
 use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_core::ir::IRHelper;
-use internal_baml_jinja::Type;
 
 use std::sync::Arc;
 
@@ -16,7 +14,6 @@ use crate::{
     FunctionResult, RuntimeContextManager,
 };
 
-use super::response::LLMResponse;
 
 /// Wrapper that holds a stream of responses from a BAML function call.
 ///

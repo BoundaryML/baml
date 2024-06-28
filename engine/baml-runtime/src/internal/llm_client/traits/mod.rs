@@ -1,4 +1,4 @@
-use std::{fmt::format, pin::Pin};
+use std::pin::Pin;
 
 use anyhow::Result;
 
@@ -24,13 +24,9 @@ use reqwest::Url;
 use shell_escape::escape;
 use std::borrow::Cow;
 
-use enum_dispatch::enum_dispatch;
 use std::str::FromStr; // Add this line at the top of your file // Add this line at the top of your file
 
 // #[enum_dispatch]
-use crate::internal::llm_client::primitive::LLMPrimitiveProvider;
-
-use ambassador::delegatable_trait;
 
 // #[delegatable_trait]
 // #[enum_dispatch]
@@ -70,6 +66,7 @@ pub trait WithPrompt<'ir> {
 // #[delegatable_trait]
 // #[enum_dispatch]
 pub trait WithRenderRawCurl {
+    #[allow(async_fn_in_trait)]
     async fn render_raw_curl(
         &self,
         ctx: &RuntimeContext,

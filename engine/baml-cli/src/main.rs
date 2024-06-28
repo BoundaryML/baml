@@ -2,14 +2,23 @@ use colored::*;
 
 use std::io::Write;
 
+#[allow(dead_code)]
 mod builder;
+#[allow(dead_code)]
 mod command;
+#[allow(dead_code)]
 mod errors;
+#[allow(dead_code)]
 mod import_command;
+#[allow(dead_code)]
 mod init_command;
+#[allow(dead_code)]
 mod runtime_test_command;
+#[allow(dead_code)]
 mod shell;
+#[allow(dead_code)]
 mod update;
+#[allow(dead_code)]
 mod version_command;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -118,6 +127,7 @@ pub enum OutputType {
     Json,
 }
 
+#[allow(dead_code)]
 pub(crate) fn main() {
     const NAME: &str = concat!("[", clap::crate_name!(), "]");
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))

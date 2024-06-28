@@ -5,7 +5,6 @@ pub(super) mod api_interface;
 pub(crate) mod core_types;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::{json, Value};
-use web_time::Duration;
 
 use crate::request::create_client;
 

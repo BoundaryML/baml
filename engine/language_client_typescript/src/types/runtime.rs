@@ -3,7 +3,7 @@ use super::runtime_ctx_manager::RuntimeContextManager;
 use super::type_builder::TypeBuilder;
 use crate::parse_ts_types;
 use crate::types::function_results::FunctionResult;
-use baml_runtime::on_log_event::{LogEvent, LogEventCallbackSync};
+use baml_runtime::on_log_event::{LogEvent};
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreRuntime;
 use baml_types::BamlValue;

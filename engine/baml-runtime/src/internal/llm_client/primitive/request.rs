@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::format};
+use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use internal_baml_jinja::RenderedChatMessage;
@@ -8,6 +8,7 @@ use serde::de::DeserializeOwned;
 use crate::internal::llm_client::{traits::WithClient, ErrorCode, LLMErrorResponse, LLMResponse};
 
 pub trait RequestBuilder {
+    #[allow(async_fn_in_trait)]
     async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
