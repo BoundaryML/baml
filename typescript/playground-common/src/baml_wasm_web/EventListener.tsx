@@ -339,6 +339,30 @@ export const availableFunctionsAtom = atom((get) => {
   return runtime.list_functions()
 })
 
+export const rawCurlAtom = atom((get) => {
+  const runtime = get(selectedRuntimeAtom)
+  const func = get(selectedFunctionAtom)
+  const test_case = get(selectedTestCaseAtom)
+
+  if (!runtime || !func || !test_case) {
+    return null
+  }
+  const params = Object.fromEntries(
+    test_case.inputs
+      .filter((i): i is WasmParam & { value: string } => i.value !== undefined)
+      .map((input) => [input.name, JSON.parse(input.value)]),
+  )
+  try {
+    return func.render_raw_curl(runtime, params, false)
+  } catch (e) {
+    if (e instanceof Error) {
+      return e.message
+    } else {
+      return `${e}`
+    }
+  }
+})
+
 export const renderPromptAtom = atom((get) => {
   const runtime = get(selectedRuntimeAtom)
   const func = get(selectedFunctionAtom)

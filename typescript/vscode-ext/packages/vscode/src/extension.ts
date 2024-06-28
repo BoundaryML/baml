@@ -287,6 +287,7 @@ export function activate(context: vscode.ExtensionContext) {
           let originalUrl = req.headers['baml-original-url']
           if (typeof originalUrl === 'string') {
             delete req.headers['baml-original-url']
+            delete req.headers['baml-render-url']
             req.headers['origin'] = `http://localhost:${port}`
 
             // Ensure the URL does not end with a slash

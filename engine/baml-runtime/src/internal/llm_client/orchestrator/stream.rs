@@ -44,6 +44,7 @@ where
     let mut results = Vec::new();
     let mut total_sleep_duration = std::time::Duration::from_secs(0);
 
+    //advanced curl viewing, use render_raw_curl on each node. TODO
     for node in iter {
         let prompt = match node.render_prompt(ir, prompt, ctx, params) {
             Ok(p) => p,

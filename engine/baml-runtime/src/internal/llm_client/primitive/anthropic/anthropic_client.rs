@@ -348,16 +348,7 @@ impl RequestBuilder for AnthropicClient {
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
     ) -> reqwest::RequestBuilder {
-        let mut req = self.client.post(if prompt.is_left() {
-            format!(
-                "{}/v1/complete",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
-        } else {
+        let mut req = self.client.post({
             format!(
                 "{}/v1/messages",
                 self.properties
@@ -376,6 +367,10 @@ impl RequestBuilder for AnthropicClient {
         }
 
         req = req.header("baml-original-url", self.properties.base_url.as_str());
+        req = req.header(
+            "baml-render-url",
+            format!("{}/v1/messages", self.properties.base_url),
+        );
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();

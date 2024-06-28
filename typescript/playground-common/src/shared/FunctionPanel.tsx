@@ -1,16 +1,22 @@
 /// Content once a function has been selected.
-
-import { useAtomValue } from 'jotai'
-import { useId, useRef } from 'react'
-import { renderPromptAtom, selectedFunctionAtom } from '../baml_wasm_web/EventListener'
+import { useAppState } from './AppStateContext'
+import { useAtomValue, useSetAtom } from 'jotai'
+import { renderPromptAtom, selectedFunctionAtom, rawCurlAtom } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
-import { Snippet } from './ImplPanel'
+import { PromptChunk } from './ImplPanel'
 import FunctionTestSnippet from './TestSnippet'
-
+import { FiCopy } from 'react-icons/fi'
+import { Button } from '../components/ui/button'
+const handleCopy = (text: string) => () => {
+  navigator.clipboard.writeText(text)
+}
 const PromptPreview: React.FC = () => {
   const promptPreview = useAtomValue(renderPromptAtom)
+  const rawCurl = useAtomValue(rawCurlAtom)
+
+  const { showCurlRequest } = useAppState()
   if (!promptPreview) {
     return (
       <div className='flex flex-col items-center justify-center w-full h-full gap-2'>
@@ -20,9 +26,36 @@ const PromptPreview: React.FC = () => {
     )
   }
 
+  if (showCurlRequest) {
+    const curlPreview = rawCurl ?? 'No curl request available'
+    return (
+      <div>
+        <div className='flex justify-end'>
+          <Button onClick={handleCopy(curlPreview)} className='copy-button bg-transparent m-0 py-0 hover:bg-indigo-500'>
+            <FiCopy />
+          </Button>
+        </div>
+        <PromptChunk
+          text={curlPreview}
+          client={{
+            identifier: {
+              end: 0,
+              source_file: '',
+              start: 0,
+              value: 'Curl Request',
+            },
+            provider: '',
+            model: '',
+          }}
+          showCopy={true}
+        />
+      </div>
+    )
+  }
+
   if (typeof promptPreview === 'string')
     return (
-      <Snippet
+      <PromptChunk
         text={promptPreview}
         type='error'
         client={{
@@ -46,7 +79,7 @@ const PromptPreview: React.FC = () => {
           {chat.parts.map((part, idx) => {
             if (part.is_text())
               return (
-                <Snippet
+                <PromptChunk
                   key={idx}
                   text={part.as_text()!}
                   client={{
@@ -83,9 +116,6 @@ const PromptPreview: React.FC = () => {
 
 const FunctionPanel: React.FC = () => {
   const selectedFunc = useAtomValue(selectedFunctionAtom)
-
-  const id = useId()
-  const refs = useRef()
 
   if (!selectedFunc) {
     const bamlFunctionSnippet = `

@@ -39,13 +39,14 @@ import {
   unsavedChangesAtom,
 } from '../_atoms/atoms'
 import { CodeMirrorEditor } from './CodeMirrorEditor'
-import { ExploreProjects } from './ExploreProjects'
+
 import { GithubStars } from './GithubStars'
 import { InitialTour, PostTestRunTour } from './Tour'
 import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from '@baml/playground-common/shared/SettingsDialog'
-import { SettingsIcon } from 'lucide-react'
+
 import FileViewer from './Tree/FileViewer'
-import { Toaster } from '@/components/ui/toaster'
+import { AppStateProvider } from '@baml/playground-common/shared/AppStateContext' // Import the AppStateProvider
+import { CheckboxHeader } from '@baml/playground-common/shared/CheckBoxHeader'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(updateFileAtom)
@@ -100,7 +101,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   <FileViewer />
                 </div>
               </ResizablePanel>
-              {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
 
               <ResizableHandle className='bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder' />
               <ResizablePanel className='flex flex-col items-center w-full pt-2 tour-templates'></ResizablePanel>
@@ -168,14 +168,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                 <></>
               )}
 
-              {/* <div className="flex flex-row justify-center gap-x-1 item-center">
-                <Button variant={'ghost'} className="h-full py-1" asChild>
-                  <Link target="_blank" href="https://docs.boundaryml.com">
-                    Docs
-                  </Link>
-                </Button>
-              </div> */}
-
               <div className='flex flex-row items-center justify-end w-full pr-4 gap-x-8'>
                 <div className='flex h-full'>
                   <Link
@@ -200,7 +192,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   >
                     <div className='flex flex-row items-center text-xs 2xl:text-sm gap-x-4 grayscale hover:grayscale-0'>
                       <Image src='/vscode_logo.svg' width={18} height={18} alt='VSCode extension' />
-                      {/* <div className='whitespace-nowrap'></div> */}
                     </div>
                   </Link>
                 </div>
@@ -231,7 +222,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                     >
                       <textarea
                         className='w-[95%] ml-2 px-2 text-sm border-none text-vscode-descriptionForeground'
-                        // type="text"
                         ref={descriptionInputRef}
                         name='task'
                         placeholder='Write a description'
@@ -264,7 +254,6 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
 export const ProjectView = ({ project }: { project: BAMLProject }) => {
   return (
     <>
-      {/* <DummyHydrate files={project.files} /> */}
       <ProjectViewImpl project={project} />
     </>
   )
@@ -273,7 +262,7 @@ export const ProjectView = ({ project }: { project: BAMLProject }) => {
 const ShareButton = ({ project, projectName }: { project: BAMLProject; projectName: string }) => {
   const [loading, setLoading] = useState(false)
   const editorFiles = useAtomValue(currentEditorFilesAtom)
-  // const runTestOutput = useAtomValue(testRunOutputAtom)
+
   const pathname = usePathname()
   const [unsavedChanges, setUnsavedChanges] = useAtom(unsavedChangesAtom)
 
@@ -326,93 +315,36 @@ const DummyHydrate = ({ files }: { files: EditorFile[] }) => {
 }
 
 const PlaygroundView = () => {
-  const setShowSettings = useSetAtom(showSettingsAtom)
-  // const [parserDb] = useAtom(currentParserDbAtom)
-  // usePlaygroundListener()
-  // const testRunOutput = useAtomValue(testRunOutputAtom)
-
-  // useEffect(() => {
-  //   if (!parserDb) {
-  //     return
-  //   }
-  //   const newParserDb = { ...parserDb }
-
-  //   window.postMessage({
-  //     command: 'setDb',
-  //     content: [[BAML_DIR, newParserDb]],
-  //   })
-  // }, [parserDb])
-
-  // useEffect(() => {
-  //   if (testRunOutput) {
-  //     window.postMessage({
-  //       command: 'test-results',
-  //       content: testRunOutput.testState,
-  //     })
-  //     window.postMessage({
-  //       command: 'test-stdout',
-  //       content: testRunOutput.outputLogs.join('\n'),
-  //     })
-  //   }
-  // }, [testRunOutput])
-  // return (
-  //   <>
-  //     <CustomErrorBoundary>TODO, implement playground view</CustomErrorBoundary>
-  //   </>
-  // )
-
-  //<TestToggle />
   return (
     <>
-      <CustomErrorBoundary>
-        <Suspense fallback={<div>Loading...</div>}>
-          <EventListener>
-            <SettingsDialog />
-            <div className='relative flex flex-col w-full gap-2 pr-0'>
-              <div className='relative flex flex-row gap-2'>
-                <FunctionSelector />
-                <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
-                  <ShowSettingsButton
-                    buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
-                    iconClassName='h-5'
-                  />
+      <AppStateProvider>
+        <CustomErrorBoundary>
+          <Suspense fallback={<div>Loading...</div>}>
+            <EventListener>
+              <SettingsDialog />
+              <div className='relative flex flex-col w-full gap-2 pr-0'>
+                <div className='relative flex flex-row gap-2'>
+                  <FunctionSelector />
+                  <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
+                    <ShowSettingsButton
+                      buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
+                      iconClassName='h-5'
+                    />
+                  </div>
                 </div>
-              </div>
+                <CheckboxHeader />
 
-              {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
-              <FunctionPanel />
-            </div>
-            <InitialTour />
-            <PostTestRunTour />
-          </EventListener>
-        </Suspense>
-      </CustomErrorBoundary>
+                {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
+                <FunctionPanel />
+              </div>
+              <InitialTour />
+              <PostTestRunTour />
+            </EventListener>
+          </Suspense>
+        </CustomErrorBoundary>
+      </AppStateProvider>
     </>
   )
 }
-
-//const TestToggle = () => {
-//  const { setSelection } = useContext(ASTContext)
-//  const { showTests, func } = useSelections()
-//
-//  // useEffect(() => {
-//  //   setSelection(undefined, undefined, undefined, undefined, false)
-//  // }, [])
-//  const numTests = func?.test_cases?.length ?? 0
-//
-//  return (
-//    <Button
-//      variant='outline'
-//      className={clsx(
-//        'tour-test-button p-1 text-xs w-fit h-fit border-vscode-textSeparator-foreground bg-vscode-button-background gap-x-2 pr-2',
-//        [!showTests ? 'bg-vscode-button-background' : 'bg-vscode-panel-background'],
-//      )}
-//      onClick={() => setSelection(undefined, undefined, undefined, undefined, !showTests)}
-//    >
-//      <FlaskConical size={16} />
-//      <span>{showTests ? 'Hide tests' : `Show  ${numTests > 0 ? numTests : ''} tests`}</span>
-//    </Button>
-//  )
-//}
 
 export default ProjectView
