@@ -324,7 +324,7 @@ fn to_curl_command(
     let mut curl_command = format!("curl -X {} '{}'", method, url);
 
     for (key, value) in headers.iter() {
-        let header = format!(" -H '{}: {}'", key.as_str(), value.to_str().unwrap());
+        let header = format!(" -H \"{}: {}\"", key.as_str(), value.to_str().unwrap());
         curl_command.push_str(&header);
     }
 
