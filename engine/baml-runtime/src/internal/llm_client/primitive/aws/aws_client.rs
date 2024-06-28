@@ -267,7 +267,7 @@ impl WithRenderRawCurl for AwsClient {
         // TODO(sam): this is fucked up. The SDK actually hides all the serializers inside the crate and doesn't let the user access them.
 
         Ok(format!(
-            "aws bedrock converse --model-id {} --messages {} {}",
+            "Note, this is not yet complete!\n\nSee: https://docs.aws.amazon.com/cli/latest/reference/bedrock-runtime/converse.html\n\naws bedrock converse --model-id {} --messages {} {}",
             converse_input.model_id.unwrap_or("<model_id>".to_string()),
             "<messages>",
             "TODO"
