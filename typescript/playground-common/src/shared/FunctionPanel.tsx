@@ -7,7 +7,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../compone
 import { TooltipProvider } from '../components/ui/tooltip'
 import { PromptChunk } from './ImplPanel'
 import FunctionTestSnippet from './TestSnippet'
-import { FiCopy } from 'react-icons/fi'
+import { Copy } from 'lucide-react'
 import { Button } from '../components/ui/button'
 const handleCopy = (text: string) => () => {
   navigator.clipboard.writeText(text)
@@ -31,8 +31,11 @@ const PromptPreview: React.FC = () => {
     return (
       <div>
         <div className='flex justify-end'>
-          <Button onClick={handleCopy(curlPreview)} className='copy-button bg-transparent m-0 py-0 hover:bg-indigo-500'>
-            <FiCopy />
+          <Button
+            onClick={handleCopy(curlPreview)}
+            className='copy-button bg-transparent text-white m-0 py-0 hover:bg-indigo-500 text-xs'
+          >
+            <Copy size={16} />
           </Button>
         </div>
         <PromptChunk

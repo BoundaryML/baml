@@ -196,7 +196,6 @@ fn render_minijinja(
 
     let mut chat_messages = vec![];
     let mut role = None;
-
     for chunk in rendered.split(MAGIC_CHAT_ROLE_DELIMITER) {
         if chunk.starts_with(":baml-start-baml:") && chunk.ends_with(":baml-end-baml:") {
             role = Some(
@@ -236,16 +235,18 @@ fn render_minijinja(
                             ))?;
                         }
                     }
-                } else if part.is_empty() {
-                    // only whitespace, so discard
-                } else {
+                } else if !part.trim().is_empty() {
                     parts.push(ChatMessagePart::Text(part.trim().to_string()));
                 }
             }
-            chat_messages.push(RenderedChatMessage {
-                role: role.unwrap_or(&default_role).to_string(),
-                parts,
-            });
+
+            // Only add the message if it contains meaningful content
+            if !parts.is_empty() {
+                chat_messages.push(RenderedChatMessage {
+                    role: role.unwrap_or(&default_role).to_string(),
+                    parts,
+                });
+            }
         }
     }
 
