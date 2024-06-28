@@ -4,7 +4,6 @@ mod stream;
 use anyhow::Result;
 use baml_types::BamlValue;
 
-use either::Either;
 use instant::Duration;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::RenderedChatMessage;

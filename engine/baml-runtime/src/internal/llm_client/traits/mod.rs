@@ -1,21 +1,19 @@
 use std::{fmt::format, pin::Pin};
 
 use anyhow::Result;
-use async_std::stream;
+
 mod chat;
 mod completion;
 pub use self::{
     chat::{WithChat, WithStreamChat},
     completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
 };
-use super::{
-    primitive::request::RequestBuilder, retry_policy::CallablePolicy, LLMResponse, ModelFeatures,
-};
-use crate::HashMap;
+use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
+
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 use baml_types::{BamlMedia, BamlMediaType, BamlValue, MediaBase64};
 use base64::encode;
-use futures::stream::{StreamExt, TryStreamExt};
+use futures::stream::StreamExt;
 use infer;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
@@ -24,7 +22,6 @@ use reqwest::get;
 use reqwest::header::HeaderMap;
 
 use reqwest::Url;
-use reqwest::{Request, Response};
 
 use shell_escape::escape;
 use std::borrow::Cow;
@@ -69,25 +66,7 @@ pub trait WithPrompt<'ir> {
         stream: bool,
     ) -> Result<String>;
 }
-fn request_to_string(request: &Request) -> Result<String, reqwest::Error> {
-    let mut result = String::new();
 
-    // Add method and URL
-    result.push_str(&format!("{} {}\n", request.method(), request.url()));
-    // Add headers
-    for (key, value) in request.headers() {
-        result.push_str(&format!("{}: {:?}\n", key, value));
-    }
-
-    // Add body
-    if let Some(body) = request.body() {
-        let body_bytes = body.as_bytes().unwrap_or_default();
-        let body_str = String::from_utf8_lossy(body_bytes);
-        result.push_str(&format!("\n\n{}", body_str));
-    }
-
-    Ok(result)
-}
 impl<T> WithSingleCallable for T
 where
     T: WithClient + WithChat + WithCompletion,
@@ -402,19 +381,19 @@ where
         let rendered_prompt = RenderedPrompt::Chat(prompt.clone());
 
         let chat_messages = self.curl_call(ctx, &rendered_prompt).await?;
-        let request_builder = self.build_request(either::Right(&chat_messages), false);
+        let request_builder = self.build_request(either::Right(&chat_messages), stream);
         let mut request = request_builder.build()?;
         let url_header_value = {
             let headers = request.headers_mut();
             let url_header_value = headers
                 .get("baml-render-url")
-                .ok_or(anyhow::anyhow!("Missing header 'baml-original-url'"))?;
+                .ok_or(anyhow::anyhow!("Missing header 'baml-render-url'"))?;
             url_header_value.to_owned()
         };
 
         let url_str = url_header_value
             .to_str()
-            .map_err(|_| anyhow::anyhow!("Invalid header 'baml-original-url'"))?;
+            .map_err(|_| anyhow::anyhow!("Invalid header 'baml-render-url'"))?;
         let new_url = Url::from_str(url_str)?;
         *request.url_mut() = new_url;
 

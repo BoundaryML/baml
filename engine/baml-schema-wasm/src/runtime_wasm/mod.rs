@@ -8,11 +8,11 @@ use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
 use baml_types::{BamlMap, BamlValue};
-use either::Either;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use wasm_bindgen::convert::IntoWasmAbi;
+
 use wasm_bindgen::prelude::*;
 
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
