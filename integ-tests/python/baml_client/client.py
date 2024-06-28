@@ -869,28 +869,6 @@ class BamlClient:
       mdl = create_model("PromptTestClaudeChatNoSystemReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
-    async def PromptTestOpenAI(
-        self,
-        input: str,
-        baml_options: BamlCallOptions = {},
-    ) -> str:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb
-      else:
-        tb = None
-
-      raw = await self.__runtime.call_function(
-        "PromptTestOpenAI",
-        {
-          "input": input,
-        },
-        self.__ctx_manager.get(),
-        tb,
-      )
-      mdl = create_model("PromptTestOpenAIReturnType", inner=(str, ...))
-      return coerce(mdl, raw.parsed())
-    
     async def PromptTestOpenAIChat(
         self,
         input: str,
@@ -933,6 +911,28 @@ class BamlClient:
         tb,
       )
       mdl = create_model("PromptTestOpenAIChatNoSystemReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    async def PromptTestStreaming(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "PromptTestStreaming",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("PromptTestStreamingReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
     async def TestAnthropic(
@@ -2551,38 +2551,6 @@ class BamlStreamClient:
         tb,
       )
     
-    def PromptTestOpenAI(
-        self,
-        input: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb
-      else:
-        tb = None
-
-      raw = self.__runtime.stream_function(
-        "PromptTestOpenAI",
-        {
-          "input": input,
-        },
-        None,
-        self.__ctx_manager.get(),
-        tb,
-      )
-
-      mdl = create_model("PromptTestOpenAIReturnType", inner=(str, ...))
-      partial_mdl = create_model("PromptTestOpenAIPartialReturnType", inner=(Optional[str], ...))
-
-      return baml_py.BamlStream[Optional[str], str](
-        raw,
-        lambda x: coerce(partial_mdl, x),
-        lambda x: coerce(mdl, x),
-        self.__ctx_manager.get(),
-        tb,
-      )
-    
     def PromptTestOpenAIChat(
         self,
         input: str,
@@ -2638,6 +2606,38 @@ class BamlStreamClient:
 
       mdl = create_model("PromptTestOpenAIChatNoSystemReturnType", inner=(str, ...))
       partial_mdl = create_model("PromptTestOpenAIChatNoSystemPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
+    def PromptTestStreaming(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "PromptTestStreaming",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("PromptTestStreamingReturnType", inner=(str, ...))
+      partial_mdl = create_model("PromptTestStreamingPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlStream[Optional[str], str](
         raw,
