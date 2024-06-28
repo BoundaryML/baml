@@ -27,6 +27,7 @@ export class WebPanelView {
   public static currentPanel: WebPanelView | undefined
   private readonly _panel: WebviewPanel
   private _disposables: Disposable[] = []
+  private _port: () => number
 
   /**
    * The WebPanelView class private constructor (called only from the render method).
@@ -34,8 +35,9 @@ export class WebPanelView {
    * @param panel A reference to the webview panel
    * @param extensionUri The URI of the directory containing the extension
    */
-  private constructor(panel: WebviewPanel, extensionUri: Uri) {
+  private constructor(panel: WebviewPanel, extensionUri: Uri, portLoader: () => number) {
     this._panel = panel
+    this._port = portLoader
 
     // Set an event listener to listen for when the panel is disposed (i.e. when the user closes
     // the panel or when the panel is closed programmatically)
@@ -54,7 +56,7 @@ export class WebPanelView {
    *
    * @param extensionUri The URI of the directory containing the extension.
    */
-  public static render(extensionUri: Uri) {
+  public static render(extensionUri: Uri, portLoader: () => number) {
     if (WebPanelView.currentPanel) {
       // If the webview panel already exists reveal it
       WebPanelView.currentPanel._panel.reveal(ViewColumn.Beside)
@@ -81,7 +83,7 @@ export class WebPanelView {
         },
       )
 
-      WebPanelView.currentPanel = new WebPanelView(panel, extensionUri)
+      WebPanelView.currentPanel = new WebPanelView(panel, extensionUri, portLoader)
     }
   }
 
@@ -161,6 +163,13 @@ export class WebPanelView {
         const text = message.text
 
         switch (command) {
+          case 'get_port':
+            // Code that should run in response to the hello message command
+            console.log(`Sending port from WebPanelView: ${this._port()}`)
+            this.postMessage('port_number', {
+              port: this._port(),
+            })
+            return
           case 'receiveData':
             // Code that should run in response to the hello message command
             window.showInformationMessage(text)

@@ -5,8 +5,6 @@ import { WebPanelView } from './panels/WebPanelView'
 import plugins from './plugins'
 import { requestDiagnostics } from './plugins/language-server'
 import { telemetry } from './plugins/language-server'
-import httpProxy from 'http-proxy'
-import express from 'express'
 import cors from 'cors'
 import { createProxyMiddleware } from 'http-proxy-middleware'
 import { type LanguageClient, type ServerOptions, TransportKind } from 'vscode-languageclient/node'
@@ -146,6 +144,8 @@ async function runDiagnostics(): Promise<void> {
   statusBarItem.hide()
 }
 
+import type { Express } from 'express'
+
 export function activate(context: vscode.ExtensionContext) {
   console.log('BAML extension activating')
 
@@ -164,12 +164,73 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(codeActionProvider)
 
+  const app: Express = require('express')()
+  app.use(cors())
+  var port = 123
+  const server = app.listen(0, () => {
+    console.log('Server started on port ' + getPort())
+    // WebPanelView.currentPanel?.postMessage('port_number', {
+    //   port: port,
+    // })
+  })
+
+  const getPort = () => {
+    let addr = server.address()
+    if (addr === null) {
+      return 0
+    }
+    if (typeof addr === 'string') {
+      return parseInt(addr)
+    }
+    return addr.port
+  }
+
+  app.use(
+    createProxyMiddleware({
+      changeOrigin: true,
+      pathRewrite: (path, req) => {
+        // Ensure the URL does not end with a slash
+        if (path.endsWith('/')) {
+          return path.slice(0, -1)
+        }
+        return path
+      },
+      router: (req) => {
+        // Extract the original target URL from the custom header
+        let originalUrl = req.headers['baml-original-url']
+        if (typeof originalUrl === 'string') {
+          delete req.headers['baml-original-url']
+          delete req.headers['baml-render-url']
+          req.headers['origin'] = `http://localhost:${port}`
+
+          // Ensure the URL does not end with a slash
+          if (originalUrl.endsWith('/')) {
+            originalUrl = originalUrl.slice(0, -1)
+          }
+          return originalUrl
+        } else {
+          throw new Error('baml-original-url header is missing or invalid')
+        }
+      },
+      logger: console,
+      on: {
+        proxyRes: (proxyRes, req, res) => {
+          proxyRes.headers['Access-Control-Allow-Origin'] = '*'
+        },
+        error: (error) => {
+          console.error('proxy error:', error)
+        },
+      },
+    }),
+  )
+
   const bamlPlaygroundCommand = vscode.commands.registerCommand(
     'baml.openBamlPanel',
     (args?: { projectId?: string; functionName?: string; implName?: string; showTests?: boolean }) => {
       const config = vscode.workspace.getConfiguration()
       config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
-      WebPanelView.render(context.extensionUri)
+
+      WebPanelView.render(context.extensionUri, getPort)
       if (telemetry) {
         telemetry.sendTelemetryEvent({
           event: 'baml.openBamlPanel',
@@ -183,29 +244,8 @@ export function activate(context: vscode.ExtensionContext) {
         root_path: 'default',
         function_name: args?.functionName ?? 'default',
       })
-      // to account for some delays (this is a hack, sorry)
-      setTimeout(() => {
-        WebPanelView.currentPanel?.postMessage('select_function', {
-          root_path: 'default',
-          function_name: args?.functionName ?? 'default',
-        })
-        WebPanelView.currentPanel?.postMessage('port_number', {
-          port: port,
-        })
-      }, 200)
-
-      // adding the select_function here causes glitches (cause it's way too delayed)
-      // for now lets resend only the port until we have a more reliable way to request this data.
-      setTimeout(() => {
-        WebPanelView.currentPanel?.postMessage('port_number', {
-          port: port,
-        })
-      }, 1000)
 
       console.info('Opening BAML panel')
-      WebPanelView.currentPanel?.postMessage('port_number', {
-        port: port,
-      })
     },
   )
 
@@ -243,6 +283,14 @@ export function activate(context: vscode.ExtensionContext) {
     }
   })
 
+  // Listen for messages from the webview
+
+  if (!WebPanelView.currentPanel) {
+    console.warn('WebPanelView.currentPanel is not initialized')
+  } else {
+    console.log('WebPanelView.currentPanel is initialized')
+  }
+
   plugins.map(async (plugin) => {
     const enabled = await plugin.enabled()
     if (enabled) {
@@ -258,61 +306,6 @@ export function activate(context: vscode.ExtensionContext) {
   if (process.env.VSCODE_DEBUG_MODE === 'true') {
     console.log(`vscode env: ${JSON.stringify(process.env, null, 2)}`)
     vscode.commands.executeCommand('baml.openBamlPanel')
-  }
-
-  try {
-    const app = require('express')()
-    app.use(cors())
-    var port: number
-    const server = app.listen(0, () => {
-      port = server.address().port
-      console.log('Server started on port ' + port)
-      WebPanelView.currentPanel?.postMessage('port_number', {
-        port: port,
-      })
-    })
-
-    app.use(
-      createProxyMiddleware({
-        changeOrigin: true,
-        pathRewrite: (path, req) => {
-          // Ensure the URL does not end with a slash
-          if (path.endsWith('/')) {
-            return path.slice(0, -1)
-          }
-          return path
-        },
-        router: (req) => {
-          // Extract the original target URL from the custom header
-          let originalUrl = req.headers['baml-original-url']
-          if (typeof originalUrl === 'string') {
-            delete req.headers['baml-original-url']
-            delete req.headers['baml-render-url']
-            req.headers['origin'] = `http://localhost:${port}`
-
-            // Ensure the URL does not end with a slash
-            if (originalUrl.endsWith('/')) {
-              originalUrl = originalUrl.slice(0, -1)
-            }
-            return originalUrl
-          } else {
-            throw new Error('baml-original-url header is missing or invalid')
-          }
-        },
-        logger: console,
-        on: {
-          proxyRes: (proxyRes, req, res) => {
-            proxyRes.headers['Access-Control-Allow-Origin'] = '*'
-          },
-          error: (error) => {
-            console.error('proxy error:', error)
-          },
-        },
-      }),
-    )
-  } catch (error) {
-    console.error('Failed to start proxy server:', error)
-    vscode.window.showErrorMessage('Failed to BAML localhost server. Contact support for help.')
   }
 
   // TODO: Reactivate linter.
