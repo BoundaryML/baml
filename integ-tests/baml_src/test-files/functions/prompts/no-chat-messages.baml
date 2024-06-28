@@ -7,9 +7,19 @@ function PromptTestClaude(input: string) -> string {
   "#
 }
 
-function PromptTestOpenAI(input: string) -> string {
+
+function PromptTestStreaming(input: string) -> string {
   client GPT35
   prompt #"
-    Tell me a haiku about {{ input }}
+    Tell me a short story about {{ input }}
   "#
+}
+
+test TestName {
+  functions [PromptTestStreaming]
+  args {
+    input #"
+      hello world
+    "#
+  }
 }

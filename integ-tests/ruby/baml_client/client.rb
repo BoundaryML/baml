@@ -796,26 +796,6 @@ module Baml
       ).returns(String)
       
     }
-    def PromptTestOpenAI(
-        input:
-    )
-      raw = @runtime.call_function(
-        "PromptTestOpenAI",
-        {
-          "input" => input,
-        },
-        @ctx_manager,
-      )
-      (raw.parsed_using_types(Baml::Types))
-    end
-
-    sig {
-      
-      params(
-        input: String,
-      ).returns(String)
-      
-    }
     def PromptTestOpenAIChat(
         input:
     )
@@ -841,6 +821,26 @@ module Baml
     )
       raw = @runtime.call_function(
         "PromptTestOpenAIChatNoSystem",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
+    def PromptTestStreaming(
+        input:
+    )
+      raw = @runtime.call_function(
+        "PromptTestStreaming",
         {
           "input" => input,
         },
@@ -2018,27 +2018,6 @@ module Baml
         input: String,
       ).returns(Baml::BamlStream[String])
     }
-    def PromptTestOpenAI(
-        input:
-    )
-      raw = @runtime.stream_function(
-        "PromptTestOpenAI",
-        {
-          "input" => input,
-        },
-        @ctx_manager,
-      )
-      Baml::BamlStream[T.nilable(String), String].new(
-        ffi_stream: raw,
-        ctx_manager: @ctx_manager
-      )
-    end
-
-    sig {
-      params(
-        input: String,
-      ).returns(Baml::BamlStream[String])
-    }
     def PromptTestOpenAIChat(
         input:
     )
@@ -2065,6 +2044,27 @@ module Baml
     )
       raw = @runtime.stream_function(
         "PromptTestOpenAIChatNoSystem",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def PromptTestStreaming(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "PromptTestStreaming",
         {
           "input" => input,
         },

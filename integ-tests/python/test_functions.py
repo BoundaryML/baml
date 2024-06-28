@@ -160,12 +160,23 @@ async def test_gemini():
 
 @pytest.mark.asyncio
 async def test_streaming():
-    stream = b.stream.PromptTestOpenAI(input="Programming languages are fun to create")
+    stream = b.stream.PromptTestStreaming(input="Programming languages are fun to create")
     msgs = []
+
+    start_time = asyncio.get_event_loop().time()
+    last_msg_time = start_time
     async for msg in stream:
         msgs.append(msg)
+        if len(msgs) == 1:
+            first_msg_time = asyncio.get_event_loop().time()
+        
+        last_msg_time = asyncio.get_event_loop().time()
+        
+
     final = await stream.get_final_response()
 
+    assert first_msg_time - start_time <= 1.5, "Expected first message within 1 second but it took longer."
+    assert last_msg_time - start_time >= 1, "Expected last message after 1.5 seconds but it was earlier."
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
@@ -176,7 +187,6 @@ async def test_streaming():
             msg,
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
-
 
 @pytest.mark.asyncio
 async def test_streaming_uniterated():

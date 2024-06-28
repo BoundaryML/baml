@@ -8,6 +8,9 @@ dependencies:
   '@boundaryml/baml':
     specifier: link:../../engine/language_client_typescript
     version: link:../../engine/language_client_typescript
+  dotenv:
+    specifier: ^16.4.5
+    version: 16.4.5
 
 devDependencies:
   '@swc/core':
@@ -1303,7 +1306,6 @@ packages:
   /dotenv@16.4.5:
     resolution: {integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==}
     engines: {node: '>=12'}
-    dev: true
 
   /dynamic-dedupe@0.3.0:
     resolution: {integrity: sha512-ssuANeD+z97meYOqd50e04Ze5qp4bPqo8cCkI4TRjZkzAUgIDTrXV1R8QCdINpiI+hw14+rYazvTRdQrz0/rFQ==}

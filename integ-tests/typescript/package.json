@@ -27,6 +27,7 @@
     "typescript": "^5.4.2"
   },
   "dependencies": {
-    "@boundaryml/baml": "link:../../engine/language_client_typescript"
+    "@boundaryml/baml": "link:../../engine/language_client_typescript",
+    "dotenv": "^16.4.5"
   }
 }

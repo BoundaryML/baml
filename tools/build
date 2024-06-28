@@ -233,6 +233,8 @@ case "$_path" in
     command="${command} && poetry run baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
       command="${command} && BAML_LOG=debug infisical run --env=test -- poetry run pytest app/test_functions.py::test_streaming_claude"
+      
+
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
