@@ -15,6 +15,7 @@ import {
 import TypeBuilder from '../baml_client/type_builder'
 import { RecursivePartialNull } from '../baml_client/client'
 import { config } from 'dotenv'
+import { BamlLogEvent } from '@boundaryml/baml/native'
 config()
 
 describe('Integ tests', () => {
@@ -353,8 +354,8 @@ describe('Integ tests', () => {
   })
 
   it("should work with 'onLogEvent'", async () => {
-    onLogEvent((error: any, param2) => {
-      console.log('msg', error, 'param2', param2)
+    onLogEvent((param2) => {
+      console.log('onLogEvent', param2)
     })
     const res = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
     expect(res).toContain('a')

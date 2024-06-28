@@ -50,7 +50,11 @@ class CtxManager {
         this.rt.flush();
     }
     onLogEvent(callback) {
-        this.rt.setLogEventCallback(callback);
+        this.rt.setLogEventCallback((error, param) => {
+            if (!error) {
+                callback(param);
+            }
+        });
     }
     traceFnSync(name, func) {
         return ((...args) => {

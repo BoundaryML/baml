@@ -14,7 +14,7 @@ pub use function_result_stream::FunctionResultStream;
 pub use function_results::FunctionResult;
 pub use image::BamlImagePy;
 
-pub use runtime::BamlRuntime;
+pub use runtime::{BamlLogEvent, BamlRuntime, LogEventMetadata};
 pub use runtime_ctx_manager::RuntimeContextManager;
 pub use span::BamlSpan;
 pub use type_builder::*;
