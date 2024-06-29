@@ -331,13 +331,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: [publish-to-pypi, publish-to-npm]
     steps:
-      - name: Build Changelog
-        id: github_release
-        uses: mikepenz/release-changelog-builder-action@v4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+
+      - name: Get Changelog
+        id: latest_release
+        run: |
+          echo "::set-output name=changelog::$(awk '/^## \[/{if (p) exit; p=1} p' CHANGELOG.md)"
 
       - name: Create Release
         uses: mikepenz/action-gh-release@v0.2.0-a03 #softprops/action-gh-release
         with:
-          body: ${{steps.github_release.outputs.changelog}}
+          body: ${{steps.latest_release.outputs.changelog}}
