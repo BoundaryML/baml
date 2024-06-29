@@ -177,7 +177,7 @@ jobs:
           command: build
           args: --release --out engine/language_client_python/dist --manifest-path engine/language_client_python/Cargo.toml
           sccache: "true"
-          manylinux: ${{ matrix._.host == 'ubuntu-latest' && 'auto' || null }}
+          manylinux: ${{ matrix._.host == 'ubuntu-latest' && 'manylinux_2_28' || null }}
           before-script-linux: |
             if command -v yum &> /dev/null; then
                 yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
