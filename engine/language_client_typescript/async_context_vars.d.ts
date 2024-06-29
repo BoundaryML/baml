@@ -1,12 +1,12 @@
 import { BamlSpan, RuntimeContextManager, BamlRuntime, BamlLogEvent } from './native';
-export declare class CtxManager {
+export declare class BamlCtxManager {
     private rt;
     private ctx;
     constructor(rt: BamlRuntime);
     upsertTags(tags: Record<string, string>): void;
     get(): RuntimeContextManager;
-    startTraceSync(name: string, args: Record<string, any>): BamlSpan;
-    startTraceAsync(name: string, args: Record<string, any>): BamlSpan;
+    startTraceSync(name: string, args: Record<string, any>): [RuntimeContextManager, BamlSpan];
+    startTraceAsync(name: string, args: Record<string, any>): [RuntimeContextManager, BamlSpan];
     endTrace(span: BamlSpan, response: any): void;
     flush(): void;
     onLogEvent(callback: (event: BamlLogEvent) => void): void;

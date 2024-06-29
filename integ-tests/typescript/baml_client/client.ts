@@ -26,9 +26,13 @@ export type RecursivePartialNull<T> = T extends object
   : T | null;
 
 export class BamlClient {
+  private runtime: BamlRuntime
+  private ctx_manager: BamlCtxManager
   private stream_client: BamlStreamClient
 
-  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {
+  constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager) {
+    this.runtime = runtime
+    this.ctx_manager = ctx_manager
     this.stream_client = new BamlStreamClient(runtime, ctx_manager)
   }
 
