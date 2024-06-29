@@ -10,7 +10,7 @@ import CustomErrorBoundary from '../utils/ErrorFallback'
 import { sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
-const vscode = acquireVsCodeApi()
+import { vscode } from '../utils/vscode'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
@@ -347,13 +347,13 @@ export const availableFunctionsAtom = atom((get) => {
   return runtime.list_functions()
 })
 
-export const rawCurlAtom = atom((get) => {
+const asyncCurlAtom = atom(async (get) => {
   const runtime = get(selectedRuntimeAtom)
   const func = get(selectedFunctionAtom)
   const test_case = get(selectedTestCaseAtom)
 
   if (!runtime || !func || !test_case) {
-    return null
+    return 'Not yet ready'
   }
   const params = Object.fromEntries(
     test_case.inputs
@@ -361,15 +361,14 @@ export const rawCurlAtom = atom((get) => {
       .map((input) => [input.name, JSON.parse(input.value)]),
   )
   try {
-    return func.render_raw_curl(runtime, params, false)
+    return await func.render_raw_curl(runtime, params, false)
   } catch (e) {
-    if (e instanceof Error) {
-      return e.message
-    } else {
-      return `${e}`
-    }
+    console.error(e)
+    return 'Error rendering curl command'
   }
 })
+
+export const curlAtom = unwrap(asyncCurlAtom)
 
 export const renderPromptAtom = atom((get) => {
   const runtime = get(selectedRuntimeAtom)
@@ -621,7 +620,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <>
-      <div className='absolute flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2'>
+      <div className='absolute flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2 z-50'>
         <ErrorCount /> <span>Runtime Version: {version}</span>
       </div>
       {selectedProject === null ? (

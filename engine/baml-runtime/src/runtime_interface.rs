@@ -136,6 +136,7 @@ pub trait InternalRuntimeInterface {
         node_index: Option<usize>,
     ) -> Result<(RenderedPrompt, OrchestrationScope)>;
 
+    #[warn(async_fn_in_trait)]
     async fn render_raw_curl(
         &self,
         function_name: &str,
