@@ -166,7 +166,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const app: Express = require('express')()
   app.use(cors())
-  var port = 123
+  var port: number
   const server = app.listen(0, () => {
     console.log('Server started on port ' + getPort())
     // WebPanelView.currentPanel?.postMessage('port_number', {
@@ -177,6 +177,7 @@ export function activate(context: vscode.ExtensionContext) {
   const getPort = () => {
     let addr = server.address()
     if (addr === null) {
+      vscode.window.showErrorMessage('Failed to start server. Please try reloading the window, or restarting VSCode.')
       return 0
     }
     if (typeof addr === 'string') {

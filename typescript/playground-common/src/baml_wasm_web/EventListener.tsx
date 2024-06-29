@@ -618,6 +618,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
           if (content.port === 0) {
             console.error('Port number is 0, not setting')
+
             return
           }
 

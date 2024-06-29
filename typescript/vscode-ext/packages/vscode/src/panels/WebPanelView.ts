@@ -170,6 +170,10 @@ export class WebPanelView {
               port: this._port(),
             })
             return
+
+          case 'show_port_error':
+            vscode.window.showErrorMessage('Failed to run diagnostics')
+            return
           case 'receiveData':
             // Code that should run in response to the hello message command
             window.showInformationMessage(text)
