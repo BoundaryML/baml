@@ -1,5 +1,4 @@
-import { BamlLogEvent } from '../native'
-import { BamlSpan, RuntimeContextManager, BamlRuntime } from './native'
+import { BamlSpan, RuntimeContextManager, BamlRuntime, BamlLogEvent } from './native'
 import { AsyncLocalStorage } from 'async_hooks'
 
 export class CtxManager {
@@ -56,8 +55,12 @@ export class CtxManager {
     this.rt.flush()
   }
 
-  onLogEvent(callback: (error: any, event: BamlLogEvent) => void): void {
-    this.rt.setLogEventCallback(callback)
+  onLogEvent(callback: (event: BamlLogEvent) => void): void {
+    this.rt.setLogEventCallback((error: any, param: BamlLogEvent) => {
+      if (!error) {
+        callback(param)
+      }
+    })
   }
 
   traceFnSync<ReturnType, F extends (...args: any[]) => ReturnType>(name: string, func: F): F {

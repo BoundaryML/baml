@@ -33,7 +33,6 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         final_coerce: Callable[[FunctionResult], FinalOutputType],
         ctx_manager: RuntimeContextManager,
         tb: Optional[TypeBuilder],
-        
     ):
         self.__ffi_stream = ffi_stream.on_event(self.__enqueue)
         self.__partial_coerce = partial_coerce
@@ -48,10 +47,10 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         self.__event_queue.put_nowait(data)
 
     async def __drive_to_completion(self) -> FunctionResult:
-        
+
         try:
             retval = await self.__ffi_stream.done(self.__ctx_manager)
-        
+
             self.__future.set_result(retval)
             return retval
         except Exception as e:
@@ -62,20 +61,21 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
 
     def __drive_to_completion_in_bg(self) -> concurrent.futures.Future[FunctionResult]:
         if self.__task is None:
-            self.__task = threading.Thread(target = self.threading_target, daemon=True)
+            self.__task = threading.Thread(target=self.threading_target, daemon=True)
             self.__task.start()
         return self.__future
 
     def threading_target(self):
         asyncio.run(self.__drive_to_completion(), debug=True)
 
-
     async def __aiter__(self):
+        # TODO: This is deliberately __aiter__ and not __iter__ because we want to
+        # ensure that the caller is using an async for loop.
+        # Eventually we do not want to create a new thread for each stream.
         self.__drive_to_completion_in_bg()
         while True:
-            event = await self.__event_queue.get()
+            event = self.__event_queue.get()
             if event is None:
-            
                 break
             yield self.__partial_coerce(event.parsed())
 
