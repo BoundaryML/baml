@@ -9,14 +9,16 @@ import { PromptChunk } from './ImplPanel'
 import FunctionTestSnippet from './TestSnippet'
 import { Copy } from 'lucide-react'
 import { Button } from '../components/ui/button'
+import { CheckboxHeader } from './CheckboxHeader'
 const handleCopy = (text: string) => () => {
   navigator.clipboard.writeText(text)
 }
 const PromptPreview: React.FC = () => {
   const promptPreview = useAtomValue(renderPromptAtom)
-  const rawCurl = useAtomValue(rawCurlAtom)
+  const rawCurl = useAtomValue(rawCurlAtom) ?? 'Not yet available'
 
   const { showCurlRequest } = useAppState()
+
   if (!promptPreview) {
     return (
       <div className='flex flex-col items-center justify-center w-full h-full gap-2'>
@@ -27,19 +29,18 @@ const PromptPreview: React.FC = () => {
   }
 
   if (showCurlRequest) {
-    const curlPreview = rawCurl ?? 'No curl request available'
     return (
       <div>
         <div className='flex justify-end'>
           <Button
-            onClick={handleCopy(curlPreview)}
+            onClick={handleCopy(rawCurl)}
             className='copy-button bg-transparent text-white m-0 py-0 hover:bg-indigo-500 text-xs'
           >
             <Copy size={16} />
           </Button>
         </div>
         <PromptChunk
-          text={curlPreview}
+          text={rawCurl}
           client={{
             identifier: {
               end: 0,
@@ -164,6 +165,7 @@ enum Topic {
             <div className='w-full'>
               <ResizablePanelGroup direction='horizontal' className='h-full'>
                 <div className='relative w-full h-full overflow-y-auto'>
+                  <CheckboxHeader />
                   <PromptPreview />
                 </div>
               </ResizablePanelGroup>

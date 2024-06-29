@@ -13,7 +13,6 @@ import CustomErrorBoundary from './utils/ErrorFallback'
 import 'jotai-devtools/styles.css'
 import { Snippets } from './shared/Snippets'
 import { Dialog, DialogTrigger, DialogContent } from './components/ui/dialog'
-import { CheckboxHeader } from './shared/CheckboxHeader'
 import { AppStateProvider } from './shared/AppStateContext' // Import the AppStateProvider
 
 function App() {
@@ -44,7 +43,6 @@ function App() {
             <div className='flex flex-col w-full gap-2 px-2 pb-4'>
               <FunctionSelector />
               <Separator className='bg-vscode-textSeparator-foreground' />
-              <CheckboxHeader />
               <FunctionPanel />
             </div>
           </AppStateProvider>{' '}

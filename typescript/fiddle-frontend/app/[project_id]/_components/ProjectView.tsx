@@ -46,7 +46,6 @@ import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from '@baml/play
 
 import FileViewer from './Tree/FileViewer'
 import { AppStateProvider } from '@baml/playground-common/shared/AppStateContext' // Import the AppStateProvider
-import { CheckboxHeader } from '@baml/playground-common/shared/CheckBoxHeader'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(updateFileAtom)
@@ -332,8 +331,6 @@ const PlaygroundView = () => {
                     />
                   </div>
                 </div>
-                <CheckboxHeader />
-
                 {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
                 <FunctionPanel />
               </div>
