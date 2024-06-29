@@ -288,12 +288,6 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Listen for messages from the webview
 
-  if (!WebPanelView.currentPanel) {
-    console.warn('WebPanelView.currentPanel is not initialized')
-  } else {
-    console.log('WebPanelView.currentPanel is initialized')
-  }
-
   plugins.map(async (plugin) => {
     const enabled = await plugin.enabled()
     if (enabled) {
