@@ -106,9 +106,10 @@ jobs:
           #   host: windows-latest
           #   node_build: pnpm build --target aarch64-pc-windows-msvc
 
-          - target: aarch64-unknown-linux-gnu
-            host: ubuntu-latest
-            node_build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
+          # maturin doesn't support aarch64-linux-gnu
+          # - target: aarch64-unknown-linux-gnu
+          #   host: ubuntu-latest
+          #   node_build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
 
           - target: x86_64-apple-darwin
             host: macos-latest
@@ -177,7 +178,7 @@ jobs:
           command: build
           args: --release --out engine/language_client_python/dist --manifest-path engine/language_client_python/Cargo.toml
           sccache: "true"
-          manylinux: ${{ matrix._.host == 'ubuntu-latest' && 'manylinux_2_28' || null }}
+          manylinux: ${{ matrix._.host == 'ubuntu-latest' && 'auto' || null }}
           before-script-linux: |
             if command -v yum &> /dev/null; then
                 yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
