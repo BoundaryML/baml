@@ -36,6 +36,14 @@ body = """
         {% endif -%}
     {% endfor -%}
 {% endfor %}\n
+### UNMATCHED
+{% for commit in commits %}
+    {%- if commit.group -%}
+    {% else -%}
+        - {% if commit.breaking %} [**breaking**]{% endif %}\
+            {{ commit.message | split(pat="\n") | first }} - ([{{ commit.id | truncate(length=7, end="") }}]($REPO/commit/{{ commit.id }})) - {{ commit.author.name }}
+    {% endif -%}
+{% endfor %}\n
 """
 # template for the changelog footer
 footer = """
@@ -52,7 +60,7 @@ postprocessors = [
 # parse the commits based on https://www.conventionalcommits.org
 conventional_commits = true
 # filter out the commits that are not conventional
-filter_unconventional = true
+filter_unconventional = false
 # process each line of a commit as an individual commit
 split_commits = false
 # regex for preprocessing the commit messages
@@ -80,7 +88,7 @@ filter_commits = false
 # regex for matching git tags
 tag_pattern = "^[0-9].[0-9]+.[0-9]+$"
 # regex for skipping tags
-skip_tags = "v0.1.0-beta.1"
+skip_tags = ""
 # regex for ignoring tags
 ignore_tags = ""
 # sort the tags topologically
