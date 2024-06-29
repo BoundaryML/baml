@@ -177,7 +177,9 @@ export function activate(context: vscode.ExtensionContext) {
   const getPort = () => {
     let addr = server.address()
     if (addr === null) {
-      vscode.window.showErrorMessage('Failed to start server. Please try reloading the window, or restarting VSCode.')
+      vscode.window.showErrorMessage(
+        'Failed to start BAML extension server. Please try reloading the window, or restarting VSCode.',
+      )
       return 0
     }
     if (typeof addr === 'string') {

@@ -8,13 +8,7 @@ import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
 import { sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
-import {
-  availableProjectsAtom,
-  projectFamilyAtom,
-  projectFilesAtom,
-  runtimeFamilyAtom,
-  // portReadyAtom,
-} from './baseAtoms'
+import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
@@ -486,29 +480,6 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const wasm = useAtomValue(wasmAtom)
   const setSelectedFunction = useSetAtom(selectedFunctionAtom)
   const envVars = useAtomValue(envVarsAtom)
-  // const [portReady, setPortReady] = useAtom(portReadyAtom)
-
-  useEffect(() => {
-    setEnvKeyValueStorage((prev) => {
-      let [proxy_env_name, orig_value] = defaultEnvKeyValues[0]
-      let keyExists = false
-      const updated: [string, string][] = prev.map(([key, value]) => {
-        if (key === proxy_env_name) {
-          keyExists = true
-          return [key, orig_value]
-        }
-        return [key, value]
-      })
-
-      if (!keyExists) {
-        updated.push([proxy_env_name, orig_value])
-      }
-      return updated
-    })
-    // setPortReady(false)
-    // postMessageToExtension({ command: 'get_port' })
-    // setPortReady(true)
-  }, [])
 
   const createRuntimeCb = useAtomCallback(
     useCallback(
@@ -617,7 +588,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           console.log('Setting port number', content.port)
 
           if (content.port === 0) {
-            console.error('Port number is 0, not setting')
+            console.error('Port number is 0, cannot launch BAML extension')
 
             return
           }
