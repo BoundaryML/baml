@@ -994,14 +994,14 @@ impl WasmFunction {
                 RenderedPrompt::Chat(chat_messages) => chat_messages,
                 RenderedPrompt::Completion(_) => vec![], // or handle this case differently
             },
-            Err(e) => return Err(wasm_bindgen::JsError::new(format!("{:?}", e).as_str())),
+            Err(e) => return Err(wasm_bindgen::JsError::new(format!("{:#?}", e).as_str())),
         };
 
         rt.runtime
             .internal()
             .render_raw_curl(&self.name, &ctx, &final_prompt, stream, None)
             .await
-            .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
+            .map_err(|e| wasm_bindgen::JsError::new(format!("{e:#?}").as_str()))
     }
 
     #[wasm_bindgen]

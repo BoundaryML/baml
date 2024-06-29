@@ -1,7 +1,7 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { renderPromptAtom, selectedFunctionAtom, rawCurlAtom } from '../baml_wasm_web/EventListener'
+import { renderPromptAtom, selectedFunctionAtom, curlAtom } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
@@ -10,13 +10,44 @@ import FunctionTestSnippet from './TestSnippet'
 import { Copy } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { CheckboxHeader } from './CheckboxHeader'
+import CustomErrorBoundary from '../utils/ErrorFallback'
 const handleCopy = (text: string) => () => {
   navigator.clipboard.writeText(text)
 }
+
+const CurlSnippet: React.FC = () => {
+  const rawCurl = useAtomValue(curlAtom) ?? 'Loading...'
+
+  return (
+    <div>
+      <div className='flex justify-end'>
+        <Button
+          onClick={handleCopy(rawCurl)}
+          className='copy-button bg-transparent text-white m-0 py-0 hover:bg-indigo-500 text-xs'
+        >
+          <Copy size={16} />
+        </Button>
+      </div>
+      <PromptChunk
+        text={rawCurl}
+        client={{
+          identifier: {
+            end: 0,
+            source_file: '',
+            start: 0,
+            value: 'Curl Request',
+          },
+          provider: '',
+          model: '',
+        }}
+        showCopy={true}
+      />
+    </div>
+  )
+}
+
 const PromptPreview: React.FC = () => {
   const promptPreview = useAtomValue(renderPromptAtom)
-  const rawCurl = useAtomValue(rawCurlAtom) ?? 'Not yet available'
-
   const { showCurlRequest } = useAppState()
 
   if (!promptPreview) {
@@ -28,36 +59,7 @@ const PromptPreview: React.FC = () => {
     )
   }
 
-  if (showCurlRequest) {
-    return (
-      <div>
-        <div className='flex justify-end'>
-          <Button
-            onClick={handleCopy(rawCurl)}
-            className='copy-button bg-transparent text-white m-0 py-0 hover:bg-indigo-500 text-xs'
-          >
-            <Copy size={16} />
-          </Button>
-        </div>
-        <PromptChunk
-          text={rawCurl}
-          client={{
-            identifier: {
-              end: 0,
-              source_file: '',
-              start: 0,
-              value: 'Curl Request',
-            },
-            provider: '',
-            model: '',
-          }}
-          showCopy={true}
-        />
-      </div>
-    )
-  }
-
-  if (typeof promptPreview === 'string')
+  if (typeof promptPreview === 'string') {
     return (
       <PromptChunk
         text={promptPreview}
@@ -74,6 +76,11 @@ const PromptPreview: React.FC = () => {
         }}
       />
     )
+  }
+
+  if (showCurlRequest) {
+    return <CurlSnippet />
+  }
 
   return (
     <div className='flex flex-col w-full h-full gap-4 px-2'>
@@ -164,9 +171,11 @@ enum Topic {
           <ResizablePanel id='top-panel' className='flex w-full px-1' defaultSize={50}>
             <div className='w-full'>
               <ResizablePanelGroup direction='horizontal' className='h-full'>
-                <div className='relative w-full h-full overflow-y-auto'>
+                <div className='w-full h-full'>
                   <CheckboxHeader />
-                  <PromptPreview />
+                  <div className='relative w-full overflow-y-auto' style={{ height: 'calc(100% - 32px)' }}>
+                    <PromptPreview />
+                  </div>
                 </div>
               </ResizablePanelGroup>
 
