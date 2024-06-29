@@ -16,6 +16,7 @@ import TypeBuilder from '../baml_client/type_builder'
 import { RecursivePartialNull } from '../baml_client/client'
 import { config } from 'dotenv'
 import { BamlLogEvent } from '@boundaryml/baml/native'
+import { AsyncLocalStorage } from 'async_hooks'
 config()
 
 describe('Integ tests', () => {
@@ -246,8 +247,87 @@ describe('Integ tests', () => {
     traceSync('dummyFunc3', dummyFunc)('hi there')
   })
 
+  it('test local trace async', async () => {
+    const s2 = new AsyncLocalStorage<string[]>()
+    s2.enterWith(['first'])
+
+    const localTraceAsync = <ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(
+      name: string,
+      func: F,
+    ): F => {
+      const funcName = name
+      return <F>(async (...args: any[]) => {
+        const params = args.reduce(
+          (acc, arg, i) => ({
+            ...acc,
+            [`arg${i}`]: arg, // generic way to label args
+          }),
+          {},
+        )
+
+        await s2.run([...(s2.getStore() ?? ['no-parent']), funcName], async () => {
+          console.log('entering span', s2.getStore())
+          try {
+            const response = await func(...args)
+            console.log('exiting span try', s2.getStore())
+            return response
+          } catch (e) {
+            console.log('exiting span catch', s2.getStore())
+            throw e
+          }
+        })
+      })
+    }
+
+    const res = await localTraceAsync('parentAsync', async (firstArg: string, secondArg: number) => {
+      const res2 = await localTraceAsync('asyncDummyFunc', asyncDummyFunc)('secondDummyFuncArg')
+
+      const llm_res = await Promise.all([
+        await localTraceAsync('prom1', asyncDummyFunc)('arg1'),
+        await localTraceAsync('prom2', asyncDummyFunc)('arg2'),
+        await localTraceAsync('prom3', asyncDummyFunc)('arg3'),
+        await localTraceAsync('prom4', asyncDummyFunc)('arg4'),
+      ])
+
+      const res3 = await localTraceAsync('asyncDummyFunc', asyncDummyFunc)('thirdDummyFuncArg')
+
+      return 'hello world'
+    })('hi', 10)
+  })
+
+  it('test asynclocalstorage semantics', async () => {
+    const s = new AsyncLocalStorage<string>()
+    s.enterWith('first')
+
+    await (async () => {
+      console.log('expected first, got ', s.getStore())
+      s.enterWith('second')
+      await Promise.all([
+        (async () => {
+          console.log('thirdA: expected second, got ', s.getStore())
+          s.run('thirdA', async () => console.log('thirdA: expected thirdA, got ', s.getStore()))
+        })(),
+        (async () => {
+          console.log('thirdB: expected second, got ', s.getStore())
+          //s.enterWith('thirdB')
+          s.run('thirdB', async () => console.log('thirdB: expected thirdB, got ', s.getStore()))
+        })(),
+        (async () => {
+          console.log('thirdC: expected second, got ', s.getStore())
+          //s.enterWith('thirdC')
+          s.run('thirdC', async () => console.log('thirdC: expected thirdC, got ', s.getStore()))
+        })(),
+        (async () => {
+          console.log('thirdD: expected second, got ', s.getStore())
+          //s.enterWith('thirdD')
+          s.run('thirdD', async () => console.log('thirdD: expected thirdD, got ', s.getStore()))
+        })(),
+      ])
+      console.log('expected second (2), got ', s.getStore())
+    })()
+  })
   // Look at the dashboard to verify results.
-  it('supports tracing async', async () => {
+  it.only('supports tracing async', async () => {
     const res = await traceAsync('parentAsync', async (firstArg: string, secondArg: number) => {
       console.log('hello world')
       setTags({ myKey: 'myVal' })
@@ -256,18 +336,31 @@ describe('Integ tests', () => {
 
       const res2 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('secondDummyFuncArg')
 
-      const llm_res = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
+      const llm_res = await Promise.all([
+        b.TestFnNamedArgsSingleStringList(['a1', 'b', 'c']),
+        b.TestFnNamedArgsSingleStringList(['a2', 'b', 'c']),
+        b.TestFnNamedArgsSingleStringList(['a3', 'b', 'c']),
+        b.TestFnNamedArgsSingleStringList(['a4', 'b', 'c']),
+        b.TestFnNamedArgsSingleStringList(['a5', 'b', 'c']),
+      ])
 
       const res3 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('thirdDummyFuncArg')
 
       return 'hello world'
     })('hi', 10)
 
-    const res2 = await traceAsync('parentAsync2', async (firstArg: string, secondArg: number) => {
+    // const res2 = await traceAsync('parentAsync2', async (firstArg: string, secondArg: number) => {
+    //   console.log('hello world')
+
+    //   const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
+
+    //   return 'hello world'
+    // })('hi', 10)
+  })
+
+  it('supports tracing async sam test', async () => {
+    const res = await traceAsync('padreAsync', async (firstArg: string, secondArg: number) => {
       console.log('hello world')
-
-      const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
-
       return 'hello world'
     })('hi', 10)
   })

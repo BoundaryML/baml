@@ -1,9 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CtxManager = void 0;
+exports.BamlCtxManager = void 0;
 const native_1 = require("./native");
 const async_hooks_1 = require("async_hooks");
-class CtxManager {
+class BamlCtxManager {
     rt;
     ctx;
     constructor(rt) {
@@ -28,15 +28,11 @@ class CtxManager {
     }
     startTraceSync(name, args) {
         const mng = this.get();
-        // const clone = mng.deepClone()
-        // this.ctx.enterWith(clone)
-        return native_1.BamlSpan.new(this.rt, name, args, mng);
+        return [mng, native_1.BamlSpan.new(this.rt, name, args, mng)];
     }
     startTraceAsync(name, args) {
-        const mng = this.get();
-        const clone = mng.deepClone();
-        this.ctx.enterWith(clone);
-        return native_1.BamlSpan.new(this.rt, name, args, clone);
+        const mng = this.get().deepClone();
+        return [mng, native_1.BamlSpan.new(this.rt, name, args, mng)];
     }
     endTrace(span, response) {
         const manager = this.ctx.getStore();
@@ -62,16 +58,18 @@ class CtxManager {
                 ...acc,
                 [`arg${i}`]: arg, // generic way to label args
             }), {});
-            const span = this.startTraceSync(name, params);
-            try {
-                const response = func(...args);
-                this.endTrace(span, response);
-                return response;
-            }
-            catch (e) {
-                this.endTrace(span, e);
-                throw e;
-            }
+            const [mng, span] = this.startTraceSync(name, params);
+            this.ctx.run(mng, () => {
+                try {
+                    const response = func(...args);
+                    this.endTrace(span, response);
+                    return response;
+                }
+                catch (e) {
+                    this.endTrace(span, e);
+                    throw e;
+                }
+            });
         });
     }
     traceFnAync(name, func) {
@@ -81,17 +79,19 @@ class CtxManager {
                 ...acc,
                 [`arg${i}`]: arg, // generic way to label args
             }), {});
-            const span = this.startTraceAsync(funcName, params);
-            try {
-                const response = await func(...args);
-                this.endTrace(span, response);
-                return response;
-            }
-            catch (e) {
-                this.endTrace(span, e);
-                throw e;
-            }
+            const [mng, span] = this.startTraceAsync(name, params);
+            await this.ctx.run(mng, async () => {
+                try {
+                    const response = await func(...args);
+                    this.endTrace(span, response);
+                    return response;
+                }
+                catch (e) {
+                    this.endTrace(span, e);
+                    throw e;
+                }
+            });
         });
     }
 }
-exports.CtxManager = CtxManager;
+exports.BamlCtxManager = BamlCtxManager;

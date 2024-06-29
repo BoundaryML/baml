@@ -12,7 +12,7 @@ use self::typescript_language_features::{ToTypescript, TypescriptLanguageFeature
 use crate::dir_writer::FileCollector;
 
 #[derive(askama::Template)]
-#[template(path = "client.js.j2", escape = "none")]
+#[template(path = "client.ts.j2", escape = "none")]
 struct TypescriptClient {
     funcs: Vec<TypescriptFunction>,
     types: Vec<String>,

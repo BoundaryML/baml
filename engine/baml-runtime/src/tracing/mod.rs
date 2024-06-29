@@ -1,12 +1,9 @@
 pub mod api_wrapper;
-#[cfg(not(target_arch = "wasm32"))]
-mod threaded_tracer;
-#[cfg(target_arch = "wasm32")]
-mod wasm_tracer;
 
 use crate::on_log_event::LogEventCallbackSync;
 use anyhow::Result;
 use baml_types::{BamlMap, BamlMediaType, BamlValue};
+use cfg_if::cfg_if;
 use colored::Colorize;
 use internal_baml_jinja::RenderedPrompt;
 use std::collections::HashMap;
@@ -27,16 +24,17 @@ use self::api_wrapper::{
     },
     APIWrapper,
 };
-#[cfg(not(target_arch = "wasm32"))]
-use self::threaded_tracer::ThreadedTracer;
 
-#[cfg(target_arch = "wasm32")]
-use self::wasm_tracer::NonThreadedTracer;
+cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
+        mod wasm_tracer;
+        use self::wasm_tracer::NonThreadedTracer as TracerImpl;
+    } else {
+        mod threaded_tracer;
+        use self::threaded_tracer::ThreadedTracer as TracerImpl;
+    }
+}
 
-#[cfg(not(target_arch = "wasm32"))]
-type TracerImpl = ThreadedTracer;
-#[cfg(target_arch = "wasm32")]
-type TracerImpl = NonThreadedTracer;
 #[derive(Debug)]
 pub struct TracingSpan {
     span_id: Uuid,
@@ -95,6 +93,7 @@ impl BamlTracer {
         params: &BamlMap<String, BamlValue>,
     ) -> (Option<TracingSpan>, RuntimeContext) {
         let span_id = ctx.enter(function_name);
+        log::trace!("Entering span: {:#?}:::{:?}", span_id, function_name);
         if !self.enabled {
             return (None, ctx.create_ctx(tb));
         }
@@ -150,6 +149,12 @@ impl BamlTracer {
                 ctx
             );
         };
+        log::trace!(
+            "Finishing span: {:#?} {}\nevent chain {:?}",
+            span,
+            span_id,
+            event_chain
+        );
 
         if span.span_id != span_id {
             anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
@@ -210,6 +215,13 @@ impl BamlTracer {
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
             anyhow::bail!("Attempting to finish a span without first starting one");
         };
+
+        log::trace!(
+            "Finishing baml span: {:#?} {}\nevent chain {:?}",
+            span,
+            span_id,
+            event_chain
+        );
 
         if span.span_id != span_id {
             anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);

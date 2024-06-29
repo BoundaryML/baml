@@ -11,4 +11,4 @@ Object.defineProperty(exports, "invoke_runtime_cli", { enumerable: true, get: fu
 var stream_1 = require("./stream");
 Object.defineProperty(exports, "BamlStream", { enumerable: true, get: function () { return stream_1.BamlStream; } });
 var async_context_vars_1 = require("./async_context_vars");
-Object.defineProperty(exports, "BamlCtxManager", { enumerable: true, get: function () { return async_context_vars_1.CtxManager; } });
+Object.defineProperty(exports, "BamlCtxManager", { enumerable: true, get: function () { return async_context_vars_1.BamlCtxManager; } });
