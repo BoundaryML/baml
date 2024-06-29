@@ -122,3 +122,5 @@ git add .
 VERSION=$(grep "current_version =" tools/versions/engine.cfg | awk '{print $3}')
 # Generate the change log
 git cliff --tag $VERSION -u --prepend CHANGELOG.md
+
+echo "Version bumped to $VERSION successfully! Please update CHANGELOG.md."
