@@ -10,12 +10,12 @@ import CustomErrorBoundary from '../utils/ErrorFallback'
 import { sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+const vscode = acquireVsCodeApi()
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
 const postMessageToExtension = (message: any) => {
-  const vscode = acquireVsCodeApi()
-  console.log(`Sending message to extension ${message}`)
+  console.log(`Sending message to extension ${message.command}`)
   vscode.postMessage(message)
 }
 
@@ -31,6 +31,8 @@ const defaultEnvKeyValues: [string, string][] = (() => {
     return [['BOUNDARY_PROXY_URL', 'https://fiddle-proxy.fly.dev']]
   } else {
     postMessageToExtension({ command: 'get_port' })
+    postMessageToExtension({ command: 'add_project' })
+
     console.log('Not running in a Next.js environment, set default value')
     // Not running in a Next.js environment, set default value
     return [['BOUNDARY_PROXY_URL', 'http://localhost:0000']]

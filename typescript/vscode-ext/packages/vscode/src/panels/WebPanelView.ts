@@ -6,6 +6,7 @@ import { getUri } from '../utils/getUri'
 
 import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { URI } from 'vscode-uri'
+import { requestDiagnostics } from '../plugins/language-server'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -171,9 +172,8 @@ export class WebPanelView {
             })
             return
 
-          case 'show_port_error':
-            vscode.window.showErrorMessage('Failed to run diagnostics')
-            return
+          case 'add_project':
+            requestDiagnostics()
           case 'receiveData':
             // Code that should run in response to the hello message command
             window.showInformationMessage(text)
