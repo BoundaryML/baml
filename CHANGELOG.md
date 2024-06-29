@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.45.0](https://github.com/boundaryml/baml/compare/0.44.0..0.45.0) - 2024-06-29
+
+### Bug Fixes
+
+- Fixed streaming in Python Client which didn't show result until later (#726) - ([e4f2daa](https://github.com/boundaryml/baml/commit/e4f2daa9e85bb1711d112fb0c87c0d769be0bb2d)) - Anish Palakurthi
+- Improve playground stability on first load (#732) - ([2ac7b32](https://github.com/boundaryml/baml/commit/2ac7b328e89400cba0d9eb4f6d09c6a03feb71a5)) - Anish Palakurthi
+- Add improved static analysis for jinja (#734) - ([423faa1](https://github.com/boundaryml/baml/commit/423faa1af5a594b7f78f7bb5620e3146a8989da5)) - hellovai
+
+### Documentation
+
+- Docs for Dynamic Types (#722) [https://docs.boundaryml.com/docs/calling-baml/dynamic-types](https://docs.boundaryml.com/docs/calling-baml/dynamic-types)
+
+### Features
+
+- Show raw cURL request in Playground (#723) - ([57928e1](https://github.com/boundaryml/baml/commit/57928e178549cb3e5118ce374aab5d0fbad7038b)) - Anish Palakurthi
+- Support bedrock as a provider (#725) - ([c64c665](https://github.com/boundaryml/baml/commit/c64c66522a1d496493a30f593103209acd201364)) - Samuel Lijin
+
 ## [0.44.0](https://github.com/boundaryml/baml/compare/0.43.0..0.44.0) - 2024-06-26
 
 ### Bug Fixes
