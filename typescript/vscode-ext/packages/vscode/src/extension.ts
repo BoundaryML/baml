@@ -169,9 +169,9 @@ export function activate(context: vscode.ExtensionContext) {
   var port: number
   const server = app.listen(0, () => {
     console.log('Server started on port ' + getPort())
-    // WebPanelView.currentPanel?.postMessage('port_number', {
-    //   port: port,
-    // })
+    WebPanelView.currentPanel?.postMessage('port_number', {
+      port: port,
+    })
   })
 
   const getPort = () => {
