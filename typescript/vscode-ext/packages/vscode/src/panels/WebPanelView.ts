@@ -174,6 +174,7 @@ export class WebPanelView {
 
           case 'add_project':
             requestDiagnostics()
+            return
           case 'receiveData':
             // Code that should run in response to the hello message command
             window.showInformationMessage(text)
