@@ -340,6 +340,6 @@ jobs:
           echo "::set-output name=changelog::$(awk '/^## \[/{if (p) exit; p=1} p' CHANGELOG.md)"
 
       - name: Create Release
-        uses: mikepenz/action-gh-release@v0.2.0-a03 #softprops/action-gh-release
+        uses: mikepenz/action-gh-release@v1 #softprops/action-gh-release
         with:
           body: ${{steps.latest_release.outputs.changelog}}
