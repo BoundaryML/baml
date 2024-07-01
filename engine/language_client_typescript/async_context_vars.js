@@ -19,8 +19,10 @@ class BamlCtxManager {
         manager.upsertTags(tags);
     }
     get() {
+        console.log('get current RuntimeContextManager');
         let store = this.ctx.getStore();
         if (store === undefined) {
+            console.error('no store found in current AsyncLocalContext');
             store = this.rt.createContextManager();
             this.ctx.enterWith(store);
         }

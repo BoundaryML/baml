@@ -227,7 +227,7 @@ case "$_path" in
     command="${command} && pnpm baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
       #command="${command} && pnpm integ-tests"
-      command="${command} && BAML_LOG=baml_runtime::tracing=trace,baml_runtime=debug  infisical run -- pnpm test tests/integ-tests.test.ts"
+      command="${command} && BAML_LOG=baml_runtime::tracing=trace,baml_runtime::types::context_manager=trace,baml_runtime=debug  infisical run -- pnpm test tests/integ-tests.test.ts"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
         #--verbose \
