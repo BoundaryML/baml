@@ -19,20 +19,14 @@ class BamlCtxManager {
         manager.upsertTags(tags);
     }
     get() {
-        console.log('get current RuntimeContextManager');
         let store = this.ctx.getStore();
         if (store === undefined) {
-            console.error('no store found in current AsyncLocalContext');
             store = this.rt.createContextManager();
             this.ctx.enterWith(store);
         }
         return store;
     }
-    startTraceSync(name, args) {
-        const mng = this.get();
-        return [mng, native_1.BamlSpan.new(this.rt, name, args, mng)];
-    }
-    startTraceAsync(name, args) {
+    startTrace(name, args) {
         const mng = this.get().deepClone();
         return [mng, native_1.BamlSpan.new(this.rt, name, args, mng)];
     }
@@ -60,7 +54,7 @@ class BamlCtxManager {
                 ...acc,
                 [`arg${i}`]: arg, // generic way to label args
             }), {});
-            const [mng, span] = this.startTraceSync(name, params);
+            const [mng, span] = this.startTrace(name, params);
             this.ctx.run(mng, () => {
                 try {
                     const response = func(...args);
@@ -74,14 +68,14 @@ class BamlCtxManager {
             });
         });
     }
-    traceFnAync(name, func) {
+    traceFnAsync(name, func) {
         const funcName = name;
         return (async (...args) => {
             const params = args.reduce((acc, arg, i) => ({
                 ...acc,
                 [`arg${i}`]: arg, // generic way to label args
             }), {});
-            const [mng, span] = this.startTraceAsync(name, params);
+            const [mng, span] = this.startTrace(name, params);
             await this.ctx.run(mng, async () => {
                 try {
                     const response = await func(...args);

@@ -20,22 +20,15 @@ export class BamlCtxManager {
   }
 
   get(): RuntimeContextManager {
-    console.log('get current RuntimeContextManager')
     let store = this.ctx.getStore()
     if (store === undefined) {
-      console.error('no store found in current AsyncLocalContext')
       store = this.rt.createContextManager()
       this.ctx.enterWith(store)
     }
     return store
   }
 
-  startTraceSync(name: string, args: Record<string, any>): [RuntimeContextManager, BamlSpan] {
-    const mng = this.get()
-    return [mng, BamlSpan.new(this.rt, name, args, mng)]
-  }
-
-  startTraceAsync(name: string, args: Record<string, any>): [RuntimeContextManager, BamlSpan] {
+  startTrace(name: string, args: Record<string, any>): [RuntimeContextManager, BamlSpan] {
     const mng = this.get().deepClone()
     return [mng, BamlSpan.new(this.rt, name, args, mng)]
   }
@@ -70,7 +63,7 @@ export class BamlCtxManager {
         }),
         {},
       )
-      const [mng, span] = this.startTraceSync(name, params)
+      const [mng, span] = this.startTrace(name, params)
       this.ctx.run(mng, () => {
         try {
           const response = func(...args)
@@ -84,7 +77,7 @@ export class BamlCtxManager {
     })
   }
 
-  traceFnAync<ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(name: string, func: F): F {
+  traceFnAsync<ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(name: string, func: F): F {
     const funcName = name
     return <F>(async (...args: any[]) => {
       const params = args.reduce(
@@ -94,7 +87,7 @@ export class BamlCtxManager {
         }),
         {},
       )
-      const [mng, span] = this.startTraceAsync(name, params)
+      const [mng, span] = this.startTrace(name, params)
       await this.ctx.run(mng, async () => {
         try {
           const response = await func(...args)

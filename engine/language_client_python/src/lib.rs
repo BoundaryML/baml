@@ -1,4 +1,5 @@
 mod parse_py_type;
+mod runtime;
 mod types;
 
 use pyo3::prelude::{pyfunction, pymodule, PyAnyMethods, PyModule, PyResult};
@@ -33,7 +34,8 @@ fn baml_py(_: Python<'_>, m: Bound<'_, PyModule>) -> PyResult<()> {
         eprintln!("Failed to initialize BAML logger: {:#}", e);
     };
 
-    m.add_class::<types::BamlRuntime>()?;
+    m.add_class::<runtime::BamlRuntime>()?;
+
     m.add_class::<types::FunctionResult>()?;
     m.add_class::<types::FunctionResultStream>()?;
     m.add_class::<types::BamlImagePy>()?;
@@ -46,8 +48,9 @@ fn baml_py(_: Python<'_>, m: Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::EnumValueBuilder>()?;
     m.add_class::<types::ClassPropertyBuilder>()?;
     m.add_class::<types::FieldType>()?;
-    m.add_class::<types::BamlLogEvent>()?;
-    m.add_class::<types::LogEventMetadata>()?;
+
+    m.add_class::<runtime::BamlLogEvent>()?;
+    m.add_class::<runtime::LogEventMetadata>()?;
 
     m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;
 

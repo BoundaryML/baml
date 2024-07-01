@@ -1,19 +1,20 @@
 pub mod api_wrapper;
 
 use crate::on_log_event::LogEventCallbackSync;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlMediaType, BamlValue};
 use cfg_if::cfg_if;
 use colored::Colorize;
 use internal_baml_jinja::RenderedPrompt;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
 use crate::{
     internal::llm_client::LLMResponse, tracing::api_wrapper::core_types::Role,
     type_builder::TypeBuilder, FunctionResult, RuntimeContext, RuntimeContextManager, SpanCtx,
-    TestResponse,
+    TestResponse, TraceStats,
 };
 
 use self::api_wrapper::{
@@ -46,6 +47,15 @@ pub struct BamlTracer {
     options: APIWrapper,
     enabled: bool,
     tracer: Option<TracerImpl>,
+    trace_stats: Arc<Mutex<TraceStats>>,
+}
+
+macro_rules! bail {
+    ($self:ident, $($arg:tt)*) => {
+        let mut locked = $self.trace_stats.lock().unwrap();
+        locked.n_spans_failed_before_submit += 1;
+        anyhow::bail!($($arg)*);
+    };
 }
 
 impl BamlTracer {
@@ -66,6 +76,9 @@ impl BamlTracer {
             },
             enabled: options.enabled(),
             options,
+            trace_stats: Arc::new(Mutex::new(TraceStats {
+                n_spans_failed_before_submit: 0,
+            })),
         };
         tracer
     }
@@ -77,12 +90,12 @@ impl BamlTracer {
         }
     }
 
-    pub(crate) fn flush(&self) -> Result<()> {
-        if let Some(tracer) = &self.tracer {
-            tracer.flush()
-        } else {
-            Ok(())
+    pub(crate) fn flush(&self) -> Result<TraceStats> {
+        if let Some(ref tracer) = self.tracer {
+            tracer.flush().context("Failed to flush BAML traces")?;
         }
+
+        Ok(self.trace_stats.lock().unwrap().clone())
     }
 
     pub(crate) fn start_span(
@@ -114,7 +127,8 @@ impl BamlTracer {
         response: Option<BamlValue>,
     ) -> Result<Option<uuid::Uuid>> {
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
-            anyhow::bail!(
+            bail!(
+                self,
                 "Attempting to finish a span {:#?} without first starting one. Current context {:#?}",
                 span,
                 ctx
@@ -122,7 +136,7 @@ impl BamlTracer {
         };
 
         if span.span_id != span_id {
-            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
+            bail!(self, "Span ID mismatch: {} != {}", span.span_id, span_id);
         }
 
         if let Some(tracer) = &self.tracer {
@@ -143,7 +157,7 @@ impl BamlTracer {
         response: Option<BamlValue>,
     ) -> Result<Option<uuid::Uuid>> {
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
-            anyhow::bail!(
+            bail!(self,
                 "Attempting to finish a span {:#?} without first starting one. Current context {:#?}",
                 span,
                 ctx
@@ -157,12 +171,23 @@ impl BamlTracer {
         );
 
         if span.span_id != span_id {
-            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
+            bail!(self, "Span ID mismatch: {} != {}", span.span_id, span_id);
         }
 
         if let Some(tracer) = &self.tracer {
-            tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
-            Ok(Some(span_id))
+            cfg_if! {
+                if #[cfg(target_arch = "wasm32")] {
+                    async {
+                        tracer
+                            .submit(response.to_log_schema(&self.options, event_chain, tags, span))
+                            .await?;
+                        Ok(Some(span_id))
+                    }
+                } else {
+                    tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
+                    Ok(Some(span_id))
+                }
+            }
         } else {
             Ok(None)
         }
@@ -176,11 +201,14 @@ impl BamlTracer {
         response: &Result<FunctionResult>,
     ) -> Result<Option<uuid::Uuid>> {
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
-            anyhow::bail!("Attempting to finish a span without first starting one");
+            bail!(
+                self,
+                "Attempting to finish a span without first starting one"
+            );
         };
 
         if span.span_id != span_id {
-            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
+            bail!(self, "Span ID mismatch: {} != {}", span.span_id, span_id);
         }
 
         if let Ok(response) = &response {
@@ -213,7 +241,10 @@ impl BamlTracer {
         response: &Result<FunctionResult>,
     ) -> Result<Option<uuid::Uuid>> {
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
-            anyhow::bail!("Attempting to finish a span without first starting one");
+            bail!(
+                self,
+                "Attempting to finish a span without first starting one"
+            );
         };
 
         log::trace!(
@@ -224,7 +255,7 @@ impl BamlTracer {
         );
 
         if span.span_id != span_id {
-            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
+            bail!(self, "Span ID mismatch: {} != {}", span.span_id, span_id);
         }
 
         if let Ok(response) = &response {

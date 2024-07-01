@@ -373,5 +373,6 @@ module.exports.FieldType = nativeBinding.FieldType
 module.exports.FunctionResult = nativeBinding.FunctionResult
 module.exports.FunctionResultStream = nativeBinding.FunctionResultStream
 module.exports.RuntimeContextManager = nativeBinding.RuntimeContextManager
+module.exports.TraceStats = nativeBinding.TraceStats
 module.exports.TypeBuilder = nativeBinding.TypeBuilder
 module.exports.invoke_runtime_cli = nativeBinding.invoke_runtime_cli

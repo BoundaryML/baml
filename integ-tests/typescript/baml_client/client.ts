@@ -987,7 +987,7 @@ class BamlStreamClient {
         "aud": aud
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1009,7 +1009,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<Category>, Category>(
@@ -1031,7 +1031,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<Category>, Category>(
@@ -1053,7 +1053,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<Category>, Category>(
@@ -1075,7 +1075,7 @@ class BamlStreamClient {
         "img": img
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1097,7 +1097,7 @@ class BamlStreamClient {
         "classWithImage": classWithImage,"img2": img2
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1119,7 +1119,7 @@ class BamlStreamClient {
         "classWithImage": classWithImage,"img2": img2
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1141,7 +1141,7 @@ class BamlStreamClient {
         "classWithImage": classWithImage,"img2": img2
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1163,7 +1163,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<DynamicClassTwo>, DynamicClassTwo>(
@@ -1185,7 +1185,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<DynInputOutput>, DynInputOutput>(
@@ -1207,7 +1207,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<DynInputOutput[]>, DynInputOutput[]>(
@@ -1229,7 +1229,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string[]>, string[]>(
@@ -1251,7 +1251,7 @@ class BamlStreamClient {
         "text": text
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<Person[]>, Person[]>(
@@ -1273,7 +1273,7 @@ class BamlStreamClient {
         "email": email
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<ReceiptInfo>, ReceiptInfo>(
@@ -1295,7 +1295,7 @@ class BamlStreamClient {
         "resume": resume,"img": img ?? null
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<Resume>, Resume>(
@@ -1317,7 +1317,7 @@ class BamlStreamClient {
         "resume": resume
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<Resume>, Resume>(
@@ -1339,7 +1339,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<ClassOptionalOutput | null>, ClassOptionalOutput | null>(
@@ -1361,7 +1361,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<ClassOptionalOutput2 | null>, ClassOptionalOutput2 | null>(
@@ -1383,7 +1383,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<EnumOutput[]>, EnumOutput[]>(
@@ -1405,7 +1405,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<EnumOutput>, EnumOutput>(
@@ -1427,7 +1427,7 @@ class BamlStreamClient {
         "myString": myString ?? null
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1449,7 +1449,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<boolean>, boolean>(
@@ -1471,7 +1471,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<TestOutputClass>, TestOutputClass>(
@@ -1493,7 +1493,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<TestOutputClass[]>, TestOutputClass[]>(
@@ -1515,7 +1515,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<TestClassNested>, TestClassNested>(
@@ -1537,7 +1537,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<TestClassWithEnum>, TestClassWithEnum>(
@@ -1559,7 +1559,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string[]>, string[]>(
@@ -1581,7 +1581,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<TestEnum>, TestEnum>(
@@ -1603,7 +1603,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<TestClassAlias>, TestClassAlias>(
@@ -1625,7 +1625,7 @@ class BamlStreamClient {
         "myArg": myArg
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1647,7 +1647,7 @@ class BamlStreamClient {
         "text": text
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<RaysData>, RaysData>(
@@ -1669,7 +1669,7 @@ class BamlStreamClient {
         "email": email
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<OrderInfo>, OrderInfo>(
@@ -1691,7 +1691,7 @@ class BamlStreamClient {
         "query": query
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<SearchParams>, SearchParams>(
@@ -1713,7 +1713,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<DynamicOutput>, DynamicOutput>(
@@ -1735,7 +1735,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<(OptionalTest_ReturnType | null)[]>, (OptionalTest_ReturnType | null)[]>(
@@ -1757,7 +1757,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1779,7 +1779,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1801,7 +1801,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1823,7 +1823,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1845,7 +1845,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1867,7 +1867,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1889,7 +1889,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1911,7 +1911,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1933,7 +1933,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1955,7 +1955,7 @@ class BamlStreamClient {
         
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1977,7 +1977,7 @@ class BamlStreamClient {
         "myBool": myBool
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -1999,7 +1999,7 @@ class BamlStreamClient {
         "myArg": myArg
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2021,7 +2021,7 @@ class BamlStreamClient {
         "myArg": myArg
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2043,7 +2043,7 @@ class BamlStreamClient {
         "myFloat": myFloat
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2065,7 +2065,7 @@ class BamlStreamClient {
         "myInt": myInt
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2087,7 +2087,7 @@ class BamlStreamClient {
         "myString": myString
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2109,7 +2109,7 @@ class BamlStreamClient {
         "myStringArray": myStringArray
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2131,7 +2131,7 @@ class BamlStreamClient {
         "myArg": myArg
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2153,7 +2153,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2175,7 +2175,7 @@ class BamlStreamClient {
         "img": img
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2197,7 +2197,7 @@ class BamlStreamClient {
         "myArg": myArg,"myArg2": myArg2
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2219,7 +2219,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2241,7 +2241,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2263,7 +2263,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2285,7 +2285,7 @@ class BamlStreamClient {
         
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2307,7 +2307,7 @@ class BamlStreamClient {
         
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
@@ -2329,7 +2329,7 @@ class BamlStreamClient {
         "input": input
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<UnionTest_ReturnType>, UnionTest_ReturnType>(

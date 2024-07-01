@@ -2,8 +2,8 @@ use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_types::BamlValue;
 use napi_derive::napi;
 
-use super::runtime::BamlRuntime;
 use super::runtime_ctx_manager::RuntimeContextManager;
+use crate::BamlRuntime;
 
 crate::lang_wrapper!(BamlSpan,
   Option<Option<baml_runtime::tracing::TracingSpan>>,

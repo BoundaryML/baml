@@ -1,10 +1,7 @@
-use std::{
-    sync::mpsc::{Receiver, Sender, TryRecvError},
-};
-
-// use crate::log_callback_event::LogEvent
 use anyhow::Result;
-use web_time::Duration;
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender, TryRecvError};
+use std::sync::{Arc, Mutex};
+use web_time::{Duration, Instant};
 
 use crate::{
     on_log_event::{LogEvent, LogEventCallbackSync, LogEventMetadata},
@@ -54,7 +51,7 @@ fn batch_processor(
 ) {
     let api_config = &api_config;
     let mut batch = Vec::with_capacity(max_batch_size);
-    let mut now = std::time::Instant::now();
+    let mut now = Instant::now();
     let rt = tokio::runtime::Runtime::new().unwrap();
     loop {
         // Try to fill the batch up to max_batch_size
@@ -65,8 +62,8 @@ fn batch_processor(
             }
             Ok(TxEventSignal::Flush) => (false, true, false),
             Ok(TxEventSignal::Stop) => (false, false, true),
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => (false, false, false),
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => (false, false, true),
+            Err(RecvTimeoutError::Timeout) => (false, false, false),
+            Err(RecvTimeoutError::Disconnected) => (false, false, true),
         };
 
         let time_trigger = now.elapsed().as_millis() >= 1000;
@@ -100,11 +97,11 @@ fn batch_processor(
 
 pub(super) struct ThreadedTracer {
     api_config: APIWrapper,
-    tx: std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Sender<TxEventSignal>>>,
-    rx: std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<RxEventSignal>>>,
+    tx: Arc<Mutex<Sender<TxEventSignal>>>,
+    rx: Arc<Mutex<Receiver<RxEventSignal>>>,
     #[allow(dead_code)]
     join_handle: std::thread::JoinHandle<()>,
-    log_event_callback: std::sync::Arc<std::sync::Mutex<Option<LogEventCallbackSync>>>,
+    log_event_callback: Arc<Mutex<Option<LogEventCallbackSync>>>,
 }
 
 impl ThreadedTracer {
@@ -112,12 +109,12 @@ impl ThreadedTracer {
         api_config: APIWrapper,
         max_batch_size: usize,
     ) -> (
-        std::sync::mpsc::Sender<TxEventSignal>,
-        std::sync::mpsc::Receiver<RxEventSignal>,
+        Sender<TxEventSignal>,
+        Receiver<RxEventSignal>,
         std::thread::JoinHandle<()>,
     ) {
-        let (tx, rx) = std::sync::mpsc::channel();
-        let (stop_tx, stop_rx) = std::sync::mpsc::channel();
+        let (tx, rx) = channel();
+        let (stop_tx, stop_rx) = channel();
         let join_handle =
             std::thread::spawn(move || batch_processor(api_config, rx, stop_tx, max_batch_size));
 
@@ -128,10 +125,10 @@ impl ThreadedTracer {
         let (tx, rx, join_handle) = Self::start_worker(api_config.clone(), max_batch_size);
         Self {
             api_config: api_config.clone(),
-            tx: std::sync::Arc::new(std::sync::Mutex::new(tx)),
-            rx: std::sync::Arc::new(std::sync::Mutex::new(rx)),
+            tx: Arc::new(Mutex::new(tx)),
+            rx: Arc::new(Mutex::new(rx)),
             join_handle,
-            log_event_callback: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            log_event_callback: Arc::new(Mutex::new(None)),
         }
     }
 

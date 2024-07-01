@@ -6,8 +6,8 @@ use pyo3::{PyObject, Python, ToPyObject};
 use crate::parse_py_type::parse_py_type;
 use crate::BamlError;
 
-use super::runtime::BamlRuntime;
 use super::runtime_ctx_manager::RuntimeContextManager;
+use crate::runtime::BamlRuntime;
 
 crate::lang_wrapper!(BamlSpan,
   Option<Option<baml_runtime::tracing::TracingSpan>>,

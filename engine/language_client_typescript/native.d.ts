@@ -25,7 +25,7 @@ export class BamlRuntime {
   callFunction(functionName: string, args: { [string]: any }, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null): Promise<FunctionResult>
   streamFunction(functionName: string, args: { [string]: any }, cb: (err: any, param: FunctionResult) => void, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null): FunctionResultStream
   setLogEventCallback(func: (err: any, param: BamlLogEvent) => void): void
-  flush(): void
+  flush(): TraceStats
 }
 
 export class BamlSpan {
@@ -73,6 +73,10 @@ export class FunctionResultStream {
 export class RuntimeContextManager {
   upsertTags(tags: any): void
   deepClone(): RuntimeContextManager
+}
+
+export class TraceStats {
+
 }
 
 export class TypeBuilder {

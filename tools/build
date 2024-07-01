@@ -223,11 +223,12 @@ case "$_path" in
     ;;
 
   /integ-tests/typescript | /integ-tests/typescript/* )
+    BAML_LOG="baml_runtime::tracing=trace,baml_runtime::types::context_manager=debug,baml_runtime=debug"
     command="(cd ${_repo_root}/engine/language_client_typescript && pnpm build:debug)"
     command="${command} && pnpm baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
       #command="${command} && pnpm integ-tests"
-      command="${command} && BAML_LOG=baml_runtime::tracing=trace,baml_runtime::types::context_manager=trace,baml_runtime=debug  infisical run -- pnpm test tests/integ-tests.test.ts"
+      command="${command} && BAML_LOG=${BAML_LOG}  infisical run -- pnpm test tests/integ-tests.test.ts"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
         #--verbose \

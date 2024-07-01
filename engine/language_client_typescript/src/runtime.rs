@@ -1,9 +1,10 @@
-use super::function_result_stream::FunctionResultStream;
-use super::runtime_ctx_manager::RuntimeContextManager;
-use super::type_builder::TypeBuilder;
 use crate::parse_ts_types;
+use crate::types::function_result_stream::FunctionResultStream;
 use crate::types::function_results::FunctionResult;
-use baml_runtime::on_log_event::{LogEvent};
+use crate::types::runtime_ctx_manager::RuntimeContextManager;
+use crate::types::trace_stats::TraceStats;
+use crate::types::type_builder::TypeBuilder;
+use baml_runtime::on_log_event::LogEvent;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreRuntime;
 use baml_types::BamlValue;
@@ -225,10 +226,11 @@ impl BamlRuntime {
     }
 
     #[napi]
-    pub fn flush(&mut self, env: Env) -> napi::Result<()> {
+    pub fn flush(&mut self, env: Env) -> napi::Result<TraceStats> {
         let res = self
             .inner
             .flush()
+            .map(|stats| stats.into())
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()));
 
         res

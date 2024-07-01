@@ -65,7 +65,7 @@ class BamlStreamClient {
         {%- endfor %}
       },
       undefined,
-      this.ctx_manager.get(),
+      this.ctx_manager.get().deepClone(),
       __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<{{ fn.return_type }}>, {{ fn.return_type }}>(

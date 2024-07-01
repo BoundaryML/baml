@@ -398,34 +398,34 @@ describe('Integ tests', () => {
       traceAsync('trace:samDummy3', samDummy)('hi'),
     ])
 
-    // const res = await traceAsync('parentAsync', async (firstArg: string, secondArg: number) => {
-    //   console.log('hello world')
-    //   setTags({ myKey: 'myVal' })
+    const res = await traceAsync('parentAsync', async (firstArg: string, secondArg: number) => {
+      console.log('hello world')
+      setTags({ myKey: 'myVal' })
 
-    //   const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
+      const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
 
-    //   const res2 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('secondDummyFuncArg')
+      const res2 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('secondDummyFuncArg')
 
-    //   const llm_res = await Promise.all([
-    //     b.TestFnNamedArgsSingleStringList(['a1', 'b', 'c']),
-    //     b.TestFnNamedArgsSingleStringList(['a2', 'b', 'c']),
-    //     b.TestFnNamedArgsSingleStringList(['a3', 'b', 'c']),
-    //     b.TestFnNamedArgsSingleStringList(['a4', 'b', 'c']),
-    //     b.TestFnNamedArgsSingleStringList(['a5', 'b', 'c']),
-    //   ])
+      const llm_res = await Promise.all([
+        b.TestFnNamedArgsSingleStringList(['a1', 'b', 'c']),
+        b.TestFnNamedArgsSingleStringList(['a2', 'b', 'c']),
+        b.TestFnNamedArgsSingleStringList(['a3', 'b', 'c']),
+        b.TestFnNamedArgsSingleStringList(['a4', 'b', 'c']),
+        b.TestFnNamedArgsSingleStringList(['a5', 'b', 'c']),
+      ])
 
-    //   const res3 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('thirdDummyFuncArg')
+      const res3 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('thirdDummyFuncArg')
 
-    //   return 'hello world'
-    // })('hi', 10)
+      return 'hello world'
+    })('hi', 10)
 
-    // const res2 = await traceAsync('parentAsync2', async (firstArg: string, secondArg: number) => {
-    //   console.log('hello world')
+    const res2 = await traceAsync('parentAsync2', async (firstArg: string, secondArg: number) => {
+      console.log('hello world')
 
-    //   const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
+      const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
 
-    //   return 'hello world'
-    // })('hi', 10)
+      return 'hello world'
+    })('hi', 10)
   })
 
   it('supports tracing async sam test', async () => {

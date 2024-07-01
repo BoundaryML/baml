@@ -92,7 +92,7 @@ pub trait ExperimentalTracingInterface {
         ctx: &RuntimeContextManager,
     ) -> Result<Option<uuid::Uuid>>;
 
-    fn flush(&self) -> Result<()>;
+    fn flush(&self) -> Result<crate::TraceStats>;
 
     #[cfg(not(target_arch = "wasm32"))]
     fn set_log_event_callback(&self, callback: LogEventCallbackSync) -> Result<()>;

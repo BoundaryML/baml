@@ -2,7 +2,10 @@ use napi::{Env, JsUndefined};
 use napi_derive::napi;
 
 mod parse_ts_types;
+mod runtime;
 mod types;
+
+pub(crate) use runtime::BamlRuntime;
 
 #[napi(js_name = "invoke_runtime_cli")]
 pub fn run_cli(env: Env, params: Vec<String>) -> napi::Result<JsUndefined> {
