@@ -1,6 +1,6 @@
 // BAML supports multi-modal inputs!
 
-// How to use call this BAML function in python or Typescript: https://docs.boundaryml.com/docs/snippets/supported-types#image
+// How to call this BAML function in python or Typescript: https://docs.boundaryml.com/docs/snippets/supported-types#image
 
 function AudioInput(audioInput: audio) -> string {
   client Gemini
