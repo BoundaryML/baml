@@ -49,7 +49,7 @@ yarn add @boundaryml/baml
 yarn run baml-cli generate --from path/to/baml_src
 ```
 
-```bash Ruby
+```bash Ruby (beta)
 bundle add baml
 bundle exec baml-cli generate --from path/to/baml_src
 ```
@@ -126,7 +126,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Install your Python/Node/Ruby dependencies here
+      # Install your Python/Node/Ruby (beta) dependencies here
 
       - name: Generate BAML client
         run: baml-cli generate --from baml_src
