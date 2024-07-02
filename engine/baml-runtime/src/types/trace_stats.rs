@@ -7,7 +7,7 @@
 /// TODO: return stats about the # of spans successfully sent
 #[derive(Clone)]
 pub struct TraceStats {
-    /// # of spans that we called finish_span or finisH_baml_span on
+    /// # of spans that we called finish_span or finish_baml_span on
     /// but did not submit due to an error
     pub n_spans_failed_before_submit: u32,
 }

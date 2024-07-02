@@ -106,7 +106,7 @@ impl BamlTracer {
         params: &BamlMap<String, BamlValue>,
     ) -> (Option<TracingSpan>, RuntimeContext) {
         let span_id = ctx.enter(function_name);
-        log::trace!("Entering span: {:#?}:::{:?}", span_id, function_name);
+        log::trace!("Entering span {:#?} in {:?}", span_id, function_name);
         if !self.enabled {
             return (None, ctx.create_ctx(tb));
         }
