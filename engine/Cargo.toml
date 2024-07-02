@@ -10,6 +10,7 @@ members = [
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
+  "derive",
 ]
 default-members = [
   "baml-cli",
@@ -57,6 +58,7 @@ web-time = "1.1.0"
 baml-types = { path = "baml-lib/baml-types" }
 internal-baml-codegen = { path = "language-client-codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
+internal-baml-derive = { path = "derive" }
 internal-baml-jinja = { path = "baml-lib/jinja" }
 
 [workspace.package]

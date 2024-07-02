@@ -915,6 +915,7 @@ dependencies = [
  "futures",
  "indexmap 2.2.6",
  "internal-baml-codegen",
+ "internal-baml-derive",
  "log",
  "napi",
  "napi-build",
@@ -2319,6 +2320,14 @@ dependencies = [
  "strum",
  "textwrap 0.16.1",
  "whoami",
+]
+
+[[package]]
+name = "internal-baml-derive"
+version = "0.45.0"
+dependencies = [
+ "quote",
+ "syn 2.0.66",
 ]
 
 [[package]]

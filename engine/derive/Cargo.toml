@@ -1,0 +1,14 @@
+[package]
+name = "internal-baml-derive"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "2.0"
+quote = "1.0"

@@ -5,6 +5,7 @@ pub(crate) mod function_result_stream;
 pub(crate) mod function_results;
 pub mod image;
 pub(crate) mod runtime_ctx_manager;
+pub(crate) mod sam_trace_stats;
 pub(crate) mod span;
 pub(crate) mod trace_stats;
 pub(crate) mod type_builder;

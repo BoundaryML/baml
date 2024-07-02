@@ -13,6 +13,7 @@ baml-runtime = { path = "../baml-runtime", features = ["internal"] }
 env_logger.workspace = true
 futures.workspace = true
 internal-baml-codegen.workspace = true
+internal-baml-derive.workspace = true
 log.workspace = true
 napi = { version = "2", features = [
   "serde-json",
