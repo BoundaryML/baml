@@ -31,6 +31,7 @@
     "@radix-ui/react-slider": "^1.1.2",
     "@radix-ui/react-slot": "^1.0.2",
     "@tanstack/react-virtual": "^3.4.0",
+    "@uiw/codemirror-extensions-hyper-link": "^4.22.2",
     "@uiw/codemirror-extensions-langs": "^4.21.25",
     "@uiw/codemirror-theme-vscode": "^4.21.25",
     "@uiw/react-codemirror": "^4.21.25",

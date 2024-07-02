@@ -109,13 +109,20 @@ export async function loadExampleProjects(): Promise<BamlProjectsGroupings> {
     allProjects: [
       {
         id: 'all-projects',
-        name: 'All Projects',
-        description: 'All projects',
+        name: 'BAML Examples',
+        description: 'All BAML examples in one place',
         filePath: '/all-projects/',
         files: [],
       },
     ],
     intros: [
+      {
+        id: 'new-project',
+        name: 'New Project',
+        description: 'New project',
+        filePath: '/new-project/',
+        files: [],
+      },
       {
         id: 'extract-resume',
         name: 'Introduction to BAML',

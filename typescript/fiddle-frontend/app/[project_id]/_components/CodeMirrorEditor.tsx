@@ -13,6 +13,7 @@ import { type Diagnostic, forceLinting, linter, openLintPanel } from '@codemirro
 import { langs } from '@uiw/codemirror-extensions-langs'
 import CodeMirror, { Compartment, EditorView, type Extension, type ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { hyperLink, hyperLinkExtension, hyperLinkStyle } from '@uiw/codemirror-extensions-hyper-link'
 import Link from 'next/link'
 import { useEffect, useRef } from 'react'
 import {
@@ -123,7 +124,7 @@ function makeLinter() {
 }
 
 const comparment = new Compartment()
-const extensions: Extension[] = [BAML(), EditorView.lineWrapping, comparment.of(makeLinter())]
+const extensions: Extension[] = [BAML(), EditorView.lineWrapping, comparment.of(makeLinter()), hyperLink]
 
 const extensionMap = {
   ts: [langs.tsx(), EditorView.lineWrapping],
@@ -227,7 +228,7 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
         </div>
         <div className='absolute -top-8 right-0 h-[20px] p-2'>
           {!activeFile?.endsWith('.baml') && (
-            <div className='p-1 text-xs bg-gray-500 rounded-sm text-primary'>
+            <div className='p-1 text-xs bg-yellow-600 rounded-sm text-primary'>
               This is an example read-only file on how to use this in your code
             </div>
           )}
