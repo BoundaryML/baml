@@ -348,12 +348,12 @@ impl BoundaryTestAPI for APIWrapper {
 }
 
 impl APIWrapper {
-    pub fn from_env_vars<T: AsRef<str>>(value: impl Iterator<Item = (T, T)>) -> Self {
+    pub fn from_env_vars<T: AsRef<str>>(value: impl Iterator<Item = (T, T)>) -> Result<Self> {
         let config = env_setup::Config::from_env_vars(value).unwrap();
         if config.log_redaction_enabled {
             log::info!("Redaction enabled: {}", config.log_redaction_enabled);
         }
-        match (&config.secret, &config.project_id) {
+        Ok(match (&config.secret, &config.project_id) {
             (Some(api_key), Some(project_id)) => Self {
                 config: APIConfig::Web(CompleteAPIConfig {
                     base_url: config.base_url,
@@ -362,7 +362,7 @@ impl APIWrapper {
                     stage: config.stage,
                     sessions_id: config.sessions_id,
                     host_name: config.host_name,
-                    client: create_tracing_client().unwrap(),
+                    client: create_tracing_client()?,
                     log_redaction_enabled: config.log_redaction_enabled,
                     log_redaction_placeholder: config.log_redaction_placeholder,
                 }),
@@ -379,7 +379,7 @@ impl APIWrapper {
                     log_redaction_placeholder: config.log_redaction_placeholder,
                 }),
             },
-        }
+        })
     }
 
     pub fn enabled(&self) -> bool {

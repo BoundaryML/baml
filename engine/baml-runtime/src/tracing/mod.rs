@@ -65,8 +65,11 @@ impl BamlTracer {
     pub fn new<T: AsRef<str>>(
         options: Option<APIWrapper>,
         env_vars: impl Iterator<Item = (T, T)>,
-    ) -> Self {
-        let options = options.unwrap_or_else(|| APIWrapper::from_env_vars(env_vars));
+    ) -> Result<Self> {
+        let options = match options {
+            Some(wrapper) => wrapper,
+            None => APIWrapper::from_env_vars(env_vars)?,
+        };
 
         let tracer = BamlTracer {
             tracer: if options.enabled() {
@@ -83,7 +86,7 @@ impl BamlTracer {
                 n_spans_failed_before_submit: 0,
             })),
         };
-        tracer
+        Ok(tracer)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
