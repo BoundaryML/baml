@@ -24,8 +24,8 @@ enum ProcessorStatus {
 
 struct DeliveryThread {
     api_config: Arc<APIWrapper>,
-    rx: mpsc::Receiver<TxEventSignal>,
-    tx: watch::Sender<ProcessorStatus>,
+    span_rx: mpsc::Receiver<TxEventSignal>,
+    stop_tx: watch::Sender<ProcessorStatus>,
     rt: tokio::runtime::Runtime,
     max_batch_size: usize,
 }
@@ -33,16 +33,16 @@ struct DeliveryThread {
 impl DeliveryThread {
     fn new(
         api_config: APIWrapper,
-        rx: mpsc::Receiver<TxEventSignal>,
-        tx: watch::Sender<ProcessorStatus>,
+        span_rx: mpsc::Receiver<TxEventSignal>,
+        stop_tx: watch::Sender<ProcessorStatus>,
         max_batch_size: usize,
     ) -> Self {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
         Self {
             api_config: Arc::new(api_config),
-            rx,
-            tx,
+            span_rx,
+            stop_tx,
             rt,
             max_batch_size,
         }
@@ -74,16 +74,17 @@ impl DeliveryThread {
         let mut now = Instant::now();
         loop {
             // Try to fill the batch up to max_batch_size
-            let (batch_full, flush, exit) = match self.rx.recv_timeout(Duration::from_millis(100)) {
-                Ok(TxEventSignal::Submit(work)) => {
-                    batch.push(work);
-                    (batch.len() >= self.max_batch_size, false, false)
-                }
-                Ok(TxEventSignal::Flush) => (false, true, false),
-                Ok(TxEventSignal::Stop) => (false, false, true),
-                Err(mpsc::RecvTimeoutError::Timeout) => (false, false, false),
-                Err(mpsc::RecvTimeoutError::Disconnected) => (false, false, true),
-            };
+            let (batch_full, flush, exit) =
+                match self.span_rx.recv_timeout(Duration::from_millis(100)) {
+                    Ok(TxEventSignal::Submit(work)) => {
+                        batch.push(work);
+                        (batch.len() >= self.max_batch_size, false, false)
+                    }
+                    Ok(TxEventSignal::Flush) => (false, true, false),
+                    Ok(TxEventSignal::Stop) => (false, false, true),
+                    Err(mpsc::RecvTimeoutError::Timeout) => (false, false, false),
+                    Err(mpsc::RecvTimeoutError::Disconnected) => (false, false, true),
+                };
 
             let time_trigger = now.elapsed().as_millis() >= 1000;
 
@@ -100,7 +101,7 @@ impl DeliveryThread {
             }
 
             if flush {
-                match self.tx.send(ProcessorStatus::Done) {
+                match self.stop_tx.send(ProcessorStatus::Done) {
                     Ok(_) => {}
                     Err(e) => {
                         println!("Error sending flush signal: {:?}", e);
@@ -133,22 +134,23 @@ impl ThreadedTracer {
         watch::Receiver<ProcessorStatus>,
         std::thread::JoinHandle<()>,
     ) {
-        let (tx, rx) = mpsc::channel();
+        let (span_tx, span_rx) = mpsc::channel();
         let (stop_tx, stop_rx) = watch::channel(ProcessorStatus::Active);
         let join_handle = std::thread::spawn(move || {
-            DeliveryThread::new(api_config, rx, stop_tx, max_batch_size).run();
+            DeliveryThread::new(api_config, span_rx, stop_tx, max_batch_size).run();
         });
 
-        (tx, stop_rx, join_handle)
+        (span_tx, stop_rx, join_handle)
     }
 
     pub fn new(api_config: &APIWrapper, max_batch_size: usize) -> Self {
-        let (tx, rx, join_handle) = Self::start_worker(api_config.clone(), max_batch_size);
+        let (span_tx, stop_rx, join_handle) =
+            Self::start_worker(api_config.clone(), max_batch_size);
 
         Self {
             api_config: Arc::new(api_config.clone()),
-            span_tx: tx,
-            stop_rx: rx,
+            span_tx,
+            stop_rx,
             join_handle,
             log_event_callback: Arc::new(Mutex::new(None)),
         }
