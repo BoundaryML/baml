@@ -201,8 +201,9 @@ export class WebPanelView {
           }
           case 'jumpToFile': {
             try {
+              console.log('jumpToFile', message.data)
               const span = message.data as StringSpan
-              const uri = vscode.Uri.file(span.source_file)
+              const uri = vscode.Uri.parse(span.source_file)
               await vscode.workspace.openTextDocument(uri).then((doc) => {
                 const range = new vscode.Range(doc.positionAt(span.start), doc.positionAt(span.end))
                 vscode.window.showTextDocument(doc, { selection: range, viewColumn: ViewColumn.One })

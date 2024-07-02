@@ -1,5 +1,9 @@
 import { useAppState } from './AppStateContext'
 import { Checkbox } from '../components/ui/checkbox'
+import { useAtomValue } from 'jotai'
+import { selectedTestCaseAtom } from '../baml_wasm_web/EventListener'
+import Link from './Link'
+import { ShowSettingsButton } from './SettingsDialog'
 
 const PromptCheckbox = ({
   children,
@@ -32,6 +36,7 @@ export const CheckboxHeader = () => {
       <PromptCheckbox checked={showCurlRequest} onChange={setShowCurl}>
         Raw cURL
       </PromptCheckbox>
+      <ShowSettingsButton iconClassName='h-5' />
     </div>
   )
 }

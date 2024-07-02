@@ -65,6 +65,6 @@ function DescribeImage4(classWithImage: ClassWithImage, img2: image) -> string {
 test TestName {
   functions [DescribeImage]
   args {
-    img { url "https://imgs.xkcd.com/comics/standards.png"}
+    img { url "http://imgs.xkcd.com/comics/standards.png" }
   }
 }

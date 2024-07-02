@@ -7,6 +7,7 @@ const SearchBarWithSelector: React.FC<{
   options: {
     value: string
     label?: string
+    content?: React.ReactNode
   }[]
   onChange: (updated: string) => void
 }> = ({ options, onChange }) => {
@@ -77,7 +78,10 @@ const SearchBarWithSelector: React.FC<{
               }}
               onMouseEnter={() => setHighlightedIndex(index)}
             >
-              {option.label ?? option.value}
+              <div className='flex flex-col'>
+                <div>{option.label ?? option.value}</div>
+                {option.content && <div className='text-xs text-vscode-descriptionForeground'>{option.content}</div>}
+              </div>
             </div>
           ))
         )}

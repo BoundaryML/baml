@@ -12,7 +12,6 @@ import {
   CustomErrorBoundary,
   EventListener,
   FunctionPanel,
-  FunctionSelector,
   //useSelections,
 } from '@baml/playground-common'
 import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
@@ -42,10 +41,11 @@ import { CodeMirrorEditor } from './CodeMirrorEditor'
 
 import { GithubStars } from './GithubStars'
 import { InitialTour, PostTestRunTour } from './Tour'
-import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from '@baml/playground-common/shared/SettingsDialog'
+import SettingsDialog, { ShowSettingsButton } from '@baml/playground-common/shared/SettingsDialog'
 
 import FileViewer from './Tree/FileViewer'
 import { AppStateProvider } from '@baml/playground-common/shared/AppStateContext' // Import the AppStateProvider
+import { ViewSelector } from '@baml/playground-common/shared/Selectors'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(updateFileAtom)
@@ -323,13 +323,10 @@ const PlaygroundView = () => {
               <SettingsDialog />
               <div className='relative flex flex-col w-full gap-2 pr-0'>
                 <div className='relative flex flex-row gap-2'>
-                  <FunctionSelector />
-                  <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
-                    <ShowSettingsButton
-                      buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
-                      iconClassName='h-5'
-                    />
+                  <div className='flex flex-row items-start justify-start gap-2 pr-1 grow'>
+                    <ViewSelector />
                   </div>
+                  <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'></div>
                 </div>
                 {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
                 <FunctionPanel />
