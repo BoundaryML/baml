@@ -1,5 +1,0 @@
-target
-*.env
-**/__pycache__
-test_logs/**
-*.so
