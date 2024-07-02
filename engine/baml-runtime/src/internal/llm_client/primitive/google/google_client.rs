@@ -15,7 +15,7 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
-use baml_types::{BamlMedia};
+use baml_types::BamlMedia;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;

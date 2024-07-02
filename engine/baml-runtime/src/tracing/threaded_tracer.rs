@@ -1,6 +1,6 @@
 use anyhow::Result;
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender, TryRecvError};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
+use tokio::sync::watch;
 use web_time::{Duration, Instant};
 
 use crate::{
@@ -17,88 +17,108 @@ enum TxEventSignal {
     Submit(LogSchema),
 }
 
-enum RxEventSignal {
+enum ProcessorStatus {
+    Active,
     Done,
 }
 
-async fn process_batch_async(api_config: &APIWrapper, batch: Vec<LogSchema>) {
-    log::info!("Processing batch of size: {}", batch.len());
-    for work in batch {
-        match api_config.log_schema(&work).await {
-            Ok(_) => {
-                log::debug!(
-                    "Successfully sent log schema: {} - {:?}",
-                    work.event_id,
-                    work.context.event_chain.last()
-                );
-            }
-            Err(e) => {
-                log::warn!("Unable to emit BAML logs: {}", e);
-            }
+struct DeliveryThread {
+    api_config: Arc<APIWrapper>,
+    rx: mpsc::Receiver<TxEventSignal>,
+    tx: watch::Sender<ProcessorStatus>,
+    rt: tokio::runtime::Runtime,
+    max_batch_size: usize,
+}
+
+impl DeliveryThread {
+    fn new(
+        api_config: APIWrapper,
+        rx: mpsc::Receiver<TxEventSignal>,
+        tx: watch::Sender<ProcessorStatus>,
+        max_batch_size: usize,
+    ) -> Self {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        Self {
+            api_config: Arc::new(api_config),
+            rx,
+            tx,
+            rt,
+            max_batch_size,
         }
     }
-}
 
-fn process_batch(rt: &tokio::runtime::Runtime, api_config: &APIWrapper, batch: Vec<LogSchema>) {
-    rt.block_on(process_batch_async(api_config, batch));
-}
+    fn process_batch(&self, batch: Vec<LogSchema>) {
+        log::info!("Processing batch of size: {}", batch.len());
+        for work in batch {
+            let api_config = self.api_config.clone();
+            self.rt.spawn(async move {
+                match api_config.log_schema(&work).await {
+                    Ok(_) => {
+                        log::debug!(
+                            "Successfully sent log schema: {} - {:?}",
+                            work.event_id,
+                            work.context.event_chain.last()
+                        );
+                    }
+                    Err(e) => {
+                        log::warn!("Unable to emit BAML logs: {}", e);
+                    }
+                }
+            });
+        }
+    }
 
-fn batch_processor(
-    api_config: APIWrapper,
-    rx: Receiver<TxEventSignal>,
-    tx: Sender<RxEventSignal>,
-    max_batch_size: usize,
-) {
-    let api_config = &api_config;
-    let mut batch = Vec::with_capacity(max_batch_size);
-    let mut now = Instant::now();
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    loop {
-        // Try to fill the batch up to max_batch_size
-        let (batch_full, flush, exit) = match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(TxEventSignal::Submit(work)) => {
-                batch.push(work);
-                (batch.len() >= max_batch_size, false, false)
+    fn run(&self) {
+        let mut batch = Vec::with_capacity(self.max_batch_size);
+        let mut now = Instant::now();
+        loop {
+            // Try to fill the batch up to max_batch_size
+            let (batch_full, flush, exit) = match self.rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(TxEventSignal::Submit(work)) => {
+                    batch.push(work);
+                    (batch.len() >= self.max_batch_size, false, false)
+                }
+                Ok(TxEventSignal::Flush) => (false, true, false),
+                Ok(TxEventSignal::Stop) => (false, false, true),
+                Err(mpsc::RecvTimeoutError::Timeout) => (false, false, false),
+                Err(mpsc::RecvTimeoutError::Disconnected) => (false, false, true),
+            };
+
+            let time_trigger = now.elapsed().as_millis() >= 1000;
+
+            let should_process_batch =
+                (batch_full || flush || exit || time_trigger) && !batch.is_empty();
+
+            // Send events every 1 second or when the batch is full
+            if should_process_batch {
+                self.process_batch(std::mem::take(&mut batch));
             }
-            Ok(TxEventSignal::Flush) => (false, true, false),
-            Ok(TxEventSignal::Stop) => (false, false, true),
-            Err(RecvTimeoutError::Timeout) => (false, false, false),
-            Err(RecvTimeoutError::Disconnected) => (false, false, true),
-        };
 
-        let time_trigger = now.elapsed().as_millis() >= 1000;
+            if should_process_batch || time_trigger {
+                now = std::time::Instant::now();
+            }
 
-        let should_process_batch =
-            (batch_full || flush || exit || time_trigger) && !batch.is_empty();
-
-        // Send events every 1 second or when the batch is full
-        if should_process_batch {
-            process_batch(&rt, api_config, std::mem::take(&mut batch));
-        }
-
-        if should_process_batch || time_trigger {
-            now = std::time::Instant::now();
-        }
-
-        if flush {
-            match tx.send(RxEventSignal::Done) {
-                Ok(_) => {}
-                Err(e) => {
-                    println!("Error sending flush signal: {:?}", e);
-                    log::error!("Error sending flush signal: {:?}", e);
+            if flush {
+                match self.tx.send(ProcessorStatus::Done) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        println!("Error sending flush signal: {:?}", e);
+                        log::error!("Error sending flush signal: {:?}", e);
+                    }
                 }
             }
-        }
-        if exit {
-            return;
+            if exit {
+                return;
+            }
         }
     }
 }
 
 pub(super) struct ThreadedTracer {
-    api_config: APIWrapper,
-    tx: Arc<Mutex<Sender<TxEventSignal>>>,
-    rx: Arc<Mutex<Receiver<RxEventSignal>>>,
+    api_config: Arc<APIWrapper>,
+    span_tx: mpsc::Sender<TxEventSignal>,
+    stop_rx: watch::Receiver<ProcessorStatus>,
     #[allow(dead_code)]
     join_handle: std::thread::JoinHandle<()>,
     log_event_callback: Arc<Mutex<Option<LogEventCallbackSync>>>,
@@ -109,49 +129,47 @@ impl ThreadedTracer {
         api_config: APIWrapper,
         max_batch_size: usize,
     ) -> (
-        Sender<TxEventSignal>,
-        Receiver<RxEventSignal>,
+        mpsc::Sender<TxEventSignal>,
+        watch::Receiver<ProcessorStatus>,
         std::thread::JoinHandle<()>,
     ) {
-        let (tx, rx) = channel();
-        let (stop_tx, stop_rx) = channel();
-        let join_handle =
-            std::thread::spawn(move || batch_processor(api_config, rx, stop_tx, max_batch_size));
+        let (tx, rx) = mpsc::channel();
+        let (stop_tx, stop_rx) = watch::channel(ProcessorStatus::Active);
+        let join_handle = std::thread::spawn(move || {
+            DeliveryThread::new(api_config, rx, stop_tx, max_batch_size).run();
+        });
 
         (tx, stop_rx, join_handle)
     }
 
     pub fn new(api_config: &APIWrapper, max_batch_size: usize) -> Self {
         let (tx, rx, join_handle) = Self::start_worker(api_config.clone(), max_batch_size);
+
         Self {
-            api_config: api_config.clone(),
-            tx: Arc::new(Mutex::new(tx)),
-            rx: Arc::new(Mutex::new(rx)),
+            api_config: Arc::new(api_config.clone()),
+            span_tx: tx,
+            stop_rx: rx,
             join_handle,
             log_event_callback: Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn flush(&self) -> Result<()> {
-        self.tx
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Error flushing BatchProcessor: {:?}", e))?
-            .send(TxEventSignal::Flush)?;
+        self.span_tx.send(TxEventSignal::Flush)?;
 
-        loop {
-            match self.rx.lock() {
-                Ok(rx) => match rx.try_recv() {
-                    Ok(RxEventSignal::Done) => return Ok(()),
-                    Err(TryRecvError::Empty) => {
-                        std::thread::sleep(Duration::from_millis(100));
-                    }
-                    Err(TryRecvError::Disconnected) => {
-                        return Err(anyhow::anyhow!("BatchProcessor worker thread disconnected"))
-                    }
-                },
-                Err(e) => return Err(anyhow::anyhow!("Error flushing BatchProcessor: {:?}", e)),
+        let flush_start = Instant::now();
+
+        while flush_start.elapsed() < Duration::from_secs(60) {
+            {
+                match *self.stop_rx.borrow() {
+                    ProcessorStatus::Active => {}
+                    ProcessorStatus::Done => return Ok(()),
+                }
             }
+            std::thread::sleep(Duration::from_millis(100));
         }
+
+        anyhow::bail!("BatchProcessor worker thread did not finish in time")
     }
 
     pub fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) {
@@ -237,11 +255,7 @@ impl ThreadedTracer {
         // Redact the event
         event = redact_event(event, &self.api_config.config);
 
-        let tx = self
-            .tx
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Error submitting work: {:?}", e))?;
-        tx.send(TxEventSignal::Submit(event))?;
+        self.span_tx.send(TxEventSignal::Submit(event))?;
         Ok(())
     }
 }

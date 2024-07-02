@@ -10,9 +10,7 @@ use serde_json::json;
 use crate::internal::llm_client::primitive::request::{
     make_parsed_request, make_request, RequestBuilder,
 };
-use crate::internal::llm_client::traits::{
-    SseResponseTrait, StreamResponse, WithStreamChat,
-};
+use crate::internal::llm_client::traits::{SseResponseTrait, StreamResponse, WithStreamChat};
 use crate::internal::llm_client::{
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
     LLMResponse, ModelFeatures,

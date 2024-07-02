@@ -6,7 +6,7 @@ pub(crate) mod core_types;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::{json, Value};
 
-use crate::request::create_client;
+use crate::request::create_tracing_client;
 
 pub(super) use self::api_interface::{BoundaryAPI, BoundaryTestAPI};
 use self::core_types::{TestCaseStatus, UpdateTestCase};
@@ -127,7 +127,7 @@ impl APIConfig {
                 stage: stage.to_string(),
                 sessions_id: sessions_id.to_string(),
                 host_name: host_name.to_string(),
-                client: create_client().unwrap(),
+                client: create_tracing_client().unwrap(),
                 log_redaction_enabled,
                 log_redaction_placeholder,
             }),
@@ -362,7 +362,7 @@ impl APIWrapper {
                     stage: config.stage,
                     sessions_id: config.sessions_id,
                     host_name: config.host_name,
-                    client: create_client().unwrap(),
+                    client: create_tracing_client().unwrap(),
                     log_redaction_enabled: config.log_redaction_enabled,
                     log_redaction_placeholder: config.log_redaction_placeholder,
                 }),

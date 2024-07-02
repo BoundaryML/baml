@@ -4,7 +4,6 @@ from assertpy import assert_that
 from dotenv import load_dotenv
 from .base64_test_data import image_b64, audio_b64
 
-
 load_dotenv()
 import baml_py
 from ..baml_client import b

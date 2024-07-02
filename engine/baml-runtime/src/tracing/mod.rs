@@ -50,6 +50,9 @@ pub struct BamlTracer {
     trace_stats: Arc<Mutex<TraceStats>>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+static_assertions::assert_impl_all!(BamlTracer: Send, Sync);
+
 macro_rules! bail {
     ($self:ident, $($arg:tt)*) => {
         let mut locked = $self.trace_stats.lock().unwrap();
