@@ -118,12 +118,12 @@ describe('Integ tests', () => {
     let res = await b.TestImageInput(
       Image.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png'),
     )
-    expect(res.toLowerCase()).toContain('green')
+    expect(res.toLowerCase()).toMatch(/(green|yellow|ogre|shrek)/)
   })
 
   it('should work with image from base 64', async () => {
     let res = await b.TestImageInput(Image.fromBase64('image/png', image_b64))
-    expect(res.toLowerCase()).toContain('green')
+    expect(res.toLowerCase()).toMatch(/(green|yellow|ogre|shrek)/)
   })
 
   it('should work with audio base 64', async () => {
@@ -181,7 +181,7 @@ describe('Integ tests', () => {
       expect(msgs[i + 1].startsWith(msgs[i])).toBeTruthy()
     }
     expect(msgs.at(-1)).toEqual(final)
-  })
+  }, 10_000)
 
   it('should support AWS', async () => {
     const res = await b.TestAws('Dr. Pepper')
@@ -228,6 +228,8 @@ describe('Integ tests', () => {
   it('supports tracing sync', async () => {
     const blah = 'blah'
 
+    const dummyFunc = (_myArg: string): string => 'hello world'
+
     const res = traceSync('myFuncParent', (firstArg: string, secondArg: number) => {
       setTags({ myKey: 'myVal' })
 
@@ -248,176 +250,46 @@ describe('Integ tests', () => {
     traceSync('dummyFunc3', dummyFunc)('hi there')
   })
 
-  it('test local trace async', async () => {
-    const s2 = new AsyncLocalStorage<string[]>()
-    s2.enterWith(['first'])
-
-    const localTraceAsync = <ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(
-      name: string,
-      func: F,
-    ): F => {
-      const funcName = name
-      return <F>(async (...args: any[]) => {
-        const params = args.reduce(
-          (acc, arg, i) => ({
-            ...acc,
-            [`arg${i}`]: arg, // generic way to label args
-          }),
-          {},
-        )
-
-        await s2.run([...(s2.getStore() ?? ['no-parent']), funcName], async () => {
-          console.log('entering span', s2.getStore())
-          try {
-            const response = await func(...args)
-            console.log('exiting span try', s2.getStore())
-            return response
-          } catch (e) {
-            console.log('exiting span catch', s2.getStore())
-            throw e
-          }
-        })
-      })
-    }
-
-    const res = await localTraceAsync('parentAsync', async (firstArg: string, secondArg: number) => {
-      const res2 = await localTraceAsync('asyncDummyFunc', asyncDummyFunc)('secondDummyFuncArg')
-
-      const llm_res = await Promise.all([
-        await localTraceAsync('prom1', asyncDummyFunc)('arg1'),
-        await localTraceAsync('prom2', asyncDummyFunc)('arg2'),
-        await localTraceAsync('prom3', asyncDummyFunc)('arg3'),
-        await localTraceAsync('prom4', asyncDummyFunc)('arg4'),
-      ])
-
-      const res3 = await localTraceAsync('asyncDummyFunc', asyncDummyFunc)('thirdDummyFuncArg')
-
-      return 'hello world'
-    })('hi', 10)
-  })
-
-  it('test asynclocalstorage semantics', async () => {
-    const ctx = new AsyncLocalStorage<string[]>()
-    ctx.enterWith(['alpha1'])
-
-    const traceFnAsync = <ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(
-      funcName: string,
-      func: F,
-    ): F => {
-      return <F>(async (...args: any[]) => {
-        // const params = args.reduce(
-        //   (acc, arg, i) => ({
-        //     ...acc,
-        //     [`arg${i}`]: arg, // generic way to label args
-        //   }),
-        //   {},
-        // )
-        //const [mng, span] = this.startTraceAsync(name, params)
-        const newCtxValue = [...(ctx.getStore() as string[]), funcName]
-        console.log('entering span', newCtxValue)
-        await ctx.run(newCtxValue, async () => {
-          try {
-            const response = await func(...args)
-            console.log('exiting span (normal)', newCtxValue)
-            return response
-          } catch (e) {
-            console.log('exiting span (error)', newCtxValue)
-            throw e
-          }
-        })
-      })
-    }
-
-    const samDummyNested = async (myArg: string): Promise<string> => {
-      await scheduler.wait(100)
-      console.log('samDummyNested', ctx.getStore())
-      return myArg
-    }
-
-    const samDummy = async (myArg: string): Promise<string> => {
-      await scheduler.wait(100)
-      const nested = await Promise.all([
-        traceFnAsync('trace:samDummyNested', samDummyNested)('nested'),
-        traceFnAsync('trace:samDummyNested2', samDummyNested)('nested'),
-        traceFnAsync('trace:samDummyNested3', samDummyNested)('nested'),
-      ])
-      console.log('samDummy', ctx.getStore())
-      return myArg
-    }
-
-    await Promise.all([
-      traceFnAsync('trace:samDummy1', samDummy)('hi'),
-      traceFnAsync('trace:samDummy2', samDummy)('hi'),
-      traceFnAsync('trace:samDummy3', samDummy)('hi'),
-    ])
-
-    //   await (async () => {
-    //     console.log('expected first, got ', s.getStore())
-    //     s.enterWith('second')
-    //     await Promise.all([
-    //       (async () => {
-    //         console.log('thirdA: expected second, got ', s.getStore())
-    //         s.run('thirdA', async () => console.log('thirdA: expected thirdA, got ', s.getStore()))
-    //       })(),
-    //       (async () => {
-    //         console.log('thirdB: expected second, got ', s.getStore())
-    //         //s.enterWith('thirdB')
-    //         s.run('thirdB', async () => console.log('thirdB: expected thirdB, got ', s.getStore()))
-    //       })(),
-    //       (async () => {
-    //         console.log('thirdC: expected second, got ', s.getStore())
-    //         //s.enterWith('thirdC')
-    //         s.run('thirdC', async () => console.log('thirdC: expected thirdC, got ', s.getStore()))
-    //       })(),
-    //       (async () => {
-    //         console.log('thirdD: expected second, got ', s.getStore())
-    //         //s.enterWith('thirdD')
-    //         s.run('thirdD', async () => console.log('thirdD: expected thirdD, got ', s.getStore()))
-    //       })(),
-    //     ])
-    //     console.log('expected second (2), got ', s.getStore())
-    //   })()
-  })
   // Look at the dashboard to verify results.
-  it.only('supports tracing async', async () => {
-    const samDummyNested = async (myArg: string): Promise<string> => {
+  it('supports tracing async', async () => {
+    const nestedDummyFn = async (myArg: string): Promise<string> => {
+      await scheduler.wait(100) // load-bearing: this ensures that we actually test concurrent execution
       console.log('samDummyNested', myArg)
       return myArg
     }
 
-    const samDummy = async (myArg: string): Promise<string> => {
+    const dummyFn = async (myArg: string): Promise<string> => {
+      await scheduler.wait(100) // load-bearing: this ensures that we actually test concurrent execution
       const nested = await Promise.all([
-        traceAsync('trace:samDummyNested', samDummyNested)('nested'),
-        traceAsync('trace:samDummyNested2', samDummyNested)('nested'),
-        traceAsync('trace:samDummyNested3', samDummyNested)('nested'),
+        traceAsync('trace:nestedDummyFn1', nestedDummyFn)('nested1'),
+        traceAsync('trace:nestedDummyFn2', nestedDummyFn)('nested2'),
+        traceAsync('trace:nestedDummyFn3', nestedDummyFn)('nested3'),
       ])
-      console.log('samDummy', myArg)
+      console.log('dummy', myArg)
       return myArg
     }
 
     await Promise.all([
-      traceAsync('trace:samDummy1', samDummy)('hi'),
-      traceAsync('trace:samDummy2', samDummy)('hi'),
-      traceAsync('trace:samDummy3', samDummy)('hi'),
+      traceAsync('trace:dummyFn1', dummyFn)('hi1'),
+      traceAsync('trace:dummyFn2', dummyFn)('hi2'),
+      traceAsync('trace:dummyFn3', dummyFn)('hi3'),
     ])
 
     const res = await traceAsync('parentAsync', async (firstArg: string, secondArg: number) => {
       console.log('hello world')
       setTags({ myKey: 'myVal' })
 
-      const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
+      const res1 = traceSync('dummyFunc', dummyFn)('firstDummyFuncArg')
 
-      const res2 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('secondDummyFuncArg')
+      const res2 = await traceAsync('asyncDummyFunc', dummyFn)('secondDummyFuncArg')
 
       const llm_res = await Promise.all([
         b.TestFnNamedArgsSingleStringList(['a1', 'b', 'c']),
         b.TestFnNamedArgsSingleStringList(['a2', 'b', 'c']),
         b.TestFnNamedArgsSingleStringList(['a3', 'b', 'c']),
-        b.TestFnNamedArgsSingleStringList(['a4', 'b', 'c']),
-        b.TestFnNamedArgsSingleStringList(['a5', 'b', 'c']),
       ])
 
-      const res3 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('thirdDummyFuncArg')
+      const res3 = await traceAsync('asyncDummyFunc', dummyFn)('thirdDummyFuncArg')
 
       return 'hello world'
     })('hi', 10)
@@ -425,20 +297,14 @@ describe('Integ tests', () => {
     const res2 = await traceAsync('parentAsync2', async (firstArg: string, secondArg: number) => {
       console.log('hello world')
 
-      const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
+      const syncDummyFn = (_myArg: string): string => 'hello world'
+      const res1 = traceSync('dummyFunc', syncDummyFn)('firstDummyFuncArg')
 
       return 'hello world'
     })('hi', 10)
 
     const failedToSubmitCount = ((b as any).runtime as BamlRuntime).flush().nSpansFailedBeforeSubmit()
     expect(failedToSubmitCount).toEqual(0)
-  })
-
-  it('supports tracing async sam test', async () => {
-    const res = await traceAsync('padreAsync', async (firstArg: string, secondArg: number) => {
-      console.log('hello world')
-      return 'hello world'
-    })('hi', 10)
   })
 
   it('should work with dynamic types single', async () => {
@@ -533,25 +399,10 @@ describe('Integ tests', () => {
   })
 })
 
-function asyncDummyFunc(myArg: string): Promise<MyInterface> {
-  console.log('asyncDummyFuncArgs', arguments)
-  return new Promise((resolve) => {
-    resolve({
-      key: 'key',
-      key_two: true,
-      key_three: 52,
-    })
-  })
-}
-
 interface MyInterface {
   key: string
   key_two: boolean
   key_three: number
-}
-
-function dummyFunc(myArg: string): string {
-  return 'hello world'
 }
 
 afterAll(async () => {

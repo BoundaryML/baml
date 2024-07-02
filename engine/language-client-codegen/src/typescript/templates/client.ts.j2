@@ -72,7 +72,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<{{ fn.return_type }}> => a,
       (a): a is {{ fn.return_type }} => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }

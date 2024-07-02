@@ -1,15 +1,15 @@
-from typing import List
+from typing import List, Optional
 import pytest
 from dotenv import load_dotenv
-from base64_test_data import image_b64, audio_b64
+from .base64_test_data import image_b64, audio_b64
 
 
 load_dotenv()
 import baml_py
-from baml_client import b
-from baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
-from baml_client.tracing import trace, set_tags, flush, on_log_event
-from baml_client.type_builder import TypeBuilder
+from ..baml_client import b
+from ..baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
+from ..baml_client.tracing import trace, set_tags, flush, on_log_event
+from ..baml_client.type_builder import TypeBuilder
 import datetime
 
 
@@ -180,12 +180,12 @@ async def test_streaming():
     stream = b.stream.PromptTestStreaming(
         input="Programming languages are fun to create"
     )
-    msgs = []
+    msgs: list[str] = []
 
     start_time = asyncio.get_event_loop().time()
     last_msg_time = start_time
     async for msg in stream:
-        msgs.append(msg)
+        msgs.append(str(msg))
         if len(msgs) == 1:
             first_msg_time = asyncio.get_event_loop().time()
 
@@ -222,9 +222,9 @@ async def test_streaming_uniterated():
 @pytest.mark.asyncio
 async def test_streaming_claude():
     stream = b.stream.PromptTestClaude(input="Mt Rainier is tall")
-    msgs = []
+    msgs: list[str] = []
     async for msg in stream:
-        msgs.append(msg)
+        msgs.append(str(msg))
     final = await stream.get_final_response()
 
     assert len(final) > 0, "Expected non-empty final but got empty."

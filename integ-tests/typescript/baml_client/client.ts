@@ -994,7 +994,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1016,7 +1016,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<Category> => a,
       (a): a is Category => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1038,7 +1038,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<Category> => a,
       (a): a is Category => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1060,7 +1060,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<Category> => a,
       (a): a is Category => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1082,7 +1082,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1104,7 +1104,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1126,7 +1126,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1148,7 +1148,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1170,7 +1170,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<DynamicClassTwo> => a,
       (a): a is DynamicClassTwo => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1192,7 +1192,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<DynInputOutput> => a,
       (a): a is DynInputOutput => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1214,7 +1214,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<DynInputOutput[]> => a,
       (a): a is DynInputOutput[] => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1236,7 +1236,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string[]> => a,
       (a): a is string[] => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1258,7 +1258,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<Person[]> => a,
       (a): a is Person[] => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1280,7 +1280,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<ReceiptInfo> => a,
       (a): a is ReceiptInfo => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1302,7 +1302,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<Resume> => a,
       (a): a is Resume => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1324,7 +1324,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<Resume> => a,
       (a): a is Resume => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1346,7 +1346,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<ClassOptionalOutput | null> => a,
       (a): a is ClassOptionalOutput | null => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1368,7 +1368,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<ClassOptionalOutput2 | null> => a,
       (a): a is ClassOptionalOutput2 | null => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1390,7 +1390,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<EnumOutput[]> => a,
       (a): a is EnumOutput[] => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1412,7 +1412,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<EnumOutput> => a,
       (a): a is EnumOutput => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1434,7 +1434,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1456,7 +1456,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<boolean> => a,
       (a): a is boolean => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1478,7 +1478,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<TestOutputClass> => a,
       (a): a is TestOutputClass => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1500,7 +1500,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<TestOutputClass[]> => a,
       (a): a is TestOutputClass[] => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1522,7 +1522,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<TestClassNested> => a,
       (a): a is TestClassNested => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1544,7 +1544,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<TestClassWithEnum> => a,
       (a): a is TestClassWithEnum => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1566,7 +1566,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string[]> => a,
       (a): a is string[] => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1588,7 +1588,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<TestEnum> => a,
       (a): a is TestEnum => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1610,7 +1610,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<TestClassAlias> => a,
       (a): a is TestClassAlias => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1632,7 +1632,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1654,7 +1654,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<RaysData> => a,
       (a): a is RaysData => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1676,7 +1676,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<OrderInfo> => a,
       (a): a is OrderInfo => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1698,7 +1698,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<SearchParams> => a,
       (a): a is SearchParams => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1720,7 +1720,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<DynamicOutput> => a,
       (a): a is DynamicOutput => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1742,7 +1742,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<(OptionalTest_ReturnType | null)[]> => a,
       (a): a is (OptionalTest_ReturnType | null)[] => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1764,7 +1764,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1786,7 +1786,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1808,7 +1808,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1830,7 +1830,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1852,7 +1852,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1874,7 +1874,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1896,7 +1896,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1918,7 +1918,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1940,7 +1940,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1962,7 +1962,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -1984,7 +1984,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2006,7 +2006,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2028,7 +2028,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2050,7 +2050,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2072,7 +2072,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2094,7 +2094,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2116,7 +2116,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2138,7 +2138,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2160,7 +2160,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2182,7 +2182,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2204,7 +2204,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2226,7 +2226,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2248,7 +2248,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2270,7 +2270,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2292,7 +2292,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2314,7 +2314,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
@@ -2336,7 +2336,7 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<UnionTest_ReturnType> => a,
       (a): a is UnionTest_ReturnType => a,
-      this.ctx_manager.get(),
+      this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
   }
