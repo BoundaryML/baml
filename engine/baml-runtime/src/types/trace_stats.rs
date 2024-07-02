@@ -2,7 +2,9 @@
 ///
 /// A span has the following lifecycle and can fail at any of these points:
 ///
-///     start -> finalize (ctx.exit) -> submit -> send
+/// ```text
+/// start -> finalize (ctx.exit) -> submit -> send
+/// ```
 ///
 /// TODO: return stats about the # of spans successfully sent
 #[derive(Clone)]
