@@ -259,7 +259,7 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
     const onlyRelevantFiles = Object.fromEntries(
       Object.entries(projFiles).filter(([name, _]) => name.startsWith(root_path)),
     )
-    console.log('Creating new project', root_path, onlyRelevantFiles)
+    // console.log('Creating new project', root_path, onlyRelevantFiles)
     if (wasm) {
       project = wasm.WasmProject.new(root_path, onlyRelevantFiles)
     }
@@ -620,7 +620,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <>
-      <div className='absolute flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2 z-50'>
+      <div className='absolute z-50 flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2'>
         <ErrorCount /> <span>Runtime Version: {version}</span>
       </div>
       {selectedProject === null ? (

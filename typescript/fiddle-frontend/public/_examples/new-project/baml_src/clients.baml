@@ -1,11 +1,11 @@
-// These are LLM clients you can use in your functions. We currently support Anthropic, OpenAI / Azure, Gemini, and Ollama as providers but are expanding to many more.
+// These are LLM clients you can use in your functions. We currently support Anthropic, OpenAI / Azure, Gemini, and Ollama as providers.
 
 // We also support any other provider that follows the OpenAI API specification, such as HuggingFace.
 
 // For this playground, we have setup a few clients for you to use already with some free credits.
 
 client<llm> GPT4 {
-  // Use one of the following: https://docs.boundaryml.com/v3/syntax/client/client#providers
+  // Use one of the following: https://docs.boundaryml.com/docs/snippets/clients/providers/openai
   provider openai
   // You can pass in any parameters from the OpenAI Python documentation into the options block.
   options {
@@ -14,21 +14,13 @@ client<llm> GPT4 {
   }
 } 
 
-client<llm> GPT4Turbo {
+client<llm> GPT4o {
   provider openai
   options {
-    model gpt-4-turbo
+    model gpt-4o
     api_key env.OPENAI_API_KEY
   }
 } 
-
-client<llm> GPT35 {
-  provider openai
-  options {
-    model gpt-3.5-turbo
-    api_key env.OPENAI_API_KEY
-  }
-}  
 
 client<llm> Claude {
   provider anthropic
@@ -42,9 +34,8 @@ client<llm> Claude {
 
 client<llm> Gemini {
   provider google-ai
-  options{
+  options {
     model "gemini-1.5-pro-001"
     api_key env.GOOGLE_API_KEY
   }
 }
-

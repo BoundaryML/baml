@@ -1,5 +1,5 @@
 // This will be available as an enum in your Python and Typescript code.
-enum Category {
+enum MyCategory {
     Refund
     CancelOrder
     TechnicalSupport
@@ -7,8 +7,8 @@ enum Category {
     Question
 }
 
-function ClassifyMessage(input: string) -> Category {
-  client GPT4Turbo
+function ClassifyMessageWithRoles(input: string) -> MyCategory {
+  client GPT4o
 
   prompt #"
     {# _.role("system") starts a system message #}
@@ -29,7 +29,7 @@ function ClassifyMessage(input: string) -> Category {
 }
 
 test Test1 {
-  functions [ClassifyMessage]
+  functions [ClassifyMessageWithRoles]
   args {
     input "Can't access my account using my usual login credentials, and each attempt results in an error message stating 'Invalid username or password.' I have tried resetting my password using the 'Forgot Password' link, but I haven't received the promised password reset email."
   }

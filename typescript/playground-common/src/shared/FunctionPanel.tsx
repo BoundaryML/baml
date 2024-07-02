@@ -23,7 +23,7 @@ const CurlSnippet: React.FC = () => {
       <div className='flex justify-end'>
         <Button
           onClick={handleCopy(rawCurl)}
-          className='copy-button bg-transparent text-white m-0 py-0 hover:bg-indigo-500 text-xs'
+          className='py-0 m-0 text-xs text-white bg-transparent copy-button hover:bg-indigo-500'
         >
           <Copy size={16} />
         </Button>
@@ -105,7 +105,12 @@ const PromptPreview: React.FC = () => {
                   }}
                 />
               )
-            if (part.is_image()) return <img key={idx} src={part.as_image()} className='max-w-40' />
+            if (part.is_image())
+              return (
+                <a href={part.as_image()} target='_blank'>
+                  <img key={idx} src={part.as_image()} className='max-w-[400px] object-cover' />
+                </a>
+              )
             if (part.is_audio()) {
               const audioUrl = part.as_audio()
               if (audioUrl) {
