@@ -41,12 +41,10 @@ async function loadExampleProject(
   projectId: string,
 ): Promise<BAMLProject | undefined> {
   // Combine all projects into a single array
-  const exampleProjects = [
-    ...groupings.intros,
-    ...groupings.advancedPromptSyntax,
-    ...groupings.promptEngineering,
-    ...groupings.allProjects,
-  ]
+  const exampleProjects = [...groupings.allProjects]
+  if (groupings.newProject) {
+    exampleProjects.push(groupings.newProject)
+  }
 
   // Search for the project by id
   const proj = exampleProjects.find((project) => project.id === projectId)
@@ -99,9 +97,7 @@ const getProjectFiles = async (projectPath: string): Promise<EditorFile[]> => {
 
 export type BamlProjectsGroupings = {
   allProjects: BAMLProject[]
-  intros: BAMLProject[]
-  advancedPromptSyntax: BAMLProject[]
-  promptEngineering: BAMLProject[]
+  newProject: BAMLProject
 }
 
 export async function loadExampleProjects(): Promise<BamlProjectsGroupings> {
@@ -115,60 +111,13 @@ export async function loadExampleProjects(): Promise<BamlProjectsGroupings> {
         files: [],
       },
     ],
-    intros: [
-      {
-        id: 'new-project',
-        name: 'New Project',
-        description: 'New project',
-        filePath: '/new-project/',
-        files: [],
-      },
-      {
-        id: 'extract-resume',
-        name: 'Introduction to BAML',
-        description: 'A simple LLM function extract a resume',
-        filePath: '/intro/extract-resume/',
-        files: [],
-      },
-      {
-        id: 'classify-message',
-        name: 'ClassifyMessage',
-        description: 'Classify a message from a user',
-        filePath: '/intro/classify-message/',
-        files: [],
-      },
-      {
-        id: 'chat-roles',
-        name: 'ChatRoles',
-        description: 'Use a sequence of system and user messages',
-        filePath: '/intro/chat-roles/',
-        files: [],
-      },
-      // {
-      //   id: 'images',
-      //   name: 'Using Vision / Image APIs',
-      //   description: 'Extract resume from image',
-      //   filePath: '/intro/images/',
-      //   files: [],
-      // },
-    ],
-    advancedPromptSyntax: [],
-    promptEngineering: [
-      {
-        id: 'chain-of-thought',
-        name: 'Chain of Thought',
-        description: 'Using chain of thought to improve results and reduce hallucinations',
-        filePath: '/prompt-engineering/chain-of-thought/',
-        files: [],
-      },
-      {
-        id: 'symbol-tuning',
-        name: 'Symbol Tuning',
-        filePath: '/prompt-engineering/symbol-tuning/',
-        description: 'Use symbol tuning to remove biases on schema property names',
-        files: [],
-      },
-    ],
+    newProject: {
+      id: 'new-project',
+      name: 'New Project',
+      description: 'New project',
+      filePath: '/new-project/',
+      files: [],
+    },
   }
   return exampleProjects
 }
