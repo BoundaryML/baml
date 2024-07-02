@@ -270,11 +270,14 @@ async def test_streaming_gemini():
 
 @pytest.mark.asyncio
 async def test_tracing_async():
-    # sync_dummy_func("second-dummycall-arg")
-    res = await parent_async("first-arg-value")
-    # sync_dummy_func("second-dummycall-arg")
+    res = await asyncio.gather(
+        parent_async("first-arg-value-1"),
+        parent_async("first-arg-value-2"),
+        parent_async("first-arg-value-3"),
+    )
     res2 = await parent_async2("second-arg-value")
-    # sync_dummy_func("second-dummycall-arg")
+
+    assert b.__runtime.flush().n_spans_failed_before_submit == -1, "Expected no errors in tracing."
 
 
 def test_tracing_sync():

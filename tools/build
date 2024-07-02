@@ -207,7 +207,7 @@ case "$_path" in
     command="env -u CONDA_PREFIX poetry run maturin develop --manifest-path ${_repo_root}/engine/language_client_python/Cargo.toml"
     command="${command} && poetry run baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && infisical run --env=test -- poetry run pytest -k tracing"
+      command="${command} && infisical run --env=test -- poetry run pytest -k test_tracing_async"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
