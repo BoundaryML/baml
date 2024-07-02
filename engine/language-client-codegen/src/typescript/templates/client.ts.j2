@@ -39,7 +39,7 @@ export class BamlClient {
         "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
         {%- endfor %}
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as {{fn.return_type}}

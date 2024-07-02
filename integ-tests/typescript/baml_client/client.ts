@@ -50,7 +50,7 @@ export class BamlClient {
       {
         "aud": aud
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -65,7 +65,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as Category
@@ -80,7 +80,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as Category
@@ -95,7 +95,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as Category
@@ -110,7 +110,7 @@ export class BamlClient {
       {
         "img": img
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -125,7 +125,7 @@ export class BamlClient {
       {
         "classWithImage": classWithImage,"img2": img2
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -140,7 +140,7 @@ export class BamlClient {
       {
         "classWithImage": classWithImage,"img2": img2
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -155,7 +155,7 @@ export class BamlClient {
       {
         "classWithImage": classWithImage,"img2": img2
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -170,7 +170,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as DynamicClassTwo
@@ -185,7 +185,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as DynInputOutput
@@ -200,7 +200,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as DynInputOutput[]
@@ -215,7 +215,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string[]
@@ -230,7 +230,7 @@ export class BamlClient {
       {
         "text": text
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as Person[]
@@ -245,7 +245,7 @@ export class BamlClient {
       {
         "email": email
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as ReceiptInfo
@@ -260,7 +260,7 @@ export class BamlClient {
       {
         "resume": resume,"img": img?? null
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as Resume
@@ -275,7 +275,7 @@ export class BamlClient {
       {
         "resume": resume
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as Resume
@@ -290,7 +290,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as ClassOptionalOutput | null
@@ -305,7 +305,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as ClassOptionalOutput2 | null
@@ -320,7 +320,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as EnumOutput[]
@@ -335,7 +335,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as EnumOutput
@@ -350,7 +350,7 @@ export class BamlClient {
       {
         "myString": myString?? null
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -365,7 +365,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as boolean
@@ -380,7 +380,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as TestOutputClass
@@ -395,7 +395,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as TestOutputClass[]
@@ -410,7 +410,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as TestClassNested
@@ -425,7 +425,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as TestClassWithEnum
@@ -440,7 +440,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string[]
@@ -455,7 +455,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as TestEnum
@@ -470,7 +470,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as TestClassAlias
@@ -485,7 +485,7 @@ export class BamlClient {
       {
         "myArg": myArg
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -500,7 +500,7 @@ export class BamlClient {
       {
         "text": text
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as RaysData
@@ -515,7 +515,7 @@ export class BamlClient {
       {
         "email": email
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as OrderInfo
@@ -530,7 +530,7 @@ export class BamlClient {
       {
         "query": query
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as SearchParams
@@ -545,7 +545,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as DynamicOutput
@@ -560,7 +560,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as (OptionalTest_ReturnType | null)[]
@@ -575,7 +575,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -590,7 +590,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -605,7 +605,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -620,7 +620,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -635,7 +635,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -650,7 +650,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -665,7 +665,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -680,7 +680,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -695,7 +695,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -710,7 +710,7 @@ export class BamlClient {
       {
         
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -725,7 +725,7 @@ export class BamlClient {
       {
         "myBool": myBool
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -740,7 +740,7 @@ export class BamlClient {
       {
         "myArg": myArg
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -755,7 +755,7 @@ export class BamlClient {
       {
         "myArg": myArg
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -770,7 +770,7 @@ export class BamlClient {
       {
         "myFloat": myFloat
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -785,7 +785,7 @@ export class BamlClient {
       {
         "myInt": myInt
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -800,7 +800,7 @@ export class BamlClient {
       {
         "myString": myString
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -815,7 +815,7 @@ export class BamlClient {
       {
         "myStringArray": myStringArray
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -830,7 +830,7 @@ export class BamlClient {
       {
         "myArg": myArg
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -845,7 +845,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -860,7 +860,7 @@ export class BamlClient {
       {
         "img": img
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -875,7 +875,7 @@ export class BamlClient {
       {
         "myArg": myArg,"myArg2": myArg2
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -890,7 +890,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -905,7 +905,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -920,7 +920,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -935,7 +935,7 @@ export class BamlClient {
       {
         
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -950,7 +950,7 @@ export class BamlClient {
       {
         
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
@@ -965,7 +965,7 @@ export class BamlClient {
       {
         "input": input
       },
-      this.ctx_manager.get().deepClone(),
+      this.ctx_manager.get(),
       __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as UnionTest_ReturnType

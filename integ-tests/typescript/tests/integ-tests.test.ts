@@ -15,7 +15,7 @@ import {
 import TypeBuilder from '../baml_client/type_builder'
 import { RecursivePartialNull } from '../baml_client/client'
 import { config } from 'dotenv'
-import { BamlLogEvent } from '@boundaryml/baml/native'
+import { BamlLogEvent, BamlRuntime } from '@boundaryml/baml/native'
 import { AsyncLocalStorage } from 'async_hooks'
 config()
 
@@ -426,6 +426,9 @@ describe('Integ tests', () => {
 
       return 'hello world'
     })('hi', 10)
+
+    const failedToSubmitCount = ((b as any).runtime as BamlRuntime).flush().nSpansFailedBeforeSubmit()
+    expect(failedToSubmitCount).toBe(-1)
   })
 
   it('supports tracing async sam test', async () => {

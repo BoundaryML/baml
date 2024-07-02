@@ -76,7 +76,7 @@ export class RuntimeContextManager {
 }
 
 export class TraceStats {
-
+  nSpansFailedBeforeSubmit(): number
 }
 
 export class TypeBuilder {
