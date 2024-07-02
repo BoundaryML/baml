@@ -84,26 +84,17 @@ client<llm> Gemini {
 }
 
 client<llm> AwsBedrock {
-  provider anthropic
+  provider aws-bedrock
   options {
-    model claude-3-haiku-20240307
-    api_key env.ANTHROPIC_API_KEY
-    max_tokens 1000
+    inference_configuration {
+      max_tokens 100
+    }
+    model_id "anthropic.claude-3-haiku-20240307-v1:0"
+    // model_id "meta.llama3-8b-instruct-v1:0"
+    // model_id "mistral.mistral-7b-instruct-v0:2"
+    api_key ""
   }
 }
-
-// client<llm> AwsBedrock {
-//   provider aws-bedrock
-//   options {
-//     inference_configuration {
-//       max_tokens 100
-//     }
-//     model_id "anthropic.claude-3-haiku-20240307-v1:0"
-//     // model_id "meta.llama3-8b-instruct-v1:0"
-//     // model_id "mistral.mistral-7b-instruct-v0:2"
-//     api_key ""
-//   }
-// }
 
 client<llm> Claude {
   provider anthropic
