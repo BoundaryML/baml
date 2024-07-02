@@ -36,7 +36,12 @@ class BamlCtxManager {
             console.error('Context lost before span could be finished\n');
             return;
         }
-        span.finish(response, manager);
+        try {
+            span.finish(response, manager);
+        }
+        catch (e) {
+            console.error('BAML internal error', e);
+        }
     }
     flush() {
         this.rt.flush();

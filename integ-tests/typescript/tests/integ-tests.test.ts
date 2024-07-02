@@ -1,4 +1,5 @@
 import assert from 'assert'
+import { scheduler } from 'node:timers/promises'
 import { image_b64, audio_b64 } from './base64_test_data'
 import { Image } from '@boundaryml/baml'
 import { Audio } from '@boundaryml/baml'
@@ -328,11 +329,13 @@ describe('Integ tests', () => {
     }
 
     const samDummyNested = async (myArg: string): Promise<string> => {
+      await scheduler.wait(100)
       console.log('samDummyNested', ctx.getStore())
       return myArg
     }
 
     const samDummy = async (myArg: string): Promise<string> => {
+      await scheduler.wait(100)
       const nested = await Promise.all([
         traceFnAsync('trace:samDummyNested', samDummyNested)('nested'),
         traceFnAsync('trace:samDummyNested2', samDummyNested)('nested'),
@@ -428,7 +431,7 @@ describe('Integ tests', () => {
     })('hi', 10)
 
     const failedToSubmitCount = ((b as any).runtime as BamlRuntime).flush().nSpansFailedBeforeSubmit()
-    expect(failedToSubmitCount).toBe(-1)
+    expect(failedToSubmitCount).toEqual(0)
   })
 
   it('supports tracing async sam test', async () => {
