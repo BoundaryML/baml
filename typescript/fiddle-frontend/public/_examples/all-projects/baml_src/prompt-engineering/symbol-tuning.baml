@@ -5,7 +5,7 @@
 
 // When you add aliases you don't need to change your resulting python code. Your models
 // stay the same. They are merely a way to aid in prompt engineering.
-enum Category {
+enum MyClass {
     Refund @alias("k1")
     @description("Customer wants to refund a product")
 
@@ -22,7 +22,7 @@ enum Category {
     @description("Customer has a question")
 }
 
-function ClassifyMessageWithSymbol(input: string) -> Category {
+function ClassifyMessageWithSymbol(input: string) -> MyClass {
   client GPT4o
 
   prompt #"

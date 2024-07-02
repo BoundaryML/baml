@@ -1,11 +1,5 @@
 // This is a BAML config file, which extends the Jinja2 templating language to write LLM functions.
 
-// BAML adds many new features to Jinja:
-// - type-support,
-// - static analysis of prompts, 
-// - robust deserialization of JSON outputs,
-// - ...and more! 
-
 class Resume {
   name string
   education Education[] @description("Extract in the same order listed")

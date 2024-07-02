@@ -153,6 +153,7 @@ const FileViewer = () => {
           openByDefault={false}
           // initialOpenState={{ baml_src: true }}
           data={data2}
+          indent={12}
           initialOpenState={{ baml_src: true }}
           rowHeight={24}
           width={width}

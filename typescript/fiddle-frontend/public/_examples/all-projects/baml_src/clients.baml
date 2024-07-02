@@ -5,7 +5,7 @@
 // For this playground, we have setup a few clients for you to use already with some free credits.
 
 client<llm> GPT4 {
-  // Use one of the following: https://docs.boundaryml.com/v3/syntax/client/client#providers
+  // Use one of the following: https://docs.boundaryml.com/docs/snippets/clients/providers/openai
   provider openai
   // You can pass in any parameters from the OpenAI Python documentation into the options block.
   options {
@@ -21,14 +21,6 @@ client<llm> GPT4o {
     api_key env.OPENAI_API_KEY
   }
 } 
-
-client<llm> GPT35 {
-  provider openai
-  options {
-    model gpt-3.5-turbo
-    api_key env.OPENAI_API_KEY
-  }
-}  
 
 client<llm> Claude {
   provider anthropic

@@ -5,7 +5,7 @@ import { type EditorFile, loadUrl } from '@/app/actions'
 import type { BAMLProject } from './exampleProjects'
 export async function loadProject(params: { project_id: string }, chooseDefault = false) {
   const projectGroups = await loadExampleProjects()
-  let data: BAMLProject = projectGroups.intros[0] //exampleProjects[0]
+  let data: BAMLProject = projectGroups.allProjects[0] //exampleProjects[0]
   const id = params.project_id
   if (id) {
     const exampleProject = await loadExampleProject(projectGroups, id)
@@ -15,7 +15,7 @@ export async function loadProject(params: { project_id: string }, chooseDefault 
       data = await loadUrl(id)
     }
   } else {
-    const exampleProject = projectGroups.intros[0]
+    const exampleProject = projectGroups.allProjects[0]
     const loadedProject = await loadExampleProject(projectGroups, exampleProject.id)
     if (loadedProject) {
       data = loadedProject
@@ -41,7 +41,12 @@ async function loadExampleProject(
   projectId: string,
 ): Promise<BAMLProject | undefined> {
   // Combine all projects into a single array
-  const exampleProjects = [...groupings.intros, ...groupings.advancedPromptSyntax, ...groupings.promptEngineering]
+  const exampleProjects = [
+    ...groupings.intros,
+    ...groupings.advancedPromptSyntax,
+    ...groupings.promptEngineering,
+    ...groupings.allProjects,
+  ]
 
   // Search for the project by id
   const proj = exampleProjects.find((project) => project.id === projectId)
@@ -93,6 +98,7 @@ const getProjectFiles = async (projectPath: string): Promise<EditorFile[]> => {
 }
 
 export type BamlProjectsGroupings = {
+  allProjects: BAMLProject[]
   intros: BAMLProject[]
   advancedPromptSyntax: BAMLProject[]
   promptEngineering: BAMLProject[]
@@ -100,6 +106,15 @@ export type BamlProjectsGroupings = {
 
 export async function loadExampleProjects(): Promise<BamlProjectsGroupings> {
   const exampleProjects: BamlProjectsGroupings = {
+    allProjects: [
+      {
+        id: 'all-projects',
+        name: 'All Projects',
+        description: 'All projects',
+        filePath: '/all-projects/',
+        files: [],
+      },
+    ],
     intros: [
       {
         id: 'extract-resume',
