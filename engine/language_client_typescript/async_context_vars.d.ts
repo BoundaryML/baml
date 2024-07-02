@@ -4,7 +4,7 @@ export declare class BamlCtxManager {
     private ctx;
     constructor(rt: BamlRuntime);
     upsertTags(tags: Record<string, string>): void;
-    get(): RuntimeContextManager;
+    cloneContext(): RuntimeContextManager;
     startTrace(name: string, args: Record<string, any>): [RuntimeContextManager, BamlSpan];
     endTrace(span: BamlSpan, response: any): void;
     flush(): void;

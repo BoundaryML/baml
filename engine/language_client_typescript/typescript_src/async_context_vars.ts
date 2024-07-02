@@ -19,17 +19,17 @@ export class BamlCtxManager {
     manager.upsertTags(tags)
   }
 
-  get(): RuntimeContextManager {
+  cloneContext(): RuntimeContextManager {
     let store = this.ctx.getStore()
     if (store === undefined) {
       store = this.rt.createContextManager()
       this.ctx.enterWith(store)
     }
-    return store
+    return store.deepClone()
   }
 
   startTrace(name: string, args: Record<string, any>): [RuntimeContextManager, BamlSpan] {
-    const mng = this.get().deepClone()
+    const mng = this.cloneContext()
     return [mng, BamlSpan.new(this.rt, name, args, mng)]
   }
 
