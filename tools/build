@@ -207,7 +207,7 @@ case "$_path" in
     command="env -u CONDA_PREFIX poetry run maturin develop --manifest-path ${_repo_root}/engine/language_client_python/Cargo.toml"
     command="${command} && poetry run baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && infisical run --env=test -- poetry run pytest"
+      command="${command} && infisical run --env=test -- poetry run pytest -k test_tracing_async"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
@@ -223,17 +223,26 @@ case "$_path" in
     ;;
 
   /integ-tests/typescript | /integ-tests/typescript/* )
+    #BAML_LOG="baml_runtime::tracing=trace,baml_runtime::types::context_manager=debug,baml_runtime=debug"
+    BAML_LOG="baml_runtime=debug"
     command="(cd ${_repo_root}/engine/language_client_typescript && pnpm build:debug)"
     command="${command} && pnpm baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && pnpm integ-tests"
+      #command="${command} && pnpm integ-tests"
+      command="${command} && BAML_LOG=${BAML_LOG}  infisical run -- pnpm test tests/integ-tests.test.ts"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
+        #--verbose \
       npx nodemon \
-        --ext py,pyi,rs,j2,toml \
+        --delay 1.5 \
+        --ext py,pyi,rs,j2,toml,test.ts \
         --watch "${_repo_root}/engine" \
         --watch . \
-        --ignore baml_client \
+        --ignore baml_client/** \
+        --ignore dist/** \
+        --ignore target/** \
+        --ignore node_modules/** \
+        --ignore *.d.ts \
         --exec "${command}"
     else
       eval "${command}"

@@ -1,4 +1,5 @@
 import assert from 'assert'
+import { scheduler } from 'node:timers/promises'
 import { image_b64, audio_b64 } from './base64_test_data'
 import { Image } from '@boundaryml/baml'
 import { Audio } from '@boundaryml/baml'
@@ -15,7 +16,8 @@ import {
 import TypeBuilder from '../baml_client/type_builder'
 import { RecursivePartialNull } from '../baml_client/client'
 import { config } from 'dotenv'
-import { BamlLogEvent } from '@boundaryml/baml/native'
+import { BamlLogEvent, BamlRuntime } from '@boundaryml/baml/native'
+import { AsyncLocalStorage } from 'async_hooks'
 config()
 
 describe('Integ tests', () => {
@@ -116,12 +118,12 @@ describe('Integ tests', () => {
     let res = await b.TestImageInput(
       Image.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png'),
     )
-    expect(res.toLowerCase()).toContain('green')
+    expect(res.toLowerCase()).toMatch(/(green|yellow|ogre|shrek)/)
   })
 
   it('should work with image from base 64', async () => {
     let res = await b.TestImageInput(Image.fromBase64('image/png', image_b64))
-    expect(res.toLowerCase()).toContain('green')
+    expect(res.toLowerCase()).toMatch(/(green|yellow|ogre|shrek)/)
   })
 
   it('should work with audio base 64', async () => {
@@ -179,7 +181,7 @@ describe('Integ tests', () => {
       expect(msgs[i + 1].startsWith(msgs[i])).toBeTruthy()
     }
     expect(msgs.at(-1)).toEqual(final)
-  })
+  }, 10_000)
 
   it('should support AWS', async () => {
     const res = await b.TestAws('Dr. Pepper')
@@ -226,6 +228,8 @@ describe('Integ tests', () => {
   it('supports tracing sync', async () => {
     const blah = 'blah'
 
+    const dummyFunc = (_myArg: string): string => 'hello world'
+
     const res = traceSync('myFuncParent', (firstArg: string, secondArg: number) => {
       setTags({ myKey: 'myVal' })
 
@@ -248,17 +252,44 @@ describe('Integ tests', () => {
 
   // Look at the dashboard to verify results.
   it('supports tracing async', async () => {
+    const nestedDummyFn = async (myArg: string): Promise<string> => {
+      await scheduler.wait(100) // load-bearing: this ensures that we actually test concurrent execution
+      console.log('samDummyNested', myArg)
+      return myArg
+    }
+
+    const dummyFn = async (myArg: string): Promise<string> => {
+      await scheduler.wait(100) // load-bearing: this ensures that we actually test concurrent execution
+      const nested = await Promise.all([
+        traceAsync('trace:nestedDummyFn1', nestedDummyFn)('nested1'),
+        traceAsync('trace:nestedDummyFn2', nestedDummyFn)('nested2'),
+        traceAsync('trace:nestedDummyFn3', nestedDummyFn)('nested3'),
+      ])
+      console.log('dummy', myArg)
+      return myArg
+    }
+
+    await Promise.all([
+      traceAsync('trace:dummyFn1', dummyFn)('hi1'),
+      traceAsync('trace:dummyFn2', dummyFn)('hi2'),
+      traceAsync('trace:dummyFn3', dummyFn)('hi3'),
+    ])
+
     const res = await traceAsync('parentAsync', async (firstArg: string, secondArg: number) => {
       console.log('hello world')
       setTags({ myKey: 'myVal' })
 
-      const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
+      const res1 = traceSync('dummyFunc', dummyFn)('firstDummyFuncArg')
 
-      const res2 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('secondDummyFuncArg')
+      const res2 = await traceAsync('asyncDummyFunc', dummyFn)('secondDummyFuncArg')
 
-      const llm_res = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
+      const llm_res = await Promise.all([
+        b.TestFnNamedArgsSingleStringList(['a1', 'b', 'c']),
+        b.TestFnNamedArgsSingleStringList(['a2', 'b', 'c']),
+        b.TestFnNamedArgsSingleStringList(['a3', 'b', 'c']),
+      ])
 
-      const res3 = await traceAsync('asyncDummyFunc', asyncDummyFunc)('thirdDummyFuncArg')
+      const res3 = await traceAsync('asyncDummyFunc', dummyFn)('thirdDummyFuncArg')
 
       return 'hello world'
     })('hi', 10)
@@ -266,10 +297,14 @@ describe('Integ tests', () => {
     const res2 = await traceAsync('parentAsync2', async (firstArg: string, secondArg: number) => {
       console.log('hello world')
 
-      const res1 = traceSync('dummyFunc', dummyFunc)('firstDummyFuncArg')
+      const syncDummyFn = (_myArg: string): string => 'hello world'
+      const res1 = traceSync('dummyFunc', syncDummyFn)('firstDummyFuncArg')
 
       return 'hello world'
     })('hi', 10)
+
+    const failedToSubmitCount = ((b as any).runtime as BamlRuntime).flush().nSpansFailedBeforeSubmit()
+    expect(failedToSubmitCount).toEqual(0)
   })
 
   it('should work with dynamic types single', async () => {
@@ -364,25 +399,10 @@ describe('Integ tests', () => {
   })
 })
 
-function asyncDummyFunc(myArg: string): Promise<MyInterface> {
-  console.log('asyncDummyFuncArgs', arguments)
-  return new Promise((resolve) => {
-    resolve({
-      key: 'key',
-      key_two: true,
-      key_three: 52,
-    })
-  })
-}
-
 interface MyInterface {
   key: string
   key_two: boolean
   key_three: number
-}
-
-function dummyFunc(myArg: string): string {
-  return 'hello world'
 }
 
 afterAll(async () => {

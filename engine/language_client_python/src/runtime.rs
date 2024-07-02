@@ -1,10 +1,11 @@
 use crate::parse_py_type::parse_py_type;
 use crate::types::function_results::FunctionResult;
+use crate::types::trace_stats::TraceStats;
 use crate::BamlError;
 
-use super::function_result_stream::FunctionResultStream;
-use super::runtime_ctx_manager::RuntimeContextManager;
-use super::type_builder::TypeBuilder;
+use crate::types::function_result_stream::FunctionResultStream;
+use crate::types::runtime_ctx_manager::RuntimeContextManager;
+use crate::types::type_builder::TypeBuilder;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
@@ -174,8 +175,11 @@ impl BamlRuntime {
     }
 
     #[pyo3()]
-    fn flush(&self) -> PyResult<()> {
-        self.inner.flush().map_err(BamlError::from_anyhow)
+    fn flush(&self) -> PyResult<TraceStats> {
+        self.inner
+            .flush()
+            .map(Into::into)
+            .map_err(BamlError::from_anyhow)
     }
 
     #[pyo3()]

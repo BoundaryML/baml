@@ -1,15 +1,16 @@
-from typing import List
+import time
 import pytest
+from assertpy import assert_that
 from dotenv import load_dotenv
-from base64_test_data import image_b64, audio_b64
+from .base64_test_data import image_b64, audio_b64
 
 
 load_dotenv()
 import baml_py
-from baml_client import b
-from baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
-from baml_client.tracing import trace, set_tags, flush, on_log_event
-from baml_client.type_builder import TypeBuilder
+from ..baml_client import b
+from ..baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
+from ..baml_client.tracing import trace, set_tags, flush, on_log_event
+from ..baml_client.type_builder import TypeBuilder
 import datetime
 
 
@@ -180,12 +181,12 @@ async def test_streaming():
     stream = b.stream.PromptTestStreaming(
         input="Programming languages are fun to create"
     )
-    msgs = []
+    msgs: list[str] = []
 
     start_time = asyncio.get_event_loop().time()
     last_msg_time = start_time
     async for msg in stream:
-        msgs.append(msg)
+        msgs.append(str(msg))
         if len(msgs) == 1:
             first_msg_time = asyncio.get_event_loop().time()
 
@@ -222,9 +223,9 @@ async def test_streaming_uniterated():
 @pytest.mark.asyncio
 async def test_streaming_claude():
     stream = b.stream.PromptTestClaude(input="Mt Rainier is tall")
-    msgs = []
+    msgs: list[str] = []
     async for msg in stream:
-        msgs.append(msg)
+        msgs.append(str(msg))
     final = await stream.get_final_response()
 
     assert len(final) > 0, "Expected non-empty final but got empty."
@@ -246,7 +247,7 @@ async def test_streaming_claude():
 @pytest.mark.asyncio
 async def test_streaming_gemini():
     stream = b.stream.TestGemini(input="Dr.Pepper")
-    msgs: List[str] = []
+    msgs: list[str] = []
     async for msg in stream:
         if msg is not None:
             msgs.append(msg)
@@ -270,11 +271,31 @@ async def test_streaming_gemini():
 
 @pytest.mark.asyncio
 async def test_tracing_async():
-    # sync_dummy_func("second-dummycall-arg")
-    res = await parent_async("first-arg-value")
-    # sync_dummy_func("second-dummycall-arg")
-    res2 = await parent_async2("second-arg-value")
-    # sync_dummy_func("second-dummycall-arg")
+
+    @trace
+    async def nested_dummy_fn(_foo: str):
+        time.sleep(0.5 + random.random())
+        return "nested dummy fn"
+
+    @trace
+    async def dummy_fn(foo: str):
+        await asyncio.gather(
+            b.FnOutputClass(foo),
+            nested_dummy_fn(foo),
+        )
+        return "dummy fn"
+
+    await asyncio.gather(
+        dummy_fn("dummy arg 1"),
+        dummy_fn("dummy arg 2"),
+        dummy_fn("dummy arg 3"),
+    )
+    await asyncio.gather(
+        parent_async("first-arg-value"),
+        parent_async2("second-arg-value")
+    )
+
+    assert_that(b._BamlClient__runtime.flush().n_spans_failed_before_submit()).is_equal_to(0)
 
 
 def test_tracing_sync():

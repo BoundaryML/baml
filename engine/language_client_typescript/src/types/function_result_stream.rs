@@ -18,7 +18,7 @@ crate::lang_wrapper!(
 );
 
 impl FunctionResultStream {
-    pub(super) fn new(
+    pub(crate) fn new(
         inner: baml_runtime::FunctionResultStream,
         event: Option<napi::Ref<()>>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
