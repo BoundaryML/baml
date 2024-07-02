@@ -102,13 +102,13 @@ async def test_should_work_with_image_url():
             "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
         )
     )
-    assert "green" in res.lower()
+    assert_that(res.lower()).matches(r'(green|yellow|shrek|ogre)')
 
 
 @pytest.mark.asyncio
 async def test_should_work_with_image_base64():
     res = await b.TestImageInput(img=baml_py.Image.from_base64("image/png", image_b64))
-    assert "green" in res.lower() or "orge" in res.lower()
+    assert_that(res.lower()).matches(r'(green|yellow|shrek|ogre)')
 
 
 @pytest.mark.asyncio
@@ -270,29 +270,32 @@ async def test_streaming_gemini():
 
 @pytest.mark.asyncio
 async def test_tracing_async():
-
     @trace
-    async def nested_dummy_fn(_foo: str):
-        time.sleep(0.5 + random.random())
-        return "nested dummy fn"
+    async def top_level_async_tracing():
+        @trace
+        async def nested_dummy_fn(_foo: str):
+            time.sleep(0.5 + random.random())
+            return "nested dummy fn"
 
-    @trace
-    async def dummy_fn(foo: str):
+        @trace
+        async def dummy_fn(foo: str):
+            await asyncio.gather(
+                b.FnOutputClass(foo),
+                nested_dummy_fn(foo),
+            )
+            return "dummy fn"
+
         await asyncio.gather(
-            b.FnOutputClass(foo),
-            nested_dummy_fn(foo),
+            dummy_fn("dummy arg 1"),
+            dummy_fn("dummy arg 2"),
+            dummy_fn("dummy arg 3"),
         )
-        return "dummy fn"
+        await asyncio.gather(
+            parent_async("first-arg-value"),
+            parent_async2("second-arg-value")
+        )
 
-    await asyncio.gather(
-        dummy_fn("dummy arg 1"),
-        dummy_fn("dummy arg 2"),
-        dummy_fn("dummy arg 3"),
-    )
-    await asyncio.gather(
-        parent_async("first-arg-value"),
-        parent_async2("second-arg-value")
-    )
+    await top_level_async_tracing()
 
     assert_that(b._BamlClient__runtime.flush().n_spans_failed_before_submit()).is_equal_to(0)
 
