@@ -1,5 +1,6 @@
-from typing import List, Optional
+import time
 import pytest
+from assertpy import assert_that
 from dotenv import load_dotenv
 from .base64_test_data import image_b64, audio_b64
 
@@ -246,7 +247,7 @@ async def test_streaming_claude():
 @pytest.mark.asyncio
 async def test_streaming_gemini():
     stream = b.stream.TestGemini(input="Dr.Pepper")
-    msgs: List[str] = []
+    msgs: list[str] = []
     async for msg in stream:
         if msg is not None:
             msgs.append(msg)
@@ -270,14 +271,31 @@ async def test_streaming_gemini():
 
 @pytest.mark.asyncio
 async def test_tracing_async():
-    res = await asyncio.gather(
-        parent_async("first-arg-value-1"),
-        parent_async("first-arg-value-2"),
-        parent_async("first-arg-value-3"),
-    )
-    res2 = await parent_async2("second-arg-value")
 
-    assert b.__runtime.flush().n_spans_failed_before_submit == -1, "Expected no errors in tracing."
+    @trace
+    async def nested_dummy_fn(_foo: str):
+        time.sleep(0.5 + random.random())
+        return "nested dummy fn"
+
+    @trace
+    async def dummy_fn(foo: str):
+        await asyncio.gather(
+            b.FnOutputClass(foo),
+            nested_dummy_fn(foo),
+        )
+        return "dummy fn"
+
+    await asyncio.gather(
+        dummy_fn("dummy arg 1"),
+        dummy_fn("dummy arg 2"),
+        dummy_fn("dummy arg 3"),
+    )
+    await asyncio.gather(
+        parent_async("first-arg-value"),
+        parent_async2("second-arg-value")
+    )
+
+    assert_that(b._BamlClient__runtime.flush().n_spans_failed_before_submit()).is_equal_to(0)
 
 
 def test_tracing_sync():
