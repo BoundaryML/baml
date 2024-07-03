@@ -175,6 +175,7 @@ jobs:
         with:
           workspaces: engine
           shared-key: engine-release-rust-build-${{ matrix._.target }}
+          cache-on-failure: true
 
       - name: Build Rust
         run: cargo build --release --target ${{ matrix._.target }}
