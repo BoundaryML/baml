@@ -145,6 +145,7 @@ async function runDiagnostics(): Promise<void> {
 }
 
 import type { Express } from 'express'
+import StatusBarPanel from './panels/StatusBarPanel'
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('BAML extension activating')
@@ -154,7 +155,7 @@ export function activate(context: vscode.ExtensionContext) {
   // statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100)
   // statusBarItem.text = `AI Linter Ready`
   // statusBarItem.show()
-  context.subscriptions.push(statusBarItem)
+  context.subscriptions.push(StatusBarPanel.instance)
 
   const provider = new DiagnosticCodeActionProvider()
   const selector: vscode.DocumentSelector = { scheme: 'file', language: 'baml' } // Adjust language as necessary
@@ -313,6 +314,7 @@ export function deactivate(): void {
   console.log('BAML extension deactivating')
   diagnosticsCollection.clear()
   diagnosticsCollection.dispose()
+  StatusBarPanel.instance.dispose()
   statusBarItem.dispose()
   for (const plugin of plugins) {
     if (plugin.deactivate) {

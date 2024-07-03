@@ -91,6 +91,14 @@ export function startServer(options?: LSOptions): void {
         params.errors.forEach(([uri, diagnostics]) => {
           connection.sendDiagnostics({ uri: uri, diagnostics })
         })
+        // Determine number of warnings and errors
+        const errors = params.errors.reduce((acc, [, diagnostics]) => {
+          return acc + diagnostics.filter((d) => d.severity === 1).length
+        }, 0)
+        const warnings = params.errors.reduce((acc, [, diagnostics]) => {
+          return acc + diagnostics.filter((d) => d.severity === 2).length
+        }, 0)
+        connection.sendRequest('runtime_diagnostics', { errors, warnings })
         break
       case 'error':
       case 'warn':

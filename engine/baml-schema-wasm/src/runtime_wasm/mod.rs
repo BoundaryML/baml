@@ -257,6 +257,8 @@ pub struct WasmFunction {
     pub test_cases: Vec<WasmTestCase>,
     #[wasm_bindgen(readonly)]
     pub test_snippet: String,
+    #[wasm_bindgen(readonly)]
+    pub signature: String,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -268,6 +270,31 @@ pub struct WasmSpan {
     pub start: usize,
     #[wasm_bindgen(readonly)]
     pub end: usize,
+    #[wasm_bindgen(readonly)]
+    pub start_line: usize,
+}
+
+impl From<&baml_runtime::internal_core::internal_baml_diagnostics::Span> for WasmSpan {
+    fn from(span: &baml_runtime::internal_core::internal_baml_diagnostics::Span) -> Self {
+        let (start, end) = span.line_and_column();
+        WasmSpan {
+            file_path: span.file.path().to_string(),
+            start: span.start,
+            end: span.end,
+            start_line: start.0,
+        }
+    }
+}
+
+impl Default for WasmSpan {
+    fn default() -> Self {
+        WasmSpan {
+            file_path: "".to_string(),
+            start: 0,
+            end: 0,
+            start_line: 0,
+        }
+    }
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -279,6 +306,8 @@ pub struct WasmTestCase {
     pub inputs: Vec<WasmParam>,
     #[wasm_bindgen(readonly)]
     pub error: Option<String>,
+    #[wasm_bindgen(readonly)]
+    pub span: WasmSpan,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -743,21 +772,27 @@ impl WasmRuntime {
                 );
 
                 let wasm_span = match f.span() {
-                    Some(span) => WasmSpan {
-                        file_path: span.file.path().to_string(),
-                        start: span.start,
-                        end: span.end,
-                    },
-                    None => WasmSpan {
-                        file_path: "".to_string(),
-                        start: 0,
-                        end: 0,
-                    },
+                    Some(span) => span.into(),
+                    None => WasmSpan::default(),
                 };
 
                 WasmFunction {
                     name: f.name().to_string(),
                     span: wasm_span,
+                    signature: {
+                        let inputs = f
+                            .inputs()
+                            .right()
+                            .map(|func_params| {
+                                func_params
+                                    .iter()
+                                    .map(|(k, t)| format!("{}: {}", k, t))
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            })
+                            .unwrap_or_default();
+                        format!("({}) -> {}", inputs, f.output().to_string())
+                    },
                     test_snippet: snippet,
                     test_cases: f
                         .walk_tests()
@@ -812,10 +847,16 @@ impl WasmRuntime {
                                 }
                             });
 
+                            let wasm_span = match tc.span() {
+                                Some(span) => span.into(),
+                                None => WasmSpan::default(),
+                            };
+
                             WasmTestCase {
                                 name: tc.test_case().name.clone(),
                                 inputs: params,
                                 error,
+                                span: wasm_span,
                             }
                         })
                         .collect(),

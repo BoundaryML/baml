@@ -137,8 +137,8 @@ const FileViewer = () => {
   )
 
   return (
-    <div className='flex flex-col w-full h-full overflow-x-clip'>
-      <div className='pl-2 folderFileActions'>{createFileFolder}</div>
+    <div className='flex flex-col w-full h-full overflow-x-clip pl-2'>
+      <div className='folderFileActions'>{createFileFolder}</div>
       {/* <input
         type="text"
         placeholder="Search..."
@@ -146,13 +146,14 @@ const FileViewer = () => {
         value={term}
         onChange={(e) => setTerm(e.target.value)}
       /> */}
-      <div ref={ref} className='flex flex-col h-full '>
+      <div ref={ref} className='flex flex-col h-full'>
         <Tree
-          className='truncate '
+          className='truncate'
           ref={treeRef}
           openByDefault={false}
           // initialOpenState={{ baml_src: true }}
           data={data2}
+          indent={12}
           initialOpenState={{ baml_src: true }}
           rowHeight={24}
           width={width}

@@ -5,7 +5,7 @@ import { type EditorFile, loadUrl } from '@/app/actions'
 import type { BAMLProject } from './exampleProjects'
 export async function loadProject(params: { project_id: string }, chooseDefault = false) {
   const projectGroups = await loadExampleProjects()
-  let data: BAMLProject = projectGroups.intros[0] //exampleProjects[0]
+  let data: BAMLProject = projectGroups.allProjects[0] //exampleProjects[0]
   const id = params.project_id
   if (id) {
     const exampleProject = await loadExampleProject(projectGroups, id)
@@ -15,7 +15,7 @@ export async function loadProject(params: { project_id: string }, chooseDefault 
       data = await loadUrl(id)
     }
   } else {
-    const exampleProject = projectGroups.intros[0]
+    const exampleProject = projectGroups.allProjects[0]
     const loadedProject = await loadExampleProject(projectGroups, exampleProject.id)
     if (loadedProject) {
       data = loadedProject
@@ -41,7 +41,10 @@ async function loadExampleProject(
   projectId: string,
 ): Promise<BAMLProject | undefined> {
   // Combine all projects into a single array
-  const exampleProjects = [...groupings.intros, ...groupings.advancedPromptSyntax, ...groupings.promptEngineering]
+  const exampleProjects = [...groupings.allProjects]
+  if (groupings.newProject) {
+    exampleProjects.push(groupings.newProject)
+  }
 
   // Search for the project by id
   const proj = exampleProjects.find((project) => project.id === projectId)
@@ -93,60 +96,28 @@ const getProjectFiles = async (projectPath: string): Promise<EditorFile[]> => {
 }
 
 export type BamlProjectsGroupings = {
-  intros: BAMLProject[]
-  advancedPromptSyntax: BAMLProject[]
-  promptEngineering: BAMLProject[]
+  allProjects: BAMLProject[]
+  newProject: BAMLProject
 }
 
 export async function loadExampleProjects(): Promise<BamlProjectsGroupings> {
   const exampleProjects: BamlProjectsGroupings = {
-    intros: [
+    allProjects: [
       {
-        id: 'extract-resume',
-        name: 'Introduction to BAML',
-        description: 'A simple LLM function extract a resume',
-        filePath: '/intro/extract-resume/',
-        files: [],
-      },
-      {
-        id: 'classify-message',
-        name: 'ClassifyMessage',
-        description: 'Classify a message from a user',
-        filePath: '/intro/classify-message/',
-        files: [],
-      },
-      {
-        id: 'chat-roles',
-        name: 'ChatRoles',
-        description: 'Use a sequence of system and user messages',
-        filePath: '/intro/chat-roles/',
-        files: [],
-      },
-      // {
-      //   id: 'images',
-      //   name: 'Using Vision / Image APIs',
-      //   description: 'Extract resume from image',
-      //   filePath: '/intro/images/',
-      //   files: [],
-      // },
-    ],
-    advancedPromptSyntax: [],
-    promptEngineering: [
-      {
-        id: 'chain-of-thought',
-        name: 'Chain of Thought',
-        description: 'Using chain of thought to improve results and reduce hallucinations',
-        filePath: '/prompt-engineering/chain-of-thought/',
-        files: [],
-      },
-      {
-        id: 'symbol-tuning',
-        name: 'Symbol Tuning',
-        filePath: '/prompt-engineering/symbol-tuning/',
-        description: 'Use symbol tuning to remove biases on schema property names',
+        id: 'all-projects',
+        name: 'BAML Examples',
+        description: 'All BAML examples in one place',
+        filePath: '/all-projects/',
         files: [],
       },
     ],
+    newProject: {
+      id: 'new-project',
+      name: 'New Project',
+      description: 'New project',
+      filePath: '/new-project/',
+      files: [],
+    },
   }
   return exampleProjects
 }

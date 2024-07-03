@@ -50,6 +50,9 @@ pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 #[cfg(feature = "internal")]
 pub use runtime_interface::InternalRuntimeInterface;
 
+#[cfg(feature = "internal")]
+pub use internal_baml_core as internal_core;
+
 #[cfg(not(feature = "internal"))]
 pub(crate) use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 #[cfg(not(feature = "internal"))]

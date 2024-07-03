@@ -14,6 +14,7 @@ import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
 import type { BamlVSCodePlugin } from '../types'
 import { URI } from 'vscode-uri'
+import StatusBarPanel from '../../panels/StatusBarPanel'
 
 const packageJson = require('../../../package.json') // eslint-disable-line
 
@@ -284,6 +285,16 @@ const activateClient = (
         default: {
           throw new Error('Invalid message type')
         }
+      }
+    })
+
+    client.onRequest('runtime_diagnostics', ({ errors, warnings }: { errors: number; warnings: number }) => {
+      if (errors > 0) {
+        StatusBarPanel.instance.setStatus({ status: 'fail', count: errors })
+      } else if (warnings > 0) {
+        StatusBarPanel.instance.setStatus({ status: 'warn', count: warnings })
+      } else {
+        StatusBarPanel.instance.setStatus('pass')
       }
     })
 

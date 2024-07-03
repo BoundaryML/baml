@@ -2,7 +2,7 @@
 
 import { ExampleProjectCard } from '@/app/_components/ExampleProjectCard'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useKeybindingOverrides } from '@/hooks/command-s'
@@ -12,7 +12,6 @@ import {
   CustomErrorBoundary,
   EventListener,
   FunctionPanel,
-  FunctionSelector,
   //useSelections,
 } from '@baml/playground-common'
 import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
@@ -20,7 +19,7 @@ import { Separator } from '@baml/playground-common/components/ui/separator'
 import clsx from 'clsx'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useHydrateAtoms } from 'jotai/utils'
-import { AlertTriangleIcon, Compass, FlaskConical, GitForkIcon, LinkIcon, ShareIcon } from 'lucide-react'
+import { AlertTriangleIcon, Compass, File, FlaskConical, GitForkIcon, LinkIcon, ShareIcon } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -42,10 +41,11 @@ import { CodeMirrorEditor } from './CodeMirrorEditor'
 
 import { GithubStars } from './GithubStars'
 import { InitialTour, PostTestRunTour } from './Tour'
-import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from '@baml/playground-common/shared/SettingsDialog'
+import SettingsDialog, { ShowSettingsButton } from '@baml/playground-common/shared/SettingsDialog'
 
 import FileViewer from './Tree/FileViewer'
 import { AppStateProvider } from '@baml/playground-common/shared/AppStateContext' // Import the AppStateProvider
+import { ViewSelector } from '@baml/playground-common/shared/Selectors'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   const setEditorFiles = useSetAtom(updateFileAtom)
@@ -89,10 +89,14 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
       <ResizablePanelGroup className='w-full h-full overflow-clip' direction='horizontal'>
         {!isMobile && (
           <ResizablePanel defaultSize={12} className='h-full bg-zinc-900'>
-            <div className='w-full pt-2 text-lg italic font-bold text-center'>Prompt Fiddle</div>
+            <div className='flex flex-row items-center justify-center w-full pt-2'>
+              <a href={'/'} className='flex text-lg italic font-bold text-center w-fit'>
+                Prompt Fiddle
+              </a>
+            </div>
 
             <ResizablePanelGroup className='h-full pb-4' direction='vertical'>
-              <ResizablePanel defaultSize={50} className='h-full '>
+              <ResizablePanel defaultSize={100} className='h-full '>
                 <div className='w-full px-2 pt-4 text-sm font-semibold text-center uppercase text-white/90'>
                   project files
                 </div>
@@ -101,8 +105,8 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                 </div>
               </ResizablePanel>
 
-              <ResizableHandle className='bg-vscode-contrastActiveBorder border-vscode-contrastActiveBorder' />
-              <ResizablePanel className='flex flex-col items-center w-full pt-2 tour-templates'></ResizablePanel>
+              {/* <ResizableHandle className='bg-white/10' />
+              <ResizablePanel className='flex flex-col items-center w-full pt-2 tour-templates'></ResizablePanel> */}
             </ResizablePanelGroup>
           </ResizablePanel>
         )}
@@ -144,17 +148,27 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                   </Link>
                 </Button>
               </div>
-              <div className='flex flex-col items-center justify-center h-full'>
-                <Button
-                  variant={'ghost'}
-                  className='flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foregrounde'
-                  onClick={() => {
-                    setOpenExplorePanel(true)
-                  }}
+              {project.id !== 'all-projects' && project.id !== null ? (
+                <div className='flex flex-col items-center justify-center h-full'>
+                  <Link
+                    href={`/all-projects`}
+                    target='_blank'
+                    className='flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 rounded-sm hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foreground'
+                  >
+                    <Compass size={16} strokeWidth={2} />
+                    <span className='whitespace-nowrap'>Explore Examples</span>
+                  </Link>
+                </div>
+              ) : null}
+              <div className='flex flex-col items-center justify-center h-full '>
+                <Link
+                  href={`/new-project`}
+                  target='_blank'
+                  className='flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 rounded-sm hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foreground'
                 >
-                  <Compass size={16} strokeWidth={2} />
-                  <span className='whitespace-nowrap'>Explore Examples</span>
-                </Button>
+                  <File size={16} strokeWidth={2} />
+                  <span className='whitespace-nowrap'>New project</span>
+                </Link>
               </div>
               {unsavedChanges ? (
                 <div className='flex flex-row items-center whitespace-nowrap text-muted-foreground'>
@@ -206,10 +220,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
               }}
               className='flex flex-row h-full overflow-clip'
             >
-              <ResizablePanelGroup
-                className='min-h-[200px] w-full rounded-lg border overflow-clip'
-                direction='horizontal'
-              >
+              <ResizablePanelGroup className='min-h-[200px] w-full rounded-lg overflow-clip' direction='horizontal'>
                 <ResizablePanel defaultSize={50}>
                   <div className='flex flex-col w-full py-1 pl-2 text-xs border-none items-left h-fit whitespace-nowrap'>
                     <Editable
@@ -233,7 +244,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                     <CodeMirrorEditor project={project} />
                   </div>
                 </ResizablePanel>
-                <ResizableHandle className='bg-vscode-contrastActiveBorder' />
+                <ResizableHandle className='bg-vscode-tab-activeBackground' />
                 {!isMobile && (
                   <ResizablePanel defaultSize={50} className='tour-playground'>
                     <div className='flex flex-row h-full bg-vscode-panel-background'>
@@ -268,7 +279,7 @@ const ShareButton = ({ project, projectName }: { project: BAMLProject; projectNa
   return (
     <Button
       variant={'default'}
-      className='h-full py-1 shadow-md bg-zinc-900/80 gap-x-1 text-vscode-button-foreground hover:bg-indigo-600 w-fit whitespace-nowrap'
+      className='h-full py-1 bg-transparent shadow-md gap-x-1 text-vscode-button-foreground hover:bg-indigo-600 w-fit whitespace-nowrap'
       disabled={loading}
       onClick={async () => {
         setLoading(true)
@@ -323,13 +334,10 @@ const PlaygroundView = () => {
               <SettingsDialog />
               <div className='relative flex flex-col w-full gap-2 pr-0'>
                 <div className='relative flex flex-row gap-2'>
-                  <FunctionSelector />
-                  <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'>
-                    <ShowSettingsButton
-                      buttonClassName='h-8 px-2 bg-black/70 hover:bg-white text-white hover:text-black'
-                      iconClassName='h-5'
-                    />
+                  <div className='flex flex-row items-start justify-start gap-2 pr-1 grow'>
+                    <ViewSelector />
                   </div>
+                  <div className='relative flex flex-row items-center justify-end gap-2 pr-1 grow'></div>
                 </div>
                 {/* <Separator className="bg-vscode-textSeparator-foreground" /> */}
                 <FunctionPanel />
