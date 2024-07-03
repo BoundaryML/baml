@@ -330,8 +330,12 @@ impl ExperimentalTracingInterface for BamlRuntime {
         }
     }
 
-    fn flush(&self) -> Result<TraceStats> {
+    fn flush(&self) -> Result<()> {
         self.tracer.flush()
+    }
+
+    fn drain_stats(&self) -> InnerTraceStats {
+        self.tracer.drain_stats()
     }
 
     #[cfg(not(target_arch = "wasm32"))]

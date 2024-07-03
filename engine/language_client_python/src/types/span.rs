@@ -49,7 +49,7 @@ impl BamlSpan {
         result: PyObject,
         ctx: &RuntimeContextManager,
     ) -> PyResult<Option<String>> {
-        log::info!("Finishing span: {:?}", self.inner);
+        log::trace!("Finishing span: {:?}", self.inner);
         let result = parse_py_type(result.into_bound(py).to_object(py), true)?;
 
         let span = self

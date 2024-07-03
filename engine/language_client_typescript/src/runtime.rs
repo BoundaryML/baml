@@ -226,14 +226,15 @@ impl BamlRuntime {
     }
 
     #[napi]
-    pub fn flush(&mut self, env: Env) -> napi::Result<TraceStats> {
-        let res = self
-            .inner
+    pub fn flush(&mut self, env: Env) -> napi::Result<()> {
+        self.inner
             .flush()
-            .map(|stats| stats.into())
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()));
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+    }
 
-        res
+    #[napi]
+    pub fn drain_stats(&self) -> TraceStats {
+        self.inner.drain_stats().into()
     }
 }
 

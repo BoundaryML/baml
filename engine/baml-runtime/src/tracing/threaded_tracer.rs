@@ -6,6 +6,7 @@ use web_time::{Duration, Instant};
 use crate::{
     on_log_event::{LogEvent, LogEventCallbackSync, LogEventMetadata},
     tracing::api_wrapper::core_types::{ContentPart, MetadataType, Template, ValueType},
+    TraceStats,
 };
 
 use super::api_wrapper::{core_types::LogSchema, APIConfig, APIWrapper, BoundaryAPI};
@@ -15,13 +16,13 @@ const MAX_TRACE_SEND_CONCURRENCY: usize = 10;
 enum TxEventSignal {
     #[allow(dead_code)]
     Stop,
-    Flush,
+    Flush(u128),
     Submit(LogSchema),
 }
 
 enum ProcessorStatus {
     Active,
-    Done,
+    Done(u128),
 }
 
 struct DeliveryThread {
@@ -31,6 +32,7 @@ struct DeliveryThread {
     rt: tokio::runtime::Runtime,
     max_batch_size: usize,
     max_concurrency: Arc<tokio::sync::Semaphore>,
+    stats: TraceStats,
 }
 
 impl DeliveryThread {
@@ -39,6 +41,7 @@ impl DeliveryThread {
         span_rx: mpsc::Receiver<TxEventSignal>,
         stop_tx: watch::Sender<ProcessorStatus>,
         max_batch_size: usize,
+        stats: TraceStats,
     ) -> Self {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -49,35 +52,47 @@ impl DeliveryThread {
             rt,
             max_batch_size,
             max_concurrency: tokio::sync::Semaphore::new(MAX_TRACE_SEND_CONCURRENCY).into(),
+            stats,
         }
     }
 
-    fn process_batch(&self, batch: Vec<LogSchema>) {
-        log::debug!("Processing batch of size: {}", batch.len());
-        for work in batch {
-            let api_config = self.api_config.clone();
-            let semaphore = self.max_concurrency.clone();
-            self.rt.spawn(async move {
-                let Ok(acquired) = semaphore.acquire().await else {
-                    log::warn!(
-                        "Failed to acquire semaphore because it was closed - not sending span"
-                    );
-                    return;
-                };
-                match api_config.log_schema(&work).await {
-                    Ok(_) => {
-                        log::debug!(
-                            "Successfully sent log schema: {} - {:?}",
-                            work.event_id,
-                            work.context.event_chain.last()
+    async fn process_batch(&self, batch: Vec<LogSchema>) {
+        let work = batch
+            .into_iter()
+            .map(|work| {
+                let api_config = self.api_config.clone();
+                let semaphore = self.max_concurrency.clone();
+                let stats = self.stats.clone();
+                stats.guard().send();
+
+                let stats_clone = stats.clone();
+                async move {
+                    let guard = stats_clone.guard();
+                    let Ok(_acquired) = semaphore.acquire().await else {
+                        log::warn!(
+                            "Failed to acquire semaphore because it was closed - not sending span"
                         );
-                    }
-                    Err(e) => {
-                        log::warn!("Unable to emit BAML logs: {}", e);
+                        return;
+                    };
+                    match api_config.log_schema(&work).await {
+                        Ok(_) => {
+                            guard.done();
+                            log::debug!(
+                                "Successfully sent log schema: {} - {:?}",
+                                work.event_id,
+                                work.context.event_chain.last()
+                            );
+                        }
+                        Err(e) => {
+                            log::warn!("Unable to emit BAML logs: {}", e);
+                        }
                     }
                 }
-            });
-        }
+            })
+            .collect::<Vec<_>>();
+
+        // Wait for all the futures to complete
+        futures::future::join_all(work).await;
     }
 
     fn run(&self) {
@@ -88,34 +103,35 @@ impl DeliveryThread {
             let (batch_full, flush, exit) =
                 match self.span_rx.recv_timeout(Duration::from_millis(100)) {
                     Ok(TxEventSignal::Submit(work)) => {
+                        self.stats.guard().submit();
                         batch.push(work);
-                        (batch.len() >= self.max_batch_size, false, false)
+                        (batch.len() >= self.max_batch_size, None, false)
                     }
-                    Ok(TxEventSignal::Flush) => (false, true, false),
-                    Ok(TxEventSignal::Stop) => (false, false, true),
-                    Err(mpsc::RecvTimeoutError::Timeout) => (false, false, false),
-                    Err(mpsc::RecvTimeoutError::Disconnected) => (false, false, true),
+                    Ok(TxEventSignal::Flush(id)) => (false, Some(id), false),
+                    Ok(TxEventSignal::Stop) => (false, None, true),
+                    Err(mpsc::RecvTimeoutError::Timeout) => (false, None, false),
+                    Err(mpsc::RecvTimeoutError::Disconnected) => (false, None, true),
                 };
 
             let time_trigger = now.elapsed().as_millis() >= 1000;
 
             let should_process_batch =
-                (batch_full || flush || exit || time_trigger) && !batch.is_empty();
+                (batch_full || flush.is_some() || exit || time_trigger) && !batch.is_empty();
 
             // Send events every 1 second or when the batch is full
             if should_process_batch {
-                self.process_batch(std::mem::take(&mut batch));
+                self.rt
+                    .block_on(self.process_batch(std::mem::take(&mut batch)));
             }
 
             if should_process_batch || time_trigger {
                 now = std::time::Instant::now();
             }
 
-            if flush {
-                match self.stop_tx.send(ProcessorStatus::Done) {
+            if let Some(id) = flush {
+                match self.stop_tx.send(ProcessorStatus::Done(id)) {
                     Ok(_) => {}
                     Err(e) => {
-                        println!("Error sending flush signal: {:?}", e);
                         log::error!("Error sending flush signal: {:?}", e);
                     }
                 }
@@ -134,12 +150,14 @@ pub(super) struct ThreadedTracer {
     #[allow(dead_code)]
     join_handle: std::thread::JoinHandle<()>,
     log_event_callback: Arc<Mutex<Option<LogEventCallbackSync>>>,
+    stats: TraceStats,
 }
 
 impl ThreadedTracer {
     fn start_worker(
         api_config: APIWrapper,
         max_batch_size: usize,
+        stats: TraceStats,
     ) -> (
         mpsc::Sender<TxEventSignal>,
         watch::Receiver<ProcessorStatus>,
@@ -148,15 +166,15 @@ impl ThreadedTracer {
         let (span_tx, span_rx) = mpsc::channel();
         let (stop_tx, stop_rx) = watch::channel(ProcessorStatus::Active);
         let join_handle = std::thread::spawn(move || {
-            DeliveryThread::new(api_config, span_rx, stop_tx, max_batch_size).run();
+            DeliveryThread::new(api_config, span_rx, stop_tx, max_batch_size, stats).run();
         });
 
         (span_tx, stop_rx, join_handle)
     }
 
-    pub fn new(api_config: &APIWrapper, max_batch_size: usize) -> Self {
+    pub fn new(api_config: &APIWrapper, max_batch_size: usize, stats: TraceStats) -> Self {
         let (span_tx, stop_rx, join_handle) =
-            Self::start_worker(api_config.clone(), max_batch_size);
+            Self::start_worker(api_config.clone(), max_batch_size, stats.clone());
 
         Self {
             api_config: Arc::new(api_config.clone()),
@@ -164,11 +182,16 @@ impl ThreadedTracer {
             stop_rx,
             join_handle,
             log_event_callback: Arc::new(Mutex::new(None)),
+            stats,
         }
     }
 
     pub fn flush(&self) -> Result<()> {
-        self.span_tx.send(TxEventSignal::Flush)?;
+        let id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        self.span_tx.send(TxEventSignal::Flush(id))?;
 
         let flush_start = Instant::now();
 
@@ -176,7 +199,12 @@ impl ThreadedTracer {
             {
                 match *self.stop_rx.borrow() {
                     ProcessorStatus::Active => {}
-                    ProcessorStatus::Done => return Ok(()),
+                    ProcessorStatus::Done(r_id) if r_id >= id => {
+                        return Ok(());
+                    }
+                    ProcessorStatus::Done(id) => {
+                        // Old flush, ignore
+                    }
                 }
             }
             std::thread::sleep(Duration::from_millis(100));
@@ -193,8 +221,6 @@ impl ThreadedTracer {
     }
 
     pub fn submit(&self, mut event: LogSchema) -> Result<()> {
-        log::debug!("Submitting work {:#?}", event.event_id);
-
         let callback = self.log_event_callback.lock().unwrap();
         if let Some(ref callback) = *callback {
             let event = event.clone();
@@ -215,7 +241,7 @@ impl ThreadedTracer {
                         Template::Single(text) => Some(text),
                         Template::Multiple(chat_prompt) => {
                             serde_json::to_string_pretty(&chat_prompt).ok().or_else(|| {
-                                log::info!(
+                                log::debug!(
                                     "Failed to serialize chat prompt for event {}",
                                     event.event_id
                                 );
@@ -243,7 +269,7 @@ impl ThreadedTracer {
                     _ => serde_json::to_string_pretty(&output.value)
                         .ok()
                         .or_else(|| {
-                            log::info!(
+                            log::debug!(
                                 "Failed to serialize output value for event {}",
                                 event.event_id
                             );

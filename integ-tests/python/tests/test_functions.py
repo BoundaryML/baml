@@ -7,6 +7,9 @@ from .base64_test_data import image_b64, audio_b64
 load_dotenv()
 import baml_py
 from ..baml_client import b
+from ..baml_client.globals import (
+    DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME,
+)
 from ..baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
@@ -102,13 +105,13 @@ async def test_should_work_with_image_url():
             "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
         )
     )
-    assert_that(res.lower()).matches(r'(green|yellow|shrek|ogre)')
+    assert_that(res.lower()).matches(r"(green|yellow|shrek|ogre)")
 
 
 @pytest.mark.asyncio
 async def test_should_work_with_image_base64():
     res = await b.TestImageInput(img=baml_py.Image.from_base64("image/png", image_b64))
-    assert_that(res.lower()).matches(r'(green|yellow|shrek|ogre)')
+    assert_that(res.lower()).matches(r"(green|yellow|shrek|ogre)")
 
 
 @pytest.mark.asyncio
@@ -184,6 +187,7 @@ async def test_streaming():
 
     start_time = asyncio.get_event_loop().time()
     last_msg_time = start_time
+    first_msg_time = start_time + 10
     async for msg in stream:
         msgs.append(str(msg))
         if len(msgs) == 1:
@@ -269,7 +273,8 @@ async def test_streaming_gemini():
 
 
 @pytest.mark.asyncio
-async def test_tracing_async():
+async def test_tracing_async_only():
+
     @trace
     async def top_level_async_tracing():
         @trace
@@ -291,13 +296,26 @@ async def test_tracing_async():
             dummy_fn("dummy arg 3"),
         )
         await asyncio.gather(
-            parent_async("first-arg-value"),
-            parent_async2("second-arg-value")
+            parent_async("first-arg-value"), parent_async2("second-arg-value")
         )
+        return 1
 
-    await top_level_async_tracing()
+    # Clear any existing traces
+    DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.flush()
+    _ = DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.drain_stats()
 
-    assert_that(b._BamlClient__runtime.flush().n_spans_failed_before_submit()).is_equal_to(0)
+    res = await top_level_async_tracing()
+    assert_that(res).is_equal_to(1)
+
+    DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.flush()
+    stats = DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.drain_stats()
+    print("STATS", stats)
+    assert_that(stats.started).is_equal_to(15)
+    assert_that(stats.finalized).is_equal_to(stats.started)
+    assert_that(stats.submitted).is_equal_to(stats.started)
+    assert_that(stats.sent).is_equal_to(stats.started)
+    assert_that(stats.done).is_equal_to(stats.started)
+    assert_that(stats.failed).is_equal_to(0)
 
 
 def test_tracing_sync():
@@ -318,9 +336,11 @@ async def test_tracing_thread_pool_async():
 async def test_tracing_async_gather():
     await trace_async_gather()
 
+
 @pytest.mark.asyncio
 async def test_tracing_async_gather_top_level():
     await asyncio.gather(*[async_dummy_func("second-dummycall-arg") for _ in range(10)])
+
 
 import concurrent.futures
 
@@ -347,7 +367,9 @@ async def trace_thread_pool_async():
 
 @trace
 async def trace_async_gather():
-    await asyncio.gather(*[async_dummy_func("handcrafted-artisan-arg") for _ in range(10)])
+    await asyncio.gather(
+        *[async_dummy_func("handcrafted-artisan-arg") for _ in range(10)]
+    )
 
 
 @trace

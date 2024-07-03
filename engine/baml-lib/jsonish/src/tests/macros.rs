@@ -30,7 +30,7 @@ macro_rules! test_deserializer {
 
             let value = result.unwrap();
             // log::info!("{}", value);
-            log::info!("Score: {}", value.score());
+            log::trace!("Score: {}", value.score());
             let value: BamlValue = value.into();
             let json_value = json!(value);
 

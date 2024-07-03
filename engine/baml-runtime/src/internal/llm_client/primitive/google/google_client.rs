@@ -148,7 +148,7 @@ impl SseResponseTrait for GoogleClient {
         Ok(Box::pin(
             resp.bytes_stream()
                 .eventsource()
-                .inspect(|event| log::info!("Received event: {:?}", event))
+                .inspect(|event| log::trace!("Received event: {:?}", event))
                 .take_while(|event| {
                     std::future::ready(event.as_ref().is_ok_and(|e| e.data != "data: \n"))
                 })
