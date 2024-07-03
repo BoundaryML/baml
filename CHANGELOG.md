@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.46.0](https://github.com/boundaryml/baml/compare/0.45.0..0.46.0) - 2024-07-03
+
+### Bug Fixes
+
+- Fixed tracing issues for Boundary Studio (#740) - ([77a4db7](https://github.com/boundaryml/baml/commit/77a4db7ef4b939636472ad4975d74e9d1a577cbf)) - Samuel Lijin
+- Fixed flush() to be more reliable  (#744) - ([9dd5fda](https://github.com/boundaryml/baml/commit/9dd5fdad5c2897b49a5a536df2e9ef775857a39d)) - Samuel Lijin
+- Remove error when user passes in extra fields in a class (#746) - ([2755b43](https://github.com/boundaryml/baml/commit/2755b43257f9405ae66a30982d9711fc3f2c0854)) - aaronvg
+
+### Features
+- Add support for base_url for the google-ai provider (#747) - ([005b1d9](https://github.com/boundaryml/baml/commit/005b1d93b7f7d2aa12a1487911766cccd9c25e98)) - hellovai
+- Playground UX improvements (#742) - ([5cb56fd](https://github.com/boundaryml/baml/commit/5cb56fdc39496f0aedacd79766c0e93cb0e401b8)) - hellovai
+- Prompt Fiddle now auto-switches functions when to change files (#745)
+
+### Documentation
+
+- Added a large example project on promptfiddle.com (#741) - ([f80da1e](https://github.com/boundaryml/baml/commit/f80da1e1dd11f0457b5789bc9ce6923a8ed88b51)) - aaronvg
+- Mark ruby as in beta (#743) - ([901109d](https://github.com/boundaryml/baml/commit/901109dbb327e6e3e1b65fda37100fcd45f97e07)) - Samuel Lijin
+
+
 ## [0.45.0](https://github.com/boundaryml/baml/compare/0.44.0..0.45.0) - 2024-06-29
 
 ### Bug Fixes
