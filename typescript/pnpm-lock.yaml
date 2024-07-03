@@ -211,6 +211,9 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.4.0
         version: 3.7.0(react-dom@18.3.1)(react@18.3.1)
+      '@uiw/codemirror-extensions-hyper-link':
+        specifier: ^4.22.2
+        version: 4.22.2(@codemirror/state@6.4.1)(@codemirror/view@6.28.2)
       '@uiw/codemirror-extensions-langs':
         specifier: ^4.21.25
         version: 4.22.2(@codemirror/autocomplete@6.16.3)(@codemirror/language-data@6.5.1)(@codemirror/language@6.10.2)(@codemirror/legacy-modes@6.4.0)(@codemirror/state@6.4.1)(@codemirror/view@6.28.2)(@lezer/common@1.2.1)(@lezer/highlight@1.2.0)(@lezer/javascript@1.4.17)(@lezer/lr@1.4.1)
@@ -906,6 +909,9 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.4.0
         version: 3.7.0(react-dom@18.3.1)(react@18.3.1)
+      '@uiw/codemirror-extensions-hyper-link':
+        specifier: ^4.22.2
+        version: 4.22.2(@codemirror/state@6.4.1)(@codemirror/view@6.28.2)
       '@uiw/react-codemirror':
         specifier: ^4.21.25
         version: 4.22.2(@babel/runtime@7.24.7)(@codemirror/autocomplete@6.16.3)(@codemirror/language@6.10.2)(@codemirror/lint@6.8.1)(@codemirror/search@6.5.6)(@codemirror/state@6.4.1)(@codemirror/theme-one-dark@6.1.2)(@codemirror/view@6.28.2)(codemirror@6.0.1)(react-dom@18.3.1)(react@18.3.1)
@@ -5666,6 +5672,16 @@ packages:
       '@codemirror/language': 6.10.2
       '@codemirror/lint': 6.8.1
       '@codemirror/search': 6.5.6
+      '@codemirror/state': 6.4.1
+      '@codemirror/view': 6.28.2
+    dev: false
+
+  /@uiw/codemirror-extensions-hyper-link@4.22.2(@codemirror/state@6.4.1)(@codemirror/view@6.28.2):
+    resolution: {integrity: sha512-mwIIS5vP5xXOZTuUDqGCiKU4QVrrFC2eh5EO2fd++uV7V0sSYwLdZ8HkkkRjC7dtFQdJc1W8+pXiOJpWEsTYsw==}
+    peerDependencies:
+      '@codemirror/state': '>=6.0.0'
+      '@codemirror/view': '>=6.0.0'
+    dependencies:
       '@codemirror/state': 6.4.1
       '@codemirror/view': 6.28.2
     dev: false

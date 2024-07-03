@@ -21,7 +21,7 @@ class ClassWithImage {
 }
 
 // chat role user present
-function DescribeImage2(classWithImage: ClassWithImage, img2: image) -> string {
+function DescribeImage2(classWithImage: ClassWithImage, img2: image) -> string { 
   client GPT4Turbo
   prompt #"
     {{ _.role("user") }}

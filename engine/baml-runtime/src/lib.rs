@@ -330,7 +330,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
         }
     }
 
-    fn flush(&self) -> Result<()> {
+    fn flush(&self) -> Result<TraceStats> {
         self.tracer.flush()
     }
 

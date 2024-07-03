@@ -1,0 +1,80 @@
+import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image } from "@boundaryml/baml"
+import { 
+  {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%} 
+} from "./types"
+import TypeBuilder from "./type_builder"
+
+export type RecursivePartialNull<T> = T extends object
+  ? {
+      [P in keyof T]?: RecursivePartialNull<T[P]>;
+    }
+  : T | null;
+
+export class BamlClient {
+  private runtime: BamlRuntime
+  private ctx_manager: BamlCtxManager
+  private stream_client: BamlStreamClient
+
+  constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager) {
+    this.runtime = runtime
+    this.ctx_manager = ctx_manager
+    this.stream_client = new BamlStreamClient(runtime, ctx_manager)
+  }
+
+  get stream() {
+    return this.stream_client
+  }  
+
+  {% for fn in funcs %}
+  async {{ fn.name }}(
+      {% for (name, optional, type) in fn.args -%}
+      {{name}}{% if optional %}?{% endif %}: {{type}},
+      {%- endfor %}
+      __baml_options__?: { tb?: TypeBuilder }
+  ): Promise<{{fn.return_type}}> {
+    const raw = await this.runtime.callFunction(
+      "{{fn.name}}",
+      {
+        {% for (name, optional, type) in fn.args -%}
+        "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
+        {%- endfor %}
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return raw.parsed() as {{fn.return_type}}
+  }
+  {% endfor %}
+}
+
+class BamlStreamClient {
+  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
+
+  {% for fn in funcs %}
+  {{ fn.name }}(
+      {% for (name, optional, type) in fn.args -%}
+      {{name}}{% if optional %}?{% endif %}: {{type}},
+      {%- endfor %}
+      __baml_options__?: { tb?: TypeBuilder }
+  ): BamlStream<RecursivePartialNull<{{ fn.return_type }}>, {{ fn.return_type }}> {
+    const raw = this.runtime.streamFunction(
+      "{{fn.name}}",
+      {
+        {% for (name, optional, type) in fn.args -%}
+        "{{name}}": {{name}}{% if optional %} ?? null{% endif %}{% if !loop.last %},{% endif %}
+        {%- endfor %}
+      },
+      undefined,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return new BamlStream<RecursivePartialNull<{{ fn.return_type }}>, {{ fn.return_type }}>(
+      raw,
+      (a): a is RecursivePartialNull<{{ fn.return_type }}> => a,
+      (a): a is {{ fn.return_type }} => a,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  {% endfor %}
+}

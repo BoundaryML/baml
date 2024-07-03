@@ -4,7 +4,13 @@ import { BAML_DIR } from '@/lib/constants'
 import type { BAMLProject } from '@/lib/exampleProjects'
 import { BAML, theme } from '@baml/codemirror-lang'
 import type { ParserDatabase } from '@baml/common'
-import { diagnositicsAtom, numErrorsAtom, updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
+import {
+  availableFunctionsAtom,
+  diagnositicsAtom,
+  numErrorsAtom,
+  selectedFunctionAtom,
+  updateFileAtom,
+} from '@baml/playground-common/baml_wasm_web/EventListener'
 import { atomStore } from '@baml/playground-common/baml_wasm_web/JotaiProvider'
 import { projectFamilyAtom, runtimeFamilyAtom } from '@baml/playground-common/baml_wasm_web/baseAtoms'
 import { Button } from '@baml/playground-common/components/ui/button'
@@ -13,6 +19,7 @@ import { type Diagnostic, forceLinting, linter, openLintPanel } from '@codemirro
 import { langs } from '@uiw/codemirror-extensions-langs'
 import CodeMirror, { Compartment, EditorView, type Extension, type ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { hyperLink, hyperLinkExtension, hyperLinkStyle } from '@uiw/codemirror-extensions-hyper-link'
 import Link from 'next/link'
 import { useEffect, useRef } from 'react'
 import {
@@ -123,7 +130,7 @@ function makeLinter() {
 }
 
 const comparment = new Compartment()
-const extensions: Extension[] = [BAML(), EditorView.lineWrapping, comparment.of(makeLinter())]
+const extensions: Extension[] = [BAML(), EditorView.lineWrapping, comparment.of(makeLinter()), hyperLink]
 
 const extensionMap = {
   ts: [langs.tsx(), EditorView.lineWrapping],
@@ -141,6 +148,9 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   const activeFileContent = useAtomValue(activeFileContentAtom)
   const updateFile = useSetAtom(updateFileAtom)
 
+  const availableFunctions = useAtomValue(availableFunctionsAtom)
+  const setSelectedFunction = useSetAtom(selectedFunctionAtom)
+
   const ref = useRef<ReactCodeMirrorRef>({})
 
   // force linting on file changes so playground updates
@@ -152,6 +162,14 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
       })
     }
   }, [JSON.stringify(editorFiles)])
+
+  useEffect(() => {
+    const func = availableFunctions.find((f) => f.span.file_path === activeFile)
+    if (func) {
+      console.log('setting selected function', func.name)
+      setSelectedFunction(func.name)
+    }
+  }, [JSON.stringify(editorFiles.map((f) => f.path)), activeFile, availableFunctions])
 
   const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
 
@@ -227,7 +245,7 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
         </div>
         <div className='absolute -top-8 right-0 h-[20px] p-2'>
           {!activeFile?.endsWith('.baml') && (
-            <div className='p-1 text-xs bg-gray-500 rounded-sm text-primary'>
+            <div className='p-1 text-xs bg-yellow-600 rounded-sm text-primary'>
               This is an example read-only file on how to use this in your code
             </div>
           )}
