@@ -2,6 +2,8 @@ name: BAML Release
 
 on:
   push:
+    branches:
+      - sam/arm64-build
     tags:
       - "test-release/*.*"
       - "*.*"
@@ -155,9 +157,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Install aarch64-linux-gnu
-        if: matrix._.target == 'aarch64-unknown-linux-gnu'
-        run: sudo apt-get install gcc-aarch64-linux-gnu -y
+      # - name: Install aarch64-linux-gnu
+      #   if: matrix._.target == 'aarch64-unknown-linux-gnu'
+      #   run: sudo apt-get install gcc-aarch64-linux-gnu -y
 
       # This doesn't work aarch64, so we build each target separately
       # - name: Build Rust
@@ -178,13 +180,13 @@ jobs:
           args: --release --out engine/language_client_python/dist --manifest-path engine/language_client_python/Cargo.toml
           sccache: "true"
           manylinux: ${{ matrix._.host == 'ubuntu-latest' && '2_27' || null }}
-          before-script-linux: |
-            if command -v yum &> /dev/null; then
-                yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
-            else
-                # If we're running on debian-based system.
-                apt update -y && apt-get install -y libssl-dev openssl pkg-config
-            fi
+          # before-script-linux: |
+          #   if command -v yum &> /dev/null; then
+          #       yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
+          #   else
+          #       # If we're running on debian-based system.
+          #       apt update -y && apt-get install -y libssl-dev openssl pkg-config
+          #   fi
 
       # Upload
       - name: Upload Python
@@ -218,7 +220,7 @@ jobs:
       # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
       # it is pinned to this github actions filename, so renaming this file is not safe!!
       - name: Publish package to PyPI
-        if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
         uses: pypa/gh-action-pypi-publish@release/v1
 
   publish-to-npm:
@@ -266,7 +268,7 @@ jobs:
         working-directory: engine/language_client_typescript
 
       - name: Publish
-        if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
         run: |
           npm publish --access public
         working-directory: engine/language_client_typescript
@@ -277,7 +279,7 @@ jobs:
   # publish-vscode:
   #   environment: release
   #   needs: [build-release, build-wasm]
-  #   if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
+  #   if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v4
@@ -322,7 +324,7 @@ jobs:
   #       run: pnpm install --frozen-lockfile
   #       working-directory: typescript/
   #     - name: Publish
-  #       if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
+  #       if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
   #       run: |
   #         pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
   #       working-directory: typescript/vscode-ext/packages
