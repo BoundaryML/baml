@@ -2,8 +2,6 @@ name: BAML Release
 
 on:
   push:
-    branches:
-      - sam/arm64-build
     tags:
       - "test-release/*.*"
       - "*.*"
