@@ -126,6 +126,13 @@ jobs:
             host: ubuntu-latest
             # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
             container: quay.io/pypa/manylinux_2_28_x86_64:latest	
+            setup-run: |
+              if command -v yum &> /dev/null; then
+                  yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
+              else
+                  # If we're running on debian-based system.
+                  apt update -y && apt-get install -y libssl-dev openssl pkg-config
+              fi
             node_build: pnpm build --target x86_64-unknown-linux-gnu --use-napi-cross
 
     name: Build ${{ matrix._.target }}
@@ -154,6 +161,15 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix._.target }}
+
+      - run: ${{ matrix._.setup-run }}
+          # before-script-linux: |
+          #   if command -v yum &> /dev/null; then
+          #       yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
+          #   else
+          #       # If we're running on debian-based system.
+          #       apt update -y && apt-get install -y libssl-dev openssl pkg-config
+          #   fi
       # Install steps
       - name: PNPM Install
         run: pnpm install --frozen-lockfile
@@ -183,8 +199,8 @@ jobs:
           target: ${{ matrix._.target }}
           command: build
           args: --release --out engine/language_client_python/dist --manifest-path engine/language_client_python/Cargo.toml
-          sccache: false
-          manylinux: null
+          #sccache: false
+          container: off
           # manylinux: ${{ matrix._.host == 'ubuntu-latest' && '2_28' || null }}
           # before-script-linux: |
           #   if command -v yum &> /dev/null; then
