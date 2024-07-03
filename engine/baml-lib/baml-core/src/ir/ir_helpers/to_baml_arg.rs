@@ -186,18 +186,15 @@ pub fn validate_arg(
                             }
                         }
                     } else {
-                        // throw an error if there are remaining fields
-                        // instead of dropping them silently
-                        // TODO, these extra dynamic fields should also be validated according to the runtime overrides.
-                        // and we should also render the key by its alias.
-                        for key in obj.keys() {
-                            if !fields.contains_key(key) {
-                                scope.push_error(format!(
-                                    "Unexpected field `{}` for class {}. Mark the class as @@dynamic if you want to allow additional fields.",
-                                    key, name
-                                ));
-                            }
-                        }
+                        // We let it slide here... but we should probably emit a warning like this:
+                        // for key in obj.keys() {
+                        //     if !fields.contains_key(key) {
+                        //         scope.push_error(format!(
+                        //             "Unexpected field `{}` for class {}. Mark the class as @@dynamic if you want to allow additional fields.",
+                        //             key, name
+                        //         ));
+                        //     }
+                        // }
                     }
 
                     Some(BamlValue::Class(name.to_string(), fields))
