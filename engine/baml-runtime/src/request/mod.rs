@@ -4,7 +4,7 @@ use web_time::Duration;
 fn builder() -> reqwest::ClientBuilder {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
-            reqwest::Client::builder();
+            reqwest::Client::builder()
         } else {
             reqwest::Client::builder()
                 // NB: we can NOT set a total request timeout here: our users
@@ -21,14 +21,15 @@ pub(crate) fn create_client() -> Result<reqwest::Client> {
 }
 
 pub(crate) fn create_tracing_client() -> Result<reqwest::Client> {
-    if #[cfg(target_arch = "wasm32")] {
-        let cb = builder();
-    } else {
-        let cb =builder()
-            // Wait up to 30s to send traces to the backend
-            .read_timeout(Duration::from_secs(30));
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            let cb = builder();
+        } else {
+            let cb =builder()
+                // Wait up to 30s to send traces to the backend
+                .read_timeout(Duration::from_secs(30));
+        }
     }
 
-    cb.build()
-        .context("Failed to create reqwest client")
+    cb.build().context("Failed to create reqwest client")
 }

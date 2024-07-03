@@ -10,6 +10,8 @@ use crate::{
 
 use super::api_wrapper::{core_types::LogSchema, APIConfig, APIWrapper, BoundaryAPI};
 
+const MAX_TRACE_SEND_CONCURRENCY: usize = 10;
+
 enum TxEventSignal {
     #[allow(dead_code)]
     Stop,
@@ -28,6 +30,7 @@ struct DeliveryThread {
     stop_tx: watch::Sender<ProcessorStatus>,
     rt: tokio::runtime::Runtime,
     max_batch_size: usize,
+    max_concurrency: Arc<tokio::sync::Semaphore>,
 }
 
 impl DeliveryThread {
@@ -45,14 +48,22 @@ impl DeliveryThread {
             stop_tx,
             rt,
             max_batch_size,
+            max_concurrency: tokio::sync::Semaphore::new(MAX_TRACE_SEND_CONCURRENCY).into(),
         }
     }
 
     fn process_batch(&self, batch: Vec<LogSchema>) {
-        log::info!("Processing batch of size: {}", batch.len());
+        log::debug!("Processing batch of size: {}", batch.len());
         for work in batch {
             let api_config = self.api_config.clone();
+            let semaphore = self.max_concurrency.clone();
             self.rt.spawn(async move {
+                let Ok(acquired) = semaphore.acquire().await else {
+                    log::warn!(
+                        "Failed to acquire semaphore because it was closed - not sending span"
+                    );
+                    return;
+                };
                 match api_config.log_schema(&work).await {
                     Ok(_) => {
                         log::debug!(

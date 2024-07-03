@@ -318,6 +318,9 @@ async def test_tracing_thread_pool_async():
 async def test_tracing_async_gather():
     await trace_async_gather()
 
+@pytest.mark.asyncio
+async def test_tracing_async_gather_top_level():
+    await asyncio.gather(*[async_dummy_func("second-dummycall-arg") for _ in range(10)])
 
 import concurrent.futures
 
@@ -344,7 +347,7 @@ async def trace_thread_pool_async():
 
 @trace
 async def trace_async_gather():
-    await asyncio.gather(*[async_dummy_func("second-dummycall-arg") for _ in range(10)])
+    await asyncio.gather(*[async_dummy_func("handcrafted-artisan-arg") for _ in range(10)])
 
 
 @trace
