@@ -15,7 +15,7 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
-use baml_types::{BamlMedia};
+use baml_types::BamlMedia;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
@@ -26,6 +26,7 @@ struct PostRequestProperities {
     default_role: String,
     api_key: Option<String>,
     headers: HashMap<String, String>,
+    base_url: String,
     proxy_url: Option<String>,
     model_id: Option<String>,
     properties: HashMap<String, serde_json::Value>,
@@ -75,6 +76,11 @@ fn resolve_properties(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .or_else(|| Some("gemini-1.5-flash".to_string()));
 
+    let base_url = properties
+        .remove("base_url")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "https://generativelanguage.googleapis.com/v1".to_string());
+
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
             v.iter()
@@ -103,6 +109,7 @@ fn resolve_properties(
         api_key,
         headers,
         properties,
+        base_url,
         model_id,
         proxy_url: ctx.env.get("BOUNDARY_PROXY_URL").map(|s| s.to_string()),
     })
@@ -277,7 +284,8 @@ impl RequestBuilder for GoogleClient {
         }
 
         let baml_original_url = format!(
-            "https://generativelanguage.googleapis.com/v1/models/{}:{}",
+            "{}/models/{}:{}",
+            self.properties.base_url,
             self.properties.model_id.as_ref().unwrap_or(&"".to_string()),
             should_stream
         );
