@@ -1,6 +1,11 @@
 name: BAML Release
 
 on:
+  workflow_dispatch: {}
+  # need to run this periodically on the default branch to populate the build cache
+  schedule:
+    # daily at 2am PST
+    - cron: 0 10 * * *
   push:
     tags:
       - "test-release/*.*"
@@ -163,7 +168,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-          shared-key: ${{ env.GITHUB_JOB }}-engine-${{ matrix._.target }}
+          shared-key: engine-${{ github.job }}-${{ matrix._.target }}
           cache-on-failure: true
 
       - name: Build Rust
