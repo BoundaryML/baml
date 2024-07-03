@@ -38,12 +38,6 @@ export const activeFileNameAtom = atom(
     const files = get(currentEditorFilesAtom)
     if (files.some((f) => f.path === path)) {
       set(activeFileNameAtomRaw, path)
-      const availableFunctions = get(availableFunctionsAtom)
-      // Set the default selected function when the current active file is changed
-      const selectedFunction = availableFunctions.find((f) => f.span.file_path === path)
-      if (selectedFunction) {
-        set(selectedFunctionAtom, selectedFunction.name)
-      }
     }
   },
 )

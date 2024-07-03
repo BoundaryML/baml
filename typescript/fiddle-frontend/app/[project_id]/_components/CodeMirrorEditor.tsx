@@ -4,7 +4,13 @@ import { BAML_DIR } from '@/lib/constants'
 import type { BAMLProject } from '@/lib/exampleProjects'
 import { BAML, theme } from '@baml/codemirror-lang'
 import type { ParserDatabase } from '@baml/common'
-import { diagnositicsAtom, numErrorsAtom, updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
+import {
+  availableFunctionsAtom,
+  diagnositicsAtom,
+  numErrorsAtom,
+  selectedFunctionAtom,
+  updateFileAtom,
+} from '@baml/playground-common/baml_wasm_web/EventListener'
 import { atomStore } from '@baml/playground-common/baml_wasm_web/JotaiProvider'
 import { projectFamilyAtom, runtimeFamilyAtom } from '@baml/playground-common/baml_wasm_web/baseAtoms'
 import { Button } from '@baml/playground-common/components/ui/button'
@@ -142,6 +148,9 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   const activeFileContent = useAtomValue(activeFileContentAtom)
   const updateFile = useSetAtom(updateFileAtom)
 
+  const availableFunctions = useAtomValue(availableFunctionsAtom)
+  const setSelectedFunction = useSetAtom(selectedFunctionAtom)
+
   const ref = useRef<ReactCodeMirrorRef>({})
 
   // force linting on file changes so playground updates
@@ -153,6 +162,14 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
       })
     }
   }, [JSON.stringify(editorFiles)])
+
+  useEffect(() => {
+    const func = availableFunctions.find((f) => f.span.file_path === activeFile)
+    if (func) {
+      console.log('setting selected function', func.name)
+      setSelectedFunction(func.name)
+    }
+  }, [JSON.stringify(editorFiles.map((f) => f.path)), activeFile, availableFunctions])
 
   const setUnsavedChanges = useSetAtom(unsavedChangesAtom)
 
