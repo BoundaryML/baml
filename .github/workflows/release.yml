@@ -125,16 +125,8 @@ jobs:
 
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-latest
-            # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
-            # using manylinux-2-28 breaks a bunch of stuff, surprisingly
-            # container: quay.io/pypa/manylinux2014_x86_64:latest	
-            # setup-run: |
-            #   if command -v yum &> /dev/null; then
-            #       yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
-            #   else
-            #       # If we're running on debian-based system.
-            #       apt update -y && apt-get install -y libssl-dev openssl pkg-config
-            #   fi
+            # Using any of the manylinux containers breaks a bunch of stuff: actions/checkout here, pnpm build there - not worth it.
+            container: null
             node_build: pnpm build --target x86_64-unknown-linux-gnu --use-napi-cross
 
     name: Build ${{ matrix._.target }}
@@ -164,12 +156,11 @@ jobs:
           toolchain: stable
           targets: ${{ matrix._.target }}
 
-      - run: ${{ matrix._.setup-run }}
-
       # Install steps
       - name: PNPM Install
         run: pnpm install --frozen-lockfile
         working-directory: engine/language_client_typescript
+
       # Rust caching
       - uses: Swatinem/rust-cache@v2
         with:
@@ -193,16 +184,7 @@ jobs:
           target: ${{ matrix._.target }}
           command: build
           args: --release --out engine/language_client_python/dist --manifest-path engine/language_client_python/Cargo.toml
-          #sccache: false
           container: off
-          # manylinux: ${{ matrix._.host == 'ubuntu-latest' && '2_28' || null }}
-          # before-script-linux: |
-          #   if command -v yum &> /dev/null; then
-          #       yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
-          #   else
-          #       # If we're running on debian-based system.
-          #       apt update -y && apt-get install -y libssl-dev openssl pkg-config
-          #   fi
 
       # Upload
       - name: Upload Python
