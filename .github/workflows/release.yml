@@ -127,7 +127,7 @@ jobs:
             host: ubuntu-latest
             # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
             # using manylinux-2-28 breaks a bunch of stuff, surprisingly
-            container: quay.io/pypa/manylinux2014_x86_64:latest	
+            # container: quay.io/pypa/manylinux2014_x86_64:latest	
             # setup-run: |
             #   if command -v yum &> /dev/null; then
             #       yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
