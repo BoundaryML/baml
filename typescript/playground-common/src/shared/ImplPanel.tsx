@@ -98,7 +98,6 @@ const CodeLine: React.FC<{
   const isTokenized = Array.isArray(line[0])
 
   if (Array.isArray(line)) {
-    console.log('line', line)
     return (
       <div className='flex flex-row items-start'>
         {lineNumberSpan}

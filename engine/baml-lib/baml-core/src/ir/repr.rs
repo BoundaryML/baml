@@ -10,8 +10,7 @@ use internal_baml_parser_database::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
         FunctionWalker, TemplateStringWalker, VariantWalker,
     },
-    ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes,
-    WithStaticRenames,
+    ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes, WithStaticRenames,
 };
 
 use internal_baml_schema_ast::ast::{self, FieldArity, WithName, WithSpan};
@@ -1102,6 +1101,14 @@ pub struct TestCase {
 }
 
 impl WithRepr<TestCase> for ConfigurationWalker<'_> {
+    fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes {
+            meta: IndexMap::new(),
+            overrides: IndexMap::new(),
+            span: Some(self.span().clone()),
+        }
+    }
+
     fn repr(&self, db: &ParserDatabase) -> Result<TestCase> {
         Ok(TestCase {
             name: self.name().to_string(),

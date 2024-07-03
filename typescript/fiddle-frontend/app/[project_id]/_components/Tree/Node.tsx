@@ -86,15 +86,17 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
       style={style}
       ref={dragHandle}
     >
-      <div className='flex flex-row items-center w-full pl-2 gap-x-1' onClick={() => node.isInternal && node.toggle()}>
+      <div className='flex flex-row items-center w-full justify-start' onClick={() => node.isInternal && node.toggle()}>
         {node.isLeaf ? (
           <>
-            <span className='arrow'></span>
+            <span className=''></span>
             {renderIcon(node.id)}
           </>
         ) : (
           <>
-            <span className='arrow'>{node.isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
+            <span className='w-fit'>
+              {node.isOpen ? <ChevronDown className='w-3 h-fit' /> : <ChevronRight size={12} />}
+            </span>
             {/* <span className="file-folder-icon">
               <Folder color="#f6cf60" size={16} />
             </span> */}
@@ -137,7 +139,12 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
               autoFocus
             />
           ) : (
-            <span className={clsx(fileHasErrors ? 'text-red-500' : node.state.isSelected ? 'text-white' : '')}>
+            <span
+              className={clsx(
+                fileHasErrors ? 'text-red-500' : node.state.isSelected ? 'text-white' : '',
+                'text-xs pl-1',
+              )}
+            >
               {node.data.name}
             </span>
           )}
@@ -146,7 +153,7 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
 
       {node.id !== 'baml_src' && (
         <div className='absolute top-0 right-0 hidden rounded-md group-hover:flex bg-zinc-800'>
-          <div className='flex flex-row items-center gap-x-1 '>
+          <div className='flex flex-row items-center'>
             <button
               className='p-1 hover:opacity-100 opacity-70'
               onClick={(e) => {
