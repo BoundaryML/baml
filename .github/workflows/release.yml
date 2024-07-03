@@ -44,7 +44,7 @@ jobs:
           run_install: false
       # Set up Node.js
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           cache: "pnpm"
           node-version: 20
@@ -142,7 +142,6 @@ jobs:
         with:
           python-version: "3.8"
           architecture: ${{ matrix._.host == 'windows-latest' && 'x64' || null }}
-      # Install node set up
       - uses: pnpm/action-setup@v3
         with:
           version: 9.0.6
@@ -232,9 +231,6 @@ jobs:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
 
       - name: setup pnpm
         uses: pnpm/action-setup@v3
@@ -315,7 +311,7 @@ jobs:
   #         run_install: false
   #     # Set up Node.js
   #     - name: Setup Node.js
-  #       uses: actions/setup-node@v3
+  #       uses: actions/setup-node@v4
   #       with:
   #         cache: "pnpm"
   #         node-version: 20
