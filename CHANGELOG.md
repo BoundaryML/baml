@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.47.0](https://github.com/boundaryml/baml/compare/0.46.0..0.47.0) - 2024-07-03
+
+### Bug Fixes
+
+- make settings dialog work in vscode again (#750) ([c94e355](https://github.com/boundaryml/baml/commit/c94e35551872f65404136b60f800fb1688902c11)) - aaronvg
+- restore releases on arm64-linux (#751) - ([adb8ee3](https://github.com/boundaryml/baml/commit/adb8ee3097fd386370f75b3ba179d18b952e9678)) - Samuel Lijin
+
 ## [0.46.0](https://github.com/boundaryml/baml/compare/0.45.0..0.46.0) - 2024-07-03
 
 ### Bug Fixes
