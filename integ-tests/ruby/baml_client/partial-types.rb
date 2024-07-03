@@ -43,7 +43,6 @@ module Baml
     class RaysData < T::Struct; end
     class ReceiptInfo < T::Struct; end
     class ReceiptItem < T::Struct; end
-    class Response < T::Struct; end
     class Resume < T::Struct; end
     class SearchParams < T::Struct; end
     class SomeClassNestedDynamic < T::Struct; end
@@ -96,7 +95,7 @@ module Baml
       const :location, T.nilable(String)
       const :degree, T.nilable(String)
       const :major, T::Array[T.nilable(String)]
-      const :date, T.nilable(String)
+      const :graduation_date, T.nilable(String)
     end
     class Email < T::Struct
       include T::Struct::ActsAsComparable
@@ -171,20 +170,13 @@ module Baml
       const :quantity, T.nilable(Integer)
       const :price, T.nilable(Float)
     end
-    class Response < T::Struct
-      include T::Struct::ActsAsComparable
-      const :type, T.nilable(String)
-      const :reason, T.nilable(String)
-      const :appropriate_for_video_games, T.nilable(T::Boolean)
-      const :score, T.nilable(Integer)
-    end
     class Resume < T::Struct
       include T::Struct::ActsAsComparable
       const :name, T.nilable(String)
       const :email, T.nilable(String)
       const :phone, T.nilable(String)
-      const :experience, T::Array[T.nilable(String)]
-      const :education, T::Array[Baml::PartialTypes::Education]
+      const :experience, T::Array[Baml::PartialTypes::Education]
+      const :education, T::Array[T.nilable(String)]
       const :skills, T::Array[T.nilable(String)]
     end
     class SearchParams < T::Struct

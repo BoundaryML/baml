@@ -1,21 +1,9 @@
-class Response {
-  type string
-  reason string
-  appropriate_for_video_games bool
-  score int @description(#"
-    1-5, 1 being best at video game background music and 5 being worst
-  "#)
-}
-
-function AudioInput(aud: audio) -> Response {
+function AudioInput(aud: audio) -> string{
   client Gemini
   prompt #"
-    Describe the sound.
-
-    {{ ctx.output_format(prefix="Answer in this schema:\n") }}
-
-
     {{ _.role("user") }}
+
+   Does this sound like a roar? Yes or no? One word no other characters.
     
     {{ aud }}
   "#

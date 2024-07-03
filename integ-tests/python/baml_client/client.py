@@ -59,7 +59,7 @@ class BamlClient:
         self,
         aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
-    ) -> types.Response:
+    ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb
@@ -74,7 +74,7 @@ class BamlClient:
         self.__ctx_manager.get(),
         tb,
       )
-      mdl = create_model("AudioInputReturnType", inner=(types.Response, ...))
+      mdl = create_model("AudioInputReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
     async def ClassifyMessage(
@@ -1433,7 +1433,7 @@ class BamlStreamClient:
         self,
         aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[partial_types.Response, types.Response]:
+    ) -> baml_py.BamlStream[Optional[str], str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb
@@ -1450,10 +1450,10 @@ class BamlStreamClient:
         tb,
       )
 
-      mdl = create_model("AudioInputReturnType", inner=(types.Response, ...))
-      partial_mdl = create_model("AudioInputPartialReturnType", inner=(partial_types.Response, ...))
+      mdl = create_model("AudioInputReturnType", inner=(str, ...))
+      partial_mdl = create_model("AudioInputPartialReturnType", inner=(Optional[str], ...))
 
-      return baml_py.BamlStream[partial_types.Response, types.Response](
+      return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

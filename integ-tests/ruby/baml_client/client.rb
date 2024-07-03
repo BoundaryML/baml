@@ -53,7 +53,7 @@ module Baml
       
       params(
         aud: Baml::Audio,
-      ).returns(Baml::Types::Response)
+      ).returns(String)
       
     }
     def AudioInput(
@@ -1299,7 +1299,7 @@ module Baml
     sig {
       params(
         aud: Baml::Audio,
-      ).returns(Baml::BamlStream[Baml::Types::Response])
+      ).returns(Baml::BamlStream[String])
     }
     def AudioInput(
         aud:
@@ -1311,7 +1311,7 @@ module Baml
         },
         @ctx_manager,
       )
-      Baml::BamlStream[Baml::PartialTypes::Response, Baml::Types::Response].new(
+      Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

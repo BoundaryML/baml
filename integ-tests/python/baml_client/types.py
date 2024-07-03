@@ -175,7 +175,7 @@ class Education(BaseModel):
     location: str
     degree: str
     major: List[str]
-    date: Optional[str] = None
+    graduation_date: Optional[str] = None
 
 class Email(BaseModel):
     
@@ -264,22 +264,14 @@ class ReceiptItem(BaseModel):
     quantity: int
     price: float
 
-class Response(BaseModel):
-    
-    
-    type: str
-    reason: str
-    appropriate_for_video_games: bool
-    score: int
-
 class Resume(BaseModel):
     
     
     name: str
     email: str
     phone: str
-    experience: List[str]
-    education: List["Education"]
+    experience: List["Education"]
+    education: List[str]
     skills: List[str]
 
 class SearchParams(BaseModel):
