@@ -174,7 +174,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-          shared-key: engine-release-rust-build-${{ matrix._.target }}
+          shared-key: ${{ env.GITHUB_JOB }}-engine-${{ matrix._.target }}
           cache-on-failure: true
 
       - name: Build Rust
