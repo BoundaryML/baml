@@ -16,7 +16,7 @@ class OptionalTest_ReturnType {
 } 
  
 function OptionalTest_Function(input: string) -> (OptionalTest_ReturnType?)[]
-{
+{ 
   client GPT35
   prompt #"
     Return a JSON blob with this schema: 

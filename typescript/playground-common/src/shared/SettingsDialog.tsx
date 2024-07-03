@@ -181,7 +181,7 @@ export const ShowSettingsButton: React.FC<{ iconClassName: string }> = ({ iconCl
 
   const button = (
     <Button
-      className='relative h-fit px-2 py-1 bg-transparent text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
+      className='relative px-2 py-1 bg-transparent h-fit text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
       onClick={() => setShowSettings(true)}
     >
       <SettingsIcon className='w-4' /> Env Vars
