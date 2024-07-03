@@ -1,0 +1,109 @@
+You can test your BAML functions in the VSCode Playground by adding a `test` snippet into a BAML file:
+
+```rust
+enum Category {
+    Refund
+    CancelOrder
+    TechnicalSupport
+    AccountIssue
+    Question
+}
+
+function ClassifyMessage(input: string) -> Category {
+  client GPT4Turbo
+  prompt #"
+    ... truncated ...
+  "#
+}
+
+test Test1 {
+  functions [ClassifyMessage]
+  args {
+    input "Can't access my account using my usual login credentials, and each attempt results in an error message stating 'Invalid username or password.' I have tried resetting my password using the 'Forgot Password' link, but I haven't received the promised password reset email."
+  }
+}
+```
+See the [interactive examples](https://promptfiddle.com)
+
+The BAML playground will give you a starting snippet to copy that will match your function signature.
+
+<Warning>
+BAML doesn't use between key-value pairs `:` except in function parameters
+</Warning>
+
+## Complex object inputs
+
+Objects are injected as dictionaries
+```rust
+class Message {
+  user string
+  content string
+}
+
+function ClassifyMessage(messages: Messages[]) -> Category {
+...
+}
+
+test Test1 {
+  functions [ClassifyMessage]
+  args {
+    messages [
+      {
+        user "hey there"
+        content #"
+          You can also add a multi-line
+          string with the hashtags
+          Instead of ugly json with \n
+        "#
+      }
+    ]
+  }
+}
+```
+
+## Images
+An `image` input type is translated into this object (assuming the function signature is `function MyFunction(myImage: image) -> ...`):
+
+URL input
+```
+test Test1 {
+  args {
+    myImage {
+      url "https...."
+    }
+  }
+}
+```
+base64 input
+```
+test Test1 {
+  args {
+    myImage {
+      base64 "base64string"
+      media_type "image/png"
+    }
+  }
+}
+```
+file input (coming soon)
+
+
+## Audio
+Audio inputs are similar to images:
+
+URL input
+```
+...
+ {
+   url "https//domain.com/somefile.mp3"
+ }
+...
+```
+Base64 input
+```
+{
+  media_type "audio/mp3"
+  base64 "base64string"
+}
+```
+file input (coming soon)

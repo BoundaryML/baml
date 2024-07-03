@@ -1,18 +1,13 @@
-use std::{
-    collections::HashMap,
-    fmt::format,
-    sync::{Arc, Mutex},
-};
+use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::BamlImage;
+use baml_types::BamlMedia;
 use eventsource_stream::Eventsource;
-use futures::{SinkExt, StreamExt};
+use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{
     ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
 };
-use reqwest::Response;
 
 use crate::{
     client_builder::ClientProperty,
@@ -85,26 +80,20 @@ fn resolve_properties(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .or_else(|| ctx.env.get("ANTHROPIC_API_KEY").map(|s| s.to_string()));
 
-    let headers = properties.remove("headers").map(|v| {
-        if let Some(v) = v.as_object() {
-            v.iter()
-                .map(|(k, v)| {
-                    Ok((
-                        k.to_string(),
-                        match v {
-                            serde_json::Value::String(s) => s.to_string(),
-                            _ => anyhow::bail!("Header '{k}' must be a string"),
-                        },
-                    ))
-                })
-                .collect::<Result<HashMap<String, String>>>()
-        } else {
-            Ok(Default::default())
-        }
-    });
-
-    let mut headers = match headers {
-        Some(h) => h?,
+    let mut headers = match properties.remove("headers") {
+        Some(headers) => headers
+            .as_object()
+            .context("headers must be a map of strings to strings")?
+            .iter()
+            .map(|(k, v)| {
+                Ok((
+                    k.to_string(),
+                    v.as_str()
+                        .context(format!("Header '{}' must be a string", k))?
+                        .to_string(),
+                ))
+            })
+            .collect::<Result<HashMap<_, _>>>()?,
         None => Default::default(),
     };
 
@@ -168,7 +157,7 @@ impl SseResponseTrait for AnthropicClient {
                         start_time: system_start,
                         latency: instant_start.elapsed(),
                         model: "".to_string(),
-                        invocation_params: params.clone(),
+                        request_options: params.clone(),
                         metadata: LLMCompleteResponseMetadata {
                             baml_is_complete: false,
                             finish_reason: None,
@@ -195,7 +184,7 @@ impl SseResponseTrait for AnthropicClient {
                                         prompt: internal_baml_jinja::RenderedPrompt::Chat(
                                             prompt.clone(),
                                         ),
-                                        invocation_params: params.clone(),
+                                        request_options: params.clone(),
                                         start_time: system_start,
                                         latency: instant_start.elapsed(),
                                         message: format!("Failed to parse event: {:#?}", e),
@@ -260,7 +249,7 @@ impl SseResponseTrait for AnthropicClient {
                                         prompt: internal_baml_jinja::RenderedPrompt::Chat(
                                             prompt.clone(),
                                         ),
-                                        invocation_params: params.clone(),
+                                        request_options: params.clone(),
                                         start_time: system_start,
                                         latency: instant_start.elapsed(),
                                         message: err.message,
@@ -282,7 +271,7 @@ impl SseResponseTrait for AnthropicClient {
 impl WithStreamChat for AnthropicClient {
     async fn stream_chat(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> StreamResponse {
         let (response, system_now, instant_now) =
@@ -297,24 +286,28 @@ impl WithStreamChat for AnthropicClient {
 // constructs base client and resolves properties based on context
 impl AnthropicClient {
     pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<Self> {
+        let properties = resolve_properties(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            ctx,
+        )?;
+        let default_role = properties.default_role.clone();
         Ok(Self {
             name: client.name.clone(),
-            properties: resolve_properties(
-                client
-                    .options
-                    .iter()
-                    .map(|(k, v)| Ok((k.clone(), json!(v))))
-                    .collect::<Result<HashMap<_, _>>>()?,
-                ctx,
-            )?,
+            properties,
             context: RenderContext_Client {
                 name: client.name.clone(),
                 provider: client.provider.clone(),
+                default_role,
             },
             features: ModelFeatures {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: true,
+                resolve_media_urls: true,
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,
@@ -323,17 +316,21 @@ impl AnthropicClient {
 
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AnthropicClient> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
+        let properties = resolve_properties(properties, ctx)?;
+        let default_role = properties.default_role.clone();
         Ok(Self {
             name: client.name().into(),
-            properties: resolve_properties(properties, ctx)?,
+            properties,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
+                default_role,
             },
             features: ModelFeatures {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: true,
+                resolve_media_urls: true,
             },
             retry_policy: client
                 .elem()
@@ -351,11 +348,11 @@ impl RequestBuilder for AnthropicClient {
         &self.client
     }
 
-    fn build_request(
+    async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
-    ) -> reqwest::RequestBuilder {
+    ) -> Result<reqwest::RequestBuilder> {
         let mut req = self.client.post(if prompt.is_left() {
             format!(
                 "{}/v1/complete",
@@ -384,6 +381,10 @@ impl RequestBuilder for AnthropicClient {
         }
 
         req = req.header("baml-original-url", self.properties.base_url.as_str());
+        req = req.header(
+            "baml-render-url",
+            format!("{}/v1/messages", self.properties.base_url),
+        );
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
@@ -399,12 +400,12 @@ impl RequestBuilder for AnthropicClient {
         if stream {
             body_obj.insert("stream".into(), true.into());
         }
-        log::info!("Request body: {:#?}", body);
+        log::debug!("Request body: {:#?}", body);
 
-        req.json(&body)
+        Ok(req.json(&body))
     }
 
-    fn invocation_params(&self) -> &HashMap<String, serde_json::Value> {
+    fn request_options(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
     }
 }
@@ -435,7 +436,7 @@ impl WithChat for AnthropicClient {
                 model: None,
                 prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                 start_time: system_now,
-                invocation_params: self.properties.properties.clone(),
+                request_options: self.properties.properties.clone(),
                 latency: instant_now.elapsed(),
                 message: format!(
                     "Expected exactly one content block, got {}",
@@ -451,7 +452,7 @@ impl WithChat for AnthropicClient {
             content: response.content[0].text.clone(),
             start_time: system_now,
             latency: instant_now.elapsed(),
-            invocation_params: self.properties.properties.clone(),
+            request_options: self.properties.properties.clone(),
             model: response.model,
             metadata: LLMCompleteResponseMetadata {
                 baml_is_complete: match response.stop_reason {
@@ -550,23 +551,29 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                 "type": "text",
                 "text": text
             }),
-            ChatMessagePart::Image(image) => match image {
-                BamlImage::Base64(image) => json!({
-                    "type": "image",
+
+            ChatMessagePart::Image(media) => match media {
+                BamlMedia::Base64(media_type, data) => json!({
+                    "type":  media_type.to_string(),
+
                     "source": {
                         "type": "base64",
-                        "media_type": image.media_type,
-                        "data": image.base64
+                        "media_type": data.media_type,
+                        "data": data.base64
                     }
                 }),
-                BamlImage::Url(image) => json!({
-                    "type": "image",
-                    "source": {
-                        "type": "url",
-                        "url": image.url
-                    }
-                }),
+                _ => panic!("Unsupported media type"),
+                //never executes, keep for future if anthropic supports urls
+                // BamlMedia::Url(media_type, data) => json!({
+                //     "type": "image",
+
+                //     "source": {
+                //         "type": "url",
+                //         "url": data.url
+                //     }
+                // }),
             },
+            _ => json!({}),
         })
         .collect()
 }

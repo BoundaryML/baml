@@ -36,7 +36,7 @@ impl From<JsonCollection> for Option<Value> {
         Some(match collection {
             JsonCollection::TrailingComment(_) | JsonCollection::BlockComment(_) => return None,
             JsonCollection::Object(keys, values) => {
-                log::info!("keys: {:?}", keys);
+                // log::debug!("keys: {:?}", keys);
                 let mut object = BamlMap::new();
                 for (key, value) in keys.into_iter().zip(values.into_iter()) {
                     object.insert(key, value);

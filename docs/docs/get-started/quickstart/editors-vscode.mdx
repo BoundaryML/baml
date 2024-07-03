@@ -1,0 +1,72 @@
+---
+title: "VSCode"
+---
+
+We provide a BAML VSCode extension:     https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension
+
+
+| Feature | Supported |
+|---------|-----------|
+| Syntax highlighting for BAML files | ✅ |
+| Code snippets for BAML | ✅ |
+| LLM playground for testing BAML functions | ✅ |
+| Jump to definition for BAML files | ✅ |
+| Jump to definition between Python/TS files and BAML files | ✅ |
+| Auto generate `baml_client` on save | ✅ |
+| BAML formatter | ❌ |
+
+<Warning>
+  For any issues, see the [troubleshooting](/docs/get-started/debugging/vscode-playground) page.
+</Warning>
+
+## Opening BAML Playground
+ 
+Once you open a `.baml` file, in VSCode, you should see a small button over every BAML function: `Open Playground`.
+
+<img src="/images/docs_latest/vscode/code-lens.png" />
+
+Or type `BAML Playground` in the VSCode Command Bar (`CMD + Shift + P` or `CTRL + Shift + P`) to open the playground.
+
+<img src="/images/docs_latest/vscode/open-playground.png" />
+
+## Setting Env Variables
+
+Click on the `Settings` button in top right of the playground and set the environment variables.
+
+It should have an indicator saying how many unset variables are there.
+
+<img src="/images/docs_latest/vscode/playground-preview.png" />
+
+The playground should persist the environment variables between closing and opening VSCode.
+
+<Tip>
+  You can set environment variables lazily. If anything is unset you'll get an error when you run the function.
+</Tip>
+
+<Info>
+  Environment Variables are stored in VSCode's local storage! We don't save any additional data to disk, or send them across the network.
+</Info>
+
+
+## Running Tests
+
+- Click on the `Run All Tests` button in the playground.
+
+- Press the `▶️` button next to an individual test case to run that just that test case.
+
+
+## Switching Functions
+
+The playground will automatically switch to the function you're currently editing.
+
+To manually change it, click on the current function name in the playground (next to the dropdown) and search for your desired function.
+
+## Switching Test Cases
+
+The test case with the highlighted background is the currently rendered test case. Clicking on a different test case will render that test case.
+
+<img src="/images/docs_latest/vscode/test-cases.png" />
+
+You can toggle between seeing the results of all test cases or all test cases for the current function.
+
+<img src="/images/docs_latest/vscode/test-case-buttons.png" />

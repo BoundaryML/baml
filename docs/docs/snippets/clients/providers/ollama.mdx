@@ -1,0 +1,91 @@
+---
+title: ollama
+---
+
+For `ollama`, we provide a client that can be used to interact with [ollama](https://ollama.com/) `/chat/completions` endpoint.
+
+<Info>What is ollama? Ollama is an easy way to run LLMs locally!</Info>
+
+Example:
+```rust BAML
+client<llm> MyClient {
+  provider ollama
+  options {
+    model llama2
+  }
+}
+```
+
+The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
+
+## Non-forwarded options
+<ParamField
+  path="base_url"
+  type="string"
+>
+  The base URL for the API. **Default: `http://localhost:11434/v1`**
+  <Tip>Note the `/v1` at the end of the URL. See [Ollama's OpenAI compatability](https://ollama.com/blog/openai-compatibility)</Tip>
+</ParamField>
+
+<ParamField
+  path="default_role"
+  type="string"
+>
+  The default role for any prompts that don't specify a role. **Default: `system`**
+  
+  We don't have any checks for this field, you can pass any string you wish.
+</ParamField>
+
+<ParamField path="headers" type="object">
+  Additional headers to send with the request.
+
+Example:
+```rust BAML
+client<llm> MyClient {
+  provider ollama
+  options {
+    model llama2
+    headers {
+      "X-My-Header" "my-value"
+    }
+  }
+}
+```
+</ParamField>
+
+## Forwarded options
+<ParamField
+   path="messages"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you from the prompt
+</ParamField>
+<ParamField
+   path="stream"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you based on how you call the client in your code
+</ParamField>
+<ParamField
+  path="model"
+  type="string"
+>
+  The model to use.
+
+| Model | Description |
+| --- | --- |
+| `llama3` | Meta Llama 3: The most capable openly available LLM to date |
+| `qwen2` | Qwen2 is a new series of large language models from Alibaba group |
+| `phi3` | Phi-3 is a family of lightweight 3B (Mini) and 14B (Medium) state-of-the-art open models by Microsoft |
+| `aya` | Aya 23, released by Cohere, is a new family of state-of-the-art, multilingual models that support 23 languages. |
+| `mistral` | The 7B model released by Mistral AI, updated to version 0.3. |
+| `gemma` | Gemma is a family of lightweight, state-of-the-art open models built by Google DeepMind. Updated to version 1.1 |
+| `mixtral` | A set of Mixture of Experts (MoE) model with open weights by Mistral AI in 8x7b and 8x22b parameter sizes. |
+
+See ollama docs for the list of ollama models. [Model Library](https://ollama.com/library)
+
+<Tip>To use a specific version you would do: `"mixtral:8x22b"`</Tip>
+</ParamField>
+
+
+For all other options, see the [official OpenAI API documentation](https://platform.openai.com/docs/api-reference/chat/create).

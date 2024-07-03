@@ -1,0 +1,61 @@
+---
+title: Function Calling / Tools
+---
+"Function calling" is a technique for getting an LLM to choose a function to call for you.
+
+The way it works is:
+1. You define a task with certain function(s)
+2. Ask the LLM to **choose which function to call**
+3. **Get the function parameters from the LLM** for the appropriate function it choose
+4. **Call the functions** in your code with those parameters
+
+In BAML, you can get represent a `tool` or a `function` you want to call as a BAML `class`, and make the function output be that class definition.
+
+```rust BAML
+class WeatherAPI {
+  city string @description("the user's city")
+  timeOfDay string @description("As an ISO8601 timestamp")
+}
+
+function UseTool(user_message: string) -> WeatherAPI {
+  client GPT4Turbo
+  prompt #"
+    Extract the info from this message
+    ---
+    {{ user_message }}
+    ---
+
+    {# special macro to print the output schema. #}
+    {{ ctx.output_format }}
+
+    JSON:
+  "#
+}
+```
+
+## Choosing multiple Tools
+
+To choose ONE tool out of many, you can use a union:
+```rust BAML
+function UseTool(user_message: string) -> WeatherAPI | MyOtherAPI {
+  .... // same thing
+}
+```
+
+<Tip>If you use [VSCode Playground](/docs/get-started/quickstart/editors-vscode), you can see what we inject into the prompt, with full transparency.</Tip>
+
+## Choosing N Tools
+To choose many tools, you can use a union of a list:
+```rust BAML
+function UseTool(user_message: string) -> (WeatherAPI | MyOtherAPI)[] {
+  .... // same thing
+}
+```
+
+## Function-calling APIs vs Prompting
+Injecting your function schemas into the prompt, as BAML does, outperforms function-calling across all benchmarks for major providers (see [Berkeley's Function-calling Leaderboard](https://gorilla.cs.berkeley.edu/leaderboard.html), where "Prompt" outperforms "FC").
+
+Keep in mind that "JSON mode" is nearly the same thing as "prompting", but it enforces the LLM response is ONLY a JSON blob.
+BAML does not use JSON mode since it allows developers to use better prompting techniques like chain-of-thought, to allow the LLM to express its reasoning before printing out the actual schema. BAML's parser can find the json schema(s) out of free-form text for you.
+
+BAML may support native function-calling APIs in the future (please let us know more about your use-case so we can prioritize accordingly)

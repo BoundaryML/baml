@@ -7,4 +7,3 @@ env -u CONDA_PREFIX poetry run maturin develop --manifest-path ../../engine/lang
 
 BAML_LOG=baml_events infisical run --env=dev -- poetry run pytest app/test_functions.py -s
 ```
-

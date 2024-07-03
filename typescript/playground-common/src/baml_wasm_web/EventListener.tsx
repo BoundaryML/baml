@@ -10,12 +10,19 @@ import CustomErrorBoundary from '../utils/ErrorFallback'
 import { sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+import { vscode } from '../utils/vscode'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
+const postMessageToExtension = (message: any) => {
+  console.log(`Sending message to extension ${message.command}`)
+  vscode.postMessage(message)
+}
+
 const defaultEnvKeyValues: [string, string][] = (() => {
   if ((window as any).next?.version) {
     console.log('Running in nextjs')
+
     const domain = window?.location?.origin || ''
     if (domain.includes('localhost')) {
       // we can do somehting fancier here later if we want to test locally.
@@ -23,6 +30,9 @@ const defaultEnvKeyValues: [string, string][] = (() => {
     }
     return [['BOUNDARY_PROXY_URL', 'https://fiddle-proxy.fly.dev']]
   } else {
+    postMessageToExtension({ command: 'get_port' })
+    postMessageToExtension({ command: 'add_project' })
+
     console.log('Not running in a Next.js environment, set default value')
     // Not running in a Next.js environment, set default value
     return [['BOUNDARY_PROXY_URL', 'http://localhost:0000']]
@@ -121,8 +131,6 @@ export const selectedFunctionAtom = atom(
       const functions = get(availableFunctionsAtom)
       if (functions.find((f) => f.name === func)) {
         set(selectedFunctionStorageAtom, func)
-      } else {
-        console.error(`Function ${func} not found in ${functions.map((f) => f.name).join(', ')}`)
       }
     }
   },
@@ -251,7 +259,7 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
     const onlyRelevantFiles = Object.fromEntries(
       Object.entries(projFiles).filter(([name, _]) => name.startsWith(root_path)),
     )
-    console.log('Creating new project', root_path, onlyRelevantFiles)
+    // console.log('Creating new project', root_path, onlyRelevantFiles)
     if (wasm) {
       project = wasm.WasmProject.new(root_path, onlyRelevantFiles)
     }
@@ -338,6 +346,29 @@ export const availableFunctionsAtom = atom((get) => {
   }
   return runtime.list_functions()
 })
+
+const asyncCurlAtom = atom(async (get) => {
+  const runtime = get(selectedRuntimeAtom)
+  const func = get(selectedFunctionAtom)
+  const test_case = get(selectedTestCaseAtom)
+
+  if (!runtime || !func || !test_case) {
+    return 'Not yet ready'
+  }
+  const params = Object.fromEntries(
+    test_case.inputs
+      .filter((i): i is WasmParam & { value: string } => i.value !== undefined)
+      .map((input) => [input.name, JSON.parse(input.value)]),
+  )
+  try {
+    return await func.render_raw_curl(runtime, params, false)
+  } catch (e) {
+    console.error(e)
+    return 'Error rendering curl command'
+  }
+})
+
+export const curlAtom = unwrap(asyncCurlAtom)
 
 export const renderPromptAtom = atom((get) => {
   const runtime = get(selectedRuntimeAtom)
@@ -524,7 +555,6 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
       >,
     ) => {
       const { command, content } = event.data
-      console.log('select Received message', command, content)
 
       switch (command) {
         case 'modify_file':
@@ -557,6 +587,13 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
         case 'port_number':
           console.log('Setting port number', content.port)
+
+          if (content.port === 0) {
+            console.error('Port number is 0, cannot launch BAML extension')
+
+            return
+          }
+
           setEnvKeyValueStorage((prev) => {
             let keyExists = false
             const updated: [string, string][] = prev.map(([key, value]) => {
@@ -583,7 +620,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <>
-      <div className='absolute flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2'>
+      <div className='absolute z-50 flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2'>
         <ErrorCount /> <span>Runtime Version: {version}</span>
       </div>
       {selectedProject === null ? (

@@ -141,6 +141,12 @@ export interface ClassWithImage {
   
 }
 
+export interface DynInputOutput {
+  testKey: string
+  
+  [key: string]: any;
+}
+
 export interface DynamicClassOne {
   
   [key: string]: any;
@@ -238,6 +244,20 @@ export interface Person {
 export interface RaysData {
   dataType: DataType
   value: Resume | Event
+  
+}
+
+export interface ReceiptInfo {
+  items: ReceiptItem[]
+  total_cost?: number | null
+  
+}
+
+export interface ReceiptItem {
+  name: string
+  description?: string | null
+  quantity: number
+  price: number
   
 }
 

@@ -265,6 +265,10 @@ impl<'a> Walker<'a, (&'a Function, &'a TestCase)> {
         &self.item.1.elem
     }
 
+    pub fn span(&self) -> Option<&crate::Span> {
+        self.item.1.attributes.span.as_ref()
+    }
+
     pub fn test_case_params(
         &self,
         env_values: &HashMap<String, String>,
@@ -339,6 +343,10 @@ impl<'a> Walker<'a, &'a Client> {
 
     pub fn span(&self) -> Option<&crate::Span> {
         self.item.attributes.span.as_ref()
+    }
+
+    pub fn options(&self) -> &Vec<(String, Expression)> {
+        &self.elem().options
     }
 }
 

@@ -631,3 +631,32 @@ test_deserializer!(
       ]
     })
 );
+
+const EXAMPLE_FILE_ORDERED_CLASS: &str = r##"
+  class OrderedClass {
+    one string?
+    two string
+    three string?
+    four string
+  }
+"##;
+
+test_deserializer!(
+    test_object_from_string_ordered_class,
+    EXAMPLE_FILE_ORDERED_CLASS,
+    r#"
+  {
+    "one": "one",
+    "two": "two",
+    "three": "three",
+    "four": "four"
+  }
+  "#,
+    FieldType::Class("OrderedClass".to_string()),
+    json!({
+      "one": "one",
+      "two": "two",
+      "three": "three",
+      "four": "four"
+    })
+);

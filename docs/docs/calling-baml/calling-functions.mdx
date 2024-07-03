@@ -1,0 +1,106 @@
+---
+title: "Calling BAML Functions"
+---
+
+Once you've [generated the BAML client] and set your environment variables,
+you can call BAML functions from your code.
+
+<Tip>You can check out more examples in the [BAML Examples] repo.</Tip>
+
+[generated the BAML client]: /docs/calling-baml/generate-baml-client
+[BAML Examples]: https://github.com/BoundaryML/baml-examples/tree/main
+
+We’ll use `function ClassifyMessage(input: string) -> Category` for our example:
+
+<Accordion title="classify-message.baml">
+```rust
+enum Category {
+    Refund
+    CancelOrder
+    TechnicalSupport
+    AccountIssue
+    Question
+}
+
+function ClassifyMessage(input: string) -> Category {
+  client GPT4o
+  prompt #"
+    Classify the following INPUT into ONE
+    of the following categories:
+
+    INPUT: {{ input }}
+
+    {{ ctx.output_format }}
+
+    Response:
+  "#
+}
+```
+</Accordion>
+
+<Tabs>
+<Tab title="Python">
+
+BAML will generate `b.ClassifyMessage()` for you, which you can use like so:
+
+```python main.py
+import asyncio
+
+from baml_client import b
+from baml_client.types import Category
+
+async def main():
+    category = await b.ClassifyMessage("I want to cancel my order")
+    print(category)
+    assert category == Category.CancelOrder
+
+if __name__ == '__main__':
+    asyncio.run(main())
+```
+</Tab>
+
+<Tab title="TypeScript">
+
+BAML will generate `b.ClassifyMessage()` for you, which you can use like so:
+
+```ts main.ts
+import { b } from './baml_client'
+import { Category } from './baml_client/types'
+import assert from 'assert'
+
+const main = async () => {
+  const category = await b.ClassifyMessage('I want to cancel my order')
+  console.log(category)
+  assert(category == Category.CancelOrder)
+}
+
+if (require.main === module) {
+  main()
+}
+
+```
+</Tab>
+
+<Tab title="Ruby (beta)">
+
+BAML will generate `Baml.Client.ClassifyMessage()` for you, which you can use like so:
+
+```ruby main.rb
+require_relative "baml_client/client"
+
+$b = Baml.Client
+
+def main
+    category = $b.ClassifyMessage(input: "I want to cancel my order")
+    puts category
+    category == Baml::Types::Category::CancelOrder
+end
+
+if __FILE__ == $0
+  puts main
+end
+
+```
+
+</Tab>
+</Tabs>

@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use crate::{
     internal::{
@@ -10,23 +6,20 @@ use crate::{
         llm_client::{
             llm_provider::LLMProvider,
             orchestrator::{
-                orchestrate_call, IterOrchestrator, LLMPrimitiveProvider, OrchestrationScope,
-                OrchestratorNode,
+                orchestrate_call, IterOrchestrator, OrchestrationScope, OrchestratorNode,
             },
             retry_policy::CallablePolicy,
-            traits::WithPrompt,
+            traits::{WithPrompt, WithRenderRawCurl},
         },
         prompt_renderer::PromptRenderer,
     },
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
-    tracing::{BamlTracer, TracingSpan},
-    type_builder::TypeBuilder,
+    tracing::BamlTracer,
     FunctionResult, FunctionResultStream, InternalRuntimeInterface, RuntimeContext,
-    RuntimeContextManager, RuntimeInterface, TestResponse,
+    RuntimeInterface,
 };
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
-
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
     ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
@@ -157,6 +150,38 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             .map(|prompt| (prompt, node.scope));
     }
 
+    async fn render_raw_curl(
+        &self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+        prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
+        stream: bool,
+        node_index: Option<usize>,
+    ) -> Result<String> {
+        let func = self.get_function(function_name, ctx)?;
+
+        let renderer = PromptRenderer::from_function(&func, &self.ir(), ctx)?;
+        let client_name = renderer.client_name().to_string();
+
+        let client = self.get_llm_provider(&client_name, ctx)?;
+        let mut selected =
+            client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self);
+
+        let node_index = node_index.unwrap_or(0);
+
+        if node_index >= selected.len() {
+            return Err(anyhow::anyhow!(
+                "Execution Node out of bounds: {} >= {} for client {}",
+                node_index,
+                selected.len(),
+                client_name
+            ));
+        }
+
+        let node = selected.swap_remove(node_index);
+        return node.provider.render_raw_curl(ctx, prompt, stream).await;
+    }
+
     fn get_function<'ir>(
         &'ir self,
         function_name: &str,
@@ -214,7 +239,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
 pub fn baml_src_files(dir: &std::path::PathBuf) -> Result<Vec<PathBuf>> {
     static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
 
-    log::info!("Reading files from {:#}", dir.to_string_lossy());
+    log::trace!("Reading files from {:#}", dir.to_string_lossy());
 
     if !dir.exists() {
         anyhow::bail!("{dir:#?} does not exist (expected a directory containing BAML files)",);
@@ -281,8 +306,8 @@ impl RuntimeConstructor for InternalBamlRuntime {
         schema.diagnostics.to_result()?;
 
         let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
-        log::info!("Successfully loaded BAML schema");
-        log::info!("Diagnostics: {:#?}", schema.diagnostics);
+        log::trace!("Successfully loaded BAML schema");
+        log::trace!("Diagnostics: {:#?}", schema.diagnostics);
 
         Ok(Self {
             ir: Arc::new(ir),

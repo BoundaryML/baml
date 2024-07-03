@@ -6,39 +6,7 @@ import { type BamlProjectsGroupings, loadExampleProjects } from '@/lib/loadProje
 import { useEffect, useState } from 'react'
 
 export const ExploreProjects = () => {
-  const [projectGroups, setProjectGroups] = useState<BamlProjectsGroupings | null>(null)
-
-  useEffect(() => {
-    const fetchProjects = async () => {
-      const projects = await loadExampleProjects()
-      setProjectGroups(projects)
-    }
-    fetchProjects()
-  }, [])
-
-  return (
-    <div className='flex flex-col w-full h-full'>
-      <SheetHeader>
-        <SheetTitle className='text-2xl'>Prompt Fiddle Examples</SheetTitle>
-        <SheetDescription className='text-base'>
-          Prompt Fiddle uses BAML -- a configuration language for LLM functions. Here are some example projects to get
-          you started.
-        </SheetDescription>
-      </SheetHeader>
-
-      <div className='overflow-y-auto'>
-        {projectGroups ? (
-          <div className='flex flex-col gap-y-4'>
-            <ExampleCarousel title='Intros' projects={projectGroups.intros} />
-            {/* <ExampleCarousel title="Advanced Prompt Syntax" projects={projectGroups.advancedPromptSyntax} /> */}
-            <ExampleCarousel title='Prompt Engineering' projects={projectGroups.promptEngineering} />
-          </div>
-        ) : (
-          <div>Loading...</div>
-        )}
-      </div>
-    </div>
-  )
+  return null
 }
 
 const ExampleCarousel = ({ title, projects }: { title: string; projects: BAMLProject[] }) => {

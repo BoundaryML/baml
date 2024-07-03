@@ -1,5 +1,5 @@
-use crate::{builder::get_src_dir, shell::build_shell_command, update::UPDATE_CHANNEL};
 use crate::{errors::CliError, OutputType};
+use crate::{shell::build_shell_command, update::UPDATE_CHANNEL};
 
 use colored::Colorize;
 use dunce::canonicalize;
@@ -178,6 +178,7 @@ dependencies
 }
 
 /// This is redundant with GeneratorLanguage.parse_version
+#[allow(dead_code)]
 fn extract_client_version(package_version_command: &str, output: &str) -> Result<String, CliError> {
     let package_version_command = shellwords::split(package_version_command)
         .map_err(|e| CliError::StringError(e.to_string()))?;
@@ -223,6 +224,7 @@ fn extract_client_version(package_version_command: &str, output: &str) -> Result
 }
 
 /// This is redundant with GeneratorLanguage.parse_version
+#[allow(dead_code)]
 pub fn get_client_version(
     project_root: &str,
     package_version_command: &str,

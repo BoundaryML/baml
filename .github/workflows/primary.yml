@@ -10,6 +10,7 @@ on:
       - ".github/workflows/primary.yml"
     branches:
       - canary
+  workflow_dispatch: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

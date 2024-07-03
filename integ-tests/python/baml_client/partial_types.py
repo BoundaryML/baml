@@ -53,6 +53,12 @@ class ClassWithImage(BaseModel):
     param2: Optional[str] = None
     fake_image: Optional["FakeImage"] = None
 
+class DynInputOutput(BaseModel):
+    
+    model_config = ConfigDict(extra='allow')
+    
+    testKey: Optional[str] = None
+
 class DynamicClassOne(BaseModel):
     
     model_config = ConfigDict(extra='allow')
@@ -152,6 +158,20 @@ class RaysData(BaseModel):
     
     dataType: Optional[types.DataType] = None
     value: Optional[Union["Resume", "Event"]] = None
+
+class ReceiptInfo(BaseModel):
+    
+    
+    items: List["ReceiptItem"]
+    total_cost: Optional[float] = None
+
+class ReceiptItem(BaseModel):
+    
+    
+    name: Optional[str] = None
+    description: Optional[str] = None
+    quantity: Optional[int] = None
+    price: Optional[float] = None
 
 class Resume(BaseModel):
     

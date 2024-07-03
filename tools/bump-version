@@ -21,6 +21,20 @@ Options:
 EOF
 }
 
+ensure_preconditions() {
+    # Ensure bump2version is installed
+    if ! command -v bump2version > /dev/null; then
+        echo "Error: bump2version is not installed."
+        exit 1
+    fi
+
+    # Ensure git cliff is available
+    if ! git cliff -h > /dev/null 2>&1; then
+        echo "Error: git-cliff is not installed or not working. Please install it using 'cargo install git-cliff'."
+        exit 1
+    fi
+}
+
 _help_mode=0
 _ts_mode=0
 _python_mode=0
@@ -69,6 +83,8 @@ if [ "$_help_mode" -eq 1 ]; then
     exit 0
 fi
 
+ensure_preconditions
+
 # Ensure only one mode is enabled
 if [ "$((_ts_mode + _python_mode + _ruby_mode + _vscode_mode + _all_mode))" -gt 1 ]; then
     echo "Error: Only one mode can be enabled."
@@ -98,3 +114,13 @@ elif [ "$_ruby_mode" -eq 1 ]; then
 elif [ "$_vscode_mode" -eq 1 ]; then
   bump2version --config-file ./versions/vscode.cfg patch
 fi
+
+cd "${_repo_root}"
+git add .
+
+
+VERSION=$(grep "current_version =" tools/versions/engine.cfg | awk '{print $3}')
+# Generate the change log
+git cliff --tag $VERSION -u --prepend CHANGELOG.md
+
+echo "Version bumped to $VERSION successfully! Please update CHANGELOG.md."

@@ -100,6 +100,11 @@ fn test_ifexpr() {
         Type::Union(vec![Type::Number, Type::String])
     );
 
+    assert_eq!(
+        assert_evaluates_to!("1 if true else '2'", &types),
+        Type::Union(vec![Type::String, Type::Number])
+    );
+
     types.add_function("AnotherFunc", Type::Float, vec![("arg".into(), Type::Bool)]);
 
     types.add_variable("BasicTest", Type::Int);
@@ -192,7 +197,42 @@ fn test_call_function() {
         assert_fails_to!("AnotherFunc(true, arg2='1', arg4=1)", &types),
         vec![
             "Function 'AnotherFunc' expects argument 'arg3'",
-            "Function 'AnotherFunc' does not have an argument 'arg4'"
+            "Function 'AnotherFunc' does not have an argument 'arg4'. Did you mean 'arg3'?"
         ]
+    );
+}
+
+#[test]
+fn test_output_format() {
+    let types = PredefinedTypes::default();
+    assert_eq!(
+        assert_evaluates_to!("ctx.output_format(prefix='hi')", &types),
+        Type::String
+    );
+
+    assert_eq!(
+        assert_evaluates_to!("ctx.output_format(prefix='1', or_splitter='1')", &types),
+        Type::String
+    );
+
+    assert_eq!(
+        assert_evaluates_to!(
+            "ctx.output_format(prefix='1', enum_value_prefix=none)",
+            &types
+        ),
+        Type::String
+    );
+
+    assert_eq!(
+        assert_fails_to!(
+            "ctx.output_format(prefix='1', always_hoist_enums=1)",
+            &types
+        ),
+        vec!["Function 'baml::OutputFormat' expects argument 'always_hoist_enums' to be of type (bool | none), but got number"]
+    );
+
+    assert_eq!(
+        assert_fails_to!("ctx.output_format(prefix='1', unknown=1)", &types),
+        vec!["Function 'baml::OutputFormat' does not have an argument 'unknown'. Did you mean one of these: 'always_hoist_enums', 'enum_value_prefix', 'or_splitter'?"]
     );
 }

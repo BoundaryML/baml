@@ -272,6 +272,71 @@
   background-color: var(--vscode-terminal-ansiWhite);
   opacity: 0.3;
 }
+.fullScreenSheet {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9999; /* Ensure it covers other content */
+  overflow-y: auto;
+}
+
+.tree-container .node {
+  padding: 10px; /* Adds padding to each node */
+}
+
+.tree-container .node-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Ensures text is truncated with ellipsis if it overflows */
+  
+}
+
+/* TextComponent.css */
+.text-component {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+}
+
+.text-blob {
+  font-size: 18px;
+  padding: 20px;
+  background-color: #f0f0f0;
+  border-radius: 8px;
+}
+
+
+/* Ensure arrows and icons have appropriate spacing */
+.tree-container .arrow, .tree-container .icon {
+  margin-right: 8px;
+}
+
+.node-container {
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.node-icon {
+  margin-right: 8px;
+}
+
+.node-text {
+  font-size: 16px;
+}
+
+.file-folder-icon {
+  display: flex;
+  align-items: center;
+}
+
+.arrow {
+  margin-right: 8px;
+}
+
+
 
 /* .json-view {
   color: var(--vscode-terminal-background);

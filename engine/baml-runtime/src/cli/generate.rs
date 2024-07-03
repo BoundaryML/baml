@@ -1,12 +1,10 @@
 use crate::{
-    runtime::{self, runtime_interface::baml_src_files},
+    runtime::{runtime_interface::baml_src_files},
     BamlRuntime,
 };
 use anyhow::Result;
-use internal_baml_core::configuration::GeneratorOutputType;
 use std::path::PathBuf;
 
-use super::LanguageClientType;
 
 #[derive(clap::Args, Debug)]
 pub struct GenerateArgs {

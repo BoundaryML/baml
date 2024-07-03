@@ -122,6 +122,10 @@ $RECYCLE.BIN/
 /dist
 /node_modules
 /out/
+engine/language_client_typescript/*.d.ts
+engine/language_client_typescript/*.d.ts.map
+engine/language_client_typescript/*.js
+!engine/language_client_typescript/cli.js
 engine/language_client_ruby/**/*.bundle
 engine/target/
 Cargo.lock

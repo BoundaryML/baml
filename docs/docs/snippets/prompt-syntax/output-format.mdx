@@ -1,0 +1,132 @@
+---
+title: ctx.output_format
+---
+
+`{{ ctx.output_format }}` is used within a prompt template (or in any template_string) to print out the function's output schema into the prompt. It describes to the LLM how to generate a structure BAML can parse (usually JSON).
+
+Here's an example of a function with `{{ ctx.output_format }}`, and how it gets rendered by BAML before sending it to the LLM.
+
+**BAML Prompt**
+
+```rust
+class Resume {
+  name string
+  education Education[]
+}
+function ExtractResume(resume_text: string) -> Resume {
+  prompt #"
+    Extract this resume:
+    ---
+    {{ resume_text }}
+    ---
+
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+**Rendered prompt**
+
+```text
+Extract this resume
+---
+Aaron V.
+Bachelors CS, 2015
+UT Austin
+---
+
+Answer in JSON using this schema: 
+{
+  name: string
+  education: [
+    {
+      school: string
+      graduation_year: string
+    }
+  ]
+}
+```
+
+## Controlling the output_format
+
+`ctx.output_format` can also be called as a function with parameters to customize how the schema is printed, like this:
+```text
+
+{{ ctx.output_format(prefix="If you use this schema correctly and I'll tip $400:\n", always_hoist_enums=true)}}
+```
+
+Here's the parameters:
+<ParamField path="prefix" type="string">
+The prefix instruction to use before printing out the schema. 
+
+```text
+Answer in this schema correctly I'll tip $400:
+{
+  ...
+}
+```
+BAML's default prefix varies based on the function's return type.
+
+| Fuction return type | Default Prefix |
+| --- | --- |
+| Primitive (String) |  |
+| Primitive (Other) | `Answer as a: ` |
+| Enum | `Answer with any of the categories:\n` |
+| Class | `Answer in JSON using this schema:\n` |
+| List | `Answer with a JSON Array using this schema:\n` |
+| Union | `Answer in JSON using any of these schemas:\n` |
+| Optional | `Answer in JSON using this schema:\n` |
+
+</ParamField>
+
+<ParamField path="always_hoist_enums" type="boolean" > 
+Whether to inline the enum definitions in the schema, or print them above. **Default: false**
+
+
+**Inlined**
+```
+
+Answer in this json schema:
+{
+  categories: "ONE" | "TWO" | "THREE"
+}
+```
+
+**hoisted**
+```
+MyCategory
+---
+ONE
+TWO
+THREE
+
+Answer in this json schema:
+{
+  categories: MyCategory
+}
+```
+
+<Warning>BAML will always hoist if you add a [description](/docs/snippets/enum#aliases-descriptions) to any of the enum values.</Warning>
+
+</ParamField>
+
+<ParamField path="or_splitter" type="string" >
+
+**Default: ` or `**
+
+If a type is a union like `string | int` or an optional like `string?`, this indicates how it's rendered. 
+
+
+BAML renders it as `property: string or null` as we have observed some LLMs have trouble identifying what `property: string | null` means (and are better with plain english).
+
+You can always set it to ` | ` or something else for a specific model you use.
+</ParamField>
+
+## Why BAML doesn't use JSON schema format in prompts
+BAML uses "type definitions" or "jsonish" format instead of the long-winded json-schema format.
+The tl;dr is that json schemas are
+1. 4x more inefficient than "type definitions".
+2. very unreadable by humans (and hence models)
+3. perform worse than type definitions (especially on deeper nested objects or smaller models)
+
+Read our [full article on json schema vs type definitions](https://www.boundaryml.com/blog/type-definition-prompting-baml)

@@ -1,5 +1,9 @@
 use core::panic;
-use std::{collections::HashMap, ops::BitOr};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::BitOr,
+    vec,
+};
 
 use minijinja::machinery::{
     ast::{Call, Spanned},
@@ -23,32 +27,47 @@ pub enum Type {
     Map(Box<Type>, Box<Type>),
     Tuple(Vec<Type>),
     Union(Vec<Type>),
+    // It is simultaneously two types, whichever fits best
+    Both(Box<Type>, Box<Type>),
     ClassRef(String),
     FunctionRef(String),
     Image,
+    Audio,
 }
 
 impl PartialEq for Type {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Unknown, Self::Unknown) => true,
-            (Self::Unknown, _) => true,
-            (_, Self::Unknown) => true,
-            (Self::Number, Self::Int | Self::Float) => true,
-            (Self::Int | Self::Float, Self::Number) => true,
-            (Self::List(l0), Self::List(r0)) => l0 == r0,
-            (Self::Map(l0, l1), Self::Map(r0, r1)) => l0 == r0 && l1 == r1,
-            (Self::Union(l0), Self::Union(r0)) => l0 == r0,
-            (Self::ClassRef(l0), Self::ClassRef(r0)) => l0 == r0,
-            (Self::FunctionRef(l0), Self::FunctionRef(r0)) => l0 == r0,
-            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
-        }
+        self.matches(other)
     }
 }
 
 impl Eq for Type {}
 
 impl Type {
+    pub fn matches(&self, r: &Self) -> bool {
+        match (self, r) {
+            (Self::Unknown, Self::Unknown) => true,
+            (Self::Unknown, _) => true,
+            (_, Self::Unknown) => true,
+            (Self::Number, Self::Int | Self::Float) => true,
+            (Self::Int | Self::Float, Self::Number) => true,
+            (Self::List(l0), Self::List(r0)) => l0.matches(r0),
+            (Self::Map(l0, l1), Self::Map(r0, r1)) => l0.matches(r0) && l1.matches(r1),
+            (Self::Union(l0), Self::Union(r0)) => {
+                // Sort l0 and r0 to make sure the order doesn't matter
+                let mut l0 = l0.clone();
+                let mut r0 = r0.clone();
+                l0.sort();
+                r0.sort();
+                l0 == r0
+            }
+            (l0, Self::Union(r0)) => r0.iter().any(|x| l0.matches(x)),
+            (Self::ClassRef(l0), Self::ClassRef(r0)) => l0 == r0,
+            (Self::FunctionRef(l0), Self::FunctionRef(r0)) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(r),
+        }
+    }
+
     pub fn name(&self) -> String {
         match self {
             Type::Unknown => "<unknown>".into(),
@@ -69,9 +88,19 @@ impl Type {
                 "({})",
                 v.iter().map(|x| x.name()).collect::<Vec<_>>().join(" | ")
             ),
+            Type::Both(l, r) => format!("{} & {}", l.name(), r.name()),
             Type::ClassRef(name) => format!("class {}", name),
             Type::FunctionRef(name) => format!("function {}", name),
             Type::Image => "image".into(),
+            Type::Audio => "audio".into(),
+        }
+    }
+
+    pub fn is_optional(&self) -> bool {
+        match self {
+            Type::None => true,
+            Type::Union(v) => v.iter().any(|x| x.is_optional()),
+            _ => false,
         }
     }
 
@@ -156,10 +185,33 @@ impl PredefinedTypes {
 
     pub fn default() -> Self {
         Self {
-            functions: HashMap::from([(
-                "baml::Chat".into(),
-                (Type::String, vec![("role".into(), Type::String)]),
-            )]),
+            functions: HashMap::from([
+                (
+                    "baml::Chat".into(),
+                    (Type::String, vec![("role".into(), Type::String)]),
+                ),
+                (
+                    "baml::OutputFormat".into(),
+                    (
+                        Type::String,
+                        vec![
+                            ("prefix".into(), Type::merge(vec![Type::String, Type::None])),
+                            (
+                                "or_splitter".into(),
+                                Type::merge(vec![Type::String, Type::None]),
+                            ),
+                            (
+                                "enum_value_prefix".into(),
+                                Type::merge(vec![Type::String, Type::None]),
+                            ),
+                            (
+                                "always_hoist_enums".into(),
+                                Type::merge(vec![Type::Bool, Type::None]),
+                            ),
+                        ],
+                    ),
+                ),
+            ]),
             classes: HashMap::from([
                 (
                     "baml::Client".into(),
@@ -171,10 +223,16 @@ impl PredefinedTypes {
                 (
                     "baml::Context".into(),
                     HashMap::from([
-                        ("output_format".into(), Type::String),
+                        (
+                            "output_format".into(),
+                            Type::Both(
+                                Type::String.into(),
+                                Type::FunctionRef("baml::OutputFormat".into()).into(),
+                            ),
+                        ),
                         ("client".into(), Type::ClassRef("baml::Client".into())),
                         (
-                            "env".into(),
+                            "tags".into(),
                             Type::Map(Box::new(Type::String), Box::new(Type::String)),
                         ),
                     ]),
@@ -383,8 +441,20 @@ impl PredefinedTypes {
         let (ret, args) = val.unwrap();
         let mut errors = Vec::new();
 
+        // Check how many args are required.
+        let mut optional_args = vec![];
+        for (name, t) in args.iter().rev() {
+            if !t.is_optional() {
+                break;
+            }
+            optional_args.push(name);
+        }
+        let required_args = args.len() - optional_args.len();
+
         // Check count
-        if positional_args.len() + kwargs.len() != args.len() {
+        if positional_args.len() + kwargs.len() < required_args
+            || (positional_args.len() + kwargs.len()) > args.len()
+        {
             errors.push(TypeError::new_wrong_arg_count(
                 func,
                 span,
@@ -392,9 +462,11 @@ impl PredefinedTypes {
                 positional_args.len() + kwargs.len(),
             ));
         } else {
+            let mut unused_args = args.iter().map(|(name, _)| name).collect::<HashSet<_>>();
             // Check types
             for (i, (name, t)) in args.iter().enumerate() {
                 if i < positional_args.len() {
+                    unused_args.remove(name);
                     let arg_t = &positional_args[i];
                     if arg_t != t {
                         errors.push(TypeError::new_wrong_arg_type(
@@ -408,6 +480,7 @@ impl PredefinedTypes {
                     }
                 } else {
                     if let Some(arg_t) = kwargs.get(name.as_str()) {
+                        unused_args.remove(name);
                         if arg_t != t {
                             errors.push(TypeError::new_wrong_arg_type(
                                 func,
@@ -419,14 +492,21 @@ impl PredefinedTypes {
                             ));
                         }
                     } else {
-                        errors.push(TypeError::new_missing_arg(func, span, name));
+                        if !optional_args.contains(&name) {
+                            errors.push(TypeError::new_missing_arg(func, span, name));
+                        }
                     }
                 }
             }
 
             kwargs.iter().for_each(|(name, _)| {
                 if !args.iter().any(|(arg_name, _)| arg_name == name) {
-                    errors.push(TypeError::new_unknown_arg(func, span, name));
+                    errors.push(TypeError::new_unknown_arg(
+                        func,
+                        span,
+                        name,
+                        unused_args.clone(),
+                    ));
                 }
             });
         }

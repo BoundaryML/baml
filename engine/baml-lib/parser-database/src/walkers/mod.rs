@@ -321,6 +321,7 @@ impl<'db> crate::ParserDatabase {
                         baml_types::TypeValue::Bool => Type::Bool,
                         baml_types::TypeValue::Null => Type::None,
                         baml_types::TypeValue::Image => Type::Image,
+                        baml_types::TypeValue::Audio => Type::Audio,
                     },
                     ast::Identifier::String(_, _) => Type::String,
                     ast::Identifier::Invalid(_, _) => Type::Unknown,

@@ -52,6 +52,26 @@ module Baml
     sig {
       
       params(
+        aud: Baml::Audio,
+      ).returns(String)
+      
+    }
+    def AudioInput(
+        aud:
+    )
+      raw = @runtime.call_function(
+        "AudioInput",
+        {
+          "aud" => aud,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
         input: String,
       ).returns(Baml::Types::Category)
       
@@ -212,6 +232,46 @@ module Baml
     sig {
       
       params(
+        input: Baml::Types::DynInputOutput,
+      ).returns(Baml::Types::DynInputOutput)
+      
+    }
+    def DynamicInputOutput(
+        input:
+    )
+      raw = @runtime.call_function(
+        "DynamicInputOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: T::Array[Baml::Types::DynInputOutput],
+      ).returns(T::Array[Baml::Types::DynInputOutput])
+      
+    }
+    def DynamicListInputOutput(
+        input:
+    )
+      raw = @runtime.call_function(
+        "DynamicListInputOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
         input: String,
       ).returns(T::Array[String])
       
@@ -243,6 +303,26 @@ module Baml
         "ExtractPeople",
         {
           "text" => text,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        email: String,
+      ).returns(Baml::Types::ReceiptInfo)
+      
+    }
+    def ExtractReceiptInfo(
+        email:
+    )
+      raw = @runtime.call_function(
+        "ExtractReceiptInfo",
+        {
+          "email" => email,
         },
         @ctx_manager,
       )
@@ -736,26 +816,6 @@ module Baml
       ).returns(String)
       
     }
-    def PromptTestOpenAI(
-        input:
-    )
-      raw = @runtime.call_function(
-        "PromptTestOpenAI",
-        {
-          "input" => input,
-        },
-        @ctx_manager,
-      )
-      (raw.parsed_using_types(Baml::Types))
-    end
-
-    sig {
-      
-      params(
-        input: String,
-      ).returns(String)
-      
-    }
     def PromptTestOpenAIChat(
         input:
     )
@@ -796,11 +856,51 @@ module Baml
       ).returns(String)
       
     }
+    def PromptTestStreaming(
+        input:
+    )
+      raw = @runtime.call_function(
+        "PromptTestStreaming",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
     def TestAnthropic(
         input:
     )
       raw = @runtime.call_function(
         "TestAnthropic",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
+    def TestAws(
+        input:
+    )
+      raw = @runtime.call_function(
+        "TestAws",
         {
           "input" => input,
         },
@@ -1109,6 +1209,26 @@ module Baml
 
     sig {
       
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
+    def TestOpenAILegacyProvider(
+        input:
+    )
+      raw = @runtime.call_function(
+        "TestOpenAILegacyProvider",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
       returns(String)
       
     }
@@ -1174,6 +1294,27 @@ module Baml
     def initialize(runtime:, ctx_manager:)
       @runtime = runtime
       @ctx_manager = ctx_manager
+    end
+
+    sig {
+      params(
+        aud: Baml::Audio,
+      ).returns(Baml::BamlStream[String])
+    }
+    def AudioInput(
+        aud:
+    )
+      raw = @runtime.stream_function(
+        "AudioInput",
+        {
+          "aud" => aud,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
     end
 
     sig {
@@ -1346,6 +1487,48 @@ module Baml
 
     sig {
       params(
+        input: Baml::Types::DynInputOutput,
+      ).returns(Baml::BamlStream[Baml::Types::DynInputOutput])
+    }
+    def DynamicInputOutput(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "DynamicInputOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::DynInputOutput, Baml::Types::DynInputOutput].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: T::Array[Baml::Types::DynInputOutput],
+      ).returns(Baml::BamlStream[T::Array[Baml::Types::DynInputOutput]])
+    }
+    def DynamicListInputOutput(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "DynamicListInputOutput",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T::Array[Baml::PartialTypes::DynInputOutput], T::Array[Baml::Types::DynInputOutput]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
         input: String,
       ).returns(Baml::BamlStream[T::Array[String]])
     }
@@ -1381,6 +1564,27 @@ module Baml
         @ctx_manager,
       )
       Baml::BamlStream[T::Array[Baml::PartialTypes::Person], T::Array[Baml::Types::Person]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        email: String,
+      ).returns(Baml::BamlStream[Baml::Types::ReceiptInfo])
+    }
+    def ExtractReceiptInfo(
+        email:
+    )
+      raw = @runtime.stream_function(
+        "ExtractReceiptInfo",
+        {
+          "email" => email,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::ReceiptInfo, Baml::Types::ReceiptInfo].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -1895,27 +2099,6 @@ module Baml
         input: String,
       ).returns(Baml::BamlStream[String])
     }
-    def PromptTestOpenAI(
-        input:
-    )
-      raw = @runtime.stream_function(
-        "PromptTestOpenAI",
-        {
-          "input" => input,
-        },
-        @ctx_manager,
-      )
-      Baml::BamlStream[T.nilable(String), String].new(
-        ffi_stream: raw,
-        ctx_manager: @ctx_manager
-      )
-    end
-
-    sig {
-      params(
-        input: String,
-      ).returns(Baml::BamlStream[String])
-    }
     def PromptTestOpenAIChat(
         input:
     )
@@ -1958,11 +2141,53 @@ module Baml
         input: String,
       ).returns(Baml::BamlStream[String])
     }
+    def PromptTestStreaming(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "PromptTestStreaming",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
     def TestAnthropic(
         input:
     )
       raw = @runtime.stream_function(
         "TestAnthropic",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestAws(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "TestAws",
         {
           "input" => input,
         },
@@ -2278,6 +2503,27 @@ module Baml
     )
       raw = @runtime.stream_function(
         "TestOpenAI",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestOpenAILegacyProvider(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "TestOpenAILegacyProvider",
         {
           "input" => input,
         },

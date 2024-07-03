@@ -15,8 +15,7 @@
     "formatter": {
       "quoteStyle": "single",
       "jsxQuoteStyle": "single",
-      "semicolons": "asNeeded",
-      "trailingComma": "all"
+      "semicolons": "asNeeded"
     }
   },
   "json": {

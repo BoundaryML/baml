@@ -135,6 +135,7 @@ module Baml
     class ClassOptionalOutput < T::Struct; end
     class ClassOptionalOutput2 < T::Struct; end
     class ClassWithImage < T::Struct; end
+    class DynInputOutput < T::Struct; end
     class DynamicClassOne < T::Struct; end
     class DynamicClassTwo < T::Struct; end
     class DynamicOutput < T::Struct; end
@@ -150,6 +151,8 @@ module Baml
     class OrderInfo < T::Struct; end
     class Person < T::Struct; end
     class RaysData < T::Struct; end
+    class ReceiptInfo < T::Struct; end
+    class ReceiptItem < T::Struct; end
     class Resume < T::Struct; end
     class SearchParams < T::Struct; end
     class SomeClassNestedDynamic < T::Struct; end
@@ -179,6 +182,10 @@ module Baml
       const :myImage, Baml::Image
       const :param2, String
       const :fake_image, Baml::Types::FakeImage
+    end
+    class DynInputOutput < T::Struct
+      include T::Struct::ActsAsComparable
+      const :testKey, String
     end
     class DynamicClassOne < T::Struct
       include T::Struct::ActsAsComparable
@@ -260,6 +267,18 @@ module Baml
       include T::Struct::ActsAsComparable
       const :dataType, Baml::Types::DataType
       const :value, T.any(Baml::Types::Resume, Baml::Types::Event)
+    end
+    class ReceiptInfo < T::Struct
+      include T::Struct::ActsAsComparable
+      const :items, T::Array[Baml::Types::ReceiptItem]
+      const :total_cost, T.nilable(Float)
+    end
+    class ReceiptItem < T::Struct
+      include T::Struct::ActsAsComparable
+      const :name, String
+      const :description, T.nilable(String)
+      const :quantity, Integer
+      const :price, Float
     end
     class Resume < T::Struct
       include T::Struct::ActsAsComparable

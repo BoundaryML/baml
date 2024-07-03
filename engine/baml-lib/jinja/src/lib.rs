@@ -1,4 +1,4 @@
-use baml_types::{BamlImage, BamlValue};
+use baml_types::{BamlMedia, BamlMediaType, BamlValue};
 use colored::*;
 mod evaluate_type;
 mod get_vars;
@@ -74,6 +74,7 @@ pub fn validate_template(
 pub struct RenderContext_Client {
     pub name: String,
     pub provider: String,
+    pub default_role: String,
 }
 
 #[derive(Debug)]
@@ -97,6 +98,7 @@ fn render_minijinja(
     args: &minijinja::Value,
     mut ctx: RenderContext,
     template_string_macros: &[TemplateStringMacro],
+    default_role: String,
 ) -> Result<RenderedPrompt, minijinja::Error> {
     let mut env = get_env();
 
@@ -194,7 +196,6 @@ fn render_minijinja(
 
     let mut chat_messages = vec![];
     let mut role = None;
-
     for chunk in rendered.split(MAGIC_CHAT_ROLE_DELIMITER) {
         if chunk.starts_with(":baml-start-baml:") && chunk.ends_with(":baml-end-baml:") {
             role = Some(
@@ -216,10 +217,17 @@ fn render_minijinja(
                         .strip_suffix(":baml-end-image:")
                         .unwrap_or(part);
 
-                    match serde_json::from_str::<BamlImage>(image_data) {
-                        Ok(image) => {
-                            parts.push(ChatMessagePart::Image(image));
-                        }
+                    match serde_json::from_str::<BamlMedia>(image_data) {
+                        Ok(media) => match media {
+                            BamlMedia::Url(media_type, _) => match media_type {
+                                BamlMediaType::Image => parts.push(ChatMessagePart::Image(media)),
+                                BamlMediaType::Audio => parts.push(ChatMessagePart::Audio(media)),
+                            },
+                            BamlMedia::Base64(media_type, _) => match media_type {
+                                BamlMediaType::Image => parts.push(ChatMessagePart::Image(media)),
+                                BamlMediaType::Audio => parts.push(ChatMessagePart::Audio(media)),
+                            },
+                        },
                         Err(_) => {
                             Err(minijinja::Error::new(
                                 ErrorKind::CannotUnpack,
@@ -227,16 +235,18 @@ fn render_minijinja(
                             ))?;
                         }
                     }
-                } else if part.is_empty() {
-                    // only whitespace, so discard
-                } else {
+                } else if !part.trim().is_empty() {
                     parts.push(ChatMessagePart::Text(part.trim().to_string()));
                 }
             }
-            chat_messages.push(RenderedChatMessage {
-                role: role.unwrap_or("system").to_string(),
-                parts,
-            });
+
+            // Only add the message if it contains meaningful content
+            if !parts.is_empty() {
+                chat_messages.push(RenderedChatMessage {
+                    role: role.unwrap_or(&default_role).to_string(),
+                    parts,
+                });
+            }
         }
     }
 
@@ -275,7 +285,8 @@ impl ImageBase64 {
 #[derive(Debug, PartialEq, Serialize, Clone)]
 pub enum ChatMessagePart {
     Text(String), // raw user-provided text
-    Image(BamlImage),
+    Image(BamlMedia),
+    Audio(BamlMedia),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -300,12 +311,19 @@ impl std::fmt::Display for RenderedPrompt {
                             .iter()
                             .map(|p| match p {
                                 ChatMessagePart::Text(t) => t.clone(),
-                                ChatMessagePart::Image(img) => match img {
-                                    BamlImage::Url(url) =>
+                                ChatMessagePart::Image(media) => match media {
+                                    BamlMedia::Url(BamlMediaType::Image, url) =>
                                         format!("<image_placeholder: {}>", url.url),
-                                    BamlImage::Base64(_) =>
-                                    // TODO: print this as well?
+                                    BamlMedia::Base64(BamlMediaType::Image, _) =>
                                         "<image_placeholder base64>".to_string(),
+                                    _ => unreachable!(),
+                                },
+                                ChatMessagePart::Audio(media) => match media {
+                                    BamlMedia::Url(BamlMediaType::Audio, url) =>
+                                        format!("<audio_placeholder: {}>", url.url),
+                                    BamlMedia::Base64(BamlMediaType::Audio, _) =>
+                                        "<audio_placeholder base64>".to_string(),
+                                    _ => unreachable!(),
                                 },
                             })
                             .collect::<Vec<String>>()
@@ -364,7 +382,8 @@ impl RenderedPrompt {
                     .flat_map(|m| {
                         m.parts.into_iter().map(|p| match p {
                             ChatMessagePart::Text(t) => t,
-                            ChatMessagePart::Image(_) => "".to_string(), // we are choosing to ignore the image for now
+                            ChatMessagePart::Image(_) | ChatMessagePart::Audio(_) => "".to_string(),
+                            // we are choosing to ignore the image for now
                         })
                     })
                     .collect::<Vec<String>>()
@@ -411,8 +430,14 @@ pub fn render_prompt(
     }
 
     let minijinja_args: Value = args.clone().into();
-
-    let rendered = render_minijinja(template, &minijinja_args, ctx, template_string_macros);
+    let default_role = ctx.client.default_role.clone();
+    let rendered = render_minijinja(
+        template,
+        &minijinja_args,
+        ctx,
+        template_string_macros,
+        default_role,
+    );
 
     match rendered {
         Ok(r) => Ok(r),
@@ -454,7 +479,11 @@ mod render_tests {
 
         let args = BamlValue::Map(BamlMap::from([(
             "img".to_string(),
-            BamlValue::Image(BamlImage::url("https://example.com/image.jpg".to_string())),
+            BamlValue::Media(BamlMedia::url(
+                BamlMediaType::Image,
+                "https://example.com/image.jpg".to_string(),
+                None,
+            )),
         )]));
 
         let rendered = render_prompt(
@@ -465,6 +494,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -478,9 +508,11 @@ mod render_tests {
                 role: "system".to_string(),
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-                    ChatMessagePart::Image(BamlImage::url(
-                        "https://example.com/image.jpg".to_string()
-                    ),),
+                    ChatMessagePart::Image(BamlMedia::url(
+                        BamlMediaType::Image,
+                        "https://example.com/image.jpg".to_string(),
+                        None
+                    )),
                 ]
             },])
         );
@@ -496,7 +528,11 @@ mod render_tests {
             "myObject".to_string(),
             BamlValue::Map(BamlMap::from([(
                 "img".to_string(),
-                BamlValue::Image(BamlImage::url("https://example.com/image.jpg".to_string())),
+                BamlValue::Media(BamlMedia::url(
+                    BamlMediaType::Image,
+                    "https://example.com/image.jpg".to_string(),
+                    None,
+                )),
             )])),
         )]));
 
@@ -508,6 +544,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -521,9 +558,11 @@ mod render_tests {
                 role: "system".to_string(),
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-                    ChatMessagePart::Image(BamlImage::url(
-                        "https://example.com/image.jpg".to_string()
-                    ),),
+                    ChatMessagePart::Image(BamlMedia::url(
+                        BamlMediaType::Image,
+                        "https://example.com/image.jpg".to_string(),
+                        None
+                    )),
                 ]
             },])
         );
@@ -537,7 +576,11 @@ mod render_tests {
 
         let args: BamlValue = BamlValue::Map(BamlMap::from([(
             "img".to_string(),
-            BamlValue::Image(BamlImage::url("https://example.com/image.jpg".to_string())),
+            BamlValue::Media(BamlMedia::url(
+                BamlMediaType::Image,
+                "https://example.com/image.jpg".to_string(),
+                None,
+            )),
         )]));
 
         let rendered = render_prompt(
@@ -548,6 +591,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -561,9 +605,11 @@ mod render_tests {
                 role: "system".to_string(),
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-                    ChatMessagePart::Image(BamlImage::url(
-                        "https://example.com/image.jpg".to_string()
-                    ),),
+                    ChatMessagePart::Image(BamlMedia::url(
+                        BamlMediaType::Image,
+                        "https://example.com/image.jpg".to_string(),
+                        None
+                    )),
                     ChatMessagePart::Text(vec![". Please help me.",].join("\n")),
                 ]
             },])
@@ -602,6 +648,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -666,6 +713,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -705,6 +753,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -733,6 +782,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -761,6 +811,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -789,6 +840,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -839,6 +891,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -888,6 +941,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -951,6 +1005,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
@@ -993,6 +1048,7 @@ mod render_tests {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
+                    default_role: "system".to_string(),
                 },
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),

@@ -8,22 +8,41 @@ This VS Code extension provides support for the Baml language used to define LLM
 2. **Dynamic playground**: Run and test your prompts in real-time.
 3. **Build typed clients in several languages**: Command +S a baml file to build a baml client to call your functions in Python or TS.
 
-
 ## Usage
 
 1. **Install BAML dependency**:
 
-* python: `pip install baml-py`
-* typescript: `npm install @boundaryml/baml`
+- python: `pip install baml-py`
+- typescript: `npm install @boundaryml/baml`
+- ruby: `bundle init && bundle add baml sorbet-runtime sorbet-struct-comparable`
 
 2. **Create a baml_src directory with a main.baml file and you're all set!**
 
-3. **Add your own api keys in the playground to test your functions**
+   Or you can try our `init` script to get an example directory setup for you:
 
+```bash Python
+# If using your local installation, venv or conda:
+pip install baml-py
+baml-cli generate init
+```
 
-4. See more examples at **[promptfiddle.com](promptfiddle.com)
+```bash TypeScript
+# If using npm:
+npm install @boundaryml/baml
+npm run baml-cli init
+```
+
+```bash Ruby
+bundle add baml
+bundle exec baml-cli init
+```
+
+3. **Add your own api keys in the playground (settings icon) to test your functions**
+
+4. See more examples at \*\*[promptfiddle.com](promptfiddle.com)
 
 ## Documentation
+
 See our [documentation](https://docs.boundaryml.com)
 
 For any issues, feature requests, or contributions, please reach out at contact@boundaryml.com

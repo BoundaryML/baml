@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Serialize, Debug)]
+#[allow(dead_code)]
 pub(crate) struct UpdateTestCase {
     pub project_id: Option<String>,
     pub test_cycle_id: String,
@@ -15,8 +16,8 @@ pub(crate) struct UpdateTestCase {
     pub error_data: Option<Value>, // Rust doesn't have a direct equivalent of Python's Any type, so we use serde_json::Value
 }
 
-#[derive(Serialize, Debug)]
-pub(crate) struct LogSchema {
+#[derive(Serialize, Debug, Clone)]
+pub struct LogSchema {
     pub project_id: Option<String>,
     pub event_type: EventType,
     pub root_event_id: String,
@@ -29,26 +30,26 @@ pub(crate) struct LogSchema {
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub(crate) struct IO {
+pub struct IO {
     pub(crate) input: Option<IOValue>,
     pub(crate) output: Option<IOValue>,
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub(crate) struct IOValue {
+pub struct IOValue {
     pub(crate) value: ValueType,
     pub(crate) r#override: Option<HashMap<String, Value>>,
     pub(crate) r#type: TypeSchema,
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub(crate) struct TypeSchema {
+pub struct TypeSchema {
     pub(crate) name: TypeSchemaName,
     pub(crate) fields: IndexMap<String, String>,
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub(crate) enum TypeSchemaName {
+pub enum TypeSchemaName {
     #[serde(rename = "single")]
     Single,
     #[serde(rename = "multi")]
@@ -57,7 +58,7 @@ pub(crate) enum TypeSchemaName {
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
-pub(crate) enum ValueType {
+pub enum ValueType {
     String(String),
     // For mutli-args, we use a list of strings
     List(Vec<String>),
@@ -98,7 +99,7 @@ pub enum EventType {
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub(crate) struct LogSchemaContext {
+pub struct LogSchemaContext {
     pub hostname: String,
     pub process_id: String,
     pub stage: Option<String>,
@@ -109,7 +110,7 @@ pub(crate) struct LogSchemaContext {
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub(crate) struct EventChain {
+pub struct EventChain {
     pub function_name: String,
     pub variant_name: Option<String>,
 }
@@ -122,8 +123,8 @@ pub(crate) struct Error {
     pub r#override: Option<HashMap<String, Value>>,
 }
 
-#[derive(Serialize, Debug, Deserialize, Default)]
-pub(crate) struct LLMOutputModelMetadata {
+#[derive(Serialize, Debug, Deserialize, Default, Clone)]
+pub struct LLMOutputModelMetadata {
     pub logprobs: Option<Value>,
     pub prompt_tokens: Option<i64>,
     pub output_tokens: Option<i64>,
@@ -131,32 +132,36 @@ pub(crate) struct LLMOutputModelMetadata {
     pub finish_reason: Option<String>,
 }
 
-#[derive(Serialize, Debug)]
-pub(crate) struct LLMOutputModel {
+#[derive(Serialize, Debug, Clone)]
+pub struct LLMOutputModel {
     pub raw_text: String,
     pub metadata: LLMOutputModelMetadata,
     pub r#override: Option<HashMap<String, Value>>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub(crate) struct LLMChat {
     pub role: Role,
     pub content: Vec<ContentPart>,
 }
 
-#[derive(Serialize, Debug)]
-pub(crate) enum ContentPart {
+#[derive(Serialize, Debug, Clone)]
+pub enum ContentPart {
     #[serde(rename = "text")]
     Text(String),
     #[serde(rename = "url_image")]
     UrlImage(String),
     #[serde(rename = "b64_image")]
     B64Image(String),
+    #[serde(rename = "url_audio")]
+    UrlAudio(String),
+    #[serde(rename = "b64_audio")]
+    B64Audio(String),
 }
 
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 #[serde(untagged)]
-pub(crate) enum Role {
+pub enum Role {
     #[serde(rename = "assistant")]
     Assistant,
     #[serde(rename = "user")]
@@ -166,14 +171,15 @@ pub(crate) enum Role {
     Other(String),
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub(crate) struct LLMEventInput {
     pub prompt: LLMEventInputPrompt,
-    pub invocation_params: HashMap<String, Value>,
+    #[serde(rename = "invocation_params")]
+    pub request_options: HashMap<String, Value>,
 }
 
-#[derive(Serialize, Debug)]
-pub(crate) struct LLMEventSchema {
+#[derive(Serialize, Debug, Clone)]
+pub struct LLMEventSchema {
     pub model_name: String,
     pub provider: String,
     pub input: LLMEventInput,
@@ -181,20 +187,21 @@ pub(crate) struct LLMEventSchema {
     pub error: Option<String>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub(crate) enum MetadataType {
+    #[allow(dead_code)]
     Single(LLMEventSchema),
     Multi(Vec<LLMEventSchema>),
 }
-#[derive(Serialize, Debug)]
-pub(crate) struct LLMEventInputPrompt {
+#[derive(Serialize, Debug, Clone)]
+pub struct LLMEventInputPrompt {
     pub template: Template,
     pub template_args: HashMap<String, String>,
     pub r#override: Option<HashMap<String, Value>>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
 #[allow(dead_code)]
 pub enum Template {

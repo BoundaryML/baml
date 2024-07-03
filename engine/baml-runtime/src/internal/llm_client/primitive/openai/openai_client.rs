@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use anyhow::{Context, Result};
-use baml_types::BamlImage;
+use anyhow::Result;
+use baml_types::{BamlMedia, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 
@@ -11,9 +11,7 @@ use crate::client_builder::ClientProperty;
 use crate::internal::llm_client::primitive::request::{
     make_parsed_request, make_request, RequestBuilder,
 };
-use crate::internal::llm_client::traits::{
-    SseResponseTrait, StreamResponse, WithCompletion, WithStreamChat,
-};
+use crate::internal::llm_client::traits::{SseResponseTrait, StreamResponse, WithStreamChat};
 use crate::internal::llm_client::{
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
     LLMResponse, ModelFeatures,
@@ -81,7 +79,7 @@ impl WithNoCompletion for OpenAIClient {}
 //                 prompt: internal_baml_jinja::RenderedPrompt::Completion(prompt.clone()),
 //                 start_time: system_start,
 //                 latency: instant_start.elapsed(),
-//                 invocation_params: self.properties.properties.clone(),
+//                 request_options: self.properties.properties.clone(),
 //                 message: format!(
 //                     "Expected exactly one choices block, got {}",
 //                     response.choices.len()
@@ -99,7 +97,7 @@ impl WithNoCompletion for OpenAIClient {}
 //             start_time: system_start,
 //             latency: instant_start.elapsed(),
 //             model: response.model,
-//             invocation_params: self.properties.properties.clone(),
+//             request_options: self.properties.properties.clone(),
 //             metadata: LLMCompleteResponseMetadata {
 //                 baml_is_complete: match response.choices.get(0) {
 //                     Some(c) => match c.finish_reason {
@@ -151,7 +149,7 @@ impl WithChat for OpenAIClient {
                 prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                 start_time: system_start,
                 latency: instant_start.elapsed(),
-                invocation_params: self.properties.properties.clone(),
+                request_options: self.properties.properties.clone(),
                 message: format!(
                     "Expected exactly one choices block, got {}",
                     response.choices.len()
@@ -174,7 +172,7 @@ impl WithChat for OpenAIClient {
             start_time: system_start,
             latency: instant_start.elapsed(),
             model: response.model,
-            invocation_params: self.properties.properties.clone(),
+            request_options: self.properties.properties.clone(),
             metadata: LLMCompleteResponseMetadata {
                 baml_is_complete: match response.choices.get(0) {
                     Some(c) => match c.finish_reason {
@@ -213,11 +211,11 @@ impl RequestBuilder for OpenAIClient {
         &self.client
     }
 
-    fn build_request(
+    async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
-    ) -> reqwest::RequestBuilder {
+    ) -> Result<reqwest::RequestBuilder> {
         let mut req = self.client.post(if prompt.is_left() {
             format!(
                 "{}/completions",
@@ -250,6 +248,10 @@ impl RequestBuilder for OpenAIClient {
         }
         req = req.header("baml-original-url", self.properties.base_url.as_str());
 
+        req = req.header(
+            "baml-render-url",
+            format!("{}/chat/completions", self.properties.base_url),
+        );
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
         match prompt {
@@ -273,13 +275,19 @@ impl RequestBuilder for OpenAIClient {
         }
 
         if stream {
-            body_obj.insert("stream".into(), true.into());
+            body_obj.insert("stream".into(), json!(true));
+            body_obj.insert(
+                "stream_options".into(),
+                json!({
+                    "include_usage": true,
+                }),
+            );
         }
 
-        req.json(&body)
+        Ok(req.json(&body))
     }
 
-    fn invocation_params(&self) -> &HashMap<String, serde_json::Value> {
+    fn request_options(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
     }
 }
@@ -315,7 +323,7 @@ impl SseResponseTrait for OpenAIClient {
                         start_time: system_start,
                         latency: instant_start.elapsed(),
                         model: "".to_string(),
-                        invocation_params: params.clone(),
+                        request_options: params.clone(),
                         metadata: LLMCompleteResponseMetadata {
                             baml_is_complete: false,
                             finish_reason: None,
@@ -344,7 +352,7 @@ impl SseResponseTrait for OpenAIClient {
                                             prompt.clone(),
                                         ),
                                         start_time: system_start,
-                                        invocation_params: params.clone(),
+                                        request_options: params.clone(),
                                         latency: instant_start.elapsed(),
                                         message: format!("Failed to parse event: {:#?}", e),
                                         code: ErrorCode::Other(2),
@@ -367,6 +375,11 @@ impl SseResponseTrait for OpenAIClient {
                             }
                         }
                         inner.latency = instant_start.elapsed();
+                        if let Some(usage) = event.usage.as_ref() {
+                            inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
+                            inner.metadata.output_tokens = Some(usage.completion_tokens);
+                            inner.metadata.total_tokens = Some(usage.total_tokens);
+                        }
 
                         std::future::ready(Some(LLMResponse::Success(inner.clone())))
                     },
@@ -378,7 +391,7 @@ impl SseResponseTrait for OpenAIClient {
 impl WithStreamChat for OpenAIClient {
     async fn stream_chat(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> StreamResponse {
         let (resp, system_start, instant_start) =
@@ -411,15 +424,18 @@ macro_rules! make_openai_client {
     ($client:ident, $properties:ident) => {
         Ok(Self {
             name: $client.name().into(),
-            properties: $properties,
+
             context: RenderContext_Client {
                 name: $client.name().into(),
                 provider: $client.elem().provider.clone(),
+                default_role: $properties.default_role.clone(),
             },
+            properties: $properties,
             features: ModelFeatures {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
+                resolve_media_urls: false,
             },
             retry_policy: $client
                 .elem()
@@ -506,17 +522,20 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
         .map(|part| match part {
             ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
             ChatMessagePart::Image(image) => match image {
-                BamlImage::Url(image) => {
+                BamlMedia::Url(BamlMediaType::Image, image) => {
                     json!({"type": "image_url", "image_url": json!({
                         "url": image.url
                     })})
                 }
-                BamlImage::Base64(image) => {
+                BamlMedia::Base64(BamlMediaType::Image, image) => {
                     json!({"type": "image_url", "image_url": json!({
-                        "base64": image.base64
+                       "url" : format!("data:{};base64,{}", image.media_type, image.base64)
                     })})
                 }
+                _ => json!({}), // return an empty JSON object or any other default value
             },
+            // OpenAI does not yet support audio
+            _ => json!({}), // return an empty JSON object or any other default value
         })
         .collect();
 

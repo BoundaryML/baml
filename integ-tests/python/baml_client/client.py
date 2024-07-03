@@ -56,6 +56,28 @@ class BamlClient:
       return self.__stream_client
 
     
+    async def AudioInput(
+        self,
+        aud: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "AudioInput",
+        {
+          "aud": aud,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("AudioInputReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def ClassifyMessage(
         self,
         input: str,
@@ -248,6 +270,50 @@ class BamlClient:
       mdl = create_model("DynamicFuncReturnType", inner=(types.DynamicClassTwo, ...))
       return coerce(mdl, raw.parsed())
     
+    async def DynamicInputOutput(
+        self,
+        input: types.DynInputOutput,
+        baml_options: BamlCallOptions = {},
+    ) -> types.DynInputOutput:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "DynamicInputOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("DynamicInputOutputReturnType", inner=(types.DynInputOutput, ...))
+      return coerce(mdl, raw.parsed())
+    
+    async def DynamicListInputOutput(
+        self,
+        input: List[types.DynInputOutput],
+        baml_options: BamlCallOptions = {},
+    ) -> List[types.DynInputOutput]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "DynamicListInputOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("DynamicListInputOutputReturnType", inner=(List[types.DynInputOutput], ...))
+      return coerce(mdl, raw.parsed())
+    
     async def ExtractNames(
         self,
         input: str,
@@ -294,6 +360,28 @@ class BamlClient:
         __cb__,
       )
       mdl = create_model("ExtractPeopleReturnType", inner=(List[types.Person], ...))
+      return coerce(mdl, raw.parsed())
+    
+    async def ExtractReceiptInfo(
+        self,
+        email: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.ReceiptInfo:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "ExtractReceiptInfo",
+        {
+          "email": email,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("ExtractReceiptInfoReturnType", inner=(types.ReceiptInfo, ...))
       return coerce(mdl, raw.parsed())
     
     async def ExtractResume(
@@ -872,6 +960,7 @@ class BamlClient:
       mdl = create_model("PromptTestClaudeChatNoSystemReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+<<<<<<< HEAD
     async def PromptTestOpenAI(
         self,
         input: str,
@@ -896,6 +985,8 @@ class BamlClient:
       mdl = create_model("PromptTestOpenAIReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+=======
+>>>>>>> canary
     async def PromptTestOpenAIChat(
         self,
         input: str,
@@ -944,6 +1035,28 @@ class BamlClient:
       mdl = create_model("PromptTestOpenAIChatNoSystemReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    async def PromptTestStreaming(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "PromptTestStreaming",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("PromptTestStreamingReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def TestAnthropic(
         self,
         input: str,
@@ -966,6 +1079,28 @@ class BamlClient:
         __cb__,
       )
       mdl = create_model("TestAnthropicReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    async def TestAws(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "TestAws",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("TestAwsReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
     async def TestAzure(
@@ -1328,6 +1463,28 @@ class BamlClient:
       mdl = create_model("TestOpenAIReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    async def TestOpenAILegacyProvider(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "TestOpenAILegacyProvider",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("TestOpenAILegacyProviderReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def TestRetryConstant(
         self,
         
@@ -1409,6 +1566,38 @@ class BamlStreamClient:
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
 
+    
+    def AudioInput(
+        self,
+        aud: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "AudioInput",
+        {
+          "aud": aud,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("AudioInputReturnType", inner=(str, ...))
+      partial_mdl = create_model("AudioInputPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
     
     def ClassifyMessage(
         self,
@@ -1677,6 +1866,70 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def DynamicInputOutput(
+        self,
+        input: types.DynInputOutput,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.DynInputOutput, types.DynInputOutput]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "DynamicInputOutput",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("DynamicInputOutputReturnType", inner=(types.DynInputOutput, ...))
+      partial_mdl = create_model("DynamicInputOutputPartialReturnType", inner=(partial_types.DynInputOutput, ...))
+
+      return baml_py.BamlStream[partial_types.DynInputOutput, types.DynInputOutput](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
+    def DynamicListInputOutput(
+        self,
+        input: List[types.DynInputOutput],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "DynamicListInputOutput",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("DynamicListInputOutputReturnType", inner=(List[types.DynInputOutput], ...))
+      partial_mdl = create_model("DynamicListInputOutputPartialReturnType", inner=(List[partial_types.DynInputOutput], ...))
+
+      return baml_py.BamlStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
     def ExtractNames(
         self,
         input: str,
@@ -1741,6 +1994,38 @@ class BamlStreamClient:
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
         self.__ctx_manager.get(),
+      )
+    
+    def ExtractReceiptInfo(
+        self,
+        email: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.ReceiptInfo, types.ReceiptInfo]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "ExtractReceiptInfo",
+        {
+          "email": email,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("ExtractReceiptInfoReturnType", inner=(types.ReceiptInfo, ...))
+      partial_mdl = create_model("ExtractReceiptInfoPartialReturnType", inner=(partial_types.ReceiptInfo, ...))
+
+      return baml_py.BamlStream[partial_types.ReceiptInfo, types.ReceiptInfo](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
       )
     
     def ExtractResume(
@@ -2536,6 +2821,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+<<<<<<< HEAD
     def PromptTestOpenAI(
         self,
         input: str,
@@ -2569,6 +2855,8 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+=======
+>>>>>>> canary
     def PromptTestOpenAIChat(
         self,
         input: str,
@@ -2635,6 +2923,38 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def PromptTestStreaming(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "PromptTestStreaming",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("PromptTestStreamingReturnType", inner=(str, ...))
+      partial_mdl = create_model("PromptTestStreamingPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
     def TestAnthropic(
         self,
         input: str,
@@ -2666,6 +2986,38 @@ class BamlStreamClient:
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
         self.__ctx_manager.get(),
+      )
+    
+    def TestAws(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "TestAws",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("TestAwsReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestAwsPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
       )
     
     def TestAzure(
@@ -3161,6 +3513,38 @@ class BamlStreamClient:
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
         self.__ctx_manager.get(),
+      )
+    
+    def TestOpenAILegacyProvider(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "TestOpenAILegacyProvider",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("TestOpenAILegacyProviderReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestOpenAILegacyProviderPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
       )
     
     def TestRetryConstant(

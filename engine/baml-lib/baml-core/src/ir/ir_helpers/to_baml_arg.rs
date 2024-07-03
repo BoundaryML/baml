@@ -1,4 +1,4 @@
-use baml_types::{BamlMap, BamlValue, TypeValue};
+use baml_types::{BamlMap, BamlMediaType, BamlValue, TypeValue};
 
 use crate::ir::{FieldType, IntermediateRepr};
 
@@ -27,7 +27,7 @@ impl ParameterError {
 pub fn validate_arg(
     ir: &IntermediateRepr,
     field_type: &FieldType,
-    value: &BamlValue,
+    value: &BamlValue, // original value passed in by user
     scope: &mut ScopeStack,
     allow_implicit_cast_to_string: bool,
 ) -> Option<BamlValue> {
@@ -57,22 +57,59 @@ pub fn validate_arg(
             TypeValue::Bool if matches!(value, BamlValue::Bool(_)) => Some(value.clone()),
             TypeValue::Null if matches!(value, BamlValue::Null) => Some(value.clone()),
             TypeValue::Image => match value {
-                BamlValue::Image(v) => Some(BamlValue::Image(v.clone())),
+                BamlValue::Media(v) => Some(BamlValue::Media(v.clone())),
                 BamlValue::Map(kv) => {
                     if let Some(BamlValue::String(s)) = kv.get("url") {
-                        Some(BamlValue::Image(baml_types::BamlImage::url(s.to_string())))
+                        Some(BamlValue::Media(baml_types::BamlMedia::url(
+                            BamlMediaType::Image,
+                            s.to_string(),
+                            None,
+                        )))
                     } else if let (
                         Some(BamlValue::String(s)),
-                        Some(BamlValue::String(media_type)),
+                        Some(BamlValue::String(media_type_str)),
                     ) = (kv.get("base64"), kv.get("media_type"))
                     {
-                        Some(BamlValue::Image(baml_types::BamlImage::base64(
+                        Some(BamlValue::Media(baml_types::BamlMedia::base64(
+                            BamlMediaType::Image,
                             s.to_string(),
-                            media_type.to_string(),
+                            media_type_str.to_string(),
                         )))
                     } else {
                         scope.push_error(format!(
                                 "Invalid image: expected `url` or (`base64` and `media_type`), got `{}`",
+                                value
+                            ));
+                        None
+                    }
+                }
+                _ => {
+                    scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                    None
+                }
+            },
+            TypeValue::Audio => match value {
+                BamlValue::Media(v) => Some(BamlValue::Media(v.clone())),
+                BamlValue::Map(kv) => {
+                    if let Some(BamlValue::String(s)) = kv.get("url") {
+                        Some(BamlValue::Media(baml_types::BamlMedia::url(
+                            BamlMediaType::Audio,
+                            s.to_string(),
+                            None,
+                        )))
+                    } else if let (
+                        Some(BamlValue::String(s)),
+                        Some(BamlValue::String(media_type_str)),
+                    ) = (kv.get("base64"), kv.get("media_type"))
+                    {
+                        Some(BamlValue::Media(baml_types::BamlMedia::base64(
+                            BamlMediaType::Audio,
+                            s.to_string(),
+                            media_type_str.to_string(),
+                        )))
+                    } else {
+                        scope.push_error(format!(
+                                "Invalid audio: expected `url` or (`base64` and `media_type`), got `{}`",
                                 value
                             ));
                         None
@@ -121,6 +158,7 @@ pub fn validate_arg(
             BamlValue::Class(_, obj) | BamlValue::Map(obj) => match ir.find_class(name) {
                 Ok(c) => {
                     let mut fields = BamlMap::new();
+
                     for f in c.walk_fields() {
                         if let Some(v) = obj.get(f.name()) {
                             if let Some(v) = validate_arg(
@@ -140,6 +178,25 @@ pub fn validate_arg(
                             ));
                         }
                     }
+                    let is_dynamic = c.item.attributes.get("dynamic_type").is_some();
+                    if is_dynamic {
+                        for (key, value) in obj {
+                            if !fields.contains_key(key) {
+                                fields.insert(key.clone(), value.clone());
+                            }
+                        }
+                    } else {
+                        // We let it slide here... but we should probably emit a warning like this:
+                        // for key in obj.keys() {
+                        //     if !fields.contains_key(key) {
+                        //         scope.push_error(format!(
+                        //             "Unexpected field `{}` for class {}. Mark the class as @@dynamic if you want to allow additional fields.",
+                        //             key, name
+                        //         ));
+                        //     }
+                        // }
+                    }
+
                     Some(BamlValue::Class(name.to_string(), fields))
                 }
                 Err(_) => {

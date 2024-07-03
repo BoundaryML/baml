@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet};
 
 use anyhow::Result;
 use baml_types::BamlValue;

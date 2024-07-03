@@ -33,6 +33,7 @@ use baml_types::BamlValue;
 use client_builder::ClientBuilder;
 use indexmap::IndexMap;
 use internal_baml_core::configuration::GeneratorOutputType;
+use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -50,6 +51,9 @@ use clap::Parser;
 pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 #[cfg(feature = "internal")]
 pub use runtime_interface::InternalRuntimeInterface;
+
+#[cfg(feature = "internal")]
+pub use internal_baml_core as internal_core;
 
 #[cfg(not(feature = "internal"))]
 pub(crate) use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
@@ -82,7 +86,7 @@ impl BamlRuntime {
             .collect();
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_directory(path)?,
-            tracer: BamlTracer::new(None, env_vars.into_iter()).into(),
+            tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
         })
     }
@@ -98,7 +102,7 @@ impl BamlRuntime {
             .collect();
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,
-            tracer: BamlTracer::new(None, env_vars.into_iter()).into(),
+            tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
         })
     }
@@ -340,5 +344,15 @@ impl ExperimentalTracingInterface for BamlRuntime {
 
     fn flush(&self) -> Result<()> {
         self.tracer.flush()
+    }
+
+    fn drain_stats(&self) -> InnerTraceStats {
+        self.tracer.drain_stats()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) -> Result<()> {
+        self.tracer.set_log_event_callback(log_event_callback);
+        Ok(())
     }
 }

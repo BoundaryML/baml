@@ -3,7 +3,7 @@ mod field_type;
 mod generate_types;
 mod ruby_language_features;
 
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{path::PathBuf};
 
 use anyhow::Result;
 use indexmap::IndexMap;

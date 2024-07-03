@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
 use colored::*;
-// mod anthropic;
-mod common;
 pub mod llm_provider;
 pub mod orchestrator;
-mod primitive;
+pub mod primitive;
+
 pub mod retry_policy;
 mod strategy;
 pub mod traits;
@@ -15,6 +14,7 @@ use anyhow::Result;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::RenderedPrompt;
 use serde::Serialize;
+use std::error::Error;
 
 use reqwest::StatusCode;
 
@@ -26,6 +26,7 @@ pub struct ModelFeatures {
     pub completion: bool,
     pub chat: bool,
     pub anthropic_system_constraints: bool,
+    pub resolve_media_urls: bool,
 }
 
 #[derive(Debug)]
@@ -41,6 +42,8 @@ pub enum LLMResponse {
     LLMFailure(LLMErrorResponse),
     OtherFailure(String),
 }
+
+impl Error for LLMResponse {}
 
 impl std::fmt::Display for LLMResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -67,7 +70,7 @@ pub struct LLMErrorResponse {
     pub client: String,
     pub model: Option<String>,
     pub prompt: RenderedPrompt,
-    pub invocation_params: HashMap<String, serde_json::Value>,
+    pub request_options: HashMap<String, serde_json::Value>,
     pub start_time: web_time::SystemTime,
     pub latency: web_time::Duration,
 
@@ -132,7 +135,7 @@ pub struct LLMCompleteResponse {
     pub client: String,
     pub model: String,
     pub prompt: RenderedPrompt,
-    pub invocation_params: HashMap<String, serde_json::Value>,
+    pub request_options: HashMap<String, serde_json::Value>,
     pub content: String,
     pub start_time: web_time::SystemTime,
     pub latency: web_time::Duration,

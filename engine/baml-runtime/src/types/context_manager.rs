@@ -147,7 +147,7 @@ impl RuntimeContextManager {
         let ctx = self.context.lock().unwrap();
 
         let env_vars = env_vars
-            .map(|x| (x.as_ref().to_string(), "".to_string()))
+            .map(|x| (x.as_ref().to_string(), format!("${{{}}}", x.as_ref())))
             .chain(self.env_vars.iter().map(|(k, v)| (k.clone(), v.clone())));
 
         RuntimeContext {

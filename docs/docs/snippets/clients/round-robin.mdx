@@ -1,0 +1,85 @@
+---
+title: round-robin
+---
+
+The `round_robin` provider allows you to distribute requests across multiple clients in a round-robin fashion. After each call, the next client in the list will be used.
+
+```rust BAML
+client<llm> MyClient {
+  provider round-robin
+  options {
+    strategy [
+      ClientA
+      ClientB
+      ClientC
+    ]
+  }
+}
+```
+
+## Options
+
+<ParamField path="strategy" type="List[string]" required>
+  The list of client names to try in order. Cannot be empty.
+</ParamField>
+
+<ParamField  path="start" type="int">
+  The index of the client to start with.
+
+  **Default is `random(0, len(strategy))`**
+
+  In the [BAML Playground](/docs/get-started/quickstart/editors-vscode.mdx), Default is `0`.
+</ParamField>
+
+## retry_policy
+
+When using a retry_policy with a round-robin client, it will rotate the strategy list after each retry.
+
+```rust BAML
+client<llm> MyClient {
+  provider round-robin
+  retry_policy MyRetryPolicy
+  options {
+    strategy [
+      ClientA
+      ClientB
+      ClientC
+    ]
+  }
+}
+```
+
+## Nesting multiple round-robin clients
+
+You can nest multiple round-robin clients inside of each other. The round-robin as you would expect.
+
+```rust BAML
+client<llm> MyClient {
+  provider round-robin
+  options {
+    strategy [
+      ClientA
+      ClientB
+      ClientC
+    ]
+  }
+}
+
+client<llm> MegaClient {
+  provider round-robin
+  options {
+    strategy [
+      MyClient
+      ClientD
+      ClientE
+    ]
+  }
+}
+
+// Calling MegaClient will call:
+// MyClient(ClientA)
+// ClientD
+// ClientE
+// MyClient(ClientB)
+// etc.
+```

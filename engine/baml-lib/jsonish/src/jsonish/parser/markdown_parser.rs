@@ -21,7 +21,7 @@ pub fn parse<'a>(str: &'a str, options: &ParseOptions) -> Result<Vec<(String, Va
 
     while let Some(cap) = md_tag_start.find(remaining) {
         let tag = cap.as_str();
-        log::info!("Found tag: {:#?}", cap);
+        log::trace!("Found tag: {:#?}", cap);
 
         let md_content = if let Some(end) = md_tag_end.find(&remaining[cap.end()..]) {
             let next = remaining[cap.end()..cap.end() + end.start()].trim();
@@ -32,7 +32,7 @@ pub fn parse<'a>(str: &'a str, options: &ParseOptions) -> Result<Vec<(String, Va
             remaining[cap.end()..].trim()
         };
 
-        log::info!("Content:\n-----\n{}\n-----\n", md_content);
+        log::trace!("Content:\n-----\n{}\n-----\n", md_content);
 
         let res = entry::parse(
             md_content,

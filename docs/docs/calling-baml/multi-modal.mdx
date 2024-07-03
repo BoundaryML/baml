@@ -1,0 +1,94 @@
+
+## Multi-modal input
+
+### Images 
+Calling a BAML function with an `image` input argument type (see [image types](/docs/snippets/supported-types))
+<CodeGroup>
+```python Python
+from baml_py import Image
+from baml_client import b
+
+async def test_image_input():
+  # from URL
+  res = await b.TestImageInput(
+      img=Image.from_url(
+          "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+      )
+  )
+
+  # Base64 image
+  image_b64 = "iVBORw0K...."
+  res = await b.TestImageInput(
+    img=Image.from_base64("image/png", image_b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Image } from "@boundaryml/baml"
+...
+
+  // URL
+  let res = await b.TestImageInput(
+    Image.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png'),
+  )
+
+  // Base64
+  const image_b64 = "iVB0R..."
+  let res = await b.TestImageInput(
+    Image.fromBase64('image/png', image_b64),
+  )
+  
+```
+
+```ruby Ruby (beta)
+we're working on it!
+```
+
+</CodeGroup>
+ 
+### Audio
+Calling functions that have `audio` types. See [audio types](/docs/snippets/supported-types)
+
+<CodeGroup>
+```python Python
+from baml_py import Audio
+from baml_client import b
+
+async def run():
+  # from URL
+  res = await b.TestAudioInput(
+      img=Audio.from_url(
+          "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+      )
+  )
+
+  # Base64
+  b64 = "iVBORw0K...."
+  res = await b.TestAudioInput(
+    img=Audio.from_base64("image/png", b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Audio } from "@boundaryml/baml"
+...
+
+  // URL
+  let res = await b.TestAudioInput(
+    Audio.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.mp4'),
+  )
+
+  // Base64
+  const audio_base64 = ".."
+  let res = await b.TestAudioInput(
+    Audio.fromBase64('image/png', audio_base64),
+  )
+  
+```
+
+```ruby Ruby (beta)
+we're working on it!
+```
+</CodeGroup>

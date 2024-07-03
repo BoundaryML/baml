@@ -6,6 +6,7 @@ from .baml_py import (
     FunctionResult,
     FunctionResultStream,
     BamlImagePy as Image,
+    BamlAudioPy as Audio,
     invoke_runtime_cli,
 )
 from .stream import BamlStream
@@ -18,5 +19,6 @@ __all__ = [
     "FunctionResult",
     "FunctionResultStream",
     "Image",
+    "Audio",
     "invoke_runtime_cli",
 ]

@@ -50,9 +50,3 @@ function Bar1(a: string) -> int {
 // 23 |   prompt #"
 // 24 |     {{ Foo(a) }}
 //    | 
-// warning: 'b' is a (function Foo | function Foo2), expected function
-//   -->  functions_v2/prompt_errors/prompt1.baml:37
-//    | 
-// 36 | 
-// 37 |     {{ b() }}
-//    | 

@@ -8,10 +8,9 @@
 
 # BAML
 
+**BAML is a domain-specific-language to write and test LLM functions.**
+
 An LLM function is a prompt template with some defined input variables, and a specific output type like a class, enum, union, optional string, etc.
-
-**BAML is a configuration file format to write better and cleaner LLM functions.**
-
 With BAML you can write and test a complex LLM function in 1/10 of the time it takes to setup a python LLM testing environment.
 
 ## Try it out in the playground -- [PromptFiddle.com](https://promptfiddle.com)
@@ -53,7 +52,7 @@ Share your creations and ask questions in our [Discord](https://discord.gg/BTNBe
 ## Starter projects
 
 - [BAML + NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
-- [BAML + FastAPI + Streaming](https://github.com/BoundaryML/baml-examples/tree/main/fastapi-starter)
+- [BAML + FastAPI + Streaming](https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter)
 
 ## A BAML LLM Function
 
@@ -177,7 +176,7 @@ Python: `baml-cli init`
 ### 4. OR use these starter projects:
 
 - [NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
-- [FastAPI](https://github.com/BoundaryML/baml-examples/tree/main/fastapi-starter)
+- [FastAPI](https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter)
 
 ## Observability
 
@@ -225,7 +224,7 @@ Here's how BAML differs from these frameworks:
 
 **Aliasing object fields in Zod**
 
-```
+```typescript
 const UserSchema = z.object({
   first_name: z.string(),
 }).transform((user) => ({
@@ -247,7 +246,7 @@ Zod: not possible
 
 Pydantic:
 
-```
+```python
 class Sentiment(Enum):
   HAPPY = ("ecstatic")
   SAD = ("sad")

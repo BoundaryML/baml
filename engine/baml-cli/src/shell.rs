@@ -1,6 +1,7 @@
 use std::process::Command;
 
 // Function for safely running a shell command (including chained commands)
+#[allow(dead_code)]
 pub fn build_shell_command(cmd: Vec<String>) -> Command {
     // Check if the command is a chained command (i.e. contains a pipe or a semicolon or a double ampersand)
     let is_chained = cmd
@@ -14,6 +15,7 @@ pub fn build_shell_command(cmd: Vec<String>) -> Command {
     }
 }
 
+#[allow(dead_code)]
 fn build_chained_shell_command(cmd: Vec<String>) -> Command {
     let shell_command = cmd
         .iter()
@@ -42,6 +44,7 @@ fn build_chained_shell_command(cmd: Vec<String>) -> Command {
     cmd
 }
 
+#[allow(dead_code)]
 fn build_single_shell_command(cmd: Vec<String>) -> Command {
     let mut cmd_ = Command::new(cmd[0].clone());
     cmd_.args(&cmd[1..]);

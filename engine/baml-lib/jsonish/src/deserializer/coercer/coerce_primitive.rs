@@ -37,6 +37,7 @@ impl TypeCoercer for TypeValue {
             TypeValue::Bool => coerce_bool(ctx, target, value),
             TypeValue::Null => coerce_null(ctx, target, value),
             TypeValue::Image => Err(ctx.error_image_not_supported()),
+            TypeValue::Audio => Err(ctx.error_audio_not_supported()),
         }
     }
 }
