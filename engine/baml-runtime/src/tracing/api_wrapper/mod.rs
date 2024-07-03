@@ -6,7 +6,7 @@ pub(crate) mod core_types;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::{json, Value};
 
-use crate::request::create_client;
+use crate::request::create_tracing_client;
 
 pub(super) use self::api_interface::{BoundaryAPI, BoundaryTestAPI};
 use self::core_types::{TestCaseStatus, UpdateTestCase};
@@ -69,78 +69,6 @@ impl APIConfig {
         match self {
             Self::LocalOnly(config) => &config.log_redaction_placeholder,
             Self::Web(config) => &config.log_redaction_placeholder,
-        }
-    }
-
-    #[allow(dead_code)]
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn copy_from(
-        &self,
-        base_url: Option<&str>,
-        api_key: Option<&str>,
-        project_id: Option<&str>,
-        sessions_id: Option<&str>,
-        stage: Option<&str>,
-        host_name: Option<&str>,
-        log_redaction_enabled: Option<bool>,
-        log_redaction_placeholder: Option<String>,
-        _debug_level: Option<bool>,
-    ) -> Self {
-        let base_url = base_url.unwrap_or(match self {
-            Self::LocalOnly(config) => config.base_url.as_str(),
-            Self::Web(config) => config.base_url.as_str(),
-        });
-        let api_key = api_key.or(match self {
-            Self::LocalOnly(config) => config.api_key.as_deref(),
-            Self::Web(config) => Some(config.api_key.as_str()),
-        });
-        let project_id = project_id.or(match self {
-            Self::LocalOnly(config) => config.project_id.as_deref(),
-            Self::Web(config) => Some(config.project_id.as_str()),
-        });
-        let sessions_id = sessions_id.unwrap_or_else(|| match self {
-            Self::LocalOnly(config) => &config.sessions_id,
-            Self::Web(config) => &config.sessions_id,
-        });
-        let stage = stage.unwrap_or_else(|| match self {
-            Self::LocalOnly(config) => &config.stage,
-            Self::Web(config) => &config.stage,
-        });
-        let host_name = host_name.unwrap_or_else(|| match self {
-            Self::LocalOnly(config) => &config.host_name,
-            Self::Web(config) => &config.host_name,
-        });
-        let log_redaction_enabled = log_redaction_enabled.unwrap_or_else(|| match self {
-            Self::LocalOnly(config) => config.log_redaction_enabled,
-            Self::Web(config) => config.log_redaction_enabled,
-        });
-        let log_redaction_placeholder = log_redaction_placeholder.unwrap_or_else(|| match self {
-            Self::LocalOnly(config) => config.log_redaction_placeholder.clone(),
-            Self::Web(config) => config.log_redaction_placeholder.clone(),
-        });
-
-        match (api_key, project_id) {
-            (Some(api_key), Some(project_id)) => Self::Web(CompleteAPIConfig {
-                base_url: base_url.to_string(),
-                api_key: api_key.to_string(),
-                project_id: project_id.to_string(),
-                stage: stage.to_string(),
-                sessions_id: sessions_id.to_string(),
-                host_name: host_name.to_string(),
-                client: create_client().unwrap(),
-                log_redaction_enabled,
-                log_redaction_placeholder,
-            }),
-            _ => Self::LocalOnly(PartialAPIConfig {
-                base_url: base_url.to_string(),
-                api_key: api_key.map(String::from),
-                project_id: project_id.map(String::from),
-                stage: stage.to_string(),
-                sessions_id: sessions_id.to_string(),
-                host_name: host_name.to_string(),
-                log_redaction_enabled,
-                log_redaction_placeholder,
-            }),
         }
     }
 }
@@ -348,12 +276,12 @@ impl BoundaryTestAPI for APIWrapper {
 }
 
 impl APIWrapper {
-    pub fn from_env_vars<T: AsRef<str>>(value: impl Iterator<Item = (T, T)>) -> Self {
+    pub fn from_env_vars<T: AsRef<str>>(value: impl Iterator<Item = (T, T)>) -> Result<Self> {
         let config = env_setup::Config::from_env_vars(value).unwrap();
         if config.log_redaction_enabled {
             log::info!("Redaction enabled: {}", config.log_redaction_enabled);
         }
-        match (&config.secret, &config.project_id) {
+        Ok(match (&config.secret, &config.project_id) {
             (Some(api_key), Some(project_id)) => Self {
                 config: APIConfig::Web(CompleteAPIConfig {
                     base_url: config.base_url,
@@ -362,7 +290,7 @@ impl APIWrapper {
                     stage: config.stage,
                     sessions_id: config.sessions_id,
                     host_name: config.host_name,
-                    client: create_client().unwrap(),
+                    client: create_tracing_client()?,
                     log_redaction_enabled: config.log_redaction_enabled,
                     log_redaction_placeholder: config.log_redaction_placeholder,
                 }),
@@ -379,7 +307,7 @@ impl APIWrapper {
                     log_redaction_placeholder: config.log_redaction_placeholder,
                 }),
             },
-        }
+        })
     }
 
     pub fn enabled(&self) -> bool {

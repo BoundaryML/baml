@@ -1,6 +1,7 @@
 pub mod api_wrapper;
 
 use crate::on_log_event::LogEventCallbackSync;
+use crate::InnerTraceStats;
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlMediaType, BamlValue};
 use cfg_if::cfg_if;
@@ -47,40 +48,35 @@ pub struct BamlTracer {
     options: APIWrapper,
     enabled: bool,
     tracer: Option<TracerImpl>,
-    trace_stats: Arc<Mutex<TraceStats>>,
+    trace_stats: TraceStats,
 }
 
-macro_rules! bail {
-    ($self:ident, $($arg:tt)*) => {
-        let mut locked = $self.trace_stats.lock().unwrap();
-        locked.n_spans_failed_before_submit += 1;
-        anyhow::bail!($($arg)*);
-    };
-}
+#[cfg(not(target_arch = "wasm32"))]
+static_assertions::assert_impl_all!(BamlTracer: Send, Sync);
 
 impl BamlTracer {
     pub fn new<T: AsRef<str>>(
         options: Option<APIWrapper>,
         env_vars: impl Iterator<Item = (T, T)>,
-    ) -> Self {
-        let options = options.unwrap_or_else(|| APIWrapper::from_env_vars(env_vars));
+    ) -> Result<Self> {
+        let options = match options {
+            Some(wrapper) => wrapper,
+            None => APIWrapper::from_env_vars(env_vars)?,
+        };
+
+        let trace_stats = TraceStats::default();
 
         let tracer = BamlTracer {
             tracer: if options.enabled() {
-                Some(TracerImpl::new(
-                    &options,
-                    if options.stage() == "test" { 1 } else { 20 },
-                ))
+                Some(TracerImpl::new(&options, 20, trace_stats.clone()))
             } else {
                 None
             },
             enabled: options.enabled(),
             options,
-            trace_stats: Arc::new(Mutex::new(TraceStats {
-                n_spans_failed_before_submit: 0,
-            })),
+            trace_stats,
         };
-        tracer
+        Ok(tracer)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -90,12 +86,16 @@ impl BamlTracer {
         }
     }
 
-    pub(crate) fn flush(&self) -> Result<TraceStats> {
+    pub(crate) fn flush(&self) -> Result<()> {
         if let Some(ref tracer) = self.tracer {
             tracer.flush().context("Failed to flush BAML traces")?;
         }
 
-        Ok(self.trace_stats.lock().unwrap().clone())
+        Ok(())
+    }
+
+    pub(crate) fn drain_stats(&self) -> InnerTraceStats {
+        self.trace_stats.drain()
     }
 
     pub(crate) fn start_span(
@@ -105,6 +105,7 @@ impl BamlTracer {
         tb: Option<&TypeBuilder>,
         params: &BamlMap<String, BamlValue>,
     ) -> (Option<TracingSpan>, RuntimeContext) {
+        self.trace_stats.guard().start();
         let span_id = ctx.enter(function_name);
         log::trace!("Entering span {:#?} in {:?}", span_id, function_name);
         if !self.enabled {
@@ -126,9 +127,10 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: Option<BamlValue>,
     ) -> Result<Option<uuid::Uuid>> {
+        let guard = self.trace_stats.guard();
+
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
-            bail!(
-                self,
+            anyhow::bail!(
                 "Attempting to finish a span {:#?} without first starting one. Current context {:#?}",
                 span,
                 ctx
@@ -136,15 +138,17 @@ impl BamlTracer {
         };
 
         if span.span_id != span_id {
-            bail!(self, "Span ID mismatch: {} != {}", span.span_id, span_id);
+            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
         }
 
         if let Some(tracer) = &self.tracer {
             tracer
                 .submit(response.to_log_schema(&self.options, event_chain, tags, span))
                 .await?;
+            guard.done();
             Ok(Some(span_id))
         } else {
+            guard.done();
             Ok(None)
         }
     }
@@ -156,8 +160,9 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: Option<BamlValue>,
     ) -> Result<Option<uuid::Uuid>> {
+        let guard = self.trace_stats.guard();
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
-            bail!(self,
+            anyhow::bail!(
                 "Attempting to finish a span {:#?} without first starting one. Current context {:#?}",
                 span,
                 ctx
@@ -171,24 +176,15 @@ impl BamlTracer {
         );
 
         if span.span_id != span_id {
-            bail!(self, "Span ID mismatch: {} != {}", span.span_id, span_id);
+            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
         }
 
         if let Some(tracer) = &self.tracer {
-            cfg_if! {
-                if #[cfg(target_arch = "wasm32")] {
-                    async {
-                        tracer
-                            .submit(response.to_log_schema(&self.options, event_chain, tags, span))
-                            .await?;
-                        Ok(Some(span_id))
-                    }
-                } else {
-                    tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
-                    Ok(Some(span_id))
-                }
-            }
+            tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
+            guard.finalize();
+            Ok(Some(span_id))
         } else {
+            guard.done();
             Ok(None)
         }
     }
@@ -200,15 +196,13 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: &Result<FunctionResult>,
     ) -> Result<Option<uuid::Uuid>> {
+        let guard = self.trace_stats.guard();
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
-            bail!(
-                self,
-                "Attempting to finish a span without first starting one"
-            );
+            anyhow::bail!("Attempting to finish a span without first starting one");
         };
 
         if span.span_id != span_id {
-            bail!(self, "Span ID mismatch: {} != {}", span.span_id, span_id);
+            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
         }
 
         if let Ok(response) = &response {
@@ -227,8 +221,10 @@ impl BamlTracer {
             tracer
                 .submit(response.to_log_schema(&self.options, event_chain, tags, span))
                 .await?;
+            guard.done();
             Ok(Some(span_id))
         } else {
+            guard.done();
             Ok(None)
         }
     }
@@ -240,11 +236,9 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: &Result<FunctionResult>,
     ) -> Result<Option<uuid::Uuid>> {
+        let guard = self.trace_stats.guard();
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
-            bail!(
-                self,
-                "Attempting to finish a span without first starting one"
-            );
+            anyhow::bail!("Attempting to finish a span without first starting one");
         };
 
         log::trace!(
@@ -255,7 +249,7 @@ impl BamlTracer {
         );
 
         if span.span_id != span_id {
-            bail!(self, "Span ID mismatch: {} != {}", span.span_id, span_id);
+            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
         }
 
         if let Ok(response) = &response {
@@ -272,8 +266,10 @@ impl BamlTracer {
 
         if let Some(tracer) = &self.tracer {
             tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
+            guard.finalize();
             Ok(Some(span_id))
         } else {
+            guard.done();
             Ok(None)
         }
     }

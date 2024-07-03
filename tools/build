@@ -165,56 +165,21 @@ case "$_path" in
     fi
     ;;
 
-  /clients/python | /clients/python/* )
-    command="env -u CONDA_PREFIX poetry run maturin develop --manifest-path ${_repo_root}/clients/python-ffi/Cargo.toml"
-    #command="${command} && poetry run mypy ."
-    #command="${command} && poetry run ruff check"
-    command="${command} && poetry run ruff format"
-    command="${command} && poetry run -- python -m baml_core.jinja.render_prompt"
-    if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && poetry run -- pytest baml_core"
-    fi
-    command="${command}; date"
-    if [ "$_watch_mode" -eq 1 ]; then
-      npx nodemon \
-        --ext py,pyi,rs \
-        --watch "${_repo_root}/engine/baml-lib/jinja" \
-        --watch "${_repo_root}/clients/python-ffi" \
-        --watch . \
-        --exec "${command}"
-    else
-      eval "${command}"
-      date
-    fi
-    ;;
-
-  /clients/ts | /clients/ts/* )
-    pnpm link "${_repo_root}/engine/baml-core-ffi"
-    if [ "$_watch_mode" -eq 1 ]; then
-      npx nodemon \
-        --verbose \
-        --ext js,ts \
-        --ignore '**/dist' \
-        --ignore '**/node_modules' \
-        --exec 'pnpm build; date'
-    else
-      pnpm build
-      date
-    fi
-    ;;
-
   /integ-tests/python | /integ-tests/python/* )
+    command="true"
     command="env -u CONDA_PREFIX poetry run maturin develop --manifest-path ${_repo_root}/engine/language_client_python/Cargo.toml"
-    command="${command} && poetry run baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
+    #command="${command} && poetry run baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && infisical run --env=test -- poetry run pytest -k test_tracing_async"
+      command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run python baml_example_tracing.py"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
         --ext py,pyi,rs,j2,toml \
         --watch "${_repo_root}/engine" \
         --watch . \
-        --ignore baml_client \
+        --ignore baml_client/** \
+        --ignore target/** \
+        --ignore .pytest_cache \
         --exec "${command}"
     else
       eval "${command}"

@@ -79,16 +79,19 @@ class BamlRuntime:
     ) -> FunctionResultStream: ...
     def create_context_manager(self) -> RuntimeContextManager: ...
     def flush(self) -> None: ...
-    def set_log_event_callback(self, handler: Callable[[BamlLogEvent], None]) -> None: ...
-
+    def drain_stats(self) -> TraceStats: ...
+    def set_log_event_callback(
+        self, handler: Callable[[BamlLogEvent], None]
+    ) -> None: ...
 
 class LogEventMetadata:
     event_id: str
     parent_id: Optional[str]
     root_event_id: str
 
-    def __init__(self, event_id: str, parent_id: Optional[str], root_event_id: str) -> None:
-        ...
+    def __init__(
+        self, event_id: str, parent_id: Optional[str], root_event_id: str
+    ) -> None: ...
 
 class BamlLogEvent:
     metadata: LogEventMetadata
@@ -97,9 +100,28 @@ class BamlLogEvent:
     parsed_output: Optional[str]
     start_time: str
 
-    def __init__(self, metadata: LogEventMetadata, prompt: Optional[str], raw_output: Optional[str], parsed_output: Optional[str], start_time: str) -> None:
-        ...
+    def __init__(
+        self,
+        metadata: LogEventMetadata,
+        prompt: Optional[str],
+        raw_output: Optional[str],
+        parsed_output: Optional[str],
+        start_time: str,
+    ) -> None: ...
 
+class TraceStats:
+    @property
+    def failed(self) -> int: ...
+    @property
+    def started(self) -> int: ...
+    @property
+    def finalized(self) -> int: ...
+    @property
+    def submitted(self) -> int: ...
+    @property
+    def sent(self) -> int: ...
+    @property
+    def done(self) -> int: ...
 
 class BamlSpan:
     @staticmethod

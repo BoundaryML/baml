@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    sync::{Arc},
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use crate::{
     internal::{
@@ -10,8 +6,7 @@ use crate::{
         llm_client::{
             llm_provider::LLMProvider,
             orchestrator::{
-                orchestrate_call, IterOrchestrator, OrchestrationScope,
-                OrchestratorNode,
+                orchestrate_call, IterOrchestrator, OrchestrationScope, OrchestratorNode,
             },
             retry_policy::CallablePolicy,
             traits::{WithPrompt, WithRenderRawCurl},
@@ -19,8 +14,9 @@ use crate::{
         prompt_renderer::PromptRenderer,
     },
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
-    tracing::{BamlTracer},
-    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RuntimeContext, RuntimeInterface,
+    tracing::BamlTracer,
+    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RuntimeContext,
+    RuntimeInterface,
 };
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
@@ -235,7 +231,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
 pub fn baml_src_files(dir: &std::path::PathBuf) -> Result<Vec<PathBuf>> {
     static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
 
-    log::info!("Reading files from {:#}", dir.to_string_lossy());
+    log::trace!("Reading files from {:#}", dir.to_string_lossy());
 
     if !dir.exists() {
         anyhow::bail!("{dir:#?} does not exist (expected a directory containing BAML files)",);
@@ -302,8 +298,8 @@ impl RuntimeConstructor for InternalBamlRuntime {
         schema.diagnostics.to_result()?;
 
         let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
-        log::info!("Successfully loaded BAML schema");
-        log::info!("Diagnostics: {:#?}", schema.diagnostics);
+        log::trace!("Successfully loaded BAML schema");
+        log::trace!("Diagnostics: {:#?}", schema.diagnostics);
 
         Ok(Self {
             ir: Arc::new(ir),

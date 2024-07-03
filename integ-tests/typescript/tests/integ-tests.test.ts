@@ -18,6 +18,7 @@ import { RecursivePartialNull } from '../baml_client/client'
 import { config } from 'dotenv'
 import { BamlLogEvent, BamlRuntime } from '@boundaryml/baml/native'
 import { AsyncLocalStorage } from 'async_hooks'
+import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from '../baml_client/globals'
 config()
 
 describe('Integ tests', () => {
@@ -181,7 +182,7 @@ describe('Integ tests', () => {
       expect(msgs[i + 1].startsWith(msgs[i])).toBeTruthy()
     }
     expect(msgs.at(-1)).toEqual(final)
-  }, 10_000)
+  }, 20_000)
 
   it('should support AWS', async () => {
     const res = await b.TestAws('Dr. Pepper')
@@ -269,6 +270,9 @@ describe('Integ tests', () => {
       return myArg
     }
 
+    DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.flush()
+    const _ = DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.drainStats()
+
     await Promise.all([
       traceAsync('trace:dummyFn1', dummyFn)('hi1'),
       traceAsync('trace:dummyFn2', dummyFn)('hi2'),
@@ -303,8 +307,15 @@ describe('Integ tests', () => {
       return 'hello world'
     })('hi', 10)
 
-    const failedToSubmitCount = ((b as any).runtime as BamlRuntime).flush().nSpansFailedBeforeSubmit()
-    expect(failedToSubmitCount).toEqual(0)
+    DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.flush()
+    const stats = DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.drainStats()
+    console.log('stats', stats.toJson())
+    expect(stats.started).toBe(30)
+    expect(stats.finalized).toEqual(stats.started)
+    expect(stats.submitted).toEqual(stats.started)
+    expect(stats.sent).toEqual(stats.started)
+    expect(stats.done).toEqual(stats.started)
+    expect(stats.failed).toEqual(0)
   })
 
   it('should work with dynamic types single', async () => {

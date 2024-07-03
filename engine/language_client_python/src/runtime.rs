@@ -175,11 +175,13 @@ impl BamlRuntime {
     }
 
     #[pyo3()]
-    fn flush(&self) -> PyResult<TraceStats> {
-        self.inner
-            .flush()
-            .map(Into::into)
-            .map_err(BamlError::from_anyhow)
+    fn flush(&self) -> PyResult<()> {
+        self.inner.flush().map_err(BamlError::from_anyhow)
+    }
+
+    #[pyo3()]
+    fn drain_stats(&self) -> TraceStats {
+        self.inner.drain_stats().into()
     }
 
     #[pyo3()]

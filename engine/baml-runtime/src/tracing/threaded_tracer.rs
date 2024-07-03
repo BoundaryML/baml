@@ -1,157 +1,216 @@
 use anyhow::Result;
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender, TryRecvError};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
+use tokio::sync::watch;
 use web_time::{Duration, Instant};
 
 use crate::{
     on_log_event::{LogEvent, LogEventCallbackSync, LogEventMetadata},
     tracing::api_wrapper::core_types::{ContentPart, MetadataType, Template, ValueType},
+    TraceStats,
 };
 
 use super::api_wrapper::{core_types::LogSchema, APIConfig, APIWrapper, BoundaryAPI};
 
+const MAX_TRACE_SEND_CONCURRENCY: usize = 10;
+
 enum TxEventSignal {
     #[allow(dead_code)]
     Stop,
-    Flush,
+    Flush(u128),
     Submit(LogSchema),
 }
 
-enum RxEventSignal {
-    Done,
+enum ProcessorStatus {
+    Active,
+    Done(u128),
 }
 
-async fn process_batch_async(api_config: &APIWrapper, batch: Vec<LogSchema>) {
-    log::info!("Processing batch of size: {}", batch.len());
-    for work in batch {
-        match api_config.log_schema(&work).await {
-            Ok(_) => {
-                log::debug!(
-                    "Successfully sent log schema: {} - {:?}",
-                    work.event_id,
-                    work.context.event_chain.last()
-                );
-            }
-            Err(e) => {
-                log::warn!("Unable to emit BAML logs: {}", e);
-            }
+struct DeliveryThread {
+    api_config: Arc<APIWrapper>,
+    span_rx: mpsc::Receiver<TxEventSignal>,
+    stop_tx: watch::Sender<ProcessorStatus>,
+    rt: tokio::runtime::Runtime,
+    max_batch_size: usize,
+    max_concurrency: Arc<tokio::sync::Semaphore>,
+    stats: TraceStats,
+}
+
+impl DeliveryThread {
+    fn new(
+        api_config: APIWrapper,
+        span_rx: mpsc::Receiver<TxEventSignal>,
+        stop_tx: watch::Sender<ProcessorStatus>,
+        max_batch_size: usize,
+        stats: TraceStats,
+    ) -> Self {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        Self {
+            api_config: Arc::new(api_config),
+            span_rx,
+            stop_tx,
+            rt,
+            max_batch_size,
+            max_concurrency: tokio::sync::Semaphore::new(MAX_TRACE_SEND_CONCURRENCY).into(),
+            stats,
         }
     }
-}
 
-fn process_batch(rt: &tokio::runtime::Runtime, api_config: &APIWrapper, batch: Vec<LogSchema>) {
-    rt.block_on(process_batch_async(api_config, batch));
-}
+    async fn process_batch(&self, batch: Vec<LogSchema>) {
+        let work = batch
+            .into_iter()
+            .map(|work| {
+                let api_config = self.api_config.clone();
+                let semaphore = self.max_concurrency.clone();
+                let stats = self.stats.clone();
+                stats.guard().send();
 
-fn batch_processor(
-    api_config: APIWrapper,
-    rx: Receiver<TxEventSignal>,
-    tx: Sender<RxEventSignal>,
-    max_batch_size: usize,
-) {
-    let api_config = &api_config;
-    let mut batch = Vec::with_capacity(max_batch_size);
-    let mut now = Instant::now();
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    loop {
-        // Try to fill the batch up to max_batch_size
-        let (batch_full, flush, exit) = match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(TxEventSignal::Submit(work)) => {
-                batch.push(work);
-                (batch.len() >= max_batch_size, false, false)
+                let stats_clone = stats.clone();
+                async move {
+                    let guard = stats_clone.guard();
+                    let Ok(_acquired) = semaphore.acquire().await else {
+                        log::warn!(
+                            "Failed to acquire semaphore because it was closed - not sending span"
+                        );
+                        return;
+                    };
+                    match api_config.log_schema(&work).await {
+                        Ok(_) => {
+                            guard.done();
+                            log::debug!(
+                                "Successfully sent log schema: {} - {:?}",
+                                work.event_id,
+                                work.context.event_chain.last()
+                            );
+                        }
+                        Err(e) => {
+                            log::warn!("Unable to emit BAML logs: {}", e);
+                        }
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Wait for all the futures to complete
+        futures::future::join_all(work).await;
+    }
+
+    fn run(&self) {
+        let mut batch = Vec::with_capacity(self.max_batch_size);
+        let mut now = Instant::now();
+        loop {
+            // Try to fill the batch up to max_batch_size
+            let (batch_full, flush, exit) =
+                match self.span_rx.recv_timeout(Duration::from_millis(100)) {
+                    Ok(TxEventSignal::Submit(work)) => {
+                        self.stats.guard().submit();
+                        batch.push(work);
+                        (batch.len() >= self.max_batch_size, None, false)
+                    }
+                    Ok(TxEventSignal::Flush(id)) => (false, Some(id), false),
+                    Ok(TxEventSignal::Stop) => (false, None, true),
+                    Err(mpsc::RecvTimeoutError::Timeout) => (false, None, false),
+                    Err(mpsc::RecvTimeoutError::Disconnected) => (false, None, true),
+                };
+
+            let time_trigger = now.elapsed().as_millis() >= 1000;
+
+            let should_process_batch =
+                (batch_full || flush.is_some() || exit || time_trigger) && !batch.is_empty();
+
+            // Send events every 1 second or when the batch is full
+            if should_process_batch {
+                self.rt
+                    .block_on(self.process_batch(std::mem::take(&mut batch)));
             }
-            Ok(TxEventSignal::Flush) => (false, true, false),
-            Ok(TxEventSignal::Stop) => (false, false, true),
-            Err(RecvTimeoutError::Timeout) => (false, false, false),
-            Err(RecvTimeoutError::Disconnected) => (false, false, true),
-        };
 
-        let time_trigger = now.elapsed().as_millis() >= 1000;
+            if should_process_batch || time_trigger {
+                now = std::time::Instant::now();
+            }
 
-        let should_process_batch =
-            (batch_full || flush || exit || time_trigger) && !batch.is_empty();
-
-        // Send events every 1 second or when the batch is full
-        if should_process_batch {
-            process_batch(&rt, api_config, std::mem::take(&mut batch));
-        }
-
-        if should_process_batch || time_trigger {
-            now = std::time::Instant::now();
-        }
-
-        if flush {
-            match tx.send(RxEventSignal::Done) {
-                Ok(_) => {}
-                Err(e) => {
-                    println!("Error sending flush signal: {:?}", e);
-                    log::error!("Error sending flush signal: {:?}", e);
+            if let Some(id) = flush {
+                match self.stop_tx.send(ProcessorStatus::Done(id)) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        log::error!("Error sending flush signal: {:?}", e);
+                    }
                 }
             }
-        }
-        if exit {
-            return;
+            if exit {
+                return;
+            }
         }
     }
 }
 
 pub(super) struct ThreadedTracer {
-    api_config: APIWrapper,
-    tx: Arc<Mutex<Sender<TxEventSignal>>>,
-    rx: Arc<Mutex<Receiver<RxEventSignal>>>,
+    api_config: Arc<APIWrapper>,
+    span_tx: mpsc::Sender<TxEventSignal>,
+    stop_rx: watch::Receiver<ProcessorStatus>,
     #[allow(dead_code)]
     join_handle: std::thread::JoinHandle<()>,
     log_event_callback: Arc<Mutex<Option<LogEventCallbackSync>>>,
+    stats: TraceStats,
 }
 
 impl ThreadedTracer {
     fn start_worker(
         api_config: APIWrapper,
         max_batch_size: usize,
+        stats: TraceStats,
     ) -> (
-        Sender<TxEventSignal>,
-        Receiver<RxEventSignal>,
+        mpsc::Sender<TxEventSignal>,
+        watch::Receiver<ProcessorStatus>,
         std::thread::JoinHandle<()>,
     ) {
-        let (tx, rx) = channel();
-        let (stop_tx, stop_rx) = channel();
-        let join_handle =
-            std::thread::spawn(move || batch_processor(api_config, rx, stop_tx, max_batch_size));
+        let (span_tx, span_rx) = mpsc::channel();
+        let (stop_tx, stop_rx) = watch::channel(ProcessorStatus::Active);
+        let join_handle = std::thread::spawn(move || {
+            DeliveryThread::new(api_config, span_rx, stop_tx, max_batch_size, stats).run();
+        });
 
-        (tx, stop_rx, join_handle)
+        (span_tx, stop_rx, join_handle)
     }
 
-    pub fn new(api_config: &APIWrapper, max_batch_size: usize) -> Self {
-        let (tx, rx, join_handle) = Self::start_worker(api_config.clone(), max_batch_size);
+    pub fn new(api_config: &APIWrapper, max_batch_size: usize, stats: TraceStats) -> Self {
+        let (span_tx, stop_rx, join_handle) =
+            Self::start_worker(api_config.clone(), max_batch_size, stats.clone());
+
         Self {
-            api_config: api_config.clone(),
-            tx: Arc::new(Mutex::new(tx)),
-            rx: Arc::new(Mutex::new(rx)),
+            api_config: Arc::new(api_config.clone()),
+            span_tx,
+            stop_rx,
             join_handle,
             log_event_callback: Arc::new(Mutex::new(None)),
+            stats,
         }
     }
 
     pub fn flush(&self) -> Result<()> {
-        self.tx
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Error flushing BatchProcessor: {:?}", e))?
-            .send(TxEventSignal::Flush)?;
+        let id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        self.span_tx.send(TxEventSignal::Flush(id))?;
 
-        loop {
-            match self.rx.lock() {
-                Ok(rx) => match rx.try_recv() {
-                    Ok(RxEventSignal::Done) => return Ok(()),
-                    Err(TryRecvError::Empty) => {
-                        std::thread::sleep(Duration::from_millis(100));
+        let flush_start = Instant::now();
+
+        while flush_start.elapsed() < Duration::from_secs(60) {
+            {
+                match *self.stop_rx.borrow() {
+                    ProcessorStatus::Active => {}
+                    ProcessorStatus::Done(r_id) if r_id >= id => {
+                        return Ok(());
                     }
-                    Err(TryRecvError::Disconnected) => {
-                        return Err(anyhow::anyhow!("BatchProcessor worker thread disconnected"))
+                    ProcessorStatus::Done(id) => {
+                        // Old flush, ignore
                     }
-                },
-                Err(e) => return Err(anyhow::anyhow!("Error flushing BatchProcessor: {:?}", e)),
+                }
             }
+            std::thread::sleep(Duration::from_millis(100));
         }
+
+        anyhow::bail!("BatchProcessor worker thread did not finish in time")
     }
 
     pub fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) {
@@ -162,8 +221,6 @@ impl ThreadedTracer {
     }
 
     pub fn submit(&self, mut event: LogSchema) -> Result<()> {
-        log::debug!("Submitting work {:#?}", event.event_id);
-
         let callback = self.log_event_callback.lock().unwrap();
         if let Some(ref callback) = *callback {
             let event = event.clone();
@@ -184,7 +241,7 @@ impl ThreadedTracer {
                         Template::Single(text) => Some(text),
                         Template::Multiple(chat_prompt) => {
                             serde_json::to_string_pretty(&chat_prompt).ok().or_else(|| {
-                                log::info!(
+                                log::debug!(
                                     "Failed to serialize chat prompt for event {}",
                                     event.event_id
                                 );
@@ -212,7 +269,7 @@ impl ThreadedTracer {
                     _ => serde_json::to_string_pretty(&output.value)
                         .ok()
                         .or_else(|| {
-                            log::info!(
+                            log::debug!(
                                 "Failed to serialize output value for event {}",
                                 event.event_id
                             );
@@ -237,11 +294,7 @@ impl ThreadedTracer {
         // Redact the event
         event = redact_event(event, &self.api_config.config);
 
-        let tx = self
-            .tx
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Error submitting work: {:?}", e))?;
-        tx.send(TxEventSignal::Submit(event))?;
+        self.span_tx.send(TxEventSignal::Submit(event))?;
         Ok(())
     }
 }

@@ -174,6 +174,7 @@ pub enum Role {
 #[derive(Serialize, Debug, Clone)]
 pub(crate) struct LLMEventInput {
     pub prompt: LLMEventInputPrompt,
+    #[serde(rename = "invocation_params")]
     pub request_options: HashMap<String, Value>,
 }
 

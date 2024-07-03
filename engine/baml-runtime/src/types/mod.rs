@@ -10,4 +10,4 @@ pub use context_manager::RuntimeContextManager;
 pub use response::{FunctionResult, TestFailReason, TestResponse, TestStatus};
 pub use runtime_context::{RuntimeContext, SpanCtx};
 pub use stream::FunctionResultStream;
-pub use trace_stats::TraceStats;
+pub use trace_stats::{InnerTraceStats, TraceStats};
