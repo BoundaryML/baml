@@ -19,7 +19,7 @@ impl ClientBuilder {
         }
     }
 
-    #[pyo3(signature = (name, provider, options, retry_policy))]
+    #[pyo3(signature = (name, provider, options, retry_policy = None))]
     pub fn add_client(
         &mut self,
         py: Python<'_>,

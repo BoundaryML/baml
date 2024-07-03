@@ -53,25 +53,6 @@ pub enum LLMPrimitiveProvider {
     Aws(aws::AwsClient),
 }
 
-// impl WithRetryPolicy for LLMPrimitiveProvider {
-//     fn retry_policy_name(&self) -> Option<&str> {
-//         match self {
-//             LLMPrimitiveProvider::OpenAI(client) => {
-//                 LLMPrimitive2::OpenAIClient(client).retry_policy_name()
-//             }
-//             LLMPrimitiveProvider::Anthropic(client) => {
-//                 LLMPrimitive2::AnthropicClient(client).retry_policy_name()
-//             }
-//             LLMPrimitiveProvider::Google(client) => {
-//                 LLMPrimitive2::GoogleClient(client).retry_policy_name()
-//             }
-//             LLMPrimitiveProvider::Aws(client) => {
-//                 LLMPrimitive2::AwsClient(client).retry_policy_name()
-//             }
-//         }
-//     }
-// }
-
 macro_rules! match_llm_provider {
     // Define the variants inside the macro
     ($self:expr, $method:ident, async $(, $args:tt)*) => {
@@ -91,6 +72,12 @@ macro_rules! match_llm_provider {
             LLMPrimitiveProvider::Aws(client) => client.$method($($args),*),
         }
     };
+}
+
+impl WithRetryPolicy for LLMPrimitiveProvider {
+    fn retry_policy_name(&self) -> Option<&str> {
+        match_llm_provider!(self, retry_policy_name)
+    }
 }
 
 impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {

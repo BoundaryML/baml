@@ -407,15 +407,17 @@ macro_rules! make_openai_client {
     ($client:ident, $properties:ident, dynamic) => {
         Ok(Self {
             name: $client.name.clone(),
-            properties: $properties,
             context: RenderContext_Client {
                 name: $client.name.clone(),
                 provider: $client.provider.clone(),
+                default_role: $properties.default_role.clone(),
             },
+            properties: $properties,
             features: ModelFeatures {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
+                resolve_media_urls: false,
             },
             retry_policy: $client.retry_policy.clone(),
             client: create_client()?,

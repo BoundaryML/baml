@@ -3,13 +3,10 @@ use crate::types::function_results::FunctionResult;
 use crate::types::trace_stats::TraceStats;
 use crate::BamlError;
 
-use super::function_result_stream::FunctionResultStream;
-use super::runtime_ctx_manager::RuntimeContextManager;
-use super::type_builder::TypeBuilder;
-use super::ClientBuilder;
 use crate::types::function_result_stream::FunctionResultStream;
 use crate::types::runtime_ctx_manager::RuntimeContextManager;
 use crate::types::type_builder::TypeBuilder;
+use crate::types::ClientBuilder;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};

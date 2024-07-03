@@ -570,11 +570,11 @@ async def test_dynamic_clients():
     cb.add_client("MyClient", "openai", {"model": "gpt-3.5-turbo"})
     cb.set_primary("MyClient")
 
-    await b.TestOllama(
+    final = await b.TestOllama(
         input="My name is Harrison. My hair is black and I'm 6 feet tall.",
         baml_options={"client_builder": cb},
     )
-    print("final ", final.model_dump(mode="json"))
+    print("final ", final)
 
 
 @pytest.mark.asyncio

@@ -14,10 +14,8 @@ use uuid::Uuid;
 
 use crate::{
     client_builder::ClientBuilder, internal::llm_client::LLMResponse,
-    internal::llm_client::LLMResponse, tracing::api_wrapper::core_types::Role,
-    tracing::api_wrapper::core_types::Role, type_builder::TypeBuilder, type_builder::TypeBuilder,
-    FunctionResult, FunctionResult, RuntimeContext, RuntimeContext, RuntimeContextManager,
-    RuntimeContextManager, SpanCtx, SpanCtx, TestResponse, TestResponse, TraceStats,
+    tracing::api_wrapper::core_types::Role, type_builder::TypeBuilder, FunctionResult,
+    RuntimeContext, RuntimeContextManager, SpanCtx, TestResponse, TraceStats,
 };
 
 use self::api_wrapper::{

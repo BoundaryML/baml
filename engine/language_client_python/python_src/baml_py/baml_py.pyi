@@ -149,7 +149,13 @@ class TypeBuilder:
 
 class ClientBuilder:
     def __init__(self) -> None: ...
-    def add_client(self, name: str, provider: str, options: Dict[str, Any], retry_policy: Optional[str]) -> None: ...
+    def add_client(
+        self,
+        name: str,
+        provider: str,
+        options: Dict[str, Any],
+        retry_policy: Optional[str] = None,
+    ) -> None: ...
     def set_primary(self, name: str) -> None: ...
 
 class FieldType:

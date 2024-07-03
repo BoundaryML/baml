@@ -39,8 +39,8 @@ pub struct RuntimeContext {
     pub env: HashMap<String, String>,
     pub tags: HashMap<String, BamlValue>,
     pub client_overrides: Option<(Option<String>, HashMap<String, Arc<LLMProvider>>)>,
-    pub class_override: HashMap<String, RuntimeClassOverride>,
-    pub enum_overrides: HashMap<String, RuntimeEnumOverride>,
+    pub class_override: IndexMap<String, RuntimeClassOverride>,
+    pub enum_overrides: IndexMap<String, RuntimeEnumOverride>,
 }
 
 impl RuntimeContext {
