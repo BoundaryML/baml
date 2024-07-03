@@ -203,6 +203,7 @@ export class WebPanelView {
             try {
               console.log('jumpToFile', message.data)
               const span = message.data as StringSpan
+              // span.source_file is a file:/// URI
               const uri = vscode.Uri.parse(span.source_file)
               await vscode.workspace.openTextDocument(uri).then((doc) => {
                 const range = new vscode.Range(doc.positionAt(span.start), doc.positionAt(span.end))
