@@ -110,6 +110,8 @@ jobs:
 
           - target: aarch64-unknown-linux-gnu
             host: ubuntu-latest
+            # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
+            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64	
             node_build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
 
           - target: x86_64-apple-darwin
@@ -122,10 +124,13 @@ jobs:
 
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-latest
+            # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
+            container: quay.io/pypa/manylinux_2_28_x86_64:latest	
             node_build: pnpm build --target x86_64-unknown-linux-gnu --use-napi-cross
 
     name: Build ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
+    container: ${{ matrix._.container }}
     steps:
       - uses: actions/checkout@v4
       # Install python set up
@@ -179,7 +184,8 @@ jobs:
           command: build
           args: --release --out engine/language_client_python/dist --manifest-path engine/language_client_python/Cargo.toml
           sccache: "true"
-          manylinux: ${{ matrix._.host == 'ubuntu-latest' && '2_28' || null }}
+          manylinux: null
+          # manylinux: ${{ matrix._.host == 'ubuntu-latest' && '2_28' || null }}
           # before-script-linux: |
           #   if command -v yum &> /dev/null; then
           #       yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
