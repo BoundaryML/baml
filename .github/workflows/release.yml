@@ -96,7 +96,7 @@ jobs:
 
   build-release:
     strategy:
-      fail-fast: true
+      fail-fast: false 
       matrix:
         _:
           - target: aarch64-apple-darwin
