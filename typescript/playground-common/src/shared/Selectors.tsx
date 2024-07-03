@@ -1,36 +1,11 @@
-import type { SFunction } from '@baml/common'
-import { VSCodeDropdown, VSCodeLink, VSCodeOption } from '@vscode/webview-ui-toolkit/react'
 import { useAtom, useAtomValue } from 'jotai'
-import {
-  BookTextIcon,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  ChevronsDown,
-  ChevronsUpDown,
-  Compass,
-  Gamepad2,
-  Gamepad2Icon,
-  ListChecksIcon,
-  SettingsIcon,
-  SlashIcon,
-} from 'lucide-react'
+import { ChevronDown, ChevronRight, Compass } from 'lucide-react'
 import type React from 'react'
-import { useContext, useState } from 'react'
+import { useState } from 'react'
 import { availableFunctionsAtom, selectedFunctionAtom, selectedTestCaseAtom } from '../baml_wasm_web/EventListener'
 import { Button } from '../components/ui/button'
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
 import SearchBarWithSelector from '../lib/searchbar'
-import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '../components/ui/breadcrumb'
 import Link from './Link'
 import { Dialog, DialogContent, DialogTrigger } from '../components/ui/dialog'
 import { Snippets } from './Snippets'
@@ -47,14 +22,14 @@ const FunctionDropdown: React.FC = () => {
   }
 
   return (
-    <div className='flex flex-col items-start gap-0.5'>
-      <span className='text-xs text-muted-foreground flex flex-row flex-wrap items-center gap-0.5'>
+    <div className='flex flex-col-reverse items-start gap-0.5'>
+      <span className='pl-2 text-xs text-muted-foreground flex flex-row flex-wrap items-center gap-0.5'>
         Function
         {selected && <JumpToFunction />}
       </span>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <div className='max-w-[300px] justify-start items-center flex hover:bg-vscode-button-hoverBackground h-fit rounded-md text-vscode-foreground outline outline-vscode-window-inactiveBorder cursor-pointer'>
+          <div className='max-w-[300px] justify-start items-center flex hover:bg-vscode-button-hoverBackground h-fit rounded-md text-vscode-foreground cursor-pointer'>
             <span className='w-full px-2 py-1 text-left truncate'>{functionName ?? 'Select a function...'}</span>
             <ChevronDown className='w-4 h-4 ml-1 opacity-50 shrink-0' />
           </div>
@@ -99,15 +74,15 @@ const TestDropdown: React.FC = () => {
   }
 
   return (
-    <div className='flex flex-col items-start gap-0.5'>
-      <span className='text-xs text-muted-foreground flex flex-row flex-wrap items-center gap-1'>
+    <div className='flex flex-col-reverse items-start gap-0.5'>
+      <span className='pl-2 text-xs text-muted-foreground flex flex-row flex-wrap items-center gap-1'>
         Test
         {selected && <JumpToTestCase />}
       </span>
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <div className='max-w-[300px] justify-between items-center flex hover:bg-vscode-button-hoverBackground h-fit rounded-md text-vscode-foreground outline outline-vscode-window-inactiveBorder cursor-pointer'>
+          <div className='max-w-[300px] justify-between items-center flex hover:bg-vscode-button-hoverBackground h-fit rounded-md text-vscode-foreground cursor-pointer'>
             <span className='w-full px-2 py-1 text-left truncate'>{selected.name}</span>
             <ChevronDown className='w-4 h-4 ml-1 opacity-50 shrink-0' />
           </div>
@@ -153,7 +128,7 @@ const JumpToFunction: React.FC = () => {
         source_file: selected.span.file_path,
         value: `${selected.span.file_path.split('/').pop() ?? '<file>.baml'}:${selected.span.start_line + 1}`,
       }}
-      className='text-xs text-muted-foreground decoration-0'
+      className='text-xs text-muted-foreground decoration-0 py-0'
     />
   )
 }
@@ -183,7 +158,9 @@ export const ViewSelector: React.FC = () => {
     <div className='flex flex-row justify-between'>
       <div className='flex flex-row gap-4 px-2 py-1 items-center'>
         <FunctionDropdown />
-        <ChevronRight className='w-4 h-4' />
+        <div>
+          <ChevronRight className='w-4 h-4' />
+        </div>
         <TestDropdown />
       </div>
       <div className='absolute z-10 flex flex-row items-center justify-center gap-1 right-1 top-2 text-end'>

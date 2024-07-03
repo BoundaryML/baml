@@ -153,6 +153,7 @@ module Baml
     class RaysData < T::Struct; end
     class ReceiptInfo < T::Struct; end
     class ReceiptItem < T::Struct; end
+    class Response < T::Struct; end
     class Resume < T::Struct; end
     class SearchParams < T::Struct; end
     class SomeClassNestedDynamic < T::Struct; end
@@ -205,7 +206,7 @@ module Baml
       const :location, String
       const :degree, String
       const :major, T::Array[String]
-      const :graduation_date, T.nilable(String)
+      const :date, T.nilable(String)
     end
     class Email < T::Struct
       include T::Struct::ActsAsComparable
@@ -280,13 +281,20 @@ module Baml
       const :quantity, Integer
       const :price, Float
     end
+    class Response < T::Struct
+      include T::Struct::ActsAsComparable
+      const :type, String
+      const :reason, String
+      const :appropriate_for_video_games, T::Boolean
+      const :score, Integer
+    end
     class Resume < T::Struct
       include T::Struct::ActsAsComparable
       const :name, String
       const :email, String
       const :phone, String
-      const :experience, T::Array[Baml::Types::Education]
-      const :education, T::Array[String]
+      const :experience, T::Array[String]
+      const :education, T::Array[Baml::Types::Education]
       const :skills, T::Array[String]
     end
     class SearchParams < T::Struct

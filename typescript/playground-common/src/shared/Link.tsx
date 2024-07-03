@@ -6,13 +6,13 @@ import { File } from 'lucide-react'
 
 const Link: React.FC<{ item: StringSpan; display?: string; className?: string }> = ({ item, display, className }) => (
   <VSCodeLink
-    className={cn(className, 'text-vscode-foreground font-medium')}
+    className={cn(className, 'font-medium underline underline-offset-2 hover:text-vscode-textLink-activeForeground')}
     onClick={() => {
       vscode.postMessage({ command: 'jumpToFile', data: item })
     }}
   >
-    <div className='flex flex-row items-center gap-1'>
-      <File className='w-3' /> {display ?? item.value}
+    <div className='flex flex-row items-center gap-0.5'>
+      <File className='w-3 h-fit' /> {display ?? item.value}
     </div>
   </VSCodeLink>
 )

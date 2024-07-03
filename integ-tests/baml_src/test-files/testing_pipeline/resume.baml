@@ -2,8 +2,8 @@ class Resume {
     name string
     email string
     phone string
-    experience Education[]
-    education string[]
+    experience string[]
+    education Education[]
     skills string[]
 }
 
@@ -12,7 +12,9 @@ class Education {
     location string
     degree string
     major string[]
-    graduation_date string?
+    date string? @alias(start_date) @description(#"
+        YYYY-MM
+    "#)
 }
 
 template_string AddRole(foo: string) #"
@@ -29,7 +31,6 @@ function ExtractResume(resume: string, img: image?) -> Resume {
 
         Extract data:
         
-
         <<<<
         {{ resume }}
         <<<<
@@ -45,9 +46,9 @@ function ExtractResume(resume: string, img: image?) -> Resume {
 test sam_resume {
     functions [ExtractResume]
     input {
-        img {
-            url "https://avatars.githubusercontent.com/u/1016595?v=4"
-        }
+        // img {
+        //     url "https://avatars.githubusercontent.com/u/1016595?v=4"
+        // }
         resume #"
             Sam Lijin
             he/him |  jobs@sxlijin.com |  sxlijin.github.io | 111-222-3333 | sxlijin |  sxlijin

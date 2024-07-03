@@ -220,10 +220,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
               }}
               className='flex flex-row h-full overflow-clip'
             >
-              <ResizablePanelGroup
-                className='min-h-[200px] w-full rounded-lg border overflow-clip'
-                direction='horizontal'
-              >
+              <ResizablePanelGroup className='min-h-[200px] w-full rounded-lg overflow-clip' direction='horizontal'>
                 <ResizablePanel defaultSize={50}>
                   <div className='flex flex-col w-full py-1 pl-2 text-xs border-none items-left h-fit whitespace-nowrap'>
                     <Editable
@@ -247,7 +244,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                     <CodeMirrorEditor project={project} />
                   </div>
                 </ResizablePanel>
-                <ResizableHandle className='bg-vscode-contrastActiveBorder' />
+                <ResizableHandle className='bg-vscode-tab-activeBackground' />
                 {!isMobile && (
                   <ResizablePanel defaultSize={50} className='tour-playground'>
                     <div className='flex flex-row h-full bg-vscode-panel-background'>

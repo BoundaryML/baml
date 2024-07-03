@@ -170,7 +170,7 @@ export interface Education {
   location: string
   degree: string
   major: string[]
-  graduation_date?: string | null
+  date?: string | null
   
 }
 
@@ -261,12 +261,20 @@ export interface ReceiptItem {
   
 }
 
+export interface Response {
+  type: string
+  reason: string
+  appropriate_for_video_games: boolean
+  score: number
+  
+}
+
 export interface Resume {
   name: string
   email: string
   phone: string
-  experience: Education[]
-  education: string[]
+  experience: string[]
+  education: Education[]
   skills: string[]
   
 }

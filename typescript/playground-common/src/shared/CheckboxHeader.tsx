@@ -23,7 +23,16 @@ const PromptCheckbox = ({
 }
 
 export const CheckboxHeader = () => {
-  const { showTokens, setShowTokens, showWhitespace, setShowWhitespace, showCurlRequest, setShowCurl } = useAppState()
+  const {
+    showTokens,
+    setShowTokens,
+    showWhitespace,
+    setShowWhitespace,
+    showCurlRequest,
+    setShowCurl,
+    showTestResults,
+    setShowTestResults,
+  } = useAppState()
 
   return (
     <div className='flex flex-wrap justify-start gap-4 px-2 py-2 text-xs whitespace-nowrap'>
@@ -35,6 +44,9 @@ export const CheckboxHeader = () => {
       </PromptCheckbox>
       <PromptCheckbox checked={showCurlRequest} onChange={setShowCurl}>
         Raw cURL
+      </PromptCheckbox>
+      <PromptCheckbox checked={showTestResults} onChange={setShowTestResults}>
+        Test Results
       </PromptCheckbox>
       <ShowSettingsButton iconClassName='h-5' />
     </div>
