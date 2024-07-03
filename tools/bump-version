@@ -23,8 +23,8 @@ EOF
 
 ensure_preconditions() {
     # Ensure bump2version is installed
-    if ! command -v bump2version > /dev/null; then
-        echo "Error: bump2version is not installed."
+    if ! command -v pipx > /dev/null; then
+        echo "Error: pipx is not installed."
         exit 1
     fi
 
@@ -33,6 +33,10 @@ ensure_preconditions() {
         echo "Error: git-cliff is not installed or not working. Please install it using 'cargo install git-cliff'."
         exit 1
     fi
+}
+
+bump2version() {
+    pipx run bump2version "$@"
 }
 
 _help_mode=0
