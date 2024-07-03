@@ -127,11 +127,9 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: Option<BamlValue>,
     ) -> Result<Option<uuid::Uuid>> {
-        let mut locked = self.trace_stats.lock().unwrap();
-        locked.spans_finalized += 1;
+        let guard = self.trace_stats.guard();
 
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
-            locked.spans_failed += 1;
             anyhow::bail!(
                 "Attempting to finish a span {:#?} without first starting one. Current context {:#?}",
                 span,
@@ -140,7 +138,6 @@ impl BamlTracer {
         };
 
         if span.span_id != span_id {
-            locked.spans_failed += 1;
             anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
         }
 
@@ -148,8 +145,10 @@ impl BamlTracer {
             tracer
                 .submit(response.to_log_schema(&self.options, event_chain, tags, span))
                 .await?;
+            guard.done();
             Ok(Some(span_id))
         } else {
+            guard.done();
             Ok(None)
         }
     }
@@ -180,11 +179,12 @@ impl BamlTracer {
             anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
         }
 
-        guard.finalize();
         if let Some(tracer) = &self.tracer {
             tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
+            guard.finalize();
             Ok(Some(span_id))
         } else {
+            guard.done();
             Ok(None)
         }
     }
@@ -196,15 +196,13 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: &Result<FunctionResult>,
     ) -> Result<Option<uuid::Uuid>> {
+        let guard = self.trace_stats.guard();
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
-            bail!(
-                self,
-                "Attempting to finish a span without first starting one"
-            );
+            anyhow::bail!("Attempting to finish a span without first starting one");
         };
 
         if span.span_id != span_id {
-            bail!(self, "Span ID mismatch: {} != {}", span.span_id, span_id);
+            anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
         }
 
         if let Ok(response) = &response {
@@ -223,8 +221,10 @@ impl BamlTracer {
             tracer
                 .submit(response.to_log_schema(&self.options, event_chain, tags, span))
                 .await?;
+            guard.done();
             Ok(Some(span_id))
         } else {
+            guard.done();
             Ok(None)
         }
     }
@@ -269,7 +269,7 @@ impl BamlTracer {
             guard.finalize();
             Ok(Some(span_id))
         } else {
-            guard.finalize();
+            guard.done();
             Ok(None)
         }
     }
