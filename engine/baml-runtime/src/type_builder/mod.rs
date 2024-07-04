@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use baml_types::{BamlValue, FieldType};
 use indexmap::IndexMap;
+use std::collections::HashMap;
 
 use crate::runtime_context::{PropertyAttributes, RuntimeClassOverride, RuntimeEnumOverride};
 

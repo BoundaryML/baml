@@ -159,7 +159,7 @@ case "$_path" in
       npx nodemon \
         --ext rs,hb,hbs,j2,toml,baml \
         --watch "${_repo_root}/engine" \
-        --ignore 'target' \
+        --ignore 'target/**' \
         --exec "${command}"
     else
       eval "${command}"
