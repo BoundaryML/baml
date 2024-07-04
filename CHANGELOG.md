@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.48.0](https://github.com/boundaryml/baml/compare/0.47.0..0.48.0) - 2024-07-04
+
+
+### UNMATCHED
+- improve error handling when submitting logs to api (#754) - ([49c768f](https://github.com/boundaryml/baml/commit/49c768fbe8eb8023cba28b8dc68c2553d8b2318a)) - aaronvg
+- readd ts files - ([1635bf0](https://github.com/boundaryml/baml/commit/1635bf06f87a18b1f933b6c112cd38044239d5c5)) - Aaron Villalpando
+
 ## [0.47.0](https://github.com/boundaryml/baml/compare/0.46.0..0.47.0) - 2024-07-03
 
 ### Bug Fixes
