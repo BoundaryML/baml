@@ -84,7 +84,7 @@ impl DeliveryThread {
                             );
                         }
                         Err(e) => {
-                            log::warn!("Unable to emit BAML logs: {}", e);
+                            log::warn!("Unable to emit BAML logs: {:#?}", e);
                         }
                     }
                 }
