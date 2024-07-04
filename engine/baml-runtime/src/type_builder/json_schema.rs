@@ -33,7 +33,10 @@ pub enum OutputFormatMode {
 #[derive(Debug, Deserialize)]
 pub struct JsonSchema {
     #[serde(default, rename = "$defs")]
-    defs: HashMap<String, TypeDef>,
+    defs1: HashMap<String, TypeSpecWithMeta>,
+
+    #[serde(default, rename = "definitions")]
+    defs2: HashMap<String, TypeSpecWithMeta>,
 
     #[serde(flatten)]
     type_spec_with_meta: TypeSpecWithMeta,
@@ -130,20 +133,26 @@ enum RefinedType {
 
 #[derive(Debug)]
 struct RefinedTypeResolver {
-    refined: HashMap<String, RefinedType>,
+    refined: HashMap<String, (RefinedType, Option<String>)>,
 }
 
 impl RefinedTypeResolver {
-    fn record_type(&mut self, position: &Vec<String>, refined_type: RefinedType) {
-        self.refined.insert(position.join("/"), refined_type);
+    fn record_type(
+        &mut self,
+        position: &Vec<String>,
+        refined_type: RefinedType,
+        title: Option<String>,
+    ) {
+        self.refined
+            .insert(position.join("/"), (refined_type, title));
     }
 
     fn resolve_ref(&self, name: &str) -> Result<FieldType> {
         // TODO: this does not handle inline-defined types
         let type_name = name.strip_prefix("#/$defs/").unwrap_or(name);
         match self.refined.get(name) {
-            Some(RefinedType::Class) => Ok(FieldType::Class(type_name.to_string())),
-            Some(RefinedType::Enum) => Ok(FieldType::Enum(type_name.to_string())),
+            Some((RefinedType::Class, title)) => Ok(FieldType::Class(type_name.to_string())),
+            Some((RefinedType::Enum, title)) => Ok(FieldType::Enum(type_name.to_string())),
             None => anyhow::bail!("Unresolved ref: {}", name),
         }
     }
@@ -336,9 +345,16 @@ impl Visit1 for JsonSchema {
         resolver: &mut RefinedTypeResolver,
         errors: &mut Vec<SerializationError>,
     ) -> core::result::Result<(), ()> {
-        for (name, type_def) in self.defs.iter() {
+        for (name, type_def) in self.defs1.iter() {
             let mut position = position.clone();
             position.push("$defs".to_string());
+            position.push(name.clone());
+
+            let _ = type_def.visit1(position, resolver, errors);
+        }
+        for (name, type_def) in self.defs2.iter() {
+            let mut position = position.clone();
+            position.push("definitions".to_string());
             position.push(name.clone());
 
             let _ = type_def.visit1(position, resolver, errors);
@@ -365,7 +381,8 @@ fn position_to_type_name(position: &Vec<String>) -> Result<String> {
         return Ok("#".to_string());
     }
 
-    anyhow::bail!("Only top-level defs are supported: {:?}", position)
+    Ok(position.join("_"))
+    //anyhow::bail!("Only top-level defs are supported: {:?}", position)
 }
 
 impl Visit1 for TypeSpecWithMeta {
@@ -377,59 +394,51 @@ impl Visit1 for TypeSpecWithMeta {
     ) -> core::result::Result<(), ()> {
         match &self.type_spec {
             TypeSpec::Inline(type_def) => {
-                let _ = type_def.visit1(position, resolver, errors);
+                match type_def {
+                    TypeDef::StringOrEnum(StringOrEnumDef { r#enum: Some(_) }) => {
+                        resolver.record_type(&position, RefinedType::Enum, self._title.clone());
+                        Ok(())
+                    }
+                    TypeDef::Class(class_def) => {
+                        resolver.record_type(&position, RefinedType::Class, self._title.clone());
+
+                        let mut ret = Ok(());
+
+                        for (field_name, field_type) in class_def.properties.iter() {
+                            let mut position = position.clone();
+                            position.push("properties".to_string());
+                            position.push(field_name.clone());
+                            //position.push(format!("properties:{}", field_name));
+
+                            if let Err(field_err) = field_type.visit1(position, resolver, errors) {
+                                ret = Err(field_err);
+                            }
+                        }
+
+                        ret
+                    }
+                    TypeDef::Array(array_def) => {
+                        let mut position = position.clone();
+                        position.push("items".to_string());
+                        array_def.items.visit1(position, resolver, errors)
+                    }
+                    _ => Ok(()),
+                }
             }
-            TypeSpec::Ref(_) => {}
+            TypeSpec::Ref(_) => Ok(()),
             TypeSpec::Union(union_ref) => {
                 for (i, t) in union_ref.any_of.iter().enumerate() {
                     let mut position = position.clone();
-                    position.push(format!("anyOf[{}]", i));
+                    position.push("anyOf".to_string());
+                    position.push(format!("{}", i));
 
                     let _ = t.visit1(position, resolver, errors);
                 }
-            }
-        }
-        if !errors.is_empty() {
-            return Err(());
-        }
-        Ok(())
-    }
-}
-
-impl Visit1 for TypeDef {
-    fn visit1(
-        &self,
-        position: Vec<String>,
-        resolver: &mut RefinedTypeResolver,
-        errors: &mut Vec<SerializationError>,
-    ) -> core::result::Result<(), ()> {
-        match self {
-            TypeDef::StringOrEnum(StringOrEnumDef { r#enum: Some(_) }) => {
-                resolver.record_type(&position, RefinedType::Enum);
+                if !errors.is_empty() {
+                    return Err(());
+                }
                 Ok(())
             }
-            TypeDef::Class(class_def) => {
-                resolver.record_type(&position, RefinedType::Class);
-
-                let mut ret = Ok(());
-
-                for (field_name, field_type) in class_def.properties.iter() {
-                    let mut position = position.clone();
-                    position.push(format!("properties:{}", field_name));
-
-                    if let Err(field_err) = field_type.visit1(position, resolver, errors) {
-                        ret = Err(field_err);
-                    }
-                }
-
-                ret
-            }
-            TypeDef::Array(array_def) => {
-                let mut position = position.clone();
-                position.push("items".to_string());
-                array_def.items.visit1(position, resolver, errors)
-            }
-            _ => Ok(()),
         }
     }
 }
@@ -486,9 +495,16 @@ impl Visit2 for JsonSchema {
         v: &mut TypeCollector,
         errors: &mut Vec<SerializationError>,
     ) -> core::result::Result<FieldType, ()> {
-        for (name, type_def) in self.defs.iter() {
+        for (name, type_def) in self.defs1.iter() {
             let mut position = position.clone();
             position.push("$defs".to_string());
+            position.push(name.clone());
+
+            let _ = type_def.visit2(position, v, errors);
+        }
+        for (name, type_def) in self.defs2.iter() {
+            let mut position = position.clone();
+            position.push("definitions".to_string());
             position.push(name.clone());
 
             let _ = type_def.visit2(position, v, errors);
@@ -627,13 +643,17 @@ impl JsonSchemaType {
         let ir = IntermediateRepr::create_empty();
 
         let output_format = prompt_renderer::render_output_format(&ir, &ctx, &self.inner)
-            .context("Failed to render output format")?;
+            .context("Failed to build output format renderer")?;
 
         match output_format.render(RenderOptions::default()) {
-            Ok(Some(s)) => Ok(s),
-            Ok(None) => anyhow::bail!("Failed to render output format"),
-            Err(e) => anyhow::bail!("Failed to render output format: {:?}", e),
+            Ok(Some(s)) => anyhow::Ok(s),
+            Ok(None) => Err(anyhow::anyhow!("Failed to render output format (none)")),
+            Err(e) => Err(anyhow::anyhow!("Failed to render output format: {:?}", e)),
         }
+        .context(format!(
+            "while attempting to render output format for {:?}",
+            self.inner
+        ))
     }
 }
 
@@ -644,7 +664,7 @@ pub trait AddJsonSchema {
 impl AddJsonSchema for TypeBuilder {
     fn add_json_schema(&self, schema: String) -> Result<JsonSchemaType> {
         let schema: JsonSchema = serde_json::from_str(&schema)?;
-        println!("{:#?}", schema);
+        // println!("{:#?}", schema);
 
         let position = vec!["#".to_string()];
         let mut errors = Vec::new();
@@ -656,7 +676,7 @@ impl AddJsonSchema for TypeBuilder {
             anyhow::bail!("Errors happened during visit1: {:#?}", errors)
         };
 
-        println!("{:#?}", resolver);
+        // println!("{:#?}", resolver);
 
         let mut tc = TypeCollector {
             tb: TypeBuilder::new(),
@@ -684,7 +704,7 @@ impl AddJsonSchema for TypeBuilder {
                 .map(|(k, v)| (k.clone(), v.clone())),
         );
 
-        println!("{:#?}", self);
+        // println!("{:#?}", self);
 
         Ok(JsonSchemaType { inner: field_type })
     }
@@ -694,7 +714,153 @@ impl AddJsonSchema for TypeBuilder {
 mod tests {
     use super::*;
 
-    #[test]
+    fn to_output_format(schema: &serde_json::Value) -> Result<String> {
+        let tb = TypeBuilder::new();
+        tb.add_json_schema(schema.to_string())?.output_format(&tb)
+    }
+
+    macro_rules! output_format_test {
+        ($name:ident, $schema:tt) => {
+            // ($name:ident, $schema:tt, $expected:expr) => {
+            #[test]
+            fn $name() {
+                let schema = serde_json::json!($schema);
+                match to_output_format(&schema).context(format!("JSON schema: {:#?}", schema)) {
+                    Ok(s) => {
+                        println!("{}", s);
+                    }
+                    Err(e) => panic!("Failed to convert JSON schema to output format: {:?}", e),
+                }
+            }
+        };
+    }
+
+    // output_format_test!(root_is_string, {
+    //     "type": "string"
+    // });
+
+    output_format_test!(root_is_array, {
+        "items": {
+            "type": "string"
+        },
+        "type": "array"
+    });
+
+    output_format_test!(root_is_enum, {
+        "enum": ["admin", "user", "guest"],
+        "type": "string"
+    });
+
+    output_format_test!(root_is_object, {
+        "properties": {
+            "name": { "type": "string" },
+        },
+        "type": "object"
+    });
+
+    output_format_test!(root_is_union, {
+        "anyOf": [
+            { "type": "string" },
+            { "type": "integer" }
+        ]
+    });
+
+    output_format_test!(all_primitive_types, {
+        "properties": {
+            "name":   { "type": "string" },
+            "count":  { "type": "integer" },
+            "score":  { "type": "number" },
+            "exists": { "type": "boolean" },
+            "nah":    { "type": "null" },
+        },
+        "type": "object"
+    });
+
+    output_format_test!(root_refs_enum_in_defs, {
+        "$defs": {
+            "Role2": {
+                "enum": ["admin2", "user2", "guest2"],
+                "type": "string"
+            }
+        },
+        "$ref": "#/$defs/Role2",
+    });
+
+    output_format_test!(root_refs_object_in_defs, {
+        "$defs": {
+            "Person": {
+                "properties": {
+                    "name": { "type": "string" },
+                },
+                "type": "object"
+            }
+        },
+        "$ref": "#/$defs/Person",
+    });
+
+    // output_format_test!(root_refs_union_in_defs, {
+    //     "$defs": {
+    //         "Label": {
+    //             "anyOf": [
+    //                 { "type": "string" },
+    //                 { "type": "integer" }
+    //             ]
+    //         }
+    //     },
+    //     "$ref": "#/$defs/Label",
+    // });
+
+    output_format_test!(inline_enum, {
+        "properties": {
+            "color": {
+                "type": "string",
+                "enum": ["red", "green", "blue"]
+            },
+        },
+        "type": "object"
+    });
+
+    output_format_test!(inline_object, {
+        "properties": {
+            "prop1": {
+                "properties": {
+                    "prop2": { "type": "string" },
+                },
+                "type": "object",
+            },
+        },
+        "type": "object"
+    });
+
+    output_format_test!(inline_enum_in_union, {
+        "anyOf": [
+            {
+                "type": "string",
+                "enum": ["red", "green", "blue"]
+            },
+            {
+                "type": "integer"
+            }
+        ]
+    });
+
+    output_format_test!(inline_object_in_union, {
+        "anyOf": [
+            {
+                "properties": {
+                    "prop": { "type": "string" },
+                },
+                "type": "object",
+            },
+            {
+                "type": "integer"
+            }
+        ]
+    });
+
+    // inline object in union
+
+    //#[test]
     fn test_create_output_format() -> Result<()> {
         let model_json_schema = serde_json::json!({
           "$defs": {
@@ -844,7 +1010,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    // #[test]
     fn test1() -> Result<()> {
         let model_json_schema = serde_json::json!({
           "enum": [
