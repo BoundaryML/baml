@@ -212,6 +212,26 @@ module Baml
     sig {
       
       params(
+        input: String,
+      ).returns(Baml::Types::DummyOutput)
+      
+    }
+    def DummyOutputFunction(
+        input:
+    )
+      raw = @runtime.call_function(
+        "DummyOutputFunction",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
         input: Baml::Types::DynamicClassOne,
       ).returns(Baml::Types::DynamicClassTwo)
       
@@ -1459,6 +1479,27 @@ module Baml
         @ctx_manager,
       )
       Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[Baml::Types::DummyOutput])
+    }
+    def DummyOutputFunction(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "DummyOutputFunction",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::DummyOutput, Baml::Types::DummyOutput].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
