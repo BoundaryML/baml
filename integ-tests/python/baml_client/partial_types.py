@@ -28,6 +28,21 @@ from . import types
 ###############################################################################
 
 
+class Actor(BaseModel):
+    
+    
+    person: Optional[str] = None
+    party: Optional["Party"] = None
+    region: Optional[types.Region] = None
+    gender: Optional[types.Gender] = None
+
+class ActorSubject(BaseModel):
+    
+    
+    actors: List["Actor"]
+    subject: List[Optional[str]]
+    dates: List[Optional[str]]
+
 class Blah(BaseModel):
     
     
@@ -145,6 +160,12 @@ class OrderInfo(BaseModel):
     order_status: Optional[types.OrderStatus] = None
     tracking_number: Optional[str] = None
     estimated_arrival_date: Optional[str] = None
+
+class Party(BaseModel):
+    
+    
+    name: Optional[str] = None
+    official: Optional[types.PartyOfficial] = None
 
 class Person(BaseModel):
     

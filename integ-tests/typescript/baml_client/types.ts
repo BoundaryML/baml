@@ -71,6 +71,12 @@ export enum EnumOutput {
   THREE = "THREE",
 }
 
+export enum Gender {
+  Male = "Male",
+  Female = "Female",
+  Other = "Other",
+}
+
 export enum Hobby {
   SPORTS = "SPORTS",
   MUSIC = "MUSIC",
@@ -100,6 +106,34 @@ export enum OrderStatus {
   CANCELLED = "CANCELLED",
 }
 
+export enum PartyOfficial {
+  Labour = "Labour",
+  Conservative = "Conservative",
+  Liberal_Democrat = "Liberal_Democrat",
+  Green_Party = "Green_Party",
+  Reform_Party = "Reform_Party",
+  Labour_Co_op = "Labour_Co_op",
+  Social_Democratic = "Social_Democratic",
+  Independent = "Independent",
+  Scottish_National_Party = "Scottish_National_Party",
+}
+
+export enum Region {
+  England = "England",
+  London = "London",
+  North_East = "North_East",
+  North_West = "North_West",
+  Yorkshire = "Yorkshire",
+  East_Midlands = "East_Midlands",
+  West_Midlands = "West_Midlands",
+  South_East = "South_East",
+  East_of_England = "East_of_England",
+  South_West = "South_West",
+  Scotland = "Scotland",
+  Wales = "Wales",
+  Northern_Ireland = "Northern_Ireland",
+}
+
 export enum Tag {
   Security = "Security",
   AI = "AI",
@@ -114,6 +148,21 @@ export enum TestEnum {
   E = "E",
   F = "F",
   G = "G",
+}
+
+export interface Actor {
+  person?: string | null
+  party: Party
+  region?: Region | null
+  gender?: Gender | null
+  
+}
+
+export interface ActorSubject {
+  actors: Actor[]
+  subject: string[]
+  dates: string[]
+  
 }
 
 export interface Blah {
@@ -231,6 +280,12 @@ export interface OrderInfo {
   order_status: OrderStatus
   tracking_number?: string | null
   estimated_arrival_date?: string | null
+  
+}
+
+export interface Party {
+  name: string
+  official?: PartyOfficial | null
   
 }
 

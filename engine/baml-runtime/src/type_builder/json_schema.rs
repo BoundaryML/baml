@@ -29,7 +29,6 @@ pub enum OutputFormatMode {
 // - maps, unions, tuples
 // - errors.is_empty() is a bad pattern, should use whether or not new errors were added as a signal
 // - root def should use schema.title as the type name
-// - handle inline types? need to figure out a schema for the refs
 #[derive(Debug, Deserialize)]
 pub struct JsonSchema {
     #[serde(default, rename = "$defs")]
@@ -44,12 +43,20 @@ pub struct JsonSchema {
 
 #[derive(Debug, Deserialize)]
 struct TypeSpecWithMeta {
+    #[serde(flatten)]
+    meta: TypeMetadata,
+
+    #[serde(flatten)]
+    type_spec: TypeSpec,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct TypeMetadata {
     /// Pydantic includes this by default.
     #[serde(rename = "title")]
     _title: Option<String>,
 
-    #[serde(flatten)]
-    type_spec: TypeSpec,
+    description: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -133,7 +140,7 @@ enum RefinedType {
 
 #[derive(Debug)]
 struct RefinedTypeResolver {
-    refined: HashMap<String, (RefinedType, Option<String>)>,
+    refined: HashMap<String, (RefinedType, TypeMetadata)>,
 }
 
 impl RefinedTypeResolver {
@@ -141,18 +148,18 @@ impl RefinedTypeResolver {
         &mut self,
         position: &Vec<String>,
         refined_type: RefinedType,
-        title: Option<String>,
+        meta: TypeMetadata,
     ) {
         self.refined
-            .insert(position.join("/"), (refined_type, title));
+            .insert(position.join("/"), (refined_type, meta));
     }
 
     fn resolve_ref(&self, name: &str) -> Result<FieldType> {
         // TODO: this does not handle inline-defined types
         let type_name = name.strip_prefix("#/$defs/").unwrap_or(name);
         match self.refined.get(name) {
-            Some((RefinedType::Class, title)) => Ok(FieldType::Class(type_name.to_string())),
-            Some((RefinedType::Enum, title)) => Ok(FieldType::Enum(type_name.to_string())),
+            Some((RefinedType::Class, meta)) => Ok(FieldType::Class(type_name.to_string())),
+            Some((RefinedType::Enum, meta)) => Ok(FieldType::Enum(type_name.to_string())),
             None => anyhow::bail!("Unresolved ref: {}", name),
         }
     }
@@ -372,19 +379,6 @@ impl Visit1 for JsonSchema {
     }
 }
 
-fn position_to_type_name(position: &Vec<String>) -> Result<String> {
-    if position.len() == 3 && position[0] == "#" && position[1] == "$defs" {
-        return Ok(position[2].clone());
-    }
-
-    if position.len() == 1 && position[0] == "#" {
-        return Ok("#".to_string());
-    }
-
-    Ok(position.join("_"))
-    //anyhow::bail!("Only top-level defs are supported: {:?}", position)
-}
-
 impl Visit1 for TypeSpecWithMeta {
     fn visit1(
         &self,
@@ -393,38 +387,35 @@ impl Visit1 for TypeSpecWithMeta {
         errors: &mut Vec<SerializationError>,
     ) -> core::result::Result<(), ()> {
         match &self.type_spec {
-            TypeSpec::Inline(type_def) => {
-                match type_def {
-                    TypeDef::StringOrEnum(StringOrEnumDef { r#enum: Some(_) }) => {
-                        resolver.record_type(&position, RefinedType::Enum, self._title.clone());
-                        Ok(())
-                    }
-                    TypeDef::Class(class_def) => {
-                        resolver.record_type(&position, RefinedType::Class, self._title.clone());
-
-                        let mut ret = Ok(());
-
-                        for (field_name, field_type) in class_def.properties.iter() {
-                            let mut position = position.clone();
-                            position.push("properties".to_string());
-                            position.push(field_name.clone());
-                            //position.push(format!("properties:{}", field_name));
-
-                            if let Err(field_err) = field_type.visit1(position, resolver, errors) {
-                                ret = Err(field_err);
-                            }
-                        }
-
-                        ret
-                    }
-                    TypeDef::Array(array_def) => {
-                        let mut position = position.clone();
-                        position.push("items".to_string());
-                        array_def.items.visit1(position, resolver, errors)
-                    }
-                    _ => Ok(()),
+            TypeSpec::Inline(type_def) => match type_def {
+                TypeDef::StringOrEnum(StringOrEnumDef { r#enum: Some(_) }) => {
+                    resolver.record_type(&position, RefinedType::Enum, self.meta.clone());
+                    Ok(())
                 }
-            }
+                TypeDef::Class(class_def) => {
+                    resolver.record_type(&position, RefinedType::Class, self.meta.clone());
+
+                    let mut ret = Ok(());
+
+                    for (field_name, field_type) in class_def.properties.iter() {
+                        let mut position = position.clone();
+                        position.push("properties".to_string());
+                        position.push(field_name.clone());
+
+                        if let Err(field_err) = field_type.visit1(position, resolver, errors) {
+                            ret = Err(field_err);
+                        }
+                    }
+
+                    ret
+                }
+                TypeDef::Array(array_def) => {
+                    let mut position = position.clone();
+                    position.push("items".to_string());
+                    array_def.items.visit1(position, resolver, errors)
+                }
+                _ => Ok(()),
+            },
             TypeSpec::Ref(_) => Ok(()),
             TypeSpec::Union(union_ref) => {
                 for (i, t) in union_ref.any_of.iter().enumerate() {
@@ -451,12 +442,31 @@ struct TypeCollector {
 }
 
 impl TypeCollector {
+    fn to_type_name(position: &Vec<String>, meta: &TypeMetadata) -> Result<String> {
+        if position.len() == 3
+            && position[0] == "#"
+            && (position[1] == "$defs" || position[1] == "definitions")
+        {
+            return Ok(position[2].clone());
+        }
+
+        if position.len() == 1 && position[0] == "#" {
+            return match &meta._title {
+                Some(title) => Ok(title.clone()),
+                None => Ok("#".to_string()),
+            };
+        }
+
+        Ok(position.join("_"))
+    }
+
     fn add_class(
         &self,
         position: &Vec<String>,
+        meta: &TypeMetadata,
         fields: Vec<(String, FieldType)>,
     ) -> Result<FieldType> {
-        let class_name = position_to_type_name(&position)?;
+        let class_name = Self::to_type_name(&position, meta)?;
         let arc = self.tb.class(class_name.as_str());
         let cb = arc.lock().unwrap();
 
@@ -467,8 +477,13 @@ impl TypeCollector {
         Ok(FieldType::class(class_name.as_str()))
     }
 
-    fn add_enum(&self, position: &Vec<String>, enums: &[String]) -> Result<FieldType> {
-        let enum_name = position_to_type_name(&position)?;
+    fn add_enum(
+        &self,
+        position: &Vec<String>,
+        meta: &TypeMetadata,
+        enums: &[String],
+    ) -> Result<FieldType> {
+        let enum_name = Self::to_type_name(&position, meta)?;
         let arc = self.tb.r#enum(enum_name.as_str());
         let eb = arc.lock().unwrap();
 
@@ -522,7 +537,7 @@ impl Visit2 for TypeSpecWithMeta {
         errors: &mut Vec<SerializationError>,
     ) -> core::result::Result<FieldType, ()> {
         match &self.type_spec {
-            TypeSpec::Inline(type_def) => type_def.visit2(position, v, errors),
+            TypeSpec::Inline(type_def) => type_def.visit_type_def(position, &self.meta, v, errors),
             TypeSpec::Ref(TypeRef { ref r#ref }) => match v.resolver.resolve_ref(r#ref) {
                 Ok(t) => Ok(t),
                 Err(e) => {
@@ -538,7 +553,8 @@ impl Visit2 for TypeSpecWithMeta {
 
                 for (i, t) in union_ref.any_of.iter().enumerate() {
                     let mut position = position.clone();
-                    position.push(format!("anyOf[{}]", i));
+                    position.push("anyOf".to_string());
+                    position.push(format!("{}", i));
 
                     if let Ok(one_of) = t.visit2(position, v, errors) {
                         any_of.push(one_of);
@@ -554,10 +570,11 @@ impl Visit2 for TypeSpecWithMeta {
     }
 }
 
-impl Visit2 for TypeDef {
-    fn visit2(
+impl TypeDef {
+    fn visit_type_def(
         &self,
         position: Vec<String>,
+        meta: &TypeMetadata,
         v: &mut TypeCollector,
         errors: &mut Vec<SerializationError>,
     ) -> core::result::Result<FieldType, ()> {
@@ -568,7 +585,8 @@ impl Visit2 for TypeDef {
                     .iter()
                     .map(|(field_name, field_type)| {
                         let mut position = position.clone();
-                        position.push(format!("properties:{}", field_name));
+                        position.push("properties".to_string());
+                        position.push(field_name.clone());
 
                         match field_type.visit2(position, v, errors) {
                             Ok(t) => Ok((
@@ -584,7 +602,7 @@ impl Visit2 for TypeDef {
                     })
                     .collect::<Result<Vec<_>, ()>>()?;
 
-                match v.add_class(&position, fields) {
+                match v.add_class(&position, meta, fields) {
                     Ok(t) => t,
                     Err(e) => {
                         errors.push(SerializationError {
@@ -605,7 +623,7 @@ impl Visit2 for TypeDef {
             }
             TypeDef::StringOrEnum(StringOrEnumDef {
                 r#enum: Some(enum_values),
-            }) => match v.add_enum(&position, enum_values.as_slice()) {
+            }) => match v.add_enum(&position, meta, enum_values.as_slice()) {
                 Ok(t) => t,
                 Err(e) => {
                     errors.push(SerializationError {
@@ -860,9 +878,25 @@ mod tests {
 
     // inline object in union
 
-    //#[test]
-    fn test_create_output_format() -> Result<()> {
-        let model_json_schema = serde_json::json!({
+    #[test]
+    fn test_root_uses_title() -> Result<()> {
+        let schema = serde_json::json!({
+            "title": "Role",
+            "enum": ["admin", "user", "guest"],
+            "type": "string"
+        });
+
+        let output_format = to_output_format(&schema)?;
+
+        assert!(output_format.contains("Role"));
+        assert!(!output_format.contains("#"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_complex() -> Result<()> {
+        let schema = serde_json::json!({
           "$defs": {
             "Role": {
               "enum": [
@@ -1000,32 +1034,7 @@ mod tests {
           "type": "object"
         });
 
-        let tb = TypeBuilder::new();
-        let output_format = tb
-            .add_json_schema(model_json_schema.to_string())?
-            .output_format(&tb)?;
-
-        println!("{}", output_format);
-
-        Ok(())
-    }
-
-    // #[test]
-    fn test1() -> Result<()> {
-        let model_json_schema = serde_json::json!({
-          "enum": [
-            "admin",
-            "user",
-            "guest"
-          ],
-          "title": "Role",
-          "type": "string"
-        });
-
-        let tb = TypeBuilder::new();
-        let output_format = tb
-            .add_json_schema(model_json_schema.to_string())?
-            .output_format(&tb)?;
+        let output_format = to_output_format(&schema)?;
 
         println!("{}", output_format);
 

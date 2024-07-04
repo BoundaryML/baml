@@ -77,6 +77,28 @@ class BamlClient:
       mdl = create_model("AudioInputReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    async def Brits(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.ActorSubject:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = await self.__runtime.call_function(
+        "Brits",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+      )
+      mdl = create_model("BritsReturnType", inner=(types.ActorSubject, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def ClassifyMessage(
         self,
         input: str,
@@ -1454,6 +1476,38 @@ class BamlStreamClient:
       partial_mdl = create_model("AudioInputPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+        tb,
+      )
+    
+    def Brits(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.ActorSubject, types.ActorSubject]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+
+      raw = self.__runtime.stream_function(
+        "Brits",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+      )
+
+      mdl = create_model("BritsReturnType", inner=(types.ActorSubject, ...))
+      partial_mdl = create_model("BritsPartialReturnType", inner=(partial_types.ActorSubject, ...))
+
+      return baml_py.BamlStream[partial_types.ActorSubject, types.ActorSubject](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
