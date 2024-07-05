@@ -393,6 +393,7 @@ describe('Integ tests', () => {
       }),
     })
 
+    // TODO- https://www.npmjs.com/package/zod-to-json-schema fucks with unions
     console.log(JSON.stringify(zodToJsonSchema(personSchema, 'Person'), null, 2))
 
     let tb = new TypeBuilder()
