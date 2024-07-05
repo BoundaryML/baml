@@ -32,14 +32,18 @@ impl TypeBuilderUnstableFeatures {
         let value_type = schema.get_type()?;
 
         if value_type == ValueType::String {
+            println!("adding json schema from string");
             let schema = env.from_js_value(schema)?;
+            println!("adding json schema from string2");
             self.inner
                 .inner
                 .add_json_schema_from_str(schema)
                 .map(|_| ())
                 .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
         } else {
+            println!("adding json schema from value");
             let schema = env.from_js_value(schema)?;
+            println!("adding json schema from value2");
             self.inner
                 .inner
                 .add_json_schema_from_value(schema)

@@ -393,8 +393,10 @@ describe('Integ tests', () => {
       }),
     })
 
+    console.log(JSON.stringify(zodToJsonSchema(personSchema, 'Person'), null, 2))
+
     let tb = new TypeBuilder()
-    tb.__tb().unstableFeatures.addJsonSchema(zodToJsonSchema(personSchema))
+    tb.__tb().unstableFeatures.addJsonSchema(zodToJsonSchema(personSchema, 'Person'))
     // const animalClass = tb.addClass('Animal')
     // animalClass.addProperty('animal', tb.string()).description('The animal mentioned, in singular form.')
     // tb.Person.addProperty('animalLiked', animalClass.type())
