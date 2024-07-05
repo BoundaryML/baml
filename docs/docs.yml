@@ -157,12 +157,12 @@ navigation:
         path: docs/contact.mdx
 
 navbar-links:
+  - type: github
+    value: https://github.com/boundaryml/baml
   - type: filled
     text: Community
     url: https://discord.gg/8Q7Q5b8Q
-  - type: outlined
-    text: GitHub
-    url: https://github.com/boundaryml/baml
+  
   
 
 colors:
