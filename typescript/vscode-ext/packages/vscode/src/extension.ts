@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import axios from 'axios'
 import glooLens from './LanguageToBamlCodeLensProvider'
-import { WebPanelView } from './panels/WebPanelView'
+import { WebPanelView, openPlaygroundConfig } from './panels/WebPanelView'
 import plugins from './plugins'
 import { requestDiagnostics } from './plugins/language-server'
 import { telemetry } from './plugins/language-server'
@@ -243,7 +243,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
       // sends project files as well to webview
       requestDiagnostics()
-
+      openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
       WebPanelView.currentPanel?.postMessage('select_function', {
         root_path: 'default',
         function_name: args?.functionName ?? 'default',
