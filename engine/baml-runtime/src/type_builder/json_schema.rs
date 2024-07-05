@@ -8,7 +8,6 @@ use internal_baml_jinja::types::{OutputFormatContent, RenderOptions};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::f32::consts::E;
 
 use crate::internal::prompt_renderer;
 use crate::RuntimeContext;
@@ -56,6 +55,14 @@ struct TypeMetadata {
     #[serde(rename = "title")]
     _title: Option<String>,
 
+    /// JSON schema considers 'enum' to be a validation rule, not a type,
+    /// so it can be attached to any type.
+    /// We only allow string-shaped enums
+    r#enum: Option<Vec<String>>,
+
+    /// We only allow string-shaped const values
+    r#const: Option<String>,
+
     description: Option<String>,
 }
 
@@ -66,11 +73,12 @@ enum TypeSpec {
     Ref(TypeRef),
     Inline(TypeDef),
     Union(UnionRef),
+    Unknown(serde_json::Value),
 }
 
 #[derive(Debug, Deserialize)]
 struct UnionRef {
-    #[serde(rename = "anyOf")]
+    #[serde(rename = "anyOf", alias = "oneOf")]
     any_of: Vec<TypeSpecWithMeta>,
 }
 
@@ -84,7 +92,7 @@ struct TypeRef {
 #[serde(tag = "type")]
 enum TypeDef {
     #[serde(rename = "string")]
-    StringOrEnum(StringOrEnumDef),
+    String,
 
     #[serde(rename = "object")]
     Class(ClassDef),
@@ -103,6 +111,8 @@ enum TypeDef {
 
     #[serde(rename = "null")]
     Null,
+    // #[serde(other)]
+    // Unknown,
 }
 
 #[derive(Debug, Deserialize)]
@@ -136,32 +146,79 @@ struct SerializationError {
 enum RefinedType {
     Class,
     Enum,
+    Primitive(TypeValue),
+}
+#[derive(Clone, Debug)]
+enum LazyTypeRef {
+    Class,
+    Enum,
+    Union(Vec<LazyTypeRef>),
+    Array(Box<LazyTypeRef>),
+    Ref(String),
+    Primitive(TypeValue),
+}
+
+impl LazyTypeRef {
+    /// TODO: handle infinite recursion
+    fn resolve(&self, index: &TypeIndex, type_name: &str) -> Result<FieldType> {
+        Ok(match &self {
+            LazyTypeRef::Class => FieldType::Class(
+                type_name
+                    .strip_prefix("#/$defs/")
+                    .unwrap_or(type_name)
+                    .strip_prefix("#/definitions/")
+                    .unwrap_or(type_name)
+                    .to_string(),
+            ),
+            LazyTypeRef::Enum => FieldType::Enum(
+                type_name
+                    .strip_prefix("#/$defs/")
+                    .unwrap_or(type_name)
+                    .strip_prefix("#/definitions/")
+                    .unwrap_or(type_name)
+                    .to_string(),
+            ),
+            LazyTypeRef::Union(union) => {
+                let mut any_of = vec![];
+                for t in union.iter() {
+                    any_of.push(t.resolve(index, type_name)?);
+                }
+                FieldType::Union(any_of)
+            }
+            LazyTypeRef::Array(t) => FieldType::List(Box::new(t.resolve(index, type_name)?)),
+            LazyTypeRef::Ref(name) => index.resolve_ref2(name)?.resolve(index, type_name)?,
+            LazyTypeRef::Primitive(type_value) => FieldType::Primitive(type_value.clone()),
+        })
+    }
 }
 
 #[derive(Debug)]
-struct RefinedTypeResolver {
-    refined: HashMap<String, (RefinedType, TypeMetadata)>,
+struct TypeIndex {
+    index2: HashMap<String, (LazyTypeRef, TypeMetadata)>,
 }
 
-impl RefinedTypeResolver {
-    fn record_type(
+impl TypeIndex {
+    fn record_type2(
         &mut self,
         position: &Vec<String>,
-        refined_type: RefinedType,
-        meta: TypeMetadata,
-    ) {
-        self.refined
-            .insert(position.join("/"), (refined_type, meta));
+        lazy_ref: LazyTypeRef,
+        meta: &TypeMetadata,
+    ) -> LazyTypeRef {
+        self.index2
+            .insert(position.join("/"), (lazy_ref.clone(), meta.clone()));
+        lazy_ref
     }
 
-    fn resolve_ref(&self, name: &str) -> Result<FieldType> {
-        // TODO: this does not handle inline-defined types
-        let type_name = name.strip_prefix("#/$defs/").unwrap_or(name);
-        match self.refined.get(name) {
-            Some((RefinedType::Class, meta)) => Ok(FieldType::Class(type_name.to_string())),
-            Some((RefinedType::Enum, meta)) => Ok(FieldType::Enum(type_name.to_string())),
+    fn resolve_ref2(&self, name: &str) -> Result<&LazyTypeRef> {
+        println!("    resolve_ref2 against index: {}", name);
+        match &self.index2.get(name) {
+            Some((lazy_ref, meta)) => Ok(lazy_ref),
             None => anyhow::bail!("Unresolved ref: {}", name),
         }
+    }
+    fn resolve_ref3(&self, name: &str) -> Result<FieldType> {
+        println!("resolving type name against index: {}", name);
+        self.resolve_ref2(name)?.resolve(self, name)
     }
 }
 
@@ -335,21 +392,11 @@ impl RefinedTypeResolver {
 //     }
 // }
 
-trait Visit1 {
-    /// Discover all enums and class refs
-    fn visit1(
+impl JsonSchema {
+    fn build_type_index(
         &self,
         position: Vec<String>,
-        resolver: &mut RefinedTypeResolver,
-        errors: &mut Vec<SerializationError>,
-    ) -> core::result::Result<(), ()>;
-}
-
-impl Visit1 for JsonSchema {
-    fn visit1(
-        &self,
-        position: Vec<String>,
-        resolver: &mut RefinedTypeResolver,
+        index: &mut TypeIndex,
         errors: &mut Vec<SerializationError>,
     ) -> core::result::Result<(), ()> {
         for (name, type_def) in self.defs1.iter() {
@@ -357,78 +404,154 @@ impl Visit1 for JsonSchema {
             position.push("$defs".to_string());
             position.push(name.clone());
 
-            let _ = type_def.visit1(position, resolver, errors);
+            if let Ok(t) = type_def.build_type_index(position.clone(), index, errors) {
+                index.record_type2(&position, t, &type_def.meta);
+            }
         }
         for (name, type_def) in self.defs2.iter() {
             let mut position = position.clone();
             position.push("definitions".to_string());
             position.push(name.clone());
 
-            let _ = type_def.visit1(position, resolver, errors);
+            if let Ok(t) = type_def.build_type_index(position.clone(), index, errors) {
+                index.record_type2(&position, t, &type_def.meta);
+            }
         }
 
         let _ = self
             .type_spec_with_meta
-            .visit1(position.clone(), resolver, errors);
+            .build_type_index(position.clone(), index, errors);
 
-        if !errors.is_empty() {
-            return Err(());
-        }
+        // TODO: we should definitely return an error if it's bad enough
+        // if !errors.is_empty() {
+        //     return Err(());
+        // }
+
+        // println!("type index: {:#?}", index);
+        println!("type index errors: {:#?}", errors);
 
         Ok(())
     }
 }
 
-impl Visit1 for TypeSpecWithMeta {
-    fn visit1(
+impl TypeSpecWithMeta {
+    fn build_type_index(
         &self,
         position: Vec<String>,
-        resolver: &mut RefinedTypeResolver,
+        resolver: &mut TypeIndex,
         errors: &mut Vec<SerializationError>,
-    ) -> core::result::Result<(), ()> {
-        match &self.type_spec {
-            TypeSpec::Inline(type_def) => match type_def {
-                TypeDef::StringOrEnum(StringOrEnumDef { r#enum: Some(_) }) => {
-                    resolver.record_type(&position, RefinedType::Enum, self.meta.clone());
-                    Ok(())
-                }
-                TypeDef::Class(class_def) => {
-                    resolver.record_type(&position, RefinedType::Class, self.meta.clone());
-
-                    let mut ret = Ok(());
-
-                    for (field_name, field_type) in class_def.properties.iter() {
-                        let mut position = position.clone();
-                        position.push("properties".to_string());
-                        position.push(field_name.clone());
-
-                        if let Err(field_err) = field_type.visit1(position, resolver, errors) {
-                            ret = Err(field_err);
-                        }
+    ) -> core::result::Result<LazyTypeRef, ()> {
+        match (&self.meta.r#enum, &self.meta.r#const) {
+            (Some(_), Some(_)) => {
+                errors.push(SerializationError {
+                    position: position.clone(),
+                    message: "Cannot have both enum and const".to_string(),
+                });
+                return Err(());
+            }
+            (Some(_), None) | (None, Some(_)) => {
+                return match self.type_spec {
+                    TypeSpec::Inline(TypeDef::String) => {
+                        Ok(resolver.record_type2(&position, LazyTypeRef::Enum, &self.meta))
                     }
-
-                    ret
-                }
-                TypeDef::Array(array_def) => {
-                    let mut position = position.clone();
-                    position.push("items".to_string());
-                    array_def.items.visit1(position, resolver, errors)
-                }
-                _ => Ok(()),
-            },
-            TypeSpec::Ref(_) => Ok(()),
+                    TypeSpec::Unknown(_) => {
+                        Ok(resolver.record_type2(&position, LazyTypeRef::Enum, &self.meta))
+                    }
+                    _ => {
+                        errors.push(SerializationError {
+                            position: position.clone(),
+                            message: "Enums are only supported for type=string fields".to_string(),
+                        });
+                        Err(())
+                    }
+                };
+            }
+            (None, None) => {}
+        };
+        match &self.type_spec {
+            TypeSpec::Inline(type_def) => {
+                type_def.build_type_index(position, &self.meta, resolver, errors)
+            }
             TypeSpec::Union(union_ref) => {
+                let mut any_of = vec![];
+                let mut errs = vec![];
+
                 for (i, t) in union_ref.any_of.iter().enumerate() {
                     let mut position = position.clone();
                     position.push("anyOf".to_string());
                     position.push(format!("{}", i));
 
-                    let _ = t.visit1(position, resolver, errors);
+                    match t.build_type_index(position, resolver, errors) {
+                        Ok(t) => any_of.push(t),
+                        Err(e) => errs.push(e),
+                    }
                 }
-                if !errors.is_empty() {
+                if !errs.is_empty() {
                     return Err(());
                 }
-                Ok(())
+                Ok(resolver.record_type2(&position, LazyTypeRef::Union(any_of), &self.meta))
+            }
+            TypeSpec::Ref(TypeRef { r#ref }) => {
+                Ok(resolver.record_type2(&position, LazyTypeRef::Ref(r#ref.clone()), &self.meta))
+            }
+            TypeSpec::Unknown(_) => {
+                // TODO- how should this actually be handled?
+                errors.push(SerializationError {
+                    position: position.clone(),
+                    message: "Unknown type schema- treating it as a string".to_string(),
+                });
+                Ok(resolver.record_type2(
+                    &position,
+                    LazyTypeRef::Primitive(TypeValue::String),
+                    &self.meta,
+                ))
+            }
+        }
+    }
+}
+impl TypeDef {
+    fn build_type_index(
+        &self,
+        position: Vec<String>,
+        meta: &TypeMetadata,
+        resolver: &mut TypeIndex,
+        errors: &mut Vec<SerializationError>,
+    ) -> core::result::Result<LazyTypeRef, ()> {
+        match &self {
+            TypeDef::Class(class_def) => {
+                for (field_name, field_type) in class_def.properties.iter() {
+                    let mut position = position.clone();
+                    position.push("properties".to_string());
+                    position.push(field_name.clone());
+
+                    let _ = field_type.build_type_index(position, resolver, errors);
+                }
+
+                Ok(resolver.record_type2(&position, LazyTypeRef::Class, meta))
+            }
+            TypeDef::Array(array_def) => {
+                let mut position = position.clone();
+                position.push("items".to_string());
+                array_def.items.build_type_index(position, resolver, errors)
+            }
+            TypeDef::String => Ok(resolver.record_type2(
+                &position,
+                LazyTypeRef::Primitive(TypeValue::String),
+                meta,
+            )),
+            TypeDef::Int => {
+                Ok(resolver.record_type2(&position, LazyTypeRef::Primitive(TypeValue::Int), meta))
+            }
+            TypeDef::Float => Ok(resolver.record_type2(
+                &position,
+                LazyTypeRef::Primitive(TypeValue::Float),
+                meta,
+            )),
+            TypeDef::Bool => {
+                Ok(resolver.record_type2(&position, LazyTypeRef::Primitive(TypeValue::Bool), meta))
+            }
+            TypeDef::Null => {
+                Ok(resolver.record_type2(&position, LazyTypeRef::Primitive(TypeValue::Null), meta))
             }
         }
     }
@@ -438,7 +561,7 @@ impl Visit1 for TypeSpecWithMeta {
 
 struct TypeCollector {
     tb: TypeBuilder,
-    resolver: RefinedTypeResolver,
+    index: TypeIndex,
 }
 
 impl TypeCollector {
@@ -536,9 +659,56 @@ impl Visit2 for TypeSpecWithMeta {
         v: &mut TypeCollector,
         errors: &mut Vec<SerializationError>,
     ) -> core::result::Result<FieldType, ()> {
+        let enum_values = match (&self.meta.r#enum, &self.meta.r#const) {
+            (Some(_), Some(_)) => {
+                errors.push(SerializationError {
+                    position: position.clone(),
+                    message: "Cannot have both enum and const".to_string(),
+                });
+                return Err(());
+            }
+            (Some(enum_values), None) => Some(enum_values.iter().map(|v| v.clone()).collect()),
+            (None, Some(const_value)) => Some(vec![const_value.clone()]),
+            (None, None) => None,
+        };
+        if let Some(enum_values) = enum_values {
+            return match self.type_spec {
+                TypeSpec::Inline(TypeDef::String) => {
+                    match v.add_enum(&position, &self.meta, enum_values.as_slice()) {
+                        Ok(t) => Ok(t),
+                        Err(e) => {
+                            errors.push(SerializationError {
+                                position: position.clone(),
+                                message: format!("Failed to add enum: {:?}", e),
+                            });
+                            Err(())
+                        }
+                    }
+                }
+                TypeSpec::Unknown(_) => {
+                    match v.add_enum(&position, &self.meta, enum_values.as_slice()) {
+                        Ok(t) => Ok(t),
+                        Err(e) => {
+                            errors.push(SerializationError {
+                                position: position.clone(),
+                                message: format!("Failed to add enum: {:?}", e),
+                            });
+                            Err(())
+                        }
+                    }
+                }
+                _ => {
+                    errors.push(SerializationError {
+                        position: position.clone(),
+                        message: "Enums are only supported for type=string fields".to_string(),
+                    });
+                    Err(())
+                }
+            };
+        }
         match &self.type_spec {
             TypeSpec::Inline(type_def) => type_def.visit_type_def(position, &self.meta, v, errors),
-            TypeSpec::Ref(TypeRef { ref r#ref }) => match v.resolver.resolve_ref(r#ref) {
+            TypeSpec::Ref(TypeRef { ref r#ref }) => match v.index.resolve_ref3(r#ref) {
                 Ok(t) => Ok(t),
                 Err(e) => {
                     errors.push(SerializationError {
@@ -565,6 +735,17 @@ impl Visit2 for TypeSpecWithMeta {
                     return Err(());
                 }
                 Ok(FieldType::union(any_of))
+            }
+            TypeSpec::Unknown(_) => {
+                // errors.push(SerializationError {
+                //     position: position.clone(),
+                //     message: format!("Unknown type schema- treating it as a string"),
+                // });
+                println!(
+                    "Unknown type schema- treating it as a string {:#?}",
+                    position
+                );
+                Ok(FieldType::string())
             }
         }
     }
@@ -621,21 +802,7 @@ impl TypeDef {
                     .visit2(position, v, errors)
                     .map(|t| FieldType::List(Box::new(t)))?
             }
-            TypeDef::StringOrEnum(StringOrEnumDef {
-                r#enum: Some(enum_values),
-            }) => match v.add_enum(&position, meta, enum_values.as_slice()) {
-                Ok(t) => t,
-                Err(e) => {
-                    errors.push(SerializationError {
-                        position: position.clone(),
-                        message: format!("Failed to add class: {:?}", e),
-                    });
-                    return Err(());
-                }
-            },
-            TypeDef::StringOrEnum(StringOrEnumDef { r#enum: None }) => {
-                FieldType::Primitive(TypeValue::String)
-            }
+            TypeDef::String => FieldType::Primitive(TypeValue::String),
             TypeDef::Int => FieldType::Primitive(TypeValue::Int),
             TypeDef::Float => FieldType::Primitive(TypeValue::Float),
             TypeDef::Bool => FieldType::Primitive(TypeValue::Bool),
@@ -650,6 +817,10 @@ pub struct JsonSchemaType {
 
 impl JsonSchemaType {
     pub fn output_format(&self, tb: &TypeBuilder) -> Result<String> {
+        println!(
+            "output format for JsonSchemaType: {:#?}\ntype builder: {:?}",
+            self.inner, tb
+        );
         let (class_overrides, enum_overrides) = tb.to_overrides();
         let ctx = RuntimeContext {
             env: HashMap::new(),
@@ -687,18 +858,19 @@ impl AddJsonSchema for TypeBuilder {
         let position = vec!["#".to_string()];
         let mut errors = Vec::new();
 
-        let mut resolver = RefinedTypeResolver {
-            refined: HashMap::new(),
+        let mut resolver = TypeIndex {
+            index2: HashMap::new(),
         };
-        let Ok(_) = schema.visit1(position.clone(), &mut resolver, &mut errors) else {
+        let Ok(_) = schema.build_type_index(position.clone(), &mut resolver, &mut errors) else {
             anyhow::bail!("Errors happened during visit1: {:#?}", errors)
         };
 
         // println!("{:#?}", resolver);
 
+        let mut errors = Vec::new();
         let mut tc = TypeCollector {
             tb: TypeBuilder::new(),
-            resolver,
+            index: resolver,
         };
 
         let Ok(field_type) = schema.visit2(position.clone(), &mut tc, &mut errors) else {
@@ -1035,6 +1207,21 @@ mod tests {
         });
 
         let output_format = to_output_format(&schema)?;
+
+        println!("{}", output_format);
+
+        Ok(())
+    }
+    #[test]
+    fn test_complex_fhir() -> Result<()> {
+        let schema_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/type_builder/test-data-fhir.schema.json"
+        );
+        let fhir_schema = std::fs::read_to_string(schema_path)?;
+
+        let tb = TypeBuilder::new();
+        let output_format = tb.add_json_schema(fhir_schema)?.output_format(&tb)?;
 
         println!("{}", output_format);
 
