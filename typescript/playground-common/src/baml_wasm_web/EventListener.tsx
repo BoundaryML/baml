@@ -7,7 +7,7 @@ import { atomFamily, atomWithStorage, unwrap, useAtomCallback } from 'jotai/util
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
-import { sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
+import { atomStore, sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { vscode } from '../utils/vscode'
@@ -18,6 +18,13 @@ const postMessageToExtension = (message: any) => {
   console.log(`Sending message to extension ${message.command}`)
   vscode.postMessage(message)
 }
+
+const wasmAtomAsync = atom(async () => {
+  const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build')
+  return wasm
+})
+
+const wasmAtom = unwrap(wasmAtomAsync)
 
 const defaultEnvKeyValues: [string, string][] = (() => {
   if ((window as any).next?.version) {
@@ -30,9 +37,6 @@ const defaultEnvKeyValues: [string, string][] = (() => {
     }
     return [['BOUNDARY_PROXY_URL', 'https://fiddle-proxy.fly.dev']]
   } else {
-    postMessageToExtension({ command: 'get_port' })
-    postMessageToExtension({ command: 'add_project' })
-
     console.log('Not running in a Next.js environment, set default value')
     // Not running in a Next.js environment, set default value
     return [['BOUNDARY_PROXY_URL', 'http://localhost:0000']]
@@ -40,7 +44,7 @@ const defaultEnvKeyValues: [string, string][] = (() => {
 })()
 
 const selectedProjectStorageAtom = atomWithStorage<string | null>('selected-project', null, sessionStore)
-const selectedFunctionStorageAtom = atomWithStorage<string | null>('selected-function', null, sessionStore)
+const selectedFunctionStorageAtom = atom<string | null>(null)
 const envKeyValueStorage = atomWithStorage<[string, string][]>(
   'env-key-values',
   defaultEnvKeyValues,
@@ -92,13 +96,6 @@ type Selection = {
   function?: string
   testCase?: string
 }
-
-const wasmAtomAsync = atom(async () => {
-  const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build')
-  return wasm
-})
-
-const wasmAtom = unwrap(wasmAtomAsync)
 
 export const envVarsAtom = atom((get) => {
   const envKeyValues = get(envKeyValuesAtom)
@@ -262,6 +259,8 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
     // console.log('Creating new project', root_path, onlyRelevantFiles)
     if (wasm) {
       project = wasm.WasmProject.new(root_path, onlyRelevantFiles)
+    } else {
+      console.log('wasm not yet ready')
     }
   }
   let rt: WasmRuntime | undefined = undefined
@@ -479,8 +478,16 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const setEnvKeyValueStorage = useSetAtom(envKeyValueStorage)
   const version = useAtomValue(versionAtom)
   const wasm = useAtomValue(wasmAtom)
-  const setSelectedFunction = useSetAtom(selectedFunctionAtom)
+  const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom)
   const envVars = useAtomValue(envVarsAtom)
+
+  useEffect(() => {
+    if (wasm) {
+      console.log('wasm ready!')
+      postMessageToExtension({ command: 'get_port' })
+      postMessageToExtension({ command: 'add_project' })
+    }
+  }, [wasm])
 
   const createRuntimeCb = useAtomCallback(
     useCallback(
@@ -616,7 +623,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
     window.addEventListener('message', fn)
 
     return () => window.removeEventListener('message', fn)
-  })
+  }, [])
 
   return (
     <>
