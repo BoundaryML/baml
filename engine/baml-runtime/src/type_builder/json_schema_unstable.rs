@@ -73,9 +73,9 @@ struct TypeMetadata {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum TypeSpec {
-    #[serde(rename = "string")]
     Ref(TypeRef),
     Inline(TypeDef),
+    InlineUnion(InlineUnion),
     Union(UnionRef),
     Unknown(serde_json::Value),
 }
@@ -117,6 +117,41 @@ enum TypeDef {
     Null,
     // #[serde(other)]
     // Unknown,
+}
+
+#[derive(Debug, Deserialize)]
+struct InlineUnion {
+    r#type: Vec<PrimitiveTypeDef>,
+}
+
+#[derive(Debug, Deserialize)]
+enum PrimitiveTypeDef {
+    #[serde(rename = "string")]
+    String,
+
+    #[serde(rename = "integer")]
+    Int,
+
+    #[serde(rename = "number")]
+    Float,
+
+    #[serde(rename = "boolean")]
+    Bool,
+
+    #[serde(rename = "null")]
+    Null,
+}
+
+impl From<&PrimitiveTypeDef> for TypeValue {
+    fn from(pt: &PrimitiveTypeDef) -> Self {
+        match pt {
+            PrimitiveTypeDef::String => TypeValue::String,
+            PrimitiveTypeDef::Int => TypeValue::Int,
+            PrimitiveTypeDef::Float => TypeValue::Float,
+            PrimitiveTypeDef::Bool => TypeValue::Bool,
+            PrimitiveTypeDef::Null => TypeValue::Null,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -477,6 +512,12 @@ impl TypeSpecWithMeta {
             TypeSpec::Inline(type_def) => {
                 type_def.build_type_index(position, &self.meta, resolver, errors)
             }
+            TypeSpec::InlineUnion(InlineUnion { r#type }) => Ok(LazyTypeRef::Union(
+                r#type
+                    .iter()
+                    .map(|t| LazyTypeRef::Primitive(t.into()))
+                    .collect(),
+            )),
             TypeSpec::Union(union_ref) => {
                 let mut any_of = vec![];
                 let mut errs = vec![];
@@ -726,6 +767,12 @@ impl Visit2 for TypeSpecWithMeta {
                     Err(())
                 }
             },
+            TypeSpec::InlineUnion(InlineUnion { r#type }) => Ok(FieldType::Union(
+                r#type
+                    .iter()
+                    .map(|t| FieldType::Primitive(t.into()))
+                    .collect(),
+            )),
             TypeSpec::Union(union_ref) => {
                 let mut any_of = vec![];
 
@@ -966,6 +1013,13 @@ mod tests {
             { "type": "string" },
             { "type": "integer" }
         ]
+    });
+
+    // zod relies on this, and it's in the spec
+    // we only allow a subset of what the JSON schema spec allows though;
+    // we only support primitive types in this syntax
+    output_format_test!(root_is_inline_union, {
+        "type": ["string", "integer"]
     });
 
     output_format_test!(all_primitive_types, {

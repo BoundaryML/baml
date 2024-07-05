@@ -391,7 +391,8 @@ describe('Integ tests', () => {
       animalLiked: z.object({
         animal: z.string().describe('The animal mentioned, in singular form.'),
       }),
-      hobbies: z.enum(['CHESS', 'SPORTS', 'MUSIC', 'READING']).array(),
+      hobbies: z.enum(['chess', 'sports', 'music', 'reading']).array(),
+      height: z.union([z.string(), z.number().int()]).describe('Height in meters'),
     })
 
     // TODO- https://www.npmjs.com/package/zod-to-json-schema fucks with unions
