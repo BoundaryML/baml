@@ -21,8 +21,6 @@ require_relative "types"
 module Baml
   
   module PartialTypes
-    class Actor < T::Struct; end
-    class ActorSubject < T::Struct; end
     class Blah < T::Struct; end
     class ClassOptionalOutput < T::Struct; end
     class ClassOptionalOutput2 < T::Struct; end
@@ -41,7 +39,6 @@ module Baml
     class OptionalTest_Prop1 < T::Struct; end
     class OptionalTest_ReturnType < T::Struct; end
     class OrderInfo < T::Struct; end
-    class Party < T::Struct; end
     class Person < T::Struct; end
     class RaysData < T::Struct; end
     class ReceiptInfo < T::Struct; end
@@ -55,19 +52,6 @@ module Baml
     class TestOutputClass < T::Struct; end
     class UnionTest_ReturnType < T::Struct; end
     class WithReasoning < T::Struct; end
-    class Actor < T::Struct
-      include T::Struct::ActsAsComparable
-      const :person, T.nilable(String)
-      const :party, Baml::PartialTypes::Party
-      const :region, T.nilable(Baml::Types::Region)
-      const :gender, T.nilable(Baml::Types::Gender)
-    end
-    class ActorSubject < T::Struct
-      include T::Struct::ActsAsComparable
-      const :actors, T::Array[Baml::PartialTypes::Actor]
-      const :subject, T::Array[T.nilable(String)]
-      const :dates, T::Array[T.nilable(String)]
-    end
     class Blah < T::Struct
       include T::Struct::ActsAsComparable
       const :prop4, T.nilable(String)
@@ -163,11 +147,6 @@ module Baml
       const :order_status, T.nilable(Baml::Types::OrderStatus)
       const :tracking_number, T.nilable(String)
       const :estimated_arrival_date, T.nilable(String)
-    end
-    class Party < T::Struct
-      include T::Struct::ActsAsComparable
-      const :name, T.nilable(String)
-      const :official, T.nilable(Baml::Types::PartyOfficial)
     end
     class Person < T::Struct
       include T::Struct::ActsAsComparable

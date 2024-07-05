@@ -73,26 +73,6 @@ module Baml
       
       params(
         input: String,
-      ).returns(Baml::Types::ActorSubject)
-      
-    }
-    def Brits(
-        input:
-    )
-      raw = @runtime.call_function(
-        "Brits",
-        {
-          "input" => input,
-        },
-        @ctx_manager,
-      )
-      (raw.parsed_using_types(Baml::Types))
-    end
-
-    sig {
-      
-      params(
-        input: String,
       ).returns(Baml::Types::Category)
       
     }
@@ -1332,27 +1312,6 @@ module Baml
         @ctx_manager,
       )
       Baml::BamlStream[T.nilable(String), String].new(
-        ffi_stream: raw,
-        ctx_manager: @ctx_manager
-      )
-    end
-
-    sig {
-      params(
-        input: String,
-      ).returns(Baml::BamlStream[Baml::Types::ActorSubject])
-    }
-    def Brits(
-        input:
-    )
-      raw = @runtime.stream_function(
-        "Brits",
-        {
-          "input" => input,
-        },
-        @ctx_manager,
-      )
-      Baml::BamlStream[Baml::PartialTypes::ActorSubject, Baml::Types::ActorSubject].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

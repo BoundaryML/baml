@@ -1,4 +1,8 @@
+import enum
+import json
 import time
+from typing import Optional
+import pydantic
 import pytest
 from assertpy import assert_that
 from dotenv import load_dotenv
@@ -420,6 +424,8 @@ def cleanup(request):
 @pytest.mark.asyncio
 async def test_dynamic():
     tb = TypeBuilder()
+    tb._tb.unstable_features.add_json_schema()
+
     tb.Person.add_property("last_name", tb.string().list())
     tb.Person.add_property("height", tb.float().optional()).description(
         "Height in meters"
@@ -547,6 +553,65 @@ async def test_stream_dynamic_class_output():
     print("final ", final.model_dump())
     print("final ", final.model_dump_json())
     assert final.hair_color == "black"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_with_json_schema_from_dict():
+    class Hobby(enum.Enum):
+        CHESS = "chess"
+        CHECKERS = "checkers"
+
+    class Person(pydantic.BaseModel):
+        last_name: list[str]
+        height: Optional[float] = pydantic.Field(description="Height in meters")
+        #hobbies: list[Hobby] = pydantic.Field(description="Some suggested hobbies they might be good at")
+
+    print(Person.model_json_schema())
+    tb = TypeBuilder()
+    tb._tb.unstable_features.add_json_schema(Person.model_json_schema())
+
+    # tb.Hobby.add_value("chess")
+    # for name, val in tb.Hobby.list_values():
+    #     val.alias(name.lower())
+
+    # TODO: the pydantic model version of this doesn't work
+    tb.Person.add_property("hobbies", tb.Hobby.type().list()).description(
+        "Some suggested hobbies they might be good at"
+    )
+
+    tb_res = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
+        {"tb": tb},
+    )
+
+    assert len(tb_res) > 0, "Expected non-empty result but got empty."
+
+    for r in tb_res:
+        print(r.model_dump())
+
+@pytest.mark.asyncio
+async def test_dynamic_with_json_schema_from_str():
+    class Hobby(enum.Enum):
+        CHESS = "chess"
+
+    class Person(pydantic.BaseModel):
+        last_name: list[str]
+        height: Optional[float] = pydantic.Field(description="Height in meters")
+        #hobbies: list[Hobby] = pydantic.Field(description="Some suggested hobbies they might be good at")
+
+    
+    tb = TypeBuilder()
+    tb._tb.unstable_features.add_json_schema(json.dumps(Person.model_json_schema()))
+
+    tb_res = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
+        {"tb": tb},
+    )
+
+    assert len(tb_res) > 0, "Expected non-empty result but got empty."
+
+    for r in tb_res:
+        print(r.model_dump())
 
 
 @pytest.mark.asyncio

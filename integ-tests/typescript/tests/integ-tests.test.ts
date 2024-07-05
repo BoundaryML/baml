@@ -1,4 +1,6 @@
 import assert from 'assert'
+import { z } from 'zod'
+import { zodToJsonSchema } from 'zod-to-json-schema'
 import { scheduler } from 'node:timers/promises'
 import { image_b64, audio_b64 } from './base64_test_data'
 import { Image } from '@boundaryml/baml'
@@ -382,6 +384,27 @@ describe('Integ tests', () => {
     const res = await b.DynamicListInputOutput([{ 'new-key': 'hi', testKey: 'myTest' }], { tb })
     expect(res[0]['new-key']).toEqual('hi')
     expect(res[0]['testKey']).toEqual('myTest')
+  })
+
+  it.only('should work with dynamic types from zod', async () => {
+    const personSchema = z.object({
+      animalLiked: z.object({
+        animal: z.string().describe('The animal mentioned, in singular form.'),
+      }),
+    })
+
+    let tb = new TypeBuilder()
+    tb.__tb().unstableFeatures.addJsonSchema(zodToJsonSchema(personSchema))
+    // const animalClass = tb.addClass('Animal')
+    // animalClass.addProperty('animal', tb.string()).description('The animal mentioned, in singular form.')
+    // tb.Person.addProperty('animalLiked', animalClass.type())
+    const res = await b.ExtractPeople(
+      "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+      { tb },
+    )
+    expect(res.length).toBeGreaterThan(0)
+    const animalLiked = res[0]['animalLiked']
+    expect(animalLiked['animal']).toContain('giraffe')
   })
 
   // test with extra list, boolean in the input as well.

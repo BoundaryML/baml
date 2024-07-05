@@ -28,6 +28,8 @@
   },
   "dependencies": {
     "@boundaryml/baml": "link:../../engine/language_client_typescript",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.1"
   }
 }

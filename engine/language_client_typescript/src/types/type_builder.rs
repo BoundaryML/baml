@@ -1,5 +1,6 @@
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::BamlValue;
+use napi::{bindgen_prelude::Reference, Env, JsObject, JsString, JsUnknown, ValueType};
 use napi_derive::napi;
 
 crate::lang_wrapper!(TypeBuilder, type_builder::TypeBuilder);
@@ -17,11 +18,53 @@ crate::lang_wrapper!(
 );
 crate::lang_wrapper!(FieldType, baml_types::FieldType, sync_thread_safe);
 
+#[napi_derive::napi]
+struct TypeBuilderUnstableFeatures {
+    inner: Reference<TypeBuilder>,
+}
+
+#[napi]
+impl TypeBuilderUnstableFeatures {
+    #[napi]
+    pub fn add_json_schema(&self, env: Env, schema: JsUnknown) -> napi::Result<()> {
+        use baml_runtime::type_builder::json_schema_unstable::AddJsonSchema;
+
+        let value_type = schema.get_type()?;
+
+        if value_type == ValueType::String {
+            let schema = env.from_js_value(schema)?;
+            self.inner
+                .inner
+                .add_json_schema_from_str(schema)
+                .map(|_| ())
+                .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+        } else {
+            let schema = env.from_js_value(schema)?;
+            self.inner
+                .inner
+                .add_json_schema_from_value(schema)
+                .map(|_| ())
+                .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+        }
+    }
+}
+
 #[napi]
 impl TypeBuilder {
     #[napi(constructor)]
     pub fn new() -> Self {
         type_builder::TypeBuilder::new().into()
+    }
+
+    #[napi(getter)]
+    pub fn unstable_features(
+        &self,
+        nref: Reference<TypeBuilder>,
+        env: Env,
+    ) -> napi::Result<TypeBuilderUnstableFeatures> {
+        Ok(TypeBuilderUnstableFeatures {
+            inner: nref.clone(env)?,
+        })
     }
 
     #[napi]

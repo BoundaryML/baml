@@ -74,12 +74,6 @@ class EnumOutput(str, Enum):
     TWO = "TWO"
     THREE = "THREE"
 
-class Gender(str, Enum):
-    
-    Male = "Male"
-    Female = "Female"
-    Other = "Other"
-
 class Hobby(str, Enum):
     
     SPORTS = "SPORTS"
@@ -109,34 +103,6 @@ class OrderStatus(str, Enum):
     DELIVERED = "DELIVERED"
     CANCELLED = "CANCELLED"
 
-class PartyOfficial(str, Enum):
-    
-    Labour = "Labour"
-    Conservative = "Conservative"
-    Liberal_Democrat = "Liberal_Democrat"
-    Green_Party = "Green_Party"
-    Reform_Party = "Reform_Party"
-    Labour_Co_op = "Labour_Co_op"
-    Social_Democratic = "Social_Democratic"
-    Independent = "Independent"
-    Scottish_National_Party = "Scottish_National_Party"
-
-class Region(str, Enum):
-    
-    England = "England"
-    London = "London"
-    North_East = "North_East"
-    North_West = "North_West"
-    Yorkshire = "Yorkshire"
-    East_Midlands = "East_Midlands"
-    West_Midlands = "West_Midlands"
-    South_East = "South_East"
-    East_of_England = "East_of_England"
-    South_West = "South_West"
-    Scotland = "Scotland"
-    Wales = "Wales"
-    Northern_Ireland = "Northern_Ireland"
-
 class Tag(str, Enum):
     
     Security = "Security"
@@ -152,21 +118,6 @@ class TestEnum(str, Enum):
     E = "E"
     F = "F"
     G = "G"
-
-class Actor(BaseModel):
-    
-    
-    person: Optional[str] = None
-    party: "Party"
-    region: Optional["Region"] = None
-    gender: Optional["Gender"] = None
-
-class ActorSubject(BaseModel):
-    
-    
-    actors: List["Actor"]
-    subject: List[str]
-    dates: List[str]
 
 class Blah(BaseModel):
     
@@ -285,12 +236,6 @@ class OrderInfo(BaseModel):
     order_status: "OrderStatus"
     tracking_number: Optional[str] = None
     estimated_arrival_date: Optional[str] = None
-
-class Party(BaseModel):
-    
-    
-    name: str
-    official: Optional["PartyOfficial"] = None
 
 class Person(BaseModel):
     

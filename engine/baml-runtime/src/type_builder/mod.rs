@@ -13,7 +13,7 @@ use crate::{
     RuntimeContext,
 };
 
-mod json_schema;
+pub mod json_schema_unstable;
 type MetaData = Arc<Mutex<IndexMap<String, BamlValue>>>;
 
 trait Meta {
