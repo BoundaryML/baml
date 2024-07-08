@@ -99,8 +99,8 @@ from baml_client import b
 
 async def run():
   tb = TypeBuilder()
-  tb.User.add_property('email', 'string')
-  tb.User.add_property('address', 'string')
+  tb.User.add_property('email', tb.string())
+  tb.User.add_property('address', tb.string())
   res = await b.DynamicUserCreator("some user info", { "tb": tb })
   # Now res can have email and address fields
   print(res)

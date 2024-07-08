@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.49.0](https://github.com/boundaryml/baml/compare/0.46.0..0.49.0) - 2024-07-08
+
+### Bug Fixes
+- Fixed Azure / Ollama clients. Removing stream_options from azure and ollama clients (#760) - ([30bf88f](https://github.com/boundaryml/baml/commit/30bf88f65c8583ab02db6a7b7db40c1e9f3b05b6)) - hellovai
+
+### Features
+- Add support for arm64-linux (#751) - ([adb8ee3](https://github.com/boundaryml/baml/commit/adb8ee3097fd386370f75b3ba179d18b952e9678)) - Samuel Lijin
+
+## [0.48.0](https://github.com/boundaryml/baml/compare/0.47.0..0.48.0) - 2024-07-04
+
+### Bug Fixes
+- Fix env variables dialoge on VSCode (#750)
+- Playground selects correct function after loading (#757) - ([09963a0](https://github.com/boundaryml/baml/commit/09963a02e581da9eb8f7bafd3ba812058c97f672)) - aaronvg
+
+
+### Miscellaneous Chores
+- Better error messages on logging failures to Boundary Studio (#754) - ([49c768f](https://github.com/boundaryml/baml/commit/49c768fbe8eb8023cba28b8dc68c2553d8b2318a)) - aaronvg
+
 ## [0.47.0](https://github.com/boundaryml/baml/compare/0.46.0..0.47.0) - 2024-07-03
 
 ### Bug Fixes

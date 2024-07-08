@@ -141,6 +141,13 @@ export interface ClassWithImage {
   
 }
 
+export interface DummyOutput {
+  nonce: string
+  nonce2: string
+  
+  [key: string]: any;
+}
+
 export interface DynInputOutput {
   testKey: string
   

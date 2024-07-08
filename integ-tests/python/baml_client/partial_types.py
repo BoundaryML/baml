@@ -53,6 +53,13 @@ class ClassWithImage(BaseModel):
     param2: Optional[str] = None
     fake_image: Optional["FakeImage"] = None
 
+class DummyOutput(BaseModel):
+    
+    model_config = ConfigDict(extra='allow')
+    
+    nonce: Optional[str] = None
+    nonce2: Optional[str] = None
+
 class DynInputOutput(BaseModel):
     
     model_config = ConfigDict(extra='allow')

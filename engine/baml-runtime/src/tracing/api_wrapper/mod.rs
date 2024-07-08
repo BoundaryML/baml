@@ -116,10 +116,18 @@ impl CompleteAPIConfig {
             return Err(anyhow::anyhow!("Failed to fetch: {url}"));
         };
         let status = res.status();
-        match res.json::<T>().await {
+        let body = res.text().await?;
+
+        if !status.is_success() {
+            return Err(anyhow::anyhow!(
+                "Failed to submit BAML log: {url}. Status: {status}\nBody: {body}"
+            ));
+        }
+
+        match serde_json::from_str::<T>(&body) {
             Ok(v) => Ok(v),
             Err(e) => Err(anyhow::anyhow!(
-                "Failed to parse response: {url}. Status: {status}\n{:?}",
+                "Failed to parse response: {url}. Status: {status}\nBody: {body} \nError: {:?}",
                 e
             )),
         }
@@ -130,6 +138,8 @@ impl CompleteAPIConfig {
 struct LogResponse {
     #[allow(dead_code)]
     status: Option<String>,
+    #[allow(dead_code)]
+    message: Option<String>,
 }
 
 impl BoundaryAPI for CompleteAPIConfig {
