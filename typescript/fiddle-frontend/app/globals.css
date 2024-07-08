@@ -84,7 +84,7 @@
 
 /* controls dropdown styling on rsjf */
 .form-control {
-  @apply bg-vscode-input-background text-vscode-input-foreground rounded-sm;
+@apply bg-vscode-input-background text-vscode-input-foreground rounded-sm;
 }
 
 .array-item {
