@@ -335,26 +335,21 @@ impl RequestBuilder for AnthropicClient {
     async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
+        allow_proxy: bool,
         stream: bool,
     ) -> Result<reqwest::RequestBuilder> {
-        let mut req = self.client.post(if prompt.is_left() {
-            format!(
-                "{}/v1/complete",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
+        let destination_url = if allow_proxy {
+            self.properties
+                .proxy_url
+                .as_ref()
+                .unwrap_or(&self.properties.base_url)
         } else {
-            format!(
-                "{}/v1/messages",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
+            &self.properties.base_url
+        };
+        let mut req = self.client.post(if prompt.is_left() {
+            format!("{}/v1/complete", destination_url)
+        } else {
+            format!("{}/v1/messages", destination_url)
         });
 
         for (key, value) in &self.properties.headers {
@@ -364,12 +359,9 @@ impl RequestBuilder for AnthropicClient {
             req = req.header("x-api-key", key);
         }
 
-        req = req.header("baml-original-url", self.properties.base_url.as_str());
-        req = req.header(
-            "baml-render-url",
-            format!("{}/v1/messages", self.properties.base_url),
-        );
-
+        if allow_proxy {
+            req = req.header("baml-original-url", self.properties.base_url.as_str());
+        }
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
         match prompt {
@@ -384,7 +376,6 @@ impl RequestBuilder for AnthropicClient {
         if stream {
             body_obj.insert("stream".into(), true.into());
         }
-        log::debug!("Request body: {:#?}", body);
 
         Ok(req.json(&body))
     }

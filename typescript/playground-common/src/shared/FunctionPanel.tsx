@@ -1,7 +1,7 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { renderPromptAtom, selectedFunctionAtom, curlAtom } from '../baml_wasm_web/EventListener'
+import { renderPromptAtom, selectedFunctionAtom, curlAtom, streamCurl } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
@@ -10,6 +10,7 @@ import FunctionTestSnippet from './TestSnippet'
 import { Copy } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { CheckboxHeader } from './CheckboxHeader'
+import { Switch } from '../components/ui/switch'
 import CustomErrorBoundary from '../utils/ErrorFallback'
 const handleCopy = (text: string) => () => {
   navigator.clipboard.writeText(text)
@@ -20,10 +21,18 @@ const CurlSnippet: React.FC = () => {
 
   return (
     <div>
-      <div className='flex justify-end'>
+      <div className='flex justify-end items-center space-x-2 p-2  rounded-md shadow-sm'>
+        <label className='flex items-center space-x-1 mr-2'>
+          <Switch
+            className='data-[state=checked]:bg-vscode-button-background data-[state=unchecked]:bg-vscode-input-background'
+            checked={useAtomValue(streamCurl)}
+            onCheckedChange={useSetAtom(streamCurl)}
+          />
+          <span>View Stream Request</span>
+        </label>
         <Button
           onClick={handleCopy(rawCurl)}
-          className='py-0 m-0 text-xs text-white bg-transparent copy-button hover:bg-indigo-500'
+          className='py-1 px-3 text-xs text-white bg-vscode-button-background hover:bg-vscode-button-hoverBackground'
         >
           <Copy size={16} />
         </Button>

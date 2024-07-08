@@ -205,6 +205,7 @@ impl AwsClient {
     fn build_request(
         &self,
         ctx: &RuntimeContext,
+
         chat_messages: &Vec<RenderedChatMessage>,
     ) -> Result<bedrock::operation::converse::ConverseInput> {
         let mut system_message = None;
@@ -511,7 +512,7 @@ impl TryInto<bedrock::types::Message> for AwsChatMessage<'_> {
                 ChatMessagePart::Image(media) | ChatMessagePart::Audio(media) => match media {
                     BamlMedia::Url(_, _) => {
                         anyhow::bail!(
-                            "BAML internal error: media URL should have been resolved to base64"
+                            "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
                         )
                     }
                     BamlMedia::Base64(BamlMediaType::Image, media) => {

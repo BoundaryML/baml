@@ -276,6 +276,7 @@ impl RequestBuilder for GoogleClient {
     async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
+        allow_proxy: bool,
         stream: bool,
     ) -> Result<reqwest::RequestBuilder> {
         let mut should_stream = "generateContent";
@@ -283,27 +284,38 @@ impl RequestBuilder for GoogleClient {
             should_stream = "streamGenerateContent?alt=sse";
         }
 
-        let baml_original_url = format!(
-            "{}/models/{}:{}",
-            self.properties.base_url,
-            self.properties.model_id.as_ref().unwrap_or(&"".to_string()),
-            should_stream
-        );
-
-        let mut req = self.client.post(
+        let destination_url = if allow_proxy {
             self.properties
                 .proxy_url
                 .as_ref()
-                .unwrap_or(&baml_original_url)
-                .clone(),
-        );
+                .unwrap_or(&"".to_string())
+                .clone()
+        } else {
+            format!(
+                "{}/models/{}:{}",
+                self.properties.base_url,
+                self.properties.model_id.as_ref().unwrap_or(&"".to_string()),
+                should_stream
+            )
+        };
+
+        let mut req = self.client.post(destination_url);
 
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
         }
 
-        req = req.header("baml-original-url", baml_original_url.clone());
-        req = req.header("baml-render-url", baml_original_url);
+        if allow_proxy {
+            let baml_original_url = format!(
+                "{}/models/{}:{}",
+                self.properties.base_url,
+                self.properties.model_id.as_ref().unwrap_or(&"".to_string()),
+                should_stream
+            );
+
+            req = req.header("baml-original-url", baml_original_url.clone());
+        }
+
         req = req.header(
             "x-goog-api-key",
             self.properties
