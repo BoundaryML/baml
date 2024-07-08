@@ -360,7 +360,7 @@ const asyncCurlAtom = atom(async (get) => {
       .map((input) => [input.name, JSON.parse(input.value)]),
   )
   try {
-    return await func.render_raw_curl(runtime, params, false)
+    return await func.render_raw_curl(runtime, params, true)
   } catch (e) {
     console.error(e)
     return 'Error rendering curl command'
