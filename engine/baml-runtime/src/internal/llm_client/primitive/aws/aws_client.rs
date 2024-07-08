@@ -205,6 +205,7 @@ impl AwsClient {
     fn build_request(
         &self,
         ctx: &RuntimeContext,
+
         chat_messages: &Vec<RenderedChatMessage>,
     ) -> Result<bedrock::operation::converse::ConverseInput> {
         let mut system_message = None;

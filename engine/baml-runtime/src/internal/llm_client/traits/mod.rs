@@ -413,36 +413,25 @@ where
         
         let chat_messages = self.curl_call(ctx, &rendered_prompt).await?;
         let request_builder = self
-            .build_request(either::Right(&chat_messages), stream)
+            .build_request(either::Right(&chat_messages),false, stream)
             .await?;
-        let mut request = request_builder.build()?;
+        let request: reqwest::Request = request_builder.build()?;
         let url_header_value = {
-            let headers = request.headers_mut();
-            let url_header_value = headers
-                .get("baml-render-url")
-                .ok_or(anyhow::anyhow!("Missing header 'baml-render-url'"))?;
+            
+            let url_header_value = request.url();
             url_header_value.to_owned()
         };
 
         let url_str = url_header_value
-            .to_str()
-            .map_err(|_| anyhow::anyhow!("Invalid header 'baml-render-url'"))?;
-        let mut new_url = Url::from_str(url_str)?;
+            .to_string();
         
-
-        *request.url_mut() = new_url;
-
-        
-        let headers = request.headers_mut();
-        headers.remove("baml-original-url");
-        headers.remove("baml-render-url");
         
 
         let body = request
             .body()
             .map(|b| b.as_bytes().unwrap_or_default().to_vec())
             .unwrap_or_default(); // Add this line to handle the Option
-        let request_str = to_curl_command(url_str, "POST", request.headers(), body);
+        let request_str = to_curl_command(url_str.as_str(), "POST", request.headers(), body);
 
         Ok(request_str)
     }

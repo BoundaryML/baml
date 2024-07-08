@@ -214,26 +214,22 @@ impl RequestBuilder for OpenAIClient {
     async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
+        should_proxy: bool,
+
         stream: bool,
     ) -> Result<reqwest::RequestBuilder> {
-        let mut req = self.client.post(if prompt.is_left() {
-            format!(
-                "{}/completions",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
+        let destination_url = if should_proxy {
+            self.properties
+                .proxy_url
+                .as_ref()
+                .unwrap_or(&self.properties.base_url)
         } else {
-            format!(
-                "{}/chat/completions",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
+            &self.properties.base_url
+        };
+        let mut req = self.client.post(if prompt.is_left() {
+            format!("{}/completions", destination_url)
+        } else {
+            format!("{}/chat/completions", destination_url)
         });
 
         if !self.properties.query_params.is_empty() {
@@ -246,19 +242,10 @@ impl RequestBuilder for OpenAIClient {
         if let Some(key) = &self.properties.api_key {
             req = req.bearer_auth(key)
         }
-        req = req.header("baml-original-url", self.properties.base_url.as_str());
 
-        let mut url =
-            reqwest::Url::parse(&format!("{}/chat/completions", self.properties.base_url))?;
-        {
-            let mut pairs = url.query_pairs_mut();
-            for (key, value) in &self.properties.query_params {
-                pairs.append_pair(key, value);
-            }
+        if should_proxy {
+            req = req.header("baml-original-url", self.properties.base_url.as_str());
         }
-        let full_url_with_query = url.to_string();
-
-        req = req.header("baml-render-url", full_url_with_query);
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();

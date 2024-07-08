@@ -12,6 +12,7 @@ pub trait RequestBuilder {
     async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
+        should_proxy: bool,
         stream: bool,
     ) -> Result<reqwest::RequestBuilder>;
 
@@ -38,7 +39,7 @@ pub async fn make_request(
     log::debug!("Making request using client {}", client.context().name);
 
     let req = match client
-        .build_request(prompt, stream)
+        .build_request(prompt, true, stream)
         .await
         .context("Failed to build request")
     {
