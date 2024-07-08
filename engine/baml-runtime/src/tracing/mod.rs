@@ -633,7 +633,6 @@ impl From<&RenderedPrompt> for Template {
                                             BamlMediaType::Audio => {
                                                 ContentPart::B64Audio(data.base64.clone())
                                             }
-                                            _ => panic!("Unsupported media type"),
                                         }
                                     }
                                     baml_types::BamlMedia::Url(media_type, data) => {
@@ -644,7 +643,6 @@ impl From<&RenderedPrompt> for Template {
                                             BamlMediaType::Audio => {
                                                 ContentPart::UrlAudio(data.url.clone())
                                             }
-                                            _ => panic!("Unsupported media type"),
                                         }
                                     }
                                 },

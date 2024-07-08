@@ -24,6 +24,7 @@ use futures::StreamExt;
 
 pub struct OpenAIClient {
     pub name: String,
+    provider: String,
     // client: ClientWalker<'ir>,
     retry_policy: Option<String>,
     context: RenderContext_Client,
@@ -276,12 +277,14 @@ impl RequestBuilder for OpenAIClient {
 
         if stream {
             body_obj.insert("stream".into(), json!(true));
-            body_obj.insert(
-                "stream_options".into(),
-                json!({
-                    "include_usage": true,
-                }),
-            );
+            if self.provider == "openai" {
+                body_obj.insert(
+                    "stream_options".into(),
+                    json!({
+                        "include_usage": true,
+                    }),
+                );
+            }
         }
 
         Ok(req.json(&body))
@@ -404,9 +407,10 @@ impl WithStreamChat for OpenAIClient {
 }
 
 macro_rules! make_openai_client {
-    ($client:ident, $properties:ident, dynamic) => {
+    ($client:ident, $properties:ident, $provider:expr, dynamic) => {
         Ok(Self {
             name: $client.name.clone(),
+            provider: $provider.into(),
             context: RenderContext_Client {
                 name: $client.name.clone(),
                 provider: $client.provider.clone(),
@@ -423,10 +427,10 @@ macro_rules! make_openai_client {
             client: create_client()?,
         })
     };
-    ($client:ident, $properties:ident) => {
+    ($client:ident, $properties:ident, $provider:expr) => {
         Ok(Self {
             name: $client.name().into(),
-
+            provider: $provider.into(),
             context: RenderContext_Client {
                 name: $client.name().into(),
                 provider: $client.elem().provider.clone(),
@@ -453,19 +457,19 @@ impl OpenAIClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
         let properties = resolve_openai_properties(properties, ctx)?;
-        make_openai_client!(client, properties)
+        make_openai_client!(client, properties, "openai")
     }
 
     pub fn new_ollama(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
         let properties = resolve_ollama_properties(properties, ctx)?;
-        make_openai_client!(client, properties)
+        make_openai_client!(client, properties, "ollama")
     }
 
     pub fn new_azure(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
         let properties = resolve_azure_properties(properties, ctx)?;
-        make_openai_client!(client, properties)
+        make_openai_client!(client, properties, "azure")
     }
 
     pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<OpenAIClient> {
@@ -477,7 +481,7 @@ impl OpenAIClient {
                 .collect::<Result<HashMap<_, _>>>()?,
             &ctx,
         )?;
-        make_openai_client!(client, properties, dynamic)
+        make_openai_client!(client, properties, "openai", dynamic)
     }
 
     pub fn dynamic_new_ollama(
@@ -492,7 +496,7 @@ impl OpenAIClient {
                 .collect::<Result<HashMap<_, _>>>()?,
             ctx,
         )?;
-        make_openai_client!(client, properties, dynamic)
+        make_openai_client!(client, properties, "ollama", dynamic)
     }
 
     pub fn dynamic_new_azure(
@@ -507,7 +511,7 @@ impl OpenAIClient {
                 .collect::<Result<HashMap<_, _>>>()?,
             ctx,
         )?;
-        make_openai_client!(client, properties, dynamic)
+        make_openai_client!(client, properties, "azure", dynamic)
     }
 }
 

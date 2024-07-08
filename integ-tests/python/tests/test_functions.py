@@ -604,3 +604,43 @@ async def test_aws_bedrock():
     res = await stream.get_final_response()
     print("streamed final", res)
     assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_serialization_exception():
+    with pytest.raises(Exception) as excinfo:
+        await b.DummyOutputFunction("dummy input")
+
+    print("Exception message: ", excinfo)
+    assert "Failed to coerce" in str(excinfo)
+
+
+@pytest.mark.asyncio
+async def test_stream_serialization_exception():
+    with pytest.raises(Exception) as excinfo:
+        stream = b.stream.DummyOutputFunction("dummy input")
+        async for msg in stream:
+            print("streamed ", msg)
+
+        res = await stream.get_final_response()
+
+    print("Exception message: ", excinfo)
+    assert "Failed to coerce" in str(excinfo)
+
+
+def test_stream2_serialization_exception():
+    tb = TypeBuilder()
+    tb.DummyOutput.add_property("nonce3", tb.string())
+
+    async def stream_func():
+        with pytest.raises(Exception) as excinfo:
+            stream = b.stream.DummyOutputFunction("dummy input", {"tb": tb})
+            async for msg in stream:
+                print("streamed ", msg)
+
+            res = await stream.get_final_response()
+
+        print("Exception message: ", excinfo)
+        assert "Failed to coerce" in str(excinfo)
+
+    asyncio.run(stream_func())

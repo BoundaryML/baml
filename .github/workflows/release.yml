@@ -1,6 +1,11 @@
 name: BAML Release
 
 on:
+  workflow_dispatch: {}
+  # need to run this periodically on the default branch to populate the build cache
+  schedule:
+    # daily at 2am PST
+    - cron: 0 10 * * *
   push:
     tags:
       - "test-release/*.*"
@@ -39,7 +44,7 @@ jobs:
           run_install: false
       # Set up Node.js
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           cache: "pnpm"
           node-version: 20
@@ -94,7 +99,7 @@ jobs:
 
   build-release:
     strategy:
-      fail-fast: true
+      fail-fast: false 
       matrix:
         _:
           - target: aarch64-apple-darwin
@@ -106,10 +111,12 @@ jobs:
           #   host: windows-latest
           #   node_build: pnpm build --target aarch64-pc-windows-msvc
 
-          # maturin doesn't support aarch64-linux-gnu
-          # - target: aarch64-unknown-linux-gnu
-          #   host: ubuntu-latest
-          #   node_build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
+          - target: aarch64-unknown-linux-gnu
+            host: ubuntu-latest
+            # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
+            # need a new version of manylinux to build crates on arm64-linux
+            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64	
+            node_build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
 
           - target: x86_64-apple-darwin
             host: macos-latest
@@ -121,10 +128,13 @@ jobs:
 
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-latest
+            # Using any of the manylinux containers breaks a bunch of stuff: actions/checkout here, pnpm build there - not worth it.
+            container: null
             node_build: pnpm build --target x86_64-unknown-linux-gnu --use-napi-cross
 
     name: Build ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
+    container: ${{ matrix._.container }}
     steps:
       - uses: actions/checkout@v4
       # Install python set up
@@ -132,7 +142,6 @@ jobs:
         with:
           python-version: "3.8"
           architecture: ${{ matrix._.host == 'windows-latest' && 'x64' || null }}
-      # Install node set up
       - uses: pnpm/action-setup@v3
         with:
           version: 9.0.6
@@ -148,22 +157,22 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix._.target }}
+
       # Install steps
       - name: PNPM Install
         run: pnpm install --frozen-lockfile
         working-directory: engine/language_client_typescript
+
       # Rust caching
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Install aarch64-linux-gnu
-        if: matrix._.target == 'aarch64-unknown-linux-gnu'
-        run: sudo apt-get install gcc-aarch64-linux-gnu -y
+          shared-key: engine-${{ github.job }}-${{ matrix._.target }}
+          cache-on-failure: true
 
-      # This doesn't work aarch64, so we build each target separately
-      # - name: Build Rust
-      #   run: cargo build --release --target ${{ matrix._.target }}
-      #   working-directory: engine
+      - name: Build Rust
+        run: cargo build --release --target ${{ matrix._.target }}
+        working-directory: engine
 
       # Build Node
       - name: PNPM Build
@@ -177,15 +186,7 @@ jobs:
           target: ${{ matrix._.target }}
           command: build
           args: --release --out engine/language_client_python/dist --manifest-path engine/language_client_python/Cargo.toml
-          sccache: "true"
-          manylinux: ${{ matrix._.host == 'ubuntu-latest' && 'auto' || null }}
-          before-script-linux: |
-            if command -v yum &> /dev/null; then
-                yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
-            else
-                # If we're running on debian-based system.
-                apt update -y && apt-get install -y libssl-dev openssl pkg-config
-            fi
+          container: off
 
       # Upload
       - name: Upload Python
@@ -219,7 +220,7 @@ jobs:
       # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
       # it is pinned to this github actions filename, so renaming this file is not safe!!
       - name: Publish package to PyPI
-        if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
         uses: pypa/gh-action-pypi-publish@release/v1
 
   publish-to-npm:
@@ -230,9 +231,6 @@ jobs:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
 
       - name: setup pnpm
         uses: pnpm/action-setup@v3
@@ -267,7 +265,7 @@ jobs:
         working-directory: engine/language_client_typescript
 
       - name: Publish
-        if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
         run: |
           npm publish --access public
         working-directory: engine/language_client_typescript
@@ -278,7 +276,7 @@ jobs:
   # publish-vscode:
   #   environment: release
   #   needs: [build-release, build-wasm]
-  #   if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
+  #   if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v4
@@ -313,7 +311,7 @@ jobs:
   #         run_install: false
   #     # Set up Node.js
   #     - name: Setup Node.js
-  #       uses: actions/setup-node@v3
+  #       uses: actions/setup-node@v4
   #       with:
   #         cache: "pnpm"
   #         node-version: 20
@@ -323,7 +321,7 @@ jobs:
   #       run: pnpm install --frozen-lockfile
   #       working-directory: typescript/
   #     - name: Publish
-  #       if: ${{ !startsWith(github.ref, 'refs/tags/test-release') }}
+  #       if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
   #       run: |
   #         pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
   #       working-directory: typescript/vscode-ext/packages

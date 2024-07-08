@@ -14,6 +14,10 @@ const customConfig: Config = {
   length: 2,
 }
 
+export const openPlaygroundConfig: { lastOpenedFunction: null | string } = {
+  lastOpenedFunction: null,
+}
+
 /**
  * This class manages the state and behavior of HelloWorld webview panels.
  *
@@ -173,7 +177,15 @@ export class WebPanelView {
             return
 
           case 'add_project':
-            requestDiagnostics()
+            ;(async () => {
+              await requestDiagnostics()
+              console.log('last opened func', openPlaygroundConfig.lastOpenedFunction)
+              this.postMessage('select_function', {
+                root_path: 'default',
+                function_name: openPlaygroundConfig.lastOpenedFunction,
+              })
+            })()
+
             return
           case 'receiveData':
             // Code that should run in response to the hello message command

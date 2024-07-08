@@ -29,6 +29,7 @@ function App() {
               <Separator className='bg-vscode-textSeparator-foreground' />
               <FunctionPanel />
             </div>
+            <SettingsDialog />
           </AppStateProvider>{' '}
         </EventListener>
       </Suspense>
