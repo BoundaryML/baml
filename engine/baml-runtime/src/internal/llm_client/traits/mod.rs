@@ -410,7 +410,7 @@ where
         stream: bool,
     ) -> Result<String> {
         let rendered_prompt = RenderedPrompt::Chat(prompt.clone());
-
+        log::info!("Stream is {}", stream);
         let chat_messages = self.curl_call(ctx, &rendered_prompt).await?;
         let request_builder = self
             .build_request(either::Right(&chat_messages), stream)
@@ -423,7 +423,6 @@ where
                 .ok_or(anyhow::anyhow!("Missing header 'baml-render-url'"))?;
             url_header_value.to_owned()
         };
-        log::info!("url_header_value: {:?}", url_header_value);
 
         let url_str = url_header_value
             .to_str()
