@@ -91,12 +91,15 @@ where
                             match part {
                                 ChatMessagePart::Image(BamlMedia::Url(_, media_url))
                                 | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
-                                    let (base64, mime_type) = if media_url.url.starts_with("data:") {
+
+
+                                    
+                                    let (base64, mut mime_type) = if media_url.url.starts_with("data:") {
                                         let parts: Vec<&str> =
                                             media_url.url.splitn(2, ',').collect();
                                         let base64 = parts.get(1).unwrap().to_string();
                                         let prefix = parts.get(0).unwrap();
-                                        let mime_type =
+                                        let mut mime_type =
                                             prefix.splitn(2, ':').next().unwrap().to_string()
                                             .split('/').last().unwrap().to_string();
 
@@ -125,12 +128,16 @@ where
                                         };
                                         let base64 = BASE64_STANDARD.encode(&bytes);
                                         let inferred_type = infer::get(&bytes);
-                                        let mime_type = inferred_type.map_or_else(
+                                        let mut mime_type = inferred_type.map_or_else(
                                             || "application/octet-stream".into(),
                                             |t| t.extension().into(),
                                         );
                                         (base64, mime_type)
                                     };
+
+                                    if let Some(media_type) = &media_url.media_type {
+                                        mime_type = media_type.clone();
+                                    }
 
                                     Ok(if matches!(part, ChatMessagePart::Image(_)) {
                                         ChatMessagePart::Image(BamlMedia::Base64(
