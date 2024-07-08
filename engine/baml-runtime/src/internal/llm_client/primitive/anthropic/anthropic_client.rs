@@ -338,7 +338,7 @@ impl RequestBuilder for AnthropicClient {
         should_proxy: bool,
         stream: bool,
     ) -> Result<reqwest::RequestBuilder> {
-        let destiniation_url = if should_proxy {
+        let destination_url = if should_proxy {
             self.properties
                 .proxy_url
                 .as_ref()
@@ -347,9 +347,9 @@ impl RequestBuilder for AnthropicClient {
             &self.properties.base_url
         };
         let mut req = self.client.post(if prompt.is_left() {
-            format!("{}/v1/complete", destiniation_url)
+            format!("{}/v1/complete", destination_url)
         } else {
-            format!("{}/v1/messages", destiniation_url)
+            format!("{}/v1/messages", destination_url)
         });
 
         for (key, value) in &self.properties.headers {
