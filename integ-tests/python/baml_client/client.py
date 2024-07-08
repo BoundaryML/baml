@@ -258,6 +258,7 @@ class BamlClient:
         tb = __tb__._tb
       else:
         tb = None
+      __cb__ = baml_options.get("client_builder", None)
 
       raw = await self.__runtime.call_function(
         "DummyOutputFunction",
@@ -266,6 +267,7 @@ class BamlClient:
         },
         self.__ctx_manager.get(),
         tb,
+        __cb__,
       )
       mdl = create_model("DummyOutputFunctionReturnType", inner=(types.DummyOutput, ...))
       return coerce(mdl, raw.parsed())
@@ -1853,6 +1855,7 @@ class BamlStreamClient:
         tb = __tb__._tb
       else:
         tb = None
+      __cb__ = baml_options.get("client_builder", None)
 
       raw = self.__runtime.stream_function(
         "DummyOutputFunction",
@@ -1862,6 +1865,7 @@ class BamlStreamClient:
         None,
         self.__ctx_manager.get(),
         tb,
+        __cb__,
       )
 
       mdl = create_model("DummyOutputFunctionReturnType", inner=(types.DummyOutput, ...))
@@ -1872,7 +1876,6 @@ class BamlStreamClient:
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
         self.__ctx_manager.get(),
-        tb,
       )
     
     def DynamicFunc(

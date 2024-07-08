@@ -1,10 +1,8 @@
 mod lang_wrappers;
 
 pub mod audio;
-mod client_builder;
-mod function_result_stream;
+pub(crate) mod client_builder;
 pub(crate) mod function_result_stream;
-mod function_results;
 pub(crate) mod function_results;
 pub mod image;
 pub(crate) mod runtime_ctx_manager;

@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BamlCtxManager = exports.BamlStream = exports.invoke_runtime_cli = exports.Audio = exports.Image = exports.FunctionResultStream = exports.FunctionResult = exports.BamlRuntime = void 0;
+exports.BamlCtxManager = exports.BamlStream = exports.invoke_runtime_cli = exports.Audio = exports.ClientBuilder = exports.Image = exports.FunctionResultStream = exports.FunctionResult = exports.BamlRuntime = void 0;
 var native_1 = require("./native");
 Object.defineProperty(exports, "BamlRuntime", { enumerable: true, get: function () { return native_1.BamlRuntime; } });
 Object.defineProperty(exports, "FunctionResult", { enumerable: true, get: function () { return native_1.FunctionResult; } });
 Object.defineProperty(exports, "FunctionResultStream", { enumerable: true, get: function () { return native_1.FunctionResultStream; } });
 Object.defineProperty(exports, "Image", { enumerable: true, get: function () { return native_1.BamlImage; } });
+Object.defineProperty(exports, "ClientBuilder", { enumerable: true, get: function () { return native_1.ClientBuilder; } });
 Object.defineProperty(exports, "Audio", { enumerable: true, get: function () { return native_1.BamlAudio; } });
 Object.defineProperty(exports, "invoke_runtime_cli", { enumerable: true, get: function () { return native_1.invoke_runtime_cli; } });
 var stream_1 = require("./stream");

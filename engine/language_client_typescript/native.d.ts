@@ -22,8 +22,8 @@ export class BamlRuntime {
   static fromDirectory(directory: string, envVars: Record<string, string>): BamlRuntime
   static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): BamlRuntime
   createContextManager(): RuntimeContextManager
-  callFunction(functionName: string, args: { [string]: any }, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null): Promise<FunctionResult>
-  streamFunction(functionName: string, args: { [string]: any }, cb: (err: any, param: FunctionResult) => void, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null): FunctionResultStream
+  callFunction(functionName: string, args: { [string]: any }, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, cb?: ClientBuilder | undefined | null): Promise<FunctionResult>
+  streamFunction(functionName: string, args: { [string]: any }, cb: (err: any, param: FunctionResult) => void, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, clientBuilder?: ClientBuilder | undefined | null): FunctionResultStream
   setLogEventCallback(func: (err: any, param: BamlLogEvent) => void): void
   flush(): void
   drainStats(): TraceStats
@@ -43,6 +43,12 @@ export class ClassPropertyBuilder {
   setType(fieldType: FieldType): ClassPropertyBuilder
   alias(alias?: string | undefined | null): ClassPropertyBuilder
   description(description?: string | undefined | null): ClassPropertyBuilder
+}
+
+export class ClientBuilder {
+  constructor()
+  addClient(name: string, provider: string, options: { [string]: any }, retryPolicy?: string | undefined | null): void
+  setPrimary(primary: string): void
 }
 
 export class EnumBuilder {

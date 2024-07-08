@@ -362,6 +362,7 @@ impl RequestBuilder for AnthropicClient {
         } else {
             &self.properties.base_url
         };
+
         let mut req = self.client.post(if prompt.is_left() {
             format!("{}/v1/complete", destination_url)
         } else {

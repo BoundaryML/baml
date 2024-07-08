@@ -1,11 +1,8 @@
 import assert from 'assert'
 import { Image, ClientBuilder } from '@boundaryml/baml'
-import { b, NamedArgsSingleEnumList, flush, traceAsync, traceSync, setTags, TestClassNested } from '../baml_client'
 import TypeBuilder from '../baml_client/type_builder'
-import { RecursivePartialNull } from '../baml_client/client'
 import { scheduler } from 'node:timers/promises'
 import { image_b64, audio_b64 } from './base64_test_data'
-import { Image } from '@boundaryml/baml'
 import { Audio } from '@boundaryml/baml'
 import {
   b,
@@ -17,7 +14,6 @@ import {
   TestClassNested,
   onLogEvent,
 } from '../baml_client'
-import TypeBuilder from '../baml_client/type_builder'
 import { RecursivePartialNull } from '../baml_client/client'
 import { config } from 'dotenv'
 import { BamlLogEvent, BamlRuntime } from '@boundaryml/baml/native'

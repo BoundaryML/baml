@@ -299,36 +299,22 @@ impl RequestBuilder for GoogleClient {
             should_stream = "streamGenerateContent?alt=sse";
         }
 
-        let destination_url = if allow_proxy {
-            self.properties
-                .proxy_url
-                .as_ref()
-                .unwrap_or(&"".to_string())
-                .clone()
-        } else {
-            format!(
-                "{}/models/{}:{}",
-                self.properties.base_url,
-                self.properties.model_id.as_ref().unwrap_or(&"".to_string()),
-                should_stream
-            )
+        let baml_original_url = format!(
+            "{}/models/{}:{}",
+            self.properties.base_url,
+            self.properties.model_id.as_ref().unwrap_or(&"".to_string()),
+            should_stream
+        );
+        let mut req = match (&self.properties.proxy_url, allow_proxy) {
+            (Some(proxy_url), true) => {
+                let req = self.client.post(proxy_url.clone());
+                req.header("baml-original-url", baml_original_url)
+            }
+            _ => self.client.post(baml_original_url),
         };
-
-        let mut req = self.client.post(destination_url);
 
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
-        }
-
-        if allow_proxy {
-            let baml_original_url = format!(
-                "{}/models/{}:{}",
-                self.properties.base_url,
-                self.properties.model_id.as_ref().unwrap_or(&"".to_string()),
-                should_stream
-            );
-
-            req = req.header("baml-original-url", baml_original_url.clone());
         }
 
         req = req.header(
@@ -352,6 +338,7 @@ impl RequestBuilder for GoogleClient {
 
         Ok(req.json(&body))
     }
+
     fn request_options(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
     }
