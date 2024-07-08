@@ -556,6 +556,24 @@ async def test_stream_dynamic_class_output():
 
 
 @pytest.mark.asyncio
+async def test_dynamic_with_type_cycles():
+    tb = TypeBuilder()
+
+    tb.Person.add_property("sibling", tb.Person.type().list())
+
+    # no_tb_res = await b.ExtractPeople("My name is Harrison. My hair is black and I'm 6 feet tall.")
+    tb_res = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
+        {"tb": tb},
+    )
+
+    assert len(tb_res) > 0, "Expected non-empty result but got empty."
+
+    for r in tb_res:
+        print(r.model_dump())
+
+
+@pytest.mark.asyncio
 async def test_dynamic_with_json_schema_from_dict():
     class Hobby(enum.Enum):
         CHESS = "chess"
