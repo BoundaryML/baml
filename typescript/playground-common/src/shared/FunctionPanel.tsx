@@ -24,7 +24,7 @@ const CurlSnippet: React.FC = () => {
       <div className='flex justify-end items-center space-x-2 p-2  rounded-md shadow-sm'>
         <label className='flex items-center space-x-1 mr-2'>
           <Switch
-            className='data-[state=checked]:bg-vscode-button-background'
+            className='data-[state=checked]:bg-vscode-button-background data-[state=unchecked]:bg-vscode-input-background'
             checked={useAtomValue(streamCurl)}
             onCheckedChange={useSetAtom(streamCurl)}
           />
@@ -32,7 +32,7 @@ const CurlSnippet: React.FC = () => {
         </label>
         <Button
           onClick={handleCopy(rawCurl)}
-          className='py-1 px-3 text-xs text-white bg-indigo-600 rounded-md hover:bg-indigo-500'
+          className='py-1 px-3 text-xs text-white bg-vscode-button-background hover:bg-vscode-button-hoverBackground'
         >
           <Copy size={16} />
         </Button>

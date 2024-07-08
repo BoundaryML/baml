@@ -214,11 +214,11 @@ impl RequestBuilder for OpenAIClient {
     async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
-        should_proxy: bool,
+        allow_proxy: bool,
 
         stream: bool,
     ) -> Result<reqwest::RequestBuilder> {
-        let destination_url = if should_proxy {
+        let destination_url = if allow_proxy {
             self.properties
                 .proxy_url
                 .as_ref()
@@ -243,7 +243,7 @@ impl RequestBuilder for OpenAIClient {
             req = req.bearer_auth(key)
         }
 
-        if should_proxy {
+        if allow_proxy {
             req = req.header("baml-original-url", self.properties.base_url.as_str());
         }
 

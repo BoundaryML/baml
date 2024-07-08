@@ -12,7 +12,7 @@ pub trait RequestBuilder {
     async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
-        should_proxy: bool,
+        allow_proxy: bool,
         stream: bool,
     ) -> Result<reqwest::RequestBuilder>;
 

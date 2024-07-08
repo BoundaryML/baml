@@ -276,7 +276,7 @@ impl RequestBuilder for GoogleClient {
     async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
-        should_proxy: bool,
+        allow_proxy: bool,
         stream: bool,
     ) -> Result<reqwest::RequestBuilder> {
         let mut should_stream = "generateContent";
@@ -284,7 +284,7 @@ impl RequestBuilder for GoogleClient {
             should_stream = "streamGenerateContent?alt=sse";
         }
 
-        let destination_url = if should_proxy {
+        let destination_url = if allow_proxy {
             self.properties
                 .proxy_url
                 .as_ref()
@@ -305,7 +305,7 @@ impl RequestBuilder for GoogleClient {
             req = req.header(key, value);
         }
 
-        if should_proxy {
+        if allow_proxy {
             let baml_original_url = format!(
                 "{}/models/{}:{}",
                 self.properties.base_url,
