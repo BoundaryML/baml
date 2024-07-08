@@ -13,7 +13,7 @@ use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 use baml_types::{BamlMedia, BamlMediaType, BamlValue, MediaBase64};
 use base64::{prelude::BASE64_STANDARD, Engine};
-use futures::stream::{StreamExt, TryStreamExt};
+use futures::stream::StreamExt;
 use infer;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
@@ -83,111 +83,10 @@ where
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse {
         if self.model_features().resolve_media_urls {
             if let RenderedPrompt::Chat(ref chat) = prompt {
-                let messages_result = futures::stream::iter(chat.iter().map(|p| {
-                    let new_parts = p
-                        .parts
-                        .iter()
-                        .map(|part| async move {
-                            match part {
-                                ChatMessagePart::Image(BamlMedia::Url(_, media_url))
-                                | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
-
-
-                                    
-                                    let (base64, mut mime_type) = if media_url.url.starts_with("data:") {
-                                        let parts: Vec<&str> =
-                                            media_url.url.splitn(2, ',').collect();
-                                        let base64 = parts.get(1).unwrap().to_string();
-                                        let prefix = parts.get(0).unwrap();
-                                        let mut mime_type =
-                                            prefix.splitn(2, ':').next().unwrap().to_string()
-                                            .split('/').last().unwrap().to_string();
-
-                                        (base64, mime_type)
-                                    } else {
-                                        let client = reqwest::Client::new();
-                                        let response = match client.get(&media_url.url)
-                                            // NB(sam): this would workaround CORS issues, but https://github.com/seanmonstar/reqwest/issues/1401
-                                            //.fetch_mode_no_cors()
-                                            .send().await
-                                        {
-                                            Ok(response) => response,
-                                            Err(e) => {
-                                                return Err(LLMResponse::OtherFailure(
-                                                    format!("Failed to fetch image due to CORS issue: {e:?}")
-                                                ))
-                                            } // replace with your error conversion logic
-                                        };
-                                        let bytes = match response.bytes().await {
-                                            Ok(bytes) => bytes,
-                                            Err(e) => {
-                                                return Err(LLMResponse::OtherFailure(
-                                                    e.to_string(),
-                                                ));
-                                            } // replace with your error conversion logic
-                                        };
-                                        let base64 = BASE64_STANDARD.encode(&bytes);
-                                        let inferred_type = infer::get(&bytes);
-                                        let mut mime_type = inferred_type.map_or_else(
-                                            || "application/octet-stream".into(),
-                                            |t| t.extension().into(),
-                                        );
-                                        (base64, mime_type)
-                                    };
-
-                                    if let Some(media_type) = &media_url.media_type {
-                                        mime_type = media_type.clone().split('/').last().unwrap().to_string();
-                                    }
-
-                                    Ok(if matches!(part, ChatMessagePart::Image(_)) {
-                                        ChatMessagePart::Image(BamlMedia::Base64(
-                                            BamlMediaType::Image,
-                                            MediaBase64 {
-                                                base64: base64,
-                                                media_type: format!("image/{}", mime_type),
-                                            },
-                                        ))
-                                    } else {
-                                        ChatMessagePart::Audio(BamlMedia::Base64(
-                                            BamlMediaType::Audio,
-                                            MediaBase64 {
-                                                base64: base64,
-                                                media_type: format!("audio/{}", mime_type),
-                                            },
-                                        ))
-                                    })
-                                }
-                                _ => Ok(part.clone()),
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                    async move {
-                        let new_parts = futures::stream::iter(new_parts)
-                            .then(|f| f)
-                            .collect::<Vec<_>>()
-                            .await;
-
-                        let new_parts = new_parts.into_iter().collect::<Result<Vec<_>, _>>()?;
-
-                        Ok::<_, anyhow::Error>(RenderedChatMessage {
-                            role: p.role.clone(),
-                            parts: new_parts,
-                        })
-                    }
-                }))
-                .then(|f| f)
-                .collect::<Vec<_>>()
-                .await
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>();
-
-                let messages = match messages_result {
-                    Ok(messages) => messages,
-                    Err(e) => {
-                        return LLMResponse::OtherFailure(format!("Error occurred: {}", e));
-                    }
-                };
-                return self.chat(ctx, &messages).await;
+                match process_media_urls(ctx, chat).await {
+                    Ok(messages) => return self.chat(ctx, &messages).await,
+                    Err(e) => return LLMResponse::OtherFailure(format!("Error occurred: {}", e)),
+                }
             }
         }
 
@@ -210,102 +109,9 @@ where
     ) -> Result<Vec<RenderedChatMessage>, LLMResponse> {
         if self.model_features().resolve_media_urls {
             if let RenderedPrompt::Chat(ref chat) = prompt {
-                let messages_result = futures::stream::iter(chat.iter().map(|p| {
-                    let new_parts = p
-                        .parts
-                        .iter()
-                        .map(|part| async move {
-                            match part {
-                                ChatMessagePart::Image(BamlMedia::Url(_, media_url))
-                                | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
-                                    let mut base64 = "".to_string();
-                                    let mut mime_type = "".to_string();
-                                    if media_url.url.starts_with("data:") {
-                                        let parts: Vec<&str> =
-                                            media_url.url.splitn(2, ',').collect();
-                                        base64 = parts.get(1).unwrap().to_string();
-                                        let prefix = parts.get(0).unwrap();
-                                        mime_type =
-                                            prefix.splitn(2, ':').next().unwrap().to_string();
-                                        mime_type =
-                                            mime_type.split('/').last().unwrap().to_string();
-                                    } else {
-                                        let client = reqwest::Client::new();
-                                        let response = match client.get(&media_url.url).send().await
-                                        {
-                                            Ok(response) => response,
-                                            Err(e) => {
-                                                return Err(LLMResponse::OtherFailure(
-                                                    "Failed to fetch image due to CORS issue"
-                                                        .to_string(),
-                                                ))
-                                            } // replace with your error conversion logic
-                                        };
-                                        let bytes = match response.bytes().await {
-                                            Ok(bytes) => bytes,
-                                            Err(e) => {
-                                                return Err(LLMResponse::OtherFailure(
-                                                    e.to_string(),
-                                                ))
-                                            } // replace with your error conversion logic
-                                        };
-                                        base64 = BASE64_STANDARD.encode(&bytes);
-                                        let inferred_type = infer::get(&bytes);
-                                        mime_type = inferred_type.map_or_else(
-                                            || "application/octet-stream".into(),
-                                            |t| t.extension().into(),
-                                        );
-                                    }
-
-                                    Ok(if matches!(part, ChatMessagePart::Image(_)) {
-                                        ChatMessagePart::Image(BamlMedia::Base64(
-                                            BamlMediaType::Image,
-                                            MediaBase64 {
-                                                base64: base64,
-                                                media_type: format!("image/{}", mime_type),
-                                            },
-                                        ))
-                                    } else {
-                                        ChatMessagePart::Audio(BamlMedia::Base64(
-                                            BamlMediaType::Audio,
-                                            MediaBase64 {
-                                                base64: base64,
-                                                media_type: format!("audio/{}", mime_type),
-                                            },
-                                        ))
-                                    })
-                                }
-                                _ => Ok(part.clone()),
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                    async move {
-                        let new_parts = futures::stream::iter(new_parts)
-                            .then(|f| f)
-                            .collect::<Vec<_>>()
-                            .await;
-
-                        let new_parts = new_parts.into_iter().collect::<Result<Vec<_>, _>>()?;
-
-                        Ok::<_, anyhow::Error>(RenderedChatMessage {
-                            role: p.role.clone(),
-                            parts: new_parts,
-                        })
-                    }
-                }))
-                .then(|f| f)
-                .collect::<Vec<_>>()
-                .await
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>();
-
-                let messages = match messages_result {
-                    Ok(messages) => messages,
-                    Err(e) => {
-                        return Err(LLMResponse::OtherFailure(format!("Error occurred: {}", e)));
-                    }
-                };
-                return Ok(messages);
+                return process_media_urls(ctx, chat)
+                    .await
+                    .map_err(|e| LLMResponse::OtherFailure(format!("Error occurred: {}", e)));
             }
         }
 
@@ -410,28 +216,37 @@ where
         stream: bool,
     ) -> Result<String> {
         let rendered_prompt = RenderedPrompt::Chat(prompt.clone());
-        
+
         let chat_messages = self.curl_call(ctx, &rendered_prompt).await?;
         let request_builder = self
-            .build_request(either::Right(&chat_messages),false, stream)
+            .build_request(either::Right(&chat_messages), false, stream)
             .await?;
-        let request: reqwest::Request = request_builder.build()?;
+        let mut request = request_builder.build()?;
         let url_header_value = {
-            
-            let url_header_value = request.url();
+            let headers = request.headers_mut();
+            let url_header_value = headers
+                .get("baml-render-url")
+                .ok_or(anyhow::anyhow!("Missing header 'baml-render-url'"))?;
             url_header_value.to_owned()
         };
 
         let url_str = url_header_value
-            .to_string();
-        
-        
+            .to_str()
+            .map_err(|_| anyhow::anyhow!("Invalid header 'baml-render-url'"))?;
+        let new_url = Url::from_str(url_str)?;
+        *request.url_mut() = new_url;
+
+        {
+            let headers = request.headers_mut();
+            headers.remove("baml-original-url");
+            headers.remove("baml-render-url");
+        }
 
         let body = request
             .body()
             .map(|b| b.as_bytes().unwrap_or_default().to_vec())
             .unwrap_or_default(); // Add this line to handle the Option
-        let request_str = to_curl_command(url_str.as_str(), "POST", request.headers(), body);
+        let request_str = to_curl_command(url_str, "POST", request.headers(), body);
 
         Ok(request_str)
     }
@@ -469,107 +284,12 @@ where
     async fn stream(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> StreamResponse {
         if self.model_features().resolve_media_urls {
             if let RenderedPrompt::Chat(ref chat) = prompt {
-                let messages = futures::stream::iter(chat.iter().map(|p| {
-                    let new_parts = p
-                        .parts
-                        .iter()
-                        .map(|part| async move {
-                            match part {
-                                ChatMessagePart::Image(BamlMedia::Url(_, media_url))
-                                | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
-                                    let mut base64 = "".to_string();
-                                    let mut mime_type = "".to_string();
-                                    if media_url.url.starts_with("data:") {
-                                        let parts: Vec<&str> =
-                                            media_url.url.splitn(2, ',').collect();
-                                        base64 = parts.get(1).unwrap().to_string();
-                                        let prefix = parts.get(0).unwrap();
-                                        mime_type = prefix
-                                            .splitn(2, ':')
-                                            .last()
-                                            .unwrap() // Get the part after "data:"
-                                            .split('/')
-                                            .last()
-                                            .unwrap() // Get the part after "image/"
-                                            .split(';')
-                                            .next()
-                                            .unwrap() // Get the part before ";base64"
-                                            .to_string();
-                                    } else {
-                                        let client = reqwest::Client::new();
-                                        let response = match client
-                                            .get(&media_url.url)
-                                            // NB(sam): this would workaround CORS issues, but https://github.com/seanmonstar/reqwest/issues/1401
-                                            //.fetch_mode_no_cors()
-                                            .send()
-                                            .await
-                                        {
-                                            Ok(response) => response,
-                                            Err(e) => {
-                                                return Err(LLMResponse::OtherFailure(
-                                                    "Failed to fetch image due to CORS issue"
-                                                        .to_string(),
-                                                ))
-                                            } // replace with your error conversion logic
-                                        };
-                                        let bytes = match response.bytes().await {
-                                            Ok(bytes) => bytes,
-                                            Err(e) => {
-                                                return Err(LLMResponse::OtherFailure(
-                                                    e.to_string(),
-                                                ))
-                                            } // replace with your error conversion logic
-                                        };
-                                        base64 = BASE64_STANDARD.encode(&bytes);
-                                        let inferred_type = infer::get(&bytes);
-                                        mime_type = inferred_type.map_or_else(
-                                            || "application/octet-stream".into(),
-                                            |t| t.extension().into(),
-                                        );
-                                    }
-                                    Ok(if matches!(part, ChatMessagePart::Image(_)) {
-                                        ChatMessagePart::Image(BamlMedia::Base64(
-                                            BamlMediaType::Image,
-                                            MediaBase64 {
-                                                base64: base64,
-                                                media_type: format!("image/{}", mime_type),
-                                            },
-                                        ))
-                                    } else {
-                                        ChatMessagePart::Audio(BamlMedia::Base64(
-                                            BamlMediaType::Audio,
-                                            MediaBase64 {
-                                                base64: base64,
-                                                media_type: format!("audio/{}", mime_type),
-                                            },
-                                        ))
-                                    })
-                                }
-                                _ => Ok(part.clone()),
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                    async move {
-                        let new_parts = futures::stream::iter(new_parts)
-                            .then(|f| f)
-                            .collect::<Vec<_>>()
-                            .await;
-
-                        let new_parts = new_parts.into_iter().collect::<Result<Vec<_>, _>>()?;
-
-                        Ok(RenderedChatMessage {
-                            role: p.role.clone(),
-                            parts: new_parts,
-                        })
+                match process_media_urls(ctx, chat).await {
+                    Ok(messages) => return self.stream_chat(ctx, &messages).await,
+                    Err(e) => {
+                        return Err(LLMResponse::OtherFailure(format!("Error occurred: {}", e)))
                     }
-                }))
-                .then(|f| f)
-                .collect::<Vec<_>>()
-                .await
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()?;
-
-                return self.stream_chat(ctx, &messages).await;
+                }
             }
         }
 
@@ -578,4 +298,123 @@ where
             RenderedPrompt::Completion(p) => self.stream_completion(ctx, p).await,
         }
     }
+}
+
+async fn process_media_urls(
+    ctx: &RuntimeContext,
+    chat: &Vec<RenderedChatMessage>,
+) -> Result<Vec<RenderedChatMessage>, anyhow::Error> {
+    let messages_result = futures::stream::iter(chat.iter().map(|p| {
+        let new_parts = p
+            .parts
+            .iter()
+            .map(|part| async move {
+                match part {
+                    ChatMessagePart::Image(BamlMedia::Url(_, media_url))
+                    | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
+                        let (base64, mime_type) = if media_url.url.starts_with("data:") {
+                            let parts: Vec<&str> = media_url.url.splitn(2, ',').collect();
+                            let base64 = parts.get(1).unwrap().to_string();
+                            let prefix = parts.get(0).unwrap();
+                            let mime_type = prefix
+                                .splitn(2, ':')
+                                .next()
+                                .unwrap()
+                                .to_string()
+                                .split('/')
+                                .last()
+                                .unwrap()
+                                .to_string();
+
+                            (base64, mime_type)
+                        } else {
+                            let response = match fetch_with_proxy(
+                                &media_url.url,
+                                ctx.env
+                                    .get("BOUNDARY_PROXY_URL")
+                                    .as_deref()
+                                    .map(|s| s.as_str()),
+                            )
+                            .await
+                            {
+                                Ok(response) => response,
+                                Err(e) => {
+                                    return Err(anyhow::anyhow!("Failed to fetch media: {e:?}"))
+                                }
+                            };
+                            let bytes = match response.bytes().await {
+                                Ok(bytes) => bytes,
+                                Err(e) => {
+                                    return Err(anyhow::anyhow!(
+                                        "Failed to fetch media bytes: {e:?}"
+                                    ))
+                                }
+                            };
+                            let base64 = BASE64_STANDARD.encode(&bytes);
+                            let inferred_type = infer::get(&bytes);
+                            let mime_type = inferred_type.map_or_else(
+                                || "application/octet-stream".into(),
+                                |t| t.extension().into(),
+                            );
+                            (base64, mime_type)
+                        };
+
+                        Ok(if matches!(part, ChatMessagePart::Image(_)) {
+                            ChatMessagePart::Image(BamlMedia::Base64(
+                                BamlMediaType::Image,
+                                MediaBase64 {
+                                    base64: base64,
+                                    media_type: format!("image/{}", mime_type),
+                                },
+                            ))
+                        } else {
+                            ChatMessagePart::Audio(BamlMedia::Base64(
+                                BamlMediaType::Audio,
+                                MediaBase64 {
+                                    base64: base64,
+                                    media_type: format!("audio/{}", mime_type),
+                                },
+                            ))
+                        })
+                    }
+                    _ => Ok(part.clone()),
+                }
+            })
+            .collect::<Vec<_>>();
+        async move {
+            let new_parts = futures::stream::iter(new_parts)
+                .then(|f| f)
+                .collect::<Vec<_>>()
+                .await;
+
+            let new_parts = new_parts.into_iter().collect::<Result<Vec<_>, _>>()?;
+
+            Ok::<_, anyhow::Error>(RenderedChatMessage {
+                role: p.role.clone(),
+                parts: new_parts,
+            })
+        }
+    }))
+    .then(|f| f)
+    .collect::<Vec<_>>()
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>();
+
+    messages_result
+}
+
+async fn fetch_with_proxy(
+    url: &str,
+    proxy_url: Option<&str>,
+) -> Result<reqwest::Response, anyhow::Error> {
+    let client = reqwest::Client::new();
+    let mut request = if let Some(proxy) = proxy_url {
+        client.get(proxy).header("baml-original-url", url)
+    } else {
+        client.get(url)
+    };
+
+    let response = request.send().await?;
+    Ok(response)
 }
