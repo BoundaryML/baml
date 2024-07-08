@@ -216,30 +216,32 @@ impl RequestBuilder for OpenAIClient {
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         stream: bool,
     ) -> Result<reqwest::RequestBuilder> {
-        let mut req = self.client.post(if prompt.is_left() {
-            format!(
-                "{}/completions",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
-        } else {
-            format!(
-                "{}/chat/completions",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
-        });
+        // Determine the base URL
+        let base_url = format!(
+            "{}/chat/completions",
+            self.properties
+                .proxy_url
+                .as_ref()
+                .unwrap_or(&self.properties.base_url)
+                .clone()
+        );
 
+        // Construct the full URL with query parameters
+        let mut url = reqwest::Url::parse(&base_url)?;
         if !self.properties.query_params.is_empty() {
-            req = req.query(&self.properties.query_params);
+            {
+                let mut pairs = url.query_pairs_mut();
+                for (key, value) in &self.properties.query_params {
+                    pairs.append_pair(key, value);
+                }
+            }
         }
+        let full_url_with_query = url.to_string();
 
+        // Create the request builder with the full URL
+        let mut req = self.client.post(full_url_with_query.clone());
+
+        // Add headers and other properties
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
         }
@@ -247,11 +249,9 @@ impl RequestBuilder for OpenAIClient {
             req = req.bearer_auth(key)
         }
         req = req.header("baml-original-url", self.properties.base_url.as_str());
+        req = req.header("baml-render-url", full_url_with_query);
 
-        req = req.header(
-            "baml-render-url",
-            format!("{}/chat/completions", self.properties.base_url),
-        );
+        // Add the body
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
         match prompt {

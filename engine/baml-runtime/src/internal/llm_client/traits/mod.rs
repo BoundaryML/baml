@@ -136,7 +136,7 @@ where
                                     };
 
                                     if let Some(media_type) = &media_url.media_type {
-                                        mime_type = media_type.clone();
+                                        mime_type = media_type.clone().split('/').last().unwrap().to_string();
                                     }
 
                                     Ok(if matches!(part, ChatMessagePart::Image(_)) {
@@ -423,18 +423,21 @@ where
                 .ok_or(anyhow::anyhow!("Missing header 'baml-render-url'"))?;
             url_header_value.to_owned()
         };
+        log::info!("url_header_value: {:?}", url_header_value);
 
         let url_str = url_header_value
             .to_str()
             .map_err(|_| anyhow::anyhow!("Invalid header 'baml-render-url'"))?;
-        let new_url = Url::from_str(url_str)?;
+        let mut new_url = Url::from_str(url_str)?;
+        new_url.set_query(request.url().query()); // Preserve query parameters
+
         *request.url_mut() = new_url;
 
-        {
-            let headers = request.headers_mut();
-            headers.remove("baml-original-url");
-            headers.remove("baml-render-url");
-        }
+        
+        let headers = request.headers_mut();
+        headers.remove("baml-original-url");
+        headers.remove("baml-render-url");
+        
 
         let body = request
             .body()
