@@ -236,9 +236,6 @@ impl RequestBuilder for OpenAIClient {
             )
         });
 
-        log::info!("Base url: {}", &self.properties.base_url);
-        log::info!("Proxy url: {:?}", &self.properties.proxy_url);
-
         if !self.properties.query_params.is_empty() {
             req = req.query(&self.properties.query_params);
         }

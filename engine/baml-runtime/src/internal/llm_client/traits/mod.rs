@@ -410,7 +410,7 @@ where
         stream: bool,
     ) -> Result<String> {
         let rendered_prompt = RenderedPrompt::Chat(prompt.clone());
-        log::info!("Stream is {}", stream);
+        
         let chat_messages = self.curl_call(ctx, &rendered_prompt).await?;
         let request_builder = self
             .build_request(either::Right(&chat_messages), stream)
@@ -428,7 +428,7 @@ where
             .to_str()
             .map_err(|_| anyhow::anyhow!("Invalid header 'baml-render-url'"))?;
         let mut new_url = Url::from_str(url_str)?;
-        new_url.set_query(request.url().query()); // Preserve query parameters
+        
 
         *request.url_mut() = new_url;
 
