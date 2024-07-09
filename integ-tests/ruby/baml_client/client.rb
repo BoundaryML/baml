@@ -1285,6 +1285,24 @@ module Baml
 
     sig {
       
+      returns(String)
+      
+    }
+    def TestRoundRobin(
+        
+    )
+      raw = @runtime.call_function(
+        "TestRoundRobin",
+        {
+          
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
       params(
         input: T.any(String, T::Boolean),
       ).returns(Baml::Types::UnionTest_ReturnType)
@@ -2607,6 +2625,27 @@ module Baml
     )
       raw = @runtime.stream_function(
         "TestRetryExponential",
+        {
+          
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestRoundRobin(
+        
+    )
+      raw = @runtime.stream_function(
+        "TestRoundRobin",
         {
           
         },

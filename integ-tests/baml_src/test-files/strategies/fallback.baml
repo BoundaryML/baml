@@ -16,6 +16,7 @@ client<llm> FallbackClient {
       FaultyClient,
       RetryClientConstant,
       Gemini
+      
     ]
   }
 }
@@ -28,8 +29,19 @@ function TestFallbackClient() -> string {
   "#
 }
 
+function TestRoundRobin() ->string{
+  client Lottery_SimpleSyntax
+
+  prompt #"
+    Round robin haiku
+  "#
+}
+
+
+
+
 test TestName {
-  functions [TestFallbackClient]
+  functions [TestFallbackClient, TestRoundRobin]
   args {
 
   }

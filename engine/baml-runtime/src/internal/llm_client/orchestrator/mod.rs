@@ -7,8 +7,11 @@ use baml_types::BamlValue;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::RenderedChatMessage;
 use internal_baml_jinja::RenderedPrompt;
+use js_sys;
+use serde::Serialize;
 use std::{collections::HashMap, sync::Arc};
-use web_time::Duration;
+use wasm_bindgen::JsValue;
+use web_time::Duration; // Add this line
 
 use crate::{
     internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
@@ -82,9 +85,9 @@ impl OrchestratorNode {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize)]
 pub struct OrchestrationScope {
-    scope: Vec<ExecutionScope>,
+    pub scope: Vec<ExecutionScope>,
 }
 
 impl From<ExecutionScope> for OrchestrationScope {
@@ -129,6 +132,14 @@ impl OrchestrationScope {
         }
     }
 
+    pub fn to_js_value(&self) -> JsValue {
+        let array = js_sys::Array::new();
+        for scope in &self.scope {
+            array.push(&scope.to_js_value());
+        }
+        array.into()
+    }
+
     // pub fn extend_scopes(&self, scope: Vec<ExecutionScope>) -> OrchestrationScope {
     //     OrchestrationScope {
     //         scope: self
@@ -141,13 +152,13 @@ impl OrchestrationScope {
     // }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub enum ExecutionScope {
     Direct(String),
     // PolicyName, RetryCount, RetryDelayMs
     Retry(String, usize, Duration),
     // StrategyName, ClientIndex
-    RoundRobin(Arc<RoundRobinStrategy>, usize),
+    RoundRobin(RoundRobinStrategy, usize),
     // StrategyName, ClientIndex
     Fallback(String, usize),
 }
@@ -220,5 +231,82 @@ impl WithStreamable for OrchestratorNode {
             .map(|a| a.increment_index())
             .for_each(drop);
         self.provider.stream(ctx, prompt).await
+    }
+}
+
+impl ExecutionScope {
+    fn to_js_value(&self) -> JsValue {
+        let obj = js_sys::Object::new();
+        match self {
+            ExecutionScope::Direct(name) => {
+                js_sys::Reflect::set(
+                    &obj,
+                    &JsValue::from_str("type"),
+                    &JsValue::from_str("Direct"),
+                )
+                .unwrap();
+                js_sys::Reflect::set(&obj, &JsValue::from_str("name"), &JsValue::from_str(name))
+                    .unwrap();
+            }
+            ExecutionScope::Retry(name, count, delay) => {
+                js_sys::Reflect::set(
+                    &obj,
+                    &JsValue::from_str("type"),
+                    &JsValue::from_str("Retry"),
+                )
+                .unwrap();
+                js_sys::Reflect::set(&obj, &JsValue::from_str("name"), &JsValue::from_str(name))
+                    .unwrap();
+                js_sys::Reflect::set(
+                    &obj,
+                    &JsValue::from_str("count"),
+                    &JsValue::from_f64(*count as f64),
+                )
+                .unwrap();
+                js_sys::Reflect::set(
+                    &obj,
+                    &JsValue::from_str("delay"),
+                    &JsValue::from_f64(delay.as_millis() as f64),
+                )
+                .unwrap();
+            }
+            ExecutionScope::RoundRobin(strategy, index) => {
+                js_sys::Reflect::set(
+                    &obj,
+                    &JsValue::from_str("type"),
+                    &JsValue::from_str("RoundRobin"),
+                )
+                .unwrap();
+                js_sys::Reflect::set(
+                    &obj,
+                    &JsValue::from_str("strategy"),
+                    &JsValue::from_str(&format!("{:?}", strategy)),
+                )
+                .unwrap();
+                js_sys::Reflect::set(
+                    &obj,
+                    &JsValue::from_str("index"),
+                    &JsValue::from_f64(*index as f64),
+                )
+                .unwrap();
+            }
+            ExecutionScope::Fallback(name, index) => {
+                js_sys::Reflect::set(
+                    &obj,
+                    &JsValue::from_str("type"),
+                    &JsValue::from_str("Fallback"),
+                )
+                .unwrap();
+                js_sys::Reflect::set(&obj, &JsValue::from_str("name"), &JsValue::from_str(name))
+                    .unwrap();
+                js_sys::Reflect::set(
+                    &obj,
+                    &JsValue::from_str("index"),
+                    &JsValue::from_f64(*index as f64),
+                )
+                .unwrap();
+            }
+        }
+        obj.into()
     }
 }

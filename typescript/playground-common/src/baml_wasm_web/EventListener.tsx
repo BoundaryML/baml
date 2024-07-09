@@ -407,12 +407,50 @@ export const orchestrationGraph = atom((get) => {
     return null
   }
 
-  let providers = func.orchestration_graph(runtime)
+  let scopes = func.orchestration_graph(runtime)
 
-  console.log('Printing providers')
-  for (const provider of providers) {
-    console.log(`Provider: ${provider}`)
+  if (scopes === null) {
+    return []
+  } else {
+    console.log(`orchestrationGraph: ${scopes.length}`)
+    let indexOuter = 0
+
+    for (const scope of scopes) {
+      // console.log(`scope: ${scope.name()}`)
+      const scopeInfo = scope.get_orchestration_scope_info()
+      console.log(`Outer Index: ${indexOuter++}`)
+
+      // Deserialize the JsValue to a JavaScript object
+      const scopeArray = scopeInfo as any[] // You can define a TypeScript interface for better typing
+
+      scopeArray.forEach((scope) => {
+        console.log(`Scope Name: ${scope.name}`)
+
+        console.log(`Scope type: ${scope.type}`)
+
+        switch (scope.type) {
+          case 'Retry':
+            console.log(`Retry count: ${scope.count}`)
+            console.log(`Retry delay: ${scope.delay}`)
+            break
+          case 'RoundRobin':
+            console.log(`Strategy: ${scope.strategy}`)
+            console.log(`Index: ${scope.index}`)
+            break
+          case 'Fallback':
+            console.log(`Index: ${scope.index}`)
+            break
+          case 'Direct':
+            // No additional fields for Direct
+            break
+          default:
+            console.error('Unknown scope type')
+        }
+      })
+    }
   }
+
+  return scopes
 })
 
 export const diagnositicsAtom = atom((get) => {
@@ -626,7 +664,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             const updated: [string, string][] = prev.map(([key, value]) => {
               if (key === 'BOUNDARY_PROXY_URL') {
                 keyExists = true
-                return [key, `http://localhost:${content.port}`]
+                return [key, `http: //localhost:${content.port}`]
               }
               return [key, value]
             })

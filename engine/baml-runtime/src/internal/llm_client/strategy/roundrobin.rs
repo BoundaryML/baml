@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
 use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicUsize, Arc},
+    fmt::Debug,
+    {
+        collections::HashMap,
+        sync::{atomic::AtomicUsize, Arc},
+    },
 };
-
-use internal_baml_core::ir::ClientWalker;
 
 use crate::{
     client_registry::ClientProperty,
@@ -15,23 +16,56 @@ use crate::{
     runtime_interface::InternalClientLookup,
     RuntimeContext,
 };
+use internal_baml_core::ir::ClientWalker;
+use serde::Serialize;
+use serde::Serializer;
 
+struct MyAtomicUsize(AtomicUsize);
+
+impl Clone for MyAtomicUsize {
+    fn clone(&self) -> Self {
+        Self(AtomicUsize::new(
+            self.0.load(std::sync::atomic::Ordering::Relaxed),
+        ))
+    }
+}
+
+impl Debug for MyAtomicUsize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.load(std::sync::atomic::Ordering::Relaxed).fmt(f)
+    }
+}
+
+impl Serialize for MyAtomicUsize {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .serialize(serializer)
+    }
+}
+
+#[derive(Clone, Serialize, Debug)]
 pub struct RoundRobinStrategy {
     pub name: String,
     pub(super) retry_policy: Option<String>,
     // TODO: We can add conditions to each client
     clients: Vec<String>,
-    current_index: AtomicUsize,
+    current_index: MyAtomicUsize,
 }
 
 impl RoundRobinStrategy {
     pub fn current_index(&self) -> usize {
         self.current_index
+            .0
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn increment_index(&self) {
         self.current_index
+            .0
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
@@ -125,12 +159,12 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for RoundRobinStrategy {
             name: client.item.elem.name.clone(),
             retry_policy: client.retry_policy().as_ref().map(String::from),
             clients: strategy,
-            current_index: AtomicUsize::new(start),
+            current_index: MyAtomicUsize(AtomicUsize::new(start)),
         })
     }
 }
 
-impl IterOrchestrator for Arc<RoundRobinStrategy> {
+impl IterOrchestrator for RoundRobinStrategy {
     fn iter_orchestrator<'a>(
         &self,
         state: &mut OrchestrationState,

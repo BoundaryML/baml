@@ -2,7 +2,9 @@ pub mod generator;
 pub mod runtime_prompt;
 
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
-use baml_runtime::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
+use baml_runtime::internal::llm_client::orchestrator::{
+    ExecutionScope, OrchestrationScope, OrchestratorNode,
+};
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
@@ -14,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use wasm_bindgen::prelude::*;
+
+use self::runtime_prompt::WasmScope;
 
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -1091,7 +1095,7 @@ impl WasmFunction {
         })
     }
 
-    pub fn orchestration_graph(&self, rt: &WasmRuntime) -> Result<Vec<String>, JsValue> {
+    pub fn orchestration_graph(&self, rt: &WasmRuntime) -> Result<Vec<WasmScope>, JsValue> {
         let rt: &BamlRuntime = &rt.runtime;
         let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
         let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
@@ -1109,9 +1113,11 @@ impl WasmFunction {
             .orchestration_graph(&client_name, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{:#?}", e)))?;
 
-        // Iterate over the orchestrator nodes and collect the provider names
-        let providers: Vec<String> = graph.iter().map(|node| node.provider.to_string()).collect();
-
-        Ok(providers)
+        // Serialize the scopes to JsValue
+        let mut scopes = Vec::new();
+        for scope in graph {
+            scopes.push(WasmScope::from(scope.scope));
+        }
+        Ok(scopes)
     }
 }

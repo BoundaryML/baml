@@ -1033,6 +1033,21 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
+  async TestRoundRobin(
+      
+      __baml_options__?: { tb?: TypeBuilder }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestRoundRobin",
+      {
+        
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+    return raw.parsed() as string
+  }
+  
   async UnionTest_Function(
       input: string | boolean,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -2471,6 +2486,28 @@ class BamlStreamClient {
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
       __baml_options__?.cr,
+    )
+    return new BamlStream<RecursivePartialNull<string>, string>(
+      raw,
+      (a): a is RecursivePartialNull<string> => a,
+      (a): a is string => a,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  TestRoundRobin(
+      
+      __baml_options__?: { tb?: TypeBuilder }
+  ): BamlStream<RecursivePartialNull<string>, string> {
+    const raw = this.runtime.streamFunction(
+      "TestRoundRobin",
+      {
+        
+      },
+      undefined,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
