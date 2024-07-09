@@ -2,7 +2,7 @@
 title: "Client Registry"
 ---
 
-If you need to modify the model / paramters for an LLM client at runtime, you can modify the `ClientRegistry` for any specified function.
+If you need to modify the model / parameters for an LLM client at runtime, you can modify the `ClientRegistry` for any specified function.
 
 <CodeGroup>
 
@@ -30,7 +30,7 @@ import { ClientRegistry } from '@boundaryml/baml'
 async function run() {
     const cr = new ClientRegistry()
     // Creates a new client
-    cr.addLLMClient({ name: 'MyAmazingClient', provider: 'openai', options: {
+    cr.addLlmClient({ name: 'MyAmazingClient', provider: 'openai', options: {
         model: "gpt-4o",
         temperature: 0.7,
         api_key: "sk-..."
@@ -61,7 +61,7 @@ import ClientConstructorParams from '/snippets/client-params.mdx'
 
 Methods use `snake_case` in Python and `camelCase` in TypeScript.
 
-### add_llm_client / addLLMClient
+### add_llm_client / addLlmClient
 A function to add an LLM client to the registry.
 
 <ParamField
