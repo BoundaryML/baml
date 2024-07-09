@@ -15,7 +15,7 @@ client<llm> FallbackClient {
     strategy [
       FaultyClient,
       RetryClientConstant,
-      GPT35
+      Gemini
     ]
   }
 }
@@ -26,4 +26,11 @@ function TestFallbackClient() -> string {
   prompt #"
     Say a haiku about mexico.
   "#
+}
+
+test TestName {
+  functions [TestFallbackClient]
+  args {
+
+  }
 }

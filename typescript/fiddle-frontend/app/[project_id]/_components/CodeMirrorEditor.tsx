@@ -166,7 +166,6 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   useEffect(() => {
     const func = availableFunctions.find((f) => f.span.file_path === activeFile)
     if (func) {
-      console.log('setting selected function', func.name)
       setSelectedFunction(func.name)
     }
   }, [JSON.stringify(editorFiles.map((f) => f.path)), activeFile, availableFunctions])

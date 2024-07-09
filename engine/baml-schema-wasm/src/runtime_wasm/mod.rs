@@ -2,17 +2,17 @@ pub mod generator;
 pub mod runtime_prompt;
 
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
-use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
+use baml_runtime::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
 use baml_types::{BamlMap, BamlValue};
 
+use baml_runtime::internal::prompt_renderer::PromptRenderer;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-
 use wasm_bindgen::prelude::*;
 
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
@@ -21,7 +21,7 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
 pub fn on_wasm_init() {
-    match console_log::init_with_level(log::Level::Warn) {
+    match console_log::init_with_level(log::Level::Info) {
         Ok(_) => web_sys::console::log_1(&"Initialized BAML runtime logging".into()),
         Err(e) => web_sys::console::log_1(
             &format!("Failed to initialize BAML runtime logging: {:?}", e).into(),
@@ -986,6 +986,20 @@ impl WasmRuntime {
         None
     }
 }
+// Define a new struct to store the important information
+#[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SerializableOrchestratorNode {
+    pub provider: String,
+}
+
+impl From<&OrchestratorNode> for SerializableOrchestratorNode {
+    fn from(node: &OrchestratorNode) -> Self {
+        SerializableOrchestratorNode {
+            provider: node.provider.to_string(),
+        }
+    }
+}
 
 #[wasm_bindgen]
 impl WasmFunction {
@@ -1075,5 +1089,29 @@ impl WasmFunction {
             span,
             tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
         })
+    }
+
+    pub fn orchestration_graph(&self, rt: &WasmRuntime) -> Result<Vec<String>, JsValue> {
+        let rt: &BamlRuntime = &rt.runtime;
+        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
+        let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
+        let ir = rt.internal().ir();
+        let walker = ir.find_function(&self.name).unwrap();
+        let renderer = PromptRenderer::from_function(&walker, ir, &ctx)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        let client_name = renderer.client_name().to_string();
+
+        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
+        let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
+
+        let graph = rt
+            .internal()
+            .orchestration_graph(&client_name, &ctx)
+            .map_err(|e| JsValue::from_str(&format!("{:#?}", e)))?;
+
+        // Iterate over the orchestrator nodes and collect the provider names
+        let providers: Vec<String> = graph.iter().map(|node| node.provider.to_string()).collect();
+
+        Ok(providers)
     }
 }

@@ -171,7 +171,7 @@ const updateCursorAtom = atom(
       cursorIdx += cursor.column
 
       const selectedFunc = runtime.get_function_at_position(fileName, cursorIdx)
-      console.log('Selected function', selectedFunc)
+
       if (selectedFunc) {
         set(selectedFunctionAtom, selectedFunc.name)
       }
@@ -387,6 +387,8 @@ export const renderPromptAtom = atom((get) => {
   )
 
   try {
+    get(orchestrationGraph)
+
     return func.render_prompt(runtime, params)
   } catch (e) {
     if (e instanceof Error) {
@@ -394,6 +396,22 @@ export const renderPromptAtom = atom((get) => {
     } else {
       return `${e}`
     }
+  }
+})
+
+export const orchestrationGraph = atom((get) => {
+  const func = get(selectedFunctionAtom)
+  const runtime = get(selectedRuntimeAtom)
+
+  if (!func || !runtime) {
+    return null
+  }
+
+  let providers = func.orchestration_graph(runtime)
+
+  console.log('Printing providers')
+  for (const provider of providers) {
+    console.log(`Provider: ${provider}`)
   }
 })
 
