@@ -153,9 +153,7 @@ async def run():
 
 ```typescript TypeScript
 import TypeBuilder from '../baml_client/type_builder'
-import {
-  b
-} from '../baml_client'
+import { b } from '../baml_client'
 
 async function run() {
   const tb = new TypeBuilder()
@@ -188,6 +186,55 @@ tb.User.add_property("email", tb.string()).description("The user's email")
 ```typescript TypeScript
 const tb = new TypeBuilder()
 tb.User.addProperty("email", tb.string()).description("The user's email")
+```
+
+</CodeGroup>
+
+### Building dynamic types from JSON schema
+
+We have a working implementation of this, but are waiting for a concrete use case to merge it.
+Please chime in on [the GitHub issue](https://github.com/BoundaryML/baml/issues/765) if this is
+something you'd like to use.
+
+<CodeGroup>
+
+```python python
+import pydantic
+from baml_client import b
+
+class Person(pydantic.BaseModel):
+    last_name: list[str]
+    height: Optional[float] = pydantic.Field(description="Height in meters")
+
+tb = TypeBuilder()
+tb.unstable_features.add_json_schema(Person.model_json_schema())
+
+res = await b.ExtractPeople(
+    "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+    {"tb": tb},
+)
+```
+
+```typescript TypeScript
+import 'z' from zod
+import 'zodToJsonSchema' from zod-to-json-schema
+import { b } from '../baml_client'
+
+const personSchema = z.object({
+  animalLiked: z.object({
+    animal: z.string().describe('The animal mentioned, in singular form.'),
+  }),
+  hobbies: z.enum(['chess', 'sports', 'music', 'reading']).array(),
+  height: z.union([z.string(), z.number().int()]).describe('Height in meters'),
+})
+
+let tb = new TypeBuilder()
+tb.unstableFeatures.addJsonSchema(zodToJsonSchema(personSchema, 'Person'))
+
+const res = await b.ExtractPeople(
+  "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+  { tb },
+)
 ```
 
 </CodeGroup>
