@@ -1,6 +1,6 @@
 mod render_output_format;
 use jsonish::BamlValueWithFlags;
-use render_output_format::render_output_format;
+pub use render_output_format::render_output_format;
 
 use anyhow::Result;
 use baml_types::{BamlValue, FieldType};

@@ -69,7 +69,7 @@ impl<T> Default for RenderSetting<T> {
 
 pub struct RenderOptions {
     prefix: RenderSetting<String>,
-    pub or_splitter: String,
+    or_splitter: String,
     enum_value_prefix: RenderSetting<String>,
     always_hoist_enums: RenderSetting<bool>,
 }

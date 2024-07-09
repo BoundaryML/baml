@@ -1,3 +1,4 @@
+import json
 import typing
 from .baml_py import (
     ClassBuilder,
@@ -14,6 +15,15 @@ class TypeBuilder:
         self.__classes = classes
         self.__enums = enums
         self.__tb = _TypeBuilder()
+    
+    @staticmethod
+    def from_pydantic_model(model: typing.Any) -> "TypeBuilder":
+        tb = TypeBuilder(set(), set())
+        tb.__tb.add_json_schema(json.dumps(model.model_json_schema()))
+        return tb
+
+    def output_format(self) -> str:
+        return self._tb.output_format()
 
     @property
     def _tb(self) -> _TypeBuilder:

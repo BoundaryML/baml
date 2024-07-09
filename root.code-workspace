@@ -42,6 +42,7 @@
     "[typescriptreact]": {
       "editor.defaultFormatter": "biomejs.biome"
     },
+    "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome",
     "files.associations": {
       "*.baml.j2": "jinja",
       "*.js.j2": "jinja-js",
@@ -51,9 +52,11 @@
     "editor.formatOnSaveMode": "file",
     "editor.formatOnSave": true,
     "editor.tabSize": 2,
-    "mypy.enabled": false,
     "git.openDiffOnClick": true,
+    "mypy.enabled": false,
+    "python.analysis.autoImportCompletions": true,
     "python.analysis.typeCheckingMode": "strict",
+    "python.testing.pytestEnabled": true,
     "rust-analyzer.procMacro.ignored": {
       "napi-derive": ["napi"]
     },
@@ -78,9 +81,7 @@
       "activityBar.background": "#630001",
       "titleBar.activeBackground": "#8B0002",
       "titleBar.activeForeground": "#FFFBFB"
-    },
-    "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome"
-    
+    }
   },
   "extensions": {
     "recommendations": [

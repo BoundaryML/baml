@@ -1,8 +1,21 @@
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::BamlValue;
-use pyo3::pymethods;
+use pyo3::{
+    pymethods,
+    types::{PyDict, PyString},
+    Bound, FromPyObject, Py, PyAny, PyObject, PyRefMut, PyResult, Python,
+};
+use pythonize::depythonize_bound;
+use serde::Deserialize;
+
+use crate::BamlError;
 
 crate::lang_wrapper!(TypeBuilder, type_builder::TypeBuilder);
+// crate::lang_wrapper!(
+//     TypeBuilderUnstableFeatures,
+//     type_builder::TypeBuilder,
+//     sync_thread_safe
+// );
 crate::lang_wrapper!(EnumBuilder, type_builder::EnumBuilder, sync_thread_safe, name: String);
 crate::lang_wrapper!(ClassBuilder, type_builder::ClassBuilder, sync_thread_safe, name: String);
 crate::lang_wrapper!(
@@ -17,11 +30,45 @@ crate::lang_wrapper!(
 );
 crate::lang_wrapper!(FieldType, baml_types::FieldType, sync_thread_safe);
 
+#[pyo3::prelude::pyclass]
+struct TypeBuilderUnstableFeatures {
+    inner: Py<TypeBuilder>,
+}
+
+#[pymethods]
+impl TypeBuilderUnstableFeatures {
+    pub fn add_json_schema<'py>(&self, py: Python<'_>, schema: Bound<'py, PyAny>) -> PyResult<()> {
+        use baml_runtime::type_builder::json_schema_unstable::AddJsonSchema;
+
+        if let Ok(str) = String::extract_bound(&schema) {
+            self.inner
+                .borrow_mut(py)
+                .inner
+                .add_json_schema_from_str(str)
+                .map(|_| ())
+                .map_err(BamlError::from_anyhow)
+        } else {
+            let schema: serde_json::Value = depythonize_bound(schema)?;
+            self.inner
+                .borrow_mut(py)
+                .inner
+                .add_json_schema_from_value(schema)
+                .map(|_| ())
+                .map_err(BamlError::from_anyhow)
+        }
+    }
+}
+
 #[pymethods]
 impl TypeBuilder {
     #[new]
     pub fn new() -> Self {
         type_builder::TypeBuilder::new().into()
+    }
+
+    #[getter]
+    pub fn unstable_features(slf: PyRefMut<'_, Self>) -> TypeBuilderUnstableFeatures {
+        TypeBuilderUnstableFeatures { inner: slf.into() }
     }
 
     pub fn r#enum(&self, name: &str) -> EnumBuilder {
