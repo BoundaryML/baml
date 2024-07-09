@@ -144,7 +144,7 @@
       ]
     },
     {
-      "group": "BAML 🤝 Python/TS/[Lang]",
+      "group": "BAML with Python/TS/Ruby",
       "pages": [
         "docs/calling-baml/generate-baml-client",
         "docs/calling-baml/set-env-vars",
