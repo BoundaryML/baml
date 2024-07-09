@@ -137,16 +137,21 @@
       ]
     },
     {
-      "group": "Calling BAML Functions",
+      "group": "Advanced BAML Snippets",
+      "pages": [
+        "docs/calling-baml/dynamic-types",
+        "docs/calling-baml/client-registry"
+      ]
+    },
+    {
+      "group": "BAML 🤝 Python/TS/[Lang]",
       "pages": [
         "docs/calling-baml/generate-baml-client",
         "docs/calling-baml/set-env-vars",
         "docs/calling-baml/calling-functions",
         "docs/calling-baml/streaming",
         "docs/calling-baml/concurrent-calls",
-        "docs/calling-baml/multi-modal",
-        "docs/calling-baml/dynamic-types",
-        "docs/calling-baml/dynamic-clients"
+        "docs/calling-baml/multi-modal"
       ]
     },
     {

@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use crate::{
-    client_builder::ClientBuilder, internal::llm_client::LLMResponse,
+    client_registry::ClientRegistry, internal::llm_client::LLMResponse,
     tracing::api_wrapper::core_types::Role, type_builder::TypeBuilder, FunctionResult,
     RuntimeContext, RuntimeContextManager, SpanCtx, TestResponse, TraceStats,
 };

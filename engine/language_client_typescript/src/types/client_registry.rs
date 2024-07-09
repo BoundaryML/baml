@@ -1,6 +1,6 @@
 use std::borrow::BorrowMut;
 
-use baml_runtime::client_builder;
+use baml_runtime::client_registry;
 use baml_types::BamlValue;
 use napi::Env;
 use napi::JsObject;
@@ -8,19 +8,19 @@ use napi_derive::napi;
 
 use crate::parse_ts_types;
 
-crate::lang_wrapper!(ClientBuilder, client_builder::ClientBuilder);
+crate::lang_wrapper!(ClientRegistry, client_registry::ClientRegistry);
 
 #[napi]
-impl ClientBuilder {
+impl ClientRegistry {
     #[napi(constructor)]
     pub fn new() -> Self {
         Self {
-            inner: client_builder::ClientBuilder::new().into(),
+            inner: client_registry::ClientRegistry::new().into(),
         }
     }
 
     #[napi]
-    pub fn add_client(
+    pub fn add_llm_client(
         &mut self,
         env: Env,
         name: String,
@@ -40,7 +40,7 @@ impl ClientBuilder {
         }
         let args_map = args.as_map_owned().unwrap();
 
-        let client_property = baml_runtime::client_builder::ClientProperty {
+        let client_property = baml_runtime::client_registry::ClientProperty {
             name,
             provider,
             retry_policy,

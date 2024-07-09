@@ -566,13 +566,13 @@ async def test_nested_class_streaming():
 
 @pytest.mark.asyncio
 async def test_dynamic_clients():
-    cb = baml_py.baml_py.ClientBuilder()
-    cb.add_client("MyClient", "openai", {"model": "gpt-3.5-turbo"})
+    cb = baml_py.ClientRegistry()
+    cb.add_llm_client("MyClient", "openai", {"model": "gpt-3.5-turbo"})
     cb.set_primary("MyClient")
 
     final = await b.TestOllama(
         input="My name is Harrison. My hair is black and I'm 6 feet tall.",
-        baml_options={"client_builder": cb},
+        baml_options={"client_registry": cb},
     )
     print("final ", final)
 

@@ -43,7 +43,7 @@ export class BamlClient {
   
   async AudioInput(
       aud: Audio,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "AudioInput",
@@ -52,14 +52,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async ClassifyMessage(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<Category> {
     const raw = await this.runtime.callFunction(
       "ClassifyMessage",
@@ -68,14 +68,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as Category
   }
   
   async ClassifyMessage2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<Category> {
     const raw = await this.runtime.callFunction(
       "ClassifyMessage2",
@@ -84,14 +84,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as Category
   }
   
   async ClassifyMessage3(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<Category> {
     const raw = await this.runtime.callFunction(
       "ClassifyMessage3",
@@ -100,14 +100,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as Category
   }
   
   async DescribeImage(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "DescribeImage",
@@ -116,14 +116,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async DescribeImage2(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "DescribeImage2",
@@ -132,14 +132,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async DescribeImage3(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "DescribeImage3",
@@ -148,14 +148,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async DescribeImage4(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "DescribeImage4",
@@ -164,14 +164,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async DummyOutputFunction(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<DummyOutput> {
     const raw = await this.runtime.callFunction(
       "DummyOutputFunction",
@@ -180,14 +180,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as DummyOutput
   }
   
   async DynamicFunc(
       input: DynamicClassOne,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<DynamicClassTwo> {
     const raw = await this.runtime.callFunction(
       "DynamicFunc",
@@ -196,14 +196,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as DynamicClassTwo
   }
   
   async DynamicInputOutput(
       input: DynInputOutput,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<DynInputOutput> {
     const raw = await this.runtime.callFunction(
       "DynamicInputOutput",
@@ -212,14 +212,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as DynInputOutput
   }
   
   async DynamicListInputOutput(
       input: DynInputOutput[],
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<DynInputOutput[]> {
     const raw = await this.runtime.callFunction(
       "DynamicListInputOutput",
@@ -228,14 +228,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as DynInputOutput[]
   }
   
   async ExtractNames(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string[]> {
     const raw = await this.runtime.callFunction(
       "ExtractNames",
@@ -244,14 +244,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string[]
   }
   
   async ExtractPeople(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<Person[]> {
     const raw = await this.runtime.callFunction(
       "ExtractPeople",
@@ -260,14 +260,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as Person[]
   }
   
   async ExtractReceiptInfo(
       email: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<ReceiptInfo> {
     const raw = await this.runtime.callFunction(
       "ExtractReceiptInfo",
@@ -276,14 +276,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as ReceiptInfo
   }
   
   async ExtractResume(
       resume: string,img?: Image | null,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<Resume> {
     const raw = await this.runtime.callFunction(
       "ExtractResume",
@@ -292,14 +292,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as Resume
   }
   
   async ExtractResume2(
       resume: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<Resume> {
     const raw = await this.runtime.callFunction(
       "ExtractResume2",
@@ -308,14 +308,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as Resume
   }
   
   async FnClassOptionalOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<ClassOptionalOutput | null> {
     const raw = await this.runtime.callFunction(
       "FnClassOptionalOutput",
@@ -324,14 +324,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as ClassOptionalOutput | null
   }
   
   async FnClassOptionalOutput2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<ClassOptionalOutput2 | null> {
     const raw = await this.runtime.callFunction(
       "FnClassOptionalOutput2",
@@ -340,14 +340,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as ClassOptionalOutput2 | null
   }
   
   async FnEnumListOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<EnumOutput[]> {
     const raw = await this.runtime.callFunction(
       "FnEnumListOutput",
@@ -356,14 +356,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as EnumOutput[]
   }
   
   async FnEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<EnumOutput> {
     const raw = await this.runtime.callFunction(
       "FnEnumOutput",
@@ -372,14 +372,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as EnumOutput
   }
   
   async FnNamedArgsSingleStringOptional(
       myString?: string | null,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "FnNamedArgsSingleStringOptional",
@@ -388,14 +388,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async FnOutputBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<boolean> {
     const raw = await this.runtime.callFunction(
       "FnOutputBool",
@@ -404,14 +404,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as boolean
   }
   
   async FnOutputClass(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<TestOutputClass> {
     const raw = await this.runtime.callFunction(
       "FnOutputClass",
@@ -420,14 +420,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as TestOutputClass
   }
   
   async FnOutputClassList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<TestOutputClass[]> {
     const raw = await this.runtime.callFunction(
       "FnOutputClassList",
@@ -436,14 +436,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as TestOutputClass[]
   }
   
   async FnOutputClassNested(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<TestClassNested> {
     const raw = await this.runtime.callFunction(
       "FnOutputClassNested",
@@ -452,14 +452,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as TestClassNested
   }
   
   async FnOutputClassWithEnum(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<TestClassWithEnum> {
     const raw = await this.runtime.callFunction(
       "FnOutputClassWithEnum",
@@ -468,14 +468,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as TestClassWithEnum
   }
   
   async FnOutputStringList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string[]> {
     const raw = await this.runtime.callFunction(
       "FnOutputStringList",
@@ -484,14 +484,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string[]
   }
   
   async FnTestAliasedEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<TestEnum> {
     const raw = await this.runtime.callFunction(
       "FnTestAliasedEnumOutput",
@@ -500,14 +500,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as TestEnum
   }
   
   async FnTestClassAlias(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<TestClassAlias> {
     const raw = await this.runtime.callFunction(
       "FnTestClassAlias",
@@ -516,14 +516,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as TestClassAlias
   }
   
   async FnTestNamedArgsSingleEnum(
       myArg: NamedArgsSingleEnum,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "FnTestNamedArgsSingleEnum",
@@ -532,14 +532,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async GetDataType(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<RaysData> {
     const raw = await this.runtime.callFunction(
       "GetDataType",
@@ -548,14 +548,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as RaysData
   }
   
   async GetOrderInfo(
       email: Email,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<OrderInfo> {
     const raw = await this.runtime.callFunction(
       "GetOrderInfo",
@@ -564,14 +564,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as OrderInfo
   }
   
   async GetQuery(
       query: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<SearchParams> {
     const raw = await this.runtime.callFunction(
       "GetQuery",
@@ -580,14 +580,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as SearchParams
   }
   
   async MyFunc(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<DynamicOutput> {
     const raw = await this.runtime.callFunction(
       "MyFunc",
@@ -596,14 +596,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as DynamicOutput
   }
   
   async OptionalTest_Function(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<(OptionalTest_ReturnType | null)[]> {
     const raw = await this.runtime.callFunction(
       "OptionalTest_Function",
@@ -612,14 +612,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as (OptionalTest_ReturnType | null)[]
   }
   
   async PromptTestClaude(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "PromptTestClaude",
@@ -628,14 +628,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async PromptTestClaudeChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "PromptTestClaudeChat",
@@ -644,14 +644,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async PromptTestClaudeChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "PromptTestClaudeChatNoSystem",
@@ -660,14 +660,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async PromptTestOpenAIChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "PromptTestOpenAIChat",
@@ -676,14 +676,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async PromptTestOpenAIChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "PromptTestOpenAIChatNoSystem",
@@ -692,14 +692,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async PromptTestStreaming(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "PromptTestStreaming",
@@ -708,14 +708,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestAnthropic(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestAnthropic",
@@ -724,14 +724,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestAws(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestAws",
@@ -740,14 +740,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestAzure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestAzure",
@@ -756,14 +756,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestFallbackClient",
@@ -772,14 +772,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestFnNamedArgsSingleBool(
       myBool: boolean,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestFnNamedArgsSingleBool",
@@ -788,14 +788,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestFnNamedArgsSingleClass(
       myArg: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestFnNamedArgsSingleClass",
@@ -804,14 +804,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestFnNamedArgsSingleEnumList(
       myArg: NamedArgsSingleEnumList[],
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestFnNamedArgsSingleEnumList",
@@ -820,14 +820,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestFnNamedArgsSingleFloat(
       myFloat: number,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestFnNamedArgsSingleFloat",
@@ -836,14 +836,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestFnNamedArgsSingleInt(
       myInt: number,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestFnNamedArgsSingleInt",
@@ -852,14 +852,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestFnNamedArgsSingleString(
       myString: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestFnNamedArgsSingleString",
@@ -868,14 +868,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestFnNamedArgsSingleStringArray",
@@ -884,14 +884,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestFnNamedArgsSingleStringList(
       myArg: string[],
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestFnNamedArgsSingleStringList",
@@ -900,14 +900,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestGemini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestGemini",
@@ -916,14 +916,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestImageInput(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestImageInput",
@@ -932,14 +932,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestMulticlassNamedArgs",
@@ -948,14 +948,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestOllama(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestOllama",
@@ -964,14 +964,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestOpenAI",
@@ -980,14 +980,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestOpenAILegacyProvider(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestOpenAILegacyProvider",
@@ -996,14 +996,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestRetryConstant(
       
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestRetryConstant",
@@ -1012,14 +1012,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async TestRetryExponential(
       
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestRetryExponential",
@@ -1028,14 +1028,14 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as string
   }
   
   async UnionTest_Function(
       input: string | boolean,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<UnionTest_ReturnType> {
     const raw = await this.runtime.callFunction(
       "UnionTest_Function",
@@ -1044,7 +1044,7 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as UnionTest_ReturnType
   }
@@ -1057,7 +1057,7 @@ class BamlStreamClient {
   
   AudioInput(
       aud: Audio,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "AudioInput",
@@ -1067,7 +1067,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -1080,7 +1080,7 @@ class BamlStreamClient {
   
   ClassifyMessage(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<Category>, Category> {
     const raw = this.runtime.streamFunction(
       "ClassifyMessage",
@@ -1090,7 +1090,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<Category>, Category>(
       raw,
@@ -1103,7 +1103,7 @@ class BamlStreamClient {
   
   ClassifyMessage2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<Category>, Category> {
     const raw = this.runtime.streamFunction(
       "ClassifyMessage2",
@@ -1113,7 +1113,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<Category>, Category>(
       raw,
@@ -1126,7 +1126,7 @@ class BamlStreamClient {
   
   ClassifyMessage3(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<Category>, Category> {
     const raw = this.runtime.streamFunction(
       "ClassifyMessage3",
@@ -1136,7 +1136,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<Category>, Category>(
       raw,
@@ -1149,7 +1149,7 @@ class BamlStreamClient {
   
   DescribeImage(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "DescribeImage",
@@ -1159,7 +1159,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -1172,7 +1172,7 @@ class BamlStreamClient {
   
   DescribeImage2(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "DescribeImage2",
@@ -1182,7 +1182,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -1195,7 +1195,7 @@ class BamlStreamClient {
   
   DescribeImage3(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "DescribeImage3",
@@ -1205,7 +1205,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -1218,7 +1218,7 @@ class BamlStreamClient {
   
   DescribeImage4(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "DescribeImage4",
@@ -1228,7 +1228,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -1241,7 +1241,7 @@ class BamlStreamClient {
   
   DummyOutputFunction(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<DummyOutput>, DummyOutput> {
     const raw = this.runtime.streamFunction(
       "DummyOutputFunction",
@@ -1251,7 +1251,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<DummyOutput>, DummyOutput>(
       raw,
@@ -1264,7 +1264,7 @@ class BamlStreamClient {
   
   DynamicFunc(
       input: DynamicClassOne,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<DynamicClassTwo>, DynamicClassTwo> {
     const raw = this.runtime.streamFunction(
       "DynamicFunc",
@@ -1274,7 +1274,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<DynamicClassTwo>, DynamicClassTwo>(
       raw,
@@ -1287,7 +1287,7 @@ class BamlStreamClient {
   
   DynamicInputOutput(
       input: DynInputOutput,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<DynInputOutput>, DynInputOutput> {
     const raw = this.runtime.streamFunction(
       "DynamicInputOutput",
@@ -1297,7 +1297,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<DynInputOutput>, DynInputOutput>(
       raw,
@@ -1310,7 +1310,7 @@ class BamlStreamClient {
   
   DynamicListInputOutput(
       input: DynInputOutput[],
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<DynInputOutput[]>, DynInputOutput[]> {
     const raw = this.runtime.streamFunction(
       "DynamicListInputOutput",
@@ -1320,7 +1320,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<DynInputOutput[]>, DynInputOutput[]>(
       raw,
@@ -1333,7 +1333,7 @@ class BamlStreamClient {
   
   ExtractNames(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string[]>, string[]> {
     const raw = this.runtime.streamFunction(
       "ExtractNames",
@@ -1343,7 +1343,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string[]>, string[]>(
       raw,
@@ -1356,7 +1356,7 @@ class BamlStreamClient {
   
   ExtractPeople(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<Person[]>, Person[]> {
     const raw = this.runtime.streamFunction(
       "ExtractPeople",
@@ -1366,7 +1366,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<Person[]>, Person[]>(
       raw,
@@ -1379,7 +1379,7 @@ class BamlStreamClient {
   
   ExtractReceiptInfo(
       email: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<ReceiptInfo>, ReceiptInfo> {
     const raw = this.runtime.streamFunction(
       "ExtractReceiptInfo",
@@ -1389,7 +1389,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<ReceiptInfo>, ReceiptInfo>(
       raw,
@@ -1402,7 +1402,7 @@ class BamlStreamClient {
   
   ExtractResume(
       resume: string,img?: Image | null,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<Resume>, Resume> {
     const raw = this.runtime.streamFunction(
       "ExtractResume",
@@ -1412,7 +1412,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<Resume>, Resume>(
       raw,
@@ -1425,7 +1425,7 @@ class BamlStreamClient {
   
   ExtractResume2(
       resume: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<Resume>, Resume> {
     const raw = this.runtime.streamFunction(
       "ExtractResume2",
@@ -1435,7 +1435,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<Resume>, Resume>(
       raw,
@@ -1448,7 +1448,7 @@ class BamlStreamClient {
   
   FnClassOptionalOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<ClassOptionalOutput | null>, ClassOptionalOutput | null> {
     const raw = this.runtime.streamFunction(
       "FnClassOptionalOutput",
@@ -1458,7 +1458,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<ClassOptionalOutput | null>, ClassOptionalOutput | null>(
       raw,
@@ -1471,7 +1471,7 @@ class BamlStreamClient {
   
   FnClassOptionalOutput2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<ClassOptionalOutput2 | null>, ClassOptionalOutput2 | null> {
     const raw = this.runtime.streamFunction(
       "FnClassOptionalOutput2",
@@ -1481,7 +1481,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<ClassOptionalOutput2 | null>, ClassOptionalOutput2 | null>(
       raw,
@@ -1494,7 +1494,7 @@ class BamlStreamClient {
   
   FnEnumListOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<EnumOutput[]>, EnumOutput[]> {
     const raw = this.runtime.streamFunction(
       "FnEnumListOutput",
@@ -1504,7 +1504,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<EnumOutput[]>, EnumOutput[]>(
       raw,
@@ -1517,7 +1517,7 @@ class BamlStreamClient {
   
   FnEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<EnumOutput>, EnumOutput> {
     const raw = this.runtime.streamFunction(
       "FnEnumOutput",
@@ -1527,7 +1527,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<EnumOutput>, EnumOutput>(
       raw,
@@ -1540,7 +1540,7 @@ class BamlStreamClient {
   
   FnNamedArgsSingleStringOptional(
       myString?: string | null,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "FnNamedArgsSingleStringOptional",
@@ -1550,7 +1550,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -1563,7 +1563,7 @@ class BamlStreamClient {
   
   FnOutputBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<boolean>, boolean> {
     const raw = this.runtime.streamFunction(
       "FnOutputBool",
@@ -1573,7 +1573,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<boolean>, boolean>(
       raw,
@@ -1586,7 +1586,7 @@ class BamlStreamClient {
   
   FnOutputClass(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<TestOutputClass>, TestOutputClass> {
     const raw = this.runtime.streamFunction(
       "FnOutputClass",
@@ -1596,7 +1596,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<TestOutputClass>, TestOutputClass>(
       raw,
@@ -1609,7 +1609,7 @@ class BamlStreamClient {
   
   FnOutputClassList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<TestOutputClass[]>, TestOutputClass[]> {
     const raw = this.runtime.streamFunction(
       "FnOutputClassList",
@@ -1619,7 +1619,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<TestOutputClass[]>, TestOutputClass[]>(
       raw,
@@ -1632,7 +1632,7 @@ class BamlStreamClient {
   
   FnOutputClassNested(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<TestClassNested>, TestClassNested> {
     const raw = this.runtime.streamFunction(
       "FnOutputClassNested",
@@ -1642,7 +1642,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<TestClassNested>, TestClassNested>(
       raw,
@@ -1655,7 +1655,7 @@ class BamlStreamClient {
   
   FnOutputClassWithEnum(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<TestClassWithEnum>, TestClassWithEnum> {
     const raw = this.runtime.streamFunction(
       "FnOutputClassWithEnum",
@@ -1665,7 +1665,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<TestClassWithEnum>, TestClassWithEnum>(
       raw,
@@ -1678,7 +1678,7 @@ class BamlStreamClient {
   
   FnOutputStringList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string[]>, string[]> {
     const raw = this.runtime.streamFunction(
       "FnOutputStringList",
@@ -1688,7 +1688,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string[]>, string[]>(
       raw,
@@ -1701,7 +1701,7 @@ class BamlStreamClient {
   
   FnTestAliasedEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<TestEnum>, TestEnum> {
     const raw = this.runtime.streamFunction(
       "FnTestAliasedEnumOutput",
@@ -1711,7 +1711,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<TestEnum>, TestEnum>(
       raw,
@@ -1724,7 +1724,7 @@ class BamlStreamClient {
   
   FnTestClassAlias(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<TestClassAlias>, TestClassAlias> {
     const raw = this.runtime.streamFunction(
       "FnTestClassAlias",
@@ -1734,7 +1734,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<TestClassAlias>, TestClassAlias>(
       raw,
@@ -1747,7 +1747,7 @@ class BamlStreamClient {
   
   FnTestNamedArgsSingleEnum(
       myArg: NamedArgsSingleEnum,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "FnTestNamedArgsSingleEnum",
@@ -1757,7 +1757,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -1770,7 +1770,7 @@ class BamlStreamClient {
   
   GetDataType(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<RaysData>, RaysData> {
     const raw = this.runtime.streamFunction(
       "GetDataType",
@@ -1780,7 +1780,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<RaysData>, RaysData>(
       raw,
@@ -1793,7 +1793,7 @@ class BamlStreamClient {
   
   GetOrderInfo(
       email: Email,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<OrderInfo>, OrderInfo> {
     const raw = this.runtime.streamFunction(
       "GetOrderInfo",
@@ -1803,7 +1803,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<OrderInfo>, OrderInfo>(
       raw,
@@ -1816,7 +1816,7 @@ class BamlStreamClient {
   
   GetQuery(
       query: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<SearchParams>, SearchParams> {
     const raw = this.runtime.streamFunction(
       "GetQuery",
@@ -1826,7 +1826,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<SearchParams>, SearchParams>(
       raw,
@@ -1839,7 +1839,7 @@ class BamlStreamClient {
   
   MyFunc(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<DynamicOutput>, DynamicOutput> {
     const raw = this.runtime.streamFunction(
       "MyFunc",
@@ -1849,7 +1849,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<DynamicOutput>, DynamicOutput>(
       raw,
@@ -1862,7 +1862,7 @@ class BamlStreamClient {
   
   OptionalTest_Function(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<(OptionalTest_ReturnType | null)[]>, (OptionalTest_ReturnType | null)[]> {
     const raw = this.runtime.streamFunction(
       "OptionalTest_Function",
@@ -1872,7 +1872,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<(OptionalTest_ReturnType | null)[]>, (OptionalTest_ReturnType | null)[]>(
       raw,
@@ -1885,7 +1885,7 @@ class BamlStreamClient {
   
   PromptTestClaude(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestClaude",
@@ -1895,7 +1895,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -1908,7 +1908,7 @@ class BamlStreamClient {
   
   PromptTestClaudeChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestClaudeChat",
@@ -1918,7 +1918,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -1931,7 +1931,7 @@ class BamlStreamClient {
   
   PromptTestClaudeChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestClaudeChatNoSystem",
@@ -1941,7 +1941,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -1954,7 +1954,7 @@ class BamlStreamClient {
   
   PromptTestOpenAIChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestOpenAIChat",
@@ -1964,7 +1964,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -1977,7 +1977,7 @@ class BamlStreamClient {
   
   PromptTestOpenAIChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestOpenAIChatNoSystem",
@@ -1987,7 +1987,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2000,7 +2000,7 @@ class BamlStreamClient {
   
   PromptTestStreaming(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "PromptTestStreaming",
@@ -2010,7 +2010,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2023,7 +2023,7 @@ class BamlStreamClient {
   
   TestAnthropic(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestAnthropic",
@@ -2033,7 +2033,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2046,7 +2046,7 @@ class BamlStreamClient {
   
   TestAws(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestAws",
@@ -2056,7 +2056,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2069,7 +2069,7 @@ class BamlStreamClient {
   
   TestAzure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestAzure",
@@ -2079,7 +2079,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2092,7 +2092,7 @@ class BamlStreamClient {
   
   TestFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFallbackClient",
@@ -2102,7 +2102,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2115,7 +2115,7 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleBool(
       myBool: boolean,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleBool",
@@ -2125,7 +2125,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2138,7 +2138,7 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleClass(
       myArg: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleClass",
@@ -2148,7 +2148,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2161,7 +2161,7 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleEnumList(
       myArg: NamedArgsSingleEnumList[],
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleEnumList",
@@ -2171,7 +2171,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2184,7 +2184,7 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleFloat(
       myFloat: number,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleFloat",
@@ -2194,7 +2194,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2207,7 +2207,7 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleInt(
       myInt: number,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleInt",
@@ -2217,7 +2217,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2230,7 +2230,7 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleString(
       myString: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleString",
@@ -2240,7 +2240,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2253,7 +2253,7 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleStringArray",
@@ -2263,7 +2263,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2276,7 +2276,7 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleStringList(
       myArg: string[],
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleStringList",
@@ -2286,7 +2286,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2299,7 +2299,7 @@ class BamlStreamClient {
   
   TestGemini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestGemini",
@@ -2309,7 +2309,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2322,7 +2322,7 @@ class BamlStreamClient {
   
   TestImageInput(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestImageInput",
@@ -2332,7 +2332,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2345,7 +2345,7 @@ class BamlStreamClient {
   
   TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestMulticlassNamedArgs",
@@ -2355,7 +2355,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2368,7 +2368,7 @@ class BamlStreamClient {
   
   TestOllama(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestOllama",
@@ -2378,7 +2378,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2391,7 +2391,7 @@ class BamlStreamClient {
   
   TestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestOpenAI",
@@ -2401,7 +2401,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2414,7 +2414,7 @@ class BamlStreamClient {
   
   TestOpenAILegacyProvider(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestOpenAILegacyProvider",
@@ -2424,7 +2424,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2437,7 +2437,7 @@ class BamlStreamClient {
   
   TestRetryConstant(
       
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestRetryConstant",
@@ -2447,7 +2447,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2460,7 +2460,7 @@ class BamlStreamClient {
   
   TestRetryExponential(
       
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestRetryExponential",
@@ -2470,7 +2470,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
@@ -2483,7 +2483,7 @@ class BamlStreamClient {
   
   UnionTest_Function(
       input: string | boolean,
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<UnionTest_ReturnType>, UnionTest_ReturnType> {
     const raw = this.runtime.streamFunction(
       "UnionTest_Function",
@@ -2493,7 +2493,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<UnionTest_ReturnType>, UnionTest_ReturnType>(
       raw,

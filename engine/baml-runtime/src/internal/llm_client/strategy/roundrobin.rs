@@ -7,7 +7,7 @@ use std::{
 use internal_baml_core::ir::ClientWalker;
 
 use crate::{
-    client_builder::ClientProperty,
+    client_registry::ClientProperty,
     internal::llm_client::orchestrator::{
         ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState,
         OrchestratorNodeIterator,

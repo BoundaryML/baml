@@ -11,7 +11,7 @@ crate::lang_wrapper!(
     baml_runtime::FunctionResultStream, thread_safe,
     on_event: Option<PyObject>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
-    cb: Option<baml_runtime::client_builder::ClientBuilder>
+    cb: Option<baml_runtime::client_registry::ClientRegistry>
 );
 
 impl FunctionResultStream {
@@ -19,7 +19,7 @@ impl FunctionResultStream {
         inner: baml_runtime::FunctionResultStream,
         event: Option<PyObject>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
-        cb: Option<baml_runtime::client_builder::ClientBuilder>,
+        cb: Option<baml_runtime::client_registry::ClientRegistry>,
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),

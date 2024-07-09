@@ -5,7 +5,7 @@ use baml_types::BamlValue;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 
 use crate::{
-    client_builder::ClientProperty, internal::prompt_renderer::PromptRenderer,
+    client_registry::ClientProperty, internal::prompt_renderer::PromptRenderer,
     runtime_interface::InternalClientLookup, RuntimeContext,
 };
 

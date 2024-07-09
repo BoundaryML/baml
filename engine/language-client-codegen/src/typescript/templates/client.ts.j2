@@ -30,7 +30,7 @@ export class BamlClient {
       {% for (name, optional, type) in fn.args -%}
       {{name}}{% if optional %}?{% endif %}: {{type}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<{{fn.return_type}}> {
     const raw = await this.runtime.callFunction(
       "{{fn.name}}",
@@ -41,7 +41,7 @@ export class BamlClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return raw.parsed() as {{fn.return_type}}
   }
@@ -56,7 +56,7 @@ class BamlStreamClient {
       {% for (name, optional, type) in fn.args -%}
       {{name}}{% if optional %}?{% endif %}: {{type}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, cb?: ClientBuilder }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<{{ fn.return_type }}>, {{ fn.return_type }}> {
     const raw = this.runtime.streamFunction(
       "{{fn.name}}",
@@ -68,7 +68,7 @@ class BamlStreamClient {
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cb,
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<{{ fn.return_type }}>, {{ fn.return_type }}>(
       raw,

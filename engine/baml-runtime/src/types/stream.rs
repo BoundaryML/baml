@@ -5,7 +5,7 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use std::{rc, sync::Arc};
 
 use crate::{
-    client_builder::ClientBuilder,
+    client_registry::ClientRegistry,
     internal::{
         llm_client::orchestrator::{orchestrate_stream, OrchestratorNodeIterator},
         prompt_renderer::PromptRenderer,
@@ -14,7 +14,6 @@ use crate::{
     type_builder::TypeBuilder,
     FunctionResult, RuntimeContextManager,
 };
-
 
 /// Wrapper that holds a stream of responses from a BAML function call.
 ///
@@ -59,7 +58,7 @@ impl FunctionResultStream {
         on_event: Option<F>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
-        cb: Option<&ClientBuilder>,
+        cb: Option<&ClientRegistry>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>)
     where
         F: Fn(FunctionResult) -> (),

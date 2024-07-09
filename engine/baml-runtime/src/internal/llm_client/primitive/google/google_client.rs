@@ -1,4 +1,4 @@
-use crate::client_builder::ClientProperty;
+use crate::client_registry::ClientProperty;
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{

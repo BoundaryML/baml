@@ -24,7 +24,7 @@ def coerce(cls: Type[BaseModel], parsed: Any) -> Any:
 # Define the TypedDict with optional parameters having default values
 class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
-    client_builder: NotRequired[baml_py.baml_py.ClientBuilder]
+    client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
 
 class BamlClient:
     __runtime: baml_py.BamlRuntime
@@ -53,7 +53,7 @@ class BamlClient:
         tb = __tb__._tb
       else:
         tb = None
-      __cb__ = baml_options.get("client_builder", None)
+      __cr__ = baml_options.get("client_registry", None)
 
       raw = await self.__runtime.call_function(
         "{{fn.name}}",
@@ -64,7 +64,7 @@ class BamlClient:
         },
         self.__ctx_manager.get(),
         tb,
-        __cb__,
+        __cr__,
       )
       mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
       return coerce(mdl, raw.parsed())
@@ -91,7 +91,7 @@ class BamlStreamClient:
         tb = __tb__._tb
       else:
         tb = None
-      __cb__ = baml_options.get("client_builder", None)
+      __cr__ = baml_options.get("client_registry", None)
 
       raw = self.__runtime.stream_function(
         "{{fn.name}}",
@@ -103,7 +103,7 @@ class BamlStreamClient:
         None,
         self.__ctx_manager.get(),
         tb,
-        __cb__,
+        __cr__,
       )
 
       mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))

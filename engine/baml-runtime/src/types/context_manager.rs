@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use baml_types::BamlValue;
 use std::fmt;
 
-use crate::{client_builder::ClientBuilder, type_builder::TypeBuilder, RuntimeContext, SpanCtx};
+use crate::{client_registry::ClientRegistry, type_builder::TypeBuilder, RuntimeContext, SpanCtx};
 
 type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
 
@@ -98,7 +98,7 @@ impl RuntimeContextManager {
     pub fn create_ctx(
         &self,
         tb: Option<&TypeBuilder>,
-        cb: Option<&ClientBuilder>,
+        cb: Option<&ClientRegistry>,
     ) -> Result<RuntimeContext> {
         let mut tags = self.global_tags.lock().unwrap().clone();
         let ctx_tags = {
@@ -130,7 +130,7 @@ impl RuntimeContextManager {
         let client_overrides = match cb {
             Some(cb) => Some(
                 cb.to_clients(&ctx)
-                    .with_context(|| "Failed to create clients from client_builder")?,
+                    .with_context(|| "Failed to create clients from client_registry")?,
             ),
             None => None,
         };

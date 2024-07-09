@@ -13,7 +13,7 @@ pub(crate) mod internal;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod cli;
-pub mod client_builder;
+pub mod client_registry;
 mod macros;
 mod request;
 mod runtime;
@@ -30,7 +30,7 @@ use anyhow::Result;
 
 use baml_types::BamlMap;
 use baml_types::BamlValue;
-use client_builder::ClientBuilder;
+use client_registry::ClientRegistry;
 use indexmap::IndexMap;
 use internal_baml_core::configuration::GeneratorOutputType;
 use on_log_event::LogEventCallbackSync;
@@ -188,7 +188,7 @@ impl BamlRuntime {
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
-        cb: Option<&ClientBuilder>,
+        cb: Option<&ClientRegistry>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
         let span = self.tracer.start_span(&function_name, ctx, &params);
@@ -224,7 +224,7 @@ impl BamlRuntime {
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
-        cb: Option<&ClientBuilder>,
+        cb: Option<&ClientRegistry>,
     ) -> Result<FunctionResultStream> {
         self.inner.stream_function_impl(
             function_name,

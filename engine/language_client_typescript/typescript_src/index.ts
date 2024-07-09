@@ -6,6 +6,7 @@ export {
   ClientBuilder,
   BamlAudio as Audio,
   invoke_runtime_cli,
+  ClientRegistry,
 } from './native'
 export { BamlStream } from './stream'
 export { BamlCtxManager } from './async_context_vars'

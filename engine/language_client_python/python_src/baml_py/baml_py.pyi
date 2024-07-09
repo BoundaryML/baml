@@ -64,7 +64,7 @@ class BamlRuntime:
         args: Dict[str, Any],
         ctx: RuntimeContextManager,
         tb: Optional[TypeBuilder],
-        cb: Optional[ClientBuilder],
+        cr: Optional[ClientRegistry],
     ) -> FunctionResult: ...
     @staticmethod
     def from_files(
@@ -77,7 +77,7 @@ class BamlRuntime:
         on_event: Optional[Callable[[FunctionResult], None]],
         ctx: RuntimeContextManager,
         tb: Optional[TypeBuilder],
-        cb: Optional[ClientBuilder],
+        cr: Optional[ClientRegistry],
     ) -> FunctionResultStream: ...
     def create_context_manager(self) -> RuntimeContextManager: ...
     def flush(self) -> None: ...
@@ -147,9 +147,9 @@ class TypeBuilder:
     def null(self) -> FieldType: ...
     def optional(self, inner_type: FieldType) -> FieldType: ...
 
-class ClientBuilder:
+class ClientRegistry:
     def __init__(self) -> None: ...
-    def add_client(
+    def add_llm_client(
         self,
         name: str,
         provider: str,

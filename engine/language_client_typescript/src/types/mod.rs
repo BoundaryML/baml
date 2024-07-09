@@ -1,7 +1,7 @@
 mod lang_wrappers;
 
 pub mod audio;
-pub(crate) mod client_builder;
+pub(crate) mod client_registry;
 pub(crate) mod function_result_stream;
 pub(crate) mod function_results;
 pub mod image;

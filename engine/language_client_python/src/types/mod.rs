@@ -1,8 +1,8 @@
 mod lang_wrapper;
 
-pub use client_builder::ClientBuilder;
+pub use client_registry::ClientRegistry;
 pub(crate) mod audio;
-pub(crate) mod client_builder;
+pub(crate) mod client_registry;
 pub(crate) mod function_result_stream;
 pub(crate) mod function_results;
 pub(crate) mod image;

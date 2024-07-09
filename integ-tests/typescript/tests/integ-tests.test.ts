@@ -1,5 +1,5 @@
 import assert from 'assert'
-import { Image, ClientBuilder } from '@boundaryml/baml'
+import { Image, ClientRegistry } from '@boundaryml/baml'
 import TypeBuilder from '../baml_client/type_builder'
 import { scheduler } from 'node:timers/promises'
 import { image_b64, audio_b64 } from './base64_test_data'
@@ -400,14 +400,14 @@ describe('Integ tests', () => {
   })
 
   it('should work with dynamic client', async () => {
-    const clientBuilder = new ClientBuilder()
-    clientBuilder.addClient('myClient', 'openai', {
+    const clientRegistry = new ClientRegistry()
+    clientRegistry.addLlmClient('myClient', 'openai', {
       model: 'gpt-3.5-turbo',
     })
-    clientBuilder.setPrimary('myClient')
+    clientRegistry.setPrimary('myClient')
 
     await b.TestOllama('hi', {
-      cb: clientBuilder,
+      clientRegistry,
     })
   })
 

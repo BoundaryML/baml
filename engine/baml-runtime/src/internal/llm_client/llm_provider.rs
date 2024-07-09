@@ -4,7 +4,7 @@ use anyhow::Result;
 use internal_baml_core::ir::ClientWalker;
 
 use crate::{
-    client_builder::ClientProperty, runtime_interface::InternalClientLookup, RuntimeContext,
+    client_registry::ClientProperty, runtime_interface::InternalClientLookup, RuntimeContext,
 };
 
 use super::{

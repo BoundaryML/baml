@@ -10,7 +10,7 @@ use internal_baml_jinja::{
 };
 
 use crate::{
-    client_builder::ClientProperty,
+    client_registry::ClientProperty,
     internal::llm_client::{
         primitive::{
             anthropic::types::{AnthropicMessageResponse, StopReason},

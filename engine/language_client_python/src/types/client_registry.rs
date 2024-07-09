@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use baml_runtime::client_builder;
+use baml_runtime::client_registry;
 use baml_types::BamlValue;
 use pyo3::prelude::{pymethods, PyResult};
 use pyo3::{PyObject, Python, ToPyObject};
@@ -8,19 +8,19 @@ use pyo3::{PyObject, Python, ToPyObject};
 use crate::parse_py_type::parse_py_type;
 use crate::BamlError;
 
-crate::lang_wrapper!(ClientBuilder, client_builder::ClientBuilder);
+crate::lang_wrapper!(ClientRegistry, client_registry::ClientRegistry);
 
 #[pymethods]
-impl ClientBuilder {
+impl ClientRegistry {
     #[new]
     pub fn new() -> Self {
         Self {
-            inner: client_builder::ClientBuilder::new(),
+            inner: client_registry::ClientRegistry::new(),
         }
     }
 
     #[pyo3(signature = (name, provider, options, retry_policy = None))]
-    pub fn add_client(
+    pub fn add_llm_client(
         &mut self,
         py: Python<'_>,
         name: String,
@@ -39,7 +39,7 @@ impl ClientBuilder {
             ));
         };
 
-        let client_property = baml_runtime::client_builder::ClientProperty {
+        let client_property = baml_runtime::client_registry::ClientProperty {
             name,
             provider,
             retry_policy,

@@ -7,7 +7,7 @@ use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMes
 
 use serde_json::json;
 
-use crate::client_builder::ClientProperty;
+use crate::client_registry::ClientProperty;
 use crate::internal::llm_client::primitive::request::{
     make_parsed_request, make_request, RequestBuilder,
 };

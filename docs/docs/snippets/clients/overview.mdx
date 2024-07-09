@@ -25,30 +25,11 @@ function MakeHaiku(topic: string) -> string {
 
 ## Fields
 
-<ParamField path="provider"  required>
-This configures which provider to use. The provider is responsible for handling the actual API calls to the LLM service. The provider is a required field.
+import ClientConstructorParams from '/snippets/client-constructor.mdx'
 
-The configuration modifies the URL request BAML runtime makes.
-
-| Provider Name  | Docs                             | Notes                                                      |
-| -------------- | -------------------------------- | ---------------------------------------------------------- |
-| `openai`       | [OpenAI](providers/openai)       | Anything that follows openai's API exactly                 |
-| `ollama`       | [Ollama](providers/ollama)       | Alias for an openai client but with default ollama options |
-| `azure-openai` | [Azure OpenAI](providers/azure)  |                                                            |
-| `anthropic`    | [Anthropic](providers/anthropic) |                                                            |
-| `google-ai`    | [Google AI](providers/gemini)    |                                                            |
-| `fallback`     | [Fallback](fallback)             | Used to chain models conditional on failures               |
-| `round-robin`  | [Round Robin](round-robin)       | Used to load balance                                       |
-
-</ParamField>
+<ClientConstructorParams />
 
 <ParamField path="retry_policy">
   The name of the retry policy. See [Retry
   Policy](/docs/snippets/clients/retry).
-</ParamField>
-
-<ParamField path="options">
-  These vary per provider. Please see provider specific documentation for more
-  information. Generally they are pass through options to the POST request made
-  to the LLM.
 </ParamField>

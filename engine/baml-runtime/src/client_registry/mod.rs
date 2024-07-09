@@ -24,12 +24,12 @@ pub struct ClientProperty {
 }
 
 #[derive(Clone)]
-pub struct ClientBuilder {
+pub struct ClientRegistry {
     clients: HashMap<String, ClientProperty>,
     primary: Option<String>,
 }
 
-impl ClientBuilder {
+impl ClientRegistry {
     pub fn new() -> Self {
         Self {
             clients: Default::default(),

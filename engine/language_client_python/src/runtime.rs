@@ -6,7 +6,7 @@ use crate::BamlError;
 use crate::types::function_result_stream::FunctionResultStream;
 use crate::types::runtime_ctx_manager::RuntimeContextManager;
 use crate::types::type_builder::TypeBuilder;
-use crate::types::ClientBuilder;
+use crate::types::ClientRegistry;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
@@ -108,7 +108,7 @@ impl BamlRuntime {
         args: PyObject,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
-        cb: Option<&ClientBuilder>,
+        cb: Option<&ClientRegistry>,
     ) -> PyResult<PyObject> {
         let Some(args) = parse_py_type(args.into_bound(py).to_object(py), false)? else {
             return Err(BamlError::new_err(
@@ -148,7 +148,7 @@ impl BamlRuntime {
         on_event: Option<PyObject>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
-        cb: Option<&ClientBuilder>,
+        cb: Option<&ClientRegistry>,
     ) -> PyResult<FunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).to_object(py), false)? else {
             return Err(BamlError::new_err(

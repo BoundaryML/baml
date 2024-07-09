@@ -1,5 +1,5 @@
 use crate::parse_ts_types;
-use crate::types::client_builder::ClientBuilder;
+use crate::types::client_registry::ClientRegistry;
 use crate::types::function_result_stream::FunctionResultStream;
 use crate::types::function_results::FunctionResult;
 use crate::types::runtime_ctx_manager::RuntimeContextManager;
@@ -84,7 +84,7 @@ impl BamlRuntime {
         #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
-        cb: Option<&ClientBuilder>,
+        cb: Option<&ClientRegistry>,
     ) -> napi::Result<JsObject> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -127,7 +127,7 @@ impl BamlRuntime {
         #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] cb: Option<JsFunction>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
-        client_builder: Option<&ClientBuilder>,
+        client_registry: Option<&ClientRegistry>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -143,7 +143,7 @@ impl BamlRuntime {
 
         let ctx = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
-        let client_builder = client_builder.map(|cb| cb.inner.clone());
+        let client_registry = client_registry.map(|cb| cb.inner.clone());
         let stream = self
             .inner
             .stream_function(
@@ -151,7 +151,7 @@ impl BamlRuntime {
                 &args_map,
                 &ctx,
                 tb.as_ref(),
-                client_builder.as_ref(),
+                client_registry.as_ref(),
             )
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
 
@@ -160,7 +160,7 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, tb, client_builder))
+        Ok(FunctionResultStream::new(stream, cb, tb, client_registry))
     }
 
     #[napi]
