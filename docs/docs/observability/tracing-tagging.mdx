@@ -9,7 +9,7 @@ This will make the function's input and output show up in the Boundary dashboard
 ### Prerequisites
 Make sure you setup the [Boundary dashboard](/quickstart#setting-up-the-boundary-dashboard) project before you start.
 
-Make sure you also CTRl+S a .baml file to generate the `baml_client`
+Make sure you also CTRL+S a .baml file to generate the `baml_client`
 
 ### Example
 
@@ -61,7 +61,7 @@ See [running tests](/running-tests) for more information on how to run this test
 
 The dashboard view allows you to see custom tags for each of the function calls. This is useful for adding metadata to your traces and allow you to query your generated logs more easily.
 
-To add a custom tag, you can import **update_trace_tags(..)** as below:
+To add a custom tag, you can import **set_tags(..)** as below:
 
 ```python
 from baml_client.tracing import set_tags, trace
