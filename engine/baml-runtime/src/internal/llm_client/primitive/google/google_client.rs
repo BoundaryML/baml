@@ -1,3 +1,4 @@
+use crate::client_registry::ClientProperty;
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
@@ -42,25 +43,9 @@ pub struct GoogleClient {
 }
 
 fn resolve_properties(
-    client: &ClientWalker,
+    mut properties: HashMap<String, serde_json::Value>,
     ctx: &RuntimeContext,
 ) -> Result<PostRequestProperities, anyhow::Error> {
-    let mut properties = (&client.item.elem.options)
-        .iter()
-        .map(|(k, v)| {
-            Ok((
-                k.into(),
-                ctx.resolve_expression::<serde_json::Value>(v)
-                    .context(format!(
-                        "client {} could not resolve options.{}",
-                        client.name(),
-                        k
-                    ))?,
-            ))
-        })
-        .collect::<Result<HashMap<_, _>>>()?;
-    // this is a required field
-
     let default_role = properties
         .remove("default_role")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
@@ -240,17 +225,17 @@ impl WithStreamChat for GoogleClient {
 }
 
 impl GoogleClient {
-    pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<GoogleClient> {
-        let post_properties = resolve_properties(client, ctx)?;
-        let default_role = post_properties.default_role.clone(); // clone before moving
-
+    pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<Self> {
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
+        let properties = resolve_properties(properties, ctx)?;
+        let default_role = properties.default_role.clone();
         Ok(Self {
             name: client.name().into(),
-            properties: post_properties,
+            properties,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
-                default_role: default_role,
+                default_role,
             },
             features: ModelFeatures {
                 chat: true,
@@ -266,6 +251,36 @@ impl GoogleClient {
             client: create_client()?,
         })
     }
+
+    pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<Self> {
+        let properties = resolve_properties(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            ctx,
+        )?;
+        let default_role = properties.default_role.clone();
+
+        Ok(Self {
+            name: client.name.clone(),
+            properties,
+            context: RenderContext_Client {
+                name: client.name.clone(),
+                provider: client.provider.clone(),
+                default_role,
+            },
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                anthropic_system_constraints: false,
+                resolve_media_urls: true,
+            },
+            retry_policy: client.retry_policy.clone(),
+            client: create_client()?,
+        })
+    }
 }
 
 impl RequestBuilder for GoogleClient {
@@ -276,6 +291,7 @@ impl RequestBuilder for GoogleClient {
     async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
+        allow_proxy: bool,
         stream: bool,
     ) -> Result<reqwest::RequestBuilder> {
         let mut should_stream = "generateContent";
@@ -289,21 +305,18 @@ impl RequestBuilder for GoogleClient {
             self.properties.model_id.as_ref().unwrap_or(&"".to_string()),
             should_stream
         );
-
-        let mut req = self.client.post(
-            self.properties
-                .proxy_url
-                .as_ref()
-                .unwrap_or(&baml_original_url)
-                .clone(),
-        );
+        let mut req = match (&self.properties.proxy_url, allow_proxy) {
+            (Some(proxy_url), true) => {
+                let req = self.client.post(proxy_url.clone());
+                req.header("baml-original-url", baml_original_url)
+            }
+            _ => self.client.post(baml_original_url),
+        };
 
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
         }
 
-        req = req.header("baml-original-url", baml_original_url.clone());
-        req = req.header("baml-render-url", baml_original_url);
         req = req.header(
             "x-goog-api-key",
             self.properties
@@ -325,6 +338,7 @@ impl RequestBuilder for GoogleClient {
 
         Ok(req.json(&body))
     }
+
     fn request_options(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
     }

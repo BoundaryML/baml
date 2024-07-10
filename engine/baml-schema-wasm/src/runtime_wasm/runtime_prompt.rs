@@ -110,10 +110,6 @@ impl WasmPrompt {
     #[wasm_bindgen]
     pub fn as_chat(&self) -> Option<Vec<WasmChatMessage>> {
         if let RenderedPrompt::Chat(s) = &self.prompt {
-            log::info!(
-                "Chat role: {:?}",
-                s.iter().map(|m| m.role.clone()).collect::<Vec<_>>()
-            );
             Some(
                 s.iter()
                     .map(|m| WasmChatMessage {

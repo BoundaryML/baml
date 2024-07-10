@@ -11,6 +11,7 @@ pub mod traits;
 
 use anyhow::Result;
 
+use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::RenderedPrompt;
 use serde::Serialize;
 use std::error::Error;
@@ -168,4 +169,26 @@ impl std::fmt::Display for LLMCompleteResponse {
         writeln!(f, "{}", "---LLM REPLY---".blue())?;
         write!(f, "{}", self.content.dimmed())
     }
+}
+
+// For parsing args
+fn resolve_properties_walker(
+    client: &ClientWalker,
+    ctx: &crate::RuntimeContext,
+) -> Result<std::collections::HashMap<String, serde_json::Value>> {
+    use anyhow::Context;
+    (&client.item.elem.options)
+        .iter()
+        .map(|(k, v)| {
+            Ok((
+                k.into(),
+                ctx.resolve_expression::<serde_json::Value>(v)
+                    .context(format!(
+                        "client {} could not resolve options.{}",
+                        client.name(),
+                        k
+                    ))?,
+            ))
+        })
+        .collect::<Result<std::collections::HashMap<_, _>>>()
 }

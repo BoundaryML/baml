@@ -8,12 +8,14 @@ from .baml_py import (
     BamlImagePy as Image,
     BamlAudioPy as Audio,
     invoke_runtime_cli,
+    ClientRegistry,
 )
 from .stream import BamlStream
 from .ctx_manager import CtxManager as BamlCtxManager
 
 __all__ = [
     "BamlRuntime",
+    "ClientRegistry",
     "BamlStream",
     "BamlCtxManager",
     "FunctionResult",

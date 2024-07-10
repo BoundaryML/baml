@@ -8,25 +8,10 @@ use crate::RuntimeContext;
 use super::PostRequestProperities;
 
 pub fn resolve_properties(
-    client: &ClientWalker,
+    mut properties: HashMap<String, serde_json::Value>,
     ctx: &RuntimeContext,
 ) -> Result<PostRequestProperities> {
     // POST https://{your-resource-name}.openai.azure.com/openai/deployments/{deployment-id}/chat/completions?api-version={api-version}
-
-    let mut properties = (&client.item.elem.options)
-        .iter()
-        .map(|(k, v)| {
-            Ok((
-                k.into(),
-                ctx.resolve_expression::<serde_json::Value>(v)
-                    .context(format!(
-                        "client {} could not resolve options.{}",
-                        client.name(),
-                        k
-                    ))?,
-            ))
-        })
-        .collect::<Result<HashMap<_, _>>>()?;
 
     let default_role = properties
         .remove("default_role")

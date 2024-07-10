@@ -346,6 +346,8 @@ export const availableFunctionsAtom = atom((get) => {
   return runtime.list_functions()
 })
 
+export const streamCurl = atom(true)
+
 const asyncCurlAtom = atom(async (get) => {
   const runtime = get(selectedRuntimeAtom)
   const func = get(selectedFunctionAtom)
@@ -360,10 +362,10 @@ const asyncCurlAtom = atom(async (get) => {
       .map((input) => [input.name, JSON.parse(input.value)]),
   )
   try {
-    return await func.render_raw_curl(runtime, params, false)
+    return await func.render_raw_curl(runtime, params, get(streamCurl))
   } catch (e) {
     console.error(e)
-    return 'Error rendering curl command'
+    return `${e}`
   }
 })
 

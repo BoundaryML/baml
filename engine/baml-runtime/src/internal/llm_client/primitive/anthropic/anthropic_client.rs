@@ -10,6 +10,7 @@ use internal_baml_jinja::{
 };
 
 use crate::{
+    client_registry::ClientProperty,
     internal::llm_client::{
         primitive::{
             anthropic::types::{AnthropicMessageResponse, StopReason},
@@ -56,23 +57,9 @@ pub struct AnthropicClient {
 // resolves/constructs PostRequestProperties from the client's options and runtime context, fleshing out the needed headers and parameters
 // basically just reads the client's options and matches them to needed properties or defaults them
 fn resolve_properties(
-    client: &ClientWalker,
+    mut properties: HashMap<String, serde_json::Value>,
     ctx: &RuntimeContext,
 ) -> Result<PostRequestProperities> {
-    let mut properties = (&client.item.elem.options)
-        .iter()
-        .map(|(k, v)| {
-            Ok((
-                k.into(),
-                ctx.resolve_expression::<serde_json::Value>(v)
-                    .context(format!(
-                        "client {} could not resolve options.{}",
-                        client.name(),
-                        k
-                    ))?,
-            ))
-        })
-        .collect::<Result<HashMap<_, _>>>()?;
     // this is a required field
     properties
         .entry("max_tokens".into())
@@ -298,17 +285,46 @@ impl WithStreamChat for AnthropicClient {
 
 // constructs base client and resolves properties based on context
 impl AnthropicClient {
-    pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AnthropicClient> {
-        let post_properties = resolve_properties(client, ctx)?;
-        let default_role = post_properties.default_role.clone(); // clone before moving
+    pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<Self> {
+        let properties = resolve_properties(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            ctx,
+        )?;
+        let default_role = properties.default_role.clone();
+        Ok(Self {
+            name: client.name.clone(),
+            properties,
+            context: RenderContext_Client {
+                name: client.name.clone(),
+                provider: client.provider.clone(),
+                default_role,
+            },
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                anthropic_system_constraints: true,
+                resolve_media_urls: true,
+            },
+            retry_policy: client.retry_policy.clone(),
+            client: create_client()?,
+        })
+    }
 
+    pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AnthropicClient> {
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
+        let properties = resolve_properties(properties, ctx)?;
+        let default_role = properties.default_role.clone();
         Ok(Self {
             name: client.name().into(),
-            properties: post_properties,
+            properties,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
-                default_role: default_role,
+                default_role,
             },
             features: ModelFeatures {
                 chat: true,
@@ -335,26 +351,22 @@ impl RequestBuilder for AnthropicClient {
     async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
+        allow_proxy: bool,
         stream: bool,
     ) -> Result<reqwest::RequestBuilder> {
-        let mut req = self.client.post(if prompt.is_left() {
-            format!(
-                "{}/v1/complete",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
+        let destination_url = if allow_proxy {
+            self.properties
+                .proxy_url
+                .as_ref()
+                .unwrap_or(&self.properties.base_url)
         } else {
-            format!(
-                "{}/v1/messages",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
+            &self.properties.base_url
+        };
+
+        let mut req = self.client.post(if prompt.is_left() {
+            format!("{}/v1/complete", destination_url)
+        } else {
+            format!("{}/v1/messages", destination_url)
         });
 
         for (key, value) in &self.properties.headers {
@@ -364,12 +376,9 @@ impl RequestBuilder for AnthropicClient {
             req = req.header("x-api-key", key);
         }
 
-        req = req.header("baml-original-url", self.properties.base_url.as_str());
-        req = req.header(
-            "baml-render-url",
-            format!("{}/v1/messages", self.properties.base_url),
-        );
-
+        if allow_proxy {
+            req = req.header("baml-original-url", self.properties.base_url.as_str());
+        }
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
         match prompt {
@@ -384,7 +393,6 @@ impl RequestBuilder for AnthropicClient {
         if stream {
             body_obj.insert("stream".into(), true.into());
         }
-        log::debug!("Request body: {:#?}", body);
 
         Ok(req.json(&body))
     }

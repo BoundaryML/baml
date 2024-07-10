@@ -75,7 +75,7 @@ const TestDropdown: React.FC = () => {
 
   return (
     <div className='flex flex-col-reverse items-start gap-0.5'>
-      <span className='pl-2 text-xs text-muted-foreground flex flex-row flex-wrap items-center gap-1'>
+      <span className='flex flex-row flex-wrap items-center gap-1 pl-2 text-xs text-muted-foreground'>
         Test
         {selected && <JumpToTestCase />}
       </span>
@@ -128,7 +128,7 @@ const JumpToFunction: React.FC = () => {
         source_file: selected.span.file_path,
         value: `${selected.span.file_path.split('/').pop() ?? '<file>.baml'}:${selected.span.start_line + 1}`,
       }}
-      className='text-xs text-muted-foreground decoration-0 py-0'
+      className='py-0 text-xs text-muted-foreground decoration-0'
     />
   )
 }
@@ -156,7 +156,7 @@ const JumpToTestCase: React.FC = () => {
 export const ViewSelector: React.FC = () => {
   return (
     <div className='flex flex-row justify-between'>
-      <div className='flex flex-row gap-4 px-2 py-1 items-center'>
+      <div className='flex flex-row items-center gap-4 px-2 py-1'>
         <FunctionDropdown />
         <div>
           <ChevronRight className='w-4 h-4' />
@@ -168,13 +168,13 @@ export const ViewSelector: React.FC = () => {
           <DialogTrigger asChild>
             <Button
               variant={'ghost'}
-              className='flex flex-row items-center px-2 py-1 text-sm whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foreground mr-2'
+              className='flex flex-row items-center px-2 py-1 mr-2 text-sm text-white whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2'
             >
               <Compass size={16} strokeWidth={2} />
               <span className='whitespace-nowrap'>Docs</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className='fullWidth min-w-full h-full border-zinc-900 bg-zinc-900'>
+          <DialogContent className='h-full min-w-full fullWidth border-zinc-900 bg-zinc-900'>
             <Snippets />
           </DialogContent>
         </Dialog>

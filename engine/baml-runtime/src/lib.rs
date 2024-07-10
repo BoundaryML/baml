@@ -13,6 +13,7 @@ pub(crate) mod internal;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod cli;
+pub mod client_registry;
 mod macros;
 mod request;
 mod runtime;
@@ -29,6 +30,7 @@ use anyhow::Result;
 
 use baml_types::BamlMap;
 use baml_types::BamlValue;
+use client_registry::ClientRegistry;
 use indexmap::IndexMap;
 use internal_baml_core::configuration::GeneratorOutputType;
 use on_log_event::LogEventCallbackSync;
@@ -137,25 +139,29 @@ impl BamlRuntime {
     where
         F: Fn(FunctionResult) -> (),
     {
-        let (span, rctx) = self
-            .tracer
-            .start_span(test_name, ctx, None, &Default::default());
+        let span = self.tracer.start_span(test_name, ctx, &Default::default());
 
-        let params = self.inner.get_test_params(function_name, test_name, &rctx);
+        let response = match ctx.create_ctx(None, None) {
+            Ok(rctx) => {
+                let params = self.inner.get_test_params(function_name, test_name, &rctx);
+                match params {
+                    Ok(params) => {
+                        match self.stream_function(function_name.into(), &params, ctx, None, None) {
+                            Ok(mut stream) => {
+                                let (response, span) = stream.run(on_event, ctx, None, None).await;
+                                let response = response.map(|res| TestResponse {
+                                    function_response: res,
+                                    function_span: span,
+                                });
 
-        let response = match params {
-            Ok(params) => match self.stream_function(function_name.into(), &params, ctx, None) {
-                Ok(mut stream) => {
-                    let (response, span) = stream.run(on_event, ctx, None).await;
-                    let response = response.map(|res| TestResponse {
-                        function_response: res,
-                        function_span: span,
-                    });
-
-                    response
+                                response
+                            }
+                            Err(e) => Err(e),
+                        }
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
-            },
+            }
             Err(e) => Err(e),
         };
 
@@ -182,14 +188,19 @@ impl BamlRuntime {
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
-        let (span, rctx) = self.tracer.start_span(&function_name, ctx, tb, &params);
+        let span = self.tracer.start_span(&function_name, ctx, &params);
         log::trace!("Span started");
-        let response = self
-            .inner
-            .call_function_impl(function_name, params, rctx)
-            .await;
+        let response = match ctx.create_ctx(tb, cb) {
+            Ok(rctx) => {
+                self.inner
+                    .call_function_impl(function_name, params, rctx)
+                    .await
+            }
+            Err(e) => Err(e),
+        };
 
         let mut target_id = None;
         if let Some(span) = span {
@@ -213,12 +224,13 @@ impl BamlRuntime {
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
     ) -> Result<FunctionResultStream> {
         self.inner.stream_function_impl(
             function_name,
             params,
             self.tracer.clone(),
-            ctx.create_ctx(tb),
+            ctx.create_ctx(tb, cb)?,
         )
     }
 
@@ -270,8 +282,8 @@ impl ExperimentalTracingInterface for BamlRuntime {
         function_name: &str,
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
-    ) -> (Option<TracingSpan>, RuntimeContext) {
-        self.tracer.start_span(function_name, ctx, None, params)
+    ) -> Option<TracingSpan> {
+        self.tracer.start_span(function_name, ctx, params)
     }
 
     #[cfg(not(target_arch = "wasm32"))]

@@ -3,7 +3,6 @@ from .baml_py import (
     FunctionResult,
     FunctionResultStream,
     RuntimeContextManager,
-    TypeBuilder,
 )
 from typing import Callable, Generic, Optional, TypeVar
 import threading
@@ -23,7 +22,6 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
     __ctx_manager: RuntimeContextManager
     __task: Optional[threading.Thread]
     __event_queue: queue.Queue[Optional[FunctionResult]]
-    __tb: Optional[TypeBuilder]
     __future: concurrent.futures.Future[FunctionResult]
 
     def __init__(
@@ -32,7 +30,6 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         partial_coerce: Callable[[FunctionResult], PartialOutputType],
         final_coerce: Callable[[FunctionResult], FinalOutputType],
         ctx_manager: RuntimeContextManager,
-        tb: Optional[TypeBuilder],
     ):
         self.__ffi_stream = ffi_stream.on_event(self.__enqueue)
         self.__partial_coerce = partial_coerce
@@ -40,7 +37,6 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         self.__ctx_manager = ctx_manager
         self.__task = None
         self.__event_queue = queue.Queue()
-        self.__tb = tb
         self.__future = concurrent.futures.Future()  # Initialize the future here
 
     def __enqueue(self, data: FunctionResult) -> None:
