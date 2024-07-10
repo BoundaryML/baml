@@ -119,11 +119,12 @@ client<llm> Resilient_SimpleSyntax {
  
 client<llm> Lottery_SimpleSyntax {
   provider baml-round-robin
+  retry_policy Constant
   options {
-    start 0
     strategy [
       GPT35
       Claude
+      
     ]
   }
 }

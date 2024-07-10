@@ -16,7 +16,20 @@ client<llm> FallbackClient {
       FaultyClient,
       RetryClientConstant,
       Gemini
+      Lottery_SimpleSyntax
+      SecondaryFallback
       
+    ]
+  }
+}
+
+client<llm> SecondaryFallback {
+  provider fallback
+  options {
+    strategy [
+      FaultyClient
+      RetryClientExponential
+      GPT4
     ]
   }
 }

@@ -399,6 +399,21 @@ export const renderPromptAtom = atom((get) => {
   }
 })
 
+interface ClientNode {
+  name: string
+  orch_index: number
+  type: string
+  stack_group: number[]
+  retry_count?: number
+  retry_delay?: number
+  round_robin_strategy?: string
+}
+
+interface Edge {
+  from_node: number
+  to_node: number
+}
+
 export const orchestrationGraph = atom((get) => {
   const func = get(selectedFunctionAtom)
   const runtime = get(selectedRuntimeAtom)
@@ -415,40 +430,85 @@ export const orchestrationGraph = atom((get) => {
     console.log(`orchestrationGraph: ${scopes.length}`)
     let indexOuter = 0
 
+    var nodes: ClientNode[] = []
+    var edges: Edge[] = []
+
     for (const scope of scopes) {
       // console.log(`scope: ${scope.name()}`)
       const scopeInfo = scope.get_orchestration_scope_info()
-      console.log(`Outer Index: ${indexOuter++}`)
 
       // Deserialize the JsValue to a JavaScript object
       const scopeArray = scopeInfo as any[] // You can define a TypeScript interface for better typing
+      // console.log(`---------`)
+      // console.log(`Outer Index: ${indexOuter++}`)
+
+      let lastScopeName = ''
+      let lastScopeType = ''
+      let stackGroup: number[] = [-1]
 
       scopeArray.forEach((scope) => {
-        console.log(`Scope Name: ${scope.name}`)
+        // console.log(
+        //   `Scope Name: ${scope.name}, Scope type: ${scope.type}, ${scope.type === 'Retry' ? `Retry count: ${scope.count}, Retry delay: ${scope.delay}` : scope.type === 'RoundRobin' ? `Strategy: ${scope.strategy}, Index: ${scope.index}` : scope.type === 'Fallback' ? `Index: ${scope.index}` : scope.type === 'Direct' ? '' : 'Unknown scope type'}`,
+        // )
 
-        console.log(`Scope type: ${scope.type}`)
+        // Update last scope name and type
+        lastScopeName = scope.name
+        lastScopeType = scope.type
 
-        switch (scope.type) {
-          case 'Retry':
-            console.log(`Retry count: ${scope.count}`)
-            console.log(`Retry delay: ${scope.delay}`)
-            break
-          case 'RoundRobin':
-            console.log(`Strategy: ${scope.strategy}`)
-            console.log(`Index: ${scope.index}`)
-            break
-          case 'Fallback':
-            console.log(`Index: ${scope.index}`)
-            break
-          case 'Direct':
-            // No additional fields for Direct
-            break
-          default:
-            console.error('Unknown scope type')
+        // Add index to stack_group if it exists
+        if (scope.index !== undefined) {
+          stackGroup.push(scope.index)
         }
       })
+
+      // Create a new ClientNode object
+      const clientNode: ClientNode = {
+        name: lastScopeName,
+        orch_index: indexOuter,
+        type: lastScopeType,
+        stack_group: stackGroup,
+      }
+
+      // Populate additional fields based on the last scope type
+      const lastScope = scopeArray[scopeArray.length - 1]
+      switch (lastScope.type) {
+        case 'Retry':
+          clientNode.retry_count = lastScope.count
+          clientNode.retry_delay = lastScope.delay
+          break
+        case 'RoundRobin':
+          clientNode.round_robin_strategy = lastScope.strategy
+          clientNode.orch_index = lastScope.index
+          break
+        case 'Fallback':
+          clientNode.orch_index = lastScope.index
+          break
+        case 'Direct':
+          // No additional fields for Direct
+          break
+        default:
+          console.error('Unknown scope type')
+      }
+
+      // Add the ClientNode object to the nodes array
+      nodes.push(clientNode)
+      indexOuter++
     }
   }
+
+  nodes.forEach((node) => {
+    console.log(`New Node -----------------`)
+    console.log(`Node Name: ${node.name}, Orchestration Index: ${node.orch_index}, Type: ${node.type}`)
+    if (node.retry_count !== undefined) {
+      console.log(`Retry Count: ${node.retry_count}, Retry Delay: ${node.retry_delay}`)
+    }
+    if (node.round_robin_strategy !== undefined) {
+      console.log(`Round Robin Strategy: ${node.round_robin_strategy}`)
+    }
+    if (node.stack_group.length > 0) {
+      console.log(`Stack Group: ${node.stack_group}`)
+    }
+  })
 
   return scopes
 })
