@@ -9,7 +9,12 @@ import { useCallback, useEffect } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
 import { atomStore, sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
-import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+import type {
+  WasmDiagnosticError,
+  WasmParam,
+  WasmRuntime,
+  WasmScope,
+} from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { vscode } from '../utils/vscode'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
@@ -387,8 +392,6 @@ export const renderPromptAtom = atom((get) => {
   )
 
   try {
-    get(orchestrationGraph)
-
     return func.render_prompt(runtime, params)
   } catch (e) {
     if (e instanceof Error) {
@@ -399,7 +402,7 @@ export const renderPromptAtom = atom((get) => {
   }
 })
 
-interface ClientNode {
+export interface ClientNode {
   name: string
   orch_index: number
   type: string
@@ -409,7 +412,7 @@ interface ClientNode {
   round_robin_strategy?: string
 }
 
-interface Edge {
+export interface Edge {
   from_node: number
   to_node: number
 }
@@ -432,6 +435,7 @@ export const orchestrationGraph = atom((get) => {
 
     var nodes: ClientNode[] = []
     var edges: Edge[] = []
+    let prevEdge = -1
 
     for (const scope of scopes) {
       // console.log(`scope: ${scope.name()}`)
@@ -440,20 +444,13 @@ export const orchestrationGraph = atom((get) => {
       // Deserialize the JsValue to a JavaScript object
       const scopeArray = scopeInfo as any[] // You can define a TypeScript interface for better typing
       // console.log(`---------`)
-      // console.log(`Outer Index: ${indexOuter++}`)
-
-      let lastScopeName = ''
-      let lastScopeType = ''
+      // console.log(`Outer Index: ${indexOuter}`)
       let stackGroup: number[] = [-1]
 
       scopeArray.forEach((scope) => {
-        // console.log(
-        //   `Scope Name: ${scope.name}, Scope type: ${scope.type}, ${scope.type === 'Retry' ? `Retry count: ${scope.count}, Retry delay: ${scope.delay}` : scope.type === 'RoundRobin' ? `Strategy: ${scope.strategy}, Index: ${scope.index}` : scope.type === 'Fallback' ? `Index: ${scope.index}` : scope.type === 'Direct' ? '' : 'Unknown scope type'}`,
-        // )
-
-        // Update last scope name and type
-        lastScopeName = scope.name
-        lastScopeType = scope.type
+        console.log(
+          `Scope Name: ${scope.name}, Scope type: ${scope.type}, ${scope.type === 'Retry' ? `Retry count: ${scope.count}, Retry delay: ${scope.delay}` : scope.type === 'RoundRobin' ? `Strategy: ${scope.strategy}, Index: ${scope.index}` : scope.type === 'Fallback' ? `Index: ${scope.index}` : scope.type === 'Direct' ? '' : 'Unknown scope type'}`,
+        )
 
         // Add index to stack_group if it exists
         if (scope.index !== undefined) {
@@ -461,30 +458,46 @@ export const orchestrationGraph = atom((get) => {
         }
       })
 
+      var typeScope: any
+      if (stackGroup.length > 1) {
+        typeScope = scopeArray[scopeArray.length - 2]
+      } else {
+        typeScope = scopeArray[scopeArray.length - 1]
+      }
+      const lastScope = scopeArray[scopeArray.length - 1]
+
       // Create a new ClientNode object
       const clientNode: ClientNode = {
-        name: lastScopeName,
+        name: lastScope.name,
         orch_index: indexOuter,
-        type: lastScopeType,
+        type: typeScope.type,
         stack_group: stackGroup,
       }
 
       // Populate additional fields based on the last scope type
-      const lastScope = scopeArray[scopeArray.length - 1]
-      switch (lastScope.type) {
+
+      //not actually correct right now, we treat every node as direct in this sense and don't have the actual type
+      switch (typeScope.type) {
         case 'Retry':
-          clientNode.retry_count = lastScope.count
-          clientNode.retry_delay = lastScope.delay
+          // console.log(`Outerindex: ${indexOuter}: Retry Scope`)
+          clientNode.retry_count = typeScope.count
+          clientNode.retry_delay = typeScope.delay
           break
         case 'RoundRobin':
-          clientNode.round_robin_strategy = lastScope.strategy
-          clientNode.orch_index = lastScope.index
+          // console.log(`Outerindex: ${indexOuter}: RoundRobin Scope`)
+
+          clientNode.round_robin_strategy = typeScope.strategy
+          // clientNode.orch_index = typeScope.index
           break
         case 'Fallback':
-          clientNode.orch_index = lastScope.index
+          // console.log(`Outerindex: ${indexOuter}: Fallback Scope`)
+          clientNode.type = lastScope.type
+
+          // clientNode.orch_index = typeScope.index
           break
         case 'Direct':
           // No additional fields for Direct
+          // console.log(`Outerindex: ${indexOuter}: Direct Scope`)
           break
         default:
           console.error('Unknown scope type')
@@ -492,25 +505,33 @@ export const orchestrationGraph = atom((get) => {
 
       // Add the ClientNode object to the nodes array
       nodes.push(clientNode)
+      if (prevEdge !== -1) {
+        edges.push({ from_node: prevEdge, to_node: indexOuter })
+      }
+      prevEdge = indexOuter
+
       indexOuter++
     }
   }
 
-  nodes.forEach((node) => {
-    console.log(`New Node -----------------`)
-    console.log(`Node Name: ${node.name}, Orchestration Index: ${node.orch_index}, Type: ${node.type}`)
-    if (node.retry_count !== undefined) {
-      console.log(`Retry Count: ${node.retry_count}, Retry Delay: ${node.retry_delay}`)
-    }
-    if (node.round_robin_strategy !== undefined) {
-      console.log(`Round Robin Strategy: ${node.round_robin_strategy}`)
-    }
-    if (node.stack_group.length > 0) {
-      console.log(`Stack Group: ${node.stack_group}`)
-    }
-  })
+  // nodes.forEach((node) => {
+  //   console.log(`New Node -----------------`)
+  //   console.log(`Node Name: ${node.name}, Orchestration Index: ${node.orch_index}, Type: ${node.type}`)
+  //   if (node.retry_count !== undefined) {
+  //     console.log(`Retry Count: ${node.retry_count}, Retry Delay: ${node.retry_delay}`)
+  //   }
+  //   if (node.round_robin_strategy !== undefined) {
+  //     console.log(`Round Robin Strategy: ${node.round_robin_strategy}`)
+  //   }
+  //   if (node.stack_group.length > 0) {
+  //     console.log(`Stack Group: ${node.stack_group}`)
+  //   }
+  // })
 
-  return scopes
+  // edges.forEach((edge) => {
+  //   console.log(`Edge from Node ${edge.from_node} to Node ${edge.to_node}`)
+  // })
+  return { nodes, edges }
 })
 
 export const diagnositicsAtom = atom((get) => {

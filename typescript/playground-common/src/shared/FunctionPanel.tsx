@@ -1,7 +1,27 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { renderPromptAtom, selectedFunctionAtom, curlAtom, streamCurl } from '../baml_wasm_web/EventListener'
+import React, { useCallback } from 'react'
+import {
+  ReactFlow,
+  addEdge,
+  Background,
+  useNodesState,
+  useEdgesState,
+  MiniMap,
+  Controls,
+  Connection,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+import {
+  renderPromptAtom,
+  selectedFunctionAtom,
+  curlAtom,
+  streamCurl,
+  orchestrationGraph,
+  ClientNode,
+  Edge,
+} from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
@@ -55,9 +75,93 @@ const CurlSnippet: React.FC = () => {
   )
 }
 
+interface RenderEdge {
+  id: string
+  source: string
+  target: string
+}
+
+interface RenderNode {
+  id: string
+  type?: string
+  data: { label: string }
+  position: { x: number; y: number }
+  style: { backgroundColor: string }
+}
+
+const getNodeColor = (type?: string) => {
+  switch (type) {
+    //fallback should never occur -- it is a group of nodes, not a node itself
+    // case 'Fallback':
+    //   return 'pink'
+    case 'RoundRobin':
+      return 'red'
+    case 'Direct':
+      return 'green'
+    case 'Retry':
+      return 'orange'
+    default:
+      return 'gray'
+  }
+}
+
+const ClientGraph: React.FC = () => {
+  const { nodes, edges } = (useAtomValue(orchestrationGraph) as { nodes: ClientNode[]; edges: Edge[] }) ?? {
+    nodes: [] as ClientNode[],
+    edges: [] as Edge[],
+  }
+
+  console.log(`length of nodes: ${nodes.length}`)
+  for (const node of nodes) {
+    console.log(node)
+  }
+
+  const renderNodes: RenderNode[] = nodes.map((node, idx) => ({
+    id: idx.toString(),
+    style: { backgroundColor: getNodeColor(node.type) },
+    data: { label: node.name },
+    position: { x: 0, y: idx * 100 },
+  }))
+
+  // for (const edge of edges) {
+  //   console.log(edge.from_node, edge.to_node)
+  // }
+
+  const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
+    id: idx.toString(),
+    source: edge.from_node.toString(),
+    target: edge.to_node.toString(),
+  }))
+
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(renderNodes)
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(renderEdges)
+
+  const onConnect = useCallback((connection: Connection) => {
+    setFlowEdges((eds) => addEdge(connection, eds))
+  }, [])
+
+  return (
+    <div style={{ height: '100vh', width: '100%' }}>
+      <ReactFlow
+        nodes={flowNodes}
+        edges={flowEdges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        fitView
+      >
+        {/* <MiniMap /> */}
+        {/* <Controls /> */}
+        {/* <Background /> */}
+      </ReactFlow>
+    </div>
+  )
+}
+
 const PromptPreview: React.FC = () => {
   const promptPreview = useAtomValue(renderPromptAtom)
   const { showCurlRequest } = useAppState()
+  // const { showClientGraph } = useAppState()
 
   if (!promptPreview) {
     return (
@@ -88,7 +192,7 @@ const PromptPreview: React.FC = () => {
   }
 
   if (showCurlRequest) {
-    return <CurlSnippet />
+    return <ClientGraph />
   }
 
   return (

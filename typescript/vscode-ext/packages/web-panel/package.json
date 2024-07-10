@@ -44,6 +44,7 @@
     "@vercel/kv": "^1.0.1",
     "@vscode/webview-ui-toolkit": "^1.2.2",
     "@wavesurfer/react": "^1.0.6",
+    "@xyflow/react": "^12.0.1",
     "allotment": "^1.19.3",
     "anser": "^2.1.1",
     "class-variance-authority": "^0.7.0",

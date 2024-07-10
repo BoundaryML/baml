@@ -39,9 +39,22 @@ function TestRetryConstant() -> string {
   "#
 }
 
+test TestName {
+  functions [TestRetryConstant]
+  args {
+
+  }
+}
+
 function TestRetryExponential() -> string {
   client RetryClientExponential
   prompt #"
     Say a haiku
   "#
+}
+test TestName {
+  functions [TestRetryExponential]
+  args {
+
+  }
 }
