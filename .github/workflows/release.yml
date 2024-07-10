@@ -205,6 +205,7 @@ jobs:
 
   publish-to-pypi:
     environment: release
+    if: github.ref_type == 'tag'
     needs: [build-release, build-wasm]
     runs-on: ubuntu-latest
     steps:
@@ -225,6 +226,7 @@ jobs:
 
   publish-to-npm:
     environment: release
+    if: github.ref_type == 'tag'
     needs: [build-release, build-wasm]
     runs-on: ubuntu-latest
     env:
@@ -276,7 +278,7 @@ jobs:
   # publish-vscode:
   #   environment: release
   #   needs: [build-release, build-wasm]
-  #   if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
+  #   if: github.ref_type == 'tag'
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v4
@@ -328,6 +330,7 @@ jobs:
 
   release-github:
     runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
     needs: [publish-to-pypi, publish-to-npm]
     steps:
       - uses: actions/checkout@v4
