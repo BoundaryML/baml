@@ -14,7 +14,7 @@ impl FunctionResult {
         let parsed = self
             .inner
             .parsed_content()
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
 
         Ok(serde_json::json!(BamlValue::from(parsed)))
     }

@@ -21,7 +21,7 @@ impl BamlSpan {
         ctx: &RuntimeContextManager,
     ) -> napi::Result<Self> {
         let args: BamlValue = serde_json::from_value(args)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
         let Some(args_map) = args.as_map() else {
             return Err(napi::Error::new(
                 napi::Status::GenericFailure,
@@ -29,7 +29,7 @@ impl BamlSpan {
             ));
         };
 
-        let (span, _) = runtime
+        let span = runtime
             .inner
             .start_span(&function_name, &args_map, &ctx.inner);
         log::trace!("Starting span: {:#?} for {:?}\n", span, function_name);
@@ -48,7 +48,7 @@ impl BamlSpan {
     ) -> napi::Result<serde_json::Value> {
         log::trace!("Finishing span: {:?}", self.inner);
         let result: BamlValue = serde_json::from_value(result)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
         // log::info!("Finishing span: {:#?}\n", self.inner.lock().await);
 
         let span = self
@@ -60,6 +60,6 @@ impl BamlSpan {
             .finish_span(span, Some(result), &ctx.inner)
             .map(|u| u.map(|id| id.to_string()))
             .map(|u| serde_json::json!(u))
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))
     }
 }

@@ -1,7 +1,8 @@
 import assert from 'assert'
+import { Image, ClientRegistry } from '@boundaryml/baml'
+import TypeBuilder from '../baml_client/type_builder'
 import { scheduler } from 'node:timers/promises'
 import { image_b64, audio_b64 } from './base64_test_data'
-import { Image } from '@boundaryml/baml'
 import { Audio } from '@boundaryml/baml'
 import {
   b,
@@ -13,7 +14,6 @@ import {
   TestClassNested,
   onLogEvent,
 } from '../baml_client'
-import TypeBuilder from '../baml_client/type_builder'
 import { RecursivePartialNull } from '../baml_client/client'
 import { config } from 'dotenv'
 import { BamlLogEvent, BamlRuntime } from '@boundaryml/baml/native'
@@ -397,6 +397,18 @@ describe('Integ tests', () => {
     const final = await stream.getFinalResponse()
     expect(msgs.length).toBeGreaterThan(0)
     expect(msgs.at(-1)).toEqual(final)
+  })
+
+  it('should work with dynamic client', async () => {
+    const clientRegistry = new ClientRegistry()
+    clientRegistry.addLlmClient('myClient', 'openai', {
+      model: 'gpt-3.5-turbo',
+    })
+    clientRegistry.setPrimary('myClient')
+
+    await b.TestOllama('hi', {
+      clientRegistry,
+    })
   })
 
   it("should work with 'onLogEvent'", async () => {

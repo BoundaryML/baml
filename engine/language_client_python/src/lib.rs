@@ -48,6 +48,7 @@ fn baml_py(_: Python<'_>, m: Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::EnumValueBuilder>()?;
     m.add_class::<types::ClassPropertyBuilder>()?;
     m.add_class::<types::FieldType>()?;
+    m.add_class::<types::ClientRegistry>()?;
 
     m.add_class::<runtime::BamlLogEvent>()?;
     m.add_class::<runtime::LogEventMetadata>()?;

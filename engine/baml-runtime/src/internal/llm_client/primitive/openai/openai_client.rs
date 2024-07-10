@@ -7,6 +7,7 @@ use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMes
 
 use serde_json::json;
 
+use crate::client_registry::ClientProperty;
 use crate::internal::llm_client::primitive::request::{
     make_parsed_request, make_request, RequestBuilder,
 };
@@ -201,7 +202,7 @@ use crate::internal::llm_client::{
 };
 
 use super::properties::{
-    resolve_azure_properties, resolve_ollama_properties, resolve_openai_properties,
+    self, resolve_azure_properties, resolve_ollama_properties, resolve_openai_properties,
     PostRequestProperities,
 };
 use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta, FinishReason};
@@ -401,6 +402,26 @@ impl WithStreamChat for OpenAIClient {
 }
 
 macro_rules! make_openai_client {
+    ($client:ident, $properties:ident, $provider:expr, dynamic) => {
+        Ok(Self {
+            name: $client.name.clone(),
+            provider: $provider.into(),
+            context: RenderContext_Client {
+                name: $client.name.clone(),
+                provider: $client.provider.clone(),
+                default_role: $properties.default_role.clone(),
+            },
+            properties: $properties,
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                anthropic_system_constraints: false,
+                resolve_media_urls: false,
+            },
+            retry_policy: $client.retry_policy.clone(),
+            client: create_client()?,
+        })
+    };
     ($client:ident, $properties:ident, $provider:expr) => {
         Ok(Self {
             name: $client.name().into(),
@@ -429,18 +450,63 @@ macro_rules! make_openai_client {
 
 impl OpenAIClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
-        let properties = resolve_openai_properties(client, ctx)?;
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
+        let properties = resolve_openai_properties(properties, ctx)?;
         make_openai_client!(client, properties, "openai")
     }
 
     pub fn new_ollama(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
-        let properties = resolve_ollama_properties(client, ctx)?;
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
+        let properties = resolve_ollama_properties(properties, ctx)?;
         make_openai_client!(client, properties, "ollama")
     }
 
     pub fn new_azure(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
-        let properties = resolve_azure_properties(client, ctx)?;
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
+        let properties = resolve_azure_properties(properties, ctx)?;
         make_openai_client!(client, properties, "azure")
+    }
+
+    pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+        let properties = resolve_openai_properties(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            &ctx,
+        )?;
+        make_openai_client!(client, properties, "openai", dynamic)
+    }
+
+    pub fn dynamic_new_ollama(
+        client: &ClientProperty,
+        ctx: &RuntimeContext,
+    ) -> Result<OpenAIClient> {
+        let properties = resolve_ollama_properties(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            ctx,
+        )?;
+        make_openai_client!(client, properties, "ollama", dynamic)
+    }
+
+    pub fn dynamic_new_azure(
+        client: &ClientProperty,
+        ctx: &RuntimeContext,
+    ) -> Result<OpenAIClient> {
+        let properties = resolve_azure_properties(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            ctx,
+        )?;
+        make_openai_client!(client, properties, "azure", dynamic)
     }
 }
 

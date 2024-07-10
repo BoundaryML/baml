@@ -13,9 +13,9 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use crate::{
-    internal::llm_client::LLMResponse, tracing::api_wrapper::core_types::Role,
-    type_builder::TypeBuilder, FunctionResult, RuntimeContext, RuntimeContextManager, SpanCtx,
-    TestResponse, TraceStats,
+    client_registry::ClientRegistry, internal::llm_client::LLMResponse,
+    tracing::api_wrapper::core_types::Role, type_builder::TypeBuilder, FunctionResult,
+    RuntimeContext, RuntimeContextManager, SpanCtx, TestResponse, TraceStats,
 };
 
 use self::api_wrapper::{
@@ -102,14 +102,13 @@ impl BamlTracer {
         &self,
         function_name: &str,
         ctx: &RuntimeContextManager,
-        tb: Option<&TypeBuilder>,
         params: &BamlMap<String, BamlValue>,
-    ) -> (Option<TracingSpan>, RuntimeContext) {
+    ) -> Option<TracingSpan> {
         self.trace_stats.guard().start();
         let span_id = ctx.enter(function_name);
         log::trace!("Entering span {:#?} in {:?}", span_id, function_name);
         if !self.enabled {
-            return (None, ctx.create_ctx(tb));
+            return None;
         }
         let span = TracingSpan {
             span_id,
@@ -117,7 +116,7 @@ impl BamlTracer {
             start_time: web_time::SystemTime::now(),
         };
 
-        (Some(span), ctx.create_ctx(tb))
+        Some(span)
     }
 
     #[cfg(target_arch = "wasm32")]

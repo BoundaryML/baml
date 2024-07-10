@@ -5,8 +5,8 @@ use baml_types::BamlValue;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 
 use crate::{
-    internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
-    RuntimeContext,
+    client_registry::ClientProperty, internal::prompt_renderer::PromptRenderer,
+    runtime_interface::InternalClientLookup, RuntimeContext,
 };
 
 use self::{
@@ -53,25 +53,6 @@ pub enum LLMPrimitiveProvider {
     Aws(aws::AwsClient),
 }
 
-// impl WithRetryPolicy for LLMPrimitiveProvider {
-//     fn retry_policy_name(&self) -> Option<&str> {
-//         match self {
-//             LLMPrimitiveProvider::OpenAI(client) => {
-//                 LLMPrimitive2::OpenAIClient(client).retry_policy_name()
-//             }
-//             LLMPrimitiveProvider::Anthropic(client) => {
-//                 LLMPrimitive2::AnthropicClient(client).retry_policy_name()
-//             }
-//             LLMPrimitiveProvider::Google(client) => {
-//                 LLMPrimitive2::GoogleClient(client).retry_policy_name()
-//             }
-//             LLMPrimitiveProvider::Aws(client) => {
-//                 LLMPrimitive2::AwsClient(client).retry_policy_name()
-//             }
-//         }
-//     }
-// }
-
 macro_rules! match_llm_provider {
     // Define the variants inside the macro
     ($self:expr, $method:ident, async $(, $args:tt)*) => {
@@ -96,6 +77,42 @@ macro_rules! match_llm_provider {
 impl WithRetryPolicy for LLMPrimitiveProvider {
     fn retry_policy_name(&self) -> Option<&str> {
         match_llm_provider!(self, retry_policy_name)
+    }
+}
+
+impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
+    type Error = anyhow::Error;
+
+    fn try_from((value, ctx): (&ClientProperty, &RuntimeContext)) -> Result<Self> {
+        match value.provider.as_str() {
+            "openai" => OpenAIClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::OpenAI),
+            "azure-openai" => {
+                OpenAIClient::dynamic_new_azure(value, ctx).map(LLMPrimitiveProvider::OpenAI)
+            }
+            "ollama" => {
+                OpenAIClient::dynamic_new_ollama(value, ctx).map(LLMPrimitiveProvider::OpenAI)
+            }
+            "anthropic" => {
+                AnthropicClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Anthropic)
+            }
+            "google-ai" => GoogleClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Google),
+            other => {
+                let options = [
+                    "openai",
+                    "anthropic",
+                    "ollama",
+                    "google-ai",
+                    "azure-openai",
+                    "fallback",
+                    "round-robin",
+                ];
+                anyhow::bail!(
+                    "Unsupported provider: {}. Available ones are: {}",
+                    other,
+                    options.join(", ")
+                )
+            }
+        }
     }
 }
 
@@ -217,3 +234,5 @@ impl LLMPrimitiveProvider {
         match_llm_provider!(self, request_options)
     }
 }
+
+use super::resolve_properties_walker;

@@ -1,5 +1,5 @@
 ---
-title: Others (e.g. openrouter)
+title: Others (e.g. groq, openrouter)
 ---
 
 Since many model providers are settling on following the OpenAI Chat API spec, the recommended way to use them is to use the `openai` provider.
@@ -23,6 +23,42 @@ client<llm> MyClient {
       "HTTP-Referer" "YOUR-SITE-URL" // Optional
       "X-Title" "YOUR-TITLE" // Optional
     }
+  }
+}
+```
+
+### Groq
+
+https://groq.com - Fast AI Inference
+
+You can use Groq's openai interface with BAML. 
+
+See https://console.groq.com/docs/openai for more information.
+
+```rust BAML
+client<llm> MyClient {
+  provider openai
+  options {
+    base_url "https://api.groq.com/openai/v1"
+    api_key env.GROQ_API_KEY
+    model "llama3-70b-8192"
+  }
+}
+```
+
+### Together AI
+
+https://www.together.ai/ - The fastest cloud platform for building and running generative AI.
+
+See https://docs.together.ai/docs/openai-api-compatibility for more information.
+
+```rust BAML
+client<llm> MyClient {
+  provider openai
+  options {
+    base_url "https://api.together.ai/v1"
+    api_key env.TOGETHER_API_KEY
+    model "meta-llama/Llama-3-70b-chat-hf"
   }
 }
 ```

@@ -1,4 +1,5 @@
 use crate::parse_ts_types;
+use crate::types::client_registry::ClientRegistry;
 use crate::types::function_result_stream::FunctionResultStream;
 use crate::types::function_results::FunctionResult;
 use crate::types::runtime_ctx_manager::RuntimeContextManager;
@@ -83,6 +84,7 @@ impl BamlRuntime {
         #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
     ) -> napi::Result<JsObject> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -100,10 +102,11 @@ impl BamlRuntime {
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
 
         let fut = async move {
             let result = baml_runtime
-                .call_function(function_name, &args_map, &ctx_mng, tb.as_ref())
+                .call_function(function_name, &args_map, &ctx_mng, tb.as_ref(), cb.as_ref())
                 .await;
 
             result
@@ -124,6 +127,7 @@ impl BamlRuntime {
         #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] cb: Option<JsFunction>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
+        client_registry: Option<&ClientRegistry>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -139,9 +143,16 @@ impl BamlRuntime {
 
         let ctx = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
+        let client_registry = client_registry.map(|cb| cb.inner.clone());
         let stream = self
             .inner
-            .stream_function(function_name, &args_map, &ctx, tb.as_ref())
+            .stream_function(
+                function_name,
+                &args_map,
+                &ctx,
+                tb.as_ref(),
+                client_registry.as_ref(),
+            )
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
 
         let cb = match cb {
@@ -149,7 +160,7 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, tb))
+        Ok(FunctionResultStream::new(stream, cb, tb, client_registry))
     }
 
     #[napi]

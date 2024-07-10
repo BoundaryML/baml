@@ -56,7 +56,7 @@ pub trait ExperimentalTracingInterface {
         function_name: &str,
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
-    ) -> (Option<TracingSpan>, RuntimeContext);
+    ) -> Option<TracingSpan>;
 
     #[cfg(target_arch = "wasm32")]
     #[allow(async_fn_in_trait)]

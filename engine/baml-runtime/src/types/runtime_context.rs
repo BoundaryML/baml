@@ -4,7 +4,9 @@ use indexmap::IndexMap;
 use internal_baml_core::ir::{repr::Expression, FieldType};
 use serde;
 use serde_json;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
+
+use crate::internal::llm_client::llm_provider::LLMProvider;
 
 #[derive(Debug)]
 pub struct SpanCtx {
@@ -36,6 +38,7 @@ pub struct RuntimeClassOverride {
 pub struct RuntimeContext {
     pub env: HashMap<String, String>,
     pub tags: HashMap<String, BamlValue>,
+    pub client_overrides: Option<(Option<String>, HashMap<String, Arc<LLMProvider>>)>,
     pub class_override: IndexMap<String, RuntimeClassOverride>,
     pub enum_overrides: IndexMap<String, RuntimeEnumOverride>,
 }
