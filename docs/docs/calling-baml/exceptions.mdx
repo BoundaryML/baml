@@ -20,43 +20,38 @@ Not available yet
 </CodeGroup>
 
 
-## Exceptions
-
-### BamlError
+## BamlError
 
 Base class for all BAML exceptions.  
 
 <ResponseField
-  name="error"
+  name="message"
   type="string"
 >
   A human-readable error message.
 </ResponseField>
 
-### BamlParseError
+### BamlInvalidArgumentError
 
 Subclass of `BamlError`.
 
-Raised when BAML fails to parse a response into a valid object.
+Raised when one or multiple arguments to a function are invalid.
 
-<ResponseField
-  name="raw_llm_response"
-  type="string"
->
-  The raw text from the LLM that failed to parse into the expected return type of a function.
-</ResponseField>
-
-### BamlLLMError
+### BamlClientError
 
 Subclass of `BamlError`.
 
-Raised when the call to the LLM fails (only raises the last error).
+Raised when a client fails to return a valid response.
 
-#### BamlRequestError
+<Warning>
+In the case of aggregate clients like `fallback` or those with `retry_policy`, only the last client's error is raised.  
+</Warning>
 
-Subclass of `BamlLLMError`.
+#### BamlClientHttpError
 
-Raised when the request to the LLM fails with a non-200 status code.
+Subclass of `BamlClientError`.
+
+Raised when the HTTP request made by a client fails with a non-200 status code.
 
 <ResponseField
   name="status_code"
@@ -66,6 +61,8 @@ Raised when the request to the LLM fails with a non-200 status code.
 
 Common status codes are:
 
+- 1: Other
+- 2: Other
 - 400: Bad Request
 - 401: Unauthorized
 - 403: Forbidden
@@ -74,16 +71,15 @@ Common status codes are:
 - 500: Internal Server Error
 </ResponseField>
 
+### BamlValidationError
 
-#### BamlInvalidResponseError
+Subclass of `BamlError`.
 
-Subclass of `BamlLLMError`.
-
-Raised when the response from the network request is not in the expected format.
+Raised when BAML fails to parse a string from the LLM into the specified object.
 
 <ResponseField
-  name="text"
+  name="raw_llm_response"
   type="string"
 >
-  The body of the response as a string.
+  The raw text from the LLM that failed to parse into the expected return type of a function.
 </ResponseField>

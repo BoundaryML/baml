@@ -152,7 +152,7 @@
         "docs/calling-baml/streaming",
         "docs/calling-baml/concurrent-calls",
         "docs/calling-baml/multi-modal",
-        "docs/calling-baml/error-handling"
+        "docs/calling-baml/exceptions"
       ]
     },
     {
