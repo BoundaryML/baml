@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.50.0](https://github.com/boundaryml/baml/compare/0.49.0..0.50.0) - 2024-07-11
+
+### Bug Fixes
+- [Playground] Environment variable button is now visible on all themes (#762) - ([adc4da1](https://github.com/boundaryml/baml/commit/adc4da1fa36cc9c30ea36e25de1a6cefcce0bc97)) - aaronvg
+- [Playground] Fix to cURL rendering and mime_type overriding (#763) - ([67f9c6a](https://github.com/boundaryml/baml/commit/67f9c6add5ea8bbbd5ee82c28476fe0ebbefe344)) - Anish Palakurthi
+
+### Features
+- [Runtime] Add support for clients that change at runtime using ClientRegistry (#683) - ([c0fb454](https://github.com/boundaryml/baml/commit/c0fb4540d9193194fcafd7fcef71468442d9e6fa)) - hellovai
+  https://docs.boundaryml.com/docs/calling-baml/client-registry
+
+
+### Documentation
+- Add more documentation for TypeBuilder (#767) - ([85dc8ab](https://github.com/boundaryml/baml/commit/85dc8ab41e0df3267249a1efc4a95f010e52cc73)) - Samuel Lijin
+
 ## [0.49.0](https://github.com/boundaryml/baml/compare/0.46.0..0.49.0) - 2024-07-08
 
 ### Bug Fixes
