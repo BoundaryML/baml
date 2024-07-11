@@ -444,7 +444,7 @@ export const orchestrationGraph = atom((get) => {
       // Deserialize the JsValue to a JavaScript object
       const scopeArray = scopeInfo as any[] // You can define a TypeScript interface for better typing
       // console.log(`---------`)
-      console.log(`Outer Index: ${indexOuter}`)
+      // console.log(`Outer Index: ${indexOuter}`)
       let stackGroup: number[] = [-1]
 
       scopeArray.forEach((scope) => {
@@ -454,15 +454,15 @@ export const orchestrationGraph = atom((get) => {
 
         // Add index to stack_group if it exists
         if (scope.index !== undefined) {
-          console.log(`Index: ${scope.index}`)
+          // console.log(`Index: ${scope.index}`)
           stackGroup.push(scope.index)
         } else if (scope.count !== undefined) {
-          console.log(`Retry Count: ${scope.count}`)
+          // console.log(`Retry Count: ${scope.count}`)
           stackGroup.push(scope.count)
         }
       })
-      console.log(`Stack Group: ${stackGroup}`)
-
+      // console.log(`Stack Group: ${stackGroup}`)
+      //
       var typeScope: any
 
       if (scopeArray.length > 1) {
@@ -511,9 +511,9 @@ export const orchestrationGraph = atom((get) => {
 
       // ... existing code ...
       if (stackGroup[stackGroup.length - 1] == 0) {
-        console.log(`Entrant Node Found`)
+        // console.log(`Entrant Node Found`)
         if (typeScope.type !== 'Direct') {
-          console.log(`Entrant Node is not a Direct Scope`)
+          // console.log(`Entrant Node is not a Direct Scope`)
           nodes.push({
             name: 'entrant_node',
             orch_index: -1,
@@ -534,19 +534,19 @@ export const orchestrationGraph = atom((get) => {
     }
   }
 
-  nodes.forEach((node) => {
-    console.log(`New Node -----------------`)
-    console.log(`Node Name: ${node.name}, Orchestration Index: ${node.orch_index}, Type: ${node.type}`)
-    if (node.retry_count !== undefined) {
-      console.log(`Retry Count: ${node.retry_count}, Retry Delay: ${node.retry_delay}`)
-    }
-    if (node.round_robin_strategy !== undefined) {
-      console.log(`Round Robin Strategy: ${node.round_robin_strategy}`)
-    }
-    if (node.stack_group.length > 0) {
-      console.log(`Stack Group: ${node.stack_group}`)
-    }
-  })
+  // nodes.forEach((node) => {
+  //   console.log(`New Node -----------------`)
+  //   console.log(`Node Name: ${node.name}, Orchestration Index: ${node.orch_index}, Type: ${node.type}`)
+  //   if (node.retry_count !== undefined) {
+  //     console.log(`Retry Count: ${node.retry_count}, Retry Delay: ${node.retry_delay}`)
+  //   }
+  //   if (node.round_robin_strategy !== undefined) {
+  //     console.log(`Round Robin Strategy: ${node.round_robin_strategy}`)
+  //   }
+  //   if (node.stack_group.length > 0) {
+  //     console.log(`Stack Group: ${node.stack_group}`)
+  //   }
+  // })
 
   // edges.forEach((edge) => {
   //   console.log(`Edge from Node ${edge.from_node} to Node ${edge.to_node}`)

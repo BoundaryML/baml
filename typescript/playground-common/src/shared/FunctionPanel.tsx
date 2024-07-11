@@ -126,6 +126,7 @@ const ClientGraph: React.FC = () => {
     if (stackGroup && stackGroup.length > 1) {
       groupParent = stackGroup.slice(0, -1).toString()
     }
+
     renderNodes.push({
       id: stackGroup.toString(),
       data: {
@@ -135,7 +136,7 @@ const ClientGraph: React.FC = () => {
         x: 0,
         y: counter * 100,
       },
-      type: 'group',
+      type: node.type == 'Entrant' ? 'entrant' : 'group',
       style: { backgroundColor: 'blue', width: 300, height: 300 },
       ...(groupParent ? { extent: 'parent', parentId: groupParent } : {}),
     })
@@ -162,11 +163,13 @@ const ClientGraph: React.FC = () => {
     }
   }
   renderNodes.forEach((node) => {
-    const typeInfo = node.type === 'group' ? 'Type: group, ' : ''
-    console.log(
-      `${typeInfo}Node ID: ${node.id}, Label: ${node.data.label}, Position: (${node.position.x}, ${node.position.y}), ` +
-        `Extent: ${node.extent ?? 'N/A'}, Parent ID: ${node.parentId ?? 'N/A'}`,
-    )
+    if (node.type === 'group') {
+      console.log(`Group Node ID: ${node.id}, Parent ID: ${node.parentId ?? 'N/A'}`)
+    } else if (node.type === 'entrant') {
+      console.log(`Entrant Node ID: ${node.id}, Parent ID: ${node.parentId ?? 'N/A'}`)
+    } else {
+      console.log(`Label: ${node.data.label}, Parent ID/SG: ${node.parentId ?? 'N/A'}`)
+    }
   })
 
   const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({

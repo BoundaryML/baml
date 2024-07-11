@@ -44,7 +44,17 @@ function TestFallbackClient() -> string {
     Say a haiku about mexico.
   "#
 }
-
+client<llm> Lottery_SimpleSyntax {
+  provider baml-round-robin
+  retry_policy Constant
+  options {
+    strategy [
+      GPT35
+      Claude
+      
+    ]
+  }
+}
 function TestRoundRobin() ->string{
   client Lottery_SimpleSyntax
 
