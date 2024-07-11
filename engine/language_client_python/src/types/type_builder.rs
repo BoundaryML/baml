@@ -6,6 +6,7 @@ use pyo3::{
     types::{PyTuple, PyTupleMethods},
     Bound, PyResult,
 };
+use pyo3::{PyObject, Python, ToPyObject};
 
 crate::lang_wrapper!(TypeBuilder, type_builder::TypeBuilder);
 crate::lang_wrapper!(EnumBuilder, type_builder::EnumBuilder, sync_thread_safe, name: String);
@@ -51,6 +52,17 @@ impl TypeBuilder {
 
     pub fn optional(&self, inner: &FieldType) -> FieldType {
         inner.inner.lock().unwrap().clone().as_optional().into()
+    }
+
+    #[pyo3(signature = (merge))]
+    pub fn union<'py>(&self, merge: Bound<'_, PyList>) -> PyResult<FieldType> {
+        let mut types = vec![];
+        for idx in 0..merge.len()? {
+            let item = merge.get_item(idx)?;
+            let item = item.downcast::<FieldType>()?;
+            types.push(item.borrow().inner.lock().unwrap().clone());
+        }
+        Ok(baml_types::FieldType::union(types).into())
     }
 
     pub fn string(&self) -> FieldType {

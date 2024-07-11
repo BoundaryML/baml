@@ -41,7 +41,7 @@ pub struct RetryLLMResponse {
     pub failed: Vec<LLMResponse>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum LLMResponse {
     Success(LLMCompleteResponse),
     LLMFailure(LLMErrorResponse),
@@ -70,7 +70,7 @@ impl LLMResponse {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct LLMErrorResponse {
     pub client: String,
     pub model: Option<String>,
@@ -84,7 +84,7 @@ pub struct LLMErrorResponse {
     pub code: ErrorCode,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ErrorCode {
     InvalidAuthentication, // 401
     NotSupported,          // 403
@@ -135,7 +135,7 @@ impl ErrorCode {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct LLMCompleteResponse {
     pub client: String,
     pub model: String,
