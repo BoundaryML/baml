@@ -168,7 +168,15 @@
     },
     {
       "group": "Reference",
-      "pages": ["contact"]
+      "pages": [
+        {
+          "group": "Incidents",
+          "pages": [
+            "docs/incidents/2024-07-10-ssrf-issue-in-fiddle-proxy"
+          ]
+        },
+        "contact"
+      ]
     }
   ],
   "footerSocials": {
