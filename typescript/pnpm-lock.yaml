@@ -525,7 +525,7 @@ importers:
         specifier: ^4.7.1
         version: 4.7.1
       uuid:
-        specifier: ^9.0.0
+        specifier: ^9.0.1
         version: 9.0.1
       wavesurfer.js:
         specifier: ^7.7.15
@@ -550,7 +550,7 @@ importers:
         specifier: ^18.2.24
         version: 18.3.0
       '@types/uuid':
-        specifier: ^9.0.2
+        specifier: ^9.0.8
         version: 9.0.8
       '@types/vscode-webview':
         specifier: ^1.57.0
@@ -1012,7 +1012,7 @@ importers:
         specifier: ^4.7.1
         version: 4.7.1
       uuid:
-        specifier: ^9.0.0
+        specifier: ^9.0.1
         version: 9.0.1
       wavesurfer.js:
         specifier: ^7.7.15
@@ -1039,6 +1039,9 @@ importers:
       '@types/uglify-js':
         specifier: ^3.17.5
         version: 3.17.5
+      '@types/uuid':
+        specifier: ^10.0.0
+        version: 10.0.0
       '@types/vscode-webview':
         specifier: ^1.57.0
         version: 1.57.5
@@ -5509,6 +5512,10 @@ packages:
   /@types/unist@3.0.2:
     resolution: {integrity: sha512-dqId9J8K/vGi5Zr7oo212BGii5m3q5Hxlkwy3WpYuKPklmBEvsbMYYyLxAQpSffdLl/gdW0XUpKWFvYmyoWCoQ==}
     dev: false
+
+  /@types/uuid@10.0.0:
+    resolution: {integrity: sha512-7gqG38EyHgyP1S+7+xomFtL+ZNHcKv6DwNaCZmJmo1vgMugyF3TCnXVg4t1uk89mLNwnLtnY3TpOpCOyp1/xHQ==}
+    dev: true
 
   /@types/uuid@9.0.8:
     resolution: {integrity: sha512-jg+97EGIcY9AGHJJRaaPVgetKDsrTgbRjQ5Msgjh/DQKEFl0DtyRr/VCOyD1T2R1MNeWPK/u7JoGhlDZnKBAfA==}

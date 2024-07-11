@@ -41,7 +41,7 @@
     "@types/papaparse": "^5.3.14",
     "@types/react": "^18.2.74",
     "@types/react-dom": "^18.2.24",
-    "@types/uuid": "^9.0.2",
+    "@types/uuid": "^9.0.8",
     "@types/vscode-webview": "^1.57.0",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
@@ -121,7 +121,7 @@
     "tailwind-merge": "^2.0.0",
     "tailwindcss-animate": "^1.0.7",
     "unique-names-generator": "^4.7.1",
-    "uuid": "^9.0.0",
+    "uuid": "^9.0.1",
     "wavesurfer.js": "^7.7.15",
     "zod": "^3.22.4"
   },
