@@ -54,7 +54,6 @@ app.use(
     logger: console,
     on: {
       proxyReq: (proxyReq, req, res) => {
-        console.log('pre-proxy request', req)
         for (const [url, headers] of Object.entries(API_KEY_INJECTION_ALLOWED)) {
           if (req.headers['baml-original-url'] == url) {
             for (const [header, value] of Object.entries(headers)) {
