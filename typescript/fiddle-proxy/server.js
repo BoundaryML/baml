@@ -79,7 +79,7 @@ app.use(
           const proxyOrigin = new URL(bamlOriginalUrl).origin
           // It is very important that we ONLY resolve against API_KEY_INJECTION_ALLOWED
           // by using the URL origin! (i.e. NOT using str.startsWith - the latter can still
-          // leak API keys to malicious subdomains e.g. https://api.openai.com.evil.com
+          // leak API keys to malicious subdomains e.g. https://api.openai.com.evil.com)
           const headers = API_KEY_INJECTION_ALLOWED[proxyOrigin]
           if (headers === undefined) {
             return
