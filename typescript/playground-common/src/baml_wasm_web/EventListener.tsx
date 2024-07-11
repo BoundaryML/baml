@@ -437,14 +437,14 @@ export const orchestrationGraph = atom((get) => {
     var edges: Edge[] = []
     let prevEdge = -1
 
-    for (const scope of scopes) {
+    for (const [index, scope] of scopes.entries()) {
       // console.log(`scope: ${scope.name()}`)
       const scopeInfo = scope.get_orchestration_scope_info()
 
       // Deserialize the JsValue to a JavaScript object
       const scopeArray = scopeInfo as any[] // You can define a TypeScript interface for better typing
       // console.log(`---------`)
-      // console.log(`Outer Index: ${indexOuter}`)
+      console.log(`Outer Index: ${indexOuter}`)
       let stackGroup: number[] = [-1]
 
       scopeArray.forEach((scope) => {
@@ -454,12 +454,18 @@ export const orchestrationGraph = atom((get) => {
 
         // Add index to stack_group if it exists
         if (scope.index !== undefined) {
+          console.log(`Index: ${scope.index}`)
           stackGroup.push(scope.index)
+        } else if (scope.count !== undefined) {
+          console.log(`Retry Count: ${scope.count}`)
+          stackGroup.push(scope.count)
         }
       })
+      console.log(`Stack Group: ${stackGroup}`)
 
       var typeScope: any
-      if (stackGroup.length > 1) {
+
+      if (scopeArray.length > 1) {
         typeScope = scopeArray[scopeArray.length - 2]
       } else {
         typeScope = scopeArray[scopeArray.length - 1]
@@ -503,6 +509,20 @@ export const orchestrationGraph = atom((get) => {
           console.error('Unknown scope type')
       }
 
+      // ... existing code ...
+      if (stackGroup[stackGroup.length - 1] == 0) {
+        console.log(`Entrant Node Found`)
+        if (typeScope.type !== 'Direct') {
+          console.log(`Entrant Node is not a Direct Scope`)
+          nodes.push({
+            name: 'entrant_node',
+            orch_index: -1,
+            type: 'Entrant',
+            stack_group: stackGroup.slice(0, -1),
+          })
+        }
+      }
+      // ... existing code ...
       // Add the ClientNode object to the nodes array
       nodes.push(clientNode)
       if (prevEdge !== -1) {
@@ -514,19 +534,19 @@ export const orchestrationGraph = atom((get) => {
     }
   }
 
-  // nodes.forEach((node) => {
-  //   console.log(`New Node -----------------`)
-  //   console.log(`Node Name: ${node.name}, Orchestration Index: ${node.orch_index}, Type: ${node.type}`)
-  //   if (node.retry_count !== undefined) {
-  //     console.log(`Retry Count: ${node.retry_count}, Retry Delay: ${node.retry_delay}`)
-  //   }
-  //   if (node.round_robin_strategy !== undefined) {
-  //     console.log(`Round Robin Strategy: ${node.round_robin_strategy}`)
-  //   }
-  //   if (node.stack_group.length > 0) {
-  //     console.log(`Stack Group: ${node.stack_group}`)
-  //   }
-  // })
+  nodes.forEach((node) => {
+    console.log(`New Node -----------------`)
+    console.log(`Node Name: ${node.name}, Orchestration Index: ${node.orch_index}, Type: ${node.type}`)
+    if (node.retry_count !== undefined) {
+      console.log(`Retry Count: ${node.retry_count}, Retry Delay: ${node.retry_delay}`)
+    }
+    if (node.round_robin_strategy !== undefined) {
+      console.log(`Round Robin Strategy: ${node.round_robin_strategy}`)
+    }
+    if (node.stack_group.length > 0) {
+      console.log(`Stack Group: ${node.stack_group}`)
+    }
+  })
 
   // edges.forEach((edge) => {
   //   console.log(`Edge from Node ${edge.from_node} to Node ${edge.to_node}`)

@@ -86,23 +86,9 @@ interface RenderNode {
   type?: string
   data: { label: string }
   position: { x: number; y: number }
-  style: { backgroundColor: string }
-}
-
-const getNodeColor = (type?: string) => {
-  switch (type) {
-    //fallback should never occur -- it is a group of nodes, not a node itself
-    // case 'Fallback':
-    //   return 'pink'
-    case 'RoundRobin':
-      return 'red'
-    case 'Direct':
-      return 'green'
-    case 'Retry':
-      return 'orange'
-    default:
-      return 'gray'
-  }
+  style?: { backgroundColor: string; width?: number; height?: number }
+  parentId?: string
+  extent?: 'parent' | undefined // Update extent type
 }
 
 const ClientGraph: React.FC = () => {
@@ -112,20 +98,76 @@ const ClientGraph: React.FC = () => {
   }
 
   console.log(`length of nodes: ${nodes.length}`)
-  for (const node of nodes) {
-    console.log(node)
+  // for (const node of nodes) {
+  //   console.log(node)
+  // }
+
+  const getNodeColor = (type?: string) => {
+    switch (type) {
+      case 'RoundRobin':
+        return 'red'
+      case 'Direct':
+        return 'green'
+      case 'Retry':
+        return 'orange'
+      default:
+        return 'gray'
+    }
   }
 
-  const renderNodes: RenderNode[] = nodes.map((node, idx) => ({
-    id: idx.toString(),
-    style: { backgroundColor: getNodeColor(node.type) },
-    data: { label: node.name },
-    position: { x: 0, y: idx * 100 },
-  }))
+  const renderNodes: RenderNode[] = []
+  var counter = 1
 
-  // for (const edge of edges) {
-  //   console.log(edge.from_node, edge.to_node)
-  // }
+  for (let idx = 0; idx < nodes.length; idx++) {
+    const node = nodes[idx]
+    var stackGroup = node.stack_group
+
+    var groupParent = ''
+    if (stackGroup && stackGroup.length > 1) {
+      groupParent = stackGroup.slice(0, -1).toString()
+    }
+    renderNodes.push({
+      id: stackGroup.toString(),
+      data: {
+        label: stackGroup.toString(),
+      },
+      position: {
+        x: 0,
+        y: counter * 100,
+      },
+      type: 'group',
+      style: { backgroundColor: 'blue', width: 300, height: 300 },
+      ...(groupParent ? { extent: 'parent', parentId: groupParent } : {}),
+    })
+
+    counter += 1
+
+    if (node.type !== 'Entrant') {
+      renderNodes.push({
+        id: idx.toString(),
+        style: {
+          backgroundColor: getNodeColor(node.type),
+        },
+        data: {
+          label: node.name,
+        },
+        position: {
+          x: 0,
+          y: counter * 100,
+        },
+        // extent: 'parent',
+        parentId: stackGroup.toString(),
+      })
+      counter += 1
+    }
+  }
+  renderNodes.forEach((node) => {
+    const typeInfo = node.type === 'group' ? 'Type: group, ' : ''
+    console.log(
+      `${typeInfo}Node ID: ${node.id}, Label: ${node.data.label}, Position: (${node.position.x}, ${node.position.y}), ` +
+        `Extent: ${node.extent ?? 'N/A'}, Parent ID: ${node.parentId ?? 'N/A'}`,
+    )
+  })
 
   const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
     id: idx.toString(),
@@ -139,6 +181,12 @@ const ClientGraph: React.FC = () => {
   const onConnect = useCallback((connection: Connection) => {
     setFlowEdges((eds) => addEdge(connection, eds))
   }, [])
+
+  // Synchronize flowNodes and flowEdges with nodes and edges
+  React.useEffect(() => {
+    setFlowNodes(renderNodes)
+    setFlowEdges(renderEdges)
+  }, [nodes, edges])
 
   return (
     <div style={{ height: '100vh', width: '100%' }}>
@@ -157,7 +205,6 @@ const ClientGraph: React.FC = () => {
     </div>
   )
 }
-
 const PromptPreview: React.FC = () => {
   const promptPreview = useAtomValue(renderPromptAtom)
   const { showCurlRequest } = useAppState()

@@ -14,10 +14,12 @@ client<llm> FallbackClient {
     // first 2 clients are expected to fail.
     strategy [
       FaultyClient,
+      // Lottery_SimpleSyntax
+
       RetryClientConstant,
+      RetryClientExponential
       Gemini
-      Lottery_SimpleSyntax
-      SecondaryFallback
+      // SecondaryFallback
       
     ]
   }
@@ -29,7 +31,8 @@ client<llm> SecondaryFallback {
     strategy [
       FaultyClient
       RetryClientExponential
-      GPT4
+      RetryClientConstant
+      // GPT4
     ]
   }
 }
