@@ -279,8 +279,8 @@ impl ExecutionScope {
                 .unwrap();
                 js_sys::Reflect::set(
                     &obj,
-                    &JsValue::from_str("strategy"),
-                    &JsValue::from_str(&format!("{:?}", strategy)),
+                    &JsValue::from_str("strategy_name"),
+                    &JsValue::from_str(&format!("{:?}", strategy.name)),
                 )
                 .unwrap();
                 js_sys::Reflect::set(

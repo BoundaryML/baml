@@ -71,6 +71,7 @@
     "tailwind-merge": "^2.0.0",
     "tailwindcss-animate": "^1.0.7",
     "unique-names-generator": "^4.7.1",
+    "uuid": "^9.0.0",
     "wavesurfer.js": "^7.7.15",
     "zod": "^3.22.4"
   },

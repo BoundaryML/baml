@@ -18,8 +18,8 @@ import {
   selectedFunctionAtom,
   curlAtom,
   streamCurl,
-  orchestrationGraph,
-  ClientNode,
+  orchestration_nodes,
+  GroupEntry,
   Edge,
 } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
@@ -92,119 +92,51 @@ interface RenderNode {
 }
 
 const ClientGraph: React.FC = () => {
-  const { nodes, edges } = (useAtomValue(orchestrationGraph) as { nodes: ClientNode[]; edges: Edge[] }) ?? {
-    nodes: [] as ClientNode[],
+  const { nodes, edges } = (useAtomValue(orchestration_nodes) as { nodes: GroupEntry[]; edges: Edge[] }) ?? {
+    nodes: [] as GroupEntry[],
     edges: [] as Edge[],
   }
 
-  console.log(`length of nodes: ${nodes.length}`)
-  // for (const node of nodes) {
-  //   console.log(node)
+  // const renderNodes: RenderNode[] = []
+  // for (let idx = 0; idx < nodes.length; idx++) {
+  //   const node = nodes[idx]
+  //   renderNodes.push({
+  //     id: node.gid,
+  //     data: { label: node.gid },
+  //     position: { x: 0, y: 0 },
+  //     style: { backgroundColor: 'lightblue', width: 100, height: 100 },
+  //   })
   // }
 
-  const getNodeColor = (type?: string) => {
-    switch (type) {
-      case 'RoundRobin':
-        return 'red'
-      case 'Direct':
-        return 'green'
-      case 'Retry':
-        return 'orange'
-      default:
-        return 'gray'
-    }
-  }
+  // const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
+  //   id: idx.toString(),
+  //   source: edge.from_node,
+  //   target: edge.to_node,
+  // }))
 
-  const renderNodes: RenderNode[] = []
-  var counter = 1
+  // const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(renderNodes)
+  // const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(renderEdges)
 
-  for (let idx = 0; idx < nodes.length; idx++) {
-    const node = nodes[idx]
-    var stackGroup = node.stack_group
+  // const onConnect = useCallback((connection: Connection) => {
+  //   setFlowEdges((eds) => addEdge(connection, eds))
+  // }, [])
 
-    var groupParent = ''
-    if (stackGroup && stackGroup.length > 1) {
-      groupParent = stackGroup.slice(0, -1).toString()
-    }
-
-    renderNodes.push({
-      id: stackGroup.toString(),
-      data: {
-        label: stackGroup.toString(),
-      },
-      position: {
-        x: 0,
-        y: counter * 100,
-      },
-      type: node.type == 'Entrant' ? 'entrant' : 'group',
-      style: { backgroundColor: 'blue', width: 300, height: 300 },
-      ...(groupParent ? { extent: 'parent', parentId: groupParent } : {}),
-    })
-
-    counter += 1
-
-    if (node.type !== 'Entrant') {
-      renderNodes.push({
-        id: idx.toString(),
-        style: {
-          backgroundColor: getNodeColor(node.type),
-        },
-        data: {
-          label: node.name,
-        },
-        position: {
-          x: 0,
-          y: counter * 100,
-        },
-        // extent: 'parent',
-        parentId: stackGroup.toString(),
-      })
-      counter += 1
-    }
-  }
-  renderNodes.forEach((node) => {
-    if (node.type === 'group') {
-      console.log(`Group Node ID: ${node.id}, Parent ID: ${node.parentId ?? 'N/A'}`)
-    } else if (node.type === 'entrant') {
-      console.log(`Entrant Node ID: ${node.id}, Parent ID: ${node.parentId ?? 'N/A'}`)
-    } else {
-      console.log(`Label: ${node.data.label}, Parent ID/SG: ${node.parentId ?? 'N/A'}`)
-    }
-  })
-
-  const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
-    id: idx.toString(),
-    source: edge.from_node.toString(),
-    target: edge.to_node.toString(),
-  }))
-
-  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(renderNodes)
-  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(renderEdges)
-
-  const onConnect = useCallback((connection: Connection) => {
-    setFlowEdges((eds) => addEdge(connection, eds))
-  }, [])
-
-  // Synchronize flowNodes and flowEdges with nodes and edges
-  React.useEffect(() => {
-    setFlowNodes(renderNodes)
-    setFlowEdges(renderEdges)
-  }, [nodes, edges])
+  // // Synchronize flowNodes and flowEdges with nodes and edges
+  // React.useEffect(() => {
+  //   setFlowNodes(renderNodes)
+  //   setFlowEdges(renderEdges)
+  // }, [nodes, edges])
 
   return (
     <div style={{ height: '100vh', width: '100%' }}>
-      <ReactFlow
+      {/* <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         fitView
-      >
-        {/* <MiniMap /> */}
-        {/* <Controls /> */}
-        {/* <Background /> */}
-      </ReactFlow>
+      ></ReactFlow> */}
     </div>
   )
 }

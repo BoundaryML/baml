@@ -16,6 +16,7 @@ import type {
   WasmScope,
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { vscode } from '../utils/vscode'
+import { v4 as uuid } from 'uuid'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
@@ -402,156 +403,319 @@ export const renderPromptAtom = atom((get) => {
   }
 })
 
+export interface TypeCount {
+  // options are F (Fallback), R (Retry), D (Direct), B (Round Robin)
+  type: string
+
+  // range from 0 to n
+  name: number | string
+}
+
+const getTypeLetter = (type: string): string => {
+  switch (type) {
+    case 'Fallback':
+      return 'F'
+    case 'Retry':
+      return 'R'
+    case 'Direct':
+      return 'D'
+    case 'RoundRobin':
+      return 'B'
+    default:
+      return 'U'
+  }
+}
+
 export interface ClientNode {
   name: string
-  orch_index: number
+  node_index: number
   type: string
-  stack_group: number[]
-  retry_count?: number
+  identifier: TypeCount[]
   retry_delay?: number
-  round_robin_strategy?: string
+
+  //necessary for identifying unique round robins, as index matching is not enough
+  round_robin_name?: string
 }
 
 export interface Edge {
-  from_node: number
-  to_node: number
+  from_node: string
+  to_node: string
+  weight?: number
 }
 
-export const orchestrationGraph = atom((get) => {
+export interface NodeEntry {
+  gid: ReturnType<typeof uuid>
+  weight?: number
+}
+export interface GroupEntry {
+  letter: string
+  name: string | number
+  gid: ReturnType<typeof uuid>
+  parentGid?: ReturnType<typeof uuid>
+}
+const getScopeInfo = (scope: any) => {
+  switch (scope.type) {
+    case 'Retry':
+      return `Index: ${scope.count}, Retry delay: ${scope.delay}`
+    case 'RoundRobin':
+      return `Index: ${scope.index}, Strategy Name: ${scope.strategy_name}`
+    case 'Fallback':
+      return `Index: ${scope.index}`
+    case 'Direct':
+      return ''
+    default:
+      return 'Unknown scope type'
+  }
+}
+export const orchestration_nodes = atom((get) => {
   const func = get(selectedFunctionAtom)
   const runtime = get(selectedRuntimeAtom)
 
   if (!func || !runtime) {
-    return null
+    return { nodes: [], edges: [] }
   }
 
-  let scopes = func.orchestration_graph(runtime)
+  let wasmScopes = func.orchestration_graph(runtime)
 
-  if (scopes === null) {
+  if (wasmScopes === null) {
     return []
   } else {
-    console.log(`orchestrationGraph: ${scopes.length}`)
+    console.log(`orchestrationGraph: ${wasmScopes.length}`)
     let indexOuter = 0
 
     var nodes: ClientNode[] = []
-    var edges: Edge[] = []
-    let prevEdge = -1
 
-    for (const [index, scope] of scopes.entries()) {
-      // console.log(`scope: ${scope.name()}`)
+    for (const scope of wasmScopes) {
       const scopeInfo = scope.get_orchestration_scope_info()
 
-      // Deserialize the JsValue to a JavaScript object
-      const scopeArray = scopeInfo as any[] // You can define a TypeScript interface for better typing
-      // console.log(`---------`)
-      // console.log(`Outer Index: ${indexOuter}`)
-      let stackGroup: number[] = [-1]
+      // Represents the current node as a path of scopes from the root
+      const scopePath = scopeInfo as any[]
 
-      scopeArray.forEach((scope) => {
-        console.log(
-          `Scope Name: ${scope.name}, Scope type: ${scope.type}, ${scope.type === 'Retry' ? `Retry count: ${scope.count}, Retry delay: ${scope.delay}` : scope.type === 'RoundRobin' ? `Strategy: ${scope.strategy}, Index: ${scope.index}` : scope.type === 'Fallback' ? `Index: ${scope.index}` : scope.type === 'Direct' ? '' : 'Unknown scope type'}`,
-        )
+      let stackGroup: TypeCount[] = []
 
-        // Add index to stack_group if it exists
-        if (scope.index !== undefined) {
-          // console.log(`Index: ${scope.index}`)
-          stackGroup.push(scope.index)
-        } else if (scope.count !== undefined) {
-          // console.log(`Retry Count: ${scope.count}`)
-          stackGroup.push(scope.count)
-        }
+      scopePath.forEach((scope) => {
+        const indexVal =
+          scope.type === 'Retry'
+            ? scope.count
+            : scope.type === 'Direct'
+              ? 0
+              : scope.type === 'RoundRobin'
+                ? scope.strategy_name
+                : scope.index
+
+        stackGroup.push({
+          type: getTypeLetter(scope.type),
+          name: indexVal,
+        })
       })
-      // console.log(`Stack Group: ${stackGroup}`)
-      //
+
       var typeScope: any
 
-      if (scopeArray.length > 1) {
-        typeScope = scopeArray[scopeArray.length - 2]
+      if (scopePath.length > 2) {
+        typeScope = scopePath[scopePath.length - 2]
       } else {
-        typeScope = scopeArray[scopeArray.length - 1]
+        typeScope = scopePath[scopePath.length - 1]
       }
-      const lastScope = scopeArray[scopeArray.length - 1]
+
+      const lastScope = scopePath[scopePath.length - 1]
 
       // Create a new ClientNode object
       const clientNode: ClientNode = {
         name: lastScope.name,
-        orch_index: indexOuter,
+        node_index: indexOuter,
         type: typeScope.type,
-        stack_group: stackGroup,
+        identifier: stackGroup,
       }
 
-      // Populate additional fields based on the last scope type
-
-      //not actually correct right now, we treat every node as direct in this sense and don't have the actual type
       switch (typeScope.type) {
         case 'Retry':
-          // console.log(`Outerindex: ${indexOuter}: Retry Scope`)
-          clientNode.retry_count = typeScope.count
+          clientNode.node_index = typeScope.count
           clientNode.retry_delay = typeScope.delay
           break
         case 'RoundRobin':
-          // console.log(`Outerindex: ${indexOuter}: RoundRobin Scope`)
-
-          clientNode.round_robin_strategy = typeScope.strategy
-          // clientNode.orch_index = typeScope.index
+          clientNode.round_robin_name = typeScope.strategy_name
           break
         case 'Fallback':
-          // console.log(`Outerindex: ${indexOuter}: Fallback Scope`)
           clientNode.type = lastScope.type
-
-          // clientNode.orch_index = typeScope.index
           break
         case 'Direct':
-          // No additional fields for Direct
-          // console.log(`Outerindex: ${indexOuter}: Direct Scope`)
           break
         default:
           console.error('Unknown scope type')
       }
 
-      // ... existing code ...
-      if (stackGroup[stackGroup.length - 1] == 0) {
-        // console.log(`Entrant Node Found`)
-        if (typeScope.type !== 'Direct') {
-          // console.log(`Entrant Node is not a Direct Scope`)
-          nodes.push({
-            name: 'entrant_node',
-            orch_index: -1,
-            type: 'Entrant',
-            stack_group: stackGroup.slice(0, -1),
-          })
-        }
-      }
-      // ... existing code ...
-      // Add the ClientNode object to the nodes array
       nodes.push(clientNode)
-      if (prevEdge !== -1) {
-        edges.push({ from_node: prevEdge, to_node: indexOuter })
-      }
-      prevEdge = indexOuter
 
       indexOuter++
     }
   }
 
-  // nodes.forEach((node) => {
-  //   console.log(`New Node -----------------`)
-  //   console.log(`Node Name: ${node.name}, Orchestration Index: ${node.orch_index}, Type: ${node.type}`)
-  //   if (node.retry_count !== undefined) {
-  //     console.log(`Retry Count: ${node.retry_count}, Retry Delay: ${node.retry_delay}`)
-  //   }
-  //   if (node.round_robin_strategy !== undefined) {
-  //     console.log(`Round Robin Strategy: ${node.round_robin_strategy}`)
-  //   }
-  //   if (node.stack_group.length > 0) {
-  //     console.log(`Stack Group: ${node.stack_group}`)
-  //   }
-  // })
+  for (const node of nodes) {
+    const stackGroupString = node.identifier.map((item: TypeCount) => `${item.type}${item.name}`).join(' | ')
+    console.log(`${stackGroupString}`)
+  }
 
-  // edges.forEach((edge) => {
-  //   console.log(`Edge from Node ${edge.from_node} to Node ${edge.to_node}`)
-  // })
-  return { nodes, edges }
+  //we construct edges between unitNodes
+  var unitNodes: NodeEntry[] = []
+
+  //groups holds all of our nodes that we will show, including group nodes
+  var groups: { [gid: ReturnType<typeof uuid>]: GroupEntry } = {}
+
+  //utility only for building the above two
+  var indexGroups: GroupEntry[] = []
+
+  for (let index = 0; index < nodes.length; index++) {
+    const node = nodes[index]
+
+    let stackGroup: TypeCount[] = node.identifier
+    let parentGid = ''
+
+    console.log(`StackGroup: ${stackGroup.map((item) => `${item.type}${item.name}`).join(' | ')}`)
+    console.log(`Index Groups at state ${index}`)
+    indexGroups.forEach((group, index) => {
+      console.log(
+        `Index ${index}: letter: ${group.letter}, name: ${group.name}, gid: ${group.gid}, parentGid: ${group.parentGid}`,
+      )
+    })
+
+    for (let stackIndex = 0; stackIndex < stackGroup.length; stackIndex++) {
+      const scopeLayer: TypeCount = stackGroup[stackIndex]
+      const scopeType = scopeLayer.type
+      const scopeName = scopeLayer.name
+
+      let indexGroupEntry = stackIndex < indexGroups.length ? indexGroups[stackIndex] : null
+
+      //the current depth is not stored in the indexGroups array
+      if (indexGroupEntry === null) {
+        const curGid = uuid()
+        if (!(curGid in groups)) {
+          groups[curGid] = {
+            letter: scopeType,
+            name: scopeName,
+            gid: curGid,
+            ...(parentGid !== null && { parentGid: parentGid }),
+          }
+        }
+        parentGid = curGid
+
+        indexGroups[stackIndex] = {
+          letter: scopeType,
+          name: scopeName,
+          gid: curGid,
+        }
+      }
+      // current depth exists, validation is needed
+      else {
+        const indexEntryName = indexGroupEntry.name
+        const indexEntryGid = indexGroupEntry.gid
+
+        let curGid = ''
+
+        switch (scopeType) {
+          case 'R':
+            //retry >= is same group
+            if (scopeName >= indexEntryName) {
+              curGid = indexEntryGid
+            }
+            //retry < is new group -- shouldn't execute, as ancestor nodes will have reset this
+            else {
+              curGid = uuid()
+              indexGroups = indexGroups.slice(0, stackIndex)
+            }
+            break
+          case 'F':
+            //fallback == is same group
+            if (scopeName == indexEntryName) {
+              curGid = indexEntryGid
+            }
+            //lower fallback means in different group entirely
+            else if (scopeName < indexEntryName) {
+              curGid = uuid()
+              indexGroups = indexGroups.slice(0, stackIndex)
+            }
+            //increased fallback fall under same group, but trailing elements are new
+            else {
+              curGid = indexEntryGid
+              indexGroups = indexGroups.slice(0, stackIndex)
+            }
+            break
+          case 'D':
+            //direct == its own group
+            curGid = uuid()
+            indexGroups = indexGroups.slice(0, stackIndex)
+            break
+          case 'B':
+            //round robin falls under same group if same strategy name
+            if (scopeName == indexEntryName) {
+              curGid = indexEntryGid
+            }
+            // new round robin strategy name means new group -- shouldn't execute, as ancestor nodes will have reset this
+            else {
+              curGid = uuid()
+              indexGroups = indexGroups.slice(0, stackIndex)
+            }
+            break
+          default:
+            console.error('Unknown scope type')
+        }
+
+        //add the new group/node to the groups (stores every node/layer)
+        if (!(curGid in groups)) {
+          groups[curGid] = {
+            letter: scopeType,
+            name: scopeName,
+            gid: curGid,
+            ...(parentGid !== null && { parentGid: parentGid }),
+          }
+        }
+
+        console.log(`Letter: ${scopeType}, Name: ${scopeName}, Gid: ${curGid}`)
+        //update table for future iterations
+        indexGroups[stackIndex] = {
+          letter: scopeType,
+          name: scopeName,
+          gid: curGid,
+          ...(parentGid !== null && { parentGid: parentGid }),
+        }
+
+        //store the parent gid for the next iteration
+        parentGid = curGid
+      }
+    }
+    console.log(`Index Groups after state ${index}:`)
+    indexGroups.forEach((group, index) => {
+      console.log(
+        `Index ${index}: letter: ${group.letter}, name: ${group.name}, gid: ${group.gid}, parentGid: ${group.parentGid}`,
+      )
+    })
+    console.log('-----------------------------------')
+
+    unitNodes.push({
+      gid: parentGid,
+      ...(node.type === 'Retry' && { weight: node.retry_delay }),
+    })
+  }
+
+  //create edges between the unit nodes
+  let edges: Edge[] = unitNodes.slice(0, -1).map((fromNode, index) => ({
+    from_node: fromNode.gid,
+    to_node: unitNodes[index + 1].gid,
+    ...(fromNode.weight !== null && { weight: fromNode.weight }),
+  }))
+
+  // Log all contents of edges
+  console.log('Edges:')
+  edges.forEach((edge, index) => {
+    console.log(`Edge ${index}: from ${edge.from_node} to ${edge.to_node}, weight: ${edge.weight}`)
+  })
+
+  // Log all contents of groups
+  console.log('Groups:')
+  Object.entries(groups).forEach(([gid, group]) => {
+    console.log(`Group ${gid}: letter: ${group.letter}, name: ${group.name}, parentGid: ${group.parentGid}`)
+  })
+
+  return { groups, edges }
 })
 
 export const diagnositicsAtom = atom((get) => {

@@ -524,6 +524,9 @@ importers:
       unique-names-generator:
         specifier: ^4.7.1
         version: 4.7.1
+      uuid:
+        specifier: ^9.0.0
+        version: 9.0.1
       wavesurfer.js:
         specifier: ^7.7.15
         version: 7.8.0
@@ -1008,6 +1011,9 @@ importers:
       unique-names-generator:
         specifier: ^4.7.1
         version: 4.7.1
+      uuid:
+        specifier: ^9.0.0
+        version: 9.0.1
       wavesurfer.js:
         specifier: ^7.7.15
         version: 7.8.0
