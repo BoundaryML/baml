@@ -14,16 +14,14 @@ client<llm> FallbackClient {
     // first 2 clients are expected to fail.
     strategy [
       FaultyClient
-      RetryClientExponential
-      RetryClientConstant
 
-      // Lottery_SimpleSyntax
+      Lottery_SimpleSyntax
       // FaultyClient,
 
       // RetryClientConstant
       // RetryClientExponential
       // Gemini
-      // SecondaryFallback
+      SecondaryFallback
       
     ]
   }
