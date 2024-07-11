@@ -1,9 +1,35 @@
 const cors = require('cors')
 const { createProxyMiddleware } = require('http-proxy-middleware')
+const assert = require('assert')
 const app = require('express')()
 require('dotenv').config()
 
 app.use(cors())
+
+// These are the domains which we may "leak" our API keys to.
+//
+// We inject our API keys into requests to these domains so that promptfiddle users are not
+// required to provide their own API keys, but we must make sure that these API keys cannot be
+// leaked to third parties.
+//
+// Since all we do is blindly proxy requests from the WASM runtime, and promptfiddle users may
+// override the base_url of any client, this allowlist guarantees that we only inject API keys
+// in requests to these model providers.
+const API_KEY_INJECTION_ALLOWED = {
+  'https://api.openai.com/': { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+  'https://api.anthropic.com/': { 'x-api-key': process.env.ANTHROPIC_API_KEY },
+  'https://generativelanguage.googleapis.com/': { 'x-goog-api-key': process.env.GOOGLE_API_KEY },
+}
+
+// Consult sam@ before changing this.
+for (const url of Object.keys(API_KEY_INJECTION_ALLOWED)) {
+  assert(
+    // The trailing slash is important! Otherwise, users could bypass the allowlist using
+    // a subdomain like https://api.openai.com.evil.com/
+    url === `https://${new URL(url).hostname}/`,
+    `Keys of API_KEY_INJECTION_ALLOWED must be root HTTPS URLs for model providers, got ${url}`,
+  )
+}
 
 app.use(
   createProxyMiddleware({
@@ -28,23 +54,13 @@ app.use(
     logger: console,
     on: {
       proxyReq: (proxyReq, req, res) => {
-        if (req.headers['baml-original-url'].includes('openai.com')) {
-          if (process.env.OPENAI_API_KEY === undefined) {
-            throw new Error('OPENAI_API_KEY is missing')
+        console.log('pre-proxy request', req)
+        for (const [url, headers] of Object.entries(API_KEY_INJECTION_ALLOWED)) {
+          if (req.headers['baml-original-url'] == url) {
+            for (const [header, value] of Object.entries(headers)) {
+              proxyReq.setHeader(header, value)
+            }
           }
-          proxyReq.setHeader('Authorization', `Bearer ${process.env.OPENAI_API_KEY}`)
-        }
-        if (req.headers['baml-original-url'].includes('anthropic')) {
-          if (process.env.ANTHROPIC_API_KEY === undefined) {
-            throw new Error('ANTHROPIC_API_KEY is missing')
-          }
-          proxyReq.setHeader('x-api-key', process.env.ANTHROPIC_API_KEY)
-        }
-        if (req.headers['baml-original-url'].includes('gemini')) {
-          if (process.env.GOOGLE_API_KEY === undefined) {
-            throw new Error('GOOGLE_API_KEY is missing')
-          }
-          proxyReq.setHeader('x-goog-api-key', process.env.GOOGLE_API_KEY)
         }
       },
       proxyRes: (proxyRes, req, res) => {
