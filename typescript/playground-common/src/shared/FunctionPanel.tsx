@@ -105,14 +105,18 @@ const ClientGraph: React.FC = () => {
   })
 
   const renderNodes: RenderNode[] = []
+  let count = 0
+
   for (let idx = 0; idx < nodes.length; idx++) {
     const node = nodes[idx]
-    renderNodes.push({
-      id: node.gid,
-      data: { label: node.gid },
-      position: { x: 0, y: 0 },
-      style: { backgroundColor: 'lightblue', width: 100, height: 100 },
-    })
+    if (node.letter === 'D') {
+      renderNodes.push({
+        id: node.gid,
+        data: { label: node.client_name ?? '' },
+        position: { x: 0, y: 100 * count++ },
+        style: { backgroundColor: 'green', width: 100, height: 50 },
+      })
+    }
   }
 
   const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
