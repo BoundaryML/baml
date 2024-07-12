@@ -449,7 +449,8 @@ export interface NodeEntry {
 }
 export interface GroupEntry {
   letter: string
-  name: string | number
+  index: string | number
+  client_name?: string
   gid: ReturnType<typeof uuid>
   parentGid?: ReturnType<typeof uuid>
 }
@@ -574,7 +575,7 @@ export const orchestration_nodes = atom((get) => {
     console.log(`Index Groups at state ${index}`)
     indexGroups.forEach((group, index) => {
       console.log(
-        `Index ${index}: letter: ${group.letter}, name: ${group.name}, gid: ${group.gid}, parentGid: ${group.parentGid}`,
+        `Index ${index}: letter: ${group.letter}, name: ${group.index}, gid: ${group.gid}, parentGid: ${group.parentGid}`,
       )
     })
 
@@ -591,7 +592,8 @@ export const orchestration_nodes = atom((get) => {
         if (!(curGid in groups)) {
           groups[curGid] = {
             letter: scopeType,
-            name: scopeName,
+            index: scopeName,
+            client_name: node.name,
             gid: curGid,
             ...(parentGid !== null && { parentGid: parentGid }),
           }
@@ -600,13 +602,13 @@ export const orchestration_nodes = atom((get) => {
 
         indexGroups[stackIndex] = {
           letter: scopeType,
-          name: scopeName,
+          index: scopeName,
           gid: curGid,
         }
       }
       // current depth exists, validation is needed
       else {
-        const indexEntryName = indexGroupEntry.name
+        const indexEntryName = indexGroupEntry.index
         const indexEntryGid = indexGroupEntry.gid
 
         let curGid = ''
@@ -663,7 +665,9 @@ export const orchestration_nodes = atom((get) => {
         if (!(curGid in groups)) {
           groups[curGid] = {
             letter: scopeType,
-            name: scopeName,
+            index: scopeName,
+            client_name: node.name,
+
             gid: curGid,
             ...(parentGid !== null && { parentGid: parentGid }),
           }
@@ -673,7 +677,7 @@ export const orchestration_nodes = atom((get) => {
         //update table for future iterations
         indexGroups[stackIndex] = {
           letter: scopeType,
-          name: scopeName,
+          index: scopeName,
           gid: curGid,
           ...(parentGid !== null && { parentGid: parentGid }),
         }
@@ -685,7 +689,7 @@ export const orchestration_nodes = atom((get) => {
     console.log(`Index Groups after state ${index}:`)
     indexGroups.forEach((group, index) => {
       console.log(
-        `Index ${index}: letter: ${group.letter}, name: ${group.name}, gid: ${group.gid}, parentGid: ${group.parentGid}`,
+        `Index ${index}: letter: ${group.letter}, name: ${group.index}, client_name: ${group.client_name} gid: ${group.gid}, parentGid: ${group.parentGid}`,
       )
     })
     console.log('-----------------------------------')
@@ -712,10 +716,15 @@ export const orchestration_nodes = atom((get) => {
   // Log all contents of groups
   console.log('Groups:')
   Object.entries(groups).forEach(([gid, group]) => {
-    console.log(`Group ${gid}: letter: ${group.letter}, name: ${group.name}, parentGid: ${group.parentGid}`)
+    console.log(
+      `Group ${gid}: letter: ${group.letter}, client_name: ${group.client_name}, name: ${group.index}, parentGid: ${group.parentGid}`,
+    )
   })
 
-  return { groups, edges }
+  // Convert groups to an array
+  const groupArray: GroupEntry[] = Object.values(groups)
+
+  return { groupArray, edges }
 })
 
 export const diagnositicsAtom = atom((get) => {

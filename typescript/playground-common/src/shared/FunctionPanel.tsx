@@ -97,46 +97,46 @@ const ClientGraph: React.FC = () => {
     edges: [] as Edge[],
   }
 
-  // const renderNodes: RenderNode[] = []
-  // for (let idx = 0; idx < nodes.length; idx++) {
-  //   const node = nodes[idx]
-  //   renderNodes.push({
-  //     id: node.gid,
-  //     data: { label: node.gid },
-  //     position: { x: 0, y: 0 },
-  //     style: { backgroundColor: 'lightblue', width: 100, height: 100 },
-  //   })
-  // }
+  const renderNodes: RenderNode[] = []
+  for (let idx = 0; idx < nodes.length; idx++) {
+    const node = nodes[idx]
+    renderNodes.push({
+      id: node.gid,
+      data: { label: node.gid },
+      position: { x: 0, y: 0 },
+      style: { backgroundColor: 'lightblue', width: 100, height: 100 },
+    })
+  }
 
-  // const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
-  //   id: idx.toString(),
-  //   source: edge.from_node,
-  //   target: edge.to_node,
-  // }))
+  const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
+    id: idx.toString(),
+    source: edge.from_node,
+    target: edge.to_node,
+  }))
 
-  // const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(renderNodes)
-  // const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(renderEdges)
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(renderNodes)
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(renderEdges)
 
-  // const onConnect = useCallback((connection: Connection) => {
-  //   setFlowEdges((eds) => addEdge(connection, eds))
-  // }, [])
+  const onConnect = useCallback((connection: Connection) => {
+    setFlowEdges((eds) => addEdge(connection, eds))
+  }, [])
 
-  // // Synchronize flowNodes and flowEdges with nodes and edges
-  // React.useEffect(() => {
-  //   setFlowNodes(renderNodes)
-  //   setFlowEdges(renderEdges)
-  // }, [nodes, edges])
+  // Synchronize flowNodes and flowEdges with nodes and edges
+  React.useEffect(() => {
+    setFlowNodes(renderNodes)
+    setFlowEdges(renderEdges)
+  }, [nodes, edges])
 
   return (
     <div style={{ height: '100vh', width: '100%' }}>
-      {/* <ReactFlow
+      <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         fitView
-      ></ReactFlow> */}
+      ></ReactFlow>
     </div>
   )
 }
