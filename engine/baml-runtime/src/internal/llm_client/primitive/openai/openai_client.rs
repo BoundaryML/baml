@@ -1,18 +1,17 @@
 use std::collections::HashMap;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use baml_types::{BamlMedia, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 
 use serde_json::json;
 
+use crate::client_registry::ClientProperty;
 use crate::internal::llm_client::primitive::request::{
     make_parsed_request, make_request, RequestBuilder,
 };
-use crate::internal::llm_client::traits::{
-    SseResponseTrait, StreamResponse, WithCompletion, WithStreamChat,
-};
+use crate::internal::llm_client::traits::{SseResponseTrait, StreamResponse, WithStreamChat};
 use crate::internal::llm_client::{
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
     LLMResponse, ModelFeatures,
@@ -25,6 +24,7 @@ use futures::StreamExt;
 
 pub struct OpenAIClient {
     pub name: String,
+    provider: String,
     // client: ClientWalker<'ir>,
     retry_policy: Option<String>,
     context: RenderContext_Client,
@@ -80,7 +80,7 @@ impl WithNoCompletion for OpenAIClient {}
 //                 prompt: internal_baml_jinja::RenderedPrompt::Completion(prompt.clone()),
 //                 start_time: system_start,
 //                 latency: instant_start.elapsed(),
-//                 invocation_params: self.properties.properties.clone(),
+//                 request_options: self.properties.properties.clone(),
 //                 message: format!(
 //                     "Expected exactly one choices block, got {}",
 //                     response.choices.len()
@@ -98,7 +98,7 @@ impl WithNoCompletion for OpenAIClient {}
 //             start_time: system_start,
 //             latency: instant_start.elapsed(),
 //             model: response.model,
-//             invocation_params: self.properties.properties.clone(),
+//             request_options: self.properties.properties.clone(),
 //             metadata: LLMCompleteResponseMetadata {
 //                 baml_is_complete: match response.choices.get(0) {
 //                     Some(c) => match c.finish_reason {
@@ -150,7 +150,7 @@ impl WithChat for OpenAIClient {
                 prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
                 start_time: system_start,
                 latency: instant_start.elapsed(),
-                invocation_params: self.properties.properties.clone(),
+                request_options: self.properties.properties.clone(),
                 message: format!(
                     "Expected exactly one choices block, got {}",
                     response.choices.len()
@@ -173,7 +173,7 @@ impl WithChat for OpenAIClient {
             start_time: system_start,
             latency: instant_start.elapsed(),
             model: response.model,
-            invocation_params: self.properties.properties.clone(),
+            request_options: self.properties.properties.clone(),
             metadata: LLMCompleteResponseMetadata {
                 baml_is_complete: match response.choices.get(0) {
                     Some(c) => match c.finish_reason {
@@ -202,7 +202,7 @@ use crate::internal::llm_client::{
 };
 
 use super::properties::{
-    resolve_azure_properties, resolve_ollama_properties, resolve_openai_properties,
+    self, resolve_azure_properties, resolve_ollama_properties, resolve_openai_properties,
     PostRequestProperities,
 };
 use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta, FinishReason};
@@ -212,29 +212,25 @@ impl RequestBuilder for OpenAIClient {
         &self.client
     }
 
-    fn build_request(
+    async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
+        allow_proxy: bool,
+
         stream: bool,
-    ) -> reqwest::RequestBuilder {
-        let mut req = self.client.post(if prompt.is_left() {
-            format!(
-                "{}/completions",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
+    ) -> Result<reqwest::RequestBuilder> {
+        let destination_url = if allow_proxy {
+            self.properties
+                .proxy_url
+                .as_ref()
+                .unwrap_or(&self.properties.base_url)
         } else {
-            format!(
-                "{}/chat/completions",
-                self.properties
-                    .proxy_url
-                    .as_ref()
-                    .unwrap_or(&self.properties.base_url)
-                    .clone()
-            )
+            &self.properties.base_url
+        };
+        let mut req = self.client.post(if prompt.is_left() {
+            format!("{}/completions", destination_url)
+        } else {
+            format!("{}/chat/completions", destination_url)
         });
 
         if !self.properties.query_params.is_empty() {
@@ -247,7 +243,10 @@ impl RequestBuilder for OpenAIClient {
         if let Some(key) = &self.properties.api_key {
             req = req.bearer_auth(key)
         }
-        req = req.header("baml-original-url", self.properties.base_url.as_str());
+
+        if allow_proxy {
+            req = req.header("baml-original-url", self.properties.base_url.as_str());
+        }
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
@@ -273,18 +272,20 @@ impl RequestBuilder for OpenAIClient {
 
         if stream {
             body_obj.insert("stream".into(), json!(true));
-            body_obj.insert(
-                "stream_options".into(),
-                json!({
-                    "include_usage": true,
-                }),
-            );
+            if self.provider == "openai" {
+                body_obj.insert(
+                    "stream_options".into(),
+                    json!({
+                        "include_usage": true,
+                    }),
+                );
+            }
         }
 
-        req.json(&body)
+        Ok(req.json(&body))
     }
 
-    fn invocation_params(&self) -> &HashMap<String, serde_json::Value> {
+    fn request_options(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
     }
 }
@@ -320,7 +321,7 @@ impl SseResponseTrait for OpenAIClient {
                         start_time: system_start,
                         latency: instant_start.elapsed(),
                         model: "".to_string(),
-                        invocation_params: params.clone(),
+                        request_options: params.clone(),
                         metadata: LLMCompleteResponseMetadata {
                             baml_is_complete: false,
                             finish_reason: None,
@@ -349,7 +350,7 @@ impl SseResponseTrait for OpenAIClient {
                                             prompt.clone(),
                                         ),
                                         start_time: system_start,
-                                        invocation_params: params.clone(),
+                                        request_options: params.clone(),
                                         latency: instant_start.elapsed(),
                                         message: format!("Failed to parse event: {:#?}", e),
                                         code: ErrorCode::Other(2),
@@ -388,7 +389,7 @@ impl SseResponseTrait for OpenAIClient {
 impl WithStreamChat for OpenAIClient {
     async fn stream_chat(
         &self,
-        ctx: &RuntimeContext,
+        _ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
     ) -> StreamResponse {
         let (resp, system_start, instant_start) =
@@ -401,10 +402,30 @@ impl WithStreamChat for OpenAIClient {
 }
 
 macro_rules! make_openai_client {
-    ($client:ident, $properties:ident) => {
+    ($client:ident, $properties:ident, $provider:expr, dynamic) => {
+        Ok(Self {
+            name: $client.name.clone(),
+            provider: $provider.into(),
+            context: RenderContext_Client {
+                name: $client.name.clone(),
+                provider: $client.provider.clone(),
+                default_role: $properties.default_role.clone(),
+            },
+            properties: $properties,
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                anthropic_system_constraints: false,
+                resolve_media_urls: false,
+            },
+            retry_policy: $client.retry_policy.clone(),
+            client: create_client()?,
+        })
+    };
+    ($client:ident, $properties:ident, $provider:expr) => {
         Ok(Self {
             name: $client.name().into(),
-
+            provider: $provider.into(),
             context: RenderContext_Client {
                 name: $client.name().into(),
                 provider: $client.elem().provider.clone(),
@@ -429,18 +450,63 @@ macro_rules! make_openai_client {
 
 impl OpenAIClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
-        let properties = resolve_openai_properties(client, ctx)?;
-        make_openai_client!(client, properties)
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
+        let properties = resolve_openai_properties(properties, ctx)?;
+        make_openai_client!(client, properties, "openai")
     }
 
     pub fn new_ollama(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
-        let properties = resolve_ollama_properties(client, ctx)?;
-        make_openai_client!(client, properties)
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
+        let properties = resolve_ollama_properties(properties, ctx)?;
+        make_openai_client!(client, properties, "ollama")
     }
 
     pub fn new_azure(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
-        let properties = resolve_azure_properties(client, ctx)?;
-        make_openai_client!(client, properties)
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
+        let properties = resolve_azure_properties(properties, ctx)?;
+        make_openai_client!(client, properties, "azure")
+    }
+
+    pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+        let properties = resolve_openai_properties(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            &ctx,
+        )?;
+        make_openai_client!(client, properties, "openai", dynamic)
+    }
+
+    pub fn dynamic_new_ollama(
+        client: &ClientProperty,
+        ctx: &RuntimeContext,
+    ) -> Result<OpenAIClient> {
+        let properties = resolve_ollama_properties(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            ctx,
+        )?;
+        make_openai_client!(client, properties, "ollama", dynamic)
+    }
+
+    pub fn dynamic_new_azure(
+        client: &ClientProperty,
+        ctx: &RuntimeContext,
+    ) -> Result<OpenAIClient> {
+        let properties = resolve_azure_properties(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            ctx,
+        )?;
+        make_openai_client!(client, properties, "azure", dynamic)
     }
 }
 

@@ -5,16 +5,17 @@ use anyhow::Result;
 use baml_types::BamlValue;
 
 use internal_baml_core::ir::repr::IntermediateRepr;
+use internal_baml_jinja::RenderedChatMessage;
 use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, sync::Arc};
-
-use instant::Duration;
+use web_time::Duration;
 
 use crate::{
     internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
     RuntimeContext,
 };
 
+use super::traits::WithRenderRawCurl;
 use super::{
     strategy::roundrobin::RoundRobinStrategy,
     traits::{StreamResponse, WithPrompt, WithSingleCallable, WithStreamable},
@@ -178,6 +179,17 @@ impl<'ir> WithPrompt<'ir> for OrchestratorNode {
         params: &BamlValue,
     ) -> Result<RenderedPrompt> {
         self.provider.render_prompt(ir, renderer, ctx, params)
+    }
+}
+
+impl WithRenderRawCurl for OrchestratorNode {
+    async fn render_raw_curl(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<RenderedChatMessage>,
+        stream: bool,
+    ) -> Result<String> {
+        self.provider.render_raw_curl(ctx, prompt, stream).await
     }
 }
 

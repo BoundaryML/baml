@@ -5,12 +5,13 @@ use baml_types::BamlValue;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 
 use crate::{
-    internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
-    RuntimeContext,
+    client_registry::ClientProperty, internal::prompt_renderer::PromptRenderer,
+    runtime_interface::InternalClientLookup, RuntimeContext,
 };
 
 use self::{
-    anthropic::AnthropicClient, google::GoogleClient, openai::OpenAIClient, request::RequestBuilder,
+    anthropic::AnthropicClient, aws::AwsClient, google::GoogleClient, openai::OpenAIClient,
+    request::RequestBuilder,
 };
 
 use super::{
@@ -18,20 +19,38 @@ use super::{
         ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState, OrchestratorNode,
         OrchestratorNodeIterator,
     },
-    retry_policy::CallablePolicy,
-    traits::{WithClient, WithPrompt, WithRetryPolicy, WithSingleCallable, WithStreamable},
+    traits::{
+        WithClient, WithPrompt, WithRenderRawCurl, WithRetryPolicy, WithSingleCallable,
+        WithStreamable,
+    },
     LLMResponse,
 };
 
 mod anthropic;
+mod aws;
 mod google;
 mod openai;
 pub(super) mod request;
 
+// use crate::internal::llm_client::traits::ambassador_impl_WithRenderRawCurl;
+// use crate::internal::llm_client::traits::ambassador_impl_WithRetryPolicy;
+use enum_dispatch::enum_dispatch;
+
+#[enum_dispatch(WithRetryPolicy)]
+pub enum LLMPrimitive2 {
+    OpenAIClient,
+    AnthropicClient,
+    GoogleClient,
+    AwsClient,
+}
+
+// #[derive(Delegate)]
+// #[delegate(WithRetryPolicy, WithRenderRawCurl)]
 pub enum LLMPrimitiveProvider {
     OpenAI(OpenAIClient),
     Anthropic(AnthropicClient),
     Google(GoogleClient),
+    Aws(aws::AwsClient),
 }
 
 macro_rules! match_llm_provider {
@@ -41,6 +60,7 @@ macro_rules! match_llm_provider {
             LLMPrimitiveProvider::OpenAI(client) => client.$method($($args),*).await,
             LLMPrimitiveProvider::Anthropic(client) => client.$method($($args),*).await,
             LLMPrimitiveProvider::Google(client) => client.$method($($args),*).await,
+            LLMPrimitiveProvider::Aws(client) => client.$method($($args),*).await,
         }
     };
 
@@ -49,8 +69,51 @@ macro_rules! match_llm_provider {
             LLMPrimitiveProvider::OpenAI(client) => client.$method($($args),*),
             LLMPrimitiveProvider::Anthropic(client) => client.$method($($args),*),
             LLMPrimitiveProvider::Google(client) => client.$method($($args),*),
+            LLMPrimitiveProvider::Aws(client) => client.$method($($args),*),
         }
     };
+}
+
+impl WithRetryPolicy for LLMPrimitiveProvider {
+    fn retry_policy_name(&self) -> Option<&str> {
+        match_llm_provider!(self, retry_policy_name)
+    }
+}
+
+impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
+    type Error = anyhow::Error;
+
+    fn try_from((value, ctx): (&ClientProperty, &RuntimeContext)) -> Result<Self> {
+        match value.provider.as_str() {
+            "openai" => OpenAIClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::OpenAI),
+            "azure-openai" => {
+                OpenAIClient::dynamic_new_azure(value, ctx).map(LLMPrimitiveProvider::OpenAI)
+            }
+            "ollama" => {
+                OpenAIClient::dynamic_new_ollama(value, ctx).map(LLMPrimitiveProvider::OpenAI)
+            }
+            "anthropic" => {
+                AnthropicClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Anthropic)
+            }
+            "google-ai" => GoogleClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Google),
+            other => {
+                let options = [
+                    "openai",
+                    "anthropic",
+                    "ollama",
+                    "google-ai",
+                    "azure-openai",
+                    "fallback",
+                    "round-robin",
+                ];
+                anyhow::bail!(
+                    "Unsupported provider: {}. Available ones are: {}",
+                    other,
+                    options.join(", ")
+                )
+            }
+        }
+    }
 }
 
 impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
@@ -71,6 +134,7 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                 OpenAIClient::new_ollama(client, ctx).map(LLMPrimitiveProvider::OpenAI)
             }
             "google-ai" => GoogleClient::new(client, ctx).map(LLMPrimitiveProvider::Google),
+            "aws-bedrock" => aws::AwsClient::new(client, ctx).map(LLMPrimitiveProvider::Aws),
             other => {
                 let options = [
                     "openai",
@@ -80,6 +144,7 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                     "azure-openai",
                     "fallback",
                     "round-robin",
+                    "aws-bedrock",
                 ];
                 anyhow::bail!(
                     "Unsupported provider: {}. Available ones are: {}",
@@ -103,9 +168,14 @@ impl<'ir> WithPrompt<'ir> for LLMPrimitiveProvider {
     }
 }
 
-impl WithRetryPolicy for LLMPrimitiveProvider {
-    fn retry_policy_name(&self) -> Option<&str> {
-        match_llm_provider!(self, retry_policy_name)
+impl WithRenderRawCurl for LLMPrimitiveProvider {
+    async fn render_raw_curl(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
+        stream: bool,
+    ) -> Result<String> {
+        match_llm_provider!(self, render_raw_curl, async, ctx, prompt, stream)
     }
 }
 
@@ -150,6 +220,7 @@ impl std::fmt::Display for LLMPrimitiveProvider {
             LLMPrimitiveProvider::OpenAI(_) => write!(f, "OpenAI"),
             LLMPrimitiveProvider::Anthropic(_) => write!(f, "Anthropic"),
             LLMPrimitiveProvider::Google(_) => write!(f, "Google"),
+            LLMPrimitiveProvider::Aws(_) => write!(f, "AWS"),
         }
     }
 }
@@ -158,22 +229,10 @@ impl LLMPrimitiveProvider {
     pub fn name(&self) -> &str {
         &match_llm_provider!(self, context).name
     }
-}
 
-impl RequestBuilder for LLMPrimitiveProvider {
-    fn http_client(&self) -> &reqwest::Client {
-        match_llm_provider!(self, http_client)
-    }
-
-    fn invocation_params(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        match_llm_provider!(self, invocation_params)
-    }
-
-    fn build_request(
-        &self,
-        prompt: either::Either<&String, &Vec<internal_baml_jinja::RenderedChatMessage>>,
-        stream: bool,
-    ) -> reqwest::RequestBuilder {
-        match_llm_provider!(self, build_request, prompt, stream)
+    pub fn request_options(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        match_llm_provider!(self, request_options)
     }
 }
+
+use super::resolve_properties_walker;

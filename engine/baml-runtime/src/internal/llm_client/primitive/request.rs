@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::format};
+use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use internal_baml_jinja::RenderedChatMessage;
@@ -8,13 +8,15 @@ use serde::de::DeserializeOwned;
 use crate::internal::llm_client::{traits::WithClient, ErrorCode, LLMErrorResponse, LLMResponse};
 
 pub trait RequestBuilder {
-    fn build_request(
+    #[allow(async_fn_in_trait)]
+    async fn build_request(
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
+        allow_proxy: bool,
         stream: bool,
-    ) -> reqwest::RequestBuilder;
+    ) -> Result<reqwest::RequestBuilder>;
 
-    fn invocation_params(&self) -> &HashMap<String, serde_json::Value>;
+    fn request_options(&self) -> &HashMap<String, serde_json::Value>;
 
     fn http_client(&self) -> &reqwest::Client;
 }
@@ -34,9 +36,13 @@ pub async fn make_request(
     stream: bool,
 ) -> Result<(Response, web_time::SystemTime, web_time::Instant), LLMResponse> {
     let (system_now, instant_now) = (web_time::SystemTime::now(), web_time::Instant::now());
-    log::info!("Making request using client {}", client.context().name);
+    log::debug!("Making request using client {}", client.context().name);
 
-    let req = match client.build_request(prompt, stream).build() {
+    let req = match client
+        .build_request(prompt, true, stream)
+        .await
+        .context("Failed to build request")
+    {
         Ok(req) => req,
         Err(e) => {
             return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -44,13 +50,31 @@ pub async fn make_request(
                 model: None,
                 prompt: to_prompt(prompt),
                 start_time: system_now,
-                invocation_params: client.invocation_params().clone(),
+                request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: e.to_string(),
+                message: format!("{:?}", e),
                 code: ErrorCode::Other(2),
             }));
         }
     };
+
+    let req = match req.build() {
+        Ok(req) => req,
+        Err(e) => {
+            return Err(LLMResponse::LLMFailure(LLMErrorResponse {
+                client: client.context().name.to_string(),
+                model: None,
+                prompt: to_prompt(prompt),
+                start_time: system_now,
+                request_options: client.request_options().clone(),
+                latency: instant_now.elapsed(),
+                message: format!("{:?}", e),
+                code: ErrorCode::Other(2),
+            }));
+        }
+    };
+
+    log::debug!("built request: {:?}", req);
 
     let response = match client.http_client().execute(req).await {
         Ok(response) => response,
@@ -60,9 +84,9 @@ pub async fn make_request(
                 model: None,
                 prompt: to_prompt(prompt),
                 start_time: system_now,
-                invocation_params: client.invocation_params().clone(),
+                request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: e.to_string(),
+                message: format!("{:?}", e),
                 code: ErrorCode::Other(2),
             }));
         }
@@ -75,7 +99,7 @@ pub async fn make_request(
             model: None,
             prompt: to_prompt(prompt),
             start_time: system_now,
-            invocation_params: client.invocation_params().clone(),
+            request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
             message: format!(
                 "Request failed: {}",
@@ -94,9 +118,26 @@ pub async fn make_parsed_request<T: DeserializeOwned>(
     stream: bool,
 ) -> Result<(T, web_time::SystemTime, web_time::Instant), LLMResponse> {
     let (response, system_now, instant_now) = make_request(client, prompt, stream).await?;
-    match response.json::<T>().await.context(format!(
-        "Failed to parse into a response accepted by {}",
-        std::any::type_name::<T>()
+    let j = match response.json::<serde_json::Value>().await {
+        Ok(response) => response,
+        Err(e) => {
+            return Err(LLMResponse::LLMFailure(LLMErrorResponse {
+                client: client.context().name.to_string(),
+                model: None,
+                prompt: to_prompt(prompt),
+                start_time: system_now,
+                request_options: client.request_options().clone(),
+                latency: instant_now.elapsed(),
+                message: e.to_string(),
+                code: ErrorCode::Other(2),
+            }))
+        }
+    };
+
+    match T::deserialize(&j).context(format!(
+        "Failed to parse into a response accepted by {}: {}",
+        std::any::type_name::<T>(),
+        j
     )) {
         Ok(response) => Ok((response, system_now, instant_now)),
         Err(e) => Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -104,9 +145,9 @@ pub async fn make_parsed_request<T: DeserializeOwned>(
             model: None,
             prompt: to_prompt(prompt),
             start_time: system_now,
-            invocation_params: client.invocation_params().clone(),
+            request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
-            message: e.to_string(),
+            message: format!("{:?}", e),
             code: ErrorCode::Other(2),
         })),
     }

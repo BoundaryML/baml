@@ -6,7 +6,7 @@ import contextvars
 import functools
 import inspect
 import typing
-from .baml_py import RuntimeContextManager, BamlRuntime, BamlSpan
+from .baml_py import BamlLogEvent, RuntimeContextManager, BamlRuntime, BamlSpan
 import atexit
 import threading
 
@@ -64,6 +64,9 @@ class CtxManager:
 
     def flush(self) -> None:
         self.rt.flush()
+
+    def on_log_event(self, handler: typing.Callable[[BamlLogEvent], None]) -> None:
+        self.rt.set_log_event_callback(handler)
 
     def trace_fn(self, func: F) -> F:
         func_name = func.__name__

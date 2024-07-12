@@ -7,6 +7,7 @@ mod test_expr;
 mod test_stmt;
 mod types;
 
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Index;
 
@@ -143,11 +144,57 @@ impl TypeError {
         }
     }
 
-    fn new_unknown_arg(func: &str, span: Span, name: &str) -> Self {
-        Self {
-            message: format!("Function '{}' does not have an argument '{}'", func, name),
-            span,
-        }
+    fn new_unknown_arg(func: &str, span: Span, name: &str, valid_args: HashSet<&String>) -> Self {
+        let names = valid_args.into_iter().collect::<Vec<_>>();
+        let mut close_names = sort_by_match(name, &names, Some(3));
+        close_names.sort();
+        let close_names = close_names;
+
+        let message = if close_names.is_empty() {
+            // If no names are close enough, suggest nothing or provide a generic message
+            format!("Function '{}' does not have an argument '{}'.", func, name)
+        } else if close_names.len() == 1 {
+            // If there's only one close name, suggest it
+            format!(
+                "Function '{}' does not have an argument '{}'. Did you mean '{}'?",
+                func, name, close_names[0]
+            )
+        } else {
+            // If there are multiple close names, suggest them all
+            let suggestions = close_names.join("', '");
+            format!(
+                "Function '{}' does not have an argument '{}'. Did you mean one of these: '{}'?",
+                func, name, suggestions
+            )
+        };
+
+        Self { message, span }
+    }
+
+    fn new_invalid_filter(name: &str, span: Span, valid_filters: &Vec<&str>) -> Self {
+        let mut close_names = sort_by_match(name, valid_filters, Some(5));
+        close_names.sort();
+        let close_names = close_names;
+
+        let message = if close_names.is_empty() {
+            // If no names are close enough, suggest nothing or provide a generic message
+            format!("Filter '{}' does not exist", name)
+        } else if close_names.len() == 1 {
+            // If there's only one close name, suggest it
+            format!(
+                "Filter '{}' does not exist. Did you mean '{}'?",
+                name, close_names[0]
+            )
+        } else {
+            // If there are multiple close names, suggest them all
+            let suggestions = close_names.join("', '");
+            format!(
+                "Filter '{}' does not exist. Did you mean one of these: '{}'?",
+                name, suggestions
+            )
+        };
+
+        Self { message: format!("{message}\n\nSee: https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions for the compelete list"), span }
     }
 
     fn new_invalid_type(expr: &Expr, got: &Type, expected: &str, span: Span) -> Self {

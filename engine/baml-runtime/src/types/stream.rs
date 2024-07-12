@@ -1,29 +1,19 @@
 use anyhow::Result;
 
-use futures::{stream::StreamExt, Stream};
 use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_core::ir::IRHelper;
-use internal_baml_jinja::Type;
 
-use std::sync::Arc;
+use std::{rc, sync::Arc};
 
 use crate::{
+    client_registry::ClientRegistry,
     internal::{
-        llm_client::{
-            orchestrator::{
-                self, orchestrate_stream, LLMPrimitiveProvider, OrchestrationScope,
-                OrchestratorNodeIterator,
-            },
-            ErrorCode, LLMErrorResponse,
-        },
+        llm_client::orchestrator::{orchestrate_stream, OrchestratorNodeIterator},
         prompt_renderer::PromptRenderer,
     },
     tracing::BamlTracer,
     type_builder::TypeBuilder,
-    FunctionResult, RuntimeContext, RuntimeContextManager,
+    FunctionResult, RuntimeContextManager,
 };
-
-use super::response::LLMResponse;
 
 /// Wrapper that holds a stream of responses from a BAML function call.
 ///
@@ -68,6 +58,7 @@ impl FunctionResultStream {
         on_event: Option<F>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>)
     where
         F: Fn(FunctionResult) -> (),
@@ -78,23 +69,29 @@ impl FunctionResultStream {
         let mut local_params = crate::BamlMap::new();
         std::mem::swap(&mut local_params, &mut self.params);
 
-        let (span, rctx) = self
+        let span = self
             .tracer
-            .start_span(&self.function_name, ctx, tb, &local_params);
+            .start_span(&self.function_name, ctx, &local_params);
 
-        let (history, _) = orchestrate_stream(
-            local_orchestrator,
-            self.ir.as_ref(),
-            &rctx,
-            &self.renderer,
-            &baml_types::BamlValue::Map(local_params),
-            |content| self.renderer.parse(content, true),
-            |content| self.renderer.parse(content, false),
-            on_event,
-        )
-        .await;
+        let rctx = ctx.create_ctx(tb, cb);
+        let res = match rctx {
+            Ok(rctx) => {
+                let (history, _) = orchestrate_stream(
+                    local_orchestrator,
+                    self.ir.as_ref(),
+                    &rctx,
+                    &self.renderer,
+                    &baml_types::BamlValue::Map(local_params),
+                    |content| self.renderer.parse(content, true),
+                    |content| self.renderer.parse(content, false),
+                    on_event,
+                )
+                .await;
 
-        let res = FunctionResult::new_chain(history);
+                FunctionResult::new_chain(history)
+            }
+            Err(e) => Err(e),
+        };
 
         let mut target_id = None;
         if let Some(span) = span {

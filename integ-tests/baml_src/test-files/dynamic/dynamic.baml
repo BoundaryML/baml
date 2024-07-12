@@ -33,12 +33,45 @@ function DynamicFunc(input: DynamicClassOne) -> DynamicClassTwo {
   "#
 }
 
+class DynInputOutput {
+  testKey string
+  @@dynamic
+}
+
+function DynamicInputOutput(input: DynInputOutput) -> DynInputOutput {
+  client GPT35
+  prompt #"
+    Here is some input data:
+    ----
+    {{ input }}
+    ----
+
+    Extract the information.
+    {{ ctx.output_format }}
+  "#
+}
+
+function DynamicListInputOutput(input: DynInputOutput[]) -> DynInputOutput[] {
+  client GPT35
+  prompt #"
+    Here is some input data:
+    ----
+    {{ input }}
+    ----
+
+    Extract the information.
+    {{ ctx.output_format }}
+  "#
+}
+
+
+
 class DynamicOutput {
   @@dynamic
 }
  
 function MyFunc(input: string) -> DynamicOutput {
-  client GPT4
+  client GPT35
   prompt #"
     Given a string, extract info using the schema:
 
@@ -47,3 +80,4 @@ function MyFunc(input: string) -> DynamicOutput {
     {{ ctx.output_format }}
   "#
 }
+

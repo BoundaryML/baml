@@ -11,7 +11,7 @@ use tokio::{
 };
 
 use baml_runtime::{
-    BamlRuntime, InternalRuntimeInterface, RuntimeContext, RuntimeContextManager, TestResponse,
+    BamlRuntime, InternalRuntimeInterface, RuntimeContextManager, TestResponse,
 };
 
 use super::filter::FilterArgs;

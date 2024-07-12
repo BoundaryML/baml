@@ -43,7 +43,9 @@
       "editor.defaultFormatter": "biomejs.biome"
     },
     "files.associations": {
-      "*.baml.j2": "jinja"
+      "*.baml.j2": "jinja",
+      "*.js.j2": "jinja-js",
+      "*.ts.j2": "jinja-js"
     },
     "editor.colorDecoratorsLimit": 2000,
     "editor.formatOnSaveMode": "file",
@@ -78,6 +80,7 @@
       "titleBar.activeForeground": "#FFFBFB"
     },
     "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome"
+    
   },
   "extensions": {
     "recommendations": [

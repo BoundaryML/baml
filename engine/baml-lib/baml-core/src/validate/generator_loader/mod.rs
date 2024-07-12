@@ -33,7 +33,7 @@ fn parse_generator(
         Err(errors) => errors,
     };
 
-    log::info!("Failed to parse generator as v2 generator, moving on to v1 and v0.");
+    log::trace!("Failed to parse generator as v2 generator, moving on to v1 and v0.");
 
     if let Ok(gen) = v1::parse_generator(ast_generator, &diagnostics.root_path) {
         diagnostics.push_warning(DatamodelWarning::new(
@@ -46,7 +46,7 @@ fn parse_generator(
         return None;
     };
 
-    log::info!("Failed to parse generator as v1 generator, moving on to v0.");
+    log::trace!("Failed to parse generator as v1 generator, moving on to v0.");
 
     if let Ok(gen) = v0::parse_generator(ast_generator, &diagnostics.root_path) {
         diagnostics.push_warning(DatamodelWarning::new(

@@ -68,10 +68,10 @@ impl<T> Default for RenderSetting<T> {
 }
 
 pub struct RenderOptions {
-    pub prefix: RenderSetting<String>,
+    prefix: RenderSetting<String>,
     pub or_splitter: String,
-    pub enum_value_prefix: RenderSetting<String>,
-    pub always_hoist_enums: RenderSetting<bool>,
+    enum_value_prefix: RenderSetting<String>,
+    always_hoist_enums: RenderSetting<bool>,
 }
 
 impl Default for RenderOptions {
@@ -146,6 +146,7 @@ impl Attribute {
 }
 
 struct ClassRender {
+    #[allow(dead_code)]
     name: String,
     values: Vec<ClassFieldRender>,
 }

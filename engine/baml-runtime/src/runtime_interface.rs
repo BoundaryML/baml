@@ -1,6 +1,5 @@
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
-use cfg_if::cfg_if;
 use internal_baml_core::internal_baml_diagnostics::Diagnostics;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
@@ -9,13 +8,13 @@ use std::{collections::HashMap, sync::Arc};
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
 use crate::tracing::{BamlTracer, TracingSpan};
-use crate::type_builder::TypeBuilder;
+use crate::types::on_log_event::LogEventCallbackSync;
 use crate::RuntimeContextManager;
 use crate::{
     internal::{ir_features::IrFeatures, llm_client::retry_policy::CallablePolicy},
     runtime::InternalBamlRuntime,
     types::FunctionResultStream,
-    FunctionResult, RuntimeContext, TestResponse,
+    FunctionResult, RuntimeContext,
 };
 
 pub(crate) trait RuntimeConstructor {
@@ -57,7 +56,7 @@ pub trait ExperimentalTracingInterface {
         function_name: &str,
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
-    ) -> (Option<TracingSpan>, RuntimeContext);
+    ) -> Option<TracingSpan>;
 
     #[cfg(target_arch = "wasm32")]
     #[allow(async_fn_in_trait)]
@@ -94,6 +93,10 @@ pub trait ExperimentalTracingInterface {
     ) -> Result<Option<uuid::Uuid>>;
 
     fn flush(&self) -> Result<()>;
+    fn drain_stats(&self) -> crate::InnerTraceStats;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn set_log_event_callback(&self, callback: LogEventCallbackSync) -> Result<()>;
 }
 
 pub trait InternalClientLookup<'a> {
@@ -133,6 +136,16 @@ pub trait InternalRuntimeInterface {
         params: &BamlMap<String, BamlValue>,
         node_index: Option<usize>,
     ) -> Result<(RenderedPrompt, OrchestrationScope)>;
+
+    #[warn(async_fn_in_trait)]
+    async fn render_raw_curl(
+        &self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+        prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
+        stream: bool,
+        node_index: Option<usize>,
+    ) -> Result<String>;
 
     fn ir(&self) -> &IntermediateRepr;
 

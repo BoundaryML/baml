@@ -1,7 +1,7 @@
-import { BamlSpan, RuntimeContextManager, BamlRuntime } from './native'
+import { BamlSpan, RuntimeContextManager, BamlRuntime, BamlLogEvent } from './native'
 import { AsyncLocalStorage } from 'async_hooks'
 
-export class CtxManager {
+export class BamlCtxManager {
   private rt: BamlRuntime
   private ctx: AsyncLocalStorage<RuntimeContextManager>
 
@@ -19,27 +19,18 @@ export class CtxManager {
     manager.upsertTags(tags)
   }
 
-  get(): RuntimeContextManager {
+  cloneContext(): RuntimeContextManager {
     let store = this.ctx.getStore()
     if (store === undefined) {
       store = this.rt.createContextManager()
       this.ctx.enterWith(store)
     }
-    return store
+    return store.deepClone()
   }
 
-  startTraceSync(name: string, args: Record<string, any>): BamlSpan {
-    const mng = this.get()
-    // const clone = mng.deepClone()
-    // this.ctx.enterWith(clone)
-    return BamlSpan.new(this.rt, name, args, mng)
-  }
-
-  startTraceAsync(name: string, args: Record<string, any>): BamlSpan {
-    const mng = this.get()
-    const clone = mng.deepClone()
-    this.ctx.enterWith(clone)
-    return BamlSpan.new(this.rt, name, args, clone)
+  startTrace(name: string, args: Record<string, any>): [RuntimeContextManager, BamlSpan] {
+    const mng = this.cloneContext()
+    return [mng, BamlSpan.new(this.rt, name, args, mng)]
   }
 
   endTrace(span: BamlSpan, response: any): void {
@@ -48,11 +39,23 @@ export class CtxManager {
       console.error('Context lost before span could be finished\n')
       return
     }
-    span.finish(response, manager)
+    try {
+      span.finish(response, manager)
+    } catch (e) {
+      console.error('BAML internal error', e)
+    }
   }
 
   flush(): void {
     this.rt.flush()
+  }
+
+  onLogEvent(callback: (event: BamlLogEvent) => void): void {
+    this.rt.setLogEventCallback((error: any, param: BamlLogEvent) => {
+      if (!error) {
+        callback(param)
+      }
+    })
   }
 
   traceFnSync<ReturnType, F extends (...args: any[]) => ReturnType>(name: string, func: F): F {
@@ -64,20 +67,21 @@ export class CtxManager {
         }),
         {},
       )
-      const span = this.startTraceSync(name, params)
-
-      try {
-        const response = func(...args)
-        this.endTrace(span, response)
-        return response
-      } catch (e) {
-        this.endTrace(span, e)
-        throw e
-      }
+      const [mng, span] = this.startTrace(name, params)
+      this.ctx.run(mng, () => {
+        try {
+          const response = func(...args)
+          this.endTrace(span, response)
+          return response
+        } catch (e) {
+          this.endTrace(span, e)
+          throw e
+        }
+      })
     })
   }
 
-  traceFnAync<ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(name: string, func: F): F {
+  traceFnAsync<ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(name: string, func: F): F {
     const funcName = name
     return <F>(async (...args: any[]) => {
       const params = args.reduce(
@@ -87,15 +91,17 @@ export class CtxManager {
         }),
         {},
       )
-      const span = this.startTraceAsync(funcName, params)
-      try {
-        const response = await func(...args)
-        this.endTrace(span, response)
-        return response
-      } catch (e) {
-        this.endTrace(span, e)
-        throw e
-      }
+      const [mng, span] = this.startTrace(name, params)
+      await this.ctx.run(mng, async () => {
+        try {
+          const response = await func(...args)
+          this.endTrace(span, response)
+          return response
+        } catch (e) {
+          this.endTrace(span, e)
+          throw e
+        }
+      })
     })
   }
 }

@@ -14,16 +14,16 @@ retry_policy Foo {
 }
 
 client<llm> GPT4 {
-  provider baml-openai-chat
+  provider openai
   options {
-    model gpt-4
+    model gpt-4o
     api_key env.OPENAI_API_KEY
   }
 } 
 
 
 client<llm> GPT4o {
-  provider baml-openai-chat
+  provider openai
   options {
     model gpt-4o
     api_key env.OPENAI_API_KEY
@@ -33,7 +33,7 @@ client<llm> GPT4o {
 
 client<llm> GPT4Turbo {
   retry_policy Bar
-  provider baml-openai-chat
+  provider openai
   options {
     model gpt-4-turbo
     api_key env.OPENAI_API_KEY
@@ -41,12 +41,21 @@ client<llm> GPT4Turbo {
 } 
 
 client<llm> GPT35 {
-  provider baml-openai-chat
+  provider openai
   options {
     model "gpt-3.5-turbo"
     api_key env.OPENAI_API_KEY
   }
 }
+
+client<llm> GPT35LegacyProvider {
+  provider openai
+  options {
+    model "gpt-3.5-turbo"
+    api_key env.OPENAI_API_KEY
+  }
+}
+
 
 client<llm> Ollama {
   provider ollama
@@ -68,12 +77,24 @@ client<llm> GPT35Azure {
 
 client<llm> Gemini {
   provider google-ai
-  options{
+  options {
     model "gemini-1.5-pro-001"
     api_key env.GOOGLE_API_KEY
   }
 }
 
+client<llm> AwsBedrock {
+  provider aws-bedrock
+  options {
+    inference_configuration {
+      max_tokens 100
+    }
+    model_id "anthropic.claude-3-haiku-20240307-v1:0"
+    // model_id "meta.llama3-8b-instruct-v1:0"
+    // model_id "mistral.mistral-7b-instruct-v0:2"
+    api_key ""
+  }
+}
 
 client<llm> Claude {
   provider anthropic

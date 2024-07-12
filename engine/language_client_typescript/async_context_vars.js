@@ -1,9 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CtxManager = void 0;
+exports.BamlCtxManager = void 0;
 const native_1 = require("./native");
 const async_hooks_1 = require("async_hooks");
-class CtxManager {
+class BamlCtxManager {
     rt;
     ctx;
     constructor(rt) {
@@ -18,25 +18,17 @@ class CtxManager {
         const manager = this.ctx.getStore();
         manager.upsertTags(tags);
     }
-    get() {
+    cloneContext() {
         let store = this.ctx.getStore();
         if (store === undefined) {
             store = this.rt.createContextManager();
             this.ctx.enterWith(store);
         }
-        return store;
+        return store.deepClone();
     }
-    startTraceSync(name, args) {
-        const mng = this.get();
-        // const clone = mng.deepClone()
-        // this.ctx.enterWith(clone)
-        return native_1.BamlSpan.new(this.rt, name, args, mng);
-    }
-    startTraceAsync(name, args) {
-        const mng = this.get();
-        const clone = mng.deepClone();
-        this.ctx.enterWith(clone);
-        return native_1.BamlSpan.new(this.rt, name, args, clone);
+    startTrace(name, args) {
+        const mng = this.cloneContext();
+        return [mng, native_1.BamlSpan.new(this.rt, name, args, mng)];
     }
     endTrace(span, response) {
         const manager = this.ctx.getStore();
@@ -44,10 +36,22 @@ class CtxManager {
             console.error('Context lost before span could be finished\n');
             return;
         }
-        span.finish(response, manager);
+        try {
+            span.finish(response, manager);
+        }
+        catch (e) {
+            console.error('BAML internal error', e);
+        }
     }
     flush() {
         this.rt.flush();
+    }
+    onLogEvent(callback) {
+        this.rt.setLogEventCallback((error, param) => {
+            if (!error) {
+                callback(param);
+            }
+        });
     }
     traceFnSync(name, func) {
         return ((...args) => {
@@ -55,36 +59,40 @@ class CtxManager {
                 ...acc,
                 [`arg${i}`]: arg, // generic way to label args
             }), {});
-            const span = this.startTraceSync(name, params);
-            try {
-                const response = func(...args);
-                this.endTrace(span, response);
-                return response;
-            }
-            catch (e) {
-                this.endTrace(span, e);
-                throw e;
-            }
+            const [mng, span] = this.startTrace(name, params);
+            this.ctx.run(mng, () => {
+                try {
+                    const response = func(...args);
+                    this.endTrace(span, response);
+                    return response;
+                }
+                catch (e) {
+                    this.endTrace(span, e);
+                    throw e;
+                }
+            });
         });
     }
-    traceFnAync(name, func) {
+    traceFnAsync(name, func) {
         const funcName = name;
         return (async (...args) => {
             const params = args.reduce((acc, arg, i) => ({
                 ...acc,
                 [`arg${i}`]: arg, // generic way to label args
             }), {});
-            const span = this.startTraceAsync(funcName, params);
-            try {
-                const response = await func(...args);
-                this.endTrace(span, response);
-                return response;
-            }
-            catch (e) {
-                this.endTrace(span, e);
-                throw e;
-            }
+            const [mng, span] = this.startTrace(name, params);
+            await this.ctx.run(mng, async () => {
+                try {
+                    const response = await func(...args);
+                    this.endTrace(span, response);
+                    return response;
+                }
+                catch (e) {
+                    this.endTrace(span, e);
+                    throw e;
+                }
+            });
         });
     }
 }
-exports.CtxManager = CtxManager;
+exports.BamlCtxManager = BamlCtxManager;

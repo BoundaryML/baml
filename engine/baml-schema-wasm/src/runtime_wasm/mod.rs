@@ -8,10 +8,13 @@ use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
 use baml_types::{BamlMap, BamlValue};
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+
 use wasm_bindgen::prelude::*;
+
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 // Node is run using: wasm-pack test --node --features internal,wasm
@@ -57,14 +60,6 @@ pub struct SymbolLocation {
     pub end_line: usize,
     pub end_character: usize,
 }
-
-// impl std::error::Error for WasmDiagnosticError {}
-
-// impl std::fmt::Display for WasmDiagnosticError {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{:?}", self.errors)
-//     }
-// }
 
 #[wasm_bindgen]
 impl WasmDiagnosticError {
@@ -262,6 +257,8 @@ pub struct WasmFunction {
     pub test_cases: Vec<WasmTestCase>,
     #[wasm_bindgen(readonly)]
     pub test_snippet: String,
+    #[wasm_bindgen(readonly)]
+    pub signature: String,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -273,6 +270,31 @@ pub struct WasmSpan {
     pub start: usize,
     #[wasm_bindgen(readonly)]
     pub end: usize,
+    #[wasm_bindgen(readonly)]
+    pub start_line: usize,
+}
+
+impl From<&baml_runtime::internal_core::internal_baml_diagnostics::Span> for WasmSpan {
+    fn from(span: &baml_runtime::internal_core::internal_baml_diagnostics::Span) -> Self {
+        let (start, end) = span.line_and_column();
+        WasmSpan {
+            file_path: span.file.path().to_string(),
+            start: span.start,
+            end: span.end,
+            start_line: start.0,
+        }
+    }
+}
+
+impl Default for WasmSpan {
+    fn default() -> Self {
+        WasmSpan {
+            file_path: "".to_string(),
+            start: 0,
+            end: 0,
+            start_line: 0,
+        }
+    }
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -284,6 +306,8 @@ pub struct WasmTestCase {
     pub inputs: Vec<WasmParam>,
     #[wasm_bindgen(readonly)]
     pub error: Option<String>,
+    #[wasm_bindgen(readonly)]
+    pub span: WasmSpan,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -748,21 +772,27 @@ impl WasmRuntime {
                 );
 
                 let wasm_span = match f.span() {
-                    Some(span) => WasmSpan {
-                        file_path: span.file.path().to_string(),
-                        start: span.start,
-                        end: span.end,
-                    },
-                    None => WasmSpan {
-                        file_path: "".to_string(),
-                        start: 0,
-                        end: 0,
-                    },
+                    Some(span) => span.into(),
+                    None => WasmSpan::default(),
                 };
 
                 WasmFunction {
                     name: f.name().to_string(),
                     span: wasm_span,
+                    signature: {
+                        let inputs = f
+                            .inputs()
+                            .right()
+                            .map(|func_params| {
+                                func_params
+                                    .iter()
+                                    .map(|(k, t)| format!("{}: {}", k, t))
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            })
+                            .unwrap_or_default();
+                        format!("({}) -> {}", inputs, f.output().to_string())
+                    },
                     test_snippet: snippet,
                     test_cases: f
                         .walk_tests()
@@ -817,10 +847,16 @@ impl WasmRuntime {
                                 }
                             });
 
+                            let wasm_span = match tc.span() {
+                                Some(span) => span.into(),
+                                None => WasmSpan::default(),
+                            };
+
                             WasmTestCase {
                                 name: tc.test_case().name.clone(),
                                 inputs: params,
                                 error,
+                                span: wasm_span,
                             }
                         })
                         .collect(),
@@ -859,7 +895,7 @@ impl WasmRuntime {
         if let Ok(walker) = runtime.find_class(symbol) {
             let elem = walker.span().unwrap();
 
-            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let _uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
             return Some(SymbolLocation {
                 uri: elem.file.path().to_string(), // Use the variable here
@@ -873,7 +909,7 @@ impl WasmRuntime {
         if let Ok(walker) = runtime.find_function(symbol) {
             let elem = walker.span().unwrap();
 
-            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let _uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
             return Some(SymbolLocation {
                 uri: elem.file.path().to_string(), // Use the variable here
@@ -887,7 +923,7 @@ impl WasmRuntime {
         if let Ok(walker) = runtime.find_client(symbol) {
             let elem = walker.span().unwrap();
 
-            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let _uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
 
             return Some(SymbolLocation {
@@ -902,7 +938,7 @@ impl WasmRuntime {
         if let Ok(walker) = runtime.find_retry_policy(symbol) {
             let elem = walker.span().unwrap();
 
-            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let _uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
             return Some(SymbolLocation {
                 uri: elem.file.path().to_string(), // Use the variable here
@@ -915,7 +951,7 @@ impl WasmRuntime {
 
         if let Ok(walker) = runtime.find_template_string(symbol) {
             let elem = walker.span().unwrap();
-            let uri_str = elem.file.path().to_string(); // Store the String in a variable
+            let _uri_str = elem.file.path().to_string(); // Store the String in a variable
             let ((s_line, s_character), (e_line, e_character)) = elem.line_and_column();
             return Some(SymbolLocation {
                 uri: elem.file.path().to_string(), // Use the variable here
@@ -972,6 +1008,41 @@ impl WasmFunction {
             .as_ref()
             .map(|(p, scope)| (p, scope).into())
             .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
+    }
+
+    #[wasm_bindgen]
+    pub async fn render_raw_curl(
+        &self,
+        rt: &WasmRuntime,
+        params: JsValue,
+        stream: bool,
+    ) -> Result<String, wasm_bindgen::JsError> {
+        let params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
+        let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
+
+        let ctx = rt
+            .runtime
+            .create_ctx_manager(BamlValue::String("wasm".to_string()))
+            .create_ctx_with_default(missing_env_vars.iter());
+
+        let result = rt
+            .runtime
+            .internal()
+            .render_prompt(&self.name, &ctx, &params, None);
+
+        let final_prompt = match result {
+            Ok((prompt, _)) => match prompt {
+                RenderedPrompt::Chat(chat_messages) => chat_messages,
+                RenderedPrompt::Completion(_) => vec![], // or handle this case differently
+            },
+            Err(e) => return Err(wasm_bindgen::JsError::new(format!("{:#?}", e).as_str())),
+        };
+
+        rt.runtime
+            .internal()
+            .render_raw_curl(&self.name, &ctx, &final_prompt, stream, None)
+            .await
+            .map_err(|e| wasm_bindgen::JsError::new(format!("{e:#?}").as_str()))
     }
 
     #[wasm_bindgen]

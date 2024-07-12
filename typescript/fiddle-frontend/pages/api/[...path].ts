@@ -1,6 +1,5 @@
 import httpProxy from 'http-proxy'
 import { NextApiRequest, NextApiResponse } from 'next'
-import url from 'url'
 
 const API_URL = process.env.API_URL // The actual URL of your API
 

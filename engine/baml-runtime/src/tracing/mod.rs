@@ -1,22 +1,21 @@
-mod api_wrapper;
-#[cfg(not(target_arch = "wasm32"))]
-mod threaded_tracer;
-#[cfg(target_arch = "wasm32")]
-mod wasm_tracer;
+pub mod api_wrapper;
 
-use anyhow::Result;
-use baml_types::{BamlMap, BamlMedia, BamlMediaType, BamlValue};
+use crate::on_log_event::LogEventCallbackSync;
+use crate::InnerTraceStats;
+use anyhow::{Context, Result};
+use baml_types::{BamlMap, BamlMediaType, BamlValue};
+use cfg_if::cfg_if;
 use colored::Colorize;
 use internal_baml_jinja::RenderedPrompt;
-use serde_json::json;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
 use crate::{
-    internal::llm_client::LLMResponse, tracing::api_wrapper::core_types::Role,
-    type_builder::TypeBuilder, FunctionResult, RuntimeContext, RuntimeContextManager, SpanCtx,
-    TestResponse,
+    client_registry::ClientRegistry, internal::llm_client::LLMResponse,
+    tracing::api_wrapper::core_types::Role, type_builder::TypeBuilder, FunctionResult,
+    RuntimeContext, RuntimeContextManager, SpanCtx, TestResponse, TraceStats,
 };
 
 use self::api_wrapper::{
@@ -27,16 +26,17 @@ use self::api_wrapper::{
     },
     APIWrapper,
 };
-#[cfg(not(target_arch = "wasm32"))]
-use self::threaded_tracer::ThreadedTracer;
 
-#[cfg(target_arch = "wasm32")]
-use self::wasm_tracer::NonThreadedTracer;
+cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
+        mod wasm_tracer;
+        use self::wasm_tracer::NonThreadedTracer as TracerImpl;
+    } else {
+        mod threaded_tracer;
+        use self::threaded_tracer::ThreadedTracer as TracerImpl;
+    }
+}
 
-#[cfg(not(target_arch = "wasm32"))]
-type TracerImpl = ThreadedTracer;
-#[cfg(target_arch = "wasm32")]
-type TracerImpl = NonThreadedTracer;
 #[derive(Debug)]
 pub struct TracingSpan {
     span_id: Uuid,
@@ -48,48 +48,67 @@ pub struct BamlTracer {
     options: APIWrapper,
     enabled: bool,
     tracer: Option<TracerImpl>,
+    trace_stats: TraceStats,
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+static_assertions::assert_impl_all!(BamlTracer: Send, Sync);
 
 impl BamlTracer {
     pub fn new<T: AsRef<str>>(
         options: Option<APIWrapper>,
         env_vars: impl Iterator<Item = (T, T)>,
-    ) -> Self {
-        let options = options.unwrap_or_else(|| APIWrapper::from_env_vars(env_vars));
+    ) -> Result<Self> {
+        let options = match options {
+            Some(wrapper) => wrapper,
+            None => APIWrapper::from_env_vars(env_vars)?,
+        };
+
+        let trace_stats = TraceStats::default();
 
         let tracer = BamlTracer {
             tracer: if options.enabled() {
-                Some(TracerImpl::new(
-                    &options,
-                    if options.stage() == "test" { 1 } else { 20 },
-                ))
+                Some(TracerImpl::new(&options, 20, trace_stats.clone()))
             } else {
                 None
             },
             enabled: options.enabled(),
             options,
+            trace_stats,
         };
-        tracer
+        Ok(tracer)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) {
+        if let Some(tracer) = &self.tracer {
+            tracer.set_log_event_callback(log_event_callback);
+        }
     }
 
     pub(crate) fn flush(&self) -> Result<()> {
-        if let Some(tracer) = &self.tracer {
-            tracer.flush()
-        } else {
-            Ok(())
+        if let Some(ref tracer) = self.tracer {
+            tracer.flush().context("Failed to flush BAML traces")?;
         }
+
+        Ok(())
+    }
+
+    pub(crate) fn drain_stats(&self) -> InnerTraceStats {
+        self.trace_stats.drain()
     }
 
     pub(crate) fn start_span(
         &self,
         function_name: &str,
         ctx: &RuntimeContextManager,
-        tb: Option<&TypeBuilder>,
         params: &BamlMap<String, BamlValue>,
-    ) -> (Option<TracingSpan>, RuntimeContext) {
+    ) -> Option<TracingSpan> {
+        self.trace_stats.guard().start();
         let span_id = ctx.enter(function_name);
+        log::trace!("Entering span {:#?} in {:?}", span_id, function_name);
         if !self.enabled {
-            return (None, ctx.create_ctx(tb));
+            return None;
         }
         let span = TracingSpan {
             span_id,
@@ -97,7 +116,7 @@ impl BamlTracer {
             start_time: web_time::SystemTime::now(),
         };
 
-        (Some(span), ctx.create_ctx(tb))
+        Some(span)
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -107,6 +126,8 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: Option<BamlValue>,
     ) -> Result<Option<uuid::Uuid>> {
+        let guard = self.trace_stats.guard();
+
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
             anyhow::bail!(
                 "Attempting to finish a span {:#?} without first starting one. Current context {:#?}",
@@ -123,8 +144,10 @@ impl BamlTracer {
             tracer
                 .submit(response.to_log_schema(&self.options, event_chain, tags, span))
                 .await?;
+            guard.done();
             Ok(Some(span_id))
         } else {
+            guard.done();
             Ok(None)
         }
     }
@@ -136,6 +159,7 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: Option<BamlValue>,
     ) -> Result<Option<uuid::Uuid>> {
+        let guard = self.trace_stats.guard();
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
             anyhow::bail!(
                 "Attempting to finish a span {:#?} without first starting one. Current context {:#?}",
@@ -143,6 +167,12 @@ impl BamlTracer {
                 ctx
             );
         };
+        log::trace!(
+            "Finishing span: {:#?} {}\nevent chain {:?}",
+            span,
+            span_id,
+            event_chain
+        );
 
         if span.span_id != span_id {
             anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
@@ -150,8 +180,10 @@ impl BamlTracer {
 
         if let Some(tracer) = &self.tracer {
             tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
+            guard.finalize();
             Ok(Some(span_id))
         } else {
+            guard.done();
             Ok(None)
         }
     }
@@ -163,6 +195,7 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: &Result<FunctionResult>,
     ) -> Result<Option<uuid::Uuid>> {
+        let guard = self.trace_stats.guard();
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
             anyhow::bail!("Attempting to finish a span without first starting one");
         };
@@ -187,8 +220,10 @@ impl BamlTracer {
             tracer
                 .submit(response.to_log_schema(&self.options, event_chain, tags, span))
                 .await?;
+            guard.done();
             Ok(Some(span_id))
         } else {
+            guard.done();
             Ok(None)
         }
     }
@@ -200,9 +235,17 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: &Result<FunctionResult>,
     ) -> Result<Option<uuid::Uuid>> {
+        let guard = self.trace_stats.guard();
         let Some((span_id, event_chain, tags)) = ctx.exit() else {
             anyhow::bail!("Attempting to finish a span without first starting one");
         };
+
+        log::trace!(
+            "Finishing baml span: {:#?} {}\nevent chain {:?}",
+            span,
+            span_id,
+            event_chain
+        );
 
         if span.span_id != span_id {
             anyhow::bail!("Span ID mismatch: {} != {}", span.span_id, span_id);
@@ -222,8 +265,10 @@ impl BamlTracer {
 
         if let Some(tracer) = &self.tracer {
             tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
+            guard.finalize();
             Ok(Some(span_id))
         } else {
+            guard.done();
             Ok(None)
         }
     }
@@ -509,7 +554,7 @@ impl From<&LLMResponse> for LLMEventSchema {
                         template_args: Default::default(),
                         r#override: None,
                     },
-                    invocation_params: Default::default(),
+                    request_options: Default::default(),
                 },
                 output: None,
                 error: Some(s.clone()),
@@ -523,7 +568,7 @@ impl From<&LLMResponse> for LLMEventSchema {
                         template_args: Default::default(),
                         r#override: None,
                     },
-                    invocation_params: s.invocation_params.clone(),
+                    request_options: s.request_options.clone(),
                 },
                 output: Some(LLMOutputModel {
                     raw_text: s.content.clone(),
@@ -547,7 +592,7 @@ impl From<&LLMResponse> for LLMEventSchema {
                         template_args: Default::default(),
                         r#override: None,
                     },
-                    invocation_params: s.invocation_params.clone(),
+                    request_options: s.request_options.clone(),
                 },
                 output: None,
                 error: Some(s.message.clone()),
@@ -588,7 +633,6 @@ impl From<&RenderedPrompt> for Template {
                                             BamlMediaType::Audio => {
                                                 ContentPart::B64Audio(data.base64.clone())
                                             }
-                                            _ => panic!("Unsupported media type"),
                                         }
                                     }
                                     baml_types::BamlMedia::Url(media_type, data) => {
@@ -599,7 +643,6 @@ impl From<&RenderedPrompt> for Template {
                                             BamlMediaType::Audio => {
                                                 ContentPart::UrlAudio(data.url.clone())
                                             }
-                                            _ => panic!("Unsupported media type"),
                                         }
                                     }
                                 },

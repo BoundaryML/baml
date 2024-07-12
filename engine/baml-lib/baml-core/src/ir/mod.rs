@@ -3,13 +3,11 @@ mod json_schema;
 pub mod repr;
 mod walker;
 
-use internal_baml_schema_ast::ast;
 pub use ir_helpers::{
     ClassFieldWalker, ClassWalker, ClientWalker, EnumValueWalker, EnumWalker, FunctionWalker,
     IRHelper, RetryPolicyWalker, TemplateStringWalker, TestCaseWalker,
 };
 
-pub(super) use json_schema::WithJsonSchema;
 pub(super) use repr::IntermediateRepr;
 
 // Add aliases for the IR types

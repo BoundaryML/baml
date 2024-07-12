@@ -5,20 +5,15 @@ import { createJSONStorage } from 'jotai/utils'
 import type { SyncStorage } from 'jotai/vanilla/utils/atomWithStorage'
 import { DevTools } from 'jotai-devtools'
 import 'jotai-devtools/styles.css'
+import { vscode } from '../utils/vscode'
 
 export const atomStore = createStore()
 
-export const vscodeAPI = () => {
-  if (typeof acquireVsCodeApi === 'function') {
-    return acquireVsCodeApi()
-  }
-  return undefined
-}
 function setVSCodeState(state: any) {
-  vscodeAPI()?.setState(state)
+  vscode.setState(state)
 }
 function getLocalStorage() {
-  const state = vscodeAPI()?.getState() || { localStorage: {} }
+  const state = vscode.getState() || { localStorage: {} }
   return (state as any).localStorage
 }
 

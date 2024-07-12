@@ -8,10 +8,9 @@
 
 # BAML
 
+**BAML is a domain-specific-language to write and test LLM functions.**
+
 An LLM function is a prompt template with some defined input variables, and a specific output type like a class, enum, union, optional string, etc.
-
-**BAML is a configuration file format to write better and cleaner LLM functions.**
-
 With BAML you can write and test a complex LLM function in 1/10 of the time it takes to setup a python LLM testing environment.
 
 ## Try it out in the playground -- [PromptFiddle.com](https://promptfiddle.com)
@@ -31,16 +30,6 @@ Share your creations and ask questions in our [Discord](https://discord.gg/BTNBe
 - **Resilience and fallback features**: Add retries, redundancy, to your LLM calls
 - **Observability Platform**: Use Boundary Studio to visualize your functions and replay production requests with 1 click.
 
-## Companies using BAML
-
-- [Zenfetch](https://zenfetch.com/) - ChatGPT for your bookmarks
-- [Vetrec](https://www.vetrec.io/) - AI-powered Clinical Notes for Veterinarians
-- [MagnaPlay](https://www.magnaplay.com/) - Production-quality machine translation for games
-- [Aer Compliance](https://www.aercompliance.com/) - AI-powered compliance tasks
-- [Haven](https://www.usehaven.ai/) - Automate Tenant communications with AI
-- [Muckrock](https://www.muckrock.com/) - FOIA request tracking and filing
-- and more! [Let us know](https://calendly.com/boundaryml/meeting-with-founders) if you want to be showcased or want to work with us 1-1 to solve your usecase.
-
 ## Resources
 
 <a href="https://discord.gg/ENtBB6kkXH"><img src="https://img.shields.io/discord/1119368998161752075.svg?logo=discord&label=Discord%20Community" /></a>
@@ -53,7 +42,7 @@ Share your creations and ask questions in our [Discord](https://discord.gg/BTNBe
 ## Starter projects
 
 - [BAML + NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
-- [BAML + FastAPI + Streaming](https://github.com/BoundaryML/baml-examples/tree/main/fastapi-starter)
+- [BAML + FastAPI + Streaming](https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter)
 
 ## A BAML LLM Function
 
@@ -146,19 +135,21 @@ With BAML you have:
 
 ## BAML Toolchain
 
-|                                                                                           | Capabilities                                                                                                                                                                                                                                                                                                                       |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VSCode Extension [install](https://marketplace.visualstudio.com/items?itemName=gloo.baml) | Syntax highlighting for BAML files<br /> Real-time prompt preview <br /> Testing UI                                                                                                                                                                                                                                                |
-| Boundary Studio [open](https://app.boundaryml.com)<br />(not open source)                 | Type-safe observability <br />Labeling                                                                                                                                                                                                                                                                                             |
+|                                                                                           | Capabilities                                                                        |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| VSCode Extension [install](https://marketplace.visualstudio.com/items?itemName=gloo.baml) | Syntax highlighting for BAML files<br /> Real-time prompt preview <br /> Testing UI |
+| Boundary Studio [open](https://app.boundaryml.com)<br />(not open source)                 | Type-safe observability <br />Labeling                                              |
 
 </p>
 
 ## Installation
 
 ### Python
+
 `pip install baml-py`
 
 ### Typescript
+
 `npm install @boundaryml/baml`
 
 ### 2. Download VSCode extension
@@ -178,6 +169,18 @@ Python: `baml-cli init`
 
 - [NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
 - [FastAPI](https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter)
+
+## BAML in the wild
+
+Showcase of applications using BAML
+
+- [Zenfetch](https://zenfetch.com/) - ChatGPT for your bookmarks
+- [Vetrec](https://www.vetrec.io/) - AI-powered Clinical Notes for Veterinarians
+- [MagnaPlay](https://www.magnaplay.com/) - Production-quality machine translation for games
+- [Aer Compliance](https://www.aercompliance.com/) - AI-powered compliance tasks
+- [Haven](https://www.usehaven.ai/) - Automate Tenant communications with AI
+- [Muckrock](https://www.muckrock.com/) - FOIA request tracking and filing
+- and more! [Let us know](https://calendly.com/boundaryml/meeting-with-founders) if you want to be showcased or want to work with us 1-1 to solve your usecase.
 
 ## Observability
 
@@ -226,11 +229,13 @@ Here's how BAML differs from these frameworks:
 **Aliasing object fields in Zod**
 
 ```typescript
-const UserSchema = z.object({
-  first_name: z.string(),
-}).transform((user) => ({
-  firstName: user.first_name
-}));
+const UserSchema = z
+  .object({
+    first_name: z.string(),
+  })
+  .transform((user) => ({
+    firstName: user.first_name,
+  }));
 ```
 
 **Aliasing object fields BAML**

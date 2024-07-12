@@ -7,14 +7,14 @@ use crate::GeneratorArgs;
 use super::ToTypeReferenceInClientDefinition;
 
 #[derive(askama::Template)]
-#[template(path = "type_builder.js.j2", escape = "none")]
+#[template(path = "type_builder.ts.j2", escape = "none")]
 pub(crate) struct TypeBuilder<'ir> {
     enums: Vec<TypescriptEnum<'ir>>,
     classes: Vec<TypescriptClass<'ir>>,
 }
 
 #[derive(askama::Template)]
-#[template(path = "types.js.j2", escape = "none")]
+#[template(path = "types.ts.j2", escape = "none")]
 pub(crate) struct TypescriptTypes<'ir> {
     enums: Vec<TypescriptEnum<'ir>>,
     classes: Vec<TypescriptClass<'ir>>,

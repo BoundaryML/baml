@@ -6,8 +6,8 @@ use pyo3::{PyObject, Python, ToPyObject};
 use crate::parse_py_type::parse_py_type;
 use crate::BamlError;
 
-use super::runtime::BamlRuntime;
 use super::runtime_ctx_manager::RuntimeContextManager;
+use crate::runtime::BamlRuntime;
 
 crate::lang_wrapper!(BamlSpan,
   Option<Option<baml_runtime::tracing::TracingSpan>>,
@@ -31,7 +31,7 @@ impl BamlSpan {
             return Err(BamlError::new_err("Failed to parse args"));
         };
 
-        let (span, _) = runtime
+        let span = runtime
             .inner
             .start_span(function_name, &args_map, &ctx.inner);
 
@@ -49,7 +49,7 @@ impl BamlSpan {
         result: PyObject,
         ctx: &RuntimeContextManager,
     ) -> PyResult<Option<String>> {
-        log::info!("Finishing span: {:?}", self.inner);
+        log::trace!("Finishing span: {:?}", self.inner);
         let result = parse_py_type(result.into_bound(py).to_object(py), true)?;
 
         let span = self

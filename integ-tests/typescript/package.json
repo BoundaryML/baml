@@ -5,9 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "build": "cd ../../clients/ts && npm run build && cd - && pnpm i",
-    "integ-tests": "BAML_LOG=baml_events infisical run --env=test -- pnpm test -- --silent false --testTimeout 30000",
-    "integ-tests:dotenv": "BAML_LOG=baml_events dotenv -e ../.env -- pnpm test -- --silent false --testTimeout 30000",
+    "build:debug": "cd ../../engine/language_client_typescript && pnpm run build:debug && cd - && pnpm i",
+    "build": "cd ../../engine/language_client_typescript && npm run build && cd - && pnpm i",
+    "integ-tests": "BAML_LOG=info infisical run --env=test -- pnpm test -- --silent false --testTimeout 30000",
+    "integ-tests:dotenv": "BAML_LOG=info dotenv -e ../.env -- pnpm test -- --silent false --testTimeout 30000",
     "generate": "baml-cli generate --from ../baml_src"
   },
   "keywords": [],
@@ -26,6 +27,7 @@
     "typescript": "^5.4.2"
   },
   "dependencies": {
-    "@boundaryml/baml": "link:../../engine/language_client_typescript"
+    "@boundaryml/baml": "link:../../engine/language_client_typescript",
+    "dotenv": "^16.4.5"
   }
 }

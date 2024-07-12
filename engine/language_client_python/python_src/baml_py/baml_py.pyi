@@ -64,6 +64,7 @@ class BamlRuntime:
         args: Dict[str, Any],
         ctx: RuntimeContextManager,
         tb: Optional[TypeBuilder],
+        cr: Optional[ClientRegistry],
     ) -> FunctionResult: ...
     @staticmethod
     def from_files(
@@ -76,9 +77,53 @@ class BamlRuntime:
         on_event: Optional[Callable[[FunctionResult], None]],
         ctx: RuntimeContextManager,
         tb: Optional[TypeBuilder],
+        cr: Optional[ClientRegistry],
     ) -> FunctionResultStream: ...
     def create_context_manager(self) -> RuntimeContextManager: ...
     def flush(self) -> None: ...
+    def drain_stats(self) -> TraceStats: ...
+    def set_log_event_callback(
+        self, handler: Callable[[BamlLogEvent], None]
+    ) -> None: ...
+
+class LogEventMetadata:
+    event_id: str
+    parent_id: Optional[str]
+    root_event_id: str
+
+    def __init__(
+        self, event_id: str, parent_id: Optional[str], root_event_id: str
+    ) -> None: ...
+
+class BamlLogEvent:
+    metadata: LogEventMetadata
+    prompt: Optional[str]
+    raw_output: Optional[str]
+    parsed_output: Optional[str]
+    start_time: str
+
+    def __init__(
+        self,
+        metadata: LogEventMetadata,
+        prompt: Optional[str],
+        raw_output: Optional[str],
+        parsed_output: Optional[str],
+        start_time: str,
+    ) -> None: ...
+
+class TraceStats:
+    @property
+    def failed(self) -> int: ...
+    @property
+    def started(self) -> int: ...
+    @property
+    def finalized(self) -> int: ...
+    @property
+    def submitted(self) -> int: ...
+    @property
+    def sent(self) -> int: ...
+    @property
+    def done(self) -> int: ...
 
 class BamlSpan:
     @staticmethod
@@ -101,6 +146,17 @@ class TypeBuilder:
     def list(self, element_type: FieldType) -> FieldType: ...
     def null(self) -> FieldType: ...
     def optional(self, inner_type: FieldType) -> FieldType: ...
+
+class ClientRegistry:
+    def __init__(self) -> None: ...
+    def add_llm_client(
+        self,
+        name: str,
+        provider: str,
+        options: Dict[str, Any],
+        retry_policy: Optional[str] = None,
+    ) -> None: ...
+    def set_primary(self, name: str) -> None: ...
 
 class FieldType:
     def list(self) -> FieldType: ...

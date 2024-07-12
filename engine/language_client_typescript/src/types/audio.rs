@@ -2,6 +2,7 @@ use baml_types::BamlMediaType;
 use napi::bindgen_prelude::External;
 use napi_derive::napi;
 use serde_json::json;
+
 crate::lang_wrapper!(BamlAudio, baml_types::BamlMedia);
 
 #[napi]

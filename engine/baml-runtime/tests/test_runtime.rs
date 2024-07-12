@@ -3,9 +3,9 @@ mod internal_tests {
     use std::collections::HashMap;
 
     use baml_runtime::BamlRuntime;
-    use baml_runtime::RuntimeContext;
+    
     use baml_types::BamlValue;
-    use indexmap::IndexMap;
+    
 
     use wasm_bindgen_test::*;
     use wasm_logger;
@@ -107,7 +107,7 @@ mod internal_tests {
 
         let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()));
         let (res, _) = runtime
-            .call_function("GetOrderInfo".to_string(), &params, &ctx, None)
+            .call_function("GetOrderInfo".to_string(), &params, &ctx, None, None)
             .await;
 
         assert!(res.is_ok(), "Result: {:#?}", res.err());

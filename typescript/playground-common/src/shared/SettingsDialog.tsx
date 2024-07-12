@@ -170,10 +170,7 @@ const EnvvarInput: React.FC<{ envvar: EnvVar }> = ({ envvar }) => {
   )
 }
 
-export const ShowSettingsButton: React.FC<{ buttonClassName: string; iconClassName: string }> = ({
-  buttonClassName,
-  iconClassName,
-}) => {
+export const ShowSettingsButton: React.FC<{ iconClassName: string }> = ({ iconClassName }) => {
   const setShowSettings = useSetAtom(showSettingsAtom)
   const requiredButUnset = useAtomValue(requiredButUnsetAtom)
   const requiredButUnsetCount = requiredButUnset.length
@@ -183,10 +180,13 @@ export const ShowSettingsButton: React.FC<{ buttonClassName: string; iconClassNa
   }
 
   const button = (
-    <Button className={buttonClassName} onClick={() => setShowSettings(true)}>
-      <SettingsIcon className={iconClassName} />
+    <Button
+      className='relative px-2 py-1 bg-transparent h-fit text-vscode-editor-foreground hover:text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
+      onClick={() => setShowSettings(true)}
+    >
+      <SettingsIcon className='w-4' /> Env Vars
       {requiredButUnsetCount > 0 && (
-        <div className='absolute inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-yellow-500 border-2 border-white rounded-full -top-0 -end-0 dark:border-gray-900'>
+        <div className='absolute inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-yellow-500 border-2 border-white rounded-full -top-2 -end-3 dark:border-gray-900'>
           {requiredButUnsetCount}
         </div>
       )}
@@ -203,12 +203,12 @@ export const ShowSettingsButton: React.FC<{ buttonClassName: string; iconClassNa
         ? `${requiredButUnset.map((k) => `env.${k}`).join(' and ')} are used but not set`
         : `${requiredButUnsetCount} environment variables are used but not set`
   return (
-    <TooltipProvider>
-      <Tooltip delayDuration={100}>
-        <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent className='flex flex-col gap-y-1'>{message}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    // <TooltipProvider>
+    <Tooltip delayDuration={100}>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent className='flex flex-col gap-y-1'>{message}</TooltipContent>
+    </Tooltip>
+    // </TooltipProvider>
   )
 }
 export const SettingsDialog: React.FC = () => {

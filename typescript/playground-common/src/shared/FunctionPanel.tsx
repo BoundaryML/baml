@@ -1,16 +1,64 @@
 /// Content once a function has been selected.
-
-import { useAtomValue } from 'jotai'
-import { useId, useRef } from 'react'
-import { renderPromptAtom, selectedFunctionAtom } from '../baml_wasm_web/EventListener'
+import { useAppState } from './AppStateContext'
+import { useAtomValue, useSetAtom } from 'jotai'
+import { renderPromptAtom, selectedFunctionAtom, curlAtom, streamCurl } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
-import { Snippet } from './ImplPanel'
+import { PromptChunk } from './ImplPanel'
 import FunctionTestSnippet from './TestSnippet'
+import { Copy } from 'lucide-react'
+import { Button } from '../components/ui/button'
+import { CheckboxHeader } from './CheckboxHeader'
+import { Switch } from '../components/ui/switch'
+import CustomErrorBoundary from '../utils/ErrorFallback'
+const handleCopy = (text: string) => () => {
+  navigator.clipboard.writeText(text)
+}
+
+const CurlSnippet: React.FC = () => {
+  const rawCurl = useAtomValue(curlAtom) ?? 'Loading...'
+
+  return (
+    <div>
+      <div className='flex justify-end items-center space-x-2 p-2  rounded-md shadow-sm'>
+        <label className='flex items-center space-x-1 mr-2'>
+          <Switch
+            className='data-[state=checked]:bg-vscode-button-background data-[state=unchecked]:bg-vscode-input-background'
+            checked={useAtomValue(streamCurl)}
+            onCheckedChange={useSetAtom(streamCurl)}
+          />
+          <span>View Stream Request</span>
+        </label>
+        <Button
+          onClick={handleCopy(rawCurl)}
+          className='py-1 px-3 text-xs text-white bg-vscode-button-background hover:bg-vscode-button-hoverBackground'
+        >
+          <Copy size={16} />
+        </Button>
+      </div>
+      <PromptChunk
+        text={rawCurl}
+        client={{
+          identifier: {
+            end: 0,
+            source_file: '',
+            start: 0,
+            value: 'Curl Request',
+          },
+          provider: '',
+          model: '',
+        }}
+        showCopy={true}
+      />
+    </div>
+  )
+}
 
 const PromptPreview: React.FC = () => {
   const promptPreview = useAtomValue(renderPromptAtom)
+  const { showCurlRequest } = useAppState()
+
   if (!promptPreview) {
     return (
       <div className='flex flex-col items-center justify-center w-full h-full gap-2'>
@@ -20,9 +68,9 @@ const PromptPreview: React.FC = () => {
     )
   }
 
-  if (typeof promptPreview === 'string')
+  if (typeof promptPreview === 'string') {
     return (
-      <Snippet
+      <PromptChunk
         text={promptPreview}
         type='error'
         client={{
@@ -37,6 +85,11 @@ const PromptPreview: React.FC = () => {
         }}
       />
     )
+  }
+
+  if (showCurlRequest) {
+    return <CurlSnippet />
+  }
 
   return (
     <div className='flex flex-col w-full h-full gap-4 px-2'>
@@ -46,7 +99,7 @@ const PromptPreview: React.FC = () => {
           {chat.parts.map((part, idx) => {
             if (part.is_text())
               return (
-                <Snippet
+                <PromptChunk
                   key={idx}
                   text={part.as_text()!}
                   client={{
@@ -61,7 +114,12 @@ const PromptPreview: React.FC = () => {
                   }}
                 />
               )
-            if (part.is_image()) return <img key={idx} src={part.as_image()} className='max-w-40' />
+            if (part.is_image())
+              return (
+                <a key={idx} href={part.as_image()} target='_blank'>
+                  <img key={idx} src={part.as_image()} className='max-w-[400px] object-cover' />
+                </a>
+              )
             if (part.is_audio()) {
               const audioUrl = part.as_audio()
               if (audioUrl) {
@@ -83,9 +141,7 @@ const PromptPreview: React.FC = () => {
 
 const FunctionPanel: React.FC = () => {
   const selectedFunc = useAtomValue(selectedFunctionAtom)
-
-  const id = useId()
-  const refs = useRef()
+  const { showTestResults } = useAppState()
 
   if (!selectedFunc) {
     const bamlFunctionSnippet = `
@@ -130,21 +186,28 @@ enum Topic {
           <ResizablePanel id='top-panel' className='flex w-full px-1' defaultSize={50}>
             <div className='w-full'>
               <ResizablePanelGroup direction='horizontal' className='h-full'>
-                <div className='relative w-full h-full overflow-y-auto'>
-                  <PromptPreview />
+                <div className='w-full h-full'>
+                  <CheckboxHeader />
+                  <div className='relative w-full overflow-y-auto' style={{ height: 'calc(100% - 32px)' }}>
+                    <PromptPreview />
+                  </div>
                 </div>
               </ResizablePanelGroup>
 
               {/* </Allotment> */}
             </div>
           </ResizablePanel>
-          <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
-          <ResizablePanel
-            minSize={10}
-            className='flex h-full px-0 py-2 mb-2 border-t border-vscode-textSeparator-foreground'
-          >
-            <TestResults />
-          </ResizablePanel>
+          {showTestResults && (
+            <>
+              <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
+              <ResizablePanel
+                minSize={10}
+                className='flex h-full px-0 py-2 mb-2 border-t border-vscode-textSeparator-foreground'
+              >
+                <TestResults />
+              </ResizablePanel>
+            </>
+          )}
         </ResizablePanelGroup>
       </TooltipProvider>
     </div>

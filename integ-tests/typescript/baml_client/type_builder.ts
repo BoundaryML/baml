@@ -21,6 +21,10 @@ import { TypeBuilder as _TypeBuilder, EnumBuilder, ClassBuilder } from '@boundar
 export default class TypeBuilder {
     private tb: _TypeBuilder;
     
+    DummyOutput: ClassBuilder<'DummyOutput', "nonce" | "nonce2">;
+    
+    DynInputOutput: ClassBuilder<'DynInputOutput', "testKey">;
+    
     DynamicClassOne: ClassBuilder<'DynamicClassOne'>;
     
     DynamicClassTwo: ClassBuilder<'DynamicClassTwo', "hi" | "some_class" | "status">;
@@ -44,12 +48,20 @@ export default class TypeBuilder {
     constructor() {
         this.tb = new _TypeBuilder({
           classes: new Set([
-            "Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","DynamicClassOne","DynamicClassTwo","DynamicOutput","Education","Email","Event","FakeImage","InnerClass","InnerClass2","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","RaysData","Resume","SearchParams","SomeClassNestedDynamic","TestClassAlias","TestClassNested","TestClassWithEnum","TestOutputClass","UnionTest_ReturnType","WithReasoning",
+            "Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","Education","Email","Event","FakeImage","InnerClass","InnerClass2","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","RaysData","ReceiptInfo","ReceiptItem","Resume","SearchParams","SomeClassNestedDynamic","TestClassAlias","TestClassNested","TestClassWithEnum","TestOutputClass","UnionTest_ReturnType","WithReasoning",
           ]),
           enums: new Set([
             "Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumTwo","EnumInClass","EnumOutput","Hobby","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",
           ])
         });
+        
+        this.DummyOutput = this.tb.classBuilder("DummyOutput", [
+          "nonce","nonce2",
+        ]);
+        
+        this.DynInputOutput = this.tb.classBuilder("DynInputOutput", [
+          "testKey",
+        ]);
         
         this.DynamicClassOne = this.tb.classBuilder("DynamicClassOne", [
           
@@ -115,10 +127,10 @@ export default class TypeBuilder {
     }
 
     addClass<Name extends string>(name: Name): ClassBuilder<Name> {
-        this.tb.addClass(name);
+        return this.tb.addClass(name);
     }
 
     addEnum<Name extends string>(name: Name): EnumBuilder<Name> {
-        this.tb.addEnum(name);
+        return this.tb.addEnum(name);
     }
 }

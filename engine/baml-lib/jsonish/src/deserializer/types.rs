@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use baml_types::{BamlMap, BamlMedia, BamlMediaType, BamlValue};
+use baml_types::{BamlMap, BamlMedia, BamlValue};
 
 use super::{
     deserialize_flags::{DeserializerConditions, Flag},

@@ -1,4 +1,5 @@
 /// Content once a function has been selected.
+import { useAppState } from './AppStateContext'
 
 import { TestStatus } from '@baml/common'
 import type { Impl } from '@baml/common'
@@ -19,8 +20,6 @@ import {
   getEncodingNameForModel,
 } from 'js-tiktoken'
 import { useMemo, useState } from 'react'
-import { Checkbox } from '../components/ui/checkbox'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 
 const Whitespace: React.FC<{ char: 'space' | 'tab' }> = ({ char }) => (
   <span className='opacity-50 text-vscode-descriptionForeground'>{char === 'space' ? <>&middot;</> : <>&rarr;</>}</span>
@@ -53,11 +52,9 @@ const replaceWhitespace = (char: string, key: string) => {
 const renderLine = ({
   text,
   showWhitespace,
-  wrapText,
 }: {
   text: string
   showWhitespace: boolean
-  wrapText: boolean
 }) => {
   // Split the text into segments
   const segments = text.split(whitespaceRegexp)
@@ -70,15 +67,17 @@ const renderLine = ({
       if (segment == '/') {
         return segment
       }
-      return <InvisibleUtf key={index} text={segment} />
+      return segment
     } else {
       return segment
     }
   })
   return showWhitespace ? (
-    <div className={clsx('inline-flex text-xs', { 'flex-wrap': wrapText })}>{formattedText}</div>
+    <div className={clsx('inline-flex text-xs break-words [overflow-wrap:anywhere]', { 'flex-wrap': true })}>
+      {formattedText}
+    </div>
   ) : (
-    <div className='whitespace-pre-wrap'>{formattedText}</div>
+    <div className='whitespace-pre-wrap break-words [overflow-wrap:anywhere]'>{formattedText}</div>
   )
 }
 
@@ -87,9 +86,8 @@ const CodeLine: React.FC<{
   line: string | [string, number][]
   lineNumber: number
   showWhitespace: boolean
-  wrapText: boolean
   maxLineNumber: number
-}> = ({ line, lineNumber, showWhitespace, wrapText, maxLineNumber }) => {
+}> = ({ line, lineNumber, showWhitespace, maxLineNumber }) => {
   // Function to render whitespace characters and invisible UTF characters with special styling
   const lineNumberSpan = (
     <span className='pr-1 font-mono text-xs text-right text-gray-500 select-none'>
@@ -100,21 +98,24 @@ const CodeLine: React.FC<{
   const isTokenized = Array.isArray(line[0])
 
   if (Array.isArray(line)) {
-    console.log('line', line)
     return (
       <div className='flex flex-row items-start'>
         {lineNumberSpan}
         <div className='text-wrap'>
           {line.map(([token, tokenIndex], index) => (
             <span
-              className={clsx('inline-flex font-mono text-xs', TOKEN_BG_STYLES[tokenIndex % TOKEN_BG_STYLES.length], {
-                'whitespace-pre-wrap': wrapText || isTokenized,
-                'text-white': isTokenized,
-                "after:content-['↵']": index === line.length - 1,
-                'after:opacity-50': index === line.length - 1,
-              })}
+              className={clsx(
+                'inline-flex font-mono text-xs break-words [overflow-wrap:anywhere]',
+                TOKEN_BG_STYLES[tokenIndex % TOKEN_BG_STYLES.length],
+                {
+                  'whitespace-pre-wrap': true || isTokenized,
+                  'text-white': isTokenized,
+                  "after:content-['↵']": index === line.length - 1,
+                  'after:opacity-50': index === line.length - 1,
+                },
+              )}
             >
-              {renderLine({ text: token, showWhitespace, wrapText })}
+              {renderLine({ text: token, showWhitespace })}
             </span>
           ))}
         </div>
@@ -125,8 +126,8 @@ const CodeLine: React.FC<{
   return (
     <div className='flex flex-row items-start'>
       {lineNumberSpan}
-      <span className={clsx('inline-block font-mono text-xs', { 'whitespace-pre-wrap': wrapText })}>
-        {renderLine({ text: line, showWhitespace, wrapText })}
+      <span className={clsx('inline-block font-mono text-xs whitespace-pre-wrap break-words [overflow-wrap:anywhere]')}>
+        {renderLine({ text: line, showWhitespace })}
       </span>
     </div>
   )
@@ -169,14 +170,13 @@ class TokenEncoderCache {
   }
 }
 
-export const Snippet: React.FC<{
+export const PromptChunk: React.FC<{
   text: string
   type?: 'preview' | 'error'
   client: Impl['client']
-}> = ({ text, type = 'preview', client }) => {
-  const [showTokens, setShowTokens] = useState(false)
-  const [showWhitespace, setShowWhitespace] = useState(false)
-  const [wrapText, setWrapText] = useState(true)
+  showCopy?: boolean
+}> = ({ text, type = 'preview', client, showCopy = false }) => {
+  const { showTokens, showWhitespace, showCurlRequest } = useAppState()
 
   const encodingName = client.model
     ? TokenEncoderCache.getEncodingNameForModel(client.provider, client.model)
@@ -195,33 +195,6 @@ export const Snippet: React.FC<{
     'bg-vscode-inputValidation-errorBackground': type === 'error',
   })
 
-  const header = (
-    <div className='flex flex-wrap justify-start gap-4 px-2 py-2 text-xs whitespace-nowrap'>
-      {encodingName && (
-        <PromptCheckbox checked={showTokens} onChange={(e) => setShowTokens(e)}>
-          Show Tokens
-        </PromptCheckbox>
-      )}
-      <PromptCheckbox checked={wrapText} onChange={(e) => setWrapText(e)}>
-        Wrap Text
-      </PromptCheckbox>
-      <PromptCheckbox checked={showWhitespace} onChange={(e) => setShowWhitespace(e)}>
-        Whitespace
-      </PromptCheckbox>
-
-      {showTokens && encodingName && tokenizer && (
-        <Tooltip delayDuration={0}>
-          <TooltipTrigger asChild>
-            <div className='flex-grow p-0 r-full ps-2'>{(tokenizer.tokens as []).length} tokens</div>
-          </TooltipTrigger>
-          <TooltipContent className='flex flex-col gap-y-1'>
-            Tokenizer {encodingName} for model {client.model}
-          </TooltipContent>
-        </Tooltip>
-      )}
-    </div>
-  )
-
   if (showTokens && tokenizer) {
     const tokenized = Array.from(tokenizer.tokens as number[]).map((token) => tokenizer.enc.decode([token]))
     const tokenizedLines: [string, number][][] = [[]]
@@ -239,12 +212,10 @@ export const Snippet: React.FC<{
         lineNumber={lineIndex + 1}
         maxLineNumber={tokenizedLines.length}
         showWhitespace={false}
-        wrapText={false}
       />
     ))
     return (
       <div className={divStyle}>
-        {header}
         <pre className='w-full p-1 text-xs'>{tokenizedContent}</pre>
       </div>
     )
@@ -252,7 +223,6 @@ export const Snippet: React.FC<{
     const lines = text.split('\n')
     return (
       <div className={divStyle}>
-        {header}
         <pre className='w-full p-1 text-xs'>
           {lines.map((line, index) => (
             <CodeLine
@@ -261,57 +231,10 @@ export const Snippet: React.FC<{
               line={line}
               lineNumber={index + 1}
               showWhitespace={showWhitespace}
-              wrapText={wrapText}
             />
           ))}
         </pre>
       </div>
     )
-  }
-}
-
-const PromptCheckbox = ({
-  children,
-  checked,
-  onChange,
-}: {
-  children: React.ReactNode
-  checked: boolean
-  onChange: (e: any) => void
-}) => {
-  return (
-    <div className='flex flex-row items-center gap-1'>
-      <Checkbox checked={checked} onCheckedChange={onChange} className='border-vscode-descriptionForeground' />
-      <span className='text-vscode-descriptionForeground'>{children}</span>
-    </div>
-  )
-}
-
-const PromptPreview: React.FC<{ prompt: Impl['prompt']; client: Impl['client']; shouldSuppressError: boolean }> = ({
-  prompt,
-  client,
-  shouldSuppressError,
-}) => {
-  switch (prompt.type) {
-    case 'Completion':
-      return <Snippet client={client} text={prompt.completion} />
-    case 'Chat':
-      return (
-        <div className='flex flex-col gap-2'>
-          {prompt.chat.map(({ role, message }, index: number) => (
-            <div className='flex flex-col'>
-              <div className='text-xs'>
-                <span className='text-muted-foreground'>Role:</span> <span className='font-bold'>{role}</span>
-              </div>
-              <Snippet key={index} client={client} text={message} />
-            </div>
-          ))}
-        </div>
-      )
-    case 'Error':
-      if (shouldSuppressError) {
-        return null
-      }
-      return <Snippet type='error' client={client} text={prompt.error} />
   }
 }

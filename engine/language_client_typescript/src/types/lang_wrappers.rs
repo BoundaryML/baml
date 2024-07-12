@@ -17,6 +17,23 @@ macro_rules! lang_wrapper {
         }
     };
 
+    ($name:ident, $type:ty, clone_safe, custom_finalize $(, $attr_name:ident : $attr_type:ty = $default:expr)*) => {
+        #[napi_derive::napi(custom_finalize)]
+        pub struct $name {
+            pub(crate) inner: std::sync::Arc<$type>,
+            $($attr_name: $attr_type),*
+        }
+
+        impl From<$type> for $name {
+            fn from(inner: $type) -> Self {
+                Self {
+                    inner: std::sync::Arc::new(inner),
+                    $($attr_name: $default),*
+                }
+            }
+        }
+    };
+
     ($name:ident, $type:ty, sync_thread_safe $(, $attr_name:ident : $attr_type:ty)*) => {
         #[napi_derive::napi]
         pub struct $name {

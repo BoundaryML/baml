@@ -1,17 +1,17 @@
 use std::collections::HashMap;
 
 use colored::*;
-// mod anthropic;
-mod common;
 pub mod llm_provider;
 pub mod orchestrator;
-mod primitive;
+pub mod primitive;
+
 pub mod retry_policy;
 mod strategy;
 pub mod traits;
 
 use anyhow::Result;
 
+use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::RenderedPrompt;
 use serde::Serialize;
 use std::error::Error;
@@ -70,7 +70,7 @@ pub struct LLMErrorResponse {
     pub client: String,
     pub model: Option<String>,
     pub prompt: RenderedPrompt,
-    pub invocation_params: HashMap<String, serde_json::Value>,
+    pub request_options: HashMap<String, serde_json::Value>,
     pub start_time: web_time::SystemTime,
     pub latency: web_time::Duration,
 
@@ -135,7 +135,7 @@ pub struct LLMCompleteResponse {
     pub client: String,
     pub model: String,
     pub prompt: RenderedPrompt,
-    pub invocation_params: HashMap<String, serde_json::Value>,
+    pub request_options: HashMap<String, serde_json::Value>,
     pub content: String,
     pub start_time: web_time::SystemTime,
     pub latency: web_time::Duration,
@@ -169,4 +169,26 @@ impl std::fmt::Display for LLMCompleteResponse {
         writeln!(f, "{}", "---LLM REPLY---".blue())?;
         write!(f, "{}", self.content.dimmed())
     }
+}
+
+// For parsing args
+fn resolve_properties_walker(
+    client: &ClientWalker,
+    ctx: &crate::RuntimeContext,
+) -> Result<std::collections::HashMap<String, serde_json::Value>> {
+    use anyhow::Context;
+    (&client.item.elem.options)
+        .iter()
+        .map(|(k, v)| {
+            Ok((
+                k.into(),
+                ctx.resolve_expression::<serde_json::Value>(v)
+                    .context(format!(
+                        "client {} could not resolve options.{}",
+                        client.name(),
+                        k
+                    ))?,
+            ))
+        })
+        .collect::<Result<std::collections::HashMap<_, _>>>()
 }
