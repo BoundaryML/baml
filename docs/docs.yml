@@ -1,7 +1,7 @@
 instances:
   - url: https://boundary.docs.buildwithfern.com
     # vv example custom domain configuration vv
-    # custom-domain: docs.boundaryml.com
+    custom-domain: docs.boundaryml.com
     edit-this-page:
       github:
         owner: BoundaryML
