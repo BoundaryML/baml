@@ -1,10 +1,12 @@
 ---
-title: "Client Registry"
+title: Client Registry
+slug: docs/calling-baml/client-registry
 ---
+
 
 If you need to modify the model / parameters for an LLM client at runtime, you can modify the `ClientRegistry` for any specified function.
 
-<CodeGroup>
+<CodeBlocks>
 
 ```python Python
 from baml_py import ClientRegistry
@@ -47,11 +49,9 @@ async function run() {
 Not available yet
 ```
 
-</CodeGroup>
+</CodeBlocks>
 
 ## ClientRegistry Interface
-import ClientConstructorParams from '/snippets/client-params.mdx'
-
 
 <Tip>
     Note: `ClientRegistry` is imported from `baml_py` in Python and `@boundaryml/baml` in TypeScript, not `baml_client`.
@@ -76,10 +76,10 @@ A function to add an LLM client to the registry.
     </Warning>
 </ParamField>
 
-<ClientConstructorParams />
+<Markdown src="../snippets/client-constructor.mdx" />
 
 <ParamField path="retry_policy" type="string">
-The name of a retry policy that is already defined in a .baml file. See [Retry Policies](/docs/snippets/clients/retry.mdx).
+The name of a retry policy that is already defined in a .baml file. See [Retry Policies](/docs/snippets/clients/retry).
 </ParamField>
 
 ### set_primary / setPrimary

@@ -1,6 +1,8 @@
 ---
 title: google-ai
+slug: docs/snippets/clients/providers/gemini
 ---
+
 
 The `google-ai` provider supports the `https://generativelanguage.googleapis.com/v1/models/{model_id}/generateContent` and `https://generativelanguage.googleapis.com/v1/models/{model_id}/streamGenerateContent` endpoint.
 
@@ -9,7 +11,7 @@ BAML will automatically pick `streamGenerateContent` if you call the streaming i
 </Tip>
 
 Example:
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider google-ai
   options {
@@ -64,7 +66,7 @@ See the [Google Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for t
   Additional headers to send with the request.
 
 Example:
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider google-ai
   options {

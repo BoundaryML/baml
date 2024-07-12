@@ -1,13 +1,15 @@
 ---
 title: aws-bedrock
-description: AWS Bedrock provider for BAML
+subtitle: AWS Bedrock provider for BAML
+slug: docs/snippets/clients/providers/aws-bedrock
 ---
+
 
 The `aws-bedrock` provider supports all text-output models available via the [`Converse` API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html).
 
 Example:
 
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider aws-bedrock
   options {
@@ -63,7 +65,7 @@ Note that to use any of these models you'll need to [request model access].
 
 Example:
 
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider aws-bedrock
   options {

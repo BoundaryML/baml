@@ -1,13 +1,15 @@
 ---
 title: anthropic
+slug: docs/snippets/clients/providers/anthropic
 ---
+
 
 The `anthropic` provider supports all APIs that use the same interface for the `/v1/messages` endpoint.
 
-<Tip>For `ollama` ([Docs](ollama)) or `azure` ([Docs](azure)) we recommend using the respective provider instead as there are more checks.</Tip>
+<Tip>For `ollama` ([Docs](ollama.mdx)) or `azure` ([Docs](azure.mdx)) we recommend using the respective provider instead as there are more checks.</Tip>
 
 Example:
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider anthropic
   options {
@@ -54,7 +56,7 @@ The options are passed through directly to the API, barring a few. Here's a shor
   ```
 
 Example:
-```rust
+```baml
 client<llm> MyClient {
   provider anthropic
   options {

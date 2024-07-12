@@ -1,9 +1,13 @@
+---
+slug: docs/get-started/debugging/vscode-playground
+---
+
 ## General debugging strategy
 - Check [Discord (#announcements channel)](https://discord.gg/BTNBeXGuaS) / [Github](https://github.com/BoundaryML/baml/issues) for any known issues
 - Close the playground and reopen it
 - Try reloading the entire window by pressing `Ctrl + Shift + P` or `Cmd + Shift + P` and typing `Developer: Reload Window`
 - Ensure your VSCode Extension for BAML is up-to-date (It should should it its up-to-date in the Extensions tab in VSCode)
-<img src="/images/docs_latest/vscode/extension-status.png" />
+<img src="../../../assets/images/docs_latest/vscode/extension-status.png" />
 
 - If nothing works, please file an issue on [Github](https://github.com/BoundaryML/baml/issues), ideally with a screenshot of the error and the steps to reproduce it.
 
@@ -11,7 +15,7 @@
 ### No code lens in BAML files
 
 This can happen in two cases:
-1. You have syntax error in some `.baml` file. You can check the error in the `Problems` tab in VSCode or running the `generate` command in the terminal (See [Generate](/docs/calling-baml/generate-baml-client))
+1. You have syntax error in some `.baml` file. You can check the error in the `Problems` tab in VSCode or running the `generate` command in the terminal (See [Generate](../../calling-baml/generate-baml-client.mdx))
 
 2. BAML extension is broken. Please try the tools above!
 
@@ -25,4 +29,4 @@ We've seen sparse repros of this, but closing the playground and reopening it sh
 
 You can debug the actual network request being made by BAML by opening developer tools:
 
-<img src="/images/docs_latest/vscode/dev-tools.png" />
+<img src="../../../assets/images/docs_latest/vscode/dev-tools.png" />
