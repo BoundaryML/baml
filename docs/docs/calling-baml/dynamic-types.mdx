@@ -12,7 +12,7 @@ Sometimes you have a **output schemas that change at runtime** -- for example if
 Here are the steps to make this work:
 1. Add `@@dynamic` to the class or enum definition to mark it as dynamic
 
-```baml baml
+```rust baml
 enum Category {
   VALUE1 // normal static enum values that don't change
   VALUE2
@@ -75,7 +75,7 @@ Not available yet
 ### Dynamic BAML Classes
 Existing BAML classes marked with @@dynamic will be available as properties of `TypeBuilder`.
 
-```baml BAML
+```rust BAML
 class User {
   name string
   age int

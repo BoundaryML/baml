@@ -15,12 +15,13 @@ Here's a list of all the types you can extract from LLMs with BAML:
 
 ## Multimodal Types
 See [calling a function with multimodal types](/docs/snippets/calling-baml/multi-modal)
+and [testing image inputs](/docs/snippets/test-cases#images)
 
 ### `image`
 
 You can use an image like this for models that support them:
 
-```baml
+```rust
 function DescribeImage(myImg: image) -> string {
   client GPT4Turbo
   prompt #"
@@ -77,7 +78,7 @@ import { Image } from "@boundaryml/baml"
 ### `audio`
 
 Example
-```baml
+```rust
 function DescribeSound(myAudio: audio) -> string {
   client GPT4Turbo
   prompt #"
@@ -217,7 +218,7 @@ Here are some examples and what their equivalents are in different languages.
 ### Example 1
 
 <CodeBlocks>
-```baml Baml
+```rust Baml
 int?|string[]|MyClass
 ````
 
@@ -234,7 +235,7 @@ Union[Optional[int], List[str], MyClass]
 ### Example 2
 
 <CodeBlocks>
-```baml Baml
+```rust Baml
 string[]
 ```
 
@@ -251,7 +252,7 @@ string[]
 ### Example 3
 
 <CodeBlocks>
-```baml Baml
+```rust Baml
 (int|float)[]
 ```
 ```python Python Equivalent
@@ -267,7 +268,7 @@ number[]
 ### Example 4
 
 <CodeBlocks>
-```baml Baml
+```rust Baml
 (int? | string[] | MyClass)[]
 ```
 

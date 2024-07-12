@@ -166,24 +166,22 @@ navbar-links:
   - type: github
     value: https://github.com/boundaryml/baml
   - type: filled
-    text: Community
+    text: Discord Community
     url: https://discord.gg/8Q7Q5b8Q
-  
-  
 
 colors:
   accentPrimary:
-    light: "#1f1fff"
-    dark: "#ff8e00"
+    light: "#a78bfa"
+    # dark: "#ff8e00"
   background:
     light: "#ffffff"
-    dark: "#0f141a"
+    # dark: "#0f141a"
   sidebar-background:
-    light: "#fafafa"
-    dark: "#14191f"
+    light: "#fefefe"
+    # dark: "#14191f"
 logo:
   light: assets/favicon.png
-  dark: assets/favicon.png
+  # dark: assets/favicon.png
   height: 40
 favicon: assets/favicon.png
 css: assets/styles.css

@@ -13,7 +13,7 @@ In the earlier tutorial we mentioned `ctx.output_format`, which contains the sch
 
 In this example, we render the list of messages in XML tags if the provider is Anthropic (as they recommend using them as delimiters). See also  [template_string](../template-string.mdx) as it's used in here.
 
-```jinja2
+```baml
 template_string RenderConditionally(messages: Message[]) #"
   {% for message in messages %}
     {%if ctx.client.provider == "anthropic" %}

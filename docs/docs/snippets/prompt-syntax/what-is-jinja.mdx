@@ -20,7 +20,7 @@ When in doubt -- use the BAML VSCode Playground preview. It will show you the fu
 
 Here's how you can iterate over a list of items, accessing each item's attributes:
 
-```jinja2
+```jinja
 function MyFunc(messages: Message[]) -> string {
   prompt #"
     {% for message in messages %}
@@ -34,7 +34,7 @@ function MyFunc(messages: Message[]) -> string {
 
 Use conditional statements to control the flow and output of your templates based on conditions:
 
-```jinja2
+```jinja
 function MyFunc(user: User) -> string {
   prompt #"
     {% if user.is_active %}
@@ -50,7 +50,7 @@ function MyFunc(user: User) -> string {
 
 You can define and use variables within your templates to simplify expressions or manage data:
 
-```jinja2
+```jinja
 function MyFunc(items: Item[]) -> string {
   prompt #"
     {% set total_price = 0 %}
