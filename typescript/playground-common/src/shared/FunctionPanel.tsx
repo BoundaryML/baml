@@ -147,6 +147,10 @@ const ClientGraph: React.FC = () => {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         fitView
+        edgesFocusable={false}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        nodesFocusable={false}
       ></ReactFlow>
     </div>
   )
