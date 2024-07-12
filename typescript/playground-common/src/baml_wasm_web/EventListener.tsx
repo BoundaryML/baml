@@ -468,7 +468,9 @@ const getScopeInfo = (scope: any) => {
       return 'Unknown scope type'
   }
 }
-export const orchestration_nodes = atom((get) => {
+export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
+  // ... existing code ...
+
   const func = get(selectedFunctionAtom)
   const runtime = get(selectedRuntimeAtom)
 
@@ -479,9 +481,9 @@ export const orchestration_nodes = atom((get) => {
   let wasmScopes = func.orchestration_graph(runtime)
 
   if (wasmScopes === null) {
-    return []
+    return { nodes: [], edges: [] }
   } else {
-    console.log(`orchestrationGraph: ${wasmScopes.length}`)
+    // console.log(`orchestrationGraph: ${wasmScopes.length}`)
     let indexOuter = 0
 
     var nodes: ClientNode[] = []
@@ -553,7 +555,7 @@ export const orchestration_nodes = atom((get) => {
 
   for (const node of nodes) {
     const stackGroupString = node.identifier.map((item: TypeCount) => `${item.type}${item.name}`).join(' | ')
-    console.log(`${stackGroupString}`)
+    // console.log(`${stackGroupString}`)
   }
 
   //we construct edges between unitNodes
@@ -571,13 +573,13 @@ export const orchestration_nodes = atom((get) => {
     let stackGroup: TypeCount[] = node.identifier
     let parentGid = ''
 
-    console.log(`StackGroup: ${stackGroup.map((item) => `${item.type}${item.name}`).join(' | ')}`)
-    console.log(`Index Groups at state ${index}`)
-    indexGroups.forEach((group, index) => {
-      console.log(
-        `Index ${index}: letter: ${group.letter}, name: ${group.index}, gid: ${group.gid}, parentGid: ${group.parentGid}`,
-      )
-    })
+    // console.log(`StackGroup: ${stackGroup.map((item) => `${item.type}${item.name}`).join(' | ')}`)
+    // console.log(`Index Groups at state ${index}`)
+    // indexGroups.forEach((group, index) => {
+    //   console.log(
+    //     `Index ${index}: letter: ${group.letter}, name: ${group.index}, gid: ${group.gid}, parentGid: ${group.parentGid}`,
+    //   )
+    // })
 
     for (let stackIndex = 0; stackIndex < stackGroup.length; stackIndex++) {
       const scopeLayer: TypeCount = stackGroup[stackIndex]
@@ -673,7 +675,7 @@ export const orchestration_nodes = atom((get) => {
           }
         }
 
-        console.log(`Letter: ${scopeType}, Name: ${scopeName}, Gid: ${curGid}`)
+        // console.log(`Letter: ${scopeType}, Name: ${scopeName}, Gid: ${curGid}`)
         //update table for future iterations
         indexGroups[stackIndex] = {
           letter: scopeType,
@@ -686,13 +688,13 @@ export const orchestration_nodes = atom((get) => {
         parentGid = curGid
       }
     }
-    console.log(`Index Groups after state ${index}:`)
-    indexGroups.forEach((group, index) => {
-      console.log(
-        `Index ${index}: letter: ${group.letter}, name: ${group.index}, client_name: ${group.client_name} gid: ${group.gid}, parentGid: ${group.parentGid}`,
-      )
-    })
-    console.log('-----------------------------------')
+    // console.log(`Index Groups after state ${index}:`)
+    // indexGroups.forEach((group, index) => {
+    //   console.log(
+    //     `Index ${index}: letter: ${group.letter}, name: ${group.index}, client_name: ${group.client_name} gid: ${group.gid}, parentGid: ${group.parentGid}`,
+    //   )
+    // })
+    // console.log('-----------------------------------')
 
     unitNodes.push({
       gid: parentGid,
@@ -707,24 +709,24 @@ export const orchestration_nodes = atom((get) => {
     ...(fromNode.weight !== null && { weight: fromNode.weight }),
   }))
 
-  // Log all contents of edges
-  console.log('Edges:')
-  edges.forEach((edge, index) => {
-    console.log(`Edge ${index}: from ${edge.from_node} to ${edge.to_node}, weight: ${edge.weight}`)
-  })
+  // // Log all contents of edges
+  // console.log('Edges:')
+  // edges.forEach((edge, index) => {
+  //   console.log(`Edge ${index}: from ${edge.from_node} to ${edge.to_node}, weight: ${edge.weight}`)
+  // })
 
-  // Log all contents of groups
-  console.log('Groups:')
-  Object.entries(groups).forEach(([gid, group]) => {
-    console.log(
-      `Group ${gid}: letter: ${group.letter}, client_name: ${group.client_name}, name: ${group.index}, parentGid: ${group.parentGid}`,
-    )
-  })
+  // // Log all contents of groups
+  // console.log('Groups:')
+  // Object.entries(groups).forEach(([gid, group]) => {
+  //   console.log(
+  //     `Group ${gid}: letter: ${group.letter}, client_name: ${group.client_name}, name: ${group.index}, parentGid: ${group.parentGid}`,
+  //   )
+  // })
 
   // Convert groups to an array
   const groupArray: GroupEntry[] = Object.values(groups)
 
-  return { groupArray, edges }
+  return { nodes: groupArray, edges }
 })
 
 export const diagnositicsAtom = atom((get) => {

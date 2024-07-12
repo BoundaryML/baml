@@ -1,6 +1,6 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
-import { useAtomValue, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import React, { useCallback } from 'react'
 import {
   ReactFlow,
@@ -92,10 +92,17 @@ interface RenderNode {
 }
 
 const ClientGraph: React.FC = () => {
-  const { nodes, edges } = (useAtomValue(orchestration_nodes) as { nodes: GroupEntry[]; edges: Edge[] }) ?? {
-    nodes: [] as GroupEntry[],
-    edges: [] as Edge[],
-  }
+  const graph = useAtomValue(orchestration_nodes)
+  const { nodes, edges } = graph
+  nodes.forEach((node, index) => {
+    console.log(
+      `Node ${index}: id: ${node.gid}, letter: ${node.letter}, index: ${node.index}, client_name: ${node.client_name}, parentGid: ${node.parentGid}`,
+    )
+  })
+
+  edges.forEach((edge, index) => {
+    console.log(`Edge ${index}: from ${edge.from_node} to ${edge.to_node}, weight: ${edge.weight}`)
+  })
 
   const renderNodes: RenderNode[] = []
   for (let idx = 0; idx < nodes.length; idx++) {
