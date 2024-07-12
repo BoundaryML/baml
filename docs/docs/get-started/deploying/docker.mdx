@@ -1,7 +1,4 @@
 ---
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/get-started/deploying/docker
 ---
 
@@ -14,7 +11,7 @@ You _could_ commit the generated code if you're starting out to not deal with th
 
 To build your client you can use the following command. See also [Generating Clients](../../calling-baml/generate-baml-client.mdx):
   
-<CodeGroup>
+<CodeBlocks>
 
 ```dockerfile python Dockerfile
 RUN baml-cli generate --from path-to-baml_src
@@ -29,8 +26,9 @@ RUN npx baml-cli generate --from path-to-baml_src
 RUN bundle add baml
 RUN bundle exec baml-cli generate --from path/to/baml_src
 ```
-</CodeGroup>
+</CodeBlocks>
 
 
 ### Current limitations
 - We do not yet support `alpine` images. BAML will not properly build for those platforms. Let us know if you need to support lighter weight alpine images, and we'll prioritize it.
+

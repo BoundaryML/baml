@@ -1,8 +1,5 @@
 ---
 title: Comparing Marvin
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/comparisons/marvin
 ---
 
@@ -75,7 +72,7 @@ Marvin has some inherent limitations for example:
 ### Using BAML
 Here is the BAML equivalent of this classification task based off the prompt Marvin uses under-the-hood. Note how the prompt becomes transparent to you using BAML. You can easily make it more complex or simpler depending on the model.
 
-```rust
+```baml
 enum RequestType {
   SUPPORT @alias("support request")
   ACCOUNT @alias("account issue") @description("A detailed description")

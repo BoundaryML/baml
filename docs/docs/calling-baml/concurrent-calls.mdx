@@ -1,8 +1,5 @@
 ---
 title: Concurrent function calls
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/calling-baml/concurrent-calls
 ---
 
@@ -10,7 +7,7 @@ slug: docs/calling-baml/concurrent-calls
 We’ll use `function ClassifyMessage(input: string) -> Category` for our example:
 
 <Accordion title="classify-message.baml">
-```rust
+```baml
 enum Category {
     Refund
     CancelOrder
@@ -80,9 +77,9 @@ if (require.main === module) {
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby (beta)">
 
-BAML Ruby does not currently support async/concurrent calls.
+BAML Ruby (beta) does not currently support async/concurrent calls.
 
 Please [contact us](/contact) if this is something you need.
 

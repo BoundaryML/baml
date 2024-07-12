@@ -1,0 +1,82 @@
+---
+title: aws-bedrock
+subtitle: AWS Bedrock provider for BAML
+slug: docs/snippets/clients/providers/aws-bedrock
+---
+
+
+The `aws-bedrock` provider supports all text-output models available via the [`Converse` API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html).
+
+Example:
+
+```baml BAML
+client<llm> MyClient {
+  provider aws-bedrock
+  options {
+    api_key env.MY_OPENAI_KEY
+    model "gpt-3.5-turbo"
+    temperature 0.1
+  }
+}
+```
+
+## Authorization
+
+We use the AWS SDK under the hood, which will respect [all authentication mechanisms supported by the SDK](https://docs.rs/aws-config/latest/aws_config/index.html), including but not limited to:
+
+  - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as set in your environment variables
+  - loading the specified `AWS_PROFILE` from `~/.aws/config`
+  - built-in authn for services running in EC2, ECS, Lambda, etc.
+
+## Forwarded options
+
+<ParamField
+   path="messages"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you from the prompt
+</ParamField>
+
+<ParamField
+  path="model_id"
+  type="string"
+>
+  The model to use.
+
+| Model           | Description                    |
+| --------------- | ------------------------------ |
+| `anthropic.claude-3-haiku-20240307-v1:0`  | Fastest + Cheapest    |
+| `anthropic.claude-3-sonnet-20240307-v1:0` | Smartest              |
+| `meta.llama3-8b-instruct-v1:0`            |                       |
+| `meta.llama3-70b-instruct-v1:0`           |                       |
+| `mistral.mistral-7b-instruct-v0:2`        |                       |
+| `mistral.mixtral-8x7b-instruct-v0:1`      |                       |
+
+Run `aws bedrock list-foundation-models | jq '.modelSummaries.[].modelId` to get a list of available foundation models; you can also use any custom models you've deployed.
+
+Note that to use any of these models you'll need to [request model access].
+
+[request model access]: https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html
+
+</ParamField>
+
+<ParamField path="inference_configuration" type="object">
+  Additional inference configuration to send with the request; see [AWS Bedrock documentation](https://docs.rs/aws-sdk-bedrockruntime/latest/aws_sdk_bedrockruntime/types/struct.InferenceConfiguration.html).
+
+Example:
+
+```baml BAML
+client<llm> MyClient {
+  provider aws-bedrock
+  options {
+    inference_configuration {
+      max_tokens 1000
+      temperature 1.0
+      top_p 0.8
+      stop_sequence ["_EOF"]
+    }
+  }
+}
+```
+
+</ParamField>

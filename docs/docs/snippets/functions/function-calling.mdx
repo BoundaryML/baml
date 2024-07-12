@@ -1,8 +1,5 @@
 ---
 title: Function Calling / Tools
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/functions/function-calling
 ---
 
@@ -16,7 +13,7 @@ The way it works is:
 
 In BAML, you can get represent a `tool` or a `function` you want to call as a BAML `class`, and make the function output be that class definition.
 
-```rust BAML
+```baml BAML
 class WeatherAPI {
   city string @description("the user's city")
   timeOfDay string @description("As an ISO8601 timestamp")
@@ -41,7 +38,7 @@ function UseTool(user_message: string) -> WeatherAPI {
 ## Choosing multiple Tools
 
 To choose ONE tool out of many, you can use a union:
-```rust BAML
+```baml BAML
 function UseTool(user_message: string) -> WeatherAPI | MyOtherAPI {
   .... // same thing
 }
@@ -51,7 +48,7 @@ function UseTool(user_message: string) -> WeatherAPI | MyOtherAPI {
 
 ## Choosing N Tools
 To choose many tools, you can use a union of a list:
-```rust BAML
+```baml BAML
 function UseTool(user_message: string) -> (WeatherAPI | MyOtherAPI)[] {
   .... // same thing
 }

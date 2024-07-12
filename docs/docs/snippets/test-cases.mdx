@@ -1,13 +1,10 @@
 ---
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/test-cases
 ---
 
 You can test your BAML functions in the VSCode Playground by adding a `test` snippet into a BAML file:
 
-```rust
+```baml
 enum Category {
     Refund
     CancelOrder
@@ -41,7 +38,7 @@ BAML doesn't use between key-value pairs `:` except in function parameters
 ## Complex object inputs
 
 Objects are injected as dictionaries
-```rust
+```baml
 class Message {
   user string
   content string

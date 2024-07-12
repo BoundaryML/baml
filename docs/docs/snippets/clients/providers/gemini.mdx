@@ -1,8 +1,5 @@
 ---
 title: google-ai
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/clients/providers/gemini
 ---
 
@@ -14,7 +11,7 @@ BAML will automatically pick `streamGenerateContent` if you call the streaming i
 </Tip>
 
 Example:
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider google-ai
   options {
@@ -33,6 +30,10 @@ The options are passed through directly to the API, barring a few. Here's a shor
   Will be passed as the `x-goog-api-key` header. **Default: `env.GOOGLE_API_KEY`**
   
   `x-goog-api-key: $api_key`
+</ParamField>
+
+<ParamField path="base_url" type="string">
+  The base URL for the API. **Default: `https://generativelanguage.googleapis.com/v1`**
 </ParamField>
 
 <ParamField
@@ -65,7 +66,7 @@ See the [Google Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for t
   Additional headers to send with the request.
 
 Example:
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider google-ai
   options {

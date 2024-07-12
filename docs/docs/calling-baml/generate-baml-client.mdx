@@ -1,8 +1,5 @@
 ---
 title: Generate the BAML Client
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/calling-baml/generate-baml-client
 ---
 
@@ -20,7 +17,7 @@ you save a BAML file. Otherwise, you can generate the client manually:
 
 [BAML extension]: https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension
 
-<CodeGroup>
+<CodeBlocks>
 
 ```bash Python
 pipx run baml-cli generate --from path/to/baml_src
@@ -54,12 +51,12 @@ yarn add @boundaryml/baml
 yarn run baml-cli generate --from path/to/baml_src
 ```
 
-```bash Ruby
+```bash Ruby (beta)
 bundle add baml
 bundle exec baml-cli generate --from path/to/baml_src
 ```
 
-</CodeGroup>
+</CodeBlocks>
 
 ## Best Practices
 
@@ -72,9 +69,9 @@ generate` to generate code for a specific target language. You can define
 multiple `generator` clauses in your BAML project, and `baml-cli generate` will
 generate code for each of them.
 
-<CodeGroup>
+<CodeBlocks>
 
-```rust Python
+```baml Python
 generator target {
     // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
     output_type "python/pydantic"
@@ -83,7 +80,7 @@ generator target {
 }
 ```
 
-```rust TypeScript
+```baml TypeScript
 generator target {
     // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
     output_type "typescript"
@@ -92,7 +89,7 @@ generator target {
 }
 ```
 
-```rust Python
+```baml Python
 generator target {
     // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
     output_type "ruby/sorbet"
@@ -101,7 +98,7 @@ generator target {
 }
 ```
 
-</CodeGroup>
+</CodeBlocks>
          
 
 ### Generate the BAML client on-demand
@@ -131,7 +128,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Install your Python/Node/Ruby dependencies here
+      # Install your Python/Node/Ruby (beta) dependencies here
 
       - name: Generate BAML client
         run: baml-cli generate --from baml_src

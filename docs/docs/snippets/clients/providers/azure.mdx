@@ -1,8 +1,5 @@
 ---
 title: azure-openai
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/clients/providers/azure
 ---
 
@@ -10,7 +7,7 @@ slug: docs/snippets/clients/providers/azure
 For `azure-openai`, we provide a client that can be used to interact with the OpenAI API hosted on Azure using the `/chat/completions` endpoint.
 
 Example:
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider azure-openai
   options {
@@ -83,7 +80,7 @@ The options are passed through directly to the API, barring a few. Here's a shor
   Additional headers to send with the request.
 
 Example:
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider azure-openai
   options {

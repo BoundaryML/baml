@@ -1,7 +1,4 @@
 ---
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/calling-baml/multi-modal
 ---
 
@@ -9,8 +6,8 @@ slug: docs/calling-baml/multi-modal
 ## Multi-modal input
 
 ### Images 
-Calling a BAML function with an `image` input argument type:
-<CodeGroup>
+Calling a BAML function with an `image` input argument type (see [image types](../snippets/supported-types.mdx))
+<CodeBlocks>
 ```python Python
 from baml_py import Image
 from baml_client import b
@@ -48,16 +45,16 @@ import { Image } from "@boundaryml/baml"
   
 ```
 
-```ruby Ruby
+```ruby Ruby (beta)
 we're working on it!
 ```
 
-</CodeGroup>
+</CodeBlocks>
  
 ### Audio
-Calling functions that have `audio` types.
+Calling functions that have `audio` types. See [audio types](../snippets/supported-types.mdx)
 
-<CodeGroup>
+<CodeBlocks>
 ```python Python
 from baml_py import Audio
 from baml_client import b
@@ -95,7 +92,7 @@ import { Audio } from "@boundaryml/baml"
   
 ```
 
-```ruby Ruby
+```ruby Ruby (beta)
 we're working on it!
 ```
-</CodeGroup>
+</CodeBlocks>

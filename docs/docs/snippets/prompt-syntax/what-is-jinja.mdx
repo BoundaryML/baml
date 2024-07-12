@@ -1,8 +1,5 @@
 ---
 title: What is Jinja / Cookbook
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/prompt-syntax/what-is-jinja
 ---
 
@@ -69,7 +66,7 @@ function MyFunc(items: Item[]) -> string {
 
 To promote reusability, you can include other templates within a template. See [template strings](../template-string.mdx):
 
-```rust
+```baml
 template_string PrintUserInfo(arg1: string, arg2: User) #"
   {{ arg1 }}
   The user's name is: {{ arg2.name }}

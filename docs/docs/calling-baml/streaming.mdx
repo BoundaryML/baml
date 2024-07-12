@@ -1,8 +1,5 @@
 ---
 title: Streaming BAML Functions
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/calling-baml/streaming
 ---
 
@@ -19,7 +16,7 @@ This time, we'll use `function ExtractReceiptInfo(email: string) -> ReceiptInfo`
 
 <Accordion title="extract-receipt-info.baml">
 
-```rust
+```baml
 class ReceiptItem {
   name string
   description string?
@@ -166,7 +163,7 @@ if (require.main === module) {
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby (beta)">
 BAML will generate `Baml.Client.stream.ExtractReceiptInfo()` for you,
 which you can use like so:
 

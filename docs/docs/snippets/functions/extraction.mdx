@@ -1,13 +1,10 @@
 ---
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/functions/extraction
 ---
 
 Here is how we can get structured data from a chunk of text or even an image (using a union input type):
 
-```rust BAML
+```baml BAML
 class CharacterDescription {
   name string
   clothingItems string[]
@@ -44,7 +41,7 @@ If you open up the **VSCode Playground** you will be able to test this function 
 
 See [image docs](/docs/snippets/supported-types#image)
 
-<CodeGroup>
+<CodeBlocks>
 ```python python
 from baml_client import b
 from baml_client.types import CharacterDescription
@@ -79,4 +76,4 @@ def example
   stream = $b.DescribeCharacter("Bob the builder wears overalls")
 end
 ```
-</CodeGroup>
+</CodeBlocks>

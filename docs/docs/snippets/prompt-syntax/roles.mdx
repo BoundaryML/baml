@@ -1,8 +1,5 @@
 ---
 title: _.role
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/prompt-syntax/roles
 ---
 
@@ -37,7 +34,7 @@ We use `_` as the prefix of `_.role()` since we plan on adding more helpers here
 
 Here's how you can inject a list of user/assistant messages and mark each as a user or assistant role:
 
-```rust BAML
+```baml BAML
 class Message {
   role string
   message string
@@ -54,7 +51,7 @@ function ChatWithAgent(input: Message[]) -> string {
 }
 ```
 
-```rust BAML
+```baml BAML
 function ChatMessages(messages: string[]) -> string {
   client GPT4o
   prompt #"
@@ -68,7 +65,7 @@ function ChatMessages(messages: string[]) -> string {
 
 ## Example -- Using `_.role()` in a template string
 
-```rust BAML
+```baml BAML
 template_strings YouAreA(name: string, job: string) #"
   {{ _.role("system") }} 
   You are an expert {{ name }}. {{ job }}

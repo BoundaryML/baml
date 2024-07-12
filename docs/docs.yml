@@ -61,21 +61,21 @@ navigation:
             path: docs/snippets/clients/overview.mdx
           - section: providers
             contents:
-              - page: openai
-                path: docs/snippets/clients/providers/openai.mdx
-              - page: azure-openai
-                path: docs/snippets/clients/providers/azure.mdx
-              - page: ollama
-                path: docs/snippets/clients/providers/ollama.mdx
               - page: anthropic
                 path: docs/snippets/clients/providers/anthropic.mdx
+              - page: aws-bedrock
+                path: docs/snippets/clients/providers/aws-bedrock.mdx
+              - page: azure-openai
+                path: docs/snippets/clients/providers/azure.mdx
               - page: google-ai
                 path: docs/snippets/clients/providers/gemini.mdx
+              - page: ollama
+                path: docs/snippets/clients/providers/ollama.mdx
+              - page: openai
+                path: docs/snippets/clients/providers/openai.mdx
               - page: vertex-ai
                 path: docs/snippets/clients/providers/vertex.mdx
-              - page: bedrock
-                path: docs/snippets/clients/providers/bedrock.mdx
-              - page: Others (e.g. openrouter)
+              - page: Others (e.g. groq, openrouter)
                 path: docs/snippets/clients/providers/other.mdx
           - section: provider strategies
             contents:
@@ -121,7 +121,13 @@ navigation:
         path: docs/snippets/template-string.mdx
       - page: Test Cases
         path: docs/snippets/test-cases.mdx
-  - section: Calling BAML Functions
+  - section: Advanced BAML Snippets
+    contents:
+      - page: Dynamic Types
+        path: docs/calling-baml/dynamic-types.mdx
+      - page: Client Registry
+        path: docs/calling-baml/client-registry.mdx
+  - section: BAML with Python/TS/Ruby
     contents:
       - page: Generate the BAML Client
         path: docs/calling-baml/generate-baml-client.mdx
@@ -135,10 +141,6 @@ navigation:
         path: docs/calling-baml/concurrent-calls.mdx
       - page: Multi Modal
         path: docs/calling-baml/multi-modal.mdx
-      - page: Dynamic Types
-        path: docs/calling-baml/dynamic-types.mdx
-      - page: Dynamic Clients
-        path: docs/calling-baml/dynamic-clients.mdx
   - section: Observability [Paid]
     contents:
       - page: Enabling
@@ -153,6 +155,10 @@ navigation:
         path: docs/comparisons/pydantic.mdx
   - section: Reference
     contents:
+      - section: Incidents
+        contents:
+          - page: SSRF Issue in fiddle-proxy (July 2024)
+            path: docs/incidents/2024-07-10-ssrf-issue-in-fiddle-proxy.mdx
       - page: Contact Us
         path: docs/contact.mdx
 

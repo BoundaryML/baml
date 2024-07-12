@@ -1,8 +1,5 @@
 ---
 title: Calling BAML Functions
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/calling-baml/calling-functions
 ---
 
@@ -18,7 +15,7 @@ you can call BAML functions from your code.
 We’ll use `function ClassifyMessage(input: string) -> Category` for our example:
 
 <Accordion title="classify-message.baml">
-```rust
+```baml
 enum Category {
     Refund
     CancelOrder
@@ -86,7 +83,7 @@ if (require.main === module) {
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby (beta)">
 
 BAML will generate `Baml.Client.ClassifyMessage()` for you, which you can use like so:
 

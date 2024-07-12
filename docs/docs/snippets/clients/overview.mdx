@@ -1,7 +1,4 @@
 ---
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/clients/overview
 ---
 
@@ -9,7 +6,7 @@ Clients are used to configure how LLMs are called.
 
 Here's an example of a client configuration:
 
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider openai
   options {
@@ -21,7 +18,7 @@ client<llm> MyClient {
 
 Usage:
 
-```rust BAML
+```baml BAML
 function MakeHaiku(topic: string) -> string {
   client MyClient
   prompt #"
@@ -32,30 +29,11 @@ function MakeHaiku(topic: string) -> string {
 
 ## Fields
 
-<ParamField path="provider"  required>
-This configures which provider to use. The provider is responsible for handling the actual API calls to the LLM service. The provider is a required field.
+import ClientConstructorParams from '/snippets/client-constructor.mdx'
 
-The configuration modifies the URL request BAML runtime makes.
-
-| Provider Name  | Docs                             | Notes                                                      |
-| -------------- | -------------------------------- | ---------------------------------------------------------- |
-| `openai`       | [OpenAI](providers/openai.mdx)       | Anything that follows openai's API exactly                 |
-| `ollama`       | [Ollama](providers/ollama.mdx)       | Alias for an openai client but with default ollama options |
-| `azure-openai` | [Azure OpenAI](providers/azure.mdx)  |                                                            |
-| `anthropic`    | [Anthropic](providers/anthropic.mdx) |                                                            |
-| `google-ai`    | [Google AI](providers/gemini.mdx)    |                                                            |
-| `fallback`     | [Fallback](fallback.mdx)             | Used to chain models conditional on failures               |
-| `round-robin`  | [Round Robin](round-robin.mdx)       | Used to load balance                                       |
-
-</ParamField>
+<ClientConstructorParams />
 
 <ParamField path="retry_policy">
   The name of the retry policy. See [Retry
   Policy](retry.mdx).
-</ParamField>
-
-<ParamField path="options">
-  These vary per provider. Please see provider specific documentation for more
-  information. Generally they are pass through options to the POST request made
-  to the LLM.
 </ParamField>

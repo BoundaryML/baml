@@ -1,8 +1,5 @@
 ---
 title: openai
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/clients/providers/openai
 ---
 
@@ -16,7 +13,7 @@ The `openai` provider supports all APIs that use the same interface for the `/ch
 
 Example:
 
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider openai
   options {
@@ -51,7 +48,7 @@ The options are passed through directly to the API, barring a few. Here's a shor
 
 Example:
 
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider openai
   options {

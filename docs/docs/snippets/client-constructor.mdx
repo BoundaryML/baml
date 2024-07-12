@@ -1,0 +1,23 @@
+<ParamField path="provider" type="string" required>
+This configures which provider to use. The provider is responsible for handling the actual API calls to the LLM service. The provider is a required field.
+
+The configuration modifies the URL request BAML runtime makes.
+
+| Provider Name  | Docs                             | Notes                                                      |
+| -------------- | -------------------------------- | ---------------------------------------------------------- |
+| `openai`       | [OpenAI](/docs/snippets/clients/providers/openai)       | Anything that follows openai's API exactly                 |
+| `ollama`       | [Ollama](/docs/snippets/clients/providers/ollama)       | Alias for an openai client but with default ollama options |
+| `azure-openai` | [Azure OpenAI](/docs/snippets/clients/providers/azure)  |                                                            |
+| `anthropic`    | [Anthropic](/docs/snippets/clients/providers/anthropic) |                                                            |
+| `google-ai`    | [Google AI](/docs/snippets/clients/providers/gemini)    |                                                            |
+| `fallback`     | [Fallback](/docs/snippets/clients/fallback)             | Used to chain models conditional on failures               |
+| `round-robin`  | [Round Robin](/docs/snippets/clients/round-robin)       | Used to load balance                                       |
+
+</ParamField>
+
+<ParamField path="options" type="dict[str, Any]" required>
+These vary per provider. Please see provider specific documentation for more
+information. Generally they are pass through options to the POST request made
+to the LLM.
+</ParamField>
+

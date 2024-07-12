@@ -1,8 +1,5 @@
 ---
 title: enum
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/enum
 ---
 
@@ -11,8 +8,8 @@ Enums are useful for classification tasks. BAML has helper functions that can he
 
 To define your own custom enum in BAML:
 
-<CodeGroup>
-```rust BAML
+<CodeBlocks>
+```baml BAML
 enum MyEnum {
   Value1
   Value2
@@ -37,7 +34,7 @@ enum MyEnum {
 }
 ```
 
-</CodeGroup>
+</CodeBlocks>
 
 - You may have as many values as you'd like.
 - Values may not be duplicated or empty.
@@ -60,7 +57,7 @@ If set, will allow you to add/remove/modify values to the enum dynamically at ru
 </ParamField>
 
 
-```rust BAML
+```baml BAML
 enum MyEnum {
   Value1
   Value2
@@ -98,7 +95,7 @@ Skip this value in the prompt and during parsing.
 </ParamField>
 
 
-```rust BAML
+```baml BAML
 enum MyEnum {
   Value1 @alias("complete_summary") @description("Answer in 2 sentences")
   Value2

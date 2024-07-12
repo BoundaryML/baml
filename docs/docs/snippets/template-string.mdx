@@ -1,7 +1,4 @@
 ---
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/template-string
 ---
 
@@ -10,7 +7,7 @@ Writing prompts requires a lot of string manipulation. BAML has a `template_stri
 Think of template strings as functions that have variables, and return a string. They can be used to define reusable parts of a prompt, or to make the prompt more readable by breaking it into smaller parts.
 
 Example
-```rust BAML
+```baml BAML
 // Inject a list of "system" or "user" messages into the prompt.
 template_string PrintMessages(messages: Message[]) #"
   {% for m in messages %}
@@ -39,3 +36,4 @@ You can nest as many template strings inside each other and call them however ma
   The BAML linter may give you a warning when you use template strings due to a static analysis limitation. You can ignore this warning. If it renders in the playground, you're good!
 </Warning>
 Use the playground preview to ensure your template string is being evaluated correctly!
+

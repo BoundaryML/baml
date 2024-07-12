@@ -1,7 +1,4 @@
 ---
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/functions/classification
 ---
 
@@ -9,7 +6,7 @@ You can write functions to classify elements using [Enums](../enum.mdx).
 
 Here is such an example:
 
-```rust BAML
+```baml BAML
 enum Category {
     Refund
     CancelOrder @description("some description")
@@ -45,7 +42,7 @@ Based on the information provided, I think the answer is Refund
 and will give you the actual `Category.Refund` when you call the function. We will add more knobs so you can make this parsing more or less strict. 
 
 ## Usage
-<CodeGroup>
+<CodeBlocks>
 ```python python
 from baml_client import b
 from baml_client.types import Category
@@ -77,7 +74,8 @@ if __FILE__ == $0
   main
 end
 ```
-</CodeGroup>
+</CodeBlocks>
 
 ## Handling Dynamic Categories (e.g. user-provided, or from a database)
 To handle dynamic categories you can use [dynamic enums](../../calling-baml/dynamic-types.mdx) to build your enum at runtime.
+

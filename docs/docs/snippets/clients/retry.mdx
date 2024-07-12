@@ -1,22 +1,19 @@
 ---
 title: retry_policy
-hide-toc: true
-hide-nav-links: true
-layout: reference
 slug: docs/snippets/clients/retry
 ---
 
 
 A retry policy can be attached to any `client<llm>` and will attempt to retry requests that fail due to a network error.
 
-```rust BAML
+```baml BAML
 retry_policy MyPolicyName {
   max_retries 3
 }
 ```
 
 Usage:
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider anthropic
   retry_policy MyPolicyName
@@ -48,7 +45,7 @@ client<llm> MyClient {
 | `exponential_backoff` | [Docs](#exponential-backoff) | |
 
 Example:
-```rust BAML
+```baml BAML
 retry_policy MyPolicyName {
   max_retries 3
   strategy {
