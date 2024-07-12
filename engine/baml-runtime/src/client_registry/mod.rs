@@ -13,6 +13,8 @@ pub enum PrimitiveClient {
     OpenAI,
     Anthropic,
     Google,
+    Vertex,
+    // Aws,
 }
 
 #[derive(Serialize, Clone)]

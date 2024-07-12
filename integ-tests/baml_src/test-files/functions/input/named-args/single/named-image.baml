@@ -1,5 +1,5 @@
 function TestImageInput(img: image) -> string{
-  client AwsBedrock
+  client Vertex
   prompt #"
     {{ _.role("user") }}
 

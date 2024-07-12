@@ -1,4 +1,4 @@
-use internal_baml_diagnostics::{DatamodelError};
+use internal_baml_diagnostics::DatamodelError;
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -20,6 +20,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             "baml-fallback",
             "fallback",
             "google-ai",
+            "vertex-ai",
             "aws-bedrock",
         ];
 

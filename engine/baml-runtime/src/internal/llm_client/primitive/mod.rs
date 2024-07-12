@@ -10,8 +10,8 @@ use crate::{
 };
 
 use self::{
-    anthropic::AnthropicClient, aws::AwsClient, google::GoogleClient, openai::OpenAIClient,
-    request::RequestBuilder,
+    anthropic::AnthropicClient, aws::AwsClient, google::GoogleAIClient, openai::OpenAIClient,
+    request::RequestBuilder, vertex::VertexClient,
 };
 
 use super::{
@@ -31,6 +31,7 @@ mod aws;
 mod google;
 mod openai;
 pub(super) mod request;
+mod vertex;
 
 // use crate::internal::llm_client::traits::ambassador_impl_WithRenderRawCurl;
 // use crate::internal::llm_client::traits::ambassador_impl_WithRetryPolicy;
@@ -40,7 +41,8 @@ use enum_dispatch::enum_dispatch;
 pub enum LLMPrimitive2 {
     OpenAIClient,
     AnthropicClient,
-    GoogleClient,
+    GoogleAIClient,
+    VertexClient,
     AwsClient,
 }
 
@@ -49,7 +51,8 @@ pub enum LLMPrimitive2 {
 pub enum LLMPrimitiveProvider {
     OpenAI(OpenAIClient),
     Anthropic(AnthropicClient),
-    Google(GoogleClient),
+    Google(GoogleAIClient),
+    Vertex(VertexClient),
     Aws(aws::AwsClient),
 }
 
@@ -61,6 +64,7 @@ macro_rules! match_llm_provider {
             LLMPrimitiveProvider::Anthropic(client) => client.$method($($args),*).await,
             LLMPrimitiveProvider::Google(client) => client.$method($($args),*).await,
             LLMPrimitiveProvider::Aws(client) => client.$method($($args),*).await,
+            LLMPrimitiveProvider::Vertex(client) => client.$method($($args),*).await,
         }
     };
 
@@ -70,6 +74,7 @@ macro_rules! match_llm_provider {
             LLMPrimitiveProvider::Anthropic(client) => client.$method($($args),*),
             LLMPrimitiveProvider::Google(client) => client.$method($($args),*),
             LLMPrimitiveProvider::Aws(client) => client.$method($($args),*),
+            LLMPrimitiveProvider::Vertex(client) => client.$method($($args),*),
         }
     };
 }
@@ -95,13 +100,18 @@ impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
             "anthropic" => {
                 AnthropicClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Anthropic)
             }
-            "google-ai" => GoogleClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Google),
+            "google-ai" => {
+                GoogleAIClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Google)
+            }
+            // "aws-bedrock" => aws::AwsClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Aws),
+            "vertex-ai" => VertexClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Vertex),
             other => {
                 let options = [
                     "openai",
                     "anthropic",
                     "ollama",
                     "google-ai",
+                    "vertex-ai",
                     "azure-openai",
                     "fallback",
                     "round-robin",
@@ -133,14 +143,16 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
             "baml-ollama-chat" | "ollama" => {
                 OpenAIClient::new_ollama(client, ctx).map(LLMPrimitiveProvider::OpenAI)
             }
-            "google-ai" => GoogleClient::new(client, ctx).map(LLMPrimitiveProvider::Google),
+            "google-ai" => GoogleAIClient::new(client, ctx).map(LLMPrimitiveProvider::Google),
             "aws-bedrock" => aws::AwsClient::new(client, ctx).map(LLMPrimitiveProvider::Aws),
+            "vertex-ai" => VertexClient::new(client, ctx).map(LLMPrimitiveProvider::Vertex),
             other => {
                 let options = [
                     "openai",
                     "anthropic",
                     "ollama",
                     "google-ai",
+                    "vertex-ai",
                     "azure-openai",
                     "fallback",
                     "round-robin",
@@ -221,6 +233,7 @@ impl std::fmt::Display for LLMPrimitiveProvider {
             LLMPrimitiveProvider::Anthropic(_) => write!(f, "Anthropic"),
             LLMPrimitiveProvider::Google(_) => write!(f, "Google"),
             LLMPrimitiveProvider::Aws(_) => write!(f, "AWS"),
+            LLMPrimitiveProvider::Vertex(_) => write!(f, "Vertex"),
         }
     }
 }

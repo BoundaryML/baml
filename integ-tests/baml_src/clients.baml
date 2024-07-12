@@ -83,6 +83,14 @@ client<llm> Gemini {
   }
 }
 
+client<llm> Vertex {
+  provider vertex-ai
+  options {
+    model "gemini-1.5-pro-001"
+    api_key env.GOOGLE_API_KEY
+  }
+}
+
 client<llm> AwsBedrock {
   provider aws-bedrock
   options {
