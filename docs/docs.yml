@@ -41,6 +41,8 @@ navigation:
             path: docs/get-started/deploying/docker.mdx
           - page: Nextjs
             path: docs/get-started/deploying/nextjs.mdx
+          - page: AWS
+          - path: docs/get-started/deploying/aws.mdx
   - section: BAML Snippets
     contents:
       - section: General BAML Syntax

@@ -1,15 +1,13 @@
-use crate::{
-    runtime::{runtime_interface::baml_src_files},
-    BamlRuntime,
-};
+use crate::{runtime::runtime_interface::baml_src_files, BamlRuntime};
 use anyhow::Result;
-use std::path::PathBuf;
-
+use std::{env, path::PathBuf};
 
 #[derive(clap::Args, Debug)]
 pub struct GenerateArgs {
     #[arg(long, help = "path/to/baml_src", default_value = "./baml_src")]
     from: String,
+    #[arg(long, help = "Skip version check")]
+    no_version_check: bool,
 }
 
 impl GenerateArgs {
@@ -49,9 +47,11 @@ You can automatically generate a client by adding the following to any one of yo
 generator my_client {{
     output_type "{}"
     output_dir "{}"
+    version "{}"
 }}"#,
                 generate_output.client_type.to_string(),
                 output_dir_relative_to_baml_src.join("").display(),
+                env!("CARGO_PKG_VERSION")
             );
         } else {
             println!("Generated {} baml_client", generated.len());

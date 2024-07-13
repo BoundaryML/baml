@@ -2,11 +2,12 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_schema_ast::ast::{self, WithName, WithSpan};
-use strum::{VariantArray, VariantNames};
+use semver::Version;
+use strum::VariantNames;
 
 use crate::configuration::{Generator, GeneratorBuilder, GeneratorOutputType};
 
-const FIRST_CLASS_PROPERTIES: &[&str] = &["output_type", "output_dir"];
+const FIRST_CLASS_PROPERTIES: &[&str] = &["output_type", "output_dir", "version"];
 
 fn parse_required_key<'a>(
     map: &'a HashMap<&str, &ast::Expression>,
@@ -134,6 +135,26 @@ pub(crate) fn parse_generator(
             errors.push(err);
         }
     };
+
+    match parse_required_key(&args, "version", ast_generator.span()) {
+        Ok((version_str, version_span)) => match Version::parse(version_str) {
+            Ok(version) => {
+                builder.version(version.to_string());
+            }
+            Err(_) => {
+                errors.push(DatamodelError::new_validation_error(
+                    &format!("Invalid semver version string: '{}'", version_str),
+                    version_span.clone(),
+                ));
+            }
+        },
+        Err(_) => {
+            errors.push(DatamodelError::new_validation_error(
+                "Missing 'version' property. It must match the baml package version you have installed in your project and the VSCode extension, like 'version \"0.50.0\"'",
+                ast_generator.span().clone(),
+            ));
+        }
+    }
 
     if !errors.is_empty() {
         return Err(errors);

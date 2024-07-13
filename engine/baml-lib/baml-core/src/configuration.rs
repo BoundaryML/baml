@@ -35,6 +35,7 @@ pub struct Generator {
     pub baml_src: PathBuf,
     pub output_type: GeneratorOutputType,
     output_dir: PathBuf,
+    pub version: String,
 
     pub(crate) span: crate::ast::Span,
 }
@@ -45,10 +46,12 @@ impl Generator {
             r#"generator {} {{
     output_type "{}"
     output_dir "{}"
+    version "{}"
 }}"#,
             self.name,
             self.output_type.to_string(),
             self.output_dir.display(),
+            self.version,
         )
     }
 
