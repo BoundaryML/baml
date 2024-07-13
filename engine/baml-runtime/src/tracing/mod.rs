@@ -179,7 +179,9 @@ impl BamlTracer {
         }
 
         if let Some(tracer) = &self.tracer {
-            tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
+            tracer
+                .submit(response.to_log_schema(&self.options, event_chain, tags, span))
+                .context("Error while submitting span for delivery")?;
             guard.finalize();
             Ok(Some(span_id))
         } else {

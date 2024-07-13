@@ -1,6 +1,9 @@
 # Due to tracing, we need to ensure we track context vars for each thread.
 # This helps ensure we correctly instantiate the span and context for each thread.
 
+import traceback
+import os
+
 import asyncio
 import contextvars
 import functools
@@ -60,6 +63,11 @@ class CtxManager:
         return BamlSpan.new(self.rt, name, args, cln)
 
     def end_trace(self, span: BamlSpan, response: typing.Any) -> None:
+        print(f'end_trace called on span-oid={id(span)} pid={os.getpid()} tid={current_thread_id()}')
+
+        stack = traceback.extract_stack()
+        formatted_stack = traceback.format_list(stack[:-1])  # Exclude the current function call
+        print('Call stack (most recent call last):', ''.join(formatted_stack))
         span.finish(response, self.__ctx())
 
     def flush(self) -> None:
@@ -90,6 +98,7 @@ class CtxManager:
                     self.end_trace(span, response)
                     return response
                 except Exception as e:
+                    print(f'Caught exception in async trace wrapper: {e}')
                     self.end_trace(span, e)
                     raise e
 
@@ -110,6 +119,7 @@ class CtxManager:
                     self.end_trace(span, response)
                     return response
                 except Exception as e:
+                    print(f'Caught exception in sync trace wrapper: {e}')
                     self.end_trace(span, e)
                     raise e
 
