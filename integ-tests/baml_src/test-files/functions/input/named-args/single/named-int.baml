@@ -1,6 +1,6 @@
 // test for int
 function TestFnNamedArgsSingleInt(myInt: int) -> string {
-  client GPT35
+  client Vertex
   prompt #"
     Return this value back to me: {{myInt}}
   "#

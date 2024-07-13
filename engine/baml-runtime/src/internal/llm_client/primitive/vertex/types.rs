@@ -150,7 +150,7 @@ pub struct GenerationConfig {
 pub struct GoogleResponse {
     pub candidates: Vec<Candidate>,
     pub prompt_feedback: Option<PromptFeedback>,
-    pub usage_metadata: UsageMetaData,
+    pub usage_metadata: Option<UsageMetaData>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -361,7 +361,7 @@ pub struct SearchEntryPoint {
     pub sdk_blob: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageMetaData {
     pub prompt_token_count: Option<u64>,
@@ -377,56 +377,87 @@ mod tests {
     #[test]
     fn test_deserialization() {
         let data = r#"
-        {
+        [{
             "candidates": [
               {
                 "content": {
                   "role": "model",
                   "parts": [
                     {
-                      "text": "Dark fizz, cherry bright,\nTwenty-three flavors dance light,\nA Texan delight. \n"
+                      "text": "4"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+          ,
+          {
+            "candidates": [
+              {
+                "content": {
+                  "role": "model",
+                  "parts": [
+                    {
+                      "text": "2 \n"
                     }
                   ]
                 },
-                "finishReason": "STOP",
                 "safetyRatings": [
                   {
                     "category": "HARM_CATEGORY_HATE_SPEECH",
                     "probability": "NEGLIGIBLE",
-                    "probabilityScore": 0.04977345,
+                    "probabilityScore": 0.06119922,
                     "severity": "HARM_SEVERITY_NEGLIGIBLE",
-                    "severityScore": 0.06359858
+                    "severityScore": 0.14854057
                   },
                   {
                     "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
                     "probability": "NEGLIGIBLE",
-                    "probabilityScore": 0.06632687,
-                    "severity": "HARM_SEVERITY_NEGLIGIBLE",
-                    "severityScore": 0.103205055
+                    "probabilityScore": 0.24166831,
+                    "severity": "HARM_SEVERITY_LOW",
+                    "severityScore": 0.30808613
                   },
                   {
                     "category": "HARM_CATEGORY_HARASSMENT",
                     "probability": "NEGLIGIBLE",
-                    "probabilityScore": 0.06979492,
+                    "probabilityScore": 0.0894546,
                     "severity": "HARM_SEVERITY_NEGLIGIBLE",
-                    "severityScore": 0.058131594
+                    "severityScore": 0.06928941
                   },
                   {
                     "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
                     "probability": "NEGLIGIBLE",
-                    "probabilityScore": 0.09285216,
+                    "probabilityScore": 0.13364118,
                     "severity": "HARM_SEVERITY_NEGLIGIBLE",
-                    "severityScore": 0.0992954
+                    "severityScore": 0.0689125
                   }
                 ]
               }
+            ]
+          }
+          ,
+          {
+            "candidates": [
+              {
+                "content": {
+                  "role": "model",
+                  "parts": [
+                    {
+                      "text": ""
+                    }
+                  ]
+                },
+                "finishReason": "STOP"
+              }
             ],
             "usageMetadata": {
-              "promptTokenCount": 8,
-              "candidatesTokenCount": 21,
-              "totalTokenCount": 29
+              "promptTokenCount": 10,
+              "candidatesTokenCount": 4,
+              "totalTokenCount": 14
             }
           }
+          ]
         "#;
 
         let parsed: Result<GoogleResponse, Error> = serde_json::from_str(data);

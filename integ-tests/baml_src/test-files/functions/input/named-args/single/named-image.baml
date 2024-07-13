@@ -11,6 +11,7 @@ test  TestImageInput {
   functions [TestImageInput]
   args {
     img {
+      media_type "image/jpg"
       url "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png"
     }
   }

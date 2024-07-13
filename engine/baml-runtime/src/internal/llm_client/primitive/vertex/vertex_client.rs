@@ -1,4 +1,13 @@
 use crate::client_registry::ClientProperty;
+use chrono::{Duration, Utc};
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::fs::File;
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::BufReader;
 
 use crate::RuntimeContext;
 use crate::{
@@ -16,22 +25,20 @@ use crate::{
     },
     request::create_client,
 };
-use anyhow::{Context, Result};
+use anyhow::Result;
 
-use crate::PathBuf;
 use baml_types::BamlMedia;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
-use gcp_auth::{CustomServiceAccount, TokenProvider};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use reqwest::Response;
+
 use serde_json::json;
 use std::collections::HashMap;
 struct PostRequestProperities {
     default_role: String,
     base_url: String,
-    api_key: Option<CustomServiceAccount>,
+    api_key: Option<(String, String)>,
     headers: HashMap<String, String>,
     proxy_url: Option<String>,
     properties: HashMap<String, serde_json::Value>,
@@ -46,7 +53,22 @@ pub struct VertexClient {
     pub retry_policy: Option<String>,
     pub context: RenderContext_Client,
     pub features: ModelFeatures,
-    pub properties: PostRequestProperities,
+    properties: PostRequestProperities,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    iss: String,
+    scope: String,
+    aud: String,
+    exp: i64,
+    iat: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct ServiceAccount {
+    client_email: String,
+    private_key: String,
 }
 
 fn resolve_properties(
@@ -60,14 +82,16 @@ fn resolve_properties(
 
     let base_url = "";
 
-    let mut service_account = ctx.env.get("VERTEX_PLAYGROUND_CREDENTIALS").map_or_else(
-        || None,
-        |creds| CustomServiceAccount::from_json(creds.as_str()).ok(),
-    );
+    let mut service_key: Option<(String, String)> = ctx
+        .env
+        .get("VERTEX_PLAYGROUND_CREDENTIALS")
+        .map(|s| ("VERTEX_PLAYGROUND_CREDENTIALS".to_string(), s.to_string()));
 
-    if service_account.is_none() {
-        let credentials_path = PathBuf::from(ctx.env.get("VERTEX_TERMINAL_CREDENTIALS").unwrap());
-        service_account = CustomServiceAccount::from_file(credentials_path).ok();
+    if service_key.is_none() {
+        service_key = ctx
+            .env
+            .get("VERTEX_CREDENTIALS_PATH")
+            .map(|s| ("VERTEX_CREDENTIALS_PATH".to_string(), s.to_string()));
     }
 
     let project_id = properties
@@ -111,7 +135,7 @@ fn resolve_properties(
     Ok(PostRequestProperities {
         default_role,
         base_url: base_url.to_string(),
-        api_key: service_account,
+        api_key: service_key,
         headers,
         properties,
         project_id,
@@ -149,12 +173,14 @@ impl SseResponseTrait for VertexClient {
     ) -> StreamResponse {
         let prompt = prompt.clone();
         let client_name = self.context.name.clone();
+        let model_id = self.properties.model_id.clone().unwrap_or_default();
         let params = self.properties.properties.clone();
         Ok(Box::pin(
             resp.bytes_stream()
                 .eventsource()
+                .inspect(|event| log::trace!("Received event: {:?}", event))
                 .take_while(|event| {
-                    std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))
+                    std::future::ready(event.as_ref().is_ok_and(|e| e.data != "data: \n"))
                 })
                 .map(|event| -> Result<GoogleResponse> {
                     Ok(serde_json::from_str::<GoogleResponse>(&event?.data)?)
@@ -166,7 +192,7 @@ impl SseResponseTrait for VertexClient {
                         content: "".to_string(),
                         start_time: system_start,
                         latency: instant_start.elapsed(),
-                        model: "".to_string(),
+                        model: model_id,
                         request_options: params.clone(),
                         metadata: LLMCompleteResponseMetadata {
                             baml_is_complete: false,
@@ -205,6 +231,19 @@ impl SseResponseTrait for VertexClient {
                             }
                         };
 
+                        if let Some(choice) = event.candidates.get(0) {
+                            if let Some(content) = choice.content.parts.get(0) {
+                                inner.content += &content.text;
+                            }
+                            match choice.finish_reason.as_ref() {
+                                Some(FinishReason::Stop) => {
+                                    inner.metadata.baml_is_complete = true;
+                                    inner.metadata.finish_reason =
+                                        Some(FinishReason::Stop.to_string());
+                                }
+                                _ => (),
+                            }
+                        }
                         inner.latency = instant_start.elapsed();
 
                         std::future::ready(Some(LLMResponse::Success(inner.clone())))
@@ -247,7 +286,7 @@ impl VertexClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: true,
+                resolve_media_urls: false,
             },
             retry_policy: client
                 .elem()
@@ -302,8 +341,6 @@ impl RequestBuilder for VertexClient {
     ) -> Result<reqwest::RequestBuilder> {
         //disabled proxying for testing
 
-        log::info!("Building request for Google client");
-
         let mut should_stream = "generateContent";
         if stream {
             should_stream = "streamGenerateContent";
@@ -342,17 +379,71 @@ impl RequestBuilder for VertexClient {
             _ => self.client.post(baml_original_url),
         };
 
+        log::info!("Building request for Vertex client");
+        let credentials = self.properties.api_key.clone();
+        let service_account: ServiceAccount = if let Some((key, value)) = &credentials {
+            if key == "VERTEX_PLAYGROUND_CREDENTIALS" {
+                serde_json::from_str(value).unwrap()
+            } else {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let file = File::open(value)?;
+                    let reader = BufReader::new(file);
+                    serde_json::from_reader(reader)?
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    return Err(anyhow::anyhow!(
+                        "Reading from files not supported in BAML playground. Pass in your credentials file as a string to the 'VERTEX_PLAYGROUND_CREDENTIALS' environment variable."
+                    ));
+                }
+            }
+        } else {
+            return Err(anyhow::anyhow!("Service account not found"));
+        };
+
+        let now = Utc::now();
+        let claims = Claims {
+            iss: service_account.client_email,
+            scope: "https://www.googleapis.com/auth/cloud-platform".to_string(),
+            aud: "https://oauth2.googleapis.com/token".to_string(),
+            exp: (now + Duration::hours(1)).timestamp(),
+            iat: now.timestamp(),
+        };
+
+        // Create the JWT
+        let header = Header::new(Algorithm::RS256);
+        let key = EncodingKey::from_rsa_pem(service_account.private_key.as_bytes())?;
+        let jwt = encode(&header, &claims, &key)?;
+
+        // Make the token request
+        let client = reqwest::Client::new();
+        let params = [
+            ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+            ("assertion", &jwt),
+        ];
+        let res: Value = client
+            .post("https://oauth2.googleapis.com/token")
+            .form(&params)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        // Extract and print the access token
+        let access_token = if let Some(access_token) = res["access_token"].as_str() {
+            println!("Access Token: {}", access_token);
+            access_token.to_string()
+        } else {
+            println!("Failed to get access token. Response: {:?}", res);
+            return Err(anyhow::anyhow!("Failed to get access token"));
+        };
+
+        req = req.header("Authorization", format!("Bearer {}", access_token));
+
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
         }
-
-        let scopes = &["https://www.googleapis.com/auth/cloud-platform"];
-        let token = match &self.properties.api_key {
-            Some(api_key) => api_key.token(scopes).await?,
-            None => return Err(anyhow::anyhow!("API key is missing")),
-        };
-
-        req = req.header("Authorization", format!("Bearer {}", token.as_str()));
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
@@ -368,7 +459,6 @@ impl RequestBuilder for VertexClient {
 
         Ok(req.json(&body))
     }
-
     fn request_options(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
     }
@@ -407,6 +497,7 @@ impl WithChat for VertexClient {
                 code: ErrorCode::Other(200),
             });
         }
+        let usage_metadata = response.usage_metadata.clone().unwrap();
 
         LLMResponse::Success(LLMCompleteResponse {
             client: self.context.name.to_string(),
@@ -431,9 +522,9 @@ impl WithChat for VertexClient {
                     .finish_reason
                     .as_ref()
                     .map(|r| serde_json::to_string(r).unwrap_or("".into())),
-                prompt_tokens: response.usage_metadata.prompt_token_count,
-                output_tokens: response.usage_metadata.candidates_token_count,
-                total_tokens: response.usage_metadata.total_token_count,
+                prompt_tokens: usage_metadata.prompt_token_count,
+                output_tokens: usage_metadata.candidates_token_count,
+                total_tokens: usage_metadata.total_token_count,
             },
         })
     }
@@ -492,14 +583,14 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
 fn convert_media_to_content(media: &BamlMedia) -> serde_json::Value {
     match media {
         BamlMedia::Base64(_, data) => json!({
-            "blob": {
+            "inlineData": {
                 "mime_type": format!("{}", data.media_type),
                 "data": data.base64
             }
         }),
         BamlMedia::Url(_, data) => json!({
             "fileData": {
-                "mime_type": format!("{:?}", data.media_type),
+                "mime_type": data.media_type.clone().unwrap_or_default(),
                 "file_uri": data.url
             }
         }),

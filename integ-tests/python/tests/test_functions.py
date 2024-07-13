@@ -107,6 +107,15 @@ async def test_should_work_with_image_url():
     )
     assert_that(res.lower()).matches(r"(green|yellow|shrek|ogre)")
 
+@pytest.mark.asyncio
+async def vertex():
+    res = await b.TestFnNamedArgsSingleInt(
+      myInt = 42
+  
+    )
+    assert_that(res == 42)
+
+
 
 @pytest.mark.asyncio
 async def test_should_work_with_image_base64():
