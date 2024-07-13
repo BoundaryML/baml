@@ -167,7 +167,7 @@ navbar-links:
     value: https://github.com/boundaryml/baml
   - type: filled
     text: Discord Community
-    url: https://discord.gg/8Q7Q5b8Q
+    url: https://discord.gg/BTNBeXGuaS
 
 colors:
   accentPrimary:
