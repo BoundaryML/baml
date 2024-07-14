@@ -1,3 +1,7 @@
+---
+slug: docs/calling-baml/dynamic-types
+---
+
 
 
 Sometimes you have a **output schemas that change at runtime** -- for example if you have a list of Categories that you need to classify that come from a database, or your schema is user-provided.
@@ -29,7 +33,7 @@ function DynamicCategorizer(input: string) -> Category {
 
 2. Create a TypeBuilder and modify the existing type. All dynamic types you define in BAML will be available as properties of `TypeBuilder`. Think of the typebuilder as a registry of modified runtime types that the baml function will read from when building the output schema in the prompt.
 
-<CodeGroup>
+<CodeBlocks>
 
 ```python python
 from baml_client.type_builder import TypeBuilder
@@ -66,7 +70,7 @@ async function run() {
 ```ruby Ruby (beta)
 Not available yet
 ```
-</CodeGroup>
+</CodeBlocks>
 
 ### Dynamic BAML Classes
 Existing BAML classes marked with @@dynamic will be available as properties of `TypeBuilder`.
@@ -91,7 +95,7 @@ function DynamicUserCreator(user_info: string) -> User {
 
 Modify the `User` schema at runtime:
 
-<CodeGroup>
+<CodeBlocks>
 
 ```python python
 from baml_client.type_builder import TypeBuilder
@@ -122,13 +126,13 @@ async function run() {
   console.log(res)
 }
 ```
-</CodeGroup>
+</CodeBlocks>
 
 ### Creating new dynamic classes or enums not in BAML
 Here we create a new `Hobbies` enum, and a new class called `Address`.
 
 
-<CodeGroup>
+<CodeBlocks>
 
 ```python python
 from baml_client.type_builder import TypeBuilder
@@ -172,11 +176,11 @@ async function run() {
   console.log(res)
 }
 ```
-</CodeGroup>
+</CodeBlocks>
 
 ### Adding descriptions to dynamic types
 
-<CodeGroup>
+<CodeBlocks>
 
 ```python python
 tb = TypeBuilder()
@@ -188,7 +192,7 @@ const tb = new TypeBuilder()
 tb.User.addProperty("email", tb.string()).description("The user's email")
 ```
 
-</CodeGroup>
+</CodeBlocks>
 
 ### Building dynamic types from JSON schema
 
@@ -196,7 +200,7 @@ We have a working implementation of this, but are waiting for a concrete use cas
 Please chime in on [the GitHub issue](https://github.com/BoundaryML/baml/issues/771) if this is
 something you'd like to use.
 
-<CodeGroup>
+<CodeBlocks>
 
 ```python python
 import pydantic
@@ -237,4 +241,4 @@ const res = await b.ExtractPeople(
 )
 ```
 
-</CodeGroup>
+</CodeBlocks>

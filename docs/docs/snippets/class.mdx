@@ -1,16 +1,18 @@
 ---
-title: "class"
+title: class
+slug: docs/snippets/class
 ---
 
-Classes consist of a name, a list of properties, and their [types](/docs/snippets/supported-types).
+
+Classes consist of a name, a list of properties, and their [types](supported-types.mdx).
 In the context of LLMs, classes describe the type of the variables you can inject into prompts and extract out from the response.
 
 <Warning>
   Note properties have no `:`
 </Warning>
 
-<CodeGroup>
-```llvm Baml
+<CodeBlocks>
+```baml Baml
 class Foo {
   property1 string
   property2 int?
@@ -46,18 +48,18 @@ const FooZod = z.object({
 type Foo = z.infer<typeof FooZod>;
 ```
 
-</CodeGroup>
+</CodeBlocks>
 
 ## Class Attributes
 
 <ParamField
   path="@@dynamic"
 >
-If set, will allow you to add fields to the class dynamically at runtime (in your python/ts/etc code). See [dynamic classes](/docs/calling-baml/dynamic-types) for more information.
+If set, will allow you to add fields to the class dynamically at runtime (in your python/ts/etc code). See [dynamic classes](../calling-baml/dynamic-types.mdx) for more information.
 </ParamField>
 
 
-```rust BAML
+```baml BAML
 class MyClass {
   property1 string
   property2 int?
@@ -87,7 +89,7 @@ This adds some additional context to the field in the prompt.
 </ParamField>
 
 
-```rust BAML
+```baml BAML
 class MyClass {
   property1 string @alias("name") @description("The name of the object")
   age int? @description("The age of the object")
@@ -103,7 +105,7 @@ Property names must follow these rules:
 - Must be unique within the class
 - classes cannot be self-referential (cannot have a property of the same type as the class itself)
 
-The type of a property can be any [supported type](/docs/snippets/supported-types)
+The type of a property can be any [supported type](supported-types.mdx)
 
 ### Default values
 

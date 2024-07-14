@@ -1,0 +1,79 @@
+.fern-sidebar-link-content {
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+}
+
+.fern-sidebar-link-container {
+  min-height: 26px;
+}
+
+.fern-prose code {
+  background-color: #f8f8f8;
+  /* font-weight: 600; */
+}
+
+.fern-sidebar-link-container[data-state="active"] .fern-sidebar-link {
+  font-weight: 600;
+}
+
+/* .fern-sidebar-container {
+  color: #000000;
+} */
+
+body .p {
+  font-size: 1rem !important;
+}
+
+p {
+  color: #333333;
+}
+
+fern-docs {
+  color: #333333;
+}
+
+ul {
+  color: #333333;
+}
+
+fern-button-text {
+  color: #ffffff;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: #333333;
+}
+
+.fern-sidebar-link-container:not([data-state="active"]) .fern-sidebar-link {
+  color: #333333;
+}
+
+span:not(a span) {
+  color: #333333;
+}
+
+:root {
+  --accent-aaa: 139, 92, 246;
+}
+
+.fern-mdx-link {
+  text-decoration-color: rgba(167, 139, 250, 1);
+}
+
+/* .fern-sidebar-group li {
+    margin-top: 0px !important;
+} */
+
+/* .group\/sidebar {
+  z-index: 1000;
+  padding-top: 20px;
+} */
+
+/* .fern-search-bar {
+  margin-bottom: 10px;
+} */
