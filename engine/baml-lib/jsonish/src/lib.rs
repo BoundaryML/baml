@@ -12,6 +12,8 @@ pub use deserializer::types::BamlValueWithFlags;
 use internal_baml_core::ir::TypeValue;
 use internal_baml_jinja::types::OutputFormatContent;
 
+use deserializer::deserialize_flags::Flag;
+
 pub fn from_str(
     of: &OutputFormatContent,
     target: &FieldType,
@@ -42,7 +44,17 @@ pub fn from_str(
 
     // Lets try to now coerce the value into the expected schema.
     match target.coerce(&ctx, target, Some(&value)) {
-        Ok(v) => Ok(v),
+        Ok(v) => {
+            if v.conditions()
+                .flags()
+                .iter()
+                .any(|f| matches!(f, Flag::InferedObject(jsonish::Value::String(_))))
+            {
+                anyhow::bail!("Failed to coerce value: {:?}", v.conditions().flags());
+            }
+
+            Ok(v)
+        }
         Err(e) => anyhow::bail!("Failed to coerce value: {}", e),
     }
 }
