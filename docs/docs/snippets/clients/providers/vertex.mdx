@@ -33,7 +33,7 @@ The `vertex-ai` provider uses the Google Cloud SDK to authenticate with a tempor
 
 See the [Google Cloud Application Default Credentials Docs](https://cloud.google.com/docs/authentication/application-default-credentials) for more information.
 <Tip>
-The `project-id` of your client object must match the `project-id` of your credentials file.
+The `project_id` of your client object must match the `project_id` of your credentials file.
 </Tip>
 
 
@@ -101,7 +101,7 @@ The options are passed through directly to the API, barring a few. Here's a shor
   
   <Accordion title='Example Credentials Content'>
   ```json Credentials
-      {
+    {
       "type": "service_account",
       "project_id": "my-project-id",
       "private_key_id": "string",
@@ -184,7 +184,7 @@ client<llm> MyClient {
   path="safetySettings"
   type="object"
 >
-  Safety settings to apply to the request. See the [Google Vertex API Request Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference) for more information on what safety settings can be set.
+  Safety settings to apply to the request. You can stack different safety settings with a new `safetySettings` header for each one. See the [Google Vertex API Request Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference) for more information on what safety settings can be set.
 
 ```baml BAML
 client<llm> MyClient {

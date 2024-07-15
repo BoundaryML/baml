@@ -171,7 +171,7 @@ const updateCursorAtom = atom(
       cursorIdx += cursor.column
 
       const selectedFunc = runtime.get_function_at_position(fileName, cursorIdx)
-      console.log('Selected function', selectedFunc)
+
       if (selectedFunc) {
         set(selectedFunctionAtom, selectedFunc.name)
       }

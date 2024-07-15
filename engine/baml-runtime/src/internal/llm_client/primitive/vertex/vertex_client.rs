@@ -37,8 +37,8 @@ use serde_json::json;
 use std::collections::HashMap;
 struct PostRequestProperities {
     default_role: String,
-    base_url: String,
-    api_key: Option<(String, String)>,
+    base_url: Option<String>,
+    service_account_details: Option<(String, String)>,
     headers: HashMap<String, String>,
     proxy_url: Option<String>,
     properties: HashMap<String, serde_json::Value>,
@@ -80,34 +80,70 @@ fn resolve_properties(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "user".to_string());
 
-    let base_url = "";
+    let base_url = properties
+        .remove("base_url")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or("".to_string());
 
-    let mut service_key: Option<(String, String)> = ctx
-        .env
-        .get("VERTEX_PLAYGROUND_CREDENTIALS")
-        .map(|s| ("VERTEX_PLAYGROUND_CREDENTIALS".to_string(), s.to_string()));
+    let mut service_key: Option<(String, String)> = None;
 
-    if service_key.is_none() {
-        service_key = ctx
-            .env
-            .get("VERTEX_CREDENTIALS_PATH")
-            .map(|s| ("VERTEX_CREDENTIALS_PATH".to_string(), s.to_string()));
-    }
+    service_key = properties
+        .remove("authorization")
+        .map(|v| ("GOOGLE_TOKEN".to_string(), v.as_str().unwrap().to_string()))
+        .or_else(|| {
+            #[cfg(target_arch = "wasm32")]
+            {
+                properties
+                    .remove("credentials_content")
+                    .and_then(|v| {
+                        v.as_str().map(|s| {
+                            (
+                                "GOOGLE_APPLICATION_CREDENTIALS_CONTENT".to_string(),
+                                s.to_string(),
+                            )
+                        })
+                    })
+                    .or_else(|| {
+                        ctx.env
+                            .get("GOOGLE_APPLICATION_CREDENTIALS_CONTENT")
+                            .map(|s| {
+                                (
+                                    "GOOGLE_APPLICATION_CREDENTIALS_CONTENT".to_string(),
+                                    s.to_string(),
+                                )
+                            })
+                    })
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                properties
+                    .remove("credentials")
+                    .and_then(|v| {
+                        v.as_str()
+                            .map(|s| ("GOOGLE_APPLICATION_CREDENTIALS".to_string(), s.to_string()))
+                    })
+                    .or_else(|| {
+                        ctx.env
+                            .get("GOOGLE_APPLICATION_CREDENTIALS")
+                            .map(|s| ("GOOGLE_APPLICATION_CREDENTIALS".to_string(), s.to_string()))
+                    })
+            }
+        });
 
     let project_id = properties
         .remove("project_id")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .or_else(|| ctx.env.get("VERTEX_PROJECT_ID").map(|s| s.to_string()));
+        .unwrap_or("".to_string());
 
     let model_id = properties
         .remove("model")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .or_else(|| Some("gemini-1.5-pro-001".to_string()));
+        .unwrap_or("".to_string());
 
-    let location: Option<String> = properties
+    let location = properties
         .remove("location")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .or_else(|| Some("us-central1".to_string()));
+        .unwrap_or("".to_string());
 
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
@@ -134,13 +170,13 @@ fn resolve_properties(
 
     Ok(PostRequestProperities {
         default_role,
-        base_url: base_url.to_string(),
-        api_key: service_key,
+        base_url: Some(base_url),
+        service_account_details: service_key,
         headers,
         properties,
-        project_id,
-        model_id,
-        location,
+        project_id: Some(project_id),
+        model_id: Some(model_id),
+        location: Some(location),
         proxy_url: ctx.env.get("BOUNDARY_PROXY_URL").map(|s| s.to_string()),
     })
 }
@@ -350,7 +386,7 @@ impl RequestBuilder for VertexClient {
             .properties
             .location
             .clone()
-            .unwrap_or_else(|| "us-central1".to_string());
+            .unwrap_or_else(|| "".to_string());
         let project_id = self
             .properties
             .project_id
@@ -361,17 +397,26 @@ impl RequestBuilder for VertexClient {
             .properties
             .model_id
             .clone()
-            .unwrap_or_else(|| "gemini-1.5-pro".to_string());
+            .unwrap_or_else(|| "".to_string());
 
-        let baml_original_url = format!(
-            "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
-            location,
-            project_id,
-            location,
-            model_id,
-            should_stream
-        );
+        let base_url = self
+            .properties
+            .base_url
+            .clone()
+            .unwrap_or_else(|| "".to_string());
 
+        let baml_original_url = if base_url != "" {
+            format!("{}{}:{}", base_url, model_id, should_stream)
+        } else {
+            format!(
+                "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
+                location,
+                project_id,
+                location,
+                model_id,
+                should_stream
+            )
+        };
         let mut req = match (&self.properties.proxy_url, allow_proxy) {
             (Some(proxy_url), true) => {
                 let req = self.client.post(proxy_url.clone());
@@ -380,64 +425,101 @@ impl RequestBuilder for VertexClient {
             _ => self.client.post(baml_original_url),
         };
 
-        log::info!("Building request for Vertex client");
-        let credentials = self.properties.api_key.clone();
-        let service_account: ServiceAccount = if let Some((key, value)) = &credentials {
-            if key == "VERTEX_PLAYGROUND_CREDENTIALS" {
-                serde_json::from_str(value).unwrap()
+        let credentials = self.properties.service_account_details.clone();
+        log::info!("Credentials: {:?}", credentials);
+        let access_token = if let Some((key, value)) = &credentials {
+            if key == "GOOGLE_TOKEN" {
+                value.clone()
+            } else if key == "GOOGLE_APPLICATION_CREDENTIALS_CONTENT" {
+                let service_account: ServiceAccount = serde_json::from_str(value).unwrap();
+                let now = Utc::now();
+                let claims = Claims {
+                    iss: service_account.client_email,
+                    scope: "https://www.googleapis.com/auth/cloud-platform".to_string(),
+                    aud: "https://oauth2.googleapis.com/token".to_string(),
+                    exp: (now + Duration::hours(1)).timestamp(),
+                    iat: now.timestamp(),
+                };
+
+                // Create the JWT
+                let header = Header::new(Algorithm::RS256);
+                let key = EncodingKey::from_rsa_pem(service_account.private_key.as_bytes())?;
+                let jwt = encode(&header, &claims, &key)?;
+
+                // Make the token request
+                let client = reqwest::Client::new();
+                let params = [
+                    ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+                    ("assertion", &jwt),
+                ];
+                let res: Value = client
+                    .post("https://oauth2.googleapis.com/token")
+                    .form(&params)
+                    .send()
+                    .await?
+                    .json()
+                    .await?;
+
+                // Extract and print the access token
+                if let Some(access_token) = res["access_token"].as_str() {
+                    println!("Access Token: {}", access_token);
+                    access_token.to_string()
+                } else {
+                    println!("Failed to get access token. Response: {:?}", res);
+                    return Err(anyhow::anyhow!("Failed to get access token"));
+                }
             } else {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     let file = File::open(value)?;
                     let reader = BufReader::new(file);
-                    serde_json::from_reader(reader)?
+                    let service_account: ServiceAccount = serde_json::from_reader(reader)?;
+                    let now = Utc::now();
+                    let claims = Claims {
+                        iss: service_account.client_email,
+                        scope: "https://www.googleapis.com/auth/cloud-platform".to_string(),
+                        aud: "https://oauth2.googleapis.com/token".to_string(),
+                        exp: (now + Duration::hours(1)).timestamp(),
+                        iat: now.timestamp(),
+                    };
+
+                    // Create the JWT
+                    let header = Header::new(Algorithm::RS256);
+                    let key = EncodingKey::from_rsa_pem(service_account.private_key.as_bytes())?;
+                    let jwt = encode(&header, &claims, &key)?;
+
+                    // Make the token request
+                    let client = reqwest::Client::new();
+                    let params = [
+                        ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+                        ("assertion", &jwt),
+                    ];
+                    let res: Value = client
+                        .post("https://oauth2.googleapis.com/token")
+                        .form(&params)
+                        .send()
+                        .await?
+                        .json()
+                        .await?;
+
+                    // Extract and print the access token
+                    if let Some(access_token) = res["access_token"].as_str() {
+                        println!("Access Token: {}", access_token);
+                        access_token.to_string()
+                    } else {
+                        println!("Failed to get access token. Response: {:?}", res);
+                        return Err(anyhow::anyhow!("Failed to get access token"));
+                    }
                 }
                 #[cfg(target_arch = "wasm32")]
                 {
                     return Err(anyhow::anyhow!(
-                        "Reading from files not supported in BAML playground. Pass in your credentials file as a string to the 'VERTEX_PLAYGROUND_CREDENTIALS' environment variable."
+                        "Reading from files not supported in BAML playground. Pass in your credentials file as a string to the 'GOOGLE_APPLICATION_CREDENTIALS_CONTENT' environment variable."
                     ));
                 }
             }
         } else {
             return Err(anyhow::anyhow!("Service account not found"));
-        };
-
-        let now = Utc::now();
-        let claims = Claims {
-            iss: service_account.client_email,
-            scope: "https://www.googleapis.com/auth/cloud-platform".to_string(),
-            aud: "https://oauth2.googleapis.com/token".to_string(),
-            exp: (now + Duration::hours(1)).timestamp(),
-            iat: now.timestamp(),
-        };
-
-        // Create the JWT
-        let header = Header::new(Algorithm::RS256);
-        let key = EncodingKey::from_rsa_pem(service_account.private_key.as_bytes())?;
-        let jwt = encode(&header, &claims, &key)?;
-
-        // Make the token request
-        let client = reqwest::Client::new();
-        let params = [
-            ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
-            ("assertion", &jwt),
-        ];
-        let res: Value = client
-            .post("https://oauth2.googleapis.com/token")
-            .form(&params)
-            .send()
-            .await?
-            .json()
-            .await?;
-
-        // Extract and print the access token
-        let access_token = if let Some(access_token) = res["access_token"].as_str() {
-            println!("Access Token: {}", access_token);
-            access_token.to_string()
-        } else {
-            println!("Failed to get access token. Response: {:?}", res);
-            return Err(anyhow::anyhow!("Failed to get access token"));
         };
 
         req = req.header("Authorization", format!("Bearer {}", access_token));

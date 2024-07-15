@@ -90,15 +90,35 @@ client<llm> Gemini {
 
 client<llm> Vertex {
   provider vertex-ai
-
+  
   options {
     model gemini-1.5-pro
-    project_id my-project-id
-    safetySettings {
+    project_id anish-testing-426119
+    location us-central1
+    safetySettings  [
+      { 
       category HARM_CATEGORY_HATE_SPEECH
-      threshold BLOCK_LOW_AND_ABOVE
-      method SEVERITY
-    }
+      threshold BLOCK_ONLY_HIGH
+      method SEVERITY 
+      },
+      {
+      category HARM_CATEGORY_DANGEROUS_CONTENT
+      threshold BLOCK_ONLY_HIGH
+      method SEVERITY 
+      },
+      {
+      category HARM_CATEGORY_SEXUALLY_EXPLICIT
+      threshold BLOCK_ONLY_HIGH
+      method SEVERITY 
+
+      },
+      {
+      category HARM_CATEGORY_HARASSMENT
+      threshold BLOCK_ONLY_HIGH 
+      method SEVERITY 
+      }
+      ]
+    
     generationConfig {
       maxOutputTokens 10
       temperature 1
@@ -106,6 +126,7 @@ client<llm> Vertex {
     }
   }
 }
+
 
 client<llm> AwsBedrock {
   provider aws-bedrock
