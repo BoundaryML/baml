@@ -304,70 +304,74 @@ async fn process_media_urls(
                 match part {
                     ChatMessagePart::Image(BamlMedia::Url(_, media_url))
                     | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
-                        let (base64, mime_type) = if media_url.url.starts_with("data:") {
-                            let parts: Vec<&str> = media_url.url.splitn(2, ',').collect();
-                            let base64 = parts.get(1).unwrap().to_string();
-                            let prefix = parts.get(0).unwrap();
-                            let mime_type = prefix
-                                .splitn(2, ':')
-                                .next()
-                                .unwrap()
-                                .to_string()
-                                .split('/')
-                                .last()
-                                .unwrap()
-                                .to_string();
+                        if !media_url.url.starts_with("gs://") {
+                            let (base64, mime_type) = if media_url.url.starts_with("data:") {
+                                let parts: Vec<&str> = media_url.url.splitn(2, ',').collect();
+                                let base64 = parts.get(1).unwrap().to_string();
+                                let prefix = parts.get(0).unwrap();
+                                let mime_type = prefix
+                                    .splitn(2, ':')
+                                    .next()
+                                    .unwrap()
+                                    .to_string()
+                                    .split('/')
+                                    .last()
+                                    .unwrap()
+                                    .to_string();
 
-                            (base64, mime_type)
-                        } else {
-                            let response = match fetch_with_proxy(
-                                &media_url.url,
-                                ctx.env
-                                    .get("BOUNDARY_PROXY_URL")
-                                    .as_deref()
-                                    .map(|s| s.as_str()),
-                            )
-                            .await
-                            {
-                                Ok(response) => response,
-                                Err(e) => {
-                                    return Err(anyhow::anyhow!("Failed to fetch media: {e:?}"))
-                                }
+                                (base64, mime_type)
+                            } else {
+                                let response = match fetch_with_proxy(
+                                    &media_url.url,
+                                    ctx.env
+                                        .get("BOUNDARY_PROXY_URL")
+                                        .as_deref()
+                                        .map(|s| s.as_str()),
+                                )
+                                .await
+                                {
+                                    Ok(response) => response,
+                                    Err(e) => {
+                                        return Err(anyhow::anyhow!("Failed to fetch media: {e:?}"))
+                                    }
+                                };
+                                let bytes = match response.bytes().await {
+                                    Ok(bytes) => bytes,
+                                    Err(e) => {
+                                        return Err(anyhow::anyhow!(
+                                            "Failed to fetch media bytes: {e:?}"
+                                        ))
+                                    }
+                                };
+                                let base64 = BASE64_STANDARD.encode(&bytes);
+                                let inferred_type = infer::get(&bytes);
+                                let mime_type = inferred_type.map_or_else(
+                                    || "application/octet-stream".into(),
+                                    |t| t.extension().into(),
+                                );
+                                (base64, mime_type)
                             };
-                            let bytes = match response.bytes().await {
-                                Ok(bytes) => bytes,
-                                Err(e) => {
-                                    return Err(anyhow::anyhow!(
-                                        "Failed to fetch media bytes: {e:?}"
-                                    ))
-                                }
-                            };
-                            let base64 = BASE64_STANDARD.encode(&bytes);
-                            let inferred_type = infer::get(&bytes);
-                            let mime_type = inferred_type.map_or_else(
-                                || "application/octet-stream".into(),
-                                |t| t.extension().into(),
-                            );
-                            (base64, mime_type)
-                        };
 
-                        Ok(if matches!(part, ChatMessagePart::Image(_)) {
-                            ChatMessagePart::Image(BamlMedia::Base64(
-                                BamlMediaType::Image,
-                                MediaBase64 {
-                                    base64: base64,
-                                    media_type: format!("image/{}", mime_type),
-                                },
-                            ))
+                            Ok(if matches!(part, ChatMessagePart::Image(_)) {
+                                ChatMessagePart::Image(BamlMedia::Base64(
+                                    BamlMediaType::Image,
+                                    MediaBase64 {
+                                        base64: base64,
+                                        media_type: format!("image/{}", mime_type),
+                                    },
+                                ))
+                            } else {
+                                ChatMessagePart::Audio(BamlMedia::Base64(
+                                    BamlMediaType::Audio,
+                                    MediaBase64 {
+                                        base64: base64,
+                                        media_type: format!("audio/{}", mime_type),
+                                    },
+                                ))
+                            })
                         } else {
-                            ChatMessagePart::Audio(BamlMedia::Base64(
-                                BamlMediaType::Audio,
-                                MediaBase64 {
-                                    base64: base64,
-                                    media_type: format!("audio/{}", mime_type),
-                                },
-                            ))
-                        })
+                            Ok(part.clone())
+                        }
                     }
                     _ => Ok(part.clone()),
                 }

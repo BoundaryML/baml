@@ -1286,6 +1286,26 @@ module Baml
     sig {
       
       params(
+        input: String,
+      ).returns(String)
+      
+    }
+    def TestVertex(
+        input:
+    )
+      raw = @runtime.call_function(
+        "TestVertex",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
         input: T.any(String, T::Boolean),
       ).returns(Baml::Types::UnionTest_ReturnType)
       
@@ -2609,6 +2629,27 @@ module Baml
         "TestRetryExponential",
         {
           
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestVertex(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "TestVertex",
+        {
+          "input" => input,
         },
         @ctx_manager,
       )

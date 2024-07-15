@@ -11,8 +11,10 @@ test  TestImageInput {
   functions [TestImageInput]
   args {
     img {
-      media_type "image/jpg"
-      url "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png"
+      media_type "image/png"
+      url gs://cloud-samples-data/vertex-ai/llm/prompts/landmark1.png
+
+      // url "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png"
     }
   }
 }

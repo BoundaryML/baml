@@ -4,11 +4,16 @@ slug: docs/snippets/clients/providers/gemini
 ---
 
 
-The `google-ai` provider supports the `https://generativelanguage.googleapis.com/v1/models/{model_id}/generateContent` and `https://generativelanguage.googleapis.com/v1/models/{model_id}/streamGenerateContent` endpoint.
+The `google-ai` provider supports the `https://generativelanguage.googleapis.com/v1/models/{model_id}/generateContent` and `https://generativelanguage.googleapis.com/v1/models/{model_id}/streamGenerateContent` endpoints.
 
 <Tip>
 BAML will automatically pick `streamGenerateContent` if you call the streaming interface.
 </Tip>
+{/* 
+## Client-specific behavior
+The `google-ai` endpoints do not support URL-based media input.
+BAML will automatically convert any URL-based media input to base64 before sending it to the API. */}
+
 
 Example:
 ```baml BAML
@@ -21,7 +26,6 @@ client<llm> MyClient {
 ```
 
 The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
-
 ## Non-forwarded options
 <ParamField
   path="api_key"
@@ -78,6 +82,7 @@ client<llm> MyClient {
 }
 ```
 </ParamField>
+
 
 ## Forwarded options
 <ParamField

@@ -40,6 +40,14 @@ function TestGemini(input: string) -> string {
   "#
 }
 
+function TestVertex(input: string) -> string {
+  client Vertex
+  prompt #"
+    Write a nice short story about {{ input }}
+  "#
+
+}
+
 function TestAws(input: string) -> string {
   client AwsBedrock
   prompt #"
@@ -49,7 +57,7 @@ function TestAws(input: string) -> string {
 
 
 test TestProvider {
-  functions [TestAnthropic, TestOpenAI, TestAzure, TestOllama, TestGemini, TestAws]
+  functions [TestAnthropic, TestVertex, TestOpenAI, TestAzure, TestOllama, TestGemini, TestAws]
   args {
     input "Donkey kong and peanut butter"
   }

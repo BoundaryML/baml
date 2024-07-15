@@ -4,17 +4,12 @@ use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[cfg(not(target_arch = "wasm32"))]
-use std::fs::File;
-#[cfg(not(target_arch = "wasm32"))]
-use std::io::BufReader;
-
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
         primitive::{
             request::{make_parsed_request, make_request, RequestBuilder},
-            vertex::types::{FinishReason, GoogleResponse},
+            vertex::types::{FinishReason, VertexResponse},
         },
         traits::{
             SseResponseTrait, StreamResponse, WithChat, WithClient, WithNoCompletion,
@@ -26,10 +21,15 @@ use crate::{
     request::create_client,
 };
 use anyhow::Result;
+use futures::stream::TryStreamExt;
+use futures::StreamExt;
+#[cfg(not(target_arch = "wasm32"))]
+use std::fs::File;
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::BufReader;
 
 use baml_types::BamlMedia;
 use eventsource_stream::Eventsource;
-use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 
@@ -182,8 +182,8 @@ impl SseResponseTrait for VertexClient {
                 .take_while(|event| {
                     std::future::ready(event.as_ref().is_ok_and(|e| e.data != "data: \n"))
                 })
-                .map(|event| -> Result<GoogleResponse> {
-                    Ok(serde_json::from_str::<GoogleResponse>(&event?.data)?)
+                .map(|event| -> Result<VertexResponse> {
+                    Ok(serde_json::from_str::<VertexResponse>(&event?.data)?)
                 })
                 .scan(
                     Ok(LLMCompleteResponse {
@@ -286,7 +286,7 @@ impl VertexClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: false,
+                resolve_media_urls: true,
             },
             retry_policy: client
                 .elem()
@@ -320,7 +320,7 @@ impl VertexClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: false,
+                resolve_media_urls: true,
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,
@@ -343,7 +343,7 @@ impl RequestBuilder for VertexClient {
 
         let mut should_stream = "generateContent";
         if stream {
-            should_stream = "streamGenerateContent";
+            should_stream = "streamGenerateContent?alt=sse";
         }
 
         let location = self
@@ -475,7 +475,7 @@ impl WithChat for VertexClient {
     async fn chat(&self, _ctx: &RuntimeContext, prompt: &Vec<RenderedChatMessage>) -> LLMResponse {
         //non-streaming, complete response is returned
         let (response, system_now, instant_now) =
-            match make_parsed_request::<GoogleResponse>(self, either::Either::Right(prompt), false)
+            match make_parsed_request::<VertexResponse>(self, either::Either::Right(prompt), false)
                 .await
             {
                 Ok(v) => v,
@@ -590,7 +590,7 @@ fn convert_media_to_content(media: &BamlMedia) -> serde_json::Value {
         }),
         BamlMedia::Url(_, data) => json!({
             "fileData": {
-                "mime_type": data.media_type.clone().unwrap_or_default(),
+                "mime_type": data.media_type,
                 "file_uri": data.url
             }
         }),

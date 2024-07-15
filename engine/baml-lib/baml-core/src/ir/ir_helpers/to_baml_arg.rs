@@ -59,11 +59,13 @@ pub fn validate_arg(
             TypeValue::Image => match value {
                 BamlValue::Media(v) => Some(BamlValue::Media(v.clone())),
                 BamlValue::Map(kv) => {
-                    if let Some(BamlValue::String(s)) = kv.get("url") {
+                    if let (Some(BamlValue::String(s)), Some(BamlValue::String(media_type_str))) =
+                        (kv.get("base64"), kv.get("media_type"))
+                    {
                         Some(BamlValue::Media(baml_types::BamlMedia::url(
                             BamlMediaType::Image,
                             s.to_string(),
-                            None,
+                            Some(media_type_str.to_string()), // Fix: wrap in Some()
                         )))
                     } else if let (
                         Some(BamlValue::String(s)),
@@ -91,11 +93,13 @@ pub fn validate_arg(
             TypeValue::Audio => match value {
                 BamlValue::Media(v) => Some(BamlValue::Media(v.clone())),
                 BamlValue::Map(kv) => {
-                    if let Some(BamlValue::String(s)) = kv.get("url") {
+                    if let (Some(BamlValue::String(s)), Some(BamlValue::String(media_type_str))) =
+                        (kv.get("base64"), kv.get("media_type"))
+                    {
                         Some(BamlValue::Media(baml_types::BamlMedia::url(
                             BamlMediaType::Audio,
                             s.to_string(),
-                            None,
+                            Some(media_type_str.to_string()), // Fix: wrap in Some()
                         )))
                     } else if let (
                         Some(BamlValue::String(s)),

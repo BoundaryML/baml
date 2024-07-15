@@ -3,7 +3,78 @@ title: vertex-ai
 slug: docs/snippets/clients/providers/vertex
 ---
 
+The `vertex-ai` provider is used to interact with the Google Vertex AI services.
 
-We don't currently offer `vertex-ai` as a provider. If you'd like to see it, please comment on this issue: [Support Vertex AI provider](https://github.com/BoundaryML/baml/issues/706).
+Example: 
+```baml BAML
+client<llm> MyClient {
+  provider vertex-ai
+  options {
+    model "gemini-1.5-flash"
+    project-id "my-project-id"
+    
+  }
+}
+```
 
-You can instead use gemini-models with the `google-ai` provider, [see here](gemini.mdx).
+The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
+## Non-forwarded options
+<ParamField
+  path="api_key"
+  type="string"
+>
+  Will be passed as the `x-goog-api-key` header. **Default: `env.GOOGLE_API_KEY`**
+  
+  `x-goog-api-key: $api_key`
+</ParamField>
+
+<ParamField path="base_url" type="string">
+  The base URL for the API. **Default: `https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-1.5-flash:streamGenerateContent
+`**
+</ParamField>
+
+<ParamField
+  path="default_role"
+  type="string"
+>
+  The default role for any prompts that don't specify a role. **Default: `user`**
+  
+  We don't have any checks for this field, you can pass any string you wish.
+</ParamField>
+
+<ParamField
+  path="model"
+  type="string"
+>
+  The model to use. **Default: `gemini-1.5-flash`**
+  
+  We don't have any checks for this field, you can pass any string you wish.
+
+| Model | Input(s) | Optimized for |
+| --- | ---  | --- |
+| `gemini-1.5-pro`  | Audio, images, videos, and text | Complex reasoning tasks such as code and text generation, text editing, problem solving, data extraction and generation |
+| `gemini-1.5-flash`  | Audio, images, videos, and text | Fast and versatile performance across a diverse variety of tasks |
+| `gemini-1.0-pro` | Text | Natural language tasks, multi-turn text and code chat, and code generation |
+
+See the [Google Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for the latest models.
+</ParamField>
+
+<ParamField path="headers" type="object">
+  Additional headers to send with the request.
+
+Example:
+```baml BAML
+client<llm> MyClient {
+  provider google-ai
+  options {
+    model "gemini-1.5-flash"
+    headers {
+      "X-My-Header" "my-value"
+    }
+  }
+}
+```
+</ParamField>
+
+
+

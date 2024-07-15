@@ -32,6 +32,7 @@ impl serde::Serialize for BamlValue {
                 BamlMedia::Url(BamlMediaType::Image, u) => {
                     let mut s = serializer.serialize_struct("BamlImage", 2)?;
                     s.serialize_field("url", &u.url)?;
+                    s.serialize_field("media_type", &u.media_type)?;
                     s.end()
                 }
                 BamlMedia::Base64(BamlMediaType::Image, b) => {
@@ -44,6 +45,8 @@ impl serde::Serialize for BamlValue {
                     let mut s = serializer.serialize_struct("BamlAudio", 2)?;
 
                     s.serialize_field("url", &u.url)?;
+                    s.serialize_field("media_type", &u.media_type)?;
+
                     s.end()
                 }
                 BamlMedia::Base64(BamlMediaType::Audio, b) => {
