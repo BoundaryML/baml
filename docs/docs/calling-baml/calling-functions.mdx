@@ -1,6 +1,8 @@
 ---
-title: "Calling BAML Functions"
+title: Calling BAML Functions
+slug: docs/calling-baml/calling-functions
 ---
+
 
 Once you've [generated the BAML client] and set your environment variables,
 you can call BAML functions from your code.
@@ -13,7 +15,7 @@ you can call BAML functions from your code.
 We’ll use `function ClassifyMessage(input: string) -> Category` for our example:
 
 <Accordion title="classify-message.baml">
-```rust
+```baml
 enum Category {
     Refund
     CancelOrder

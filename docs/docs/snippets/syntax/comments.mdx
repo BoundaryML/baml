@@ -1,12 +1,14 @@
 ---
 title: comments
+slug: docs/snippets/syntax/comments
 ---
+
 
 ## Single line / trailing comments
 
 Denoted by `//`.
 
-```rust
+```baml
 // hello there!
 foo // this is a trailing comment
 ```
@@ -15,9 +17,9 @@ foo // this is a trailing comment
 
 To add a docstring to any block, use `///`.
 
-```rust
+```baml
 /// This is a docstring for a class
-class {
+class Foo {
     /// This is a docstring for a property
     property1 string
 }
@@ -27,7 +29,7 @@ class {
 
 Multiline comments are denoted via `{//` and `//}`.
 
-```rust
+```baml
 {// this is a multiline comment
     foo
     bar

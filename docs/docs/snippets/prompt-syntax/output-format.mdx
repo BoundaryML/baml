@@ -1,6 +1,8 @@
 ---
 title: ctx.output_format
+slug: docs/snippets/prompt-syntax/output-format
 ---
+
 
 `{{ ctx.output_format }}` is used within a prompt template (or in any template_string) to print out the function's output schema into the prompt. It describes to the LLM how to generate a structure BAML can parse (usually JSON).
 
@@ -8,7 +10,7 @@ Here's an example of a function with `{{ ctx.output_format }}`, and how it gets 
 
 **BAML Prompt**
 
-```rust
+```baml
 class Resume {
   name string
   education Education[]

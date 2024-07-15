@@ -1,6 +1,8 @@
 ---
-title: "Generate the BAML Client"
+title: Generate the BAML Client
+slug: docs/calling-baml/generate-baml-client
 ---
+
 
 <Info>This page assumes you've already defined a function in BAML. If you
 haven't done that yet, check out [how to define a function].</Info>
@@ -15,7 +17,7 @@ you save a BAML file. Otherwise, you can generate the client manually:
 
 [BAML extension]: https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension
 
-<CodeGroup>
+<CodeBlocks>
 
 ```bash Python
 pipx run baml-cli generate --from path/to/baml_src
@@ -54,7 +56,7 @@ bundle add baml
 bundle exec baml-cli generate --from path/to/baml_src
 ```
 
-</CodeGroup>
+</CodeBlocks>
 
 ## Best Practices
 
@@ -67,9 +69,9 @@ generate` to generate code for a specific target language. You can define
 multiple `generator` clauses in your BAML project, and `baml-cli generate` will
 generate code for each of them.
 
-<CodeGroup>
+<CodeBlocks>
 
-```rust Python
+```baml Python
 generator target {
     // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
     output_type "python/pydantic"
@@ -78,7 +80,7 @@ generator target {
 }
 ```
 
-```rust TypeScript
+```baml TypeScript
 generator target {
     // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
     output_type "typescript"
@@ -87,7 +89,7 @@ generator target {
 }
 ```
 
-```rust Python
+```baml Python
 generator target {
     // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
     output_type "ruby/sorbet"
@@ -96,7 +98,7 @@ generator target {
 }
 ```
 
-</CodeGroup>
+</CodeBlocks>
          
 
 ### Generate the BAML client on-demand

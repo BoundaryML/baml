@@ -1,6 +1,10 @@
+---
+slug: docs/snippets/functions/overview
+---
+
 A **function** is the contract between the application and the AI model. It defines the desired **input** and a **guaranteed output**.
 
-Here is a simple BAML function to extract a resume. Note the input is a chunk of resume_text, and the output is an actual resume class. Read [prompt syntax](/docs/snippets/prompt-syntax/what-is-jinja) to learn more about the prompt and what Jinja templating is.
+Here is a simple BAML function to extract a resume. Note the input is a chunk of resume_text, and the output is an actual resume class. Read [prompt syntax](../prompt-syntax/what-is-jinja.mdx) to learn more about the prompt and what Jinja templating is.
 
 ```rust BAML
 class Resume {
@@ -36,7 +40,7 @@ function ExtractResume(resume_text: string) -> Resume {
 
 A function signature directly translates into the same function in the language of your choice, and BAML's fuzzy parser will handle fixing any common json mistakes LLMs make. Here's how you call it:
 
-<CodeGroup>
+<CodeBlocks>
 ```python python
 from baml_client import b
 from baml_client.types import Resume
@@ -83,13 +87,13 @@ res = b.TestFnNamedArgsSingleClass(
 )
 ```
 
-</CodeGroup>
+</CodeBlocks>
 
 ## Complex input types
 
 If you have a complex input type you can import them from `baml_client` and use them when calling your function. Imagine we injected `class Resume` into a different baml function called AnalyzeResume. Here's what the call looks like:
 
-<CodeGroup>
+<CodeBlocks>
 ```python Python
 from baml_client.types import Resume
 from baml_client import b
@@ -121,8 +125,8 @@ res = b.AnalyzeResume(
 )
 ```
 
-</CodeGroup>
+</CodeBlocks>
 
-See more at [Calling functions](/docs/calling-baml/calling-functions)
+See more at [Calling functions](../../calling-baml/calling-functions.mdx)
 
 Checkout [PromptFiddle](https://promptfiddle.com) to see various interactive BAML function examples.

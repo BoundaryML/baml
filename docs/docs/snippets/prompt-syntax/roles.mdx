@@ -1,6 +1,8 @@
 ---
 title: _.role
+slug: docs/snippets/prompt-syntax/roles
 ---
+
 
 BAML prompts are compiled into a `messages` array (or equivalent) that most LLM providers use:
 
@@ -10,7 +12,7 @@ By default, BAML puts everything into a single message with the `system` role if
 When in doubt, the playground always shows you the current role for each message.
 
 To specify a role explicitly, add the `{{ _.role("user")}}` syntax to the prompt
-```jinja2
+```rust
 prompt #"
   {{ _.role("system") }} Everything after
   this element will be a system prompt!
@@ -63,8 +65,8 @@ function ChatMessages(messages: string[]) -> string {
 
 ## Example -- Using `_.role()` in a template string
 
-```rust BAML
-template_strings YouAreA(name: string, job: string) #"
+```baml BAML
+template_string YouAreA(name: string, job: string) #"
   {{ _.role("system") }} 
   You are an expert {{ name }}. {{ job }}
 

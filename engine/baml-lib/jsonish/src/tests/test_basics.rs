@@ -1,6 +1,30 @@
 use super::*;
 
 test_deserializer!(test_null, EMPTY_FILE, "null", FieldType::null(), null);
+test_deserializer!(
+    test_null_1,
+    EMPTY_FILE,
+    "null",
+    FieldType::string().as_optional(),
+    null
+);
+test_deserializer!(
+    test_null_2,
+    EMPTY_FILE,
+    "Null",
+    FieldType::string().as_optional(),
+    // This is a string, not null
+    "Null"
+);
+
+test_deserializer!(
+    test_null_3,
+    EMPTY_FILE,
+    "None",
+    FieldType::string().as_optional(),
+    // This is a string, not null
+    "None"
+);
 
 test_deserializer!(test_number, EMPTY_FILE, "12111", FieldType::int(), 12111);
 
@@ -13,6 +37,19 @@ test_deserializer!(
 );
 
 test_deserializer!(test_bool, EMPTY_FILE, "true", FieldType::bool(), true);
+test_deserializer!(test_bool_2, EMPTY_FILE, "True", FieldType::bool(), true);
+test_deserializer!(test_bool_3, EMPTY_FILE, "false", FieldType::bool(), false);
+test_deserializer!(test_bool_4, EMPTY_FILE, "False", FieldType::bool(), false);
+
+test_deserializer!(
+    test_float,
+    EMPTY_FILE,
+    "12111.123",
+    FieldType::float(),
+    12111.123
+);
+
+test_deserializer!(test_float_1, EMPTY_FILE, "1/5", FieldType::float(), 0.2);
 
 test_deserializer!(
     test_array,

@@ -1,13 +1,15 @@
 ---
 title: ollama
+slug: docs/snippets/clients/providers/ollama
 ---
+
 
 For `ollama`, we provide a client that can be used to interact with [ollama](https://ollama.com/) `/chat/completions` endpoint.
 
 <Info>What is ollama? Ollama is an easy way to run LLMs locally!</Info>
 
 Example:
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider ollama
   options {
@@ -40,7 +42,7 @@ The options are passed through directly to the API, barring a few. Here's a shor
   Additional headers to send with the request.
 
 Example:
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider ollama
   options {
