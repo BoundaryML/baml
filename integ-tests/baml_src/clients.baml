@@ -78,7 +78,7 @@ client<llm> GPT35Azure {
 client<llm> Gemini {
   provider google-ai
   options {
-    model "gemini-1.5-pro-001"
+    model gemini-1.5-pro-001
     api_key env.GOOGLE_API_KEY
     safetySettings {
       category HARM_CATEGORY_HATE_SPEECH
@@ -92,7 +92,7 @@ client<llm> Vertex {
   provider vertex-ai
 
   options {
-    model "gemini-1.5-pro-001"
+    model gemini-1.5-pro
     project_id my-project-id
     safetySettings {
       category HARM_CATEGORY_HATE_SPEECH

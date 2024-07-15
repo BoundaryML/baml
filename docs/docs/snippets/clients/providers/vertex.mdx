@@ -10,13 +10,14 @@ Example:
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model "gemini-1.5-pro"
+    model gemini-1.5-pro
     project_id my-project-id
+    location us-central1
   }
 }
 ```
 ## Authentication Instructions
-The `vertex-ai` provider uses the Google Cloud SDK to authenticate with a temporary access token. 
+The `vertex-ai` provider uses the Google Cloud SDK to authenticate with a temporary access token. We generate these Google Cloud Authentication Tokens using Google Cloud service account credentials. We do not store this token, and it is only used for the duration of the request.
 
 ### Instructions for downloading Google Cloud credentials
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
@@ -25,9 +26,12 @@ The `vertex-ai` provider uses the Google Cloud SDK to authenticate with a tempor
 5. Select an existing service account or create a new one.
 6. Click on the service account and select `Add Key`.
 7. Choose the JSON key type and click `Create`.
-9. Set the `VERTEX_CREDENTIALS` environment variable to the path of the file.
-10. Set the `VERTEX_PLAYGROUND_CREDENTIALS` environment variable to the contents of the file.
+9. Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the path of the file.
+10. Set the `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` environment variable to the contents of the file in the BAML Playground, as it does not have access to the file system.
 
+
+
+See the [Google Cloud Application Default Credentials Docs](https://cloud.google.com/docs/authentication/application-default-credentials) for more information.
 <Tip>
 The `project-id` of your client object must match the `project-id` of your credentials file.
 </Tip>
@@ -35,42 +39,100 @@ The `project-id` of your client object must match the `project-id` of your crede
 
 The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
 ## Non-forwarded options
-<ParamField
-  path="authorization"
-  type="string"
->
-  Will be passed as a bearer token.
-  
-  **Default: `Uses env.VERTEX_PLAYGROUND_CREDENTIALS or env.VERTEX_CREDENTIALS`** to generate a temporary auth_token per request.
-  
-  `Authorization: Bearer $auth_token`
-</ParamField>
-
 <ParamField path="base_url" type="string">
   The base URL for the API.
   
-  **Default: `https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-1.5-pro:generateContent
+  **Default: `https://{LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/{LOCATION}/publishers/google/models/
 `**
+
+  Can be used in lieu of the **`project_id`** and **`location`** fields, to manually set the request URL.
 </ParamField>
+
 
 <ParamField
   path="project_id"
   type="string"
+  required
 >
   Vertex requires a Google Cloud project ID for each request. See the [Google Cloud Project ID Docs](https://cloud.google.com/resource-manager/docs/creating-managing-projects#identifying_projects) for more information.
+
+    
+
 </ParamField>
 
 <ParamField
   path="location"
   type="string"
+  required
 >
-  Vertex requires a location for each request. **Default: `us-central1`**
+  Vertex requires a location for each request. Some locations may have different models avaiable.
   
-  We don't have any checks for this field, you can pass any string you wish.
+  Common locations include:
+  - `us-central1`
+  - `us-west1`
+  - `us-east1`
+  - `us-south1`
 
-  See the [Vertex Location Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/learn/locations#united-states) for all locations.
+  See the [Vertex Location Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/learn/locations#united-states) for all locations and supported models.
 
 </ParamField>
+
+
+<ParamField
+  path="credentials"
+  type="string"
+>
+  Overrides the path to JSON credentials file. **Default: `env.GOOGLE_APPLICATION_CREDENTIALS`**
+
+  Example:
+  `'path/to/credentials.json'`
+
+  <Warning>
+   This field cannot be used in the BAML Playground. Use **`credentials_content`** instead.
+  </Warning>
+</ParamField>
+
+<ParamField
+  path="credentials_content"
+  type="string"
+>
+  Overrides contents of the Google Cloud Application Credentials. **Default: `env.GOOGLE_APPLICATION_CREDENTIALS_CONTENT`**
+
+  
+  <Accordion title='Example Credentials Content'>
+  ```json Credentials
+      {
+      "type": "service_account",
+      "project_id": "my-project-id",
+      "private_key_id": "string",
+      "private_key": "-----BEGIN PRIVATE KEY-----string\n-----END PRIVATE KEY-----\n",
+      "client_email": "john_doe@gmail.com",
+      "client_id": "123456",
+      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+      "token_uri": "https://oauth2.googleapis.com/token",
+      "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+      "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/...",
+      "universe_domain": "googleapis.com"
+    }
+    ```
+
+</Accordion>
+
+    <Warning>
+    BAML Playground only. Use **`credentials`** instead.
+  </Warning>
+</ParamField>
+
+<ParamField
+  path="authorization"
+  type="string"
+>
+  Directly set Google Cloud Authentication Token in lieu of token generation via **`env.GOOGLE_APPLICATION_CREDENTIALS`** or **`env.GOOGLE_APPLICATION_CREDENTIALS_CONTENT`** fields.
+    
+</ParamField>
+
+
+
 
 <ParamField
   path="default_role"
@@ -78,16 +140,15 @@ The options are passed through directly to the API, barring a few. Here's a shor
 >
   The default role for any prompts that don't specify a role. **Default: `user`**
   
-  We don't have any checks for this field, you can pass any string you wish.
 </ParamField>
 
 <ParamField
   path="model"
   type="string"
+  required
 >
-  The model to use. **Default: `gemini-1.5-pro`**
+  The Google model to use for the request.
   
-  We don't have any checks for this field, you can pass any string you wish.
 
 | Model | Input(s) | Optimized for |
 | --- | ---  | --- |
@@ -100,23 +161,15 @@ See the [Google Model Docs](https://ai.google.dev/gemini-api/docs/models/gemini)
 
 <ParamField path="headers" type="object">
   Additional headers to send with the request.
-  For Vertex, this includes the safetySettings and generationConfig settings, as seen below. See the [Google Vertex API Request Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference) for more information on what headers can be set.
 
 Example:
 ```baml BAML
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model "gemini-1.5-flash"
-    safetySettings {
-      category HARM_CATEGORY_HATE_SPEECH
-      threshold BLOCK_LOW_AND_ABOVE
-      method SEVERITY
-    }
-    generationConfig {
-      maxOutputTokens 100
-      temperature 1
-    }
+    model gemini-1.5-pro
+    project_id my-project-id
+    location us-central1
     // Additional headers
     headers {
       "X-My-Header" "my-value"
@@ -125,6 +178,60 @@ client<llm> MyClient {
 }
 ```
 </ParamField>
+
+## Forwarded options
+<ParamField
+  path="safetySettings"
+  type="object"
+>
+  Safety settings to apply to the request. See the [Google Vertex API Request Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference) for more information on what safety settings can be set.
+
+```baml BAML
+client<llm> MyClient {
+  provider vertex-ai
+  options {
+    model gemini-1.5-pro
+    project_id my-project-id
+    location us-central1
+
+    safetySettings {
+      category HARM_CATEGORY_HATE_SPEECH
+      threshold BLOCK_LOW_AND_ABOVE
+      method SEVERITY
+    }
+  }
+}
+```
+    
+
+</ParamField>
+
+<ParamField
+  path="generationConfig"
+  type="object"
+>
+  Generation configurations to apply to the request. See the [Google Vertex API Request Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference) for more information on what properties can be set.
+```baml BAML
+client<llm> MyClient {
+  provider vertex-ai
+  options {
+    model gemini-1.5-pro
+    project_id my-project-id
+    location us-central1
+    
+    generationConfig {
+      maxOutputTokens 100
+      temperature 1
+    }
+  }
+}
+```
+
+    
+</ParamField>
+
+
+
 
 
 
