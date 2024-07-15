@@ -108,12 +108,12 @@ async def test_should_work_with_image_url():
     assert_that(res.lower()).matches(r"(green|yellow|shrek|ogre)")
 
 @pytest.mark.asyncio
-async def vertex():
-    res = await b.TestFnNamedArgsSingleInt(
-      myInt = 42
+async def test_should_work_with_vertex():
+    res = await b.TestVertex(
+      "donkey kong"
   
     )
-    assert_that(res == 42)
+    assert_that("donkey kong" in res.lower())
 
 
 

@@ -1,4 +1,5 @@
 use crate::client_registry::ClientProperty;
+use crate::internal::llm_client::ResolveMedia;
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
@@ -241,7 +242,7 @@ impl GoogleAIClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: true,
+                resolve_media_urls: ResolveMedia::Always,
             },
             retry_policy: client
                 .elem()
@@ -275,7 +276,7 @@ impl GoogleAIClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: true,
+                resolve_media_urls: ResolveMedia::Always,
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,

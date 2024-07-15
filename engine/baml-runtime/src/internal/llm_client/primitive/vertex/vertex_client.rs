@@ -1,9 +1,5 @@
 use crate::client_registry::ClientProperty;
-use chrono::{Duration, Utc};
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-
+use crate::internal::llm_client::ResolveMedia;
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
@@ -21,8 +17,12 @@ use crate::{
     request::create_client,
 };
 use anyhow::Result;
+use chrono::{Duration, Utc};
 use futures::stream::TryStreamExt;
 use futures::StreamExt;
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 #[cfg(not(target_arch = "wasm32"))]
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
@@ -129,6 +129,8 @@ fn resolve_properties(
                     })
             }
         });
+    properties.remove("credentials");
+    properties.remove("credentials_content");
 
     let project_id = properties
         .remove("project_id")
@@ -322,7 +324,7 @@ impl VertexClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: true,
+                resolve_media_urls: ResolveMedia::MissingMime,
             },
             retry_policy: client
                 .elem()
@@ -356,7 +358,7 @@ impl VertexClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: true,
+                resolve_media_urls: ResolveMedia::MissingMime,
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,
