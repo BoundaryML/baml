@@ -80,13 +80,30 @@ client<llm> Gemini {
   options {
     model "gemini-1.5-pro-001"
     api_key env.GOOGLE_API_KEY
+    safetySettings {
+      category HARM_CATEGORY_HATE_SPEECH
+      threshold BLOCK_LOW_AND_ABOVE
+      method SEVERITY
+    }
   }
 }
 
 client<llm> Vertex {
   provider vertex-ai
+
   options {
     model "gemini-1.5-pro-001"
+    project_id my-project-id
+    safetySettings {
+      category HARM_CATEGORY_HATE_SPEECH
+      threshold BLOCK_LOW_AND_ABOVE
+      method SEVERITY
+    }
+    generationConfig {
+      maxOutputTokens 10
+      temperature 1
+      topP 0.95
+    }
   }
 }
 

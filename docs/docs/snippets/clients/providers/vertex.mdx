@@ -10,20 +10,36 @@ Example:
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model "gemini-1.5-pro-001"
-    project-id "my-project-id"
-    
+    model "gemini-1.5-pro"
+    project_id my-project-id
   }
 }
 ```
+## Authentication Instructions
+The `vertex-ai` provider uses the Google Cloud SDK to authenticate with a temporary access token. 
+
+### Instructions for downloading Google Cloud credentials
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Click on the project you want to use.
+3. Select the `IAM & Admin` section, and click on `Service Accounts`.
+5. Select an existing service account or create a new one.
+6. Click on the service account and select `Add Key`.
+7. Choose the JSON key type and click `Create`.
+9. Set the `VERTEX_CREDENTIALS` environment variable to the path of the file.
+10. Set the `VERTEX_PLAYGROUND_CREDENTIALS` environment variable to the contents of the file.
+
+<Tip>
+The `project-id` of your client object must match the `project-id` of your credentials file.
+</Tip>
+
 
 The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
 ## Non-forwarded options
 <ParamField
-  path="api_key"
+  path="authorization"
   type="string"
 >
-  Will be passed as the `Authorization` header. 
+  Will be passed as a bearer token.
   
   **Default: `Uses env.VERTEX_PLAYGROUND_CREDENTIALS or env.VERTEX_CREDENTIALS`** to generate a temporary auth_token per request.
   
@@ -35,6 +51,13 @@ The options are passed through directly to the API, barring a few. Here's a shor
   
   **Default: `https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-1.5-pro:generateContent
 `**
+</ParamField>
+
+<ParamField
+  path="project_id"
+  type="string"
+>
+  Vertex requires a Google Cloud project ID for each request. See the [Google Cloud Project ID Docs](https://cloud.google.com/resource-manager/docs/creating-managing-projects#identifying_projects) for more information.
 </ParamField>
 
 <ParamField
@@ -72,18 +95,29 @@ The options are passed through directly to the API, barring a few. Here's a shor
 | `gemini-1.5-flash`  | Audio, images, videos, and text | Fast and versatile performance across a diverse variety of tasks |
 | `gemini-1.0-pro` | Text | Natural language tasks, multi-turn text and code chat, and code generation |
 
-See the [Google Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for the latest models.
+See the [Google Model Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for the latest models.
 </ParamField>
 
 <ParamField path="headers" type="object">
   Additional headers to send with the request.
+  For Vertex, this includes the safetySettings and generationConfig settings, as seen below. See the [Google Vertex API Request Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference) for more information on what headers can be set.
 
 Example:
 ```baml BAML
 client<llm> MyClient {
-  provider google-ai
+  provider vertex-ai
   options {
     model "gemini-1.5-flash"
+    safetySettings {
+      category HARM_CATEGORY_HATE_SPEECH
+      threshold BLOCK_LOW_AND_ABOVE
+      method SEVERITY
+    }
+    generationConfig {
+      maxOutputTokens 100
+      temperature 1
+    }
+    // Additional headers
     headers {
       "X-My-Header" "my-value"
     }

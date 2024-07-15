@@ -97,7 +97,7 @@ fn resolve_properties(
     let project_id = properties
         .remove("project_id")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .or_else(|| ctx.env.get("GOOGLE_PROJECT_ID").map(|s| s.to_string()));
+        .or_else(|| ctx.env.get("VERTEX_PROJECT_ID").map(|s| s.to_string()));
 
     let model_id = properties
         .remove("model")
@@ -356,6 +356,7 @@ impl RequestBuilder for VertexClient {
             .project_id
             .clone()
             .unwrap_or_else(|| "".to_string());
+
         let model_id = self
             .properties
             .model_id
