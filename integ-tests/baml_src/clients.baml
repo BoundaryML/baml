@@ -95,7 +95,7 @@ client<llm> Vertex {
     model gemini-1.5-pro
     project_id anish-testing-426119
     location us-central1
-    // base_url https://us-central1-aiplatform.googleapis.com/v1/projects/anish-testing-426119/locations/us-central1/publishers/google/models/
+
   }
 }
 

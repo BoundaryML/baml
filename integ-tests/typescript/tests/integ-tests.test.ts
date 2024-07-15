@@ -226,6 +226,12 @@ describe('Integ tests', () => {
     expect(msgs.at(-1)).toEqual(final)
   })
 
+  it('should support vertex', async() => {
+    const res = await b.TestVertex('Donkey Kong')
+    expect(res.toLowerCase()).toContain('donkey')
+
+  })
+
   it('supports tracing sync', async () => {
     const blah = 'blah'
 

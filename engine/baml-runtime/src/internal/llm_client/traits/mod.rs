@@ -328,7 +328,7 @@ async fn process_media_urls(
                                     .next()
                                     .unwrap()
                                     .to_string();
-                                log::info!("Mime type: {}", mime_type);
+
                                 (base64, mime_type)
                             } else {
                                 let response = match fetch_with_proxy(
