@@ -35,6 +35,7 @@ pub(super) fn coerce_array(
             for (i, item) in arr.iter().enumerate() {
                 match inner.coerce(&ctx.enter_scope(&format!("{i}")), inner, Some(item)) {
                     Ok(v) => items.push(v),
+                    // TODO(vbv): this seems like a bug - it causes more penalization the deeper into an array it is?
                     Err(e) => flags.add_flag(Flag::ArrayItemParseError(i, e)),
                 }
             }

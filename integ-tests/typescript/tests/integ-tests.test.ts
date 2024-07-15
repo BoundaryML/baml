@@ -23,50 +23,81 @@ import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from '..
 config()
 
 describe('Integ tests', () => {
-  it('should work for all inputs', async () => {
-    let res = await b.TestFnNamedArgsSingleBool(true)
-    expect(res).toEqual('true')
-
-    res = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
-    expect(res).toContain('a')
-    expect(res).toContain('b')
-    expect(res).toContain('c')
-
-    console.log('calling with class')
-    res = await b.TestFnNamedArgsSingleClass({
-      key: 'key',
-      key_two: true,
-      key_three: 52,
+  describe('should work for all inputs', () => {
+    it('single bool', async () => {
+      const res = await b.TestFnNamedArgsSingleBool(true)
+      expect(res).toEqual('true')
     })
-    console.log('got response', res)
-    expect(res).toContain('52')
 
-    res = await b.TestMulticlassNamedArgs(
-      {
+    it('single string list', async () => {
+      const res = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
+      expect(res).toContain('a')
+      expect(res).toContain('b')
+      expect(res).toContain('c')
+    })
+
+    it('single class', async () => {
+      console.log('calling with class')
+      const res = await b.TestFnNamedArgsSingleClass({
         key: 'key',
         key_two: true,
         key_three: 52,
-      },
-      {
-        key: 'key',
-        key_two: true,
-        key_three: 64,
-      },
-    )
-    expect(res).toContain('52')
-    expect(res).toContain('64')
+      })
+      console.log('got response', res)
+      expect(res).toContain('52')
+    })
 
-    res = await b.TestFnNamedArgsSingleEnumList([NamedArgsSingleEnumList.TWO])
-    expect(res).toContain('TWO')
+    it('multiple classes', async () => {
+      const res = await b.TestMulticlassNamedArgs(
+        {
+          key: 'key',
+          key_two: true,
+          key_three: 52,
+        },
+        {
+          key: 'key',
+          key_two: true,
+          key_three: 64,
+        },
+      )
+      expect(res).toContain('52')
+      expect(res).toContain('64')
+    })
 
-    res = await b.TestFnNamedArgsSingleFloat(3.12)
-    expect(res).toContain('3.12')
+    it('single enum list', async () => {
+      const res = await b.TestFnNamedArgsSingleEnumList([NamedArgsSingleEnumList.TWO])
+      expect(res).toContain('TWO')
+    })
 
-    res = await b.TestFnNamedArgsSingleInt(3566)
-    expect(res).toContain('3566')
+    it('single float', async () => {
+      const res = await b.TestFnNamedArgsSingleFloat(3.12)
+      expect(res).toContain('3.12')
+    })
 
-    // TODO fix the fact it's required.
-    res = await b.FnNamedArgsSingleStringOptional()
+    it('single int', async () => {
+      const res = await b.TestFnNamedArgsSingleInt(3566)
+      expect(res).toContain('3566')
+    })
+
+    it('single optional string', async () => {
+      // TODO fix the fact it's required.
+      const res = await b.FnNamedArgsSingleStringOptional()
+    })
+
+    it('single map string to string', async () => {
+      const res = await b.TestFnNamedArgsSingleMapStringToString({ lorem: 'ipsum', dolor: 'sit' })
+      expect(res).toHaveProperty('lorem', 'ipsum')
+    })
+
+    it('single map string to class', async () => {
+      const res = await b.TestFnNamedArgsSingleMapStringToClass({ lorem: { word: 'ipsum' }, dolor: { word: 'sit' } })
+      expect(res).toHaveProperty('lorem', { word: 'ipsum' })
+    })
+
+    it('single map string to map', async () => {
+      const res = await b.TestFnNamedArgsSingleMapStringToMap({ lorem: { word: 'ipsum' }, dolor: { word: 'sit' } })
+      expect(res).toHaveProperty('lorem', { word: 'ipsum' })
+    })
   })
 
   it('should work for all outputs', async () => {

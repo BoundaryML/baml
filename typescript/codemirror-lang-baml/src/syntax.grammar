@@ -12,13 +12,15 @@ ComplexTypeExpr {
   "(" UnionTypeExpr ")" |
   SimpleTypeExpr
 }
+MapTypeExpr { MapIdentifier "<" ComplexTypeExpr "," ComplexTypeExpr ">"}
 ListTypeExpr { ComplexTypeExpr"[]" }
 OptionalTypeExpr { ComplexTypeExpr"?" }
-SimpleTypeExpr { ListTypeExpr | OptionalTypeExpr | IdentifierDecl }
+SimpleTypeExpr { ListTypeExpr | OptionalTypeExpr | MapTypeExpr!MapOverIdentifier | IdentifierDecl }
 UnionTypeExpr { TypeExpr!TypeUnion"|"TypeExpr }
 
 @precedence {
   TypeUnion @left
+  MapOverIdentifier @left
 }
 
 EnumDecl { "enum" IdentifierDecl "{" (BlockAttribute | EnumValueDecl)* "}" }
@@ -63,7 +65,11 @@ TemplateStringDecl {
   @precedence {
     NumericLiteral, QuotedString, UnquotedString, UnquotedAttributeValue
   }
+  @precedence {
+    MapIdentifier, IdentifierDecl
+  }
 
+  MapIdentifier { "map" }
   IdentifierDecl { $[A-Za-z0-9-_]+ }
 
   NumericLiteral { $[0-9]+ | $[0-9]*'.'$[0-9]+ }

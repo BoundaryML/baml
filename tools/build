@@ -158,7 +158,7 @@ case "$_path" in
       npx nodemon \
         --ext rs,hb,hbs,j2,toml,baml \
         --watch "${_repo_root}/engine" \
-        --ignore 'target' \
+        --ignore 'target/**' \
         --exec "${command}"
     else
       eval "${command}"
@@ -168,17 +168,19 @@ case "$_path" in
   /integ-tests/python | /integ-tests/python/* )
     command="true"
     command="env -u CONDA_PREFIX poetry run maturin develop --manifest-path ${_repo_root}/engine/language_client_python/Cargo.toml"
-    #command="${command} && poetry run baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
+    command="${command} && poetry run baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
-      command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run python baml_example_tracing.py"
+      #command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run python baml_example_tracing.py"
+      #command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run pytest -s tests/test_functions.py"
+      command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run pytest -s tests/test_functions.py::TestAllInputs"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
-        --ext py,pyi,rs,j2,toml \
+        --ext py,pyi,rs,j2,toml,baml \
         --watch "${_repo_root}/engine" \
         --watch . \
-        --ignore baml_client/** \
-        --ignore target/** \
+        --ignore 'baml_client/**' \
+        --ignore 'target/**' \
         --ignore .pytest_cache \
         --exec "${command}"
     else

@@ -1,0 +1,16 @@
+{
+  "name": "syntaxes",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "vscode-tmgrammar-snap --config ../package.json all.test.baml",
+    "update-test": "pnpm test --updateSnapshot"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "vscode-tmgrammar-test": "^0.1.3"
+  }
+}

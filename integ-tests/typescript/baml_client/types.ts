@@ -294,6 +294,11 @@ export interface SomeClassNestedDynamic {
   [key: string]: any;
 }
 
+export interface StringToClassEntry {
+  word: string
+  
+}
+
 export interface TestClassAlias {
   key: string
   key2: string

@@ -14,11 +14,16 @@ from ..baml_client.globals import (
 from ..baml_client.types import (
     NamedArgsSingleEnumList,
     NamedArgsSingleClass,
-    DynInputOutput,
+   StringToClassEntry,  DynInputOutput,
 )
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
+from ..baml_client.
 import datetime
+import concurrent.futures
+import asyncio
+import random
+
 
 
 def test_sync():
@@ -33,47 +38,74 @@ def test_sync():
     assert "52" in res
 
 
-@pytest.mark.asyncio
-async def test_should_work_for_all_inputs():
-    res = await b.TestFnNamedArgsSingleBool(True)
-    assert res
+class TestAllInputs:
 
-    res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
-    assert "a" in res and "b" in res and "c" in res
+    @pytest.mark.asyncio
+    async def test_single_bool(self):
+        res = await b.TestFnNamedArgsSingleBool(True)
+        assert res
 
-    print("calling with class")
-    res = await b.TestFnNamedArgsSingleClass(
-        myArg=NamedArgsSingleClass(
-            key="key",
-            key_two=True,
-            key_three=52,
+    @pytest.mark.asyncio
+    async def test_single_string_list(self):
+        res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
+        assert "a" in res and "b" in res and "c" in res
+
+    @pytest.mark.asyncio
+    async def test_single_class(self):
+        res = await b.TestFnNamedArgsSingleClass(
+            myArg=NamedArgsSingleClass(
+                key="key",
+                key_two=True,
+                key_three=52,
+            )
         )
-    )
-    print("got response", res)
-    assert "52" in res
+        assert "52" in res
 
-    res = await b.TestMulticlassNamedArgs(
-        myArg=NamedArgsSingleClass(
-            key="key",
-            key_two=True,
-            key_three=52,
-        ),
-        myArg2=NamedArgsSingleClass(
-            key="key",
-            key_two=True,
-            key_three=64,
-        ),
-    )
-    assert "52" in res and "64" in res
+    @pytest.mark.asyncio
+    async def test_multiple_args(self):
+        res = await b.TestMulticlassNamedArgs(
+            myArg=NamedArgsSingleClass(
+                key="key",
+                key_two=True,
+                key_three=52,
+            ),
+            myArg2=NamedArgsSingleClass(
+                key="key",
+                key_two=True,
+                key_three=64,
+            ),
+        )
+        assert "52" in res and "64" in res
 
-    res = await b.TestFnNamedArgsSingleEnumList([NamedArgsSingleEnumList.TWO])
-    assert "TWO" in res
+    @pytest.mark.asyncio
+    async def test_single_enum_list(self):
+        res = await b.TestFnNamedArgsSingleEnumList([NamedArgsSingleEnumList.TWO])
+        assert "TWO" in res
 
-    res = await b.TestFnNamedArgsSingleFloat(3.12)
-    assert "3.12" in res
+    @pytest.mark.asyncio
+    async def test_single_float(self):
+        res = await b.TestFnNamedArgsSingleFloat(3.12)
+        assert "3.12" in res
 
-    res = await b.TestFnNamedArgsSingleInt(3566)
-    assert "3566" in res
+    @pytest.mark.asyncio
+    async def test_single_int(self):
+        res = await b.TestFnNamedArgsSingleInt(3566)
+        assert "3566" in res
+
+    @pytest.mark.asyncio
+    async def test_single_map_string_to_string(self):
+        res = await b.TestFnNamedArgsSingleMapStringToString({'lorem': 'ipsum', 'dolor': 'sit'})
+        assert 'lorem' in res
+
+    @pytest.mark.asyncio
+    async def test_single_map_string_to_class(self):
+        res = await b.TestFnNamedArgsSingleMapStringToClass({'lorem': StringToClassEntry(word='ipsum')})
+        assert res['lorem'].word == 'ipsum'
+
+    @pytest.mark.asyncio
+    async def test_single_map_string_to_map(self):
+        res = await b.TestFnNamedArgsSingleMapStringToMap({'lorem': {'word': 'ipsum'}})
+        assert res['lorem']['word'] == 'ipsum'
 
 
 class MyCustomClass(NamedArgsSingleClass):
@@ -408,9 +440,6 @@ async def test_tracing_async_gather_top_level():
     await asyncio.gather(*[async_dummy_func("second-dummycall-arg") for _ in range(10)])
 
 
-import concurrent.futures
-
-
 @trace
 def trace_thread_pool():
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -461,9 +490,6 @@ def parent_sync(myStr: str):
     sync_dummy_func(myStr)
     return "hello world parentsync"
 
-
-import asyncio
-import random
 
 
 @trace

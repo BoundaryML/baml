@@ -189,7 +189,7 @@ fn validate_variable_path(
                 variable.span.clone(),
             )),
         },
-        ast::FieldType::Dictionary(_, _) => Err(DatamodelError::new_validation_error(
+        ast::FieldType::Map(_, _) => Err(DatamodelError::new_validation_error(
             "Dictionary types are not supported",
             variable.span.clone(),
         )),

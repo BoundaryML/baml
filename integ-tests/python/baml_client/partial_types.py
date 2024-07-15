@@ -206,6 +206,11 @@ class SomeClassNestedDynamic(BaseModel):
     
     hi: Optional[str] = None
 
+class StringToClassEntry(BaseModel):
+    
+    
+    word: Optional[str] = None
+
 class TestClassAlias(BaseModel):
     
     

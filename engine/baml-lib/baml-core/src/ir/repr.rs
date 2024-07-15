@@ -314,7 +314,7 @@ impl WithRepr<FieldType> for ast::FieldType {
 
                 repr
             }
-            ast::FieldType::Dictionary(kv, _) => {
+            ast::FieldType::Map(kv, _) => {
                 // NB: we can't just unpack (*kv) into k, v because that would require a move/copy
                 FieldType::Map(Box::new((*kv).0.repr(db)?), Box::new((*kv).1.repr(db)?))
             }

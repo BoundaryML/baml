@@ -31,9 +31,11 @@ function DescribeImage(myImg: image) -> string {
   "#
 }
 ```
-You cannot name as variable "image" at the moment as it is a reserved keyword.
+
+You cannot name a variable `image` at the moment as it is a reserved keyword.
 
 Calling a function with an image type:
+
 <CodeBlocks>
 ```python Python
 from baml_py import Image
@@ -148,6 +150,7 @@ enum Name {
   Value2 @description("My optional description annotation")
 }
 ```
+
 ### class
 
 **See also:** [Class](/docs/syntax/class)
@@ -157,6 +160,7 @@ Classes are for user-defined complex data structures.
 Use when you need an LLM to call another function (e.g. OpenAI's function calling), you can model the function's parameters as a class. You can also get models to return complex structured data by using a class.
 
 **Example:**
+
 Note that properties have no `:`
 ```baml
 class Car {
@@ -166,10 +170,12 @@ class Car {
 ```
 
 ### Optional (?)
+
 A type that represents a value that might or might not be present.
 
 Useful when a variable might not have a value and you want to explicitly handle its absence.
-**Syntax:** `<type>?`
+
+**Syntax:** `Type?`
 
 **Example:** `int?` or `(MyClass | int)?`
 
@@ -178,30 +184,45 @@ Useful when a variable might not have a value and you want to explicitly handle 
 A type that can hold one of several specified types.
 
 This can be helpful with **function calling**, where you want to return different types of data depending on which function should be called.
-- **Syntax:** `<type>|<type>`
-- **Example:** `int | string` or `(int | string) | MyClass` or `string | MyClass | int[]`
-  <Warning>
-    Order is important. `int | string` is not the same as `string | int`.
-    <br />
-    For example, if you have a `"1"` string, it will be parsed as an `int` if
-    you use `int | string`, but as a `string` if you use `string | int`.
-  </Warning>
+
+**Syntax:** `Type1 | Type2`
+
+**Example:** `int | string` or `(int | string) | MyClass` or `string | MyClass | int[]`
+
+<Warning>
+  Order is important. `int | string` is not the same as `string | int`.
+
+  For example, if you have a `"1"` string, it will be parsed as an `int` if
+  you use `int | string`, but as a `string` if you use `string | int`.
+</Warning>
 
 ### List/Array ([])
+
 A collection of elements of the same type.
-- **Syntax:** `<type>[]`
-- **Example:** `string[]` or `(int | string)[]` or `int[][]`
+
+**Syntax:** `Type[]`
+
+**Example:** `string[]` or `(int | string)[]` or `int[][]`
 
 <Tip>
-  <ul>
-    <li>Array types can be nested to create multi-dimensional arrays</li>
-    <li>An array type cannot be optional</li>
-  </ul>
+  * Array types can be nested to create multi-dimensional arrays
+  * An array type cannot be optional
 </Tip>
 
-### ❌ Dictionary
+### Map
 
-- Not yet supported. Use a `class` instead.
+A mapping of elements of one type to another type.
+
+**Syntax**: `map<KeyType, ValueType>`
+
+**Example**: `map<string, string>`
+
+<Info>
+  For TS users: `map<string, ValueType>` will generate a 
+  `Record<string, ValueType>` type annotation, but using any other type for the
+  key will generate a `Map`, e.g. `map<int, string>` in BAML will generate a
+  `Map<number, string>` type annotation in TypeScript.
+</Info>
 
 ### ❌ Set
 

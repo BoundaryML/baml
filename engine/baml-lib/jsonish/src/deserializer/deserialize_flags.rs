@@ -14,6 +14,8 @@ pub enum Flag {
     SubstringMatch(String),
     SingleToArray,
     ArrayItemParseError(usize, ParsingError),
+    MapKeyParseError(usize, ParsingError),
+    MapValueParseError(String, ParsingError),
 
     JsonToString(crate::jsonish::Value),
     ImpliedKey(String),
@@ -93,6 +95,12 @@ impl std::fmt::Display for Flag {
             }
             Flag::ArrayItemParseError(idx, error) => {
                 write!(f, "Error parsing item {}: {}", idx, error)?;
+            }
+            Flag::MapKeyParseError(idx, error) => {
+                write!(f, "Error parsing map key {}: {}", idx, error)?;
+            }
+            Flag::MapValueParseError(key, error) => {
+                write!(f, "Error parsing map value for key {}: {}", key, error)?;
             }
             Flag::SingleToArray => {
                 write!(f, "Converted a single value to an array")?;

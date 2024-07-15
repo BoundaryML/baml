@@ -297,6 +297,11 @@ class SomeClassNestedDynamic(BaseModel):
     
     hi: str
 
+class StringToClassEntry(BaseModel):
+    
+    
+    word: str
+
 class TestClassAlias(BaseModel):
     
     

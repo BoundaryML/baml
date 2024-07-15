@@ -157,6 +157,7 @@ module Baml
     class Resume < T::Struct; end
     class SearchParams < T::Struct; end
     class SomeClassNestedDynamic < T::Struct; end
+    class StringToClassEntry < T::Struct; end
     class TestClassAlias < T::Struct; end
     class TestClassNested < T::Struct; end
     class TestClassWithEnum < T::Struct; end
@@ -307,6 +308,10 @@ module Baml
     class SomeClassNestedDynamic < T::Struct
       include T::Struct::ActsAsComparable
       const :hi, String
+    end
+    class StringToClassEntry < T::Struct
+      include T::Struct::ActsAsComparable
+      const :word, String
     end
     class TestClassAlias < T::Struct
       include T::Struct::ActsAsComparable

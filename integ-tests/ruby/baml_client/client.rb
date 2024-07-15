@@ -1090,6 +1090,66 @@ module Baml
     sig {
       
       params(
+        myMap: T::Hash[String, Baml::Types::StringToClassEntry],
+      ).returns(T::Hash[String, Baml::Types::StringToClassEntry])
+      
+    }
+    def TestFnNamedArgsSingleMapStringToClass(
+        myMap:
+    )
+      raw = @runtime.call_function(
+        "TestFnNamedArgsSingleMapStringToClass",
+        {
+          "myMap" => myMap,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        myMap: T::Hash[String, T::Hash[String, String]],
+      ).returns(T::Hash[String, T::Hash[String, String]])
+      
+    }
+    def TestFnNamedArgsSingleMapStringToMap(
+        myMap:
+    )
+      raw = @runtime.call_function(
+        "TestFnNamedArgsSingleMapStringToMap",
+        {
+          "myMap" => myMap,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        myMap: T::Hash[String, String],
+      ).returns(T::Hash[String, String])
+      
+    }
+    def TestFnNamedArgsSingleMapStringToString(
+        myMap:
+    )
+      raw = @runtime.call_function(
+        "TestFnNamedArgsSingleMapStringToString",
+        {
+          "myMap" => myMap,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
         myString: String,
       ).returns(String)
       
@@ -2423,6 +2483,69 @@ module Baml
         @ctx_manager,
       )
       Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        myMap: T::Hash[String, Baml::Types::StringToClassEntry],
+      ).returns(Baml::BamlStream[T::Hash[String, Baml::Types::StringToClassEntry]])
+    }
+    def TestFnNamedArgsSingleMapStringToClass(
+        myMap:
+    )
+      raw = @runtime.stream_function(
+        "TestFnNamedArgsSingleMapStringToClass",
+        {
+          "myMap" => myMap,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T::Hash[String, Baml::PartialTypes::StringToClassEntry], T::Hash[String, Baml::Types::StringToClassEntry]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        myMap: T::Hash[String, T::Hash[String, String]],
+      ).returns(Baml::BamlStream[T::Hash[String, T::Hash[String, String]]])
+    }
+    def TestFnNamedArgsSingleMapStringToMap(
+        myMap:
+    )
+      raw = @runtime.stream_function(
+        "TestFnNamedArgsSingleMapStringToMap",
+        {
+          "myMap" => myMap,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T::Hash[String, T::Hash[String, T.nilable(String)]], T::Hash[String, T::Hash[String, String]]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        myMap: T::Hash[String, String],
+      ).returns(Baml::BamlStream[T::Hash[String, String]])
+    }
+    def TestFnNamedArgsSingleMapStringToString(
+        myMap:
+    )
+      raw = @runtime.stream_function(
+        "TestFnNamedArgsSingleMapStringToString",
+        {
+          "myMap" => myMap,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T::Hash[String, T.nilable(String)], T::Hash[String, String]].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
