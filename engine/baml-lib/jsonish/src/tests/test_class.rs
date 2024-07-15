@@ -435,3 +435,174 @@ test_deserializer!(
             }
         ]
 );
+
+const FUNCTION_FILE: &str = r#"
+class Function {
+    selected (Function1 | Function2 | Function3)
+}
+
+class Function1 {
+    function_name string
+    radius int
+}
+
+class Function2 {
+    function_name string
+    diameter int
+}
+
+class Function3 {
+    function_name string
+    length int
+    breadth int
+}
+"#;
+
+test_deserializer!(
+    test_obj_created_when_not_present,
+    FUNCTION_FILE,
+    r#"[
+        {
+          // Calculate the area of a circle based on the radius.
+          function_name: 'circle.calculate_area',
+          // The radius of the circle.
+          radius: 5,
+        },
+        {
+          // Calculate the circumference of a circle based on the diameter.
+          function_name: 'circle.calculate_circumference',
+          // The diameter of the circle.
+          diameter: 10,
+        }
+      ]"#,
+    FieldType::list(FieldType::class("Function")),
+    [
+        {"selected": {
+            "function_name": "circle.calculate_area",
+            "radius": 5
+        },
+    },
+        {"selected":
+        {
+            "function_name": "circle.calculate_circumference",
+            "diameter": 10
+        }
+        }
+    ]
+);
+
+test_deserializer!(
+    test_trailing_comma_with_space_last_field,
+    FUNCTION_FILE,
+    r#"
+    {
+      // Calculate the circumference of a circle based on the diameter.
+      function_name: 'circle.calculate_circumference',
+      // The diameter of the circle. (with a ", ")
+      diameter: 10, 
+    }
+    "#,
+    FieldType::class("Function2"),
+    {
+        "function_name": "circle.calculate_circumference",
+        "diameter": 10
+    }
+);
+
+test_deserializer!(
+    test_trailing_comma_with_space_last_field_and_extra_text,
+    FUNCTION_FILE,
+    r#"
+    {
+      // Calculate the circumference of a circle based on the diameter.
+      function_name: 'circle.calculate_circumference',
+      // The diameter of the circle. (with a ", ")
+      diameter: 10, 
+      Some key: "Some value"
+    }
+    and this
+    "#,
+    FieldType::class("Function2"),
+    {
+        "function_name": "circle.calculate_circumference",
+        "diameter": 10
+    }
+);
+
+test_failing_deserializer!(
+    test_nested_obj_from_string_fails_0,
+    r#"
+    class Foo {
+        foo Bar
+    }
+
+    class Bar {
+        bar string
+        option int?
+    }
+    "#,
+    r#"My inner string"#,
+    FieldType::Class("Foo".to_string())
+);
+
+test_failing_deserializer!(
+    test_nested_obj_from_string_fails_1,
+    r#"
+    class Foo {
+        foo Bar
+    }
+
+    class Bar {
+        bar string
+    }
+    "#,
+    r#"My inner string"#,
+    FieldType::Class("Foo".to_string())
+);
+
+test_failing_deserializer!(
+    test_nested_obj_from_string_fails_2,
+    r#"
+    class Foo {
+        foo string
+    }
+    "#,
+    r#"My inner string"#,
+    FieldType::Class("Foo".to_string())
+);
+
+test_deserializer!(
+    test_nested_obj_from_int,
+    r#"
+    class Foo {
+        foo int
+    }
+    "#,
+    r#"1214"#,
+    FieldType::Class("Foo".to_string()),
+    { "foo": 1214 }
+);
+
+test_deserializer!(
+    test_nested_obj_from_float,
+    r#"
+    class Foo {
+        foo float
+    }
+    "#,
+    r#"1214.123"#,
+    FieldType::Class("Foo".to_string()),
+    { "foo": 1214.123 }
+);
+
+test_deserializer!(
+    test_nested_obj_from_bool,
+    r#"
+    class Foo {
+        foo bool
+    }
+    "#,
+    r#" true "#,
+    FieldType::Class("Foo".to_string()),
+    { "foo": true }
+);

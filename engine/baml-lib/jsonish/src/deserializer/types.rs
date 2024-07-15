@@ -53,6 +53,21 @@ impl BamlValueWithFlags {
             BamlValueWithFlags::Image(f) => f.score(),
         }
     }
+
+    pub fn conditions(&self) -> &DeserializerConditions {
+        match self {
+            BamlValueWithFlags::String(v) => &v.flags,
+            BamlValueWithFlags::Int(v) => &v.flags,
+            BamlValueWithFlags::Float(v) => &v.flags,
+            BamlValueWithFlags::Bool(v) => &v.flags,
+            BamlValueWithFlags::List(v, _) => &v,
+            BamlValueWithFlags::Map(v, _) => &v,
+            BamlValueWithFlags::Enum(_, v) => &v.flags,
+            BamlValueWithFlags::Class(_, v, _) => &v,
+            BamlValueWithFlags::Null(v) => &v,
+            BamlValueWithFlags::Image(v) => &v.flags,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

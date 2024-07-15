@@ -17,6 +17,7 @@ pub enum Flag {
 
     JsonToString(crate::jsonish::Value),
     ImpliedKey(String),
+    InferedObject(crate::jsonish::Value),
 
     // Values here are all the possible matches.
     FirstMatch(usize, Vec<Result<BamlValueWithFlags, ParsingError>>),
@@ -68,6 +69,9 @@ impl std::fmt::Display for DeserializerConditions {
 impl std::fmt::Display for Flag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Flag::InferedObject(value) => {
+                write!(f, "Infered object from: {}", value.r#type())?;
+            }
             Flag::OptionalDefaultFromNoValue => {
                 write!(f, "Optional Default value")?;
             }
@@ -174,6 +178,10 @@ impl DeserializerConditions {
 
     pub fn new() -> Self {
         Self { flags: Vec::new() }
+    }
+
+    pub fn flags(&self) -> &Vec<Flag> {
+        &self.flags
     }
 }
 
