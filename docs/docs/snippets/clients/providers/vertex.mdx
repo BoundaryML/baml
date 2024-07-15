@@ -10,7 +10,7 @@ Example:
 client<llm> MyClient {
   provider vertex-ai
   options {
-    model "gemini-1.5-flash"
+    model "gemini-1.5-pro-001"
     project-id "my-project-id"
     
   }
@@ -23,14 +23,30 @@ The options are passed through directly to the API, barring a few. Here's a shor
   path="api_key"
   type="string"
 >
-  Will be passed as the `x-goog-api-key` header. **Default: `env.GOOGLE_API_KEY`**
+  Will be passed as the `Authorization` header. 
   
-  `x-goog-api-key: $api_key`
+  **Default: `Uses env.VERTEX_PLAYGROUND_CREDENTIALS or env.VERTEX_CREDENTIALS`** to generate a temporary auth_token per request.
+  
+  `Authorization: Bearer $auth_token`
 </ParamField>
 
 <ParamField path="base_url" type="string">
-  The base URL for the API. **Default: `https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-1.5-flash:streamGenerateContent
+  The base URL for the API.
+  
+  **Default: `https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-1.5-pro:generateContent
 `**
+</ParamField>
+
+<ParamField
+  path="location"
+  type="string"
+>
+  Vertex requires a location for each request. **Default: `us-central1`**
+  
+  We don't have any checks for this field, you can pass any string you wish.
+
+  See the [Vertex Location Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/learn/locations#united-states) for all locations.
+
 </ParamField>
 
 <ParamField
@@ -46,7 +62,7 @@ The options are passed through directly to the API, barring a few. Here's a shor
   path="model"
   type="string"
 >
-  The model to use. **Default: `gemini-1.5-flash`**
+  The model to use. **Default: `gemini-1.5-pro`**
   
   We don't have any checks for this field, you can pass any string you wish.
 

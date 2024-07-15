@@ -355,12 +355,12 @@ impl RequestBuilder for VertexClient {
             .properties
             .project_id
             .clone()
-            .unwrap_or_else(|| "gloo-ai".to_string());
+            .unwrap_or_else(|| "".to_string());
         let model_id = self
             .properties
             .model_id
             .clone()
-            .unwrap_or_else(|| "gemini-1.5-pro-001".to_string());
+            .unwrap_or_else(|| "gemini-1.5-pro".to_string());
 
         let baml_original_url = format!(
             "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
