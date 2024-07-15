@@ -1,8 +1,9 @@
-use std::{collections::BTreeMap, path::PathBuf};
-
 use anyhow::Result;
+use colored::*;
 use indexmap::IndexMap;
 use internal_baml_core::{configuration::GeneratorOutputType, ir::repr::IntermediateRepr};
+use semver::Version;
+use std::{collections::BTreeMap, path::PathBuf};
 
 mod dir_writer;
 mod python;
@@ -17,6 +18,9 @@ pub struct GeneratorArgs {
     baml_src_dir: PathBuf,
 
     input_file_map: BTreeMap<PathBuf, String>,
+
+    version: String,
+    no_version_check: bool,
 }
 
 fn relative_path_to_baml_src(path: &PathBuf, baml_src: &PathBuf) -> Result<PathBuf> {
@@ -34,6 +38,8 @@ impl GeneratorArgs {
         output_dir_relative_to_baml_src: impl Into<PathBuf>,
         baml_src_dir: impl Into<PathBuf>,
         input_files: impl IntoIterator<Item = (&'i PathBuf, &'i String)>,
+        version: String,
+        no_version_check: bool,
     ) -> Result<Self> {
         let baml_src = baml_src_dir.into();
         let input_file_map: BTreeMap<PathBuf, String> = input_files
@@ -46,6 +52,8 @@ impl GeneratorArgs {
             baml_src_dir: baml_src.clone(),
             // for the key, whhich is the name, just get the filename
             input_file_map,
+            version,
+            no_version_check,
         })
     }
 
@@ -101,12 +109,66 @@ pub trait GenerateClient {
         -> Result<GenerateOutput>;
 }
 
+fn versions_equal_ignoring_patch(v1: &str, v2: &str) -> bool {
+    let version1 = Version::parse(v1).unwrap();
+    let version2 = Version::parse(v2).unwrap();
+
+    version1.major == version2.major && version1.minor == version2.minor
+}
+
 impl GenerateClient for GeneratorOutputType {
     fn generate_client(
         &self,
         ir: &IntermediateRepr,
         gen: &GeneratorArgs,
     ) -> Result<GenerateOutput> {
+        let runtime_version = env!("CARGO_PKG_VERSION");
+        let gen_version = semver::Version::parse(&gen.version)?;
+        let runtime_semver = semver::Version::parse(runtime_version)?;
+        // with version check enabled, error if they dont match
+        if !gen.no_version_check {
+            if !versions_equal_ignoring_patch(&runtime_version, gen_version.to_string().as_str()) {
+                let error_message = format!(
+                "The generator in the BAML files (version: {}) does not match the installed baml version ({}). Major and minor version must match. Update the installed BAML package or the version in the BAML generator config. See https://docs.boundaryml.com/docs/calling-baml/generate-baml-client#best-practices",
+                gen.version, runtime_version
+            );
+                return Err(anyhow::anyhow!(error_message));
+            }
+        }
+
+        // Uncomment if we want to error if your generated code is newer than the runtime.
+        // Error if the version of the generator args is greater than this version which has been  the main or only situation that has caused us issues since the generated code of a new version
+        // may contain types or constructs not actually available from the runtime.
+        // if gen_version > runtime_semver {
+        //     let error_message = format!(
+        //         "The generator in the BAML files (version: {}) is older than the installed baml version ({}). Try updating your installed BAML package to {}. See https://docs.boundaryml.com/docs/calling-baml/generate-baml-client#best-practices",
+        //         gen.version, runtime_version, gen.version
+        //     );
+        //     return Err(anyhow::anyhow!(error_message));
+        // }
+
+        // log a warning everytime anyway regardless of what happens.
+        if gen_version != runtime_semver {
+            // Log a warning if BAML generated files are stale / user forgot to update the version in the config.
+            if gen_version < runtime_semver {
+                let warning_message = format!(
+                    "The generator in the BAML files (version: {}) is older than the installed baml version ({}). Please update the generator configuration to {}. See https://docs.boundaryml.com/docs/calling-baml/generate-baml-client#best-practices",
+                    gen.version, runtime_version, runtime_version
+                );
+                println!("{}", "BAML Warning:".yellow().bold());
+                println!("{}", warning_message.yellow());
+                log::warn!("{}", warning_message);
+            } else {
+                let warning_message = format!(
+                    "The generator in the BAML files (version: {}) is newer than the installed baml version ({}). Please update the installed BAML package to {}. See https://docs.boundaryml.com/docs/calling-baml/generate-baml-client#best-practices",
+                    gen.version, runtime_version, gen.version
+                );
+                println!("{}", "BAML Warning:".yellow().bold());
+                println!("{}", warning_message.yellow());
+                log::warn!("{}", warning_message);
+            }
+        }
+
         let files = match self {
             GeneratorOutputType::RubySorbet => ruby::generate(ir, gen),
             GeneratorOutputType::PythonPydantic => python::generate(ir, gen),

@@ -31,11 +31,10 @@
       "properties": {
         "baml.versionCheckMode": {
           "type": "string",
-          "default": "allow-newer",
+          "default": "strict",
           "description": "Check for updates automatically or manually",
           "enum": [
-            "strict",
-            "allow-newer"
+            "strict"
           ],
           "scope": "machine-overridable"
         },

@@ -37,7 +37,7 @@ pub struct Generator {
     output_dir: PathBuf,
     pub version: String,
 
-    pub(crate) span: crate::ast::Span,
+    pub span: crate::ast::Span,
 }
 
 impl Generator {

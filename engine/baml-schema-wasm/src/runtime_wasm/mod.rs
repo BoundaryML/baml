@@ -3,6 +3,7 @@ pub mod runtime_prompt;
 
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
+use baml_runtime::internal_core::configuration::GeneratorOutputType;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
@@ -225,14 +226,16 @@ impl WasmProject {
     #[wasm_bindgen]
     pub fn run_generators(
         &self,
+        no_version_check: Option<bool>,
     ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
         let fake_map: HashMap<String, String> = HashMap::new();
+        let no_version_check = no_version_check.unwrap_or(false);
 
         let js_value = serde_wasm_bindgen::to_value(&fake_map).unwrap();
         let runtime = self.runtime(js_value);
         log::info!("Files are: {:#?}", self.files);
         let res = match runtime {
-            Ok(runtime) => runtime.run_generators(&self.files),
+            Ok(runtime) => runtime.run_generators(&self.files, no_version_check),
             Err(e) => Err(wasm_bindgen::JsError::new(
                 format!("Failed to create runtime: {:#?}", e).as_str(),
             )),
@@ -272,6 +275,19 @@ pub struct WasmSpan {
     pub end: usize,
     #[wasm_bindgen(readonly)]
     pub start_line: usize,
+    #[wasm_bindgen(readonly)]
+    pub end_line: usize,
+}
+
+#[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Clone)]
+pub struct WasmGeneratorConfig {
+    #[wasm_bindgen(readonly)]
+    pub output_type: String,
+    #[wasm_bindgen(readonly)]
+    pub version: String,
+    #[wasm_bindgen(readonly)]
+    pub span: WasmSpan,
 }
 
 impl From<&baml_runtime::internal_core::internal_baml_diagnostics::Span> for WasmSpan {
@@ -282,6 +298,7 @@ impl From<&baml_runtime::internal_core::internal_baml_diagnostics::Span> for Was
             start: span.start,
             end: span.end,
             start_line: start.0,
+            end_line: end.0,
         }
     }
 }
@@ -293,6 +310,7 @@ impl Default for WasmSpan {
             start: 0,
             end: 0,
             start_line: 0,
+            end_line: 0,
         }
     }
 }
@@ -707,6 +725,7 @@ impl WasmRuntime {
     pub fn run_generators(
         &self,
         input_files: &HashMap<String, String>,
+        no_version_check: bool,
     ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
         Ok(self
             .runtime
@@ -716,6 +735,7 @@ impl WasmRuntime {
                     .iter()
                     .map(|(k, v)| (PathBuf::from(k), v.clone()))
                     .collect(),
+                no_version_check,
             )
             .map_err(|e| JsError::new(format!("{e:#}").as_str()))?
             .into_iter()
@@ -861,6 +881,28 @@ impl WasmRuntime {
                         })
                         .collect(),
                 }
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn list_generators(&self) -> Vec<WasmGeneratorConfig> {
+        self.runtime
+            .internal()
+            .ir()
+            .configuration()
+            .generators
+            .iter()
+            .map(|(generator, _)| WasmGeneratorConfig {
+                output_type: generator.output_type.clone().to_string(),
+                version: generator.version.clone(),
+                span: WasmSpan {
+                    file_path: generator.span.file.path().to_string(),
+                    start: generator.span.start,
+                    end: generator.span.end,
+                    start_line: generator.span.line_and_column().0 .0,
+                    end_line: generator.span.line_and_column().1 .0,
+                },
             })
             .collect()
     }

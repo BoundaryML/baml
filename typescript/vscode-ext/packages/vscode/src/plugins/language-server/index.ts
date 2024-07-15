@@ -108,79 +108,15 @@ const buildUpdateMessage = (latestVersions: LatestVersions): { message: string; 
 
 const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }) => {
   try {
-    const res = await client.sendRequest<string | undefined>('cliCheckForUpdates')
-
-    if (!res) {
-      throw new Error('Failed to get latest updates')
-    }
-
-    const latestVersions = LatestVersions.parse(JSON.parse(res))
-    const update = buildUpdateMessage(latestVersions)
-    const shouldUpdateVscode = semver.lt(packageJson.version, latestVersions.vscode.latest_version || '0.0.0')
-
-    if (update) {
-      const updateNowAction = 'Update now'
-      const detailsAction = 'Details'
-      vscode.window
-        .showInformationMessage(
-          update.message,
-          {
-            title: updateNowAction,
-          },
-          {
-            title: detailsAction,
-          },
-        )
-        .then((selection) => {
-          if (selection?.title === updateNowAction) {
-            // Open a new terminal
-            vscode.commands.executeCommand('workbench.action.terminal.new').then(() => {
-              // Run the update command
-              vscode.commands.executeCommand('workbench.action.terminal.sendSequence', {
-                text: `${update.command}\n`,
-              })
-            })
-          }
-          if (selection?.title === detailsAction) {
-            // Open a new terminal
-            vscode.commands.executeCommand('workbench.action.terminal.new').then(() => {
-              // Run the update command
-              vscode.commands.executeCommand('workbench.action.terminal.sendSequence', {
-                text: `${bamlCliPath()} version --check\n`,
-              })
-            })
-          }
-        })
-    } else {
-      if (showIfNoUpdates) {
-        vscode.window.showInformationMessage(`BAML is up to date!`)
-      } else {
-        console.info(`BAML is up to date! ${JSON.stringify(latestVersions, null, 2)}`)
-      }
-    }
-
-    if (shouldUpdateVscode) {
-      const updateNowAction = 'Open Extensions View'
-      vscode.window
-        .showInformationMessage('Please update the BAML VSCode extension', {
-          title: updateNowAction,
-        })
-        .then((selection) => {
-          if (selection?.title === updateNowAction) {
-            vscode.commands.executeCommand('workbench.view.extensions')
-          }
-        })
-    }
-
     if (telemetry) {
       telemetry.sendTelemetryEvent({
         event: 'baml.checkForUpdates',
         properties: {
-          is_typescript: latestVersions.generators.find((g) => g.language === 'typescript'),
-          is_python: latestVersions.generators.find((g) => g.language === 'python'),
-          baml_check: latestVersions,
-          updateAvailable: !!update,
-          vscodeUpdateAvailable: shouldUpdateVscode,
+          // is_typescript: latestVersions.generators.find((g) => g.language === 'typescript'),
+          // is_python: latestVersions.generators.find((g) => g.language === 'python'),
+          // baml_check: latestVersions,
+          // updateAvailable: !!update,
+          // vscodeUpdateAvailable: shouldUpdateVscode,
         },
       })
     }
@@ -192,6 +128,7 @@ const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }
 interface BAMLMessage {
   type: 'warn' | 'info' | 'error'
   message: string
+  durationMs?: number
 }
 
 const sleep = (time: number) => {
@@ -231,8 +168,8 @@ const activateClient = (
     client.onNotification('baml/showLanguageServerOutput', () => {
       // need to append line for the show to work for some reason.
       // dont delete this.
-      client.outputChannel.appendLine('baml/showLanguageServerOutput')
-      //client.outputChannel.show()
+      client.outputChannel.appendLine('\n')
+      client.outputChannel.show()
     })
     client.onNotification('baml/message', (message: BAMLMessage) => {
       client.outputChannel.appendLine('baml/message' + JSON.stringify(message, null, 2))
@@ -262,16 +199,15 @@ const activateClient = (
                   return
                 })
 
-                const sleepTimeMs = 1000
-                const totalSecs = 10
-                const iterations = (totalSecs * 1000) / sleepTimeMs
-                for (let i = 0; i < iterations; i++) {
-                  const prog = (i / iterations) * 100
-                  // Increment is summed up with the previous value
-                  progress.report({ increment: prog, message: message.message })
-                  await sleep(100)
-                }
+                const totalMs = message.durationMs || 1500 // Total duration in milliseconds (2 seconds)
+                const updateCount = 20 // Number of updates
+                const intervalMs = totalMs / updateCount // Interval between updates
 
+                for (let i = 0; i < updateCount; i++) {
+                  const prog = ((i + 1) / updateCount) * 100
+                  progress.report({ increment: prog, message: message.message })
+                  await sleep(intervalMs)
+                }
                 resolve(null)
               })
             },

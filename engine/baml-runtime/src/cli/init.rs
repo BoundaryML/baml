@@ -55,7 +55,7 @@ generator target {{
     // Where the generated code will be saved (relative to baml_src/)
     output_dir "../"
     // The version of the BAML package you have installed (e.g. same version as your baml-py or @boundaryml/baml).
-    // The VSCode extension version should also match this version to ensure compatibility.
+    // The VSCode extension version should also match this version.
     version "{}"
 }}
         "#,

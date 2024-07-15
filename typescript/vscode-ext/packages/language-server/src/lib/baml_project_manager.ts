@@ -11,12 +11,13 @@ import { URI } from 'vscode-uri'
 import { findTopLevelParent, gatherFiles } from '../file/fileUtils'
 import { getWordAtPosition, trimLine } from './ast'
 import { debounce } from 'lodash'
-
+import semver from 'semver'
+import { bamlConfig } from '../bamlConfig'
 type Notify = (
   params:
     | { type: 'error' | 'warn' | 'info'; message: string }
     // the string is a uri
-    | { type: 'diagnostic'; errors: [string, Diagnostic[]][] }
+    | { type: 'diagnostic'; errors: [string, Diagnostic[]][]; projects: Project[] }
     | { type: 'runtime_updated'; root_path: string; files: Record<string, string> },
 ) => void
 
@@ -32,6 +33,25 @@ const uriToRootPath = (uri: URI): string => {
   return found
 }
 
+export enum GeneratorDisabledReason {
+  EmptyGenerators,
+  VersionMismatch,
+  UserDisabled,
+}
+
+export enum GeneratorType {
+  Cli,
+  VSCode,
+}
+
+export type GeneratorStatus = {
+  isReady: boolean
+  generatorType: GeneratorType
+  disabledReason?: GeneratorDisabledReason
+  problematicGenerator?: string
+  diagnostics: Map<string, Diagnostic[]>
+}
+
 class Project {
   private last_successful_runtime?: BamlWasm.WasmRuntime
   private current_runtime?: BamlWasm.WasmRuntime
@@ -40,6 +60,61 @@ class Project {
     private wasmProject: BamlWasm.WasmProject,
     private onSuccess: (e: WasmDiagnosticError, files: Record<string, string>) => void,
   ) {}
+
+  getGeneratorStatus(): GeneratorStatus {
+    const generatorType = bamlConfig.config?.cliPath ? GeneratorType.Cli : GeneratorType.VSCode
+    // for now, if the cli is set, ignore any other checks and let the CLI run.
+    if (generatorType === GeneratorType.Cli) {
+      return { isReady: true, generatorType: generatorType, diagnostics: new Map() }
+    }
+
+    if (this.current_runtime === undefined) {
+      return {
+        isReady: false,
+        generatorType: generatorType,
+        disabledReason: GeneratorDisabledReason.EmptyGenerators,
+        diagnostics: new Map(),
+      }
+    }
+    const generators = this.list_generators()
+    if (generators.length === 0) {
+      return {
+        isReady: false,
+        generatorType: generatorType,
+        disabledReason: GeneratorDisabledReason.EmptyGenerators,
+        diagnostics: new Map(),
+      }
+    }
+    const versionMismatch = generators.find((g) => {
+      return !semver.satisfies(BamlWasm.version(), `${semver.major(g.version)}.${semver.minor(g.version)}.x`)
+    })
+    if (versionMismatch === undefined) {
+      return { isReady: true, generatorType: generatorType, diagnostics: new Map() }
+    }
+
+    return {
+      isReady: false,
+      generatorType: generatorType,
+      disabledReason: GeneratorDisabledReason.VersionMismatch,
+      problematicGenerator: versionMismatch.output_type,
+      diagnostics: new Map([
+        [
+          URI.file(versionMismatch.span.file_path).toString(),
+          [
+            {
+              range: {
+                start: { line: versionMismatch.span.start_line, character: 0 },
+                end: { line: versionMismatch.span.end_line, character: 0 },
+              },
+              message: `The BAML Generator ${versionMismatch.output_type} version (${versionMismatch.version}), does not match the VSCode BAML Runtime version (${BamlWasm.version()}), so generation of baml_client via VSCode is disabled. \n\nA) Update this version the latest version and update your installed baml package, or \nB) configure VSCode to use the locally installed generator. \nSee https://docs.boundaryml.com/docs/calling-baml/generate-baml-client#best-practices`,
+              severity: DiagnosticSeverity.Error,
+              source: 'baml',
+            },
+          ],
+        ],
+      ]),
+    }
+  }
 
   update_runtime() {
     if (this.current_runtime == undefined) {
@@ -69,6 +144,9 @@ class Project {
           .map((f): [string, string] => f.split('BAML_PATH_SPLTTER', 2) as [string, string])
           .map(([path, content]) => [URI.file(path).toString(), content]),
       )
+      const diagnostics = this.wasmProject.diagnostics(this.current_runtime)
+      const generatorStatus = this.getGeneratorStatus()
+      const newErrors = [...diagnostics.errors(), generatorStatus.diagnostics]
       this.onSuccess(this.wasmProject.diagnostics(this.current_runtime), fileMap)
     }
   }
@@ -200,6 +278,10 @@ class Project {
     let runtime = this.runtime()
 
     return runtime.list_functions()
+  }
+
+  list_generators(): BamlWasm.WasmGeneratorConfig[] {
+    return this.runtime().list_generators()
   }
 
   rootPath(): string {
@@ -340,7 +422,7 @@ class BamlProjectManager {
   private handleMessage(e: any) {
     if (e instanceof BamlWasm.WasmDiagnosticError) {
       const diagnostics = new Map<string, Diagnostic[]>(e.all_files.map((f) => [URI.file(f).toString(), []]))
-      console.log('diagnostic filess ' + JSON.stringify(diagnostics, null, 2))
+      // console.log('diagnostic filess ' + JSON.stringify(diagnostics, null, 2))
 
       e.errors().forEach((err) => {
         if (err.type === 'error') {
@@ -362,8 +444,27 @@ class BamlProjectManager {
           source: 'baml',
         })
       })
+
+      for (const project of this.projects.values()) {
+        const generatorStatus = project.getGeneratorStatus()
+        if (generatorStatus.diagnostics && generatorStatus.diagnostics.size > 0) {
+          generatorStatus.diagnostics.forEach((diagnosticArray, uri) => {
+            if (!diagnostics.has(uri)) {
+              diagnostics.set(uri, [])
+            }
+            diagnosticArray.forEach((diagnostic) => {
+              diagnostics.get(uri)!.push(diagnostic)
+            })
+          })
+        }
+      }
+
       console.log('diagnostics length: ' + Array.from(diagnostics).length)
-      this.notifier({ errors: Array.from(diagnostics), type: 'diagnostic' })
+      this.notifier({
+        errors: Array.from(diagnostics),
+        type: 'diagnostic',
+        projects: Array.from(this.projects.values()),
+      })
     } else if (e instanceof Error) {
       console.error('Error linting, got error ' + e.message)
       this.notifier({ message: e.message, type: 'error' })
@@ -397,7 +498,6 @@ class BamlProjectManager {
   }
 
   private get_project(root_path: string) {
-    console.log('Get project root path: ' + root_path)
     const project = this.projects.get(root_path)
     if (!project) {
       throw new Error(`Project not found for path: ${root_path}`)
@@ -408,7 +508,7 @@ class BamlProjectManager {
 
   private add_project(root_path: string, files: { [path: string]: string }) {
     // console.debug(`Adding project: ${root_path}`)
-    console.log('add project project path ' + root_path)
+    // console.log('add project project path ' + root_path)
 
     const project = BamlWasm.WasmProject.new(root_path, files)
     this.projects.set(
@@ -514,7 +614,6 @@ class BamlProjectManager {
         })
       }
       console.debug(`projects ${this.projects.size}: ${JSON.stringify(this.projects, null, 2)},`)
-      console.info(this.projects)
 
       if (!this.projects.has(rootPath)) {
         const project = this.add_project(rootPath, Object.fromEntries(files))

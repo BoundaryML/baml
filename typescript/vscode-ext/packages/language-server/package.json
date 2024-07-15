@@ -9,10 +9,6 @@
   "engines": {
     "node": ">=14"
   },
-  "prisma": {
-    "enginesVersion": "42bfcd0e4a2e9f73937c1ed5c2f42bf08d07289a",
-    "cliVersion": "5.5.0-dev.60"
-  },
   "bin": {
     "baml-language-server": "dist/src/bin.js"
   },
@@ -37,12 +33,11 @@
     "@baml/common": "workspace:*",
     "@gloo-ai/baml-schema-wasm-node": "*",
     "@types/js-levenshtein": "1.1.2",
-    "@types/semver": "^7.5.6",
     "js-levenshtein": "1.1.6",
     "klona": "2.0.6",
     "lodash": "^4.17.21",
     "nyc": "15.1.0",
-    "semver": "^7.5.4",
+    "semver": "^7.6.2",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "1.0.11",
     "vscode-uri": "^3.0.8",
@@ -52,6 +47,7 @@
     "@types/lodash": "^4.14.200",
     "@types/mocha": "10.0.3",
     "@types/node": "14.18.63",
+    "@types/semver": "^7.5.8",
     "esbuild": "^0.19.4",
     "esbuild-plugin-copy": "^2.1.1",
     "rimraf": "^5.0.5",

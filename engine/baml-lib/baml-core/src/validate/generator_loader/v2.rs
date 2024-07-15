@@ -150,7 +150,7 @@ pub(crate) fn parse_generator(
         },
         Err(_) => {
             errors.push(DatamodelError::new_validation_error(
-                "Missing 'version' property. It must match the baml package version you have installed in your project and the VSCode extension, like 'version \"0.50.0\"'",
+                "Missing 'version' property in your generator. It must match the baml package version you have installed in your project and the VSCode extension, like 'version \"0.50.0\"'",
                 ast_generator.span().clone(),
             ));
         }
