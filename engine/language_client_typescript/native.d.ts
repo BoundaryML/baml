@@ -120,4 +120,3 @@ export interface LogEventMetadata {
   parentId?: string
   rootEventId: string
 }
-
