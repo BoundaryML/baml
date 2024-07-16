@@ -1,6 +1,8 @@
 ---
 title: Comparing Pydantic
+slug: docs/comparisons/pydantic
 ---
+
 Pydantic is a popular library for data validation in Python used by most -- if not all -- LLM frameworks, like [instructor](https://github.com/jxnl/instructor/tree/main).
 
 BAML also uses Pydantic. The BAML Rust compiler can generate Pydantic models from your `.baml` files. But that's not all the compiler does -- it also takes care of fixing common LLM parsing issues, supports more data types, handles retries, and reduces the amount of boilerplate code you have to write.
@@ -335,13 +337,13 @@ The Boundary toolkit helps you iterate seamlessly compared to Pydantic.
 
 Here's all the BAML code you need to solve the Extract Resume problem from earlier (VSCode prompt preview is shown on the right):
 
-<img src="/images/v3/resume_playground1.png" />
+<img src="../../assets/images/v3/resume_playground1.png" />
 
 <Note>
 Here we use a "GPT4" client, but you can use any model. See [client docs](/docs/syntax/client/client)
 </Note>
 {/* 
-```rust
+```baml
 
 
 class Education {
@@ -393,16 +395,16 @@ Converting the `Resume` into an array of resumes requires a single line change i
 
 In this image we removed `education` and made `Resume` an array:
 
-<img src="/images/v3/resume_change1.png" />
+<img src="../../assets/images/v3/resume_change1.png" />
 
 After changing the BAML file, the Python-BAML function instantly changes as well. VSCode shows you the output is a list now. Everything is fully typed.
-<img src="/images/v3/resume_error.png" />
+<img src="../../assets/images/v3/resume_error.png" />
 
 
 Adding retries or resilience requires just [a couple of modifications](/docs/syntax/client/retry). And best of all, **you can test things instantly, without leaving your VSCode**:
 
-{/* <video src="/images/v3/testing_20s.mp4" autoplay loop playsInline muted controls className="w-full aspect-video"></video> */}
-<img src="/images/v3/testing_2.gif" />
+{/* <video src="../../assets/images/v3/testing_20s.mp4" autoplay loop playsInline muted controls className="w-full aspect-video"></video> */}
+<img src="../../assets/images/v3/testing_2.gif" />
 
 
 ### Conclusion

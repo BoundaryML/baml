@@ -1,13 +1,15 @@
 ---
-title: "enum"
+title: enum
+slug: docs/snippets/enum
 ---
+
 
 Enums are useful for classification tasks. BAML has helper functions that can help you serialize an enum into your prompt in a neatly formatted list (more on that later).
 
 To define your own custom enum in BAML:
 
-<CodeGroup>
-```rust BAML
+<CodeBlocks>
+```baml BAML
 enum MyEnum {
   Value1
   Value2
@@ -32,7 +34,7 @@ enum MyEnum {
 }
 ```
 
-</CodeGroup>
+</CodeBlocks>
 
 - You may have as many values as you'd like.
 - Values may not be duplicated or empty.
@@ -51,11 +53,11 @@ This is the name of the enum rendered in the prompt.
 <ParamField
   path="@@dynamic"
 >
-If set, will allow you to add/remove/modify values to the enum dynamically at runtime (in your python/ts/etc code). See [dynamic enums](/docs/calling-baml/dynamic-types) for more information.
+If set, will allow you to add/remove/modify values to the enum dynamically at runtime (in your python/ts/etc code). See [dynamic enums](../calling-baml/dynamic-types.mdx) for more information.
 </ParamField>
 
 
-```rust BAML
+```baml BAML
 enum MyEnum {
   Value1
   Value2
@@ -93,7 +95,7 @@ Skip this value in the prompt and during parsing.
 </ParamField>
 
 
-```rust BAML
+```baml BAML
 enum MyEnum {
   Value1 @alias("complete_summary") @description("Answer in 2 sentences")
   Value2
@@ -106,4 +108,4 @@ enum MyEnum {
 ```
 
 
-See more in [prompt syntax docs](prompt-syntax/what-is-jinja)
+See more in [prompt syntax docs](prompt-syntax/what-is-jinja.mdx)

@@ -665,6 +665,22 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
+  async PromptTestOpenAI(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "PromptTestOpenAI",
+      {
+        "input": input
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.cr,
+    )
+    return raw.parsed() as string
+  }
+  
   async PromptTestOpenAIChat(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -969,22 +985,6 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
-  async TestOpenAI(
-      input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): Promise<string> {
-    const raw = await this.runtime.callFunction(
-      "TestOpenAI",
-      {
-        "input": input
-      },
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-      __baml_options__?.cr,
-    )
-    return raw.parsed() as string
-  }
-  
   async TestOpenAILegacyProvider(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -1025,6 +1025,22 @@ export class BamlClient {
       "TestRetryExponential",
       {
         
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.cr,
+    )
+    return raw.parsed() as string
+  }
+  
+  async TestVertex(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestVertex",
+      {
+        "input": input
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -1967,6 +1983,29 @@ class BamlStreamClient {
     )
   }
   
+  PromptTestOpenAI(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): BamlStream<RecursivePartialNull<string>, string> {
+    const raw = this.runtime.streamFunction(
+      "PromptTestOpenAI",
+      {
+        "input": input
+      },
+      undefined,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.cr,
+    )
+    return new BamlStream<RecursivePartialNull<string>, string>(
+      raw,
+      (a): a is RecursivePartialNull<string> => a,
+      (a): a is string => a,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
   PromptTestOpenAIChat(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -2404,29 +2443,6 @@ class BamlStreamClient {
     )
   }
   
-  TestOpenAI(
-      input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): BamlStream<RecursivePartialNull<string>, string> {
-    const raw = this.runtime.streamFunction(
-      "TestOpenAI",
-      {
-        "input": input
-      },
-      undefined,
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-      __baml_options__?.cr,
-    )
-    return new BamlStream<RecursivePartialNull<string>, string>(
-      raw,
-      (a): a is RecursivePartialNull<string> => a,
-      (a): a is string => a,
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-    )
-  }
-  
   TestOpenAILegacyProvider(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -2481,6 +2497,29 @@ class BamlStreamClient {
       "TestRetryExponential",
       {
         
+      },
+      undefined,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.cr,
+    )
+    return new BamlStream<RecursivePartialNull<string>, string>(
+      raw,
+      (a): a is RecursivePartialNull<string> => a,
+      (a): a is string => a,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  TestVertex(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): BamlStream<RecursivePartialNull<string>, string> {
+    const raw = this.runtime.streamFunction(
+      "TestVertex",
+      {
+        "input": input
       },
       undefined,
       this.ctx_manager.cloneContext(),

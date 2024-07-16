@@ -1,6 +1,10 @@
+---
+slug: docs/snippets/test-cases
+---
+
 You can test your BAML functions in the VSCode Playground by adding a `test` snippet into a BAML file:
 
-```rust
+```baml
 enum Category {
     Refund
     CancelOrder
@@ -34,7 +38,7 @@ BAML doesn't use between key-value pairs `:` except in function parameters
 ## Complex object inputs
 
 Objects are injected as dictionaries
-```rust
+```baml
 class Message {
   user string
   content string
@@ -65,7 +69,7 @@ test Test1 {
 An `image` input type is translated into this object (assuming the function signature is `function MyFunction(myImage: image) -> ...`):
 
 URL input
-```
+```baml
 test Test1 {
   args {
     myImage {
@@ -75,7 +79,7 @@ test Test1 {
 }
 ```
 base64 input
-```
+```baml
 test Test1 {
   args {
     myImage {
@@ -92,7 +96,7 @@ file input (coming soon)
 Audio inputs are similar to images:
 
 URL input
-```
+```rust
 ...
  {
    url "https//domain.com/somefile.mp3"
@@ -100,7 +104,7 @@ URL input
 ...
 ```
 Base64 input
-```
+```rust
 {
   media_type "audio/mp3"
   base64 "base64string"

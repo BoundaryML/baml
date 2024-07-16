@@ -1,6 +1,8 @@
 ---
-title: "Tracing and tagging functions"
+title: Tracing and tagging functions
+slug: docs/observability/tracing-tagging
 ---
+
 
 BAML allows you to trace any function with the **@trace** decorator.
 This will make the function's input and output show up in the Boundary dashboard. This works for any python function you define yourself. BAML LLM functions (or any other function declared in a .baml file) are already traced by default. Logs are only sent to the Dashboard if you setup your environment variables correctly.
@@ -53,7 +55,7 @@ async def test_book1():
 
 This allows us to see each function invocation, as well as all its children in the dashboard:
 
-<img src="/images/dashboard/dashboard-test-pic.png" width="auto" />
+<img src="../../assets/images/dashboard/dashboard-test-pic.png" width="auto" />
 
 See [running tests](/running-tests) for more information on how to run this test.
 

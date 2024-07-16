@@ -22,7 +22,7 @@ use crate::internal::llm_client::{
         WithStreamChat,
     },
     ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-    ModelFeatures,
+    ModelFeatures, ResolveMedia,
 };
 
 use crate::RuntimeContext;
@@ -110,7 +110,7 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: true,
-                resolve_media_urls: true,
+                resolve_media_urls: ResolveMedia::Always,
             },
             retry_policy: client
                 .elem()

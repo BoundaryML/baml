@@ -20,13 +20,18 @@ use reqwest::StatusCode;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
-
+#[derive(Clone, Copy, PartialEq)]
+pub enum ResolveMedia {
+    Never,
+    MissingMime,
+    Always,
+}
 #[derive(Clone, Copy)]
 pub struct ModelFeatures {
     pub completion: bool,
     pub chat: bool,
     pub anthropic_system_constraints: bool,
-    pub resolve_media_urls: bool,
+    pub resolve_media_urls: ResolveMedia,
 }
 
 #[derive(Debug)]

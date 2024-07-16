@@ -60,20 +60,26 @@ pub fn validate_arg(
                 BamlValue::Media(v) => Some(BamlValue::Media(v.clone())),
                 BamlValue::Map(kv) => {
                     if let Some(BamlValue::String(s)) = kv.get("url") {
+                        let media_type_str = kv
+                            .get("media_type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string();
                         Some(BamlValue::Media(baml_types::BamlMedia::url(
                             BamlMediaType::Image,
                             s.to_string(),
-                            None,
+                            Some(media_type_str),
                         )))
-                    } else if let (
-                        Some(BamlValue::String(s)),
-                        Some(BamlValue::String(media_type_str)),
-                    ) = (kv.get("base64"), kv.get("media_type"))
-                    {
+                    } else if let Some(BamlValue::String(s)) = kv.get("base64") {
+                        let media_type_str = kv
+                            .get("media_type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string();
                         Some(BamlValue::Media(baml_types::BamlMedia::base64(
                             BamlMediaType::Image,
                             s.to_string(),
-                            media_type_str.to_string(),
+                            media_type_str,
                         )))
                     } else {
                         scope.push_error(format!(
@@ -92,20 +98,26 @@ pub fn validate_arg(
                 BamlValue::Media(v) => Some(BamlValue::Media(v.clone())),
                 BamlValue::Map(kv) => {
                     if let Some(BamlValue::String(s)) = kv.get("url") {
+                        let media_type_str = kv
+                            .get("media_type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string();
                         Some(BamlValue::Media(baml_types::BamlMedia::url(
                             BamlMediaType::Audio,
                             s.to_string(),
-                            None,
+                            Some(media_type_str),
                         )))
-                    } else if let (
-                        Some(BamlValue::String(s)),
-                        Some(BamlValue::String(media_type_str)),
-                    ) = (kv.get("base64"), kv.get("media_type"))
-                    {
+                    } else if let Some(BamlValue::String(s)) = kv.get("base64") {
+                        let media_type_str = kv
+                            .get("media_type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string();
                         Some(BamlValue::Media(baml_types::BamlMedia::base64(
                             BamlMediaType::Audio,
                             s.to_string(),
-                            media_type_str.to_string(),
+                            media_type_str,
                         )))
                     } else {
                         scope.push_error(format!(

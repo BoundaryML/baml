@@ -992,6 +992,30 @@ class BamlClient:
       mdl = create_model("PromptTestClaudeChatNoSystemReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    async def PromptTestOpenAI(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "PromptTestOpenAI",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("PromptTestOpenAIReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def PromptTestOpenAIChat(
         self,
         input: str,
@@ -1448,30 +1472,6 @@ class BamlClient:
       mdl = create_model("TestOllamaReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
-    async def TestOpenAI(
-        self,
-        input: str,
-        baml_options: BamlCallOptions = {},
-    ) -> str:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      raw = await self.__runtime.call_function(
-        "TestOpenAI",
-        {
-          "input": input,
-        },
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-      )
-      mdl = create_model("TestOpenAIReturnType", inner=(str, ...))
-      return coerce(mdl, raw.parsed())
-    
     async def TestOpenAILegacyProvider(
         self,
         input: str,
@@ -1544,9 +1544,9 @@ class BamlClient:
       mdl = create_model("TestRetryExponentialReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
-    async def TestRoundRobin(
+    async def TestVertex(
         self,
-        
+        input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
@@ -1554,16 +1554,18 @@ class BamlClient:
         tb = __tb__._tb
       else:
         tb = None
+      __cr__ = baml_options.get("client_registry", None)
 
       raw = await self.__runtime.call_function(
-        "TestRoundRobin",
+        "TestVertex",
         {
-          
+          "input": input,
         },
         self.__ctx_manager.get(),
         tb,
+        __cr__,
       )
-      mdl = create_model("TestRoundRobinReturnType", inner=(str, ...))
+      mdl = create_model("TestVertexReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
     async def UnionTest_Function(
@@ -2891,6 +2893,39 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def PromptTestOpenAI(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "PromptTestOpenAI",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("PromptTestOpenAIReturnType", inner=(str, ...))
+      partial_mdl = create_model("PromptTestOpenAIPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
     def PromptTestOpenAIChat(
         self,
         input: str,
@@ -3518,39 +3553,6 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
-    def TestOpenAI(
-        self,
-        input: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      raw = self.__runtime.stream_function(
-        "TestOpenAI",
-        {
-          "input": input,
-        },
-        None,
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-      )
-
-      mdl = create_model("TestOpenAIReturnType", inner=(str, ...))
-      partial_mdl = create_model("TestOpenAIPartialReturnType", inner=(Optional[str], ...))
-
-      return baml_py.BamlStream[Optional[str], str](
-        raw,
-        lambda x: coerce(partial_mdl, x),
-        lambda x: coerce(mdl, x),
-        self.__ctx_manager.get(),
-      )
-    
     def TestOpenAILegacyProvider(
         self,
         input: str,
@@ -3640,6 +3642,39 @@ class BamlStreamClient:
 
       mdl = create_model("TestRetryExponentialReturnType", inner=(str, ...))
       partial_mdl = create_model("TestRetryExponentialPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestVertex(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "TestVertex",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("TestVertexReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestVertexPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlStream[Optional[str], str](
         raw,

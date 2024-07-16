@@ -1,6 +1,8 @@
 ---
-title: "Set Environment Variables"
+title: Set Environment Variables
+slug: docs/calling-baml/set-env-vars
 ---
+
 
 
 The generated BAML client will capture all environment variables when you import it,
@@ -24,7 +26,7 @@ Any of the following strategies are compatible with BAML:
 If you do anything to load environment variables in-process - e.g. using a
 `.env` file - make sure to do it before importing the BAML client.
 
-<CodeGroup>
+<CodeBlocks>
 
 ```python Python
 import dotenv
@@ -50,7 +52,7 @@ require 'baml_client'
 ```
 
 
-</CodeGroup>
+</CodeBlocks>
 
 
 ## Environment Variables in BAML
@@ -58,7 +60,7 @@ require 'baml_client'
 Environment variables are primarily used in clients to propagate authorization
 credentials, such as API keys, like so:
 
-```rust
+```baml
 
 client<llm> GPT4o {
   provider baml-openai-chat

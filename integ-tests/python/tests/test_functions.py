@@ -107,6 +107,15 @@ async def test_should_work_with_image_url():
     )
     assert_that(res.lower()).matches(r"(green|yellow|shrek|ogre)")
 
+@pytest.mark.asyncio
+async def test_should_work_with_vertex():
+    res = await b.TestVertex(
+      "donkey kong"
+  
+    )
+    assert_that("donkey kong" in res.lower())
+
+
 
 @pytest.mark.asyncio
 async def test_should_work_with_image_base64():

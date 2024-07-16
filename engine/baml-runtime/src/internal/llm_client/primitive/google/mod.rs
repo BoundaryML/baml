@@ -1,4 +1,4 @@
-mod google_client;
+mod googleai_client;
 mod types;
 
-pub use google_client::GoogleClient;
+pub use googleai_client::GoogleAIClient;

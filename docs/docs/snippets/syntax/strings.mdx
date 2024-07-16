@@ -1,6 +1,8 @@
 ---
 title: strings
+slug: docs/snippets/syntax/strings
 ---
+
 
 BAML treats strings as first-class citizens, to support more struggle-free prompt engineering.
 
@@ -8,7 +10,7 @@ BAML treats strings as first-class citizens, to support more struggle-free promp
 
 This is a valid **inline string**, which is surrounded by double quotes.
 
-```llvm
+```rust
 "Hello World"
 ```
 
@@ -16,7 +18,7 @@ This is a valid **inline string**, which is surrounded by double quotes.
 
 BAML also supports simple **unquoted in-line** strings. The string below is valid! These are useful for simple strings such as configuration options.
 
-```
+```rust
 Hello World
 ```
 
@@ -37,7 +39,7 @@ When in doubt, use a quoted string or a block string, but the VSCode extension w
 
 If a string is on multiple lines, it must be surrounded by #" and "#. This is called a **block string**.
 
-```llvm
+```rust
 #"
 Hello
 World
@@ -46,7 +48,7 @@ World
 
 Block strings are automatically dedented and stripped of the first and last newline. This means that the following will render the same thing as above
 
-```llvm
+```rust
 #"
     Hello
     World
@@ -56,7 +58,7 @@ Block strings are automatically dedented and stripped of the first and last newl
 ### Code Strings
 
 In case you need to add some code documentation or whatnot in a baml file, you can type this in:
-```llvm
+```rust
 python#"
     print("Hello World")
     def foo():

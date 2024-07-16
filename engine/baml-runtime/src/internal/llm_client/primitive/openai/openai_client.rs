@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
+use crate::internal::llm_client::ResolveMedia;
 use anyhow::Result;
 use baml_types::{BamlMedia, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-
 use serde_json::json;
 
 use crate::client_registry::ClientProperty;
@@ -416,7 +416,7 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: false,
+                resolve_media_urls: ResolveMedia::Never,
             },
             retry_policy: $client.retry_policy.clone(),
             client: create_client()?,
@@ -436,7 +436,7 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: false,
+                resolve_media_urls: ResolveMedia::Never,
             },
             retry_policy: $client
                 .elem()

@@ -836,6 +836,26 @@ module Baml
       ).returns(String)
       
     }
+    def PromptTestOpenAI(
+        input:
+    )
+      raw = @runtime.call_function(
+        "PromptTestOpenAI",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
     def PromptTestOpenAIChat(
         input:
     )
@@ -1214,26 +1234,6 @@ module Baml
       ).returns(String)
       
     }
-    def TestOpenAI(
-        input:
-    )
-      raw = @runtime.call_function(
-        "TestOpenAI",
-        {
-          "input" => input,
-        },
-        @ctx_manager,
-      )
-      (raw.parsed_using_types(Baml::Types))
-    end
-
-    sig {
-      
-      params(
-        input: String,
-      ).returns(String)
-      
-    }
     def TestOpenAILegacyProvider(
         input:
     )
@@ -1285,16 +1285,38 @@ module Baml
 
     sig {
       
-      returns(String)
+      params(
+        input: String,
+      ).returns(String)
       
     }
-    def TestRoundRobin(
-        
+    def TestVertex(
+        input:
     )
       raw = @runtime.call_function(
-        "TestRoundRobin",
+        "TestVertex",
         {
-          
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
+        input: String,
+      ).returns(String)
+      
+    }
+    def TestVertex(
+        input:
+    )
+      raw = @runtime.call_function(
+        "TestVertex",
+        {
+          "input" => input,
         },
         @ctx_manager,
       )
@@ -2158,6 +2180,27 @@ module Baml
         input: String,
       ).returns(Baml::BamlStream[String])
     }
+    def PromptTestOpenAI(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "PromptTestOpenAI",
+        {
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
     def PromptTestOpenAIChat(
         input:
     )
@@ -2557,27 +2600,6 @@ module Baml
         input: String,
       ).returns(Baml::BamlStream[String])
     }
-    def TestOpenAI(
-        input:
-    )
-      raw = @runtime.stream_function(
-        "TestOpenAI",
-        {
-          "input" => input,
-        },
-        @ctx_manager,
-      )
-      Baml::BamlStream[T.nilable(String), String].new(
-        ffi_stream: raw,
-        ctx_manager: @ctx_manager
-      )
-    end
-
-    sig {
-      params(
-        input: String,
-      ).returns(Baml::BamlStream[String])
-    }
     def TestOpenAILegacyProvider(
         input:
     )
@@ -2638,16 +2660,37 @@ module Baml
 
     sig {
       params(
-        
+        input: String,
       ).returns(Baml::BamlStream[String])
     }
-    def TestRoundRobin(
-        
+    def TestVertex(
+        input:
     )
       raw = @runtime.stream_function(
-        "TestRoundRobin",
+        "TestVertex",
         {
-          
+          "input" => input,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        input: String,
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestVertex(
+        input:
+    )
+      raw = @runtime.stream_function(
+        "TestVertex",
+        {
+          "input" => input,
         },
         @ctx_manager,
       )

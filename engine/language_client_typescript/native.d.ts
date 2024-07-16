@@ -113,7 +113,7 @@ export interface BamlLogEvent {
   startTime: string
 }
 
-export function invoke_runtime_cli(params: Array<string>): void
+export declare function invoke_runtime_cli(params: Array<string>): void
 
 export interface LogEventMetadata {
   eventId: string

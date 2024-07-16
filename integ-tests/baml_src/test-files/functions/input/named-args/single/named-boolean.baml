@@ -1,7 +1,7 @@
 
 
 function TestFnNamedArgsSingleBool(myBool: bool) -> string{
-  client GPT35
+  client Vertex
   prompt #"
     Return this value back to me: {{myBool}}
   "#

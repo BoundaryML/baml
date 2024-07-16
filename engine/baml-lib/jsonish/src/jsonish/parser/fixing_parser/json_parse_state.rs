@@ -175,10 +175,22 @@ impl JsonParseState {
                                         log::debug!("Testing for comment after space + comma");
                                         // If after the space we have "//" or "/*" or the beginning of a key, we'll close the string
                                         let mut buffer = ",".to_string();
+                                        let mut anything_but_whitespace = false;
                                         while let Some((_, next_next_c)) = next.next() {
+                                            anything_but_whitespace = anything_but_whitespace
+                                                || !next_next_c.is_whitespace();
                                             buffer.push(next_next_c);
                                             match next_next_c {
-                                                ' ' | '\n' => {}
+                                                ' ' => {}
+                                                '\n' => {
+                                                    if anything_but_whitespace {
+                                                    } else {
+                                                        // Likely end of the key as the LLM generated a (', ' token by mistake)
+                                                        // so drop the comma
+                                                        log::debug!("Closing due to: newline after comma + space");
+                                                        return Some(idx);
+                                                    }
+                                                }
                                                 '/' => match next.peek() {
                                                     Some((_, '/')) => {
                                                         // This is likely a comment

@@ -103,7 +103,6 @@ pub struct VertexAiSearch {
 pub struct SafetySetting {
     pub category: HarmCategory,
     pub threshold: HarmBlockThreshold,
-    pub method: HarmBlockMethod,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -118,16 +117,6 @@ pub enum HarmBlockThreshold {
     BlockOnlyHigh,
     #[serde(rename = "BLOCK_NONE")]
     BlockNone,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum HarmBlockMethod {
-    #[serde(rename = "harm_block_method_unspecified")]
-    HarmBlockMethodUnspecified,
-    #[serde(rename = "severity")]
-    Severity,
-    #[serde(rename = "probability")]
-    Probability,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
