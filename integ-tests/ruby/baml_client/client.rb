@@ -1285,18 +1285,16 @@ module Baml
 
     sig {
       
-      params(
-        input: String,
-      ).returns(String)
+      returns(String)
       
     }
-    def TestVertex(
-        input:
+    def TestRoundRobin(
+        
     )
       raw = @runtime.call_function(
-        "TestVertex",
+        "TestRoundRobin",
         {
-          "input" => input,
+          
         },
         @ctx_manager,
       )
@@ -2660,16 +2658,16 @@ module Baml
 
     sig {
       params(
-        input: String,
+        
       ).returns(Baml::BamlStream[String])
     }
-    def TestVertex(
-        input:
+    def TestRoundRobin(
+        
     )
       raw = @runtime.stream_function(
-        "TestVertex",
+        "TestRoundRobin",
         {
-          "input" => input,
+          
         },
         @ctx_manager,
       )

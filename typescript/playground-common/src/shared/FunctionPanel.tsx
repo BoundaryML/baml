@@ -41,10 +41,10 @@ const CurlSnippet: React.FC = () => {
 
   return (
     <div>
-      <div className='flex justify-end items-center space-x-2 p-2  rounded-md shadow-sm'>
-        <label className='flex items-center space-x-1 mr-2'>
+      <div className="flex justify-end items-center space-x-2 p-2  rounded-md shadow-sm">
+        <label className="flex items-center space-x-1 mr-2">
           <Switch
-            className='data-[state=checked]:bg-vscode-button-background data-[state=unchecked]:bg-vscode-input-background'
+            className="data-[state=checked]:bg-vscode-button-background data-[state=unchecked]:bg-vscode-input-background"
             checked={useAtomValue(streamCurl)}
             onCheckedChange={useSetAtom(streamCurl)}
           />
@@ -52,7 +52,7 @@ const CurlSnippet: React.FC = () => {
         </label>
         <Button
           onClick={handleCopy(rawCurl)}
-          className='py-1 px-3 text-xs text-white bg-vscode-button-background hover:bg-vscode-button-hoverBackground'
+          className="py-1 px-3 text-xs text-white bg-vscode-button-background hover:bg-vscode-button-hoverBackground"
         >
           <Copy size={16} />
         </Button>
@@ -94,12 +94,26 @@ interface RenderNode {
 const ClientGraph: React.FC = () => {
   const graph = useAtomValue(orchestration_nodes)
   const { nodes, edges } = graph
+  // First print all core nodes (node.letter == "D")
+  console.log('Core Nodes')
   nodes.forEach((node, index) => {
-    console.log(
-      `Node ${index}: id: ${node.gid}, letter: ${node.letter}, index: ${node.index}, client_name: ${node.client_name}, parentGid: ${node.parentGid}`,
-    )
+    if (node.letter === 'D') {
+      console.log(
+        `Core Node ${index}: id: ${node.gid}, letter: ${node.letter}, index: ${node.index}, client_name: ${node.client_name}, parentGid: ${node.parentGid}`,
+      )
+    }
+  })
+  console.log('Box Nodes')
+  // Then print all parent nodes (node.letter != "D")
+  nodes.forEach((node, index) => {
+    if (node.letter !== 'D') {
+      console.log(
+        `Box Node ${index}: id: ${node.gid}, letter: ${node.letter}, index: ${node.index}, client_name: ${node.client_name}, parentGid: ${node.parentGid}`,
+      )
+    }
   })
 
+  console.log('Edges')
   edges.forEach((edge, index) => {
     console.log(`Edge ${index}: from ${edge.from_node} to ${edge.to_node}, weight: ${edge.weight}`)
   })
@@ -162,8 +176,8 @@ const PromptPreview: React.FC = () => {
 
   if (!promptPreview) {
     return (
-      <div className='flex flex-col items-center justify-center w-full h-full gap-2'>
-        <span className='text-center'>No prompt preview available! Add a test to see it!</span>
+      <div className="flex flex-col items-center justify-center w-full h-full gap-2">
+        <span className="text-center">No prompt preview available! Add a test to see it!</span>
         <FunctionTestSnippet />
       </div>
     )
@@ -173,7 +187,7 @@ const PromptPreview: React.FC = () => {
     return (
       <PromptChunk
         text={promptPreview}
-        type='error'
+        type="error"
         client={{
           identifier: {
             end: 0,
@@ -193,10 +207,10 @@ const PromptPreview: React.FC = () => {
   }
 
   return (
-    <div className='flex flex-col w-full h-full gap-4 px-2'>
+    <div className="flex flex-col w-full h-full gap-4 px-2">
       {promptPreview.as_chat()?.map((chat, idx) => (
-        <div key={idx} className='flex flex-col'>
-          <div className='flex flex-row'>{chat.role}</div>
+        <div key={idx} className="flex flex-col">
+          <div className="flex flex-row">{chat.role}</div>
           {chat.parts.map((part, idx) => {
             if (part.is_text())
               return (
@@ -217,8 +231,8 @@ const PromptPreview: React.FC = () => {
               )
             if (part.is_image())
               return (
-                <a key={idx} href={part.as_image()} target='_blank'>
-                  <img key={idx} src={part.as_image()} className='max-w-[400px] object-cover' />
+                <a key={idx} href={part.as_image()} target="_blank">
+                  <img key={idx} src={part.as_image()} className="max-w-[400px] object-cover" />
                 </a>
               )
             if (part.is_audio()) {
@@ -268,28 +282,28 @@ enum Topic {
 }
   `.trim()
     return (
-      <div className='flex flex-col items-center justify-center w-full h-full gap-2'>
+      <div className="flex flex-col items-center justify-center w-full h-full gap-2">
         No functions found! You can create a new function like:
-        <pre className='p-2 text-xs rounded-sm bg-vscode-input-background'>{bamlFunctionSnippet}</pre>
+        <pre className="p-2 text-xs rounded-sm bg-vscode-input-background">{bamlFunctionSnippet}</pre>
       </div>
     )
   }
 
   return (
     <div
-      className='flex flex-col w-full overflow-auto'
+      className="flex flex-col w-full overflow-auto"
       style={{
         height: 'calc(100vh - 80px)',
       }}
     >
       <TooltipProvider>
-        <ResizablePanelGroup direction='vertical' className='h-full'>
-          <ResizablePanel id='top-panel' className='flex w-full px-1' defaultSize={50}>
-            <div className='w-full'>
-              <ResizablePanelGroup direction='horizontal' className='h-full'>
-                <div className='w-full h-full'>
+        <ResizablePanelGroup direction="vertical" className="h-full">
+          <ResizablePanel id="top-panel" className="flex w-full px-1" defaultSize={50}>
+            <div className="w-full">
+              <ResizablePanelGroup direction="horizontal" className="h-full">
+                <div className="w-full h-full">
                   <CheckboxHeader />
-                  <div className='relative w-full overflow-y-auto' style={{ height: 'calc(100% - 32px)' }}>
+                  <div className="relative w-full overflow-y-auto" style={{ height: 'calc(100% - 32px)' }}>
                     <PromptPreview />
                   </div>
                 </div>
@@ -300,10 +314,10 @@ enum Topic {
           </ResizablePanel>
           {showTestResults && (
             <>
-              <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
+              <ResizableHandle withHandle={false} className="bg-vscode-panel-border" />
               <ResizablePanel
                 minSize={10}
-                className='flex h-full px-0 py-2 mb-2 border-t border-vscode-textSeparator-foreground'
+                className="flex h-full px-0 py-2 mb-2 border-t border-vscode-textSeparator-foreground"
               >
                 <TestResults />
               </ResizablePanel>

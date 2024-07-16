@@ -469,8 +469,6 @@ const getScopeInfo = (scope: any) => {
   }
 }
 export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
-  // ... existing code ...
-
   const func = get(selectedFunctionAtom)
   const runtime = get(selectedRuntimeAtom)
 
@@ -478,223 +476,132 @@ export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edg
     return { nodes: [], edges: [] }
   }
 
-  let wasmScopes = func.orchestration_graph(runtime)
-
+  const wasmScopes = func.orchestration_graph(runtime)
   if (wasmScopes === null) {
     return { nodes: [], edges: [] }
-  } else {
-    // console.log(`orchestrationGraph: ${wasmScopes.length}`)
-    let indexOuter = 0
-
-    var nodes: ClientNode[] = []
-
-    for (const scope of wasmScopes) {
-      const scopeInfo = scope.get_orchestration_scope_info()
-
-      // Represents the current node as a path of scopes from the root
-      const scopePath = scopeInfo as any[]
-
-      let stackGroup: TypeCount[] = []
-
-      scopePath.forEach((scope) => {
-        const indexVal =
-          scope.type === 'Retry'
-            ? scope.count
-            : scope.type === 'Direct'
-            ? 0
-            : scope.type === 'RoundRobin'
-            ? scope.strategy_name
-            : scope.index
-
-        stackGroup.push({
-          type: getTypeLetter(scope.type),
-          name: indexVal,
-        })
-      })
-
-      var typeScope: any
-
-      if (scopePath.length > 2) {
-        typeScope = scopePath[scopePath.length - 2]
-      } else {
-        typeScope = scopePath[scopePath.length - 1]
-      }
-
-      const lastScope = scopePath[scopePath.length - 1]
-
-      // Create a new ClientNode object
-      const clientNode: ClientNode = {
-        name: lastScope.name,
-        node_index: indexOuter,
-        type: typeScope.type,
-        identifier: stackGroup,
-      }
-
-      switch (typeScope.type) {
-        case 'Retry':
-          clientNode.node_index = typeScope.count
-          clientNode.retry_delay = typeScope.delay
-          break
-        case 'RoundRobin':
-          clientNode.round_robin_name = typeScope.strategy_name
-          break
-        case 'Fallback':
-          clientNode.type = lastScope.type
-          break
-        case 'Direct':
-          break
-        default:
-          console.error('Unknown scope type')
-      }
-
-      nodes.push(clientNode)
-
-      indexOuter++
-    }
   }
+
+  const nodes = createClientNodes(wasmScopes)
+  nodes.forEach((node) => {
+    node.identifier.unshift({
+      type: 'F',
+      name: 0,
+    })
+  })
+
+  nodes.forEach((node) => {
+    const stackGroupString = node.identifier.map((item: TypeCount) => `${item.type}${item.name}`).join(' | ')
+    console.log(`${stackGroupString}`)
+  })
+
+  const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
+  const edges = createEdges(unitNodes)
+
+  const groupArray: GroupEntry[] = Object.values(groups)
+  return { nodes: groupArray, edges }
+})
+
+function createClientNodes(wasmScopes: any[]): ClientNode[] {
+  let indexOuter = 0
+  const nodes: ClientNode[] = []
+
+  for (const scope of wasmScopes) {
+    const scopeInfo = scope.get_orchestration_scope_info()
+    const scopePath = scopeInfo as any[]
+    const stackGroup = createStackGroup(scopePath)
+
+    const typeScope = scopePath.length > 2 ? scopePath[scopePath.length - 2] : scopePath[scopePath.length - 1]
+    const lastScope = scopePath[scopePath.length - 1]
+
+    const clientNode: ClientNode = {
+      name: lastScope.name,
+      node_index: indexOuter,
+      type: typeScope.type,
+      identifier: stackGroup,
+    }
+
+    switch (typeScope.type) {
+      case 'Retry':
+        clientNode.node_index = typeScope.count
+        clientNode.retry_delay = typeScope.delay
+        break
+      case 'RoundRobin':
+        clientNode.round_robin_name = typeScope.strategy_name
+        break
+      case 'Fallback':
+        clientNode.type = lastScope.type
+        break
+      case 'Direct':
+        break
+      default:
+        console.error('Unknown scope type')
+    }
+
+    nodes.push(clientNode)
+    indexOuter++
+  }
+
+  return nodes
+}
+
+function createStackGroup(scopePath: any[]): TypeCount[] {
+  const stackGroup: TypeCount[] = []
+
+  for (let i = 0; i < scopePath.length; i++) {
+    const scope = scopePath[i]
+    const indexVal =
+      scope.type === 'Retry'
+        ? scope.count
+        : scope.type === 'Direct'
+        ? 0
+        : scope.type === 'RoundRobin'
+        ? scope.strategy_name
+        : scope.index
+
+    stackGroup.push({
+      type: getTypeLetter(scope.type),
+      name: indexVal,
+    })
+  }
+
+  return stackGroup
+}
+
+function buildUnitNodesAndGroups(nodes: ClientNode[]): {
+  unitNodes: NodeEntry[]
+  groups: { [gid: string]: GroupEntry }
+} {
+  const unitNodes: NodeEntry[] = []
+  const groups: { [gid: string]: GroupEntry } = {}
+  const indexGroups: GroupEntry[] = []
 
   for (const node of nodes) {
-    const stackGroupString = node.identifier.map((item: TypeCount) => `${item.type}${item.name}`).join(' | ')
-    // console.log(`${stackGroupString}`)
-  }
-
-  //we construct edges between unitNodes
-  var unitNodes: NodeEntry[] = []
-
-  //groups holds all of our nodes that we will show, including group nodes
-  var groups: { [gid: ReturnType<typeof uuid>]: GroupEntry } = {}
-
-  //utility only for building the above two
-  var indexGroups: GroupEntry[] = []
-
-  for (let index = 0; index < nodes.length; index++) {
-    const node = nodes[index]
-
-    let stackGroup: TypeCount[] = node.identifier
+    const stackGroup = node.identifier
     let parentGid = ''
 
-    // console.log(`StackGroup: ${stackGroup.map((item) => `${item.type}${item.name}`).join(' | ')}`)
-    // console.log(`Index Groups at state ${index}`)
-    // indexGroups.forEach((group, index) => {
-    //   console.log(
-    //     `Index ${index}: letter: ${group.letter}, name: ${group.index}, gid: ${group.gid}, parentGid: ${group.parentGid}`,
-    //   )
-    // })
-
     for (let stackIndex = 0; stackIndex < stackGroup.length; stackIndex++) {
-      const scopeLayer: TypeCount = stackGroup[stackIndex]
-      const scopeType = scopeLayer.type
-      const scopeName = scopeLayer.name
+      const scopeLayer = stackGroup[stackIndex]
+      const { scopeType, scopeName, curGid } = getScopeDetails(scopeLayer, indexGroups, stackIndex, parentGid)
 
-      let indexGroupEntry = stackIndex < indexGroups.length ? indexGroups[stackIndex] : null
-
-      //the current depth is not stored in the indexGroups array
-      if (indexGroupEntry === null) {
-        const curGid = uuid()
-        if (!(curGid in groups)) {
-          groups[curGid] = {
-            letter: scopeType,
-            index: scopeName,
-            client_name: node.name,
-            gid: curGid,
-            ...(parentGid !== null && { parentGid: parentGid }),
-          }
-        }
-        parentGid = curGid
-
-        indexGroups[stackIndex] = {
+      if (!(curGid in groups)) {
+        groups[curGid] = {
           letter: scopeType,
           index: scopeName,
+          client_name: node.name,
           gid: curGid,
+          ...(parentGid && { parentGid }),
         }
       }
-      // current depth exists, validation is needed
-      else {
-        const indexEntryName = indexGroupEntry.index
-        const indexEntryGid = indexGroupEntry.gid
 
-        let curGid = ''
-
-        switch (scopeType) {
-          case 'R':
-            //retry >= is same group
-            if (scopeName >= indexEntryName) {
-              curGid = indexEntryGid
-            }
-            //retry < is new group -- shouldn't execute, as ancestor nodes will have reset this
-            else {
-              curGid = uuid()
-              indexGroups = indexGroups.slice(0, stackIndex)
-            }
-            break
-          case 'F':
-            //fallback == is same group
-            if (scopeName == indexEntryName) {
-              curGid = indexEntryGid
-            }
-            //lower fallback means in different group entirely
-            else if (scopeName < indexEntryName) {
-              curGid = uuid()
-              indexGroups = indexGroups.slice(0, stackIndex)
-            }
-            //increased fallback fall under same group, but trailing elements are new
-            else {
-              curGid = indexEntryGid
-              indexGroups = indexGroups.slice(0, stackIndex)
-            }
-            break
-          case 'D':
-            //direct == its own group
-            curGid = uuid()
-            indexGroups = indexGroups.slice(0, stackIndex)
-            break
-          case 'B':
-            //round robin falls under same group if same strategy name
-            if (scopeName == indexEntryName) {
-              curGid = indexEntryGid
-            }
-            // new round robin strategy name means new group -- shouldn't execute, as ancestor nodes will have reset this
-            else {
-              curGid = uuid()
-              indexGroups = indexGroups.slice(0, stackIndex)
-            }
-            break
-          default:
-            console.error('Unknown scope type')
-        }
-
-        //add the new group/node to the groups (stores every node/layer)
-        if (!(curGid in groups)) {
-          groups[curGid] = {
-            letter: scopeType,
-            index: scopeName,
-            client_name: node.name,
-
-            gid: curGid,
-            ...(parentGid !== null && { parentGid: parentGid }),
-          }
-        }
-
-        // console.log(`Letter: ${scopeType}, Name: ${scopeName}, Gid: ${curGid}`)
-        //update table for future iterations
-        indexGroups[stackIndex] = {
-          letter: scopeType,
-          index: scopeName,
-          gid: curGid,
-          ...(parentGid !== null && { parentGid: parentGid }),
-        }
-
-        //store the parent gid for the next iteration
-        parentGid = curGid
+      indexGroups[stackIndex] = {
+        letter: scopeType,
+        index: scopeName,
+        gid: curGid,
+        ...(parentGid && { parentGid }),
       }
+
+      parentGid = curGid
     }
-    // console.log(`Index Groups after state ${index}:`)
-    // indexGroups.forEach((group, index) => {
-    //   console.log(
-    //     `Index ${index}: letter: ${group.letter}, name: ${group.index}, client_name: ${group.client_name} gid: ${group.gid}, parentGid: ${group.parentGid}`,
-    //   )
-    // })
-    // console.log('-----------------------------------')
 
     unitNodes.push({
       gid: parentGid,
@@ -702,32 +609,50 @@ export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edg
     })
   }
 
-  //create edges between the unit nodes
-  let edges: Edge[] = unitNodes.slice(0, -1).map((fromNode, index) => ({
+  return { unitNodes, groups }
+}
+
+function getScopeDetails(scopeLayer: TypeCount, indexGroups: GroupEntry[], stackIndex: number, parentGid: string) {
+  const scopeType = scopeLayer.type
+  const scopeName = scopeLayer.name
+  const indexGroupEntry = stackIndex < indexGroups.length ? indexGroups[stackIndex] : null
+
+  let curGid = ''
+
+  if (indexGroupEntry === null) {
+    curGid = uuid()
+  } else {
+    const indexEntryName = indexGroupEntry.index
+    const indexEntryGid = indexGroupEntry.gid
+
+    switch (scopeType) {
+      case 'R':
+        curGid = scopeName >= indexEntryName ? indexEntryGid : uuid()
+        break
+      case 'F':
+        curGid = scopeName == indexEntryName ? indexEntryGid : uuid()
+        break
+      case 'D':
+        curGid = uuid()
+        break
+      case 'B':
+        curGid = scopeName == indexEntryName ? indexEntryGid : uuid()
+        break
+      default:
+        console.error('Unknown scope type')
+    }
+  }
+
+  return { scopeType, scopeName, curGid }
+}
+
+function createEdges(unitNodes: NodeEntry[]): Edge[] {
+  return unitNodes.slice(0, -1).map((fromNode, index) => ({
     from_node: fromNode.gid,
     to_node: unitNodes[index + 1].gid,
     ...(fromNode.weight !== null && { weight: fromNode.weight }),
   }))
-
-  // // Log all contents of edges
-  // console.log('Edges:')
-  // edges.forEach((edge, index) => {
-  //   console.log(`Edge ${index}: from ${edge.from_node} to ${edge.to_node}, weight: ${edge.weight}`)
-  // })
-
-  // // Log all contents of groups
-  // console.log('Groups:')
-  // Object.entries(groups).forEach(([gid, group]) => {
-  //   console.log(
-  //     `Group ${gid}: letter: ${group.letter}, client_name: ${group.client_name}, name: ${group.index}, parentGid: ${group.parentGid}`,
-  //   )
-  // })
-
-  // Convert groups to an array
-  const groupArray: GroupEntry[] = Object.values(groups)
-
-  return { nodes: groupArray, edges }
-})
+}
 
 export const diagnositicsAtom = atom((get) => {
   const diagnostics = get(selectedDiagnosticsAtom)

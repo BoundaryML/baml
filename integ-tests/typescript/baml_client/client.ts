@@ -1033,6 +1033,22 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
+  async TestRoundRobin(
+      
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestRoundRobin",
+      {
+        
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.cr,
+    )
+    return raw.parsed() as string
+  }
+  
   async TestVertex(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -1045,21 +1061,6 @@ export class BamlClient {
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
       __baml_options__?.cr,
-    )
-    return raw.parsed() as string
-  }
-  
-  async TestRoundRobin(
-      
-      __baml_options__?: { tb?: TypeBuilder }
-  ): Promise<string> {
-    const raw = await this.runtime.callFunction(
-      "TestRoundRobin",
-      {
-        
-      },
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
     )
     return raw.parsed() as string
   }
@@ -2512,14 +2513,14 @@ class BamlStreamClient {
     )
   }
   
-  TestVertex(
-      input: string,
+  TestRoundRobin(
+      
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
-      "TestVertex",
+      "TestRoundRobin",
       {
-        "input": input
+        
       },
       undefined,
       this.ctx_manager.cloneContext(),
@@ -2535,18 +2536,19 @@ class BamlStreamClient {
     )
   }
   
-  TestRoundRobin(
-      
-      __baml_options__?: { tb?: TypeBuilder }
+  TestVertex(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
-      "TestRoundRobin",
+      "TestVertex",
       {
-        
+        "input": input
       },
       undefined,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
+      __baml_options__?.cr,
     )
     return new BamlStream<RecursivePartialNull<string>, string>(
       raw,
