@@ -317,7 +317,7 @@ export function startServer(options?: LSOptions): void {
       }
 
       connection.sendNotification('baml/message', {
-        type: 'info',
+        type: 'warn',
         message:
           'BAML: Code generation disabled. Extension version (' +
           BamlWasm.version() +
