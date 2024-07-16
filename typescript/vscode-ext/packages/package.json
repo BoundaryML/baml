@@ -47,7 +47,7 @@
           "description": "Use the locally installed baml CLI instead of the one bundled with the extension. Helps keeps generated code more in sync.",
           "scope": "machine-overridable"
         },
-        "generateCodeOnSave": {
+        "baml.generateCodeOnSave": {
           "type": "string",
           "default": "always",
           "enum": [
