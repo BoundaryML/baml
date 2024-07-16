@@ -1,7 +1,7 @@
 generator lang_python {
   output_type python/pydantic
   output_dir "../python"
-  version "0.49.0"
+  version "0.50.0"
 }
 
 generator lang_typescript {

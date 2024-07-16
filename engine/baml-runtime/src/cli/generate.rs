@@ -29,17 +29,13 @@ impl GenerateArgs {
 
     fn generate_clients(&self, caller_type: super::CallerType) -> Result<()> {
         let src_dir = PathBuf::from(&self.from);
-        let runtime = BamlRuntime::from_directory(&src_dir, std::env::vars().collect())
-            .context("Failed to create BamlRuntime")?;
-        let src_files = baml_src_files(&src_dir).context("Failed to get baml source files")?;
+        let runtime = BamlRuntime::from_directory(&src_dir, std::env::vars().collect())?;
+        let src_files = baml_src_files(&src_dir)?;
         let all_files = src_files
             .iter()
             .map(|k| Ok((k.clone(), std::fs::read_to_string(&k)?)))
-            .collect::<Result<_>>()
-            .context("Failed to read source files")?;
-        let generated = runtime
-            .run_generators(&all_files, self.no_version_check)
-            .context("Failed to run generators")?;
+            .collect::<Result<_>>()?;
+        let generated = runtime.run_generators(&all_files, self.no_version_check)?;
 
         // give the user a working config to copy-paste (so we need to run it through generator again)
         if generated.is_empty() {
