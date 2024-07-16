@@ -1,5 +1,5 @@
 function TestImageInput(img: image) -> string{
-  client AwsBedrock
+  client Gemini
   prompt #"
     {{ _.role("user") }}
 
@@ -11,6 +11,9 @@ test  TestImageInput {
   functions [TestImageInput]
   args {
     img {
+      media_type "image/png"
+      // url gs://cloud-samples-data/vertex-ai/llm/prompts/landmark1.png
+
       url "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png"
     }
   }
@@ -20,6 +23,7 @@ test  shrek {
   functions [TestImageInput]
   args {
     img {
+      
       url "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
     }
   }

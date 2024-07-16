@@ -103,6 +103,7 @@ pub struct VertexAiSearch {
 pub struct SafetySetting {
     pub category: HarmCategory,
     pub threshold: HarmBlockThreshold,
+    pub method: HarmBlockMethod,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -117,6 +118,16 @@ pub enum HarmBlockThreshold {
     BlockOnlyHigh,
     #[serde(rename = "BLOCK_NONE")]
     BlockNone,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum HarmBlockMethod {
+    #[serde(rename = "harm_block_method_unspecified")]
+    HarmBlockMethodUnspecified,
+    #[serde(rename = "severity")]
+    Severity,
+    #[serde(rename = "probability")]
+    Probability,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -136,10 +147,10 @@ pub struct GenerationConfig {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct GoogleResponse {
+pub struct VertexResponse {
     pub candidates: Vec<Candidate>,
     pub prompt_feedback: Option<PromptFeedback>,
-    pub usage_metadata: UsageMetaData,
+    pub usage_metadata: Option<UsageMetaData>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -350,7 +361,7 @@ pub struct SearchEntryPoint {
     pub sdk_blob: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageMetaData {
     pub prompt_token_count: Option<u64>,
@@ -367,58 +378,58 @@ mod tests {
     fn test_deserialization() {
         let data = r#"
         {
-            "candidates": [
-              {
-                "content": {
-                  "role": "model",
-                  "parts": [
-                    {
-                      "text": "Dark fizz, cherry bright,\nTwenty-three flavors dance light,\nA Texan delight. \n"
-                    }
-                  ]
-                },
-                "finishReason": "STOP",
-                "safetyRatings": [
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
                   {
-                    "category": "HARM_CATEGORY_HATE_SPEECH",
-                    "probability": "NEGLIGIBLE",
-                    "probabilityScore": 0.04977345,
-                    "severity": "HARM_SEVERITY_NEGLIGIBLE",
-                    "severityScore": 0.06359858
-                  },
-                  {
-                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    "probability": "NEGLIGIBLE",
-                    "probabilityScore": 0.06632687,
-                    "severity": "HARM_SEVERITY_NEGLIGIBLE",
-                    "severityScore": 0.103205055
-                  },
-                  {
-                    "category": "HARM_CATEGORY_HARASSMENT",
-                    "probability": "NEGLIGIBLE",
-                    "probabilityScore": 0.06979492,
-                    "severity": "HARM_SEVERITY_NEGLIGIBLE",
-                    "severityScore": 0.058131594
-                  },
-                  {
-                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    "probability": "NEGLIGIBLE",
-                    "probabilityScore": 0.09285216,
-                    "severity": "HARM_SEVERITY_NEGLIGIBLE",
-                    "severityScore": 0.0992954
+                    "text": "The air in Donkey Kong's treehouse was thick with frustration. Scattered banana peels littered the floor, evidence of a temper tantrum of Kong-sized proportions. Donkey Kong himself sat slumped against a wall, his furry brow furrowed. Today was the annual Jungle Jamboree, and Donkey Kong, reigning champion of the Banana Eating Contest, couldn't participate. \n\nHis dentist, a nervous little monkey named Marvin, had fitted him with braces. \"No more chomping whole bananas for a while, big guy,\" Marvin had chirped, tapping a metal bracket. \"These babies need soft food.\"\n\nDonkey Kong sighed. Soft food. What was the point of a jungle jamboree if you couldn't even enjoy a proper banana?\n\nSuddenly, a sweet, nutty aroma wafted in from the open window. Donkey Kong's nose twitched. He followed the scent to find Diddy Kong, his little buddy, happily munching on something spread on a banana slice.\n\n\"What's that you got there, little buddy?\" Donkey Kong grumbled, trying not to sound too interested.\n\n\"Peanut butter sandwiches!\" chirped Diddy Kong, offering Donkey Kong a bite. \"Want one? It's the best thing ever!\"\n\nDonkey Kong hesitated. Could he? He took a tentative bite and his eyes widened. The creamy peanut butter coated his mouth, the salty-sweet taste a revelation. It was soft, delicious, and didn't require any chewing!\n\n\"Diddy,\" Donkey Kong said, a slow grin spreading across his face, \"You're a genius!\"\n\nThat afternoon, Donkey Kong entered the Jungle Jamboree, his head held high. He might not be the Banana Eating Champion this year, but he was determined to become the Peanut Butter Sandwich Eating Champion. And with a determined glint in his eye and a stack of peanut butter sandwiches, Donkey Kong knew he had this one in the bag. From then on, peanut butter became a staple in Donkey Kong's diet, braces or no braces. After all, who needed chomping when you had creamy, delicious peanut butter? \n"
                   }
                 ]
-              }
-            ],
-            "usageMetadata": {
-              "promptTokenCount": 8,
-              "candidatesTokenCount": 21,
-              "totalTokenCount": 29
+              },
+              "finishReason": "STOP",
+              "safetyRatings": [
+                {
+                  "category": "HARM_CATEGORY_HATE_SPEECH",
+                  "probability": "NEGLIGIBLE",
+                  "probabilityScore": 0.12085322,
+                  "severity": "HARM_SEVERITY_NEGLIGIBLE",
+                  "severityScore": 0.11616109
+                },
+                {
+                  "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                  "probability": "NEGLIGIBLE",
+                  "probabilityScore": 0.07356305,
+                  "severity": "HARM_SEVERITY_NEGLIGIBLE",
+                  "severityScore": 0.037750278
+                },
+                {
+                  "category": "HARM_CATEGORY_HARASSMENT",
+                  "probability": "NEGLIGIBLE",
+                  "probabilityScore": 0.24926445,
+                  "severity": "HARM_SEVERITY_NEGLIGIBLE",
+                  "severityScore": 0.108566426
+                },
+                {
+                  "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                  "probability": "NEGLIGIBLE",
+                  "probabilityScore": 0.08137363,
+                  "severity": "HARM_SEVERITY_NEGLIGIBLE",
+                  "severityScore": 0.1301748
+                }
+              ]
             }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 11,
+            "candidatesTokenCount": 433,
+            "totalTokenCount": 444
           }
+        }
         "#;
 
-        let parsed: Result<GoogleResponse, Error> = serde_json::from_str(data);
+        let parsed: Result<VertexResponse, Error> = serde_json::from_str(data);
 
         match parsed {
             Ok(response) => println!("Parsed successfully: {:?}", response),

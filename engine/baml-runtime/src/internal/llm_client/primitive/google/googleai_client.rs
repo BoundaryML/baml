@@ -1,4 +1,5 @@
 use crate::client_registry::ClientProperty;
+use crate::internal::llm_client::ResolveMedia;
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
@@ -33,7 +34,7 @@ struct PostRequestProperities {
     properties: HashMap<String, serde_json::Value>,
 }
 
-pub struct GoogleClient {
+pub struct GoogleAIClient {
     pub name: String,
     pub client: reqwest::Client,
     pub retry_policy: Option<String>,
@@ -100,13 +101,13 @@ fn resolve_properties(
     })
 }
 
-impl WithRetryPolicy for GoogleClient {
+impl WithRetryPolicy for GoogleAIClient {
     fn retry_policy_name(&self) -> Option<&str> {
         self.retry_policy.as_deref()
     }
 }
 
-impl WithClient for GoogleClient {
+impl WithClient for GoogleAIClient {
     fn context(&self) -> &RenderContext_Client {
         &self.context
     }
@@ -116,9 +117,9 @@ impl WithClient for GoogleClient {
     }
 }
 
-impl WithNoCompletion for GoogleClient {}
+impl WithNoCompletion for GoogleAIClient {}
 
-impl SseResponseTrait for GoogleClient {
+impl SseResponseTrait for GoogleAIClient {
     fn response_stream(
         &self,
         resp: reqwest::Response,
@@ -208,7 +209,7 @@ impl SseResponseTrait for GoogleClient {
     }
 }
 // makes the request to the google client, on success it triggers the response_stream function to handle continuous rendering with the response object
-impl WithStreamChat for GoogleClient {
+impl WithStreamChat for GoogleAIClient {
     async fn stream_chat(
         &self,
         _ctx: &RuntimeContext,
@@ -224,7 +225,7 @@ impl WithStreamChat for GoogleClient {
     }
 }
 
-impl GoogleClient {
+impl GoogleAIClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<Self> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
         let properties = resolve_properties(properties, ctx)?;
@@ -241,7 +242,7 @@ impl GoogleClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: true,
+                resolve_media_urls: ResolveMedia::Always,
             },
             retry_policy: client
                 .elem()
@@ -275,7 +276,7 @@ impl GoogleClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: true,
+                resolve_media_urls: ResolveMedia::Always,
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,
@@ -283,7 +284,7 @@ impl GoogleClient {
     }
 }
 
-impl RequestBuilder for GoogleClient {
+impl RequestBuilder for GoogleAIClient {
     fn http_client(&self) -> &reqwest::Client {
         &self.client
     }
@@ -305,6 +306,7 @@ impl RequestBuilder for GoogleClient {
             self.properties.model_id.as_ref().unwrap_or(&"".to_string()),
             should_stream
         );
+
         let mut req = match (&self.properties.proxy_url, allow_proxy) {
             (Some(proxy_url), true) => {
                 let req = self.client.post(proxy_url.clone());
@@ -344,7 +346,7 @@ impl RequestBuilder for GoogleClient {
     }
 }
 
-impl WithChat for GoogleClient {
+impl WithChat for GoogleAIClient {
     fn chat_options(&self, _ctx: &RuntimeContext) -> Result<internal_baml_jinja::ChatOptions> {
         Ok(internal_baml_jinja::ChatOptions::new(
             self.properties.default_role.clone(),
@@ -450,13 +452,13 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
             ChatMessagePart::Text(text) => json!({
                 "text": text
             }),
-            ChatMessagePart::Image(image) => convert_media_to_content(image, "image"),
-            ChatMessagePart::Audio(audio) => convert_media_to_content(audio, "audio"),
+            ChatMessagePart::Image(image) => convert_media_to_content(image),
+            ChatMessagePart::Audio(audio) => convert_media_to_content(audio),
         })
         .collect()
 }
 
-fn convert_media_to_content(media: &BamlMedia, media_type: &str) -> serde_json::Value {
+fn convert_media_to_content(media: &BamlMedia) -> serde_json::Value {
     match media {
         BamlMedia::Base64(_, data) => json!({
             "inlineData": {

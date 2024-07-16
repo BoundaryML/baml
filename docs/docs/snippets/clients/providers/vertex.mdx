@@ -3,7 +3,243 @@ title: vertex-ai
 slug: docs/snippets/clients/providers/vertex
 ---
 
+The `vertex-ai` provider is used to interact with the Google Vertex AI services, specifically the following endpoints:
 
-We don't currently offer `vertex-ai` as a provider. If you'd like to see it, please comment on this issue: [Support Vertex AI provider](https://github.com/BoundaryML/baml/issues/706).
+`
+https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${MODEL_ID}:streamGenerateContent
+`
 
-You can instead use gemini-models with the `google-ai` provider, [see here](gemini.mdx).
+`https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${MODEL_ID}:generateContent`
+
+
+
+Example: 
+```baml BAML
+client<llm> MyClient {
+  provider vertex-ai
+  options {
+    model gemini-1.5-pro
+    project_id my-project-id
+    location us-central1
+  }
+}
+```
+## Authentication Instructions
+The `vertex-ai` provider uses the Google Cloud SDK to authenticate with a temporary access token. We generate these Google Cloud Authentication Tokens using Google Cloud service account credentials. We do not store this token, and it is only used for the duration of the request.
+
+### Instructions for downloading Google Cloud credentials
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Click on the project you want to use.
+3. Select the `IAM & Admin` section, and click on `Service Accounts`.
+5. Select an existing service account or create a new one.
+6. Click on the service account and select `Add Key`.
+7. Choose the JSON key type and click `Create`.
+9. Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the path of the file.
+10. Set the `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` environment variable to the contents of the file in the BAML Playground, as it does not have access to the file system.
+
+
+
+See the [Google Cloud Application Default Credentials Docs](https://cloud.google.com/docs/authentication/application-default-credentials) for more information.
+<Tip>
+The `project_id` of your client object must match the `project_id` of your credentials file.
+</Tip>
+
+
+The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
+## Non-forwarded options
+<ParamField path="base_url" type="string">
+  The base URL for the API.
+  
+  **Default: `https://{LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/{LOCATION}/publishers/google/models/
+`**
+
+  Can be used in lieu of the **`project_id`** and **`location`** fields, to manually set the request URL.
+</ParamField>
+
+
+<ParamField
+  path="project_id"
+  type="string"
+  required
+>
+  Vertex requires a Google Cloud project ID for each request. See the [Google Cloud Project ID Docs](https://cloud.google.com/resource-manager/docs/creating-managing-projects#identifying_projects) for more information.
+
+    
+
+</ParamField>
+
+<ParamField
+  path="location"
+  type="string"
+  required
+>
+  Vertex requires a location for each request. Some locations may have different models avaiable.
+  
+  Common locations include:
+  - `us-central1`
+  - `us-west1`
+  - `us-east1`
+  - `us-south1`
+
+  See the [Vertex Location Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/learn/locations#united-states) for all locations and supported models.
+
+</ParamField>
+
+
+<ParamField
+  path="credentials"
+  type="string"
+>
+  Overrides the path to JSON credentials file. **Default: `env.GOOGLE_APPLICATION_CREDENTIALS`**
+
+  Example:
+  `'path/to/credentials.json'`
+
+  <Warning>
+   This field cannot be used in the BAML Playground. Use **`credentials_content`** instead.
+  </Warning>
+</ParamField>
+
+<ParamField
+  path="credentials_content"
+  type="string"
+>
+  Overrides contents of the Google Cloud Application Credentials. **Default: `env.GOOGLE_APPLICATION_CREDENTIALS_CONTENT`**
+
+  
+  <Accordion title='Example Credentials Content'>
+  ```json Credentials
+    {
+      "type": "service_account",
+      "project_id": "my-project-id",
+      "private_key_id": "string",
+      "private_key": "-----BEGIN PRIVATE KEY-----string\n-----END PRIVATE KEY-----\n",
+      "client_email": "john_doe@gmail.com",
+      "client_id": "123456",
+      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+      "token_uri": "https://oauth2.googleapis.com/token",
+      "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+      "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/...",
+      "universe_domain": "googleapis.com"
+    }
+    ```
+
+</Accordion>
+
+    <Warning>
+    BAML Playground only. Use **`credentials`** instead.
+  </Warning>
+</ParamField>
+
+<ParamField
+  path="authorization"
+  type="string"
+>
+  Directly set Google Cloud Authentication Token in lieu of token generation via **`env.GOOGLE_APPLICATION_CREDENTIALS`** or **`env.GOOGLE_APPLICATION_CREDENTIALS_CONTENT`** fields.
+    
+</ParamField>
+
+
+
+
+<ParamField
+  path="default_role"
+  type="string"
+>
+  The default role for any prompts that don't specify a role. **Default: `user`**
+  
+</ParamField>
+
+<ParamField
+  path="model"
+  type="string"
+  required
+>
+  The Google model to use for the request.
+  
+
+| Model | Input(s) | Optimized for |
+| --- | ---  | --- |
+| `gemini-1.5-pro`  | Audio, images, videos, and text | Complex reasoning tasks such as code and text generation, text editing, problem solving, data extraction and generation |
+| `gemini-1.5-flash`  | Audio, images, videos, and text | Fast and versatile performance across a diverse variety of tasks |
+| `gemini-1.0-pro` | Text | Natural language tasks, multi-turn text and code chat, and code generation |
+
+See the [Google Model Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for the latest models.
+</ParamField>
+
+<ParamField path="headers" type="object">
+  Additional headers to send with the request.
+
+Example:
+```baml BAML
+client<llm> MyClient {
+  provider vertex-ai
+  options {
+    model gemini-1.5-pro
+    project_id my-project-id
+    location us-central1
+    // Additional headers
+    headers {
+      "X-My-Header" "my-value"
+    }
+  }
+}
+```
+</ParamField>
+
+## Forwarded options
+<ParamField
+  path="safetySettings"
+  type="object"
+>
+  Safety settings to apply to the request. You can stack different safety settings with a new `safetySettings` header for each one. See the [Google Vertex API Request Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference) for more information on what safety settings can be set.
+
+```baml BAML
+client<llm> MyClient {
+  provider vertex-ai
+  options {
+    model gemini-1.5-pro
+    project_id my-project-id
+    location us-central1
+
+    safetySettings {
+      category HARM_CATEGORY_HATE_SPEECH
+      threshold BLOCK_LOW_AND_ABOVE
+      method SEVERITY
+    }
+  }
+}
+```
+    
+
+</ParamField>
+
+<ParamField
+  path="generationConfig"
+  type="object"
+>
+  Generation configurations to apply to the request. See the [Google Vertex API Request Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference) for more information on what properties can be set.
+```baml BAML
+client<llm> MyClient {
+  provider vertex-ai
+  options {
+    model gemini-1.5-pro
+    project_id my-project-id
+    location us-central1
+    
+    generationConfig {
+      maxOutputTokens 100
+      temperature 1
+    }
+  }
+}
+```
+
+    
+</ParamField>
+
+
+
+
+
+

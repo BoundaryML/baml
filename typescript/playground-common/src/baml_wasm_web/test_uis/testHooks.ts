@@ -67,7 +67,6 @@ export const useRunHooks = () => {
         set(isRunningAtom, true)
         set(showTestsAtom, true)
 
-        console.log('test baml getting runtime context')
         // First clear any previous test results
         testStatusAtom.setShouldRemove(() => true)
         // Remove the shouldRemove function so we don't remove future test results

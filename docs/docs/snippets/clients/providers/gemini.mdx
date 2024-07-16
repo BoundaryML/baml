@@ -4,7 +4,7 @@ slug: docs/snippets/clients/providers/gemini
 ---
 
 
-The `google-ai` provider supports the `https://generativelanguage.googleapis.com/v1/models/{model_id}/generateContent` and `https://generativelanguage.googleapis.com/v1/models/{model_id}/streamGenerateContent` endpoint.
+The `google-ai` provider supports the `https://generativelanguage.googleapis.com/v1/models/{model_id}/generateContent` and `https://generativelanguage.googleapis.com/v1/models/{model_id}/streamGenerateContent` endpoints.
 
 <Tip>
 BAML will automatically pick `streamGenerateContent` if you call the streaming interface.
@@ -21,7 +21,6 @@ client<llm> MyClient {
 ```
 
 The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
-
 ## Non-forwarded options
 <ParamField
   path="api_key"
@@ -59,7 +58,7 @@ The options are passed through directly to the API, barring a few. Here's a shor
 | `gemini-1.5-flash`  | Audio, images, videos, and text | Fast and versatile performance across a diverse variety of tasks |
 | `gemini-1.0-pro` | Text | Natural language tasks, multi-turn text and code chat, and code generation |
 
-See the [Google Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for the latest models.
+See the [Google Model Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for the latest models.
 </ParamField>
 
 <ParamField path="headers" type="object">
@@ -78,6 +77,7 @@ client<llm> MyClient {
 }
 ```
 </ParamField>
+
 
 ## Forwarded options
 <ParamField
