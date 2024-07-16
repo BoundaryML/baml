@@ -428,7 +428,7 @@ impl RequestBuilder for VertexClient {
         };
 
         let credentials = self.properties.service_account_details.clone();
-        log::info!("Credentials: {:?}", credentials);
+
         let access_token = if let Some((key, value)) = &credentials {
             if key == "GOOGLE_TOKEN" {
                 value.clone()
@@ -646,8 +646,6 @@ fn convert_chat_prompt_to_body(
             })
             .collect::<serde_json::Value>(),
     );
-
-    log::debug!("converted chat prompt to body: {:#?}", map);
 
     return map;
 }

@@ -103,8 +103,8 @@ impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
             "google-ai" => {
                 GoogleAIClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Google)
             }
-            // "aws-bedrock" => aws::AwsClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Aws),
             "vertex-ai" => VertexClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Vertex),
+            // dynamic_new is not implemented for aws::AwsClient
             other => {
                 let options = [
                     "openai",

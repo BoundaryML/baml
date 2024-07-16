@@ -665,6 +665,22 @@ export class BamlClient {
     return raw.parsed() as string
   }
   
+  async PromptTestOpenAI(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "PromptTestOpenAI",
+      {
+        "input": input
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.cr,
+    )
+    return raw.parsed() as string
+  }
+  
   async PromptTestOpenAIChat(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -959,22 +975,6 @@ export class BamlClient {
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestOllama",
-      {
-        "input": input
-      },
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-      __baml_options__?.cr,
-    )
-    return raw.parsed() as string
-  }
-  
-  async TestOpenAI(
-      input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): Promise<string> {
-    const raw = await this.runtime.callFunction(
-      "TestOpenAI",
       {
         "input": input
       },
@@ -1968,6 +1968,29 @@ class BamlStreamClient {
     )
   }
   
+  PromptTestOpenAI(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): BamlStream<RecursivePartialNull<string>, string> {
+    const raw = this.runtime.streamFunction(
+      "PromptTestOpenAI",
+      {
+        "input": input
+      },
+      undefined,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.cr,
+    )
+    return new BamlStream<RecursivePartialNull<string>, string>(
+      raw,
+      (a): a is RecursivePartialNull<string> => a,
+      (a): a is string => a,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
   PromptTestOpenAIChat(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -2388,29 +2411,6 @@ class BamlStreamClient {
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestOllama",
-      {
-        "input": input
-      },
-      undefined,
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-      __baml_options__?.cr,
-    )
-    return new BamlStream<RecursivePartialNull<string>, string>(
-      raw,
-      (a): a is RecursivePartialNull<string> => a,
-      (a): a is string => a,
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-    )
-  }
-  
-  TestOpenAI(
-      input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): BamlStream<RecursivePartialNull<string>, string> {
-    const raw = this.runtime.streamFunction(
-      "TestOpenAI",
       {
         "input": input
       },

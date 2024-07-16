@@ -3,7 +3,15 @@ title: vertex-ai
 slug: docs/snippets/clients/providers/vertex
 ---
 
-The `vertex-ai` provider is used to interact with the Google Vertex AI services.
+The `vertex-ai` provider is used to interact with the Google Vertex AI services, specifically the following endpoints:
+
+`
+https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${MODEL_ID}:streamGenerateContent
+`
+
+`https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${MODEL_ID}:generateContent`
+
+
 
 Example: 
 ```baml BAML

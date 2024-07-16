@@ -5,7 +5,7 @@ function TestAnthropic(input: string) -> string {
   "#
 }
 
-function TestOpenAI(input: string) -> string {
+function PromptTestOpenAI(input: string) -> string {
   client GPT35
   prompt #"
     Write a nice haiku about {{ input }}

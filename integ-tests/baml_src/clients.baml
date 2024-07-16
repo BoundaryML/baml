@@ -89,8 +89,7 @@ client<llm> Gemini {
 }
 
 client<llm> Vertex {
-  provider vertex-ai
-  
+  provider vertex-ai  
   options {
     model gemini-1.5-pro
     project_id anish-testing-426119
