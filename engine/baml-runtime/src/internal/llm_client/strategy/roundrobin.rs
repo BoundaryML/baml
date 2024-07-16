@@ -89,7 +89,7 @@ impl TryFrom<(&ClientProperty, &RuntimeContext)> for RoundRobinStrategy {
             name: client.name.clone(),
             retry_policy: client.retry_policy.clone(),
             clients: strategy,
-            current_index: AtomicUsize::new(start),
+            current_index: MyAtomicUsize(AtomicUsize::new(start)),
         })
     }
 }

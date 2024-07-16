@@ -68,7 +68,7 @@ export const envKeyValuesAtom = atom(
     get,
     set,
     update: // Update value
-      | { itemIndex: number; value: string }
+    | { itemIndex: number; value: string }
       // Update key
       | { itemIndex: number; newKey: string }
       // Remove key
@@ -501,10 +501,10 @@ export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edg
           scope.type === 'Retry'
             ? scope.count
             : scope.type === 'Direct'
-              ? 0
-              : scope.type === 'RoundRobin'
-                ? scope.strategy_name
-                : scope.index
+            ? 0
+            : scope.type === 'RoundRobin'
+            ? scope.strategy_name
+            : scope.index
 
         stackGroup.push({
           type: getTypeLetter(scope.type),
@@ -750,20 +750,20 @@ const ErrorCount: React.FC = () => {
   const { errors, warnings } = useAtomValue(numErrorsAtom)
   if (errors === 0 && warnings === 0) {
     return (
-      <div className='flex flex-row items-center gap-1 text-green-600'>
+      <div className="flex flex-row items-center gap-1 text-green-600">
         <CheckCircle size={12} />
       </div>
     )
   }
   if (errors === 0) {
     return (
-      <div className='flex flex-row items-center gap-1 text-yellow-600'>
+      <div className="flex flex-row items-center gap-1 text-yellow-600">
         {warnings} <AlertTriangle size={12} />
       </div>
     )
   }
   return (
-    <div className='flex flex-row items-center gap-1 text-red-600'>
+    <div className="flex flex-row items-center gap-1 text-red-600">
       {errors} <XCircle size={12} /> {warnings} <AlertTriangle size={12} />{' '}
     </div>
   )
@@ -961,7 +961,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <>
-      <div className='absolute z-50 flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2'>
+      <div className="absolute z-50 flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2">
         <ErrorCount /> <span>Runtime Version: {version}</span>
       </div>
       {selectedProject === null ? (
