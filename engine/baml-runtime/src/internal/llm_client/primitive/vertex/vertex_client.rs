@@ -464,7 +464,6 @@ impl RequestBuilder for VertexClient {
 
                 // Extract and print the access token
                 if let Some(access_token) = res["access_token"].as_str() {
-                    println!("Access Token: {}", access_token);
                     access_token.to_string()
                 } else {
                     println!("Failed to get access token. Response: {:?}", res);
