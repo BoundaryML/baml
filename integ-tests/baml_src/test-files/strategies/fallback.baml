@@ -10,15 +10,17 @@ client<llm> FaultyClient {
 
 client<llm> FallbackClient {
   provider fallback
+  // retry_policy Constant
   options {
     // first 2 clients are expected to fail.
     strategy [
       FaultyClient
+      FaultyClient
 
-      Lottery_SimpleSyntax
+      // Lottery_SimpleSyntax
 
       SecondaryFallback
-      TertiaryFallback
+      // TertiaryFallback
       
     ]
   }

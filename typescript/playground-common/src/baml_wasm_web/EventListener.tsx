@@ -408,7 +408,10 @@ export interface TypeCount {
   type: string
 
   // range from 0 to n
-  name: number | string
+  index: number
+
+  // only for Round Robin
+  scope_name: string
 }
 
 const getTypeLetter = (type: string): string => {
@@ -449,7 +452,8 @@ export interface NodeEntry {
 }
 export interface GroupEntry {
   letter: string
-  index: string | number
+  index: number
+  index_name?: string
   client_name?: string
   gid: ReturnType<typeof uuid>
   parentGid?: ReturnType<typeof uuid>
@@ -476,14 +480,35 @@ export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edg
   }
 
   const nodes = createClientNodes(wasmScopes)
-  nodes.forEach((node) => {
-    node.identifier.unshift({
-      type: 'F',
-      name: 0,
+  // nodes.forEach((node) => {
+  //   node.identifier.unshift({
+  //     type: 'F',
+  //     name: 0,
+  //   })
+  // })
+
+  nodes.forEach((node, index) => {
+    console.log(`Node ${index}:`, {
+      name: node.name,
+      type: node.type,
+      identifier: node.identifier.map((id) => `${id.type}${id.index}`).join(' | '),
     })
   })
 
   const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
+
+  Object.entries(groups).forEach(([gid, group]) => {
+    console.log(`Group ID: ${gid}`)
+    console.log(
+      `Letter: ${group.letter}`,
+      `Index: ${group.index}`,
+      group.index_name ? `Index Name: ${group.index_name}` : '',
+      group.client_name ? `Client Name: ${group.client_name}` : '',
+      group.parentGid ? `Parent GID: ${group.parentGid}` : '',
+    )
+    console.log('---')
+  })
+
   const edges = createEdges(unitNodes)
 
   const positionedNodes = getPositions(groups)
@@ -536,19 +561,20 @@ function getPositions(nodes: { [key: string]: GroupEntry }): GroupEntry[] {
     Dimension: sizes[node.gid] || { width: 0, height: 0 },
   }))
 
-  return sizedNodes
+  // return sizedNodes
 
-  // const positionsMap = getCoordinates(adjacencyList, rootNode.gid, sizes)
-  // const positionedNodes = nodeEntries.map((node) => ({
-  //   ...node,
-  //   position: positionsMap[node.gid] || { x: 0, y: 0 },
-  // }))
+  const positionsMap = getCoordinates(adjacencyList, rootNode.gid, sizes)
+  const positionedNodes = nodeEntries.map((node) => ({
+    ...node,
+    Position: positionsMap[node.gid] || { x: 0, y: 0 },
+    Dimension: sizes[node.gid] || { width: 0, height: 0 },
+  }))
 
-  // positionedNodes.forEach((node) => {
-  //   console.log(`Node ID: ${node.gid}, Position: (${node.position.x}, ${node.position.y})`)
-  // })
+  positionedNodes.forEach((node) => {
+    console.log(`Node ID: ${node.gid}, Position: (${node.Position.x}, ${node.Position.y})`)
+  })
 
-  // return positionedNodes
+  return positionedNodes
 }
 
 function getCoordinates(
@@ -562,7 +588,7 @@ function getCoordinates(
 
   const coordinates: { [key: string]: Position } = {}
 
-  const PADDING = 10 // Define a constant padding value
+  const PADDING = 50 // Define a constant padding value
 
   function recurse(node: string, horizontal: boolean, x: number, y: number): { x: number; y: number } {
     const children = adjacencyList[node]
@@ -571,8 +597,8 @@ function getCoordinates(
       return coordinates[node]
     }
 
-    let childX = 0
-    let childY = 0
+    let childX = PADDING
+    let childY = PADDING
     for (const child of children) {
       const childSize = recurse(child, !horizontal, childX, childY)
 
@@ -601,7 +627,7 @@ function getSizes(
 
   const sizes: { [key: string]: { width: number; height: number } } = {}
 
-  const PADDING = 10 // Define a constant padding value
+  const PADDING = 50 // Define a constant padding value
 
   function recurse(node: string, horizontal: boolean): { width: number; height: number } {
     const children = adjacencyList[node]
@@ -610,8 +636,8 @@ function getSizes(
       return sizes[node]
     }
 
-    let width = 0
-    let height = 0
+    let width = horizontal ? PADDING : 0
+    let height = horizontal ? 0 : PADDING
     for (const child of children) {
       const childSize = recurse(child, !horizontal)
 
@@ -646,25 +672,28 @@ function createClientNodes(wasmScopes: any[]): ClientNode[] {
   for (const scope of wasmScopes) {
     const scopeInfo = scope.get_orchestration_scope_info()
     const scopePath = scopeInfo as any[]
+    scopePath.forEach((scope, index) => {
+      console.log(`Scope ${index}:`, scope)
+    })
     const stackGroup = createStackGroup(scopePath)
 
-    const typeScope = scopePath.length > 2 ? scopePath[scopePath.length - 2] : scopePath[scopePath.length - 1]
+    // Always a direct node
     const lastScope = scopePath[scopePath.length - 1]
 
     const clientNode: ClientNode = {
       name: lastScope.name,
       node_index: indexOuter,
-      type: typeScope.type,
+      type: lastScope.type,
       identifier: stackGroup,
     }
 
-    switch (typeScope.type) {
+    switch (lastScope.type) {
       case 'Retry':
-        clientNode.node_index = typeScope.count
-        clientNode.retry_delay = typeScope.delay
+        clientNode.node_index = lastScope.count
+        clientNode.retry_delay = lastScope.delay
         break
       case 'RoundRobin':
-        clientNode.round_robin_name = typeScope.strategy_name
+        clientNode.round_robin_name = lastScope.strategy_name
         break
       case 'Fallback':
         clientNode.type = lastScope.type
@@ -687,18 +716,12 @@ function createStackGroup(scopePath: any[]): TypeCount[] {
 
   for (let i = 0; i < scopePath.length; i++) {
     const scope = scopePath[i]
-    const indexVal =
-      scope.type === 'Retry'
-        ? scope.count
-        : scope.type === 'Direct'
-        ? 0
-        : scope.type === 'RoundRobin'
-        ? scope.strategy_name
-        : scope.index
+    const indexVal = scope.type === 'Retry' ? scope.count : scope.type === 'Direct' ? 0 : scope.index
 
     stackGroup.push({
       type: getTypeLetter(scope.type),
-      name: indexVal,
+      index: indexVal,
+      scope_name: scope.type === 'RoundRobin' ? scope.strategy_name : scope.name ?? 'SOME_NAME',
     })
   }
 
@@ -711,7 +734,7 @@ function buildUnitNodesAndGroups(nodes: ClientNode[]): {
 } {
   const unitNodes: NodeEntry[] = []
   const groups: { [gid: string]: GroupEntry } = {}
-  const indexGroups: GroupEntry[] = []
+  const prevNodeIndexGroups: GroupEntry[] = []
 
   for (const node of nodes) {
     const stackGroup = node.identifier
@@ -719,21 +742,25 @@ function buildUnitNodesAndGroups(nodes: ClientNode[]): {
 
     for (let stackIndex = 0; stackIndex < stackGroup.length; stackIndex++) {
       const scopeLayer = stackGroup[stackIndex]
-      const { scopeType, scopeName, curGid } = getScopeDetails(scopeLayer, indexGroups, stackIndex, parentGid)
+      const prevScopeIdx = stackIndex > 0 ? stackGroup[stackIndex - 1].index : 0
+      const prevNodeScope = prevNodeIndexGroups.at(stackIndex)
+      const curGid = getScopeDetails(scopeLayer, prevScopeIdx, prevNodeScope)
 
       if (!(curGid in groups)) {
         groups[curGid] = {
-          letter: scopeType,
-          index: scopeName,
-          client_name: node.name,
+          letter: scopeLayer.type,
+          index: prevScopeIdx,
+          client_name: scopeLayer.scope_name,
           gid: curGid,
           ...(parentGid && { parentGid }),
         }
+        // Also clean indexGroups up to the current stackIndex
+        prevNodeIndexGroups.length = stackIndex
       }
 
-      indexGroups[stackIndex] = {
-        letter: scopeType,
-        index: scopeName,
+      prevNodeIndexGroups[stackIndex] = {
+        letter: scopeLayer.type,
+        index: prevScopeIdx,
         gid: curGid,
         ...(parentGid && { parentGid }),
       }
@@ -753,38 +780,29 @@ var counter = 0
 function uuid() {
   return String(counter++)
 }
-function getScopeDetails(scopeLayer: TypeCount, indexGroups: GroupEntry[], stackIndex: number, parentGid: string) {
-  const scopeType = scopeLayer.type
-  const scopeName = scopeLayer.name
-  const indexGroupEntry = stackIndex < indexGroups.length ? indexGroups[stackIndex] : null
-
-  let curGid = ''
-
-  if (indexGroupEntry === null) {
-    curGid = uuid()
+function getScopeDetails(scopeLayer: TypeCount, prevIdx: number, prevIndexGroupEntry: GroupEntry | undefined) {
+  if (prevIndexGroupEntry === undefined) {
+    return uuid()
   } else {
-    const indexEntryName = indexGroupEntry.index
-    const indexEntryGid = indexGroupEntry.gid
+    const indexEntryGid = prevIndexGroupEntry.gid
+    const indexEntryIdx = prevIndexGroupEntry.index
+    const indexEntryScopeName = prevIndexGroupEntry.client_name
 
-    switch (scopeType) {
-      case 'R':
-        curGid = scopeName >= indexEntryName ? indexEntryGid : uuid()
-        break
-      case 'F':
-        curGid = scopeName == indexEntryName ? indexEntryGid : uuid()
-        break
-      case 'D':
-        curGid = uuid()
-        break
+    switch (scopeLayer.type) {
       case 'B':
-        curGid = scopeName == indexEntryName ? indexEntryGid : uuid()
-        break
+        if (scopeLayer.scope_name === indexEntryScopeName) {
+          return indexEntryGid
+        } else {
+          return uuid()
+        }
       default:
-        console.error('Unknown scope type')
+        if (prevIdx === indexEntryIdx) {
+          return indexEntryGid
+        } else {
+          return uuid()
+        }
     }
   }
-
-  return { scopeType, scopeName, curGid }
 }
 
 function createEdges(unitNodes: NodeEntry[]): Edge[] {

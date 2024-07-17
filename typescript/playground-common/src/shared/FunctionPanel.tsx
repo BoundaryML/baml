@@ -83,7 +83,7 @@ interface RenderEdge {
 
 interface RenderNode {
   id: string
-  type?: string
+  type: string
   data: { label: string }
   position: { x: number; y: number }
   style?: { backgroundColor: string; width?: number; height?: number }
@@ -91,33 +91,24 @@ interface RenderNode {
   extent?: 'parent' | undefined // Update extent type
 }
 
+function getBackgroundColor(letter: string): string {
+  switch (letter) {
+    case 'D':
+      return 'blue'
+    case 'B':
+      return 'yellow'
+    case 'R':
+      return 'red'
+    case 'F':
+      return 'green'
+    default:
+      return 'gray'
+  }
+}
+
 const ClientGraph: React.FC = () => {
   const graph = useAtomValue(orchestration_nodes)
   const { nodes, edges } = graph
-  // First print all core nodes (node.letter == "D")
-  // console.log('Core Nodes')
-  // nodes.forEach((node, index) => {
-  //   if (node.letter === 'D') {
-  //     console.log(
-  //       `Core Node ${index}: id: ${node.gid}, letter: ${node.letter}, index: ${node.index}, client_name: ${node.client_name}, parentGid: ${node.parentGid}`,
-  //     )
-  //   }
-  // })
-  // console.log('Box Nodes')
-  // // Then print all parent nodes (node.letter != "D")
-  // nodes.forEach((node, index) => {
-  //   if (node.letter !== 'D') {
-  //     console.log(
-  //       `Box Node ${index}: id: ${node.gid}, letter: ${node.letter}, index: ${node.index}, client_name: ${node.client_name}, parentGid: ${node.parentGid}`,
-  //     )
-  //   }
-  // })
-
-  // console.log('Edges')
-  // edges.forEach((edge, index) => {
-  //   console.log(`Edge ${index}: from ${edge.from_node} to ${edge.to_node}, weight: ${edge.weight}`)
-  // })
-
   const renderNodes: RenderNode[] = []
   let count = 0
 
@@ -126,12 +117,26 @@ const ClientGraph: React.FC = () => {
 
     renderNodes.push({
       id: node.gid,
+      type: 'default', // Add this line
       data: { label: node.client_name ?? 'no name for this node' },
-      // position: { x: 0, y: 100 * count++ },
-      position: { x: 0, y: 0 },
-      style: { backgroundColor: 'green', width: node.Dimension?.width, height: node.Dimension?.height },
+      position: { x: node.Position?.x ?? 0, y: node.Position?.y ?? 0 },
+      style: {
+        backgroundColor: getBackgroundColor(node.letter),
+        width: node.Dimension?.width,
+        height: node.Dimension?.height,
+      },
+      parentId: node.parentGid,
+      extent: 'parent',
     })
   }
+
+  renderNodes.forEach((node, index) => {
+    console.log(
+      `RenderNode ${index}: id: ${node.id}, label: ${node.data.label}, position: (${node.position.x}, ${
+        node.position.y
+      }), style: ${JSON.stringify(node.style)}`,
+    )
+  })
 
   // const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
   //   id: idx.toString(),
