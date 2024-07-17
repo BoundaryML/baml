@@ -16,7 +16,7 @@ import type {
   WasmScope,
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { vscode } from '../utils/vscode'
-import { v4 as uuid } from 'uuid'
+// import { v4 as uuid } from 'uuid'
 
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
@@ -453,21 +453,15 @@ export interface GroupEntry {
   client_name?: string
   gid: ReturnType<typeof uuid>
   parentGid?: ReturnType<typeof uuid>
+  Position?: Position
+  Dimension?: Dimension
 }
-const getScopeInfo = (scope: any) => {
-  switch (scope.type) {
-    case 'Retry':
-      return `Index: ${scope.count}, Retry delay: ${scope.delay}`
-    case 'RoundRobin':
-      return `Index: ${scope.index}, Strategy Name: ${scope.strategy_name}`
-    case 'Fallback':
-      return `Index: ${scope.index}`
-    case 'Direct':
-      return ''
-    default:
-      return 'Unknown scope type'
-  }
+
+export interface Dimension {
+  width: number
+  height: number
 }
+
 export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
   const func = get(selectedFunctionAtom)
   const runtime = get(selectedRuntimeAtom)
@@ -489,17 +483,161 @@ export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edg
     })
   })
 
-  nodes.forEach((node) => {
-    const stackGroupString = node.identifier.map((item: TypeCount) => `${item.type}${item.name}`).join(' | ')
-    console.log(`${stackGroupString}`)
-  })
-
   const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
   const edges = createEdges(unitNodes)
 
-  const groupArray: GroupEntry[] = Object.values(groups)
-  return { nodes: groupArray, edges }
+  const positionedNodes = getPositions(groups)
+
+  return { nodes: positionedNodes, edges }
 })
+
+interface Position {
+  x: number
+  y: number
+}
+
+function getPositions(nodes: { [key: string]: GroupEntry }): GroupEntry[] {
+  const nodeEntries = Object.values(nodes)
+  if (nodeEntries.length === 0) {
+    return []
+  }
+
+  const adjacencyList: { [key: string]: string[] } = {}
+
+  nodeEntries.forEach((node) => {
+    if (node.parentGid) {
+      if (!adjacencyList[node.parentGid]) {
+        adjacencyList[node.parentGid] = []
+      }
+      adjacencyList[node.parentGid].push(node.gid)
+    }
+    if (!adjacencyList[node.gid]) {
+      adjacencyList[node.gid] = []
+    }
+  })
+
+  const rootNode = nodeEntries.find((node) => !node.parentGid)
+  if (!rootNode) {
+    console.error('No root node found')
+    return []
+  }
+  // console.log('Adjacency List:', adjacencyList)
+  // console.log('Root Node:', rootNode)
+
+  const sizes = getSizes(adjacencyList, rootNode.gid)
+
+  console.log('Sizes:', sizes)
+  Object.entries(sizes).forEach(([nodeId, size]) => {
+    console.log(`Node ID: ${nodeId}, Size: Width: ${size.width}, Height: ${size.height}`)
+  })
+
+  const sizedNodes = nodeEntries.map((node) => ({
+    ...node,
+    Dimension: sizes[node.gid] || { width: 0, height: 0 },
+  }))
+
+  return sizedNodes
+
+  // const positionsMap = getCoordinates(adjacencyList, rootNode.gid, sizes)
+  // const positionedNodes = nodeEntries.map((node) => ({
+  //   ...node,
+  //   position: positionsMap[node.gid] || { x: 0, y: 0 },
+  // }))
+
+  // positionedNodes.forEach((node) => {
+  //   console.log(`Node ID: ${node.gid}, Position: (${node.position.x}, ${node.position.y})`)
+  // })
+
+  // return positionedNodes
+}
+
+function getCoordinates(
+  adjacencyList: { [key: string]: string[] },
+  rootNode: string,
+  sizes: { [key: string]: { width: number; height: number } },
+): { [key: string]: Position } {
+  if (Object.keys(adjacencyList).length === 0 || Object.keys(sizes).length === 0) {
+    return {}
+  }
+
+  const coordinates: { [key: string]: Position } = {}
+
+  const PADDING = 10 // Define a constant padding value
+
+  function recurse(node: string, horizontal: boolean, x: number, y: number): { x: number; y: number } {
+    const children = adjacencyList[node]
+    if (children.length === 0) {
+      coordinates[node] = { x: x + PADDING, y: y + PADDING }
+      return coordinates[node]
+    }
+
+    let childX = 0
+    let childY = 0
+    for (const child of children) {
+      const childSize = recurse(child, !horizontal, childX, childY)
+
+      if (!horizontal) {
+        childY += childSize.y + PADDING
+      } else {
+        childX += childSize.x + PADDING
+      }
+    }
+
+    coordinates[node] = { x: x + PADDING, y: y + PADDING }
+    return coordinates[node]
+  }
+
+  recurse(rootNode, true, 0, 0)
+  return coordinates
+}
+
+function getSizes(
+  adjacencyList: { [key: string]: string[] },
+  rootNode: string,
+): { [key: string]: { width: number; height: number } } {
+  if (Object.keys(adjacencyList).length === 0) {
+    return {}
+  }
+
+  const sizes: { [key: string]: { width: number; height: number } } = {}
+
+  const PADDING = 10 // Define a constant padding value
+
+  function recurse(node: string, horizontal: boolean): { width: number; height: number } {
+    const children = adjacencyList[node]
+    if (children.length === 0) {
+      sizes[node] = { width: 100, height: 50 }
+      return sizes[node]
+    }
+
+    let width = 0
+    let height = 0
+    for (const child of children) {
+      const childSize = recurse(child, !horizontal)
+
+      if (!horizontal) {
+        width = Math.max(width, childSize.width)
+        height += childSize.height + PADDING
+      } else {
+        width += childSize.width + PADDING
+        height = Math.max(height, childSize.height)
+      }
+    }
+
+    if (horizontal) {
+      width += PADDING // Add padding to the final width
+    } else {
+      height += PADDING // Add padding to the final height
+    }
+
+    sizes[node] = { width, height }
+    return sizes[node]
+  }
+
+  recurse(rootNode, true)
+
+  return sizes
+}
 
 function createClientNodes(wasmScopes: any[]): ClientNode[] {
   let indexOuter = 0
@@ -611,7 +749,10 @@ function buildUnitNodesAndGroups(nodes: ClientNode[]): {
 
   return { unitNodes, groups }
 }
-
+var counter = 0
+function uuid() {
+  return String(counter++)
+}
 function getScopeDetails(scopeLayer: TypeCount, indexGroups: GroupEntry[], stackIndex: number, parentGid: string) {
   const scopeType = scopeLayer.type
   const scopeName = scopeLayer.name

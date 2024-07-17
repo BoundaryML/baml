@@ -95,49 +95,51 @@ const ClientGraph: React.FC = () => {
   const graph = useAtomValue(orchestration_nodes)
   const { nodes, edges } = graph
   // First print all core nodes (node.letter == "D")
-  console.log('Core Nodes')
-  nodes.forEach((node, index) => {
-    if (node.letter === 'D') {
-      console.log(
-        `Core Node ${index}: id: ${node.gid}, letter: ${node.letter}, index: ${node.index}, client_name: ${node.client_name}, parentGid: ${node.parentGid}`,
-      )
-    }
-  })
-  console.log('Box Nodes')
-  // Then print all parent nodes (node.letter != "D")
-  nodes.forEach((node, index) => {
-    if (node.letter !== 'D') {
-      console.log(
-        `Box Node ${index}: id: ${node.gid}, letter: ${node.letter}, index: ${node.index}, client_name: ${node.client_name}, parentGid: ${node.parentGid}`,
-      )
-    }
-  })
+  // console.log('Core Nodes')
+  // nodes.forEach((node, index) => {
+  //   if (node.letter === 'D') {
+  //     console.log(
+  //       `Core Node ${index}: id: ${node.gid}, letter: ${node.letter}, index: ${node.index}, client_name: ${node.client_name}, parentGid: ${node.parentGid}`,
+  //     )
+  //   }
+  // })
+  // console.log('Box Nodes')
+  // // Then print all parent nodes (node.letter != "D")
+  // nodes.forEach((node, index) => {
+  //   if (node.letter !== 'D') {
+  //     console.log(
+  //       `Box Node ${index}: id: ${node.gid}, letter: ${node.letter}, index: ${node.index}, client_name: ${node.client_name}, parentGid: ${node.parentGid}`,
+  //     )
+  //   }
+  // })
 
-  console.log('Edges')
-  edges.forEach((edge, index) => {
-    console.log(`Edge ${index}: from ${edge.from_node} to ${edge.to_node}, weight: ${edge.weight}`)
-  })
+  // console.log('Edges')
+  // edges.forEach((edge, index) => {
+  //   console.log(`Edge ${index}: from ${edge.from_node} to ${edge.to_node}, weight: ${edge.weight}`)
+  // })
 
   const renderNodes: RenderNode[] = []
   let count = 0
 
   for (let idx = 0; idx < nodes.length; idx++) {
     const node = nodes[idx]
-    if (node.letter === 'D') {
-      renderNodes.push({
-        id: node.gid,
-        data: { label: node.client_name ?? '' },
-        position: { x: 0, y: 100 * count++ },
-        style: { backgroundColor: 'green', width: 100, height: 50 },
-      })
-    }
+
+    renderNodes.push({
+      id: node.gid,
+      data: { label: node.client_name ?? 'no name for this node' },
+      // position: { x: 0, y: 100 * count++ },
+      position: { x: 0, y: 0 },
+      style: { backgroundColor: 'green', width: node.Dimension?.width, height: node.Dimension?.height },
+    })
   }
 
-  const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
-    id: idx.toString(),
-    source: edge.from_node,
-    target: edge.to_node,
-  }))
+  // const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
+  //   id: idx.toString(),
+  //   source: edge.from_node,
+  //   target: edge.to_node,
+  // }))
+
+  const renderEdges: RenderEdge[] = []
 
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(renderNodes)
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(renderEdges)
@@ -161,10 +163,10 @@ const ClientGraph: React.FC = () => {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         fitView
-        edgesFocusable={false}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        nodesFocusable={false}
+        // edgesFocusable={false}
+        // nodesDraggable={false}
+        // nodesConnectable={false}
+        // nodesFocusable={false}
       ></ReactFlow>
     </div>
   )
