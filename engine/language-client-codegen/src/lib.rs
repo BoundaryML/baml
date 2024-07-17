@@ -139,11 +139,12 @@ fn version_check_with_error(
     client_type: GeneratorOutputType,
 ) -> Result<()> {
     let res = check_version(
-        runtime_version,
         gen_version,
+        runtime_version,
         generator_type,
         mode,
         client_type,
+        true,
     );
     match res {
         Some(e) => Err(anyhow::anyhow!("Version mismatch: {}", e.msg)),

@@ -22,25 +22,28 @@ import {
   RenameParams,
   TextDocumentSyncKind,
   TextDocuments,
+  FormattingOptions,
+  TextEdit,
 } from 'vscode-languageserver'
 import { URI } from 'vscode-uri'
 
-import debounce from 'lodash/debounce'
-import { TextDocument } from 'vscode-languageserver-textdocument'
-import { IPCMessageReader, IPCMessageWriter, createConnection } from 'vscode-languageserver/node'
-import { getWordAtPosition } from './lib/ast'
+import { exec } from 'child_process'
 // import { FileChangeType } from 'vscode'
 import fs from 'fs'
 // import { cliBuild, cliCheckForUpdates, cliVersion } from './baml-cli'
 import { type ParserDatabase, TestRequest } from '@baml/common'
+import debounce from 'lodash/debounce'
+import { TextDocumentIdentifier } from 'vscode-languageserver-protocol'
+import { TextDocument } from 'vscode-languageserver-textdocument'
+import { IPCMessageReader, IPCMessageWriter, createConnection } from 'vscode-languageserver/node'
 import { z } from 'zod'
+import { cliBuild } from './baml-cli'
+import { bamlConfig, bamlConfigSchema } from './bamlConfig'
+import { getWordAtPosition } from './lib/ast'
 // import { getVersion, getEnginesVersion } from './lib/wasm/internals'
 import BamlProjectManager, { GeneratorDisabledReason, GeneratorStatus, GeneratorType } from './lib/baml_project_manager'
 import type { LSOptions, LSSettings } from './lib/types'
 import { BamlWasm } from './lib/wasm'
-import { bamlConfig, bamlConfigSchema } from './bamlConfig'
-import { cliBuild } from './baml-cli'
-import { exec } from 'child_process'
 
 try {
   // only required on vscode versions 1.89 and below.
@@ -73,32 +76,36 @@ export function startServer(options?: LSOptions): void {
   // Source code: https://github.com/microsoft/vscode-languageserver-node/blob/main/server/src/common/server.ts#L1044
   const connection: Connection = getConnection(options)
   const bamlProjectManager = new BamlProjectManager((params) => {
-    switch (params.type) {
-      case 'runtime_updated':
-        // console.log(`runtime_updated today! ${Object.keys(params.files).length}: ${Object.entries(params.files).length}`)
-        connection.sendRequest('runtime_updated', params)
-        break
-      case 'diagnostic':
-        params.errors.forEach(([uri, diagnostics]) => {
-          connection.sendDiagnostics({ uri: uri, diagnostics: diagnostics })
-        })
+    try {
+      switch (params.type) {
+        case 'runtime_updated':
+          // console.log(`runtime_updated today! ${Object.keys(params.files).length}: ${Object.entries(params.files).length}`)
+          connection.sendRequest('runtime_updated', params)
+          break
+        case 'diagnostic':
+          params.errors.forEach(([uri, diagnostics]) => {
+            connection.sendDiagnostics({ uri: uri, diagnostics: diagnostics })
+          })
 
-        // Determine number of warnings and errors
-        const errors = params.errors.reduce((acc, [, diagnostics]) => {
-          return acc + diagnostics.filter((d) => d.severity === 1).length
-        }, 0)
-        const warnings = params.errors.reduce((acc, [, diagnostics]) => {
-          return acc + diagnostics.filter((d) => d.severity === 2).length
-        }, 0)
-        connection.sendRequest('runtime_diagnostics', { errors, warnings })
-        break
-      case 'error':
-      case 'warn':
-      case 'info':
-        connection.sendNotification('baml/message', { message: params.message, type: params.type ?? 'warn' })
-        break
-      default:
-        console.error(`Unknown notification type ${params}`)
+          // Determine number of warnings and errors
+          const errors = params.errors.reduce((acc, [, diagnostics]) => {
+            return acc + diagnostics.filter((d) => d.severity === 1).length
+          }, 0)
+          const warnings = params.errors.reduce((acc, [, diagnostics]) => {
+            return acc + diagnostics.filter((d) => d.severity === 2).length
+          }, 0)
+          connection.sendRequest('runtime_diagnostics', { errors, warnings })
+          break
+        case 'error':
+        case 'warn':
+        case 'info':
+          connection.sendNotification('baml/message', { message: params.message, type: params.type ?? 'warn' })
+          break
+        default:
+          console.error(`Unknown notification type ${params}`)
+      }
+    } catch (e) {
+      console.error(`Error occurred while sending runtime notification:\n${e}`)
     }
   })
 
@@ -233,7 +240,7 @@ export function startServer(options?: LSOptions): void {
         const stdout = await new Promise<string>((resolve, reject) => {
           exec(versionCommand, (error, stdout, stderr) => {
             if (error) {
-              reject(`Error running baml cli script: ${error}`)
+              reject(`Error running baml-cli: ${error}`)
             } else {
               resolve(stdout)
             }
@@ -245,14 +252,12 @@ export function startServer(options?: LSOptions): void {
         if (version) {
           bamlConfig.cliVersion = version
         } else {
-          throw new Error(`Error parsing baml cli version from output: ${stdout}`)
+          throw new Error(`Error parsing baml-cli version from output: ${stdout}`)
         }
       } catch (error) {
         console.error(error)
-        connection.window.showErrorMessage(`BAML CLI Error: ${error}`)
+        connection.window.showErrorMessage(`baml-cli error: ${error}`)
       }
-    } else {
-      throw new Error('No CLI path found in config')
     }
   }
 
@@ -344,23 +349,25 @@ export function startServer(options?: LSOptions): void {
     console.log('baml config ' + JSON.stringify(bamlConfig.config, null, 2))
     await loadBamlCLIVersion()
 
-    if (bamlConfig.config?.generateCodeOnSave === 'always') {
+    if (bamlConfig.config?.generateCodeOnSave === 'never') {
       return
     }
 
     const proj = bamlProjectManager.getProjectById(documentUri)
 
-    const error = proj.checkVersionOnSave()
-
-    if (error) {
-      connection.sendNotification('baml/message', {
-        type: 'info',
-        message: error,
-        durationMs: 6000,
-      })
-    }
-
     try {
+      const error = proj.checkVersionOnSave()
+
+      if (error) {
+        console.error('Error generating: ' + error)
+        connection.sendNotification('baml/message', {
+          type: 'info',
+          message: error,
+          durationMs: 7000,
+        })
+        return
+      }
+
       if (bamlConfig.config?.cliPath) {
         cliBuild(
           bamlConfig.config?.cliPath!,
@@ -379,7 +386,7 @@ export function startServer(options?: LSOptions): void {
           () => {
             connection.sendNotification('baml/message', {
               type: 'info',
-              message: 'BAML: Client generated! (Using installed baml-cli)',
+              message: 'BAML: Client generated! (Using installed baml-cli ' + bamlConfig.cliVersion + ')',
             })
           },
         )
@@ -534,6 +541,17 @@ export function startServer(options?: LSOptions): void {
   //   }
   // })
 
+  // connection.onDocumentFormatting((params: DocumentFormattingParams): TextEdit[] => {
+  //   const { textDocument, options } = params
+  //   const document = documents.get(textDocument.uri)
+
+  //   if (!document) {
+  //     return []
+  //   }
+
+  //   return formatDocument(document, options)
+  // })
+
   // connection.onCodeAction((params: CodeActionParams) => {
   //   const doc = getDocument(params.textDocument.uri)
   //   if (doc) {
@@ -562,6 +580,10 @@ export function startServer(options?: LSOptions): void {
 
   connection.onRequest('requestDiagnostics', async () => {
     await bamlProjectManager.requestDiagnostics()
+  })
+
+  connection.onRequest('bamlCliVersion', async () => {
+    return bamlConfig.cliVersion
   })
 
   connection.onRequest(

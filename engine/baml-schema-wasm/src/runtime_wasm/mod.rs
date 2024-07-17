@@ -916,6 +916,7 @@ impl WasmRuntime {
         generator_type: &str,
         version_check_mode: &str,
         generator_language: &str,
+        is_diagnostic: bool,
     ) -> Option<String> {
         // Convert string parameters to enums
         let generator_type = match generator_type {
@@ -944,6 +945,7 @@ impl WasmRuntime {
             generator_type,
             version_check_mode,
             generator_language,
+            is_diagnostic,
         )
         .map(|error| error.msg)
     }

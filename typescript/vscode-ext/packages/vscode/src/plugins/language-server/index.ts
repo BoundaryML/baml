@@ -35,6 +35,11 @@ let serverModule: string
 let telemetry: TelemetryReporter
 const intervalTimers: NodeJS.Timeout[] = []
 
+export const bamlConfig: { config: BamlConfig | null; cliVersion: string | null } = {
+  config: null,
+  cliVersion: null,
+}
+
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
 
@@ -44,6 +49,16 @@ export const generateTestRequest = async (test_request: TestRequest): Promise<st
 
 export const requestDiagnostics = async () => {
   await client?.sendRequest('requestDiagnostics')
+}
+
+export const requestBamlCLIVersion = async () => {
+  try {
+    const version = (await client.sendRequest('bamlCliVersion')) as string
+    console.log('Got BAML CLI version', version)
+    bamlConfig.cliVersion = version
+  } catch (e) {
+    console.error('Failed to get BAML CLI version', e)
+  }
 }
 
 export const getBAMLFunctions = async (): Promise<
@@ -77,34 +92,6 @@ const LatestVersions = z.object({
 type LatestVersions = z.infer<typeof LatestVersions>
 
 const bamlCliPath = () => config?.path || 'baml'
-
-const buildUpdateMessage = (latestVersions: LatestVersions): { message: string; command: string } | null => {
-  const shouldUpdateCli = !!latestVersions.cli.recommended_update
-  const shouldUpdateGenerators = latestVersions.generators.filter((g) => g.recommended_update).length > 0
-
-  if (shouldUpdateCli && shouldUpdateGenerators) {
-    return {
-      message: 'Please update BAML and its client libraries',
-      command: `${bamlCliPath()} update && ${bamlCliPath()} update-client`,
-    }
-  }
-
-  if (shouldUpdateCli) {
-    return {
-      message: 'Please update BAML',
-      command: `${bamlCliPath()} update`,
-    }
-  }
-
-  if (shouldUpdateGenerators) {
-    return {
-      message: 'Please update the BAML client libraries',
-      command: `${bamlCliPath()} update-client`,
-    }
-  }
-
-  return null
-}
 
 const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }) => {
   try {
@@ -194,13 +181,13 @@ const activateClient = (
                   customCancellationToken?.dispose()
                   customCancellationToken = null
 
-                  vscode.window.showInformationMessage('Cancelled the progress')
+                  // vscode.window.showInformationMessage('Cancelled the progress')
                   resolve(null)
                   return
                 })
 
                 const totalMs = message.durationMs || 1500 // Total duration in milliseconds (2 seconds)
-                const updateCount = 20 // Number of updates
+                const updateCount = 50 // Number of updates
                 const intervalMs = totalMs / updateCount // Interval between updates
 
                 for (let i = 0; i < updateCount; i++) {
@@ -225,12 +212,16 @@ const activateClient = (
     })
 
     client.onRequest('runtime_diagnostics', ({ errors, warnings }: { errors: number; warnings: number }) => {
-      if (errors > 0) {
-        StatusBarPanel.instance.setStatus({ status: 'fail', count: errors })
-      } else if (warnings > 0) {
-        StatusBarPanel.instance.setStatus({ status: 'warn', count: warnings })
-      } else {
-        StatusBarPanel.instance.setStatus('pass')
+      try {
+        if (errors > 0) {
+          StatusBarPanel.instance.setStatus({ status: 'fail', count: errors })
+        } else if (warnings > 0) {
+          StatusBarPanel.instance.setStatus({ status: 'warn', count: warnings })
+        } else {
+          StatusBarPanel.instance.setStatus('pass')
+        }
+      } catch (e) {
+        console.error('Error updating status bar', e)
       }
     })
 

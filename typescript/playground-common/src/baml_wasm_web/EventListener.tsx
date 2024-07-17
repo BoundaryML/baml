@@ -50,6 +50,7 @@ const envKeyValueStorage = atomWithStorage<[string, string][]>(
   defaultEnvKeyValues,
   vscodeLocalStorageStore,
 )
+export const bamlCliVersionAtom = atom<string | null>(null)
 
 export const resetEnvKeyValuesAtom = atom(null, (get, set) => {
   set(envKeyValueStorage, [])
@@ -482,6 +483,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const wasm = useAtomValue(wasmAtom)
   const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom)
   const envVars = useAtomValue(envVarsAtom)
+  const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
 
   useEffect(() => {
     if (wasm) {
@@ -561,6 +563,10 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
               port: number
             }
           }
+        | {
+            command: 'baml_cli_version'
+            content: string
+          }
       >,
     ) => {
       const { command, content } = event.data
@@ -588,6 +594,10 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           if ('cursor' in content) {
             updateCursor(content.cursor)
           }
+          break
+        case 'baml_cli_version':
+          console.log('Setting baml cli version', content)
+          setBamlCliVersion(content)
           break
 
         case 'remove_project':
@@ -630,7 +640,8 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <>
       <div className='absolute z-50 flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2'>
-        <ErrorCount /> <span>Runtime Version: {version}</span>
+        <div className='pr-4 whitespace-nowrap'>{bamlCliVersion ? 'baml-cli ' + bamlCliVersion : ''}</div>
+        <ErrorCount /> <span>VSCode Runtime Version: {version}</span>
       </div>
       {selectedProject === null ? (
         availableProjects.length === 0 ? (

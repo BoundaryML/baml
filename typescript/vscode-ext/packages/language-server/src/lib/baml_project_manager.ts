@@ -68,15 +68,14 @@ class Project {
     private onSuccess: (e: WasmDiagnosticError, files: Record<string, string>) => void,
   ) {}
 
-  private checkVersion(generator: BamlWasm.WasmGeneratorConfig) {
-    const current_version = BamlWasm.version() // TODO set to CLI or other thing
-
+  private checkVersion(generator: BamlWasm.WasmGeneratorConfig, isDiagnostic: boolean) {
     const message = WasmRuntime.check_version(
       generator.version,
-      current_version,
+      this.getVSCodeGeneratorVersion(),
       bamlConfig?.config?.cliPath ? GeneratorType.VSCodeCLI : GeneratorType.VSCode,
       VersionCheckMode.Strict,
       generator.output_type,
+      isDiagnostic,
     )
     return message
   }
@@ -84,7 +83,7 @@ class Project {
   checkVersionOnSave() {
     let firstErrorMessage: undefined | string = undefined
     this.list_generators().forEach((g) => {
-      const message = this.checkVersion(g)
+      const message = this.checkVersion(g, false)
       if (message) {
         if (!firstErrorMessage) {
           firstErrorMessage = message
@@ -96,42 +95,43 @@ class Project {
   }
 
   getGeneratorDiagnostics() {
-    if (!this.current_runtime) {
-      return
-    }
-    const generators = this.list_generators() // requires runtime
-    const diagnostics = new Map<string, Diagnostic[]>()
-    generators.forEach((g) => {
-      const message = this.checkVersion(g)
-      if (message) {
-        const diagnostic: Diagnostic = {
-          range: {
-            start: { line: g.span.start_line, character: 0 },
-            end: { line: g.span.end_line, character: 0 },
-          },
-          message: message,
-          severity: DiagnosticSeverity.Error,
-          source: 'baml',
-        }
-        diagnostics.set(URI.file(g.span.file_path).toString(), [diagnostic])
+    try {
+      if (!this.current_runtime) {
+        return
       }
-    })
-    return diagnostics
+      const generators = this.list_generators() // requires runtime
+      const diagnostics = new Map<string, Diagnostic[]>()
+      generators.forEach((g) => {
+        const message = this.checkVersion(g, true)
+        if (message) {
+          const diagnostic: Diagnostic = {
+            range: {
+              start: { line: g.span.start_line, character: 0 },
+              end: { line: g.span.end_line, character: 0 },
+            },
+            message: message,
+            severity: DiagnosticSeverity.Error,
+            source: 'baml',
+          }
+          diagnostics.set(URI.file(g.span.file_path).toString(), [diagnostic])
+        }
+      })
+      return diagnostics
+    } catch (e) {
+      console.error(`Error getting generator diagnostics: ${e}`)
+      return new Map<string, Diagnostic[]>()
+    }
   }
 
   private getVSCodeGeneratorVersion() {
     if (bamlConfig.config?.cliPath) {
-      const versionCommand = `${bamlConfig.config.cliPath} --version`
-      exec(versionCommand, (error: Error | null, stdout: string, stderr: string) => {
-        if (error) {
-          console.error(`Error running baml cli script: ${JSON.stringify(error, null, 2)}`)
-
-          return
-        } else {
-          console.log(stdout)
-        }
-      })
+      if (bamlConfig.cliVersion) {
+        return bamlConfig.cliVersion
+      } else {
+        throw new Error('CLI version not available')
+      }
     }
+    return BamlWasm.version()
   }
 
   update_runtime() {
@@ -170,7 +170,7 @@ class Project {
   runtime(): BamlWasm.WasmRuntime {
     const rt = this.current_runtime ?? this.last_successful_runtime
     if (!rt) {
-      throw new Error(`Project is not valid.`)
+      throw new Error(`BAML Generate failed - Project has errors.`)
     }
 
     return rt
@@ -297,7 +297,10 @@ class Project {
   }
 
   list_generators(): BamlWasm.WasmGeneratorConfig[] {
-    return this.runtime().list_generators()
+    if (this.current_runtime == undefined) {
+      throw new Error(`BAML Generate failed. Project has errors.`)
+    }
+    return this.current_runtime.list_generators()
   }
 
   rootPath(): string {
@@ -475,7 +478,7 @@ class BamlProjectManager {
         }
       }
 
-      console.log('diagnostics length: ' + Array.from(diagnostics).length)
+      // console.log('diagnostics length: ' + Array.from(diagnostics).length)
       this.notifier({
         errors: Array.from(diagnostics),
         type: 'diagnostic',
@@ -542,9 +545,9 @@ class BamlProjectManager {
   }
 
   async upsert_file(path: URI, content: string | undefined) {
-    console.debug(
-      `Upserting file: ${path}. Current projects ${this.projects.size} ${JSON.stringify(this.projects, null, 2)}`,
-    )
+    // console.debug(
+    //   `Upserting file: ${path}. Current projects ${this.projects.size} ${JSON.stringify(this.projects, null, 2)}`,
+    // )
     await this.wrapAsync(async () => {
       console.debug(
         `Upserting file: ${path}. current projects  ${this.projects.size}  ${JSON.stringify(this.projects, null, 2)}`,
@@ -611,7 +614,7 @@ class BamlProjectManager {
   // Reload all files in a project
   // Takes in a URI to any file in the project
   async reload_project_files(path: URI) {
-    console.debug(`Reloading project files: ${path}`)
+    // console.debug(`Reloading project files: ${path}`)
     await this.wrapAsync(async () => {
       const rootPath = uriToRootPath(path)
 
