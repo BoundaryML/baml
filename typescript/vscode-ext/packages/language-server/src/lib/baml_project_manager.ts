@@ -1,9 +1,10 @@
-import BamlWasm, { type WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-node'
+import BamlWasm, { WasmRuntime, type WasmDiagnosticError } from '@gloo-ai/baml-schema-wasm-node'
 import { access, mkdir, open, readdir, readFile, rename, rm, writeFile } from 'fs/promises'
 import path from 'path'
 import { type Diagnostic, DiagnosticSeverity, Position, LocationLink, Hover } from 'vscode-languageserver'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 import { CompletionList, CompletionItem } from 'vscode-languageserver'
+import { exec } from 'child_process'
 
 import { existsSync, readFileSync } from 'fs'
 
@@ -40,8 +41,14 @@ export enum GeneratorDisabledReason {
 }
 
 export enum GeneratorType {
-  Cli,
-  VSCode,
+  CLI = 'CLI',
+  VSCode = 'VSCode',
+  VSCodeCLI = 'VSCodeCLI',
+}
+
+export enum VersionCheckMode {
+  Strict = 'Strict',
+  None = 'None',
 }
 
 export type GeneratorStatus = {
@@ -61,58 +68,69 @@ class Project {
     private onSuccess: (e: WasmDiagnosticError, files: Record<string, string>) => void,
   ) {}
 
-  getGeneratorStatus(): GeneratorStatus {
-    const generatorType = bamlConfig.config?.cliPath ? GeneratorType.Cli : GeneratorType.VSCode
-    // for now, if the cli is set, ignore any other checks and let the CLI run.
-    if (generatorType === GeneratorType.Cli) {
-      return { isReady: true, generatorType: generatorType, diagnostics: new Map() }
-    }
+  private checkVersion(generator: BamlWasm.WasmGeneratorConfig) {
+    const current_version = BamlWasm.version() // TODO set to CLI or other thing
 
-    if (this.current_runtime === undefined) {
-      return {
-        isReady: false,
-        generatorType: generatorType,
-        disabledReason: GeneratorDisabledReason.EmptyGenerators,
-        diagnostics: new Map(),
+    const message = WasmRuntime.check_version(
+      generator.version,
+      current_version,
+      bamlConfig?.config?.cliPath ? GeneratorType.VSCodeCLI : GeneratorType.VSCode,
+      VersionCheckMode.Strict,
+      generator.output_type,
+    )
+    return message
+  }
+
+  checkVersionOnSave() {
+    let firstErrorMessage: undefined | string = undefined
+    this.list_generators().forEach((g) => {
+      const message = this.checkVersion(g)
+      if (message) {
+        if (!firstErrorMessage) {
+          firstErrorMessage = message
+        }
+        console.error(message)
       }
-    }
-    const generators = this.list_generators()
-    if (generators.length === 0) {
-      return {
-        isReady: false,
-        generatorType: generatorType,
-        disabledReason: GeneratorDisabledReason.EmptyGenerators,
-        diagnostics: new Map(),
-      }
-    }
-    const versionMismatch = generators.find((g) => {
-      return !semver.satisfies(BamlWasm.version(), `${semver.major(g.version)}.${semver.minor(g.version)}.x`)
     })
-    if (versionMismatch === undefined) {
-      return { isReady: true, generatorType: generatorType, diagnostics: new Map() }
-    }
+    return firstErrorMessage
+  }
 
-    return {
-      isReady: false,
-      generatorType: generatorType,
-      disabledReason: GeneratorDisabledReason.VersionMismatch,
-      problematicGenerator: versionMismatch.output_type,
-      diagnostics: new Map([
-        [
-          URI.file(versionMismatch.span.file_path).toString(),
-          [
-            {
-              range: {
-                start: { line: versionMismatch.span.start_line, character: 0 },
-                end: { line: versionMismatch.span.end_line, character: 0 },
-              },
-              message: `The BAML Generator ${versionMismatch.output_type} version (${versionMismatch.version}), does not match the VSCode BAML Runtime version (${BamlWasm.version()}), so generation of baml_client via VSCode is disabled. \n\nA) Update this version the latest version and update your installed baml package, or \nB) configure VSCode to use the locally installed generator. \nSee https://docs.boundaryml.com/docs/calling-baml/generate-baml-client#best-practices`,
-              severity: DiagnosticSeverity.Error,
-              source: 'baml',
-            },
-          ],
-        ],
-      ]),
+  getGeneratorDiagnostics() {
+    if (!this.current_runtime) {
+      return
+    }
+    const generators = this.list_generators() // requires runtime
+    const diagnostics = new Map<string, Diagnostic[]>()
+    generators.forEach((g) => {
+      const message = this.checkVersion(g)
+      if (message) {
+        const diagnostic: Diagnostic = {
+          range: {
+            start: { line: g.span.start_line, character: 0 },
+            end: { line: g.span.end_line, character: 0 },
+          },
+          message: message,
+          severity: DiagnosticSeverity.Error,
+          source: 'baml',
+        }
+        diagnostics.set(URI.file(g.span.file_path).toString(), [diagnostic])
+      }
+    })
+    return diagnostics
+  }
+
+  private getVSCodeGeneratorVersion() {
+    if (bamlConfig.config?.cliPath) {
+      const versionCommand = `${bamlConfig.config.cliPath} --version`
+      exec(versionCommand, (error: Error | null, stdout: string, stderr: string) => {
+        if (error) {
+          console.error(`Error running baml cli script: ${JSON.stringify(error, null, 2)}`)
+
+          return
+        } else {
+          console.log(stdout)
+        }
+      })
     }
   }
 
@@ -145,8 +163,6 @@ class Project {
           .map(([path, content]) => [URI.file(path).toString(), content]),
       )
       const diagnostics = this.wasmProject.diagnostics(this.current_runtime)
-      const generatorStatus = this.getGeneratorStatus()
-      const newErrors = [...diagnostics.errors(), generatorStatus.diagnostics]
       this.onSuccess(this.wasmProject.diagnostics(this.current_runtime), fileMap)
     }
   }
@@ -446,9 +462,9 @@ class BamlProjectManager {
       })
 
       for (const project of this.projects.values()) {
-        const generatorStatus = project.getGeneratorStatus()
-        if (generatorStatus.diagnostics && generatorStatus.diagnostics.size > 0) {
-          generatorStatus.diagnostics.forEach((diagnosticArray, uri) => {
+        const genDiags = project.getGeneratorDiagnostics()
+        if (genDiags) {
+          genDiags.forEach((diagnosticArray, uri) => {
             if (!diagnostics.has(uri)) {
               diagnostics.set(uri, [])
             }

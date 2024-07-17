@@ -29,15 +29,6 @@
       "type": "object",
       "title": "Baml extension settings",
       "properties": {
-        "baml.versionCheckMode": {
-          "type": "string",
-          "default": "strict",
-          "description": "Check for updates automatically or manually",
-          "enum": [
-            "strict"
-          ],
-          "scope": "machine-overridable"
-        },
         "baml.cliPath": {
           "type": [
             "string",
@@ -52,17 +43,9 @@
           "default": "always",
           "enum": [
             "never",
-            "always",
-            "same-version-only",
-            "use-cli-path"
+            "always"
           ],
           "description": "Generate code on save"
-        },
-        "baml.envCommand": {
-          "type": "string",
-          "default": "env",
-          "description": "Command to run to retrieve environment variables (runs in workspace root)",
-          "scope": "machine-overridable"
         },
         "baml.fileWatcher": {
           "scope": "window",

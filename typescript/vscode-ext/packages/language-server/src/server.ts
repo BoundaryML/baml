@@ -40,6 +40,7 @@ import type { LSOptions, LSSettings } from './lib/types'
 import { BamlWasm } from './lib/wasm'
 import { bamlConfig, bamlConfigSchema } from './bamlConfig'
 import { cliBuild } from './baml-cli'
+import { exec } from 'child_process'
 
 try {
   // only required on vscode versions 1.89 and below.
@@ -209,12 +210,49 @@ export function startServer(options?: LSOptions): void {
       const configResponse = await connection.workspace.getConfiguration('baml')
       console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
       bamlConfig.config = bamlConfigSchema.parse(configResponse)
+      await loadBamlCLIVersion()
     } catch (e: any) {
       if (e instanceof Error) {
         console.log('Error getting config' + e.message + ' ' + e.stack)
       } else {
         console.log('Error getting config' + e)
       }
+    }
+  }
+
+  async function loadBamlCLIVersion(): Promise<void> {
+    function parseVersion(input: string): string | null {
+      const versionPattern = /(\d+\.\d+\.\d+)/
+      const match = input.match(versionPattern)
+      return match ? match[0] : null
+    }
+
+    if (bamlConfig.config?.cliPath) {
+      const versionCommand = `${bamlConfig.config.cliPath} --version`
+      try {
+        const stdout = await new Promise<string>((resolve, reject) => {
+          exec(versionCommand, (error, stdout, stderr) => {
+            if (error) {
+              reject(`Error running baml cli script: ${error}`)
+            } else {
+              resolve(stdout)
+            }
+          })
+        })
+
+        console.log(stdout)
+        const version = parseVersion(stdout)
+        if (version) {
+          bamlConfig.cliVersion = version
+        } else {
+          throw new Error(`Error parsing baml cli version from output: ${stdout}`)
+        }
+      } catch (error) {
+        console.error(error)
+        connection.window.showErrorMessage(`BAML CLI Error: ${error}`)
+      }
+    } else {
+      throw new Error('No CLI path found in config')
     }
   }
 
@@ -304,32 +342,26 @@ export function startServer(options?: LSOptions): void {
     await bamlProjectManager.save_file(documentUri, change.document.getText())
 
     console.log('baml config ' + JSON.stringify(bamlConfig.config, null, 2))
-    if (bamlConfig.config?.generateCodeOnSave === 'never') {
+    await loadBamlCLIVersion()
+
+    if (bamlConfig.config?.generateCodeOnSave === 'always') {
       return
     }
+
     const proj = bamlProjectManager.getProjectById(documentUri)
-    const generationStatus = proj?.getGeneratorStatus()
 
-    // We need to do some of this logic in VSCode (not the CLI, since vscode needs to be able to surface warnings or even diagnostics when things mismatch)
-    if (!generationStatus.isReady) {
-      if (generationStatus.disabledReason === GeneratorDisabledReason.EmptyGenerators) {
-        return
-      }
+    const error = proj.checkVersionOnSave()
 
+    if (error) {
       connection.sendNotification('baml/message', {
-        type: 'warn',
-        message:
-          'BAML: Code generation disabled. Extension version (' +
-          BamlWasm.version() +
-          ') no longer matches the version in your ' +
-          generationStatus.problematicGenerator +
-          ' BAML Generator. [See fix](https://docs.boundaryml.com/docs/calling-baml/generate-baml-client#best-practices)',
+        type: 'info',
+        message: error,
         durationMs: 6000,
       })
-      return
     }
+
     try {
-      if (generationStatus.generatorType === GeneratorType.Cli) {
+      if (bamlConfig.config?.cliPath) {
         cliBuild(
           bamlConfig.config?.cliPath!,
           URI.file(proj.rootPath()),

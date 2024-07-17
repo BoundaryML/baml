@@ -10,6 +10,8 @@ use baml_runtime::{
 };
 use baml_types::{BamlMap, BamlValue};
 
+use internal_baml_codegen::version_check::GeneratorType;
+use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -905,6 +907,45 @@ impl WasmRuntime {
                 },
             })
             .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn check_version(
+        generator_version: &str,
+        current_version: &str,
+        generator_type: &str,
+        version_check_mode: &str,
+        generator_language: &str,
+    ) -> Option<String> {
+        // Convert string parameters to enums
+        let generator_type = match generator_type {
+            "VSCodeCLI" => GeneratorType::VSCodeCLI,
+            "VSCode" => GeneratorType::VSCode,
+            "CLI" => GeneratorType::CLI,
+            _ => return Some("Invalid generator type".to_string()),
+        };
+
+        let version_check_mode = match version_check_mode {
+            "Strict" => VersionCheckMode::Strict,
+            "None" => VersionCheckMode::None,
+            _ => return Some("Invalid version check mode".to_string()),
+        };
+
+        let generator_language = match generator_language {
+            "python/pydantic" => GeneratorOutputType::PythonPydantic,
+            "typescript" => GeneratorOutputType::Typescript,
+            "ruby/sorbet" => GeneratorOutputType::RubySorbet,
+            _ => return Some("Invalid generator language".to_string()),
+        };
+
+        check_version(
+            generator_version,
+            current_version,
+            generator_type,
+            version_check_mode,
+            generator_language,
+        )
+        .map(|error| error.msg)
     }
 
     #[wasm_bindgen]

@@ -136,23 +136,23 @@ pub(crate) fn parse_generator(
         }
     };
 
-    match parse_required_key(&args, "version", ast_generator.span()) {
-        Ok((version_str, version_span)) => match Version::parse(version_str) {
+    match parse_optional_key(&args, "version") {
+        Ok(Some(version_str)) => match Version::parse(version_str) {
             Ok(version) => {
                 builder.version(version.to_string());
             }
             Err(_) => {
                 errors.push(DatamodelError::new_validation_error(
                     &format!("Invalid semver version string: '{}'", version_str),
-                    version_span.clone(),
+                    args.get("version").unwrap().span().clone(),
                 ));
             }
         },
-        Err(_) => {
-            errors.push(DatamodelError::new_validation_error(
-                "Missing 'version' property in your generator. It must match the baml package version you have installed in your project and the VSCode extension, like 'version \"0.50.0\"'",
-                ast_generator.span().clone(),
-            ));
+        Ok(None) => {
+            builder.version("0.0.0".to_string());
+        }
+        Err(err) => {
+            errors.push(err);
         }
     }
 
