@@ -640,7 +640,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <>
       <div className='absolute z-50 flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2'>
-        <div className='pr-4 whitespace-nowrap'>{bamlCliVersion ? 'baml-cli ' + bamlCliVersion : ''}</div>
+        <div className='pr-4 whitespace-nowrap'>{bamlCliVersion && 'baml-cli ' + bamlCliVersion}</div>
         <ErrorCount /> <span>VSCode Runtime Version: {version}</span>
       </div>
       {selectedProject === null ? (

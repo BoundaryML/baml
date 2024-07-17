@@ -144,7 +144,9 @@ pub(crate) fn parse_generator(
             Err(_) => {
                 errors.push(DatamodelError::new_validation_error(
                     &format!("Invalid semver version string: '{}'", version_str),
-                    args.get("version").unwrap().span().clone(),
+                    args.get("version")
+                        .map(|arg| arg.span().clone())
+                        .unwrap_or_else(|| ast_generator.span().clone()),
                 ));
             }
         },

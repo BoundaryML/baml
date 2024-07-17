@@ -111,13 +111,6 @@ pub trait GenerateClient {
         -> Result<GenerateOutput>;
 }
 
-pub fn versions_equal_ignoring_patch(v1: &str, v2: &str) -> bool {
-    let version1 = Version::parse(v1).unwrap();
-    let version2 = Version::parse(v2).unwrap();
-
-    version1.major == version2.major && version1.minor == version2.minor
-}
-
 // Assume VSCode is the only one that uses WASM, and it does call this method but at a different time.
 #[cfg(target_arch = "wasm32")]
 fn version_check_with_error(

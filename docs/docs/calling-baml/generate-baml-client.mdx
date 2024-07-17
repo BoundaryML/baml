@@ -163,29 +163,7 @@ Only the minor and major versions are checked for compatibility (0.0.x).
 You can also tweak the generator settings below for a better experience.
 
 #### VSCode generator settings
-<ParamField
-  path="baml.cliPath"
-  type="string"
-  default="null"
->
-If set, will make the extension use the baml-cli you have installed on your system to generate the client. This prevents mismatches between the generated code and the installed BAML package.  
-<img src="/assets/images/docs_latest/vscode/vscode-settings.png"/>
-
-If you use unix, you can run `where baml-cli` in your project to figure out what the path is.
-
-If you have multiple BAML projects, ensure that this path is set to baml package installed for that project.
-</ParamField>
-
-<ParamField
-  path="baml.generateCodeOnSave"
-  type="string"
-  default="'always'"
->
-Possible options: `always`, `never`.
-
-
-If you choose `never`, you will have to run the `baml-cli generate` command manually.
-</ParamField>
+<Markdown src="/docs/doc-snippets/vscode-settings.mdx" />
 
 <br/>
 <br/>

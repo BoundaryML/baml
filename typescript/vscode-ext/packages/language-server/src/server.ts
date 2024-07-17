@@ -256,7 +256,9 @@ export function startServer(options?: LSOptions): void {
         }
       } catch (error) {
         console.error(error)
-        connection.window.showErrorMessage(`baml-cli error: ${error}`)
+        connection.window.showErrorMessage(
+          `baml.cliPath error: ${error}\n Is the baml.cliPath setting configured properly?`,
+        )
       }
     }
   }
