@@ -43,3 +43,69 @@ test_deserializer!(
     FieldType::map(FieldType::string(), FieldType::class("Foo")).into(),
     {"first":{"a": 1, "b": "hello"}, "second":{"a": 2, "b": "world"}}
 );
+
+test_deserializer!(
+    test_unterminated_map,
+    "",
+    r#"
+{
+    "a": "b
+"#,
+    FieldType::map(FieldType::string(), FieldType::string()).into(),
+    {"a": "b\n"}
+);
+
+test_deserializer!(
+    test_unterminated_nested_map,
+    "",
+    r#"
+{
+    "a": {
+        "b": "c",
+        "d":
+"#,
+    FieldType::map(FieldType::string(), FieldType::map(FieldType::string(), FieldType::optional(FieldType::string()))).into(),
+    // NB: we explicitly drop "d" in this scenario, even though the : gives us a signal that it's a key,
+    // and we could default to 'null' for the value, because this is reasonable behavior
+    {"a": {"b": "c"}}
+);
+
+test_deserializer!(
+    test_map_with_newlines_in_keys,
+    "",
+    r#"
+{
+    "a
+    ": "b"}
+"#,
+    FieldType::map(FieldType::string(), FieldType::string()).into(),
+    {"a\n    ": "b"}
+);
+
+test_deserializer!(
+    test_map_key_coercion,
+    "",
+    r#"
+{
+    5: "b",
+    2.17: "e",
+    null: "n"
+}
+"#,
+    FieldType::map(FieldType::string(), FieldType::string()).into(),
+    {"5": "b", "2.17": "e", "null": "n"}
+);
+
+// test_deserializer!(
+//     test_map_key_coercion,
+//     "",
+//     r#"
+// {
+//     5: "b"
+//     2.17: "e"
+//     null: "n"
+// }
+// "#,
+//     FieldType::map(FieldType::string(), FieldType::string()).into(),
+//     {"5": "b", "2.17": "e", "null": "n"}
+// );
