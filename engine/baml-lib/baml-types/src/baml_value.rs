@@ -119,6 +119,13 @@ impl BamlValue {
         }
     }
 
+    pub fn as_int(&self) -> Option<i64> {
+        match self {
+            BamlValue::Int(i) => Some(*i),
+            _ => None,
+        }
+    }
+
     pub fn as_str(&self) -> Option<&str> {
         match self {
             BamlValue::String(s) => Some(s),

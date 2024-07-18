@@ -1013,7 +1013,9 @@ impl WasmFunction {
         rt: &WasmRuntime,
         params: JsValue,
     ) -> Result<WasmPrompt, wasm_bindgen::JsError> {
-        let params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
+        let mut params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
+        let node_index = params.shift_remove("node_index");
+
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
         let ctx = rt
             .runtime
@@ -1022,7 +1024,12 @@ impl WasmFunction {
 
         rt.runtime
             .internal()
-            .render_prompt(&self.name, &ctx, &params, None)
+            .render_prompt(
+                &self.name,
+                &ctx,
+                &params,
+                node_index.and_then(|v| v.as_int().map(|i| i as usize)),
+            )
             .as_ref()
             .map(|(p, scope)| (p, scope).into())
             .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
@@ -1035,7 +1042,11 @@ impl WasmFunction {
         params: JsValue,
         stream: bool,
     ) -> Result<String, wasm_bindgen::JsError> {
-        let params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
+        let mut params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
+        let node_index = params
+            .shift_remove("node_index")
+            .and_then(|v| v.as_int().map(|i| i as usize));
+
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
 
         let ctx = rt
@@ -1043,10 +1054,10 @@ impl WasmFunction {
             .create_ctx_manager(BamlValue::String("wasm".to_string()))
             .create_ctx_with_default(missing_env_vars.iter());
 
-        let result = rt
-            .runtime
-            .internal()
-            .render_prompt(&self.name, &ctx, &params, None);
+        let result =
+            rt.runtime
+                .internal()
+                .render_prompt(&self.name, &ctx, &params, node_index.clone());
 
         let final_prompt = match result {
             Ok((prompt, _)) => match prompt {
@@ -1058,7 +1069,7 @@ impl WasmFunction {
 
         rt.runtime
             .internal()
-            .render_raw_curl(&self.name, &ctx, &final_prompt, stream, None)
+            .render_raw_curl(&self.name, &ctx, &final_prompt, stream, node_index)
             .await
             .map_err(|e| wasm_bindgen::JsError::new(format!("{e:#?}").as_str()))
     }

@@ -68,7 +68,7 @@ export const envKeyValuesAtom = atom(
     get,
     set,
     update: // Update value
-    | { itemIndex: number; value: string }
+      | { itemIndex: number; value: string }
       // Update key
       | { itemIndex: number; newKey: string }
       // Remove key
@@ -358,6 +358,7 @@ const asyncCurlAtom = atom(async (get) => {
   const runtime = get(selectedRuntimeAtom)
   const func = get(selectedFunctionAtom)
   const test_case = get(selectedTestCaseAtom)
+  const orch_index = get(orchIndexAtom)
 
   if (!runtime || !func || !test_case) {
     return 'Not yet ready'
@@ -367,7 +368,11 @@ const asyncCurlAtom = atom(async (get) => {
       .filter((i): i is WasmParam & { value: string } => i.value !== undefined)
       .map((input) => [input.name, JSON.parse(input.value)]),
   )
+  params['node_index'] = orch_index
+
   try {
+    console.log(`Orchestrator index: ${orch_index}`)
+
     return await func.render_raw_curl(runtime, params, get(streamCurl))
   } catch (e) {
     console.error(e)
@@ -381,6 +386,7 @@ export const renderPromptAtom = atom((get) => {
   const runtime = get(selectedRuntimeAtom)
   const func = get(selectedFunctionAtom)
   const test_case = get(selectedTestCaseAtom)
+  const orch_index = get(orchIndexAtom)
 
   if (!runtime || !func || !test_case) {
     return null
@@ -391,8 +397,10 @@ export const renderPromptAtom = atom((get) => {
       .filter((i): i is WasmParam & { value: string } => i.value !== undefined)
       .map((input) => [input.name, JSON.parse(input.value)]),
   )
+  params['node_index'] = orch_index
 
   try {
+    console.log(`Orchestrator index: ${orch_index}`)
     return func.render_prompt(runtime, params)
   } catch (e) {
     if (e instanceof Error) {
@@ -409,9 +417,10 @@ export interface TypeCount {
 
   // range from 0 to n
   index: number
-
-  // only for Round Robin
   scope_name: string
+
+  //only for retry
+  retry_delay?: number
 }
 
 const getTypeLetter = (type: string): string => {
@@ -449,11 +458,12 @@ export interface Edge {
 export interface NodeEntry {
   gid: ReturnType<typeof uuid>
   weight?: number
+  node_index?: number
 }
 export interface GroupEntry {
   letter: string
   index: number
-  index_name?: string
+  orch_index?: number
   client_name?: string
   gid: ReturnType<typeof uuid>
   parentGid?: ReturnType<typeof uuid>
@@ -465,6 +475,8 @@ export interface Dimension {
   width: number
   height: number
 }
+
+export const orchIndexAtom = atom(0)
 
 export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
   const func = get(selectedFunctionAtom)
@@ -481,19 +493,23 @@ export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edg
 
   const nodes = createClientNodes(wasmScopes)
 
-  nodes.forEach((node, index) => {
-    console.log(`Node ${index}:`, {
-      name: node.name,
-      type: node.type,
-      identifier: node.identifier.map((id) => `${id.type}${id.index}`).join(' | '),
-    })
-  })
-
   const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
+
+  console.log('Unit Nodes:', unitNodes)
 
   const edges = createEdges(unitNodes)
 
+  console.log('Edges:', edges)
   const positionedNodes = getPositions(groups)
+
+  console.log('Positioned Nodes', positionedNodes)
+
+  positionedNodes.forEach((posNode) => {
+    const correspondingUnitNode = unitNodes.find((unitNode) => unitNode.gid === posNode.gid)
+    if (correspondingUnitNode) {
+      posNode.orch_index = correspondingUnitNode.node_index
+    }
+  })
 
   return { nodes: positionedNodes, edges }
 })
@@ -559,7 +575,7 @@ function getCoordinates(
 
   const coordinates: { [key: string]: Position } = {}
 
-  const PADDING = 50 // Define a constant padding value
+  const PADDING = 60 // Define a constant padding value
 
   function recurse(node: string, horizontal: boolean, x: number, y: number): { x: number; y: number } {
     const children = adjacencyList[node]
@@ -598,7 +614,7 @@ function getSizes(
 
   const sizes: { [key: string]: { width: number; height: number } } = {}
 
-  const PADDING = 50 // Define a constant padding value
+  const PADDING = 60 // Define a constant padding value
 
   function recurse(node: string, horizontal: boolean): { width: number; height: number } {
     const children = adjacencyList[node]
@@ -640,6 +656,12 @@ function createClientNodes(wasmScopes: any[]): ClientNode[] {
   let indexOuter = 0
   const nodes: ClientNode[] = []
 
+  // nodes.push({
+  //   name: 'start',
+  //   node_index: -1,
+  //   type: 'S',
+  //   identifier: [{ type: 'S', index: 0, scope_name: 'Start' }] as TypeCount[],
+  // })
   for (const scope of wasmScopes) {
     const scopeInfo = scope.get_orchestration_scope_info()
     const scopePath = scopeInfo as any[]
@@ -658,26 +680,16 @@ function createClientNodes(wasmScopes: any[]): ClientNode[] {
       identifier: stackGroup,
     }
 
-    switch (lastScope.type) {
-      case 'Retry':
-        clientNode.node_index = lastScope.count
-        clientNode.retry_delay = lastScope.delay
-        break
-      case 'RoundRobin':
-        clientNode.round_robin_name = lastScope.strategy_name
-        break
-      case 'Fallback':
-        clientNode.type = lastScope.type
-        break
-      case 'Direct':
-        break
-      default:
-        console.error('Unknown scope type')
-    }
-
     nodes.push(clientNode)
     indexOuter++
   }
+
+  // nodes.push({
+  //   name: 'end',
+  //   node_index: indexOuter++,
+  //   type: 'E',
+  //   identifier: [{ type: 'E', index: 0, scope_name: 'End' }] as TypeCount[],
+  // })
 
   return nodes
 }
@@ -694,6 +706,10 @@ function createStackGroup(scopePath: any[]): TypeCount[] {
       index: indexVal,
       scope_name: scope.type === 'RoundRobin' ? scope.strategy_name : scope.name ?? 'SOME_NAME',
     })
+
+    if (scope.type === 'Retry') {
+      stackGroup[stackGroup.length - 1].retry_delay = scope.delay
+    }
   }
 
   return stackGroup
@@ -707,10 +723,11 @@ function buildUnitNodesAndGroups(nodes: ClientNode[]): {
   const groups: { [gid: string]: GroupEntry } = {}
   const prevNodeIndexGroups: GroupEntry[] = []
 
-  for (const node of nodes) {
+  for (let index = 0; index < nodes.length; index++) {
+    const node = nodes[index]
     const stackGroup = node.identifier
     let parentGid = ''
-
+    let retry_cost = -1
     for (let stackIndex = 0; stackIndex < stackGroup.length; stackIndex++) {
       const scopeLayer = stackGroup[stackIndex]
       const prevScopeIdx = stackIndex > 0 ? stackGroup[stackIndex - 1].index : 0
@@ -738,11 +755,16 @@ function buildUnitNodesAndGroups(nodes: ClientNode[]): {
       }
 
       parentGid = curGid
+
+      if (scopeLayer.type === 'R' && scopeLayer.retry_delay !== 0) {
+        retry_cost = scopeLayer.retry_delay ?? -1
+      }
     }
 
     unitNodes.push({
       gid: parentGid,
-      ...(node.type === 'Retry' && { weight: node.retry_delay }),
+      node_index: index,
+      ...(retry_cost !== -1 && { weight: retry_cost }),
     })
   }
 
@@ -811,20 +833,20 @@ const ErrorCount: React.FC = () => {
   const { errors, warnings } = useAtomValue(numErrorsAtom)
   if (errors === 0 && warnings === 0) {
     return (
-      <div className="flex flex-row items-center gap-1 text-green-600">
+      <div className='flex flex-row items-center gap-1 text-green-600'>
         <CheckCircle size={12} />
       </div>
     )
   }
   if (errors === 0) {
     return (
-      <div className="flex flex-row items-center gap-1 text-yellow-600">
+      <div className='flex flex-row items-center gap-1 text-yellow-600'>
         {warnings} <AlertTriangle size={12} />
       </div>
     )
   }
   return (
-    <div className="flex flex-row items-center gap-1 text-red-600">
+    <div className='flex flex-row items-center gap-1 text-red-600'>
       {errors} <XCircle size={12} /> {warnings} <AlertTriangle size={12} />{' '}
     </div>
   )
@@ -1022,7 +1044,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <>
-      <div className="absolute z-50 flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2">
+      <div className='absolute z-50 flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2'>
         <ErrorCount /> <span>Runtime Version: {version}</span>
       </div>
       {selectedProject === null ? (

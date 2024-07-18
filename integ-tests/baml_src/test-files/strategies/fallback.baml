@@ -16,7 +16,7 @@ client<llm> FallbackClient {
     strategy [
       FaultyClient
       FaultyClient
-
+      Gemini
       // Lottery_SimpleSyntax
 
       SecondaryFallback
@@ -57,7 +57,7 @@ function TestFallbackClient() -> string {
 }
 client<llm> Lottery_SimpleSyntax {
   provider baml-round-robin
-  retry_policy Constant
+  retry_policy Exponential
   options {
     strategy [
       GPT35
