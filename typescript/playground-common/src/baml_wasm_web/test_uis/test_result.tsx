@@ -22,7 +22,7 @@ import {
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import JsonView from 'react18-json-view'
 import clsx from 'clsx'
-import { FilterIcon, Link2Icon, PlayIcon, PlusIcon } from 'lucide-react'
+import { Check, Copy, FilterIcon, Link2Icon, PlayIcon, PlusIcon } from 'lucide-react'
 import { selectedFunctionAtom, selectedTestCaseAtom } from '../EventListener'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import FunctionTestSnippet from '../../shared/TestSnippet'
@@ -56,7 +56,7 @@ const TestStatusIcon: React.FC<{
           done: (
             <div className='flex flex-row items-center gap-1'>
               {testStatus && <TestStatusMessage testStatus={testStatus} />}
-              {traceUrl && <Link2Icon className='hover:underline icon-link w-3 h-3 inline text-center' />}
+              {traceUrl && <Link2Icon className='inline w-3 h-3 text-center hover:underline icon-link' />}
             </div>
           ),
           error: (
@@ -101,6 +101,13 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
   doneStatus,
   testLatency,
 }) => {
+  const [copiedRaw, setCopiedRaw] = useState(false)
+  const [copiedParsed, setCopiedParsed] = useState(false)
+  const copyToClipboard = (text: string, setCopied: React.Dispatch<React.SetStateAction<boolean>>) => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
   const failure = test.failure_message()
   const llm_response = test.llm_response()
   const llm_failure = test.llm_failure()
@@ -149,8 +156,17 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
                 : `Raw LLM Response (${llm_response?.output_tokens} tokens):`}
               <div className='px-1 py-2'>
                 {llm_response && (
-                  <pre className='px-1 py-2 whitespace-pre-wrap rounded-sm bg-vscode-input-background max-h-[200px] overflow-y-auto'>
+                  <pre className='px-1 py-2 whitespace-pre-wrap rounded-sm bg-vscode-input-background max-h-[300px] overflow-y-auto relative pr-2'>
                     {llm_response.content}
+                    <div className='absolute flex items-center top-1 right-1'>
+                      <button
+                        className='text-vscode-foreground hover:text-vscode-button-foreground'
+                        onClick={() => copyToClipboard(llm_response.content, setCopiedRaw)}
+                      >
+                        {copiedRaw ? <Check size={16} /> : <Copy size={16} />}
+                      </button>
+                      {copiedRaw && <span className='ml-1 text-xs text-vscode-foreground'>Copied</span>}
+                    </div>
                   </pre>
                 )}
                 {llm_failure && (
@@ -175,19 +191,30 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
               </div>
             </div>
             {(doneStatus === 'parse_failed' || parsed !== undefined) && (
-              <div className='flex flex-col'>
+              <div className='relative flex flex-col'>
                 Parsed LLM Response:
-                <div className='px-1 py-2'>
+                <div className='relative px-1 py-2'>
                   {failure && <pre className='text-xs whitespace-pre-wrap text-vscode-errorForeground'>{failure}</pre>}
                   {parsed !== undefined && (
-                    <JsonView
-                      enableClipboard={false}
-                      className='bg-[#1E1E1E] px-1 py-1 rounded-sm'
-                      theme='a11y'
-                      collapseStringsAfterLength={200}
-                      matchesURL
-                      src={sorted_parsed}
-                    />
+                    <>
+                      <JsonView
+                        enableClipboard={false}
+                        className='bg-[#1E1E1E] px-1 py-1 rounded-sm'
+                        theme='a11y'
+                        collapseStringsAfterLength={200}
+                        matchesURL
+                        src={sorted_parsed}
+                      />
+                      <div className='absolute flex items-center top-3 right-2'>
+                        <button
+                          className='text-vscode-descriptionForeground hover:text-vscode-foreground'
+                          onClick={() => copyToClipboard(JSON.stringify(sorted_parsed, null, 2), setCopiedParsed)}
+                        >
+                          {copiedParsed ? <Check size={16} /> : <Copy size={16} />}
+                        </button>
+                        {copiedParsed && <span className='ml-1 text-xs text-vscode-foreground'>Copied</span>}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
