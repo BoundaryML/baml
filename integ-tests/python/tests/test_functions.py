@@ -107,14 +107,11 @@ async def test_should_work_with_image_url():
     )
     assert_that(res.lower()).matches(r"(green|yellow|shrek|ogre)")
 
+
 @pytest.mark.asyncio
 async def test_should_work_with_vertex():
-    res = await b.TestVertex(
-      "donkey kong"
-  
-    )
+    res = await b.TestVertex("donkey kong")
     assert_that("donkey kong" in res.lower())
-
 
 
 @pytest.mark.asyncio
@@ -556,6 +553,41 @@ async def test_stream_dynamic_class_output():
     print("final ", final.model_dump())
     print("final ", final.model_dump_json())
     assert final.hair_color == "black"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_inputs_list():
+    tb = TypeBuilder()
+    tb.DynInputOutput.add_property("new_key", tb.string().optional())
+    custom_class = tb.add_class("MyBlah")
+    custom_class.add_property("nestedKey1", tb.string())
+    tb.DynInputOutput.add_property("blah", custom_class.type())
+
+    res = await b.DynamicListInputOutput(
+        [
+            {
+                "new_key": "hi",
+                "testKey": "myTest",
+                "blah": {
+                    "nestedKey1": "nestedVal",
+                },
+            },
+            {
+                "new_key": "hi",
+                "testKey": "myTest",
+                "blah": {
+                    "nestedKey1": "nestedVal",
+                },
+            },
+        ],
+        {"tb": tb},
+    )
+    assert res[0].new_key == "hi"
+    assert res[0].testKey == "myTest"
+    assert res[0].blah["nestedKey1"] == "nestedVal"
+    assert res[1].new_key == "hi"
+    assert res[1].testKey == "myTest"
+    assert res[1].blah["nestedKey1"] == "nestedVal"
 
 
 @pytest.mark.asyncio
