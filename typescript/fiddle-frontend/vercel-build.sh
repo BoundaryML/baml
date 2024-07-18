@@ -6,7 +6,7 @@ export PATH="/vercel/.cargo/bin:$PATH"
 source $HOME/.cargo/env
 
 which cargo
-clang --version
+# clang --version
 llvm-config --version
 
 
