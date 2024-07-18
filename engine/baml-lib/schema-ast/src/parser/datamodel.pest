@@ -131,7 +131,7 @@ base_type      = { array_notation | map | identifier | group | tuple }
 array_suffix   = { "[]" }
 array_notation = { base_type_without_array ~ array_suffix+ }
 
-map   = { "map<" ~ field_type ~ "," ~ field_type ~ ">" }
+map   = { "map" ~ "<" ~ field_type ~ "," ~ field_type ~ ">" }
 group = { "(" ~ field_type ~ ")" }
 tuple = { "(" ~ field_type ~ ("," ~ field_type)+ ~ ")" }
 
