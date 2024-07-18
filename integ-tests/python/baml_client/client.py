@@ -1162,7 +1162,7 @@ class BamlClient:
     
     async def TestFallbackClient(
         self,
-        
+        input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
@@ -1175,7 +1175,7 @@ class BamlClient:
       raw = await self.__runtime.call_function(
         "TestFallbackClient",
         {
-          
+          "input": input,
         },
         self.__ctx_manager.get(),
         tb,
@@ -3150,7 +3150,7 @@ class BamlStreamClient:
     
     def TestFallbackClient(
         self,
-        
+        input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
       __tb__ = baml_options.get("tb", None)
@@ -3163,6 +3163,7 @@ class BamlStreamClient:
       raw = self.__runtime.stream_function(
         "TestFallbackClient",
         {
+          "input": input,
         },
         None,
         self.__ctx_manager.get(),

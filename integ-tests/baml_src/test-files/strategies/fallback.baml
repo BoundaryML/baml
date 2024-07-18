@@ -48,11 +48,11 @@ client<llm> TertiaryFallback {
   }
 }
 
-function TestFallbackClient() -> string {
+function TestFallbackClient(input: string) -> string {
   client FallbackClient
   // TODO make it return the client name instead
   prompt #"
-    Say a haiku about mexico.
+    Say a haiku about {{input}}.
   "#
 }
 client<llm> Lottery_SimpleSyntax {
@@ -80,6 +80,6 @@ function TestRoundRobin() ->string{
 test TestName {
   functions [TestFallbackClient, TestRoundRobin]
   args {
-
+    input mexico
   }
 }

@@ -778,13 +778,13 @@ export class BamlClient {
   }
   
   async TestFallbackClient(
-      
+      input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestFallbackClient",
       {
-        
+        "input": input
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -2146,13 +2146,13 @@ class BamlStreamClient {
   }
   
   TestFallbackClient(
-      
+      input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFallbackClient",
       {
-        
+        "input": input
       },
       undefined,
       this.ctx_manager.cloneContext(),

@@ -522,6 +522,7 @@ const TestResults: React.FC = () => {
   const selectedFunction = useAtomValue(selectedFunctionAtom)
   const [showTests, setShowTests] = useAtom(showTestsAtom)
   const [showClientGraph, setClientGraph] = useAtom(showClientGraphAtom)
+  const setOrchIndex = useSetAtom(orchIndexAtom)
 
   // reset the tab when switching funcs
   useEffect(() => {
@@ -541,6 +542,7 @@ const TestResults: React.FC = () => {
           onClick={() => {
             setShowTests(false)
             setClientGraph(false)
+            setOrchIndex(0)
           }}
         >
           All Tests
@@ -555,6 +557,7 @@ const TestResults: React.FC = () => {
           onClick={() => {
             setShowTests(true)
             setClientGraph(false)
+            setOrchIndex(0)
           }}
         >
           Test Results

@@ -971,16 +971,18 @@ module Baml
 
     sig {
       
-      returns(String)
+      params(
+        input: String,
+      ).returns(String)
       
     }
     def TestFallbackClient(
-        
+        input:
     )
       raw = @runtime.call_function(
         "TestFallbackClient",
         {
-          
+          "input" => input,
         },
         @ctx_manager,
       )
@@ -2322,16 +2324,16 @@ module Baml
 
     sig {
       params(
-        
+        input: String,
       ).returns(Baml::BamlStream[String])
     }
     def TestFallbackClient(
-        
+        input:
     )
       raw = @runtime.stream_function(
         "TestFallbackClient",
         {
-          
+          "input" => input,
         },
         @ctx_manager,
       )
