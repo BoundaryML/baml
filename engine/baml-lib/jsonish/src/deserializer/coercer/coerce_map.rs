@@ -33,6 +33,7 @@ pub(super) fn coerce_map(
     }
 
     let mut flags = DeserializerConditions::new();
+    flags.add_flag(Flag::ObjectToMap(value.clone()));
 
     match &value {
         crate::jsonish::Value::Object(obj) => {

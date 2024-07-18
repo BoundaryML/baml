@@ -39,6 +39,7 @@ impl WithScore for Flag {
             Flag::ObjectFromFixedJson(_) => 0,
             Flag::ObjectFromMarkdown(s) => *s,
             Flag::DefaultButHadUnparseableValue(_) => 2,
+            Flag::ObjectToMap(_) => 1,
             Flag::ObjectToString(_) => 2,
             Flag::ObjectToPrimitive(_) => 2,
             Flag::ExtraKey(_, _) => 1,

@@ -1,3 +1,5 @@
+use crate::BamlValueWithFlags;
+
 use super::*;
 
 test_deserializer!(
@@ -109,3 +111,69 @@ test_deserializer!(
 //     FieldType::map(FieldType::string(), FieldType::string()).into(),
 //     {"5": "b", "2.17": "e", "null": "n"}
 // );
+
+#[test_log::test]
+fn test_union_of_class_and_map() {
+    let file_content = r#"
+    class Foo {
+        a string
+        b string
+    }"#;
+    let target_type = FieldType::union(vec![
+        FieldType::class("Foo"),
+        FieldType::map(FieldType::string(), FieldType::string()),
+    ])
+    .into();
+    let llm_output = r#"{"a": 1, "b": "hello"}"#;
+    let expected = json!({"a": "1", "b": "hello"});
+
+    let ir = load_test_ir(file_content);
+    let target = render_output_format(&ir, &target_type, &Default::default()).unwrap();
+
+    let result = from_str(&target, &target_type, llm_output, false);
+
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+
+    let value = result.unwrap();
+    assert!(matches!(value, BamlValueWithFlags::Class(_, _, _)));
+
+    log::trace!("Score: {}", value.score());
+    let value: BamlValue = value.into();
+    log::info!("{}", value);
+    let json_value = json!(value);
+
+    assert_json_diff::assert_json_eq!(json_value, expected);
+}
+
+#[test_log::test]
+fn test_union_of_map_and_class() {
+    let file_content = r#"
+    class Foo {
+        a string
+        b string
+    }"#;
+    let target_type = FieldType::union(vec![
+        FieldType::map(FieldType::string(), FieldType::string()),
+        FieldType::class("Foo"),
+    ])
+    .into();
+    let llm_output = r#"{"a": 1, "b": "hello"}"#;
+    let expected = json!({"a": "1", "b": "hello"});
+
+    let ir = load_test_ir(file_content);
+    let target = render_output_format(&ir, &target_type, &Default::default()).unwrap();
+
+    let result = from_str(&target, &target_type, llm_output, false);
+
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+
+    let value = result.unwrap();
+    assert!(matches!(value, BamlValueWithFlags::Class(_, _, _)));
+
+    log::trace!("Score: {}", value.score());
+    let value: BamlValue = value.into();
+    log::info!("{}", value);
+    let json_value = json!(value);
+
+    assert_json_diff::assert_json_eq!(json_value, expected);
+}

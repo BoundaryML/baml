@@ -9,6 +9,7 @@ pub enum Flag {
     DefaultButHadUnparseableValue(ParsingError),
     ObjectToString(crate::jsonish::Value),
     ObjectToPrimitive(crate::jsonish::Value),
+    ObjectToMap(crate::jsonish::Value),
     ExtraKey(String, crate::jsonish::Value),
     StrippedNonAlphaNumeric(String),
     SubstringMatch(String),
@@ -129,6 +130,10 @@ impl std::fmt::Display for Flag {
             }
             Flag::ObjectToPrimitive(value) => {
                 write!(f, "Object to field: ")?;
+                writeln!(f, "{:#?}", value)?;
+            }
+            Flag::ObjectToMap(value) => {
+                write!(f, "Object to map: ")?;
                 writeln!(f, "{:#?}", value)?;
             }
             Flag::StrippedNonAlphaNumeric(value) => {
