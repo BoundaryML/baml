@@ -139,24 +139,48 @@ impl BamlRuntime {
     where
         F: Fn(FunctionResult) -> (),
     {
+        log::info!("running test");
         let span = self.tracer.start_span(test_name, ctx, &Default::default());
+        log::info!("got span");
 
         let response = match ctx.create_ctx(None, None) {
             Ok(rctx) => {
                 let params = self.inner.get_test_params(function_name, test_name, &rctx);
                 match params {
                     Ok(params) => {
+                        // INSERT_YOUR_CODE
+                        log::info!("Params: {:?}", params);
+                        log::info!("Starting stream function for {}", function_name);
                         match self.stream_function(function_name.into(), &params, ctx, None, None) {
                             Ok(mut stream) => {
+                                log::info!(
+                                    "Stream function started successfully for {}",
+                                    function_name
+                                );
                                 let (response, span) = stream.run(on_event, ctx, None, None).await;
-                                let response = response.map(|res| TestResponse {
-                                    function_response: res,
-                                    function_span: span,
+                                log::info!("Stream function run completed for {}", function_name);
+                                let response = response.map(|res| {
+                                    log::info!("Processing response for {}", function_name);
+                                    TestResponse {
+                                        function_response: res,
+                                        function_span: span,
+                                    }
                                 });
 
+                                log::info!(
+                                    "Stream function response processed for {}",
+                                    function_name
+                                );
                                 response
                             }
-                            Err(e) => Err(e),
+                            Err(e) => {
+                                log::error!(
+                                    "Error in stream function for {}: {}",
+                                    function_name,
+                                    e
+                                );
+                                Err(e)
+                            }
                         }
                     }
                     Err(e) => Err(e),

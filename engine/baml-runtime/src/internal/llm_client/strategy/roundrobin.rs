@@ -183,7 +183,7 @@ impl IterOrchestrator for RoundRobinStrategy {
         let client = client.clone();
         client.iter_orchestrator(
             state,
-            ExecutionScope::RoundRobin(self.clone(), next).into(),
+            ExecutionScope::RoundRobin(Arc::new(self.clone()), next).into(),
             ctx,
             client_lookup,
         )

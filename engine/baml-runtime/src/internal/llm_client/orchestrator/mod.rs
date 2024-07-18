@@ -158,7 +158,7 @@ pub enum ExecutionScope {
     // PolicyName, RetryCount, RetryDelayMs
     Retry(String, usize, Duration),
     // StrategyName, ClientIndex
-    RoundRobin(RoundRobinStrategy, usize),
+    RoundRobin(Arc<RoundRobinStrategy>, usize),
     // StrategyName, ClientIndex
     Fallback(String, usize),
 }

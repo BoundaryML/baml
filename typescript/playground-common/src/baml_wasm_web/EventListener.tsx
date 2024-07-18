@@ -371,8 +371,6 @@ const asyncCurlAtom = atom(async (get) => {
   params['node_index'] = orch_index
 
   try {
-    console.log(`Orchestrator index: ${orch_index}`)
-
     return await func.render_raw_curl(runtime, params, get(streamCurl))
   } catch (e) {
     console.error(e)
@@ -400,7 +398,6 @@ export const renderPromptAtom = atom((get) => {
   params['node_index'] = orch_index
 
   try {
-    console.log(`Orchestrator index: ${orch_index}`)
     return func.render_prompt(runtime, params)
   } catch (e) {
     if (e instanceof Error) {
@@ -495,14 +492,9 @@ export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edg
 
   const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
 
-  console.log('Unit Nodes:', unitNodes)
-
   const edges = createEdges(unitNodes)
 
-  console.log('Edges:', edges)
   const positionedNodes = getPositions(groups)
-
-  console.log('Positioned Nodes', positionedNodes)
 
   positionedNodes.forEach((posNode) => {
     const correspondingUnitNode = unitNodes.find((unitNode) => unitNode.gid === posNode.gid)
@@ -665,9 +657,7 @@ function createClientNodes(wasmScopes: any[]): ClientNode[] {
   for (const scope of wasmScopes) {
     const scopeInfo = scope.get_orchestration_scope_info()
     const scopePath = scopeInfo as any[]
-    scopePath.forEach((scope, index) => {
-      console.log(`Scope ${index}:`, scope)
-    })
+
     const stackGroup = createStackGroup(scopePath)
 
     // Always a direct node
@@ -784,14 +774,9 @@ function getScopeDetails(scopeLayer: TypeCount, prevIdx: number, prevIndexGroupE
 
     switch (scopeLayer.type) {
       case 'B':
-        console.log('Round Robin case identified')
-        console.log('Scope name:', scopeLayer.scope_name)
-        console.log('Index Entry Scope Name:', indexEntryScopeName)
         if (scopeLayer.scope_name === indexEntryScopeName) {
-          console.log('Round Robin match')
           return indexEntryGid
         } else {
-          console.log('Round Robin mismatch')
           return uuid()
         }
       default:
@@ -1010,10 +995,8 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           break
 
         case 'port_number':
-          console.log('Setting port number', content.port)
-
           if (content.port === 0) {
-            console.error('Port number is 0, cannot launch BAML extension')
+            console.error('No ports available, cannot launch BAML extension')
 
             return
           }
