@@ -480,12 +480,6 @@ export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edg
   }
 
   const nodes = createClientNodes(wasmScopes)
-  // nodes.forEach((node) => {
-  //   node.identifier.unshift({
-  //     type: 'F',
-  //     name: 0,
-  //   })
-  // })
 
   nodes.forEach((node, index) => {
     console.log(`Node ${index}:`, {
@@ -496,18 +490,6 @@ export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edg
   })
 
   const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
-
-  Object.entries(groups).forEach(([gid, group]) => {
-    console.log(`Group ID: ${gid}`)
-    console.log(
-      `Letter: ${group.letter}`,
-      `Index: ${group.index}`,
-      group.index_name ? `Index Name: ${group.index_name}` : '',
-      group.client_name ? `Client Name: ${group.client_name}` : '',
-      group.parentGid ? `Parent GID: ${group.parentGid}` : '',
-    )
-    console.log('---')
-  })
 
   const edges = createEdges(unitNodes)
 
@@ -546,15 +528,8 @@ function getPositions(nodes: { [key: string]: GroupEntry }): GroupEntry[] {
     console.error('No root node found')
     return []
   }
-  // console.log('Adjacency List:', adjacencyList)
-  // console.log('Root Node:', rootNode)
 
   const sizes = getSizes(adjacencyList, rootNode.gid)
-
-  console.log('Sizes:', sizes)
-  Object.entries(sizes).forEach(([nodeId, size]) => {
-    console.log(`Node ID: ${nodeId}, Size: Width: ${size.width}, Height: ${size.height}`)
-  })
 
   const sizedNodes = nodeEntries.map((node) => ({
     ...node,
@@ -569,10 +544,6 @@ function getPositions(nodes: { [key: string]: GroupEntry }): GroupEntry[] {
     Position: positionsMap[node.gid] || { x: 0, y: 0 },
     Dimension: sizes[node.gid] || { width: 0, height: 0 },
   }))
-
-  positionedNodes.forEach((node) => {
-    console.log(`Node ID: ${node.gid}, Position: (${node.Position.x}, ${node.Position.y})`)
-  })
 
   return positionedNodes
 }
@@ -593,7 +564,7 @@ function getCoordinates(
   function recurse(node: string, horizontal: boolean, x: number, y: number): { x: number; y: number } {
     const children = adjacencyList[node]
     if (children.length === 0) {
-      coordinates[node] = { x: x + PADDING, y: y + PADDING }
+      coordinates[node] = { x, y }
       return coordinates[node]
     }
 
@@ -603,13 +574,13 @@ function getCoordinates(
       const childSize = recurse(child, !horizontal, childX, childY)
 
       if (!horizontal) {
-        childY += childSize.y + PADDING
+        childY = childSize.y + PADDING + sizes[child].height
       } else {
-        childX += childSize.x + PADDING
+        childX = childSize.x + PADDING + sizes[child].width
       }
     }
 
-    coordinates[node] = { x: x + PADDING, y: y + PADDING }
+    coordinates[node] = { x, y }
     return coordinates[node]
   }
 
@@ -650,10 +621,10 @@ function getSizes(
       }
     }
 
-    if (horizontal) {
-      width += PADDING // Add padding to the final width
+    if (!horizontal) {
+      width += 2 * PADDING // Add padding to the final width
     } else {
-      height += PADDING // Add padding to the final height
+      height += 2 * PADDING // Add padding to the final height
     }
 
     sizes[node] = { width, height }
@@ -761,6 +732,7 @@ function buildUnitNodesAndGroups(nodes: ClientNode[]): {
       prevNodeIndexGroups[stackIndex] = {
         letter: scopeLayer.type,
         index: prevScopeIdx,
+        client_name: scopeLayer.scope_name,
         gid: curGid,
         ...(parentGid && { parentGid }),
       }
@@ -790,9 +762,14 @@ function getScopeDetails(scopeLayer: TypeCount, prevIdx: number, prevIndexGroupE
 
     switch (scopeLayer.type) {
       case 'B':
+        console.log('Round Robin case identified')
+        console.log('Scope name:', scopeLayer.scope_name)
+        console.log('Index Entry Scope Name:', indexEntryScopeName)
         if (scopeLayer.scope_name === indexEntryScopeName) {
+          console.log('Round Robin match')
           return indexEntryGid
         } else {
+          console.log('Round Robin mismatch')
           return uuid()
         }
       default:

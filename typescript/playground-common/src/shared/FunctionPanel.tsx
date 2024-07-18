@@ -83,7 +83,6 @@ interface RenderEdge {
 
 interface RenderNode {
   id: string
-  type: string
   data: { label: string }
   position: { x: number; y: number }
   style?: { backgroundColor: string; width?: number; height?: number }
@@ -117,11 +116,10 @@ const ClientGraph: React.FC = () => {
 
     renderNodes.push({
       id: node.gid,
-      type: 'default', // Add this line
       data: { label: node.client_name ?? 'no name for this node' },
       position: { x: node.Position?.x ?? 0, y: node.Position?.y ?? 0 },
       style: {
-        backgroundColor: getBackgroundColor(node.letter),
+        backgroundColor: 'rgba(255, 0, 255, 0.2)',
         width: node.Dimension?.width,
         height: node.Dimension?.height,
       },
@@ -130,21 +128,12 @@ const ClientGraph: React.FC = () => {
     })
   }
 
-  renderNodes.forEach((node, index) => {
-    console.log(
-      `RenderNode ${index}: id: ${node.id}, label: ${node.data.label}, position: (${node.position.x}, ${
-        node.position.y
-      }), style: ${JSON.stringify(node.style)}`,
-    )
-  })
-
-  // const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
-  //   id: idx.toString(),
-  //   source: edge.from_node,
-  //   target: edge.to_node,
-  // }))
-
-  const renderEdges: RenderEdge[] = []
+  const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
+    id: idx.toString(),
+    source: edge.from_node,
+    target: edge.to_node,
+    animated: true,
+  }))
 
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(renderNodes)
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(renderEdges)
@@ -168,10 +157,10 @@ const ClientGraph: React.FC = () => {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         fitView
-        // edgesFocusable={false}
-        // nodesDraggable={false}
-        // nodesConnectable={false}
-        // nodesFocusable={false}
+        edgesFocusable={false}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        nodesFocusable={false}
       ></ReactFlow>
     </div>
   )
