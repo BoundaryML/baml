@@ -344,6 +344,8 @@ export const versionAtom = atom((get) => {
   return wasm.version()
 })
 
+export const availableClientsAtom = atom<string[]>([])
+
 export const availableFunctionsAtom = atom((get) => {
   const runtime = get(selectedRuntimeAtom)
   if (!runtime) {
@@ -385,7 +387,6 @@ export const renderPromptAtom = atom((get) => {
   const func = get(selectedFunctionAtom)
   const test_case = get(selectedTestCaseAtom)
   const orch_index = get(orchIndexAtom)
-
   if (!runtime || !func || !test_case) {
     return null
   }
@@ -474,11 +475,25 @@ export interface Dimension {
 }
 
 export const orchIndexAtom = atom(0)
+export const currentClientsAtom = atom((get) => {
+  const func = get(selectedFunctionAtom)
+  const runtime = get(selectedRuntimeAtom)
+  if (!func || !runtime) {
+    return []
+  }
 
+  const wasmScopes = func.orchestration_graph(runtime)
+  if (wasmScopes === null) {
+    return []
+  }
+
+  const nodes = createClientNodes(wasmScopes)
+  return nodes.map((node) => node.name)
+})
 export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
   const func = get(selectedFunctionAtom)
   const runtime = get(selectedRuntimeAtom)
-
+  const [currentClient, setCurrentClientNames] = useAtom(currentClientsAtom)
   if (!func || !runtime) {
     return { nodes: [], edges: [] }
   }
@@ -489,7 +504,6 @@ export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edg
   }
 
   const nodes = createClientNodes(wasmScopes)
-
   const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
 
   const edges = createEdges(unitNodes)
@@ -1006,7 +1020,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             const updated: [string, string][] = prev.map(([key, value]) => {
               if (key === 'BOUNDARY_PROXY_URL') {
                 keyExists = true
-                return [key, `http: //localhost:${content.port}`]
+                return [key, `http://localhost:${content.port}`]
               }
               return [key, value]
             })

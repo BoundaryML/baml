@@ -45,6 +45,7 @@ pub async fn make_request(
     {
         Ok(req) => req,
         Err(e) => {
+            log::info!("Failed to build request: {:#?}", e);
             return Err(LLMResponse::LLMFailure(LLMErrorResponse {
                 client: client.context().name.to_string(),
                 model: None,
@@ -52,15 +53,17 @@ pub async fn make_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("{:?}", e),
+                message: format!("{:#?}", e),
                 code: ErrorCode::Other(2),
             }));
         }
     };
-
+    log::info!("built 1");
+    log::debug!("Request: {:#?}", req);
     let req = match req.build() {
         Ok(req) => req,
         Err(e) => {
+            log::info!("Failed to build request: {:#?}", e);
             return Err(LLMResponse::LLMFailure(LLMErrorResponse {
                 client: client.context().name.to_string(),
                 model: None,
@@ -68,7 +71,7 @@ pub async fn make_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("{:?}", e),
+                message: format!("{:#?}", e),
                 code: ErrorCode::Other(2),
             }));
         }

@@ -42,7 +42,7 @@ client<llm> GPT4Turbo {
 
 client<llm> GPT35 {
   provider openai
-    retry_policy Exponential
+    // retry_policy Exponential
 
   options {
     model "gpt-3.5-turbo"

@@ -20,52 +20,31 @@ use internal_baml_core::ir::ClientWalker;
 use serde::Serialize;
 use serde::Serializer;
 
-struct MyAtomicUsize(AtomicUsize);
-
-impl Clone for MyAtomicUsize {
-    fn clone(&self) -> Self {
-        Self(AtomicUsize::new(
-            self.0.load(std::sync::atomic::Ordering::Relaxed),
-        ))
-    }
-}
-
-impl Debug for MyAtomicUsize {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.load(std::sync::atomic::Ordering::Relaxed).fmt(f)
-    }
-}
-
-impl Serialize for MyAtomicUsize {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        self.0
-            .load(std::sync::atomic::Ordering::Relaxed)
-            .serialize(serializer)
-    }
-}
-
-#[derive(Clone, Serialize, Debug)]
+#[derive(Serialize, Debug)]
 pub struct RoundRobinStrategy {
     pub name: String,
     pub(super) retry_policy: Option<String>,
     // TODO: We can add conditions to each client
     clients: Vec<String>,
-    current_index: MyAtomicUsize,
+    #[serde(serialize_with = "serialize_atomic")]
+    current_index: AtomicUsize,
+}
+
+fn serialize_atomic<S>(value: &AtomicUsize, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_u64(value.load(std::sync::atomic::Ordering::Relaxed) as u64)
 }
 
 impl RoundRobinStrategy {
     pub fn current_index(&self) -> usize {
         self.current_index
-            .0
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn increment_index(&self) {
         self.current_index
-            .0
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
@@ -89,7 +68,7 @@ impl TryFrom<(&ClientProperty, &RuntimeContext)> for RoundRobinStrategy {
             name: client.name.clone(),
             retry_policy: client.retry_policy.clone(),
             clients: strategy,
-            current_index: MyAtomicUsize(AtomicUsize::new(start)),
+            current_index: AtomicUsize::new(start),
         })
     }
 }
@@ -159,12 +138,12 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for RoundRobinStrategy {
             name: client.item.elem.name.clone(),
             retry_policy: client.retry_policy().as_ref().map(String::from),
             clients: strategy,
-            current_index: MyAtomicUsize(AtomicUsize::new(start)),
+            current_index: AtomicUsize::new(start),
         })
     }
 }
 
-impl IterOrchestrator for RoundRobinStrategy {
+impl IterOrchestrator for Arc<RoundRobinStrategy> {
     fn iter_orchestrator<'a>(
         &self,
         state: &mut OrchestrationState,
@@ -183,7 +162,7 @@ impl IterOrchestrator for RoundRobinStrategy {
         let client = client.clone();
         client.iter_orchestrator(
             state,
-            ExecutionScope::RoundRobin(Arc::new(self.clone()), next).into(),
+            ExecutionScope::RoundRobin(self.clone(), next).into(),
             ctx,
             client_lookup,
         )

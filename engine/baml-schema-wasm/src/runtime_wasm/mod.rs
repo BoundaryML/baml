@@ -1034,7 +1034,17 @@ impl WasmFunction {
             .map(|(p, scope)| (p, scope).into())
             .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
     }
-
+    #[wasm_bindgen]
+    pub fn client_name(&self, rt: &WasmRuntime) -> Result<String, JsValue> {
+        let rt: &BamlRuntime = &rt.runtime;
+        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
+        let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
+        let ir = rt.internal().ir();
+        let walker = ir.find_function(&self.name).unwrap();
+        let renderer = PromptRenderer::from_function(&walker, ir, &ctx)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        Ok(renderer.client_name().to_string())
+    }
     #[wasm_bindgen]
     pub async fn render_raw_curl(
         &self,
