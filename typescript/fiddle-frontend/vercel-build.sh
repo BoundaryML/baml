@@ -7,6 +7,8 @@ source $HOME/.cargo/env
 
 which cargo
 
+sudo apt install g++
+
 cd ../../engine/baml-schema-wasm
 export OPENSSL_NO_VENDOR=1
 # cargo install
