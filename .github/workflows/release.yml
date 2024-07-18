@@ -10,6 +10,8 @@ on:
     tags:
       - "test-release/*.*"
       - "*.*"
+    branches:
+      - fiddle-build-fix
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -99,7 +101,7 @@ jobs:
 
   build-release:
     strategy:
-      fail-fast: false 
+      fail-fast: false
       matrix:
         _:
           - target: aarch64-apple-darwin
@@ -115,7 +117,7 @@ jobs:
             host: ubuntu-latest
             # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
             # need a new version of manylinux to build crates on arm64-linux
-            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64	
+            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
             node_build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
 
           - target: x86_64-apple-darwin
@@ -203,77 +205,77 @@ jobs:
           path: engine/language_client_typescript/*.node
           if-no-files-found: error
 
-  publish-to-pypi:
-    environment: release
-    if: github.ref_type == 'tag'
-    needs: [build-release, build-wasm]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: wheels-*
+  # publish-to-pypi:
+  #   environment: release
+  #   if: github.ref_type == 'tag'
+  #   needs: [build-release, build-wasm]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.8"
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: wheels-*
 
-      - run: mkdir dist && mv wheels-*/* dist
-      # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
-      # it is pinned to this github actions filename, so renaming this file is not safe!!
-      - name: Publish package to PyPI
-        if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
-        uses: pypa/gh-action-pypi-publish@release/v1
+  #     - run: mkdir dist && mv wheels-*/* dist
+  #     # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
+  #     # it is pinned to this github actions filename, so renaming this file is not safe!!
+  #     - name: Publish package to PyPI
+  #       if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
+  #       uses: pypa/gh-action-pypi-publish@release/v1
 
-  publish-to-npm:
-    environment: release
-    if: github.ref_type == 'tag'
-    needs: [build-release, build-wasm]
-    runs-on: ubuntu-latest
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
+  # publish-to-npm:
+  #   environment: release
+  #   if: github.ref_type == 'tag'
+  #   needs: [build-release, build-wasm]
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9.0.6
-          package_json_file: engine/language_client_typescript/package.json
-          run_install: false
+  #     - name: setup pnpm
+  #       uses: pnpm/action-setup@v3
+  #       with:
+  #         version: 9.0.6
+  #         package_json_file: engine/language_client_typescript/package.json
+  #         run_install: false
 
-      - name: Setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: engine/language_client_typescript/pnpm-lock.yaml
-          registry-url: "https://registry.npmjs.org"
+  #     - name: Setup node
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 20
+  #         cache: pnpm
+  #         cache-dependency-path: engine/language_client_typescript/pnpm-lock.yaml
+  #         registry-url: "https://registry.npmjs.org"
 
-      - name: Install dependencies
-        run: pnpm install
-        working-directory: engine/language_client_typescript
+  #     - name: Install dependencies
+  #       run: pnpm install
+  #       working-directory: engine/language_client_typescript
 
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: bindings-*
-          path: engine/language_client_typescript/artifacts
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: bindings-*
+  #         path: engine/language_client_typescript/artifacts
 
-      - name: create npm dirs
-        run: pnpm napi create-npm-dirs
-        working-directory: engine/language_client_typescript
+  #     - name: create npm dirs
+  #       run: pnpm napi create-npm-dirs
+  #       working-directory: engine/language_client_typescript
 
-      - name: Move artifacts
-        run: pnpm artifacts
-        working-directory: engine/language_client_typescript
+  #     - name: Move artifacts
+  #       run: pnpm artifacts
+  #       working-directory: engine/language_client_typescript
 
-      - name: Publish
-        if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
-        run: |
-          npm publish --access public
-        working-directory: engine/language_client_typescript
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  #     - name: Publish
+  #       if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/test-release') }}
+  #       run: |
+  #         npm publish --access public
+  #       working-directory: engine/language_client_typescript
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #         NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # publish-vscode:
   #   environment: release
@@ -328,19 +330,19 @@ jobs:
   #         pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
   #       working-directory: typescript/vscode-ext/packages
 
-  release-github:
-    runs-on: ubuntu-latest
-    if: github.ref_type == 'tag'
-    needs: [publish-to-pypi, publish-to-npm]
-    steps:
-      - uses: actions/checkout@v4
+  # release-github:
+  #   runs-on: ubuntu-latest
+  #   if: github.ref_type == 'tag'
+  #   needs: [publish-to-pypi, publish-to-npm]
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Get Changelog
-        id: latest_release
-        run: |
-          echo "::set-output name=changelog::$(awk '/^## \[/{if (p) exit; p=1} p' CHANGELOG.md)"
+  #     - name: Get Changelog
+  #       id: latest_release
+  #       run: |
+  #         echo "::set-output name=changelog::$(awk '/^## \[/{if (p) exit; p=1} p' CHANGELOG.md)"
 
-      - name: Create Release
-        uses: mikepenz/action-gh-release@v1 #softprops/action-gh-release
-        with:
-          body: ${{steps.latest_release.outputs.changelog}}
+  #     - name: Create Release
+  #       uses: mikepenz/action-gh-release@v1 #softprops/action-gh-release
+  #       with:
+  #         body: ${{steps.latest_release.outputs.changelog}}
