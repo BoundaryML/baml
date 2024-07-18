@@ -8,9 +8,10 @@ source $HOME/.cargo/env
 which cargo
 # clang --version
 #llvm-config --version
+# g++ --version
 
-
-dnf install -y g++
+dnf install -y llvm
+dnf install -y clang
 
 cd ../../engine/baml-schema-wasm
 export OPENSSL_NO_VENDOR=1
