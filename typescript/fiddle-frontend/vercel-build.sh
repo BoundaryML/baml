@@ -7,7 +7,7 @@ source $HOME/.cargo/env
 
 which cargo
 # clang --version
-llvm-config --version
+#llvm-config --version
 
 
 sudo apt install g++
