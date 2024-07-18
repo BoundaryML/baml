@@ -10,7 +10,7 @@ which cargo
 #llvm-config --version
 
 
-sudo apt install g++
+dnf install -y g++
 
 cd ../../engine/baml-schema-wasm
 export OPENSSL_NO_VENDOR=1
