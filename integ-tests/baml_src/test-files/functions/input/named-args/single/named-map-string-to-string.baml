@@ -1,5 +1,5 @@
 // test string
-function TestFnNamedArgsSingleMapStringToString(myMap: map<string, string>) -> map<string, string> {
+function TestFnNamedArgsSingleMapStringToString(myMap: map<string, string>) -> map<string, map<string, string>> {
   client GPT35
   prompt #"
     Return this value back to me: {{myMap}}

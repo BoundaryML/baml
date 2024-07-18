@@ -251,6 +251,12 @@ class Person(BaseModel):
     name: Optional[str] = None
     hair_color: Optional[Union["Color", str]] = None
 
+class Quantity(BaseModel):
+    
+    
+    amount: Union[int, float]
+    unit: Optional[str] = None
+
 class RaysData(BaseModel):
     
     
@@ -270,6 +276,11 @@ class ReceiptItem(BaseModel):
     description: Optional[str] = None
     quantity: int
     price: float
+
+class Recipe(BaseModel):
+    
+    
+    ingredients: Dict[str, "Quantity"]
 
 class Resume(BaseModel):
     

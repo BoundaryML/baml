@@ -52,6 +52,26 @@ module Baml
     sig {
       
       params(
+        recipe: String,
+      ).returns(Baml::Types::Recipe)
+      
+    }
+    def AaaSamOutputFormat(
+        recipe:
+    )
+      raw = @runtime.call_function(
+        "AaaSamOutputFormat",
+        {
+          "recipe" => recipe,
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
+      params(
         aud: Baml::Audio,
       ).returns(String)
       
@@ -1090,7 +1110,7 @@ module Baml
     sig {
       
       params(
-        myMap: T::Hash[String, Baml::Types::StringToClassEntry],
+        myMap: Integer,
       ).returns(T::Hash[String, Baml::Types::StringToClassEntry])
       
     }
@@ -1131,7 +1151,7 @@ module Baml
       
       params(
         myMap: T::Hash[String, String],
-      ).returns(T::Hash[String, String])
+      ).returns(T::Hash[String, T::Hash[String, String]])
       
     }
     def TestFnNamedArgsSingleMapStringToString(
@@ -1394,6 +1414,27 @@ module Baml
     def initialize(runtime:, ctx_manager:)
       @runtime = runtime
       @ctx_manager = ctx_manager
+    end
+
+    sig {
+      params(
+        recipe: String,
+      ).returns(Baml::BamlStream[Baml::Types::Recipe])
+    }
+    def AaaSamOutputFormat(
+        recipe:
+    )
+      raw = @runtime.stream_function(
+        "AaaSamOutputFormat",
+        {
+          "recipe" => recipe,
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[Baml::PartialTypes::Recipe, Baml::Types::Recipe].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
     end
 
     sig {
@@ -2490,7 +2531,7 @@ module Baml
 
     sig {
       params(
-        myMap: T::Hash[String, Baml::Types::StringToClassEntry],
+        myMap: Integer,
       ).returns(Baml::BamlStream[T::Hash[String, Baml::Types::StringToClassEntry]])
     }
     def TestFnNamedArgsSingleMapStringToClass(
@@ -2533,7 +2574,7 @@ module Baml
     sig {
       params(
         myMap: T::Hash[String, String],
-      ).returns(Baml::BamlStream[T::Hash[String, String]])
+      ).returns(Baml::BamlStream[T::Hash[String, T::Hash[String, String]]])
     }
     def TestFnNamedArgsSingleMapStringToString(
         myMap:
@@ -2545,7 +2586,7 @@ module Baml
         },
         @ctx_manager,
       )
-      Baml::BamlStream[T::Hash[String, T.nilable(String)], T::Hash[String, String]].new(
+      Baml::BamlStream[T::Hash[String, T::Hash[String, T.nilable(String)]], T::Hash[String, T::Hash[String, String]]].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

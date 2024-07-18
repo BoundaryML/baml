@@ -59,6 +59,30 @@ class BamlAsyncClient:
 
 
     
+    async def AaaSamOutputFormat(
+        self,
+        recipe: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Recipe:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "AaaSamOutputFormat",
+        {
+          "recipe": recipe,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("AaaSamOutputFormatReturnType", inner=(types.Recipe, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def AudioInput(
         self,
         aud: baml_py.Audio,
@@ -1309,7 +1333,7 @@ class BamlAsyncClient:
     
     async def TestFnNamedArgsSingleMapStringToClass(
         self,
-        myMap: Dict[str, types.StringToClassEntry],
+        myMap: int,
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, types.StringToClassEntry]:
       __tb__ = baml_options.get("tb", None)
@@ -1359,7 +1383,7 @@ class BamlAsyncClient:
         self,
         myMap: Dict[str, str],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, str]:
+    ) -> Dict[str, Dict[str, str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb
@@ -1376,7 +1400,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
       )
-      mdl = create_model("TestFnNamedArgsSingleMapStringToStringReturnType", inner=(Dict[str, str], ...))
+      mdl = create_model("TestFnNamedArgsSingleMapStringToStringReturnType", inner=(Dict[str, Dict[str, str]], ...))
       return coerce(mdl, raw.parsed())
     
     async def TestFnNamedArgsSingleString(
@@ -1677,6 +1701,39 @@ class BamlStreamClient:
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
 
+    
+    def AaaSamOutputFormat(
+        self,
+        recipe: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.Recipe, types.Recipe]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "AaaSamOutputFormat",
+        {
+          "recipe": recipe,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("AaaSamOutputFormatReturnType", inner=(types.Recipe, ...))
+      partial_mdl = create_model("AaaSamOutputFormatPartialReturnType", inner=(partial_types.Recipe, ...))
+
+      return baml_py.BamlStream[partial_types.Recipe, types.Recipe](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
     
     def AudioInput(
         self,
@@ -3399,7 +3456,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleMapStringToClass(
         self,
-        myMap: Dict[str, types.StringToClassEntry],
+        myMap: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[str, partial_types.StringToClassEntry], Dict[str, types.StringToClassEntry]]:
       __tb__ = baml_options.get("tb", None)
@@ -3467,7 +3524,7 @@ class BamlStreamClient:
         self,
         myMap: Dict[str, str],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Dict[str, Optional[str]], Dict[str, str]]:
+    ) -> baml_py.BamlStream[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, str]]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb
@@ -3486,10 +3543,10 @@ class BamlStreamClient:
         __cr__,
       )
 
-      mdl = create_model("TestFnNamedArgsSingleMapStringToStringReturnType", inner=(Dict[str, str], ...))
-      partial_mdl = create_model("TestFnNamedArgsSingleMapStringToStringPartialReturnType", inner=(Dict[str, Optional[str]], ...))
+      mdl = create_model("TestFnNamedArgsSingleMapStringToStringReturnType", inner=(Dict[str, Dict[str, str]], ...))
+      partial_mdl = create_model("TestFnNamedArgsSingleMapStringToStringPartialReturnType", inner=(Dict[str, Dict[str, Optional[str]]], ...))
 
-      return baml_py.BamlStream[Dict[str, Optional[str]], Dict[str, str]](
+      return baml_py.BamlStream[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, str]]](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
