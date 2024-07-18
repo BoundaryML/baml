@@ -35,6 +35,11 @@ let serverModule: string
 let telemetry: TelemetryReporter
 const intervalTimers: NodeJS.Timeout[] = []
 
+export const bamlConfig: { config: BamlConfig | null; cliVersion: string | null } = {
+  config: null,
+  cliVersion: null,
+}
+
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
 
@@ -44,6 +49,16 @@ export const generateTestRequest = async (test_request: TestRequest): Promise<st
 
 export const requestDiagnostics = async () => {
   await client?.sendRequest('requestDiagnostics')
+}
+
+export const requestBamlCLIVersion = async () => {
+  try {
+    const version = (await client.sendRequest('bamlCliVersion')) as string
+    console.log('Got BAML CLI version', version)
+    bamlConfig.cliVersion = version
+  } catch (e) {
+    console.error('Failed to get BAML CLI version', e)
+  }
 }
 
 export const getBAMLFunctions = async (): Promise<
@@ -78,109 +93,17 @@ type LatestVersions = z.infer<typeof LatestVersions>
 
 const bamlCliPath = () => config?.path || 'baml'
 
-const buildUpdateMessage = (latestVersions: LatestVersions): { message: string; command: string } | null => {
-  const shouldUpdateCli = !!latestVersions.cli.recommended_update
-  const shouldUpdateGenerators = latestVersions.generators.filter((g) => g.recommended_update).length > 0
-
-  if (shouldUpdateCli && shouldUpdateGenerators) {
-    return {
-      message: 'Please update BAML and its client libraries',
-      command: `${bamlCliPath()} update && ${bamlCliPath()} update-client`,
-    }
-  }
-
-  if (shouldUpdateCli) {
-    return {
-      message: 'Please update BAML',
-      command: `${bamlCliPath()} update`,
-    }
-  }
-
-  if (shouldUpdateGenerators) {
-    return {
-      message: 'Please update the BAML client libraries',
-      command: `${bamlCliPath()} update-client`,
-    }
-  }
-
-  return null
-}
-
 const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }) => {
   try {
-    const res = await client.sendRequest<string | undefined>('cliCheckForUpdates')
-
-    if (!res) {
-      throw new Error('Failed to get latest updates')
-    }
-
-    const latestVersions = LatestVersions.parse(JSON.parse(res))
-    const update = buildUpdateMessage(latestVersions)
-    const shouldUpdateVscode = semver.lt(packageJson.version, latestVersions.vscode.latest_version || '0.0.0')
-
-    if (update) {
-      const updateNowAction = 'Update now'
-      const detailsAction = 'Details'
-      vscode.window
-        .showInformationMessage(
-          update.message,
-          {
-            title: updateNowAction,
-          },
-          {
-            title: detailsAction,
-          },
-        )
-        .then((selection) => {
-          if (selection?.title === updateNowAction) {
-            // Open a new terminal
-            vscode.commands.executeCommand('workbench.action.terminal.new').then(() => {
-              // Run the update command
-              vscode.commands.executeCommand('workbench.action.terminal.sendSequence', {
-                text: `${update.command}\n`,
-              })
-            })
-          }
-          if (selection?.title === detailsAction) {
-            // Open a new terminal
-            vscode.commands.executeCommand('workbench.action.terminal.new').then(() => {
-              // Run the update command
-              vscode.commands.executeCommand('workbench.action.terminal.sendSequence', {
-                text: `${bamlCliPath()} version --check\n`,
-              })
-            })
-          }
-        })
-    } else {
-      if (showIfNoUpdates) {
-        vscode.window.showInformationMessage(`BAML is up to date!`)
-      } else {
-        console.info(`BAML is up to date! ${JSON.stringify(latestVersions, null, 2)}`)
-      }
-    }
-
-    if (shouldUpdateVscode) {
-      const updateNowAction = 'Open Extensions View'
-      vscode.window
-        .showInformationMessage('Please update the BAML VSCode extension', {
-          title: updateNowAction,
-        })
-        .then((selection) => {
-          if (selection?.title === updateNowAction) {
-            vscode.commands.executeCommand('workbench.view.extensions')
-          }
-        })
-    }
-
     if (telemetry) {
       telemetry.sendTelemetryEvent({
         event: 'baml.checkForUpdates',
         properties: {
-          is_typescript: latestVersions.generators.find((g) => g.language === 'typescript'),
-          is_python: latestVersions.generators.find((g) => g.language === 'python'),
-          baml_check: latestVersions,
-          updateAvailable: !!update,
-          vscodeUpdateAvailable: shouldUpdateVscode,
+          // is_typescript: latestVersions.generators.find((g) => g.language === 'typescript'),
+          // is_python: latestVersions.generators.find((g) => g.language === 'python'),
+          // baml_check: latestVersions,
+          // updateAvailable: !!update,
+          // vscodeUpdateAvailable: shouldUpdateVscode,
         },
       })
     }
@@ -192,6 +115,7 @@ const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }
 interface BAMLMessage {
   type: 'warn' | 'info' | 'error'
   message: string
+  durationMs?: number
 }
 
 const sleep = (time: number) => {
@@ -231,8 +155,8 @@ const activateClient = (
     client.onNotification('baml/showLanguageServerOutput', () => {
       // need to append line for the show to work for some reason.
       // dont delete this.
-      client.outputChannel.appendLine('baml/showLanguageServerOutput')
-      //client.outputChannel.show()
+      client.outputChannel.appendLine('\n')
+      client.outputChannel.show()
     })
     client.onNotification('baml/message', (message: BAMLMessage) => {
       client.outputChannel.appendLine('baml/message' + JSON.stringify(message, null, 2))
@@ -257,21 +181,20 @@ const activateClient = (
                   customCancellationToken?.dispose()
                   customCancellationToken = null
 
-                  vscode.window.showInformationMessage('Cancelled the progress')
+                  // vscode.window.showInformationMessage('Cancelled the progress')
                   resolve(null)
                   return
                 })
 
-                const sleepTimeMs = 1000
-                const totalSecs = 10
-                const iterations = (totalSecs * 1000) / sleepTimeMs
-                for (let i = 0; i < iterations; i++) {
-                  const prog = (i / iterations) * 100
-                  // Increment is summed up with the previous value
-                  progress.report({ increment: prog, message: message.message })
-                  await sleep(100)
-                }
+                const totalMs = message.durationMs || 1500 // Total duration in milliseconds (2 seconds)
+                const updateCount = 50 // Number of updates
+                const intervalMs = totalMs / updateCount // Interval between updates
 
+                for (let i = 0; i < updateCount; i++) {
+                  const prog = ((i + 1) / updateCount) * 100
+                  progress.report({ increment: prog, message: message.message })
+                  await sleep(intervalMs)
+                }
                 resolve(null)
               })
             },
@@ -289,12 +212,16 @@ const activateClient = (
     })
 
     client.onRequest('runtime_diagnostics', ({ errors, warnings }: { errors: number; warnings: number }) => {
-      if (errors > 0) {
-        StatusBarPanel.instance.setStatus({ status: 'fail', count: errors })
-      } else if (warnings > 0) {
-        StatusBarPanel.instance.setStatus({ status: 'warn', count: warnings })
-      } else {
-        StatusBarPanel.instance.setStatus('pass')
+      try {
+        if (errors > 0) {
+          StatusBarPanel.instance.setStatus({ status: 'fail', count: errors })
+        } else if (warnings > 0) {
+          StatusBarPanel.instance.setStatus({ status: 'warn', count: warnings })
+        } else {
+          StatusBarPanel.instance.setStatus('pass')
+        }
+      } catch (e) {
+        console.error('Error updating status bar', e)
       }
     })
 

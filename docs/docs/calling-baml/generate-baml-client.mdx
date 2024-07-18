@@ -77,6 +77,8 @@ generator target {
     output_type "python/pydantic"
     // Where the generated code will be saved (relative to baml_src/)
     output_dir "../"
+    // Version of runtime to generate code for (should match installed baml-py version)
+    version "0.50.0"
 }
 ```
 
@@ -86,15 +88,19 @@ generator target {
     output_type "typescript"
     // Where the generated code will be saved (relative to baml_src/)
     output_dir "../"
+    // Version of runtime to generate code for (should match the package @boundaryml/baml version)
+    version "0.50.0"
 }
 ```
 
-```baml Python
+```baml Ruby
 generator target {
     // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
     output_type "ruby/sorbet"
     // Where the generated code will be saved (relative to baml_src/)
     output_dir "../"
+    // Version of runtime to generate code for (should match installed `baml` package version)
+    version "0.50.0"
 }
 ```
 
@@ -133,3 +139,48 @@ jobs:
       - name: Generate BAML client
         run: baml-cli generate --from baml_src
 ```
+
+### Troubleshooting version conflicts
+
+`baml_client` can be generated in 2 ways:
+1. VSCode extension
+2. the installed baml dependency (e.g., `baml-py`)
+
+Since the extension auto-updates, it's possible that it stops generating the client due to a version mismatch with the `generator` version. You might see an error like:
+```bash
+BAML: Code Generation disabled due to version mismatch... See the fix.
+```
+
+**To fix any version mismatch issues, update all these things to the same version:**
+1. VSCode extension
+2. the installed baml dependency (e.g., `baml-py`)
+  - python: `pip install --upgrade package_name`
+  - typescript: `npm install @boundaryml/baml@latest`
+3. the `version` in your `generator` clause
+
+Only the minor and major versions are checked for compatibility (0.0.x).
+
+You can also tweak the generator settings below for a better experience.
+
+#### VSCode generator settings
+<Markdown src="/docs/doc-snippets/vscode-settings.mdx" />
+
+<br/>
+<br/>
+<br/>
+
+#### `baml-cli generate` arguments
+<ParamField
+  path="--from"
+  type="string"
+  default="null">
+
+Path to the BAML source directory. This is where the BAML files are located.
+</ParamField>
+
+<ParamField
+  path="--no-version-check"
+  type="string"
+  default="false">
+If set, it will disable checking the BAML source version with the installed BAML package version before generating code.
+</ParamField>

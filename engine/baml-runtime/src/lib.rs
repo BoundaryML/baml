@@ -248,6 +248,7 @@ impl BamlRuntime {
     pub fn run_generators(
         &self,
         input_files: &IndexMap<PathBuf, String>,
+        no_version_check: bool,
     ) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
         use internal_baml_codegen::GenerateClient;
 
@@ -264,6 +265,8 @@ impl BamlRuntime {
                         generator.output_dir(),
                         generator.baml_src.clone(),
                         input_files.iter(),
+                        generator.version.clone(),
+                        no_version_check,
                     )?,
                 ))
             })

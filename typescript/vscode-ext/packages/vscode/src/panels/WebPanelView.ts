@@ -6,7 +6,7 @@ import { getUri } from '../utils/getUri'
 
 import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { URI } from 'vscode-uri'
-import { requestDiagnostics } from '../plugins/language-server'
+import { bamlConfig, requestDiagnostics } from '../plugins/language-server'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -184,6 +184,7 @@ export class WebPanelView {
                 root_path: 'default',
                 function_name: openPlaygroundConfig.lastOpenedFunction,
               })
+              this.postMessage('baml_cli_version', bamlConfig.cliVersion)
             })()
 
             return

@@ -2,11 +2,12 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_schema_ast::ast::{self, WithName, WithSpan};
-use strum::{VariantArray, VariantNames};
+use semver::Version;
+use strum::VariantNames;
 
 use crate::configuration::{Generator, GeneratorBuilder, GeneratorOutputType};
 
-const FIRST_CLASS_PROPERTIES: &[&str] = &["output_type", "output_dir"];
+const FIRST_CLASS_PROPERTIES: &[&str] = &["output_type", "output_dir", "version"];
 
 fn parse_required_key<'a>(
     map: &'a HashMap<&str, &ast::Expression>,
@@ -134,6 +135,28 @@ pub(crate) fn parse_generator(
             errors.push(err);
         }
     };
+
+    match parse_optional_key(&args, "version") {
+        Ok(Some(version_str)) => match Version::parse(version_str) {
+            Ok(version) => {
+                builder.version(version.to_string());
+            }
+            Err(_) => {
+                errors.push(DatamodelError::new_validation_error(
+                    &format!("Invalid semver version string: '{}'", version_str),
+                    args.get("version")
+                        .map(|arg| arg.span().clone())
+                        .unwrap_or_else(|| ast_generator.span().clone()),
+                ));
+            }
+        },
+        Ok(None) => {
+            builder.version("0.0.0".to_string());
+        }
+        Err(err) => {
+            errors.push(err);
+        }
+    }
 
     if !errors.is_empty() {
         return Err(errors);

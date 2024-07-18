@@ -19,7 +19,7 @@ client<llm> GPT4 {
     model gpt-4o
     api_key env.OPENAI_API_KEY
   }
-} 
+}  
 
 
 client<llm> GPT4o {

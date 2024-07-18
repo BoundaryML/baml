@@ -1,13 +1,16 @@
-use std::{collections::BTreeMap, path::PathBuf};
-
 use anyhow::Result;
+use colored::*;
 use indexmap::IndexMap;
 use internal_baml_core::{configuration::GeneratorOutputType, ir::repr::IntermediateRepr};
+use semver::Version;
+use std::{collections::BTreeMap, path::PathBuf};
+use version_check::{check_version, GeneratorType, VersionCheckMode};
 
 mod dir_writer;
 mod python;
 mod ruby;
 mod typescript;
+pub mod version_check;
 
 pub struct GeneratorArgs {
     /// Output directory for the generated client, relative to baml_src
@@ -17,6 +20,9 @@ pub struct GeneratorArgs {
     baml_src_dir: PathBuf,
 
     input_file_map: BTreeMap<PathBuf, String>,
+
+    version: String,
+    no_version_check: bool,
 }
 
 fn relative_path_to_baml_src(path: &PathBuf, baml_src: &PathBuf) -> Result<PathBuf> {
@@ -34,6 +40,8 @@ impl GeneratorArgs {
         output_dir_relative_to_baml_src: impl Into<PathBuf>,
         baml_src_dir: impl Into<PathBuf>,
         input_files: impl IntoIterator<Item = (&'i PathBuf, &'i String)>,
+        version: String,
+        no_version_check: bool,
     ) -> Result<Self> {
         let baml_src = baml_src_dir.into();
         let input_file_map: BTreeMap<PathBuf, String> = input_files
@@ -46,6 +54,8 @@ impl GeneratorArgs {
             baml_src_dir: baml_src.clone(),
             // for the key, whhich is the name, just get the filename
             input_file_map,
+            version,
+            no_version_check,
         })
     }
 
@@ -101,12 +111,58 @@ pub trait GenerateClient {
         -> Result<GenerateOutput>;
 }
 
+// Assume VSCode is the only one that uses WASM, and it does call this method but at a different time.
+#[cfg(target_arch = "wasm32")]
+fn version_check_with_error(
+    runtime_version: &str,
+    gen_version: &str,
+    generator_type: GeneratorType,
+    mode: VersionCheckMode,
+    client_type: GeneratorOutputType,
+) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn version_check_with_error(
+    runtime_version: &str,
+    gen_version: &str,
+    generator_type: GeneratorType,
+    mode: VersionCheckMode,
+    client_type: GeneratorOutputType,
+) -> Result<()> {
+    let res = check_version(
+        gen_version,
+        runtime_version,
+        generator_type,
+        mode,
+        client_type,
+        true,
+    );
+    match res {
+        Some(e) => Err(anyhow::anyhow!("Version mismatch: {}", e.msg)),
+        None => Ok(()),
+    }
+}
+
 impl GenerateClient for GeneratorOutputType {
     fn generate_client(
         &self,
         ir: &IntermediateRepr,
         gen: &GeneratorArgs,
     ) -> Result<GenerateOutput> {
+        let runtime_version = env!("CARGO_PKG_VERSION");
+
+        if !gen.no_version_check {
+            version_check_with_error(
+                runtime_version,
+                &gen.version,
+                GeneratorType::CLI,
+                VersionCheckMode::Strict,
+                self.clone(),
+            )?;
+        }
+
         let files = match self {
             GeneratorOutputType::RubySorbet => ruby::generate(ir, gen),
             GeneratorOutputType::PythonPydantic => python::generate(ir, gen),
