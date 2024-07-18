@@ -1,7 +1,5 @@
 use baml_types::{BamlMap, BamlMediaType, BamlValue, FieldType, TypeValue};
 use core::result::Result;
-use log::kv;
-use std::ops::Deref;
 
 use crate::ir::IntermediateRepr;
 
@@ -68,7 +66,7 @@ pub fn validate_arg(
                             .and_then(|v| v.as_str())
                             .unwrap_or_default()
                             .to_string();
-                        Some(BamlValue::Media(baml_types::BamlMedia::url(
+                        Ok(BamlValue::Media(baml_types::BamlMedia::url(
                             BamlMediaType::Image,
                             s.to_string(),
                             Some(media_type_str),
@@ -79,7 +77,7 @@ pub fn validate_arg(
                             .and_then(|v| v.as_str())
                             .unwrap_or_default()
                             .to_string();
-                        Some(BamlValue::Media(baml_types::BamlMedia::base64(
+                        Ok(BamlValue::Media(baml_types::BamlMedia::base64(
                             BamlMediaType::Image,
                             s.to_string(),
                             media_type_str,
@@ -106,7 +104,7 @@ pub fn validate_arg(
                             .and_then(|v| v.as_str())
                             .unwrap_or_default()
                             .to_string();
-                        Some(BamlValue::Media(baml_types::BamlMedia::url(
+                        Ok(BamlValue::Media(baml_types::BamlMedia::url(
                             BamlMediaType::Audio,
                             s.to_string(),
                             Some(media_type_str),
@@ -117,7 +115,7 @@ pub fn validate_arg(
                             .and_then(|v| v.as_str())
                             .unwrap_or_default()
                             .to_string();
-                        Some(BamlValue::Media(baml_types::BamlMedia::base64(
+                        Ok(BamlValue::Media(baml_types::BamlMedia::base64(
                             BamlMediaType::Audio,
                             s.to_string(),
                             media_type_str,
