@@ -208,8 +208,9 @@ pub(crate) fn parse_generator(
     };
 
     builder.build().map_err(|e| {
-        vec![DatamodelError::new_internal_error(
-            anyhow::Error::from(e).context("Internal error while parsing generator (v1 syntax)"),
+        vec![DatamodelError::new_anyhow_error(
+            anyhow::Error::from(e)
+                .context("Internal error while parsing generator (legacy v0 syntax)"),
             ast_generator.span().clone(),
         )]
     })

@@ -69,6 +69,7 @@ enum_dispatch = "0.3.13"
 ambassador = "0.4.0"
 aws-smithy-json = "0.60.7"
 jsonwebtoken = "9.3.0"
+pretty_assertions = "1.4.0"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

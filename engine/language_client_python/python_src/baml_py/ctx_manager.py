@@ -20,7 +20,9 @@ RTContextVar = contextvars.ContextVar[typing.Dict[int, RuntimeContextManager]]
 
 def current_thread_id() -> int:
     current_thread = threading.current_thread()
-    return current_thread.native_id or 0
+    if hasattr(current_thread, "native_id"):
+        return current_thread.native_id or 0
+    return current_thread.ident or 0
 
 
 class CtxManager:

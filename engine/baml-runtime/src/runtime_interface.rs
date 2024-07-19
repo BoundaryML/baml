@@ -43,6 +43,7 @@ pub trait RuntimeInterface {
         params: &BamlMap<String, BamlValue>,
         tracer: Arc<BamlTracer>,
         ctx: RuntimeContext,
+        tokio_runtime: Arc<tokio::runtime::Runtime>,
     ) -> Result<FunctionResultStream>;
 }
 

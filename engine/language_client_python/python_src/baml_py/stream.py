@@ -2,9 +2,10 @@ from __future__ import annotations
 from .baml_py import (
     FunctionResult,
     FunctionResultStream,
+    SyncFunctionResultStream,
     RuntimeContextManager,
 )
-from typing import Callable, Generic, Optional, TypeVar
+from typing import Callable, Generic, Optional, TypeVar, Union
 import threading
 import asyncio
 import concurrent.futures
@@ -43,7 +44,6 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         self.__event_queue.put_nowait(data)
 
     async def __drive_to_completion(self) -> FunctionResult:
-
         try:
             retval = await self.__ffi_stream.done(self.__ctx_manager)
 
@@ -78,3 +78,85 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
     async def get_final_response(self):
         final = self.__drive_to_completion_in_bg()
         return self.__final_coerce((await asyncio.wrap_future(final)).parsed())
+
+
+class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
+    __ffi_stream: SyncFunctionResultStream
+    __partial_coerce: Callable[[FunctionResult], PartialOutputType]
+    __final_coerce: Callable[[FunctionResult], FinalOutputType]
+    __ctx_manager: RuntimeContextManager
+    __task: Optional[threading.Thread]
+    __event_queue: queue.Queue[Optional[FunctionResult]]
+    __result: Optional[FunctionResult]
+    __exception: Optional[Exception]
+
+    def __init__(
+        self,
+        ffi_stream: SyncFunctionResultStream,
+        partial_coerce: Callable[[FunctionResult], PartialOutputType],
+        final_coerce: Callable[[FunctionResult], FinalOutputType],
+        ctx_manager: RuntimeContextManager,
+    ):
+        self.__ffi_stream = ffi_stream.on_event(self.__enqueue)
+        self.__partial_coerce = partial_coerce
+        self.__final_coerce = final_coerce
+        self.__ctx_manager = ctx_manager
+        self.__task = None
+        self.__event_queue = queue.Queue()
+        self.__result = None
+        self.__exception = None
+
+    def __enqueue(self, data: FunctionResult) -> None:
+        print("Enqueuing data")
+        self.__event_queue.put_nowait(data)
+
+    def __drive_to_completion(self) -> FunctionResult:
+        try:
+            print(f"Driving to completion: {type(self.__ffi_stream)}")
+            retval = self.__ffi_stream.done(self.__ctx_manager)
+            print(f"Setting result: {type(retval)}")
+            self.__result = retval
+            return retval
+        except Exception as e:
+            self.__exception = e
+            raise e
+        finally:
+            print("Putting None in queue")
+            self.__event_queue.put_nowait(None)
+
+    def __drive_to_completion_in_bg(self):
+        if self.__task is None:
+            self.__task = threading.Thread(target=self.__threading_target, daemon=True)
+            self.__task.start()
+
+    def __threading_target(self):
+        self.__drive_to_completion()
+
+    def __iter__(self):
+        # TODO: This is deliberately __iter__ and not __aiter__ because we want to
+        # ensure that the caller is NOT using an async for loop.
+        self.__drive_to_completion_in_bg()
+        while True:
+            event = self.__event_queue.get()
+            if event is None:
+                print("Breaking out of loop")
+                break
+            yield self.__partial_coerce(event.parsed())
+
+    def get_final_response(self):
+        print("Getting final response")
+        self.__drive_to_completion_in_bg()
+        if self.__task is not None:
+            print("Waiting for task to complete")
+            self.__task.join()
+        else:
+            print("Task is None")
+
+        if self.__exception is not None:
+            print("Raising exception")
+            raise self.__exception
+        
+        if self.__result is None:
+            raise Exception("BAML Internal error: Stream did not complete successfully. Please report this issue.")
+        
+        return self.__final_coerce(self.__result.parsed())
