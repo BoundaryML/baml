@@ -46,8 +46,10 @@ import SettingsDialog, { ShowSettingsButton } from '@baml/playground-common/shar
 import FileViewer from './Tree/FileViewer'
 import { AppStateProvider } from '@baml/playground-common/shared/AppStateContext' // Import the AppStateProvider
 import { ViewSelector } from '@baml/playground-common/shared/Selectors'
+import { useDoorbell } from '@baml/playground-common/lib/doorbell'
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
+  useDoorbell()
   const setEditorFiles = useSetAtom(updateFileAtom)
   useKeybindingOverrides()
   // Tried to use url pathnames for this but nextjs hijacks the pathname state (even the window.location) so we have to manually track unsaved changes in the app.

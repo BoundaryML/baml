@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import './App.css'
 import 'allotment/dist/style.css'
 import { DevTools } from 'jotai-devtools'
@@ -14,8 +14,10 @@ import 'jotai-devtools/styles.css'
 import { Snippets } from './shared/Snippets'
 import { Dialog, DialogTrigger, DialogContent } from './components/ui/dialog'
 import { AppStateProvider } from './shared/AppStateContext' // Import the AppStateProvider
+import { useDoorbell } from './lib/doorbell'
 
 function App() {
+  useDoorbell()
   return (
     <CustomErrorBoundary>
       <DevTools />
