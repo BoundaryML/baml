@@ -18,6 +18,7 @@ $ pnpm add @boundaryml/baml
 import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image, ClientBuilder } from "@boundaryml/baml"
 import {Blah, ClassOptionalOutput, ClassOptionalOutput2, ClassWithImage, DummyOutput, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, Education, Email, Event, FakeImage, InnerClass, InnerClass2, NamedArgsSingleClass, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, Person, RaysData, ReceiptInfo, ReceiptItem, Resume, SearchParams, SomeClassNestedDynamic, TestClassAlias, TestClassNested, TestClassWithEnum, TestOutputClass, UnionTest_ReturnType, WithReasoning, Category, Category2, Category3, Color, DataType, DynEnumOne, DynEnumTwo, EnumInClass, EnumOutput, Hobby, NamedArgsSingleEnum, NamedArgsSingleEnumList, OptionalTest_CategoryType, OrderStatus, Tag, TestEnum} from "./types"
 import TypeBuilder from "./type_builder"
+import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
 export type RecursivePartialNull<T> = T extends object
   ? {
@@ -25,7 +26,7 @@ export type RecursivePartialNull<T> = T extends object
     }
   : T | null;
 
-export class BamlClient {
+export class BamlAsyncClient {
   private runtime: BamlRuntime
   private ctx_manager: BamlCtxManager
   private stream_client: BamlStreamClient
@@ -2544,3 +2545,5 @@ class BamlStreamClient {
   }
   
 }
+
+export const b = new BamlAsyncClient(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)

@@ -43,6 +43,7 @@ pub trait RuntimeInterface {
         params: &BamlMap<String, BamlValue>,
         tracer: Arc<BamlTracer>,
         ctx: RuntimeContext,
+        #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
     ) -> Result<FunctionResultStream>;
 }
 
@@ -96,7 +97,7 @@ pub trait ExperimentalTracingInterface {
     fn drain_stats(&self) -> crate::InnerTraceStats;
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn set_log_event_callback(&self, callback: LogEventCallbackSync) -> Result<()>;
+    fn set_log_event_callback(&self, callback: Option<LogEventCallbackSync>) -> Result<()>;
 }
 
 pub trait InternalClientLookup<'a> {

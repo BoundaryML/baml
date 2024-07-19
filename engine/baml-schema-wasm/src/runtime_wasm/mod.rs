@@ -951,7 +951,7 @@ impl WasmRuntime {
             generator_language,
             is_diagnostic,
         )
-        .map(|error| error.msg)
+        .map(|error| error.msg())
     }
 
     #[wasm_bindgen]

@@ -7,13 +7,30 @@ from .base64_test_data import image_b64, audio_b64
 load_dotenv()
 import baml_py
 from ..baml_client import b
+from ..baml_client.sync_client import b as sync_b
 from ..baml_client.globals import (
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME,
 )
-from ..baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
+from ..baml_client.types import (
+    NamedArgsSingleEnumList,
+    NamedArgsSingleClass,
+    DynInputOutput,
+)
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
 import datetime
+
+
+def test_sync():
+    res = sync_b.TestFnNamedArgsSingleClass(
+        myArg=NamedArgsSingleClass(
+            key="key",
+            key_two=True,
+            key_three=52,
+        )
+    )
+    print("got response", res)
+    assert "52" in res
 
 
 @pytest.mark.asyncio
@@ -224,6 +241,49 @@ async def test_streaming():
 @pytest.mark.asyncio
 async def test_streaming_uniterated():
     final = await b.stream.PromptTestStreaming(
+        input="The color blue makes me sad"
+    ).get_final_response()
+    assert len(final) > 0, "Expected non-empty final but got empty."
+
+
+def test_streaming_sync():
+    stream = sync_b.stream.PromptTestStreaming(
+        input="Programming languages are fun to create"
+    )
+    msgs: list[str] = []
+
+    start_time = asyncio.get_event_loop().time()
+    last_msg_time = start_time
+    first_msg_time = start_time + 10
+    for msg in stream:
+        msgs.append(str(msg))
+        if len(msgs) == 1:
+            first_msg_time = asyncio.get_event_loop().time()
+
+        last_msg_time = asyncio.get_event_loop().time()
+
+    final = stream.get_final_response()
+
+    assert (
+        first_msg_time - start_time <= 1.5
+    ), "Expected first message within 1 second but it took longer."
+    assert (
+        last_msg_time - start_time >= 1
+    ), "Expected last message after 1.5 seconds but it was earlier."
+    assert len(final) > 0, "Expected non-empty final but got empty."
+    assert len(msgs) > 0, "Expected at least one streamed response but got none."
+    for prev_msg, msg in zip(msgs, msgs[1:]):
+        assert msg.startswith(
+            prev_msg
+        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
+            prev_msg,
+            msg,
+        )
+    assert msgs[-1] == final, "Expected last stream message to match final response."
+
+
+def test_streaming_uniterated_sync():
+    final = sync_b.stream.PromptTestStreaming(
         input="The color blue makes me sad"
     ).get_final_response()
     assert len(final) > 0, "Expected non-empty final but got empty."
@@ -537,13 +597,15 @@ async def test_stream_dynamic_class_output():
     for prop, _ in tb.DynamicOutput.list_properties():
         print(f"Property: {prop}")
 
+    cr = baml_py.ClientRegistry()
+    cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini"})
+    cr.set_primary("MyClient")
     stream = b.stream.MyFunc(
         input="My name is Harrison. My hair is black and I'm 6 feet tall.",
-        baml_options={"tb": tb},
+        baml_options={"tb": tb, "client_registry": cr},
     )
     msgs = []
     async for msg in stream:
-        print("streamed ", msg)
         print("streamed ", msg.model_dump())
         msgs.append(msg)
     final = await stream.get_final_response()
@@ -553,6 +615,43 @@ async def test_stream_dynamic_class_output():
     print("final ", final.model_dump())
     print("final ", final.model_dump_json())
     assert final.hair_color == "black"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_inputs_list2():
+    tb = TypeBuilder()
+    tb.DynInputOutput.add_property("new_key", tb.string().optional())
+    custom_class = tb.add_class("MyBlah")
+    custom_class.add_property("nestedKey1", tb.string())
+    tb.DynInputOutput.add_property("blah", custom_class.type())
+
+    res = await b.DynamicListInputOutput(
+        [
+            DynInputOutput(
+                **{
+                    "new_key": "hi1",
+                    "testKey": "myTest",
+                    "blah": {
+                        "nestedKey1": "nestedVal",
+                    },
+                }
+            ),
+            {
+                "new_key": "hi",
+                "testKey": "myTest",
+                "blah": {
+                    "nestedKey1": "nestedVal",
+                },
+            },
+        ],
+        {"tb": tb},
+    )
+    assert res[0].new_key == "hi1"
+    assert res[0].testKey == "myTest"
+    assert res[0].blah["nestedKey1"] == "nestedVal"
+    assert res[1].new_key == "hi"
+    assert res[1].testKey == "myTest"
+    assert res[1].blah["nestedKey1"] == "nestedVal"
 
 
 @pytest.mark.asyncio
@@ -624,9 +723,12 @@ async def test_event_log_hook():
         print("Event log hook1: ")
         print("Event log event ", event)
 
+    flush()  # clear any existing hooks
     on_log_event(event_log_hook)
     res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
     assert res
+    flush()  # clear the hook
+    on_log_event(None)
 
 
 @pytest.mark.asyncio

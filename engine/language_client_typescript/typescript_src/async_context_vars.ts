@@ -50,7 +50,11 @@ export class BamlCtxManager {
     this.rt.flush()
   }
 
-  onLogEvent(callback: (event: BamlLogEvent) => void): void {
+  onLogEvent(callback: ((event: BamlLogEvent) => void) | undefined): void {
+    if (!callback) {
+      this.rt.setLogEventCallback(undefined)
+      return
+    }
     this.rt.setLogEventCallback((error: any, param: BamlLogEvent) => {
       if (!error) {
         callback(param)

@@ -80,7 +80,7 @@ impl BamlTracer {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) {
+    pub(crate) fn set_log_event_callback(&self, log_event_callback: Option<LogEventCallbackSync>) {
         if let Some(tracer) = &self.tracer {
             tracer.set_log_event_callback(log_event_callback);
         }

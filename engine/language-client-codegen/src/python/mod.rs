@@ -6,16 +6,42 @@ use std::path::PathBuf;
 use anyhow::Result;
 use either::Either;
 use indexmap::IndexMap;
-use internal_baml_core::ir::{repr::IntermediateRepr, FieldType, IRHelper};
+use internal_baml_core::{
+    configuration::GeneratorDefaultClientMode,
+    ir::{repr::IntermediateRepr, FieldType, IRHelper},
+};
 
 use self::python_language_features::{PythonLanguageFeatures, ToPython};
 use crate::dir_writer::FileCollector;
 
 #[derive(askama::Template)]
-#[template(path = "client.py.j2", escape = "none")]
+#[template(path = "async_client.py.j2", escape = "none")]
+struct AsyncPythonClient {
+    funcs: Vec<PythonFunction>,
+}
+
+#[derive(askama::Template)]
+#[template(path = "sync_client.py.j2", escape = "none")]
+struct SyncPythonClient {
+    funcs: Vec<PythonFunction>,
+}
+
 struct PythonClient {
     funcs: Vec<PythonFunction>,
 }
+
+impl From<PythonClient> for AsyncPythonClient {
+    fn from(value: PythonClient) -> Self {
+        Self { funcs: value.funcs }
+    }
+}
+
+impl From<PythonClient> for SyncPythonClient {
+    fn from(value: PythonClient) -> Self {
+        Self { funcs: value.funcs }
+    }
+}
+
 struct PythonFunction {
     name: String,
     partial_return_type: String,
@@ -25,7 +51,9 @@ struct PythonFunction {
 
 #[derive(askama::Template)]
 #[template(path = "__init__.py.j2", escape = "none")]
-struct PythonInit {}
+struct PythonInit {
+    default_client_mode: GeneratorDefaultClientMode,
+}
 
 #[derive(askama::Template)]
 #[template(path = "globals.py.j2", escape = "none")]
@@ -51,7 +79,8 @@ pub(crate) fn generate(
         .add_template::<generate_types::PythonStreamTypes>("partial_types.py", (ir, generator))?;
     collector.add_template::<generate_types::PythonTypes>("types.py", (ir, generator))?;
     collector.add_template::<generate_types::TypeBuilder>("type_builder.py", (ir, generator))?;
-    collector.add_template::<PythonClient>("client.py", (ir, generator))?;
+    collector.add_template::<AsyncPythonClient>("async_client.py", (ir, generator))?;
+    collector.add_template::<SyncPythonClient>("sync_client.py", (ir, generator))?;
     collector.add_template::<PythonGlobals>("globals.py", (ir, generator))?;
     collector.add_template::<PythonTracing>("tracing.py", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlinedbaml.py", (ir, generator))?;
@@ -71,8 +100,10 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonTracing
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonInit {
     type Error = anyhow::Error;
 
-    fn try_from(_: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
-        Ok(PythonInit {})
+    fn try_from((_, gen): (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        Ok(PythonInit {
+            default_client_mode: gen.default_client_mode.clone(),
+        })
     }
 }
 
@@ -91,6 +122,24 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
         Ok(InlinedBaml {
             file_map: args.file_map()?,
         })
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for AsyncPythonClient {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let python_client = PythonClient::try_from(params)?;
+        Ok(python_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for SyncPythonClient {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let python_client = PythonClient::try_from(params)?;
+        Ok(python_client.into())
     }
 }
 
