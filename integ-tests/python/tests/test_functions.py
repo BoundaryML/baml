@@ -11,7 +11,11 @@ from ..baml_client.sync_client import b as sync_b
 from ..baml_client.globals import (
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME,
 )
-from ..baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass, DynInputOutput
+from ..baml_client.types import (
+    NamedArgsSingleEnumList,
+    NamedArgsSingleClass,
+    DynInputOutput,
+)
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
 import datetime
@@ -593,13 +597,15 @@ async def test_stream_dynamic_class_output():
     for prop, _ in tb.DynamicOutput.list_properties():
         print(f"Property: {prop}")
 
+    cr = baml_py.ClientRegistry()
+    cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini"})
+    cr.set_primary("MyClient")
     stream = b.stream.MyFunc(
         input="My name is Harrison. My hair is black and I'm 6 feet tall.",
-        baml_options={"tb": tb},
+        baml_options={"tb": tb, "client_registry": cr},
     )
     msgs = []
     async for msg in stream:
-        print("streamed ", msg)
         print("streamed ", msg.model_dump())
         msgs.append(msg)
     final = await stream.get_final_response()
@@ -621,13 +627,15 @@ async def test_dynamic_inputs_list2():
 
     res = await b.DynamicListInputOutput(
         [
-            DynInputOutput(**{
-                "new_key": "hi1",
-                "testKey": "myTest",
-                "blah": {
-                    "nestedKey1": "nestedVal",
-                },
-            }),
+            DynInputOutput(
+                **{
+                    "new_key": "hi1",
+                    "testKey": "myTest",
+                    "blah": {
+                        "nestedKey1": "nestedVal",
+                    },
+                }
+            ),
             {
                 "new_key": "hi",
                 "testKey": "myTest",
@@ -715,9 +723,12 @@ async def test_event_log_hook():
         print("Event log hook1: ")
         print("Event log event ", event)
 
+    flush()  # clear any existing hooks
     on_log_event(event_log_hook)
     res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
     assert res
+    flush()  # clear the hook
+    on_log_event(None)
 
 
 @pytest.mark.asyncio

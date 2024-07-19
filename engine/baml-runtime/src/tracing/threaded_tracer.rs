@@ -213,11 +213,11 @@ impl ThreadedTracer {
         anyhow::bail!("BatchProcessor worker thread did not finish in time")
     }
 
-    pub fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) {
+    pub fn set_log_event_callback(&self, log_event_callback: Option<LogEventCallbackSync>) {
         // Get a mutable lock on the log_event_callback
         let mut callback_lock = self.log_event_callback.lock().unwrap();
 
-        *callback_lock = Some(log_event_callback);
+        *callback_lock = log_event_callback;
     }
 
     pub fn submit(&self, mut event: LogSchema) -> Result<()> {

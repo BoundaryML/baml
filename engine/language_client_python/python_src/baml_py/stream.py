@@ -5,7 +5,7 @@ from .baml_py import (
     SyncFunctionResultStream,
     RuntimeContextManager,
 )
-from typing import Callable, Generic, Optional, TypeVar, Union
+from typing import Callable, Generic, Optional, TypeVar
 import threading
 import asyncio
 import concurrent.futures
@@ -73,7 +73,8 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
             event = self.__event_queue.get()
             if event is None:
                 break
-            yield self.__partial_coerce(event.parsed())
+            if event.is_ok():
+                yield self.__partial_coerce(event.parsed())
 
     async def get_final_response(self):
         final = self.__drive_to_completion_in_bg()
@@ -107,21 +108,17 @@ class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
         self.__exception = None
 
     def __enqueue(self, data: FunctionResult) -> None:
-        print("Enqueuing data")
         self.__event_queue.put_nowait(data)
 
     def __drive_to_completion(self) -> FunctionResult:
         try:
-            print(f"Driving to completion: {type(self.__ffi_stream)}")
             retval = self.__ffi_stream.done(self.__ctx_manager)
-            print(f"Setting result: {type(retval)}")
             self.__result = retval
             return retval
         except Exception as e:
             self.__exception = e
             raise e
         finally:
-            print("Putting None in queue")
             self.__event_queue.put_nowait(None)
 
     def __drive_to_completion_in_bg(self):
@@ -139,24 +136,21 @@ class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
         while True:
             event = self.__event_queue.get()
             if event is None:
-                print("Breaking out of loop")
                 break
-            yield self.__partial_coerce(event.parsed())
+            if event.is_ok():
+                yield self.__partial_coerce(event.parsed())
 
     def get_final_response(self):
-        print("Getting final response")
         self.__drive_to_completion_in_bg()
         if self.__task is not None:
-            print("Waiting for task to complete")
             self.__task.join()
-        else:
-            print("Task is None")
 
         if self.__exception is not None:
-            print("Raising exception")
             raise self.__exception
-        
+
         if self.__result is None:
-            raise Exception("BAML Internal error: Stream did not complete successfully. Please report this issue.")
-        
+            raise Exception(
+                "BAML Internal error: Stream did not complete successfully. Please report this issue."
+            )
+
         return self.__final_coerce(self.__result.parsed())

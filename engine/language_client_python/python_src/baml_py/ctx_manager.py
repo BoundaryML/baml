@@ -67,7 +67,9 @@ class CtxManager:
     def flush(self) -> None:
         self.rt.flush()
 
-    def on_log_event(self, handler: typing.Callable[[BamlLogEvent], None]) -> None:
+    def on_log_event(
+        self, handler: typing.Optional[typing.Callable[[BamlLogEvent], None]]
+    ) -> None:
         self.rt.set_log_event_callback(handler)
 
     def trace_fn(self, func: F) -> F:

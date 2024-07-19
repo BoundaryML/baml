@@ -268,36 +268,43 @@ impl BamlRuntime {
     }
 
     #[pyo3()]
-    fn set_log_event_callback(&self, callback: PyObject) -> PyResult<()> {
+    fn set_log_event_callback(&self, callback: Option<PyObject>) -> PyResult<()> {
         let callback = callback.clone();
         let baml_runtime = self.inner.clone();
 
-        baml_runtime
-            .as_ref()
-            .set_log_event_callback(Box::new(move |log_event| {
-                Python::with_gil(|py| {
-                    match callback.call1(
-                        py,
-                        (BamlLogEvent {
-                            metadata: LogEventMetadata {
-                                event_id: log_event.metadata.event_id.clone(),
-                                parent_id: log_event.metadata.parent_id.clone(),
-                                root_event_id: log_event.metadata.root_event_id.clone(),
-                            },
-                            prompt: log_event.prompt.clone(),
-                            raw_output: log_event.raw_output.clone(),
-                            parsed_output: log_event.parsed_output.clone(),
-                            start_time: log_event.start_time.clone(),
-                        },),
-                    ) {
-                        Ok(_) => Ok(()),
-                        Err(e) => {
-                            log::error!("Error calling log_event_callback: {:?}", e);
-                            Err(anyhow::Error::new(e).into()) // Proper error handling
+        if let Some(callback) = callback {
+            baml_runtime
+                .as_ref()
+                .set_log_event_callback(Some(Box::new(move |log_event| {
+                    Python::with_gil(|py| {
+                        match callback.call1(
+                            py,
+                            (BamlLogEvent {
+                                metadata: LogEventMetadata {
+                                    event_id: log_event.metadata.event_id.clone(),
+                                    parent_id: log_event.metadata.parent_id.clone(),
+                                    root_event_id: log_event.metadata.root_event_id.clone(),
+                                },
+                                prompt: log_event.prompt.clone(),
+                                raw_output: log_event.raw_output.clone(),
+                                parsed_output: log_event.parsed_output.clone(),
+                                start_time: log_event.start_time.clone(),
+                            },),
+                        ) {
+                            Ok(_) => Ok(()),
+                            Err(e) => {
+                                log::error!("Error calling log_event_callback: {:?}", e);
+                                Err(anyhow::Error::new(e).into()) // Proper error handling
+                            }
                         }
-                    }
-                })
-            }))
-            .map_err(BamlError::from_anyhow)
+                    })
+                })))
+                .map_err(BamlError::from_anyhow)
+        } else {
+            baml_runtime
+                .as_ref()
+                .set_log_event_callback(None)
+                .map_err(BamlError::from_anyhow)
+        }
     }
 }

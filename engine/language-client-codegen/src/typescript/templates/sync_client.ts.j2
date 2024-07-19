@@ -15,11 +15,7 @@ export class BamlSyncClient {
   private runtime: BamlRuntime
   private ctx_manager: BamlCtxManager
 
-  constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager) {
-    this.runtime = runtime
-    this.ctx_manager = ctx_manager
-    this.stream_client = new BamlStreamClient(runtime, ctx_manager)
-  }
+  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
 
   /*
   * @deprecated NOT IMPLEMENTED as streaming must by async. We

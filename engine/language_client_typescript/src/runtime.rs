@@ -251,14 +251,18 @@ impl BamlRuntime {
     pub fn set_log_event_callback(
         &mut self,
         env: Env,
-        #[napi(ts_arg_type = "(err: any, param: BamlLogEvent) => void")] func: JsFunction,
+        #[napi(ts_arg_type = "undefined | (err: any, param: BamlLogEvent) => void")] func: Option<
+            JsFunction,
+        >,
     ) -> napi::Result<JsUndefined> {
-        let cb = env.create_reference(func)?;
-        // let prev = self.callback.take();
-        // if let Some(mut old_cb) = prev {
-        //     old_cb.unref(env)?;
-        // }
-        self.callback = Some(cb);
+        let prev = self.callback.take();
+        if let Some(mut old_cb) = prev {
+            old_cb.unref(env)?;
+        }
+        self.callback = match func {
+            Some(func) => Some(env.create_reference(func)?),
+            None => None,
+        };
 
         let res = match &self.callback {
             Some(callback_ref) => {
@@ -272,29 +276,31 @@ impl BamlRuntime {
                 )?;
                 let tsfn_clone = tsfn.clone();
 
+                let cb = Box::new(move |event: LogEvent| {
+                    // let env = callback.env;
+                    let event = BamlLogEvent {
+                        metadata: LogEventMetadata {
+                            event_id: event.metadata.event_id,
+                            parent_id: event.metadata.parent_id,
+                            root_event_id: event.metadata.root_event_id,
+                        },
+                        prompt: event.prompt,
+                        raw_output: event.raw_output,
+                        parsed_output: event.parsed_output,
+                        start_time: event.start_time,
+                    };
+
+                    let res = tsfn_clone.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
+                    if res != napi::Status::Ok {
+                        log::error!("Error calling on_log_event callback: {:?}", res);
+                    }
+
+                    Ok(())
+                });
+
                 let res = self
                     .inner
-                    .set_log_event_callback(Box::new(move |event: LogEvent| {
-                        // let env = callback.env;
-                        let event = BamlLogEvent {
-                            metadata: LogEventMetadata {
-                                event_id: event.metadata.event_id,
-                                parent_id: event.metadata.parent_id,
-                                root_event_id: event.metadata.root_event_id,
-                            },
-                            prompt: event.prompt,
-                            raw_output: event.raw_output,
-                            parsed_output: event.parsed_output,
-                            start_time: event.start_time,
-                        };
-
-                        let res = tsfn_clone.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
-                        if res != napi::Status::Ok {
-                            log::error!("Error calling on_log_event callback: {:?}", res);
-                        }
-
-                        Ok(())
-                    }))
+                    .set_log_event_callback(Some(cb))
                     .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()));
                 let _ = tsfn.unref(&env);
 
@@ -306,7 +312,20 @@ impl BamlRuntime {
                     }
                 }
             }
-            None => Ok(()),
+            None => {
+                let res = self
+                    .inner
+                    .set_log_event_callback(None)
+                    .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()));
+
+                match res {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        log::error!("Error setting log_event_callback: {:?}", e);
+                        Err(e)
+                    }
+                }
+            }
         };
 
         let _ = match res {

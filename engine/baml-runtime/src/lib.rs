@@ -33,6 +33,7 @@ use baml_types::BamlValue;
 use client_registry::ClientRegistry;
 use indexmap::IndexMap;
 use internal_baml_core::configuration::GeneratorOutputType;
+use internal_core::configuration::Generator;
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
 
@@ -273,7 +274,7 @@ impl BamlRuntime {
     ) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
         use internal_baml_codegen::GenerateClient;
 
-        let client_types: Vec<(GeneratorOutputType, internal_baml_codegen::GeneratorArgs)> = self
+        let client_types: Vec<(&Generator, internal_baml_codegen::GeneratorArgs)> = self
             .inner
             .ir()
             .configuration()
@@ -281,7 +282,7 @@ impl BamlRuntime {
             .iter()
             .map(|(generator, _)| {
                 Ok((
-                    generator.output_type.clone(),
+                    generator,
                     internal_baml_codegen::GeneratorArgs::new(
                         generator.output_dir(),
                         generator.baml_src.clone(),
@@ -296,7 +297,18 @@ impl BamlRuntime {
 
         client_types
             .iter()
-            .map(|(client_type, args)| client_type.generate_client(self.inner.ir(), args))
+            .map(|(generator, args)| {
+                generator
+                    .output_type
+                    .generate_client(self.inner.ir(), args)
+                    .map_err(|e| {
+                        let ((line, col), _) = generator.span.line_and_column();
+                        anyhow::anyhow!(
+                            "Error in file {}:{line}:{col} {e}",
+                            generator.span.file.path()
+                        )
+                    })
+            })
             .collect()
     }
 }
@@ -376,7 +388,10 @@ impl ExperimentalTracingInterface for BamlRuntime {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) -> Result<()> {
+    fn set_log_event_callback(
+        &self,
+        log_event_callback: Option<LogEventCallbackSync>,
+    ) -> Result<()> {
         self.tracer.set_log_event_callback(log_event_callback);
         Ok(())
     }

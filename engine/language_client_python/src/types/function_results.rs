@@ -11,6 +11,10 @@ impl FunctionResult {
         format!("{:#}", self.inner)
     }
 
+    fn is_ok(&self) -> bool {
+        self.inner.parsed_content().is_ok()
+    }
+
     fn parsed(&self, py: Python<'_>) -> PyResult<PyObject> {
         let parsed = self
             .inner

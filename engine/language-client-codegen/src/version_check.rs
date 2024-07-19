@@ -58,7 +58,7 @@ pub fn check_version(
   
     if gen_version.major != runtime_version.major || gen_version.minor != runtime_version.minor {
         let base_message = format!(
-            "Version mismatch: Generator version ({}) does not match the {} version ({}). Major and minor versions must match.",
+            "Generator version ({}) does not match the {} version ({}). Major and minor versions must match.",
             gen_version,
             match generator_type {
                 GeneratorType::VSCode => "VSCode extension",

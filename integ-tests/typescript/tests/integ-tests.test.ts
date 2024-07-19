@@ -418,6 +418,7 @@ describe('Integ tests', () => {
   })
 
   it("should work with 'onLogEvent'", async () => {
+    flush() // Wait for all logs to be sent so no calls to onLogEvent are missed.
     onLogEvent((param2) => {
       console.log('onLogEvent', param2)
     })
@@ -425,6 +426,8 @@ describe('Integ tests', () => {
     expect(res).toContain('a')
     const res2 = await b.TestFnNamedArgsSingleStringList(['d', 'e', 'f'])
     expect(res2).toContain('d')
+    flush() // Wait for all logs to be sent so no calls to onLogEvent are missed.
+    onLogEvent(undefined)
   })
 
   it('should work with a sync client', () => {
