@@ -27,6 +27,7 @@ pub struct FunctionResultStream {
     pub(crate) ir: Arc<IntermediateRepr>,
     pub(crate) orchestrator: OrchestratorNodeIterator,
     pub(crate) tracer: Arc<BamlTracer>,
+    pub(crate) tokio_runtime: Arc<tokio::runtime::Runtime>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -53,6 +54,21 @@ first.scope.clone();
 */
 
 impl FunctionResultStream {
+    pub fn run_sync<F>(
+        &mut self,
+        on_event: Option<F>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> (Result<FunctionResult>, Option<uuid::Uuid>)
+    where
+        F: Fn(FunctionResult) -> (),
+    {
+        let rt = self.tokio_runtime.clone();
+        let fut = self.run(on_event, ctx, tb, cb);
+        rt.block_on(fut)
+    }
+
     pub async fn run<F>(
         &mut self,
         on_event: Option<F>,

@@ -1,0 +1,56 @@
+import { BamlRuntime, FunctionResult, BamlCtxManager, BamlSyncStream, Image, ClientBuilder } from "@boundaryml/baml"
+import { 
+  {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%} 
+} from "./types"
+import TypeBuilder from "./type_builder"
+import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
+
+export type RecursivePartialNull<T> = T extends object
+  ? {
+      [P in keyof T]?: RecursivePartialNull<T[P]>;
+    }
+  : T | null;
+
+export class BamlSyncClient {
+  private runtime: BamlRuntime
+  private ctx_manager: BamlCtxManager
+
+  constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager) {
+    this.runtime = runtime
+    this.ctx_manager = ctx_manager
+    this.stream_client = new BamlStreamClient(runtime, ctx_manager)
+  }
+
+  /*
+  * @deprecated NOT IMPLEMENTED as streaming must by async. We
+  * are not providing an async version as we want to reserve the
+  * right to provide a sync version in the future.
+  */
+  get stream() {
+    throw new Error("stream is not available in BamlSyncClient. Use `import { b } from 'baml_client/async_client")
+  }  
+
+  {% for fn in funcs %}
+  {{ fn.name }}(
+      {% for (name, optional, type) in fn.args -%}
+      {{name}}{% if optional %}?{% endif %}: {{type}},
+      {%- endfor %}
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): {{fn.return_type}} {
+    const raw = this.runtime.callFunctionSync(
+      "{{fn.name}}",
+      {
+        {% for (name, optional, type) in fn.args -%}
+        "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
+        {%- endfor %}
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.cr,
+    )
+    return raw.parsed() as {{fn.return_type}}
+  }
+  {% endfor %}
+}
+
+export const b = new BamlSyncClient(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)

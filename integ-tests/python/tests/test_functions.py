@@ -7,6 +7,7 @@ from .base64_test_data import image_b64, audio_b64
 load_dotenv()
 import baml_py
 from ..baml_client import b
+from ..baml_client.sync_client import b as sync_b
 from ..baml_client.globals import (
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME,
 )
@@ -14,6 +15,18 @@ from ..baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass, D
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
 import datetime
+
+
+def test_sync():
+    res = sync_b.TestFnNamedArgsSingleClass(
+        myArg=NamedArgsSingleClass(
+            key="key",
+            key_two=True,
+            key_three=52,
+        )
+    )
+    print("got response", res)
+    assert "52" in res
 
 
 @pytest.mark.asyncio
@@ -224,6 +237,49 @@ async def test_streaming():
 @pytest.mark.asyncio
 async def test_streaming_uniterated():
     final = await b.stream.PromptTestStreaming(
+        input="The color blue makes me sad"
+    ).get_final_response()
+    assert len(final) > 0, "Expected non-empty final but got empty."
+
+
+def test_streaming_sync():
+    stream = sync_b.stream.PromptTestStreaming(
+        input="Programming languages are fun to create"
+    )
+    msgs: list[str] = []
+
+    start_time = asyncio.get_event_loop().time()
+    last_msg_time = start_time
+    first_msg_time = start_time + 10
+    for msg in stream:
+        msgs.append(str(msg))
+        if len(msgs) == 1:
+            first_msg_time = asyncio.get_event_loop().time()
+
+        last_msg_time = asyncio.get_event_loop().time()
+
+    final = stream.get_final_response()
+
+    assert (
+        first_msg_time - start_time <= 1.5
+    ), "Expected first message within 1 second but it took longer."
+    assert (
+        last_msg_time - start_time >= 1
+    ), "Expected last message after 1.5 seconds but it was earlier."
+    assert len(final) > 0, "Expected non-empty final but got empty."
+    assert len(msgs) > 0, "Expected at least one streamed response but got none."
+    for prev_msg, msg in zip(msgs, msgs[1:]):
+        assert msg.startswith(
+            prev_msg
+        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
+            prev_msg,
+            msg,
+        )
+    assert msgs[-1] == final, "Expected last stream message to match final response."
+
+
+def test_streaming_uniterated_sync():
+    final = sync_b.stream.PromptTestStreaming(
         input="The color blue makes me sad"
     ).get_final_response()
     assert len(final) > 0, "Expected non-empty final but got empty."

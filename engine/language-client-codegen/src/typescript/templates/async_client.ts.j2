@@ -3,6 +3,7 @@ import {
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%} 
 } from "./types"
 import TypeBuilder from "./type_builder"
+import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
 export type RecursivePartialNull<T> = T extends object
   ? {
@@ -10,7 +11,7 @@ export type RecursivePartialNull<T> = T extends object
     }
   : T | null;
 
-export class BamlClient {
+export class BamlAsyncClient {
   private runtime: BamlRuntime
   private ctx_manager: BamlCtxManager
   private stream_client: BamlStreamClient
@@ -80,3 +81,5 @@ class BamlStreamClient {
   }
   {% endfor %}
 }
+
+export const b = new BamlAsyncClient(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)

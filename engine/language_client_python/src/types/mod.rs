@@ -12,7 +12,7 @@ pub(crate) mod trace_stats;
 pub(crate) mod type_builder;
 
 pub use audio::BamlAudioPy;
-pub use function_result_stream::FunctionResultStream;
+pub use function_result_stream::{FunctionResultStream, SyncFunctionResultStream};
 pub use function_results::FunctionResult;
 pub use image::BamlImagePy;
 

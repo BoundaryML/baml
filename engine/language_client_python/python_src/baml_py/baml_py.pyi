@@ -31,6 +31,20 @@ class FunctionResultStream:
     ) -> FunctionResultStream: ...
     async def done(self, ctx: RuntimeContextManager) -> FunctionResult: ...
 
+class SyncFunctionResultStream:
+    """The result of a BAML function stream.
+
+    Provides a callback interface to receive events from a BAML result stream.
+
+    Use `on_event` to set the callback, and `done` to drive the stream to completion.
+    """
+
+    def __str__(self) -> str: ...
+    def on_event(
+        self, on_event: Callable[[FunctionResult], None]
+    ) -> SyncFunctionResultStream: ...
+    def done(self, ctx: RuntimeContextManager) -> FunctionResult: ...
+
 class BamlImagePy:
     @staticmethod
     def from_url(url: str) -> BamlImagePy: ...
@@ -79,6 +93,15 @@ class BamlRuntime:
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
     ) -> FunctionResultStream: ...
+    def stream_function_sync(
+        self,
+        function_name: str,
+        args: Dict[str, Any],
+        on_event: Optional[Callable[[FunctionResult], None]],
+        ctx: RuntimeContextManager,
+        tb: Optional[TypeBuilder],
+        cr: Optional[ClientRegistry],
+    ) -> SyncFunctionResultStream: ...
     def create_context_manager(self) -> RuntimeContextManager: ...
     def flush(self) -> None: ...
     def drain_stats(self) -> TraceStats: ...

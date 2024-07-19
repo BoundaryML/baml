@@ -119,7 +119,91 @@ impl BamlRuntime {
     }
 
     #[napi]
+    pub fn call_function_sync(
+        &self,
+        env: Env,
+        function_name: String,
+        #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> napi::Result<FunctionResult> {
+        let args = parse_ts_types::js_object_to_baml_value(env, args)?;
+
+        if !args.is_map() {
+            return Err(napi::Error::new(
+                napi::Status::GenericFailure,
+                format!(
+                    "Invalid args: Expected a map of arguments, got: {}",
+                    args.r#type()
+                ),
+            ));
+        }
+        let args_map = args.as_map_owned().unwrap();
+
+        let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
+        let (result, _event_id) = self.inner.call_function_sync(
+            function_name,
+            &args_map,
+            &ctx_mng,
+            tb.as_ref(),
+            cb.as_ref(),
+        );
+
+        result
+            .map(FunctionResult::from)
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+    }
+
+    #[napi]
     pub fn stream_function(
+        &self,
+        env: Env,
+        function_name: String,
+        #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
+        #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] cb: Option<JsFunction>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        client_registry: Option<&ClientRegistry>,
+    ) -> napi::Result<FunctionResultStream> {
+        let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
+        if !args.is_map() {
+            return Err(napi::Error::new(
+                napi::Status::GenericFailure,
+                format!(
+                    "Invalid args: Expected a map of arguments, got: {}",
+                    args.r#type()
+                ),
+            ));
+        }
+        let args_map = args.as_map_owned().unwrap();
+
+        let ctx = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let client_registry = client_registry.map(|cb| cb.inner.clone());
+        let stream = self
+            .inner
+            .stream_function(
+                function_name,
+                &args_map,
+                &ctx,
+                tb.as_ref(),
+                client_registry.as_ref(),
+            )
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
+
+        let cb = match cb {
+            Some(cb) => Some(env.create_reference(cb)?),
+            None => None,
+        };
+
+        Ok(FunctionResultStream::new(stream, cb, tb, client_registry))
+    }
+
+    #[napi]
+    pub fn stream_function_sync(
         &self,
         env: Env,
         function_name: String,

@@ -839,6 +839,7 @@ dependencies = [
  "mime",
  "mime_guess",
  "pin-project-lite",
+ "pretty_assertions",
  "reqwest 0.12.5",
  "reqwest-eventsource",
  "ring",

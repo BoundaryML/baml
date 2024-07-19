@@ -67,6 +67,8 @@ pub struct BamlRuntime {
     inner: InternalBamlRuntime,
     tracer: Arc<BamlTracer>,
     env_vars: HashMap<String, String>,
+    #[cfg(not(target_arch = "wasm32"))]
+    async_runtime: Arc<tokio::runtime::Runtime>,
 }
 
 impl BamlRuntime {
@@ -88,6 +90,8 @@ impl BamlRuntime {
             inner: InternalBamlRuntime::from_directory(path)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
+            #[cfg(not(target_arch = "wasm32"))]
+            async_runtime: tokio::runtime::Runtime::new()?.into(),
         })
     }
 
@@ -104,6 +108,8 @@ impl BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
+            #[cfg(not(target_arch = "wasm32"))]
+            async_runtime: tokio::runtime::Runtime::new()?.into(),
         })
     }
 
@@ -182,6 +188,19 @@ impl BamlRuntime {
         (response, target_id)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn call_function_sync(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
+        let fut = self.call_function(function_name, params, ctx, tb, cb);
+        self.async_runtime.block_on(fut)
+    }
+
     pub async fn call_function(
         &self,
         function_name: String,
@@ -231,6 +250,7 @@ impl BamlRuntime {
             params,
             self.tracer.clone(),
             ctx.create_ctx(tb, cb)?,
+            self.async_runtime.clone(),
         )
     }
 
@@ -267,6 +287,7 @@ impl BamlRuntime {
                         input_files.iter(),
                         generator.version.clone(),
                         no_version_check,
+                        generator.default_client_mode(),
                     )?,
                 ))
             })

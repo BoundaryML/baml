@@ -1,3 +1,7 @@
-export { b } from "./globals"
+{% if default_client_mode == GeneratorDefaultClientMode::Async %}
+export { b } from "./async_client"
+{% else %}
+export { b } from "./sync_client"
+{% endif %}
 export * from "./types"
 export * from "./tracing"

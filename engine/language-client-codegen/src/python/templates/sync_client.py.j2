@@ -7,6 +7,7 @@ from pydantic import BaseModel, ValidationError, create_model
 
 from . import partial_types, types
 from .type_builder import TypeBuilder
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
 
 OutputType = TypeVar('OutputType')
 
@@ -26,7 +27,7 @@ class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
 
-class BamlClient:
+class BamlSyncClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
@@ -41,7 +42,7 @@ class BamlClient:
       return self.__stream_client
 
     {% for fn in funcs %}
-    async def {{ fn.name }}(
+    def {{ fn.name }}(
         self,
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}},
@@ -55,7 +56,7 @@ class BamlClient:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.call_function(
+      raw = self.__runtime.call_function_sync(
         "{{fn.name}}",
         {
           {% for (name, _) in fn.args -%}
@@ -69,6 +70,8 @@ class BamlClient:
       mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
       return coerce(mdl, raw.parsed())
     {% endfor %}
+
+
 
 class BamlStreamClient:
     __runtime: baml_py.BamlRuntime
@@ -85,7 +88,7 @@ class BamlStreamClient:
         {{name}}: {{type}},
         {%- endfor %}
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}]:
+    ) -> baml_py.BamlSyncStream[{{ fn.partial_return_type }}, {{ fn.return_type }}]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb
@@ -93,7 +96,7 @@ class BamlStreamClient:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = self.__runtime.stream_function(
+      raw = self.__runtime.stream_function_sync(
         "{{fn.name}}",
         {
           {%- for (name, _) in fn.args %}
@@ -109,10 +112,14 @@ class BamlStreamClient:
       mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
       partial_mdl = create_model("{{ fn.name }}PartialReturnType", inner=({{ fn.partial_return_type }}, ...))
 
-      return baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](
+      return baml_py.BamlSyncStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
         self.__ctx_manager.get(),
       )
     {% endfor %}
+
+b = BamlSyncClient(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)
+
+__all__ = ["b"]

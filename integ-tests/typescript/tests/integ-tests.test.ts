@@ -14,7 +14,8 @@ import {
   TestClassNested,
   onLogEvent,
 } from '../baml_client'
-import { RecursivePartialNull } from '../baml_client/client'
+import { RecursivePartialNull } from '../baml_client/async_client'
+import { b as b_sync } from '../baml_client/sync_client'
 import { config } from 'dotenv'
 import { BamlLogEvent, BamlRuntime } from '@boundaryml/baml/native'
 import { AsyncLocalStorage } from 'async_hooks'
@@ -226,10 +227,9 @@ describe('Integ tests', () => {
     expect(msgs.at(-1)).toEqual(final)
   })
 
-  it('should support vertex', async() => {
+  it('should support vertex', async () => {
     const res = await b.TestVertex('Donkey Kong')
     expect(res.toLowerCase()).toContain('donkey')
-
   })
 
   it('supports tracing sync', async () => {
@@ -425,6 +425,11 @@ describe('Integ tests', () => {
     expect(res).toContain('a')
     const res2 = await b.TestFnNamedArgsSingleStringList(['d', 'e', 'f'])
     expect(res2).toContain('d')
+  })
+
+  it('should work with a sync client', () => {
+    const res = b_sync.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
+    expect(res).toContain('a')
   })
 })
 

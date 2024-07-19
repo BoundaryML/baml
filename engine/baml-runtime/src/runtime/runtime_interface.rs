@@ -353,6 +353,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         params: &BamlMap<String, BamlValue>,
         tracer: Arc<BamlTracer>,
         ctx: RuntimeContext,
+        tokio_runtime: Arc<tokio::runtime::Runtime>,
     ) -> Result<FunctionResultStream> {
         let func = self.get_function(&function_name, &ctx)?;
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
@@ -372,6 +373,7 @@ impl RuntimeInterface for InternalBamlRuntime {
             orchestrator,
             tracer,
             renderer,
+            tokio_runtime,
         })
     }
 }
