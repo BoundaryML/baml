@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue } from 'jotai'
-import { ChevronDown, ChevronRight, Compass, Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, Compass } from 'lucide-react'
 import type React from 'react'
 import { useState } from 'react'
 import {
@@ -19,7 +19,6 @@ import { Snippets } from './Snippets'
 
 const ClientHeader: React.FC = () => {
   const clients = useAtomValue(availableClientsAtom)
-  const [selected, setSelected] = useAtom(selectedFunctionAtom)
   const orchIndex = useAtomValue(orchIndexAtom)
 
   const clientsArray = useAtomValue(currentClientsAtom)

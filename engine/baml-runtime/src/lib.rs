@@ -139,9 +139,7 @@ impl BamlRuntime {
     where
         F: Fn(FunctionResult) -> (),
     {
-        log::info!("running test");
         let span = self.tracer.start_span(test_name, ctx, &Default::default());
-        log::info!("got span");
 
         let response = match ctx.create_ctx(None, None) {
             Ok(rctx) => {

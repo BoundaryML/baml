@@ -418,62 +418,53 @@ interface RenderNode {
   extent?: 'parent' | undefined // Update extent type
 }
 
-function getBackgroundColor(letter: string): string {
-  switch (letter) {
-    case 'D':
-      return 'blue'
-    case 'B':
-      return 'yellow'
-    case 'R':
-      return 'red'
-    case 'F':
-      return 'green'
-    default:
-      return 'gray'
-  }
-}
-
 const ClientGraph: React.FC = () => {
   const graph = useAtomValue(orchestration_nodes)
   const [orchIndex, setOrchIndex] = useAtom(orchIndexAtom)
 
-  const { nodes, edges } = graph
+  const renderNodes: RenderNode[] = useMemo(
+    () =>
+      graph.nodes.map((node) => ({
+        id: node.gid,
+        data: {
+          label: node.client_name ?? 'no name for this node',
+          orch_index: node.orch_index !== undefined ? node.orch_index : -1,
+        },
+        position: { x: node.Position?.x ?? 0, y: node.Position?.y ?? 0 },
+        style: {
+          backgroundColor: 'rgba(255, 0, 255, 0.2)',
+          width: node.Dimension?.width,
+          height: node.Dimension?.height,
+          outline: orchIndex === node.orch_index ? '1px solid white' : '',
+        },
+        parentId: node.parentGid,
+        extent: 'parent',
+      })),
+    [graph.nodes, orchIndex],
+  )
 
-  const renderNodes: RenderNode[] = nodes.map((node) => ({
-    id: node.gid,
-    data: {
-      label: node.client_name ?? 'no name for this node',
-      orch_index: node.orch_index !== undefined ? node.orch_index : -1,
-    },
-    position: { x: node.Position?.x ?? 0, y: node.Position?.y ?? 0 },
-    style: {
-      backgroundColor: 'rgba(255, 0, 255, 0.2)',
-      width: node.Dimension?.width,
-      height: node.Dimension?.height,
-      outline: orchIndex === node.orch_index ? '1px solid white' : '',
-    },
-    parentId: node.parentGid,
-    extent: 'parent',
-  }))
-
-  const renderEdges: RenderEdge[] = edges.map((edge, idx) => ({
-    id: idx.toString(),
-    source: edge.from_node,
-    target: edge.to_node,
-    animated: true,
-    type: 'smoothstep',
-    markerEnd: {
-      type: MarkerType.ArrowClosed,
-    },
-    label: edge.weight !== undefined ? `⏰ ${edge.weight} ms ` : '',
-  }))
+  const renderEdges: RenderEdge[] = useMemo(
+    () =>
+      graph.edges.map((edge, idx) => ({
+        id: idx.toString(),
+        source: edge.from_node,
+        target: edge.to_node,
+        animated: true,
+        type: 'smoothstep',
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+        },
+        label: edge.weight !== undefined ? `⏰ ${edge.weight} ms ` : '',
+      })),
+    [graph.edges],
+  )
 
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(renderNodes)
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(renderEdges)
 
-  const onConnect = useCallback((connection: Connection) => {
-    setFlowEdges((eds) => addEdge(connection, eds))
-  }, [])
+  // const onConnect = useCallback((connection: Connection) => {
+  //   setFlowEdges((eds) => addEdge(connection, eds))
+  // }, [])
 
   // Set default selected node
 
@@ -481,10 +472,9 @@ const ClientGraph: React.FC = () => {
   useEffect(() => {
     setFlowNodes(renderNodes)
     setFlowEdges(renderEdges)
-  }, [nodes, edges, orchIndex])
+  }, [renderNodes, renderEdges])
 
   const onNodeClick = (event: React.MouseEvent, node: any) => {
-    console.log('Node clicked:', node)
     if (node.data.orch_index != -1) {
       setOrchIndex(node.data.orch_index)
     }
@@ -504,7 +494,6 @@ const ClientGraph: React.FC = () => {
         edges={flowEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
         onNodeClick={onNodeClick}
         fitView
         edgesFocusable={false}
@@ -521,7 +510,7 @@ const TestResults: React.FC = () => {
   const [showTests, setShowTests] = useAtom(showTestsAtom)
   const [showClientGraph, setClientGraph] = useAtom(showClientGraphAtom)
   const currentClients = useAtomValue(currentClientsAtom)
-  console.log('currentClients', currentClients.length)
+
   // reset the tab when switching funcs
   useEffect(() => {
     setShowTests(false)

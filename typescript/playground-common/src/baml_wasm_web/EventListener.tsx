@@ -151,6 +151,7 @@ export const selectedTestCaseAtom = atom(
   },
   (get, set, testCase: string) => {
     set(rawSelectedTestCaseAtom, testCase)
+    set(orchIndexAtom, 0)
   },
 )
 
@@ -494,7 +495,6 @@ export const currentClientsAtom = atom((get) => {
 export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
   const func = get(selectedFunctionAtom)
   const runtime = get(selectedRuntimeAtom)
-  const [currentClient, setCurrentClientNames] = useAtom(currentClientsAtom)
   if (!func || !runtime) {
     return { nodes: [], edges: [] }
   }
@@ -553,13 +553,6 @@ function getPositions(nodes: { [key: string]: GroupEntry }): GroupEntry[] {
   }
 
   const sizes = getSizes(adjacencyList, rootNode.gid)
-
-  const sizedNodes = nodeEntries.map((node) => ({
-    ...node,
-    Dimension: sizes[node.gid] || { width: 0, height: 0 },
-  }))
-
-  // return sizedNodes
 
   const positionsMap = getCoordinates(adjacencyList, rootNode.gid, sizes)
   const positionedNodes = nodeEntries.map((node) => ({
@@ -663,12 +656,6 @@ function createClientNodes(wasmScopes: any[]): ClientNode[] {
   let indexOuter = 0
   const nodes: ClientNode[] = []
 
-  // nodes.push({
-  //   name: 'start',
-  //   node_index: -1,
-  //   type: 'S',
-  //   identifier: [{ type: 'S', index: 0, scope_name: 'Start' }] as TypeCount[],
-  // })
   for (const scope of wasmScopes) {
     const scopeInfo = scope.get_orchestration_scope_info()
     const scopePath = scopeInfo as any[]
@@ -688,13 +675,6 @@ function createClientNodes(wasmScopes: any[]): ClientNode[] {
     nodes.push(clientNode)
     indexOuter++
   }
-
-  // nodes.push({
-  //   name: 'end',
-  //   node_index: indexOuter++,
-  //   type: 'E',
-  //   identifier: [{ type: 'E', index: 0, scope_name: 'End' }] as TypeCount[],
-  // })
 
   return nodes
 }
