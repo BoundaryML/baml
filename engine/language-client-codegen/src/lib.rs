@@ -147,7 +147,7 @@ fn version_check_with_error(
         true,
     );
     match res {
-        Some(e) => Err(anyhow::anyhow!("Version mismatch: {}", e.msg)),
+        Some(e) => Err(anyhow::anyhow!("{}", e.msg())),
         None => Ok(()),
     }
 }
