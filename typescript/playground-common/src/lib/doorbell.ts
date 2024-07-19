@@ -1,28 +1,5 @@
 import { useEffect } from 'react'
 
-const onMountMoveDoorbellToBottomLeft = () => {
-  // Create a MutationObserver instance
-  const observer = new MutationObserver(function (mutations) {
-    for (const m of mutations) {
-      if (m.type === 'childList') changeButtonClass()
-    }
-  })
-
-  function changeButtonClass() {
-    const doorbellButton = document.getElementById('doorbell-button')
-    if (doorbellButton) {
-      doorbellButton.classList.remove('bottom_right')
-      doorbellButton.classList.add('bottom_left')
-      // Disconnect the observer once the change is made
-      observer.disconnect()
-    }
-  }
-
-  const config = { childList: true, subtree: true }
-
-  observer.observe(document.body, config)
-}
-
 const loadDoorbell = () => {
   ;(window as any).doorbellOptions = {
     id: '14262',
@@ -59,7 +36,6 @@ const loadDoorbell = () => {
 
 export const useDoorbell = () => {
   useEffect(() => {
-    onMountMoveDoorbellToBottomLeft()
     loadDoorbell()
   }, [])
 }

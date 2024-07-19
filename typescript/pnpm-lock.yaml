@@ -223,9 +223,6 @@ importers:
       '@uiw/react-codemirror':
         specifier: ^4.21.25
         version: 4.22.2(@babel/runtime@7.24.7)(@codemirror/autocomplete@6.16.3)(@codemirror/language@6.10.2)(@codemirror/lint@6.8.1)(@codemirror/search@6.5.6)(@codemirror/state@6.4.1)(@codemirror/theme-one-dark@6.1.2)(@codemirror/view@6.28.2)(codemirror@6.0.1)(react-dom@18.3.1)(react@18.3.1)
-      '@userback/react':
-        specifier: ^0.3.4
-        version: 0.3.4(react-dom@18.3.1)(react@18.3.1)
       '@vercel/kv':
         specifier: ^1.0.1
         version: 1.0.1
@@ -5799,21 +5796,6 @@ packages:
     resolution: {integrity: sha512-ACj0GhJ4qrQyBshwFgPod6XufVEfKX2wcaihsEvSdLYnY+m+pa13kGt1RXm/yTHKf4TQi/Dy2A8z/y6WUEOmlg==}
     dependencies:
       crypto-js: 4.2.0
-    dev: false
-
-  /@userback/react@0.3.4(react-dom@18.3.1)(react@18.3.1):
-    resolution: {integrity: sha512-3a6TEkYqeZCixRpkYZvonP/y9W02jFrfsKJD1wV6Si9z5WphwFvM5aL1pniW0X/48af6qfI/0Ykip1kaHflkyw==}
-    peerDependencies:
-      react: '>=17.0.0'
-      react-dom: '>=17.0.0'
-    dependencies:
-      '@userback/widget': 0.3.4
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-    dev: false
-
-  /@userback/widget@0.3.4:
-    resolution: {integrity: sha512-YPbGGmcbA8BEXuLqspZrjiAIrRwBKfzJOWxHSNBA7v2Vbuyk57GeqI0VWvA0OA4kdgtT+wwTX8+acUsaj2eKCw==}
     dev: false
 
   /@vercel/kv@1.0.1:
