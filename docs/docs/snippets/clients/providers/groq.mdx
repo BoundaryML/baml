@@ -1,0 +1,19 @@
+
+
+https://groq.com - Fast AI Inference
+
+Groq supports the OpenAI client, allowing you to use the [openai](/docs/snippets/clients/providers/openai) provider with an overrided `base_url`
+
+
+See https://console.groq.com/docs/openai for more information.
+
+```baml BAML
+client<llm> MyClient {
+  provider openai
+  options {
+    base_url "https://api.groq.com/openai/v1"
+    api_key env.GROQ_API_KEY
+    model "llama3-70b-8192"
+  }
+}
+```
