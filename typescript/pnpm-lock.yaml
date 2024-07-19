@@ -676,9 +676,6 @@ importers:
       '@types/js-levenshtein':
         specifier: 1.1.2
         version: 1.1.2
-      '@types/semver':
-        specifier: ^7.5.6
-        version: 7.5.8
       js-levenshtein:
         specifier: 1.1.6
         version: 1.1.6
@@ -692,7 +689,7 @@ importers:
         specifier: 15.1.0
         version: 15.1.0
       semver:
-        specifier: ^7.5.4
+        specifier: ^7.6.2
         version: 7.6.2
       vscode-languageserver:
         specifier: ^9.0.1
@@ -716,6 +713,9 @@ importers:
       '@types/node':
         specifier: 14.18.63
         version: 14.18.63
+      '@types/semver':
+        specifier: ^7.5.8
+        version: 7.5.8
       esbuild:
         specifier: ^0.19.4
         version: 0.19.12

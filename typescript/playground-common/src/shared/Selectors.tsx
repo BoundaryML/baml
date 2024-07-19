@@ -46,12 +46,16 @@ const FunctionDropdown: React.FC = () => {
     return <>Create a function</>
   }
 
+  const isNextJS = (window as any).next?.version!!
+
   return (
     <div className='flex flex-col-reverse items-start gap-0.5'>
-      <span className='pl-2 text-xs text-muted-foreground flex flex-row flex-wrap items-center gap-0.5'>
-        Function
-        {selected && <JumpToFunction />}
-      </span>
+      {!isNextJS && (
+        <span className='pl-2 text-xs text-muted-foreground flex flex-row flex-wrap items-center gap-0.5'>
+          Function
+          {selected && <JumpToFunction />}
+        </span>
+      )}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <div className='max-w-[300px] justify-start items-center flex hover:bg-vscode-button-hoverBackground h-fit rounded-md text-vscode-foreground cursor-pointer'>
@@ -97,13 +101,16 @@ const TestDropdown: React.FC = () => {
   if (!selected) {
     return <>Select a test...</>
   }
+  const isNextJS = (window as any).next?.version!!
 
   return (
     <div className='flex flex-col-reverse items-start gap-0.5'>
-      <span className='flex flex-row flex-wrap items-center gap-1 pl-2 text-xs text-muted-foreground'>
-        Test
-        {selected && <JumpToTestCase />}
-      </span>
+      {!isNextJS && (
+        <span className='flex flex-row flex-wrap items-center gap-1 pl-2 text-xs text-muted-foreground'>
+          Test
+          {selected && <JumpToTestCase />}
+        </span>
+      )}
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>

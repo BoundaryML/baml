@@ -5,6 +5,7 @@ use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use baml_runtime::internal::llm_client::orchestrator::{
     ExecutionScope, OrchestrationScope, OrchestratorNode,
 };
+use baml_runtime::internal_core::configuration::GeneratorOutputType;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
@@ -12,6 +13,8 @@ use baml_runtime::{
 use baml_types::{BamlMap, BamlValue};
 
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
+use internal_baml_codegen::version_check::GeneratorType;
+use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -229,14 +232,16 @@ impl WasmProject {
     #[wasm_bindgen]
     pub fn run_generators(
         &self,
+        no_version_check: Option<bool>,
     ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
         let fake_map: HashMap<String, String> = HashMap::new();
+        let no_version_check = no_version_check.unwrap_or(false);
 
         let js_value = serde_wasm_bindgen::to_value(&fake_map).unwrap();
         let runtime = self.runtime(js_value);
         log::info!("Files are: {:#?}", self.files);
         let res = match runtime {
-            Ok(runtime) => runtime.run_generators(&self.files),
+            Ok(runtime) => runtime.run_generators(&self.files, no_version_check),
             Err(e) => Err(wasm_bindgen::JsError::new(
                 format!("Failed to create runtime: {:#?}", e).as_str(),
             )),
@@ -276,6 +281,19 @@ pub struct WasmSpan {
     pub end: usize,
     #[wasm_bindgen(readonly)]
     pub start_line: usize,
+    #[wasm_bindgen(readonly)]
+    pub end_line: usize,
+}
+
+#[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Clone)]
+pub struct WasmGeneratorConfig {
+    #[wasm_bindgen(readonly)]
+    pub output_type: String,
+    #[wasm_bindgen(readonly)]
+    pub version: String,
+    #[wasm_bindgen(readonly)]
+    pub span: WasmSpan,
 }
 
 impl From<&baml_runtime::internal_core::internal_baml_diagnostics::Span> for WasmSpan {
@@ -286,6 +304,7 @@ impl From<&baml_runtime::internal_core::internal_baml_diagnostics::Span> for Was
             start: span.start,
             end: span.end,
             start_line: start.0,
+            end_line: end.0,
         }
     }
 }
@@ -297,6 +316,7 @@ impl Default for WasmSpan {
             start: 0,
             end: 0,
             start_line: 0,
+            end_line: 0,
         }
     }
 }
@@ -711,6 +731,7 @@ impl WasmRuntime {
     pub fn run_generators(
         &self,
         input_files: &HashMap<String, String>,
+        no_version_check: bool,
     ) -> Result<Vec<generator::WasmGeneratorOutput>, wasm_bindgen::JsError> {
         Ok(self
             .runtime
@@ -720,6 +741,7 @@ impl WasmRuntime {
                     .iter()
                     .map(|(k, v)| (PathBuf::from(k), v.clone()))
                     .collect(),
+                no_version_check,
             )
             .map_err(|e| JsError::new(format!("{e:#}").as_str()))?
             .into_iter()
@@ -867,6 +889,69 @@ impl WasmRuntime {
                 }
             })
             .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn list_generators(&self) -> Vec<WasmGeneratorConfig> {
+        self.runtime
+            .internal()
+            .ir()
+            .configuration()
+            .generators
+            .iter()
+            .map(|(generator, _)| WasmGeneratorConfig {
+                output_type: generator.output_type.clone().to_string(),
+                version: generator.version.clone(),
+                span: WasmSpan {
+                    file_path: generator.span.file.path().to_string(),
+                    start: generator.span.start,
+                    end: generator.span.end,
+                    start_line: generator.span.line_and_column().0 .0,
+                    end_line: generator.span.line_and_column().1 .0,
+                },
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn check_version(
+        generator_version: &str,
+        current_version: &str,
+        generator_type: &str,
+        version_check_mode: &str,
+        generator_language: &str,
+        is_diagnostic: bool,
+    ) -> Option<String> {
+        // Convert string parameters to enums
+        let generator_type = match generator_type {
+            "VSCodeCLI" => GeneratorType::VSCodeCLI,
+            "VSCode" => GeneratorType::VSCode,
+            "CLI" => GeneratorType::CLI,
+            _ => return Some("Invalid generator type".to_string()),
+        };
+
+        let version_check_mode = match version_check_mode {
+            "Strict" => VersionCheckMode::Strict,
+            "None" => VersionCheckMode::None,
+            _ => return Some("Invalid version check mode".to_string()),
+        };
+
+        let generator_language = match generator_language {
+            "python/pydantic" => GeneratorOutputType::PythonPydantic,
+            "typescript" => GeneratorOutputType::Typescript,
+            "ruby/sorbet" => GeneratorOutputType::RubySorbet,
+            _ => return Some("Invalid generator language".to_string()),
+        };
+
+        check_version(
+            generator_version,
+            current_version,
+            generator_type,
+            version_check_mode,
+            generator_language,
+            is_diagnostic,
+        )
+        .map(|error| error.msg)
     }
 
     #[wasm_bindgen]

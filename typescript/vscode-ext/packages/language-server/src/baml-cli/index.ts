@@ -7,7 +7,7 @@ export function cliBuild(
   onError?: (errorMessage: string) => void,
   onSuccess?: () => void,
 ) {
-  const buildCommand = `${cliPath} build`
+  const buildCommand = `${cliPath} generate --from ${workspacePath?.fsPath}`
 
   if (!workspacePath) {
     return
@@ -30,8 +30,8 @@ export function cliBuild(
       }
 
       if (error) {
-        console.error(`Error running the build script: ${JSON.stringify(error, null, 2)}`)
-        onError?.(`Baml build error`)
+        console.error(`Error running baml cli script: ${JSON.stringify(error, null, 2)}`)
+        onError?.(`baml-cli error: ${error.message}`)
         return
       } else {
         if (onSuccess) {

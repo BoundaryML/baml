@@ -29,17 +29,23 @@
       "type": "object",
       "title": "Baml extension settings",
       "properties": {
-        "baml.path": {
-          "type": "string",
-          "default": "baml",
-          "description": "Override the baml CLI path",
-          "scope": "resource"
+        "baml.cliPath": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "description": "Use the locally installed baml CLI instead of the one bundled with the extension. Helps keeps generated code more in sync.",
+          "scope": "machine-overridable"
         },
-        "baml.envCommand": {
+        "baml.generateCodeOnSave": {
           "type": "string",
-          "default": "env",
-          "description": "Command to run to retrieve environment variables (runs in workspace root)",
-          "scope": "resource"
+          "default": "always",
+          "enum": [
+            "never",
+            "always"
+          ],
+          "description": "Generate code on save"
         },
         "baml.fileWatcher": {
           "scope": "window",
