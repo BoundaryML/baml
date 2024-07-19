@@ -12,13 +12,13 @@ from ..baml_client.globals import (
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME,
 )
 from ..baml_client.types import (
+    DynInputOutput,
     NamedArgsSingleEnumList,
     NamedArgsSingleClass,
-   StringToClassEntry,  DynInputOutput,
+    StringToClassEntry,  
 )
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
-from ..baml_client.
 import datetime
 import concurrent.futures
 import asyncio

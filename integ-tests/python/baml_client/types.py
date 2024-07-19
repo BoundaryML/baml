@@ -16,7 +16,7 @@
 import baml_py
 from enum import Enum
 from pydantic import BaseModel, ConfigDict
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 
 class Category(str, Enum):
