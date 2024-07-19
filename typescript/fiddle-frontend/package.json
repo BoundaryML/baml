@@ -35,7 +35,6 @@
     "@uiw/codemirror-extensions-langs": "^4.21.25",
     "@uiw/codemirror-theme-vscode": "^4.21.25",
     "@uiw/react-codemirror": "^4.21.25",
-    "@userback/react": "^0.3.4",
     "@vercel/kv": "^1.0.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
