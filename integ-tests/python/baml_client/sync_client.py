@@ -13,7 +13,7 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-from typing import Any, List, Optional, TypeVar, Union, TypedDict, Type
+from typing import Any, Dict, List, Optional, TypeVar, Union, TypedDict, Type
 from typing_extensions import NotRequired
 import pprint
 
@@ -1331,7 +1331,7 @@ class BamlSyncClient:
     
     def TestFnNamedArgsSingleMapStringToClass(
         self,
-        myMap: int,
+        myMap: Dict[str, types.StringToClassEntry],
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, types.StringToClassEntry]:
       __tb__ = baml_options.get("tb", None)
@@ -1381,7 +1381,7 @@ class BamlSyncClient:
         self,
         myMap: Dict[str, str],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Dict[str, str]]:
+    ) -> Dict[str, str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb
@@ -1398,7 +1398,7 @@ class BamlSyncClient:
         tb,
         __cr__,
       )
-      mdl = create_model("TestFnNamedArgsSingleMapStringToStringReturnType", inner=(Dict[str, Dict[str, str]], ...))
+      mdl = create_model("TestFnNamedArgsSingleMapStringToStringReturnType", inner=(Dict[str, str], ...))
       return coerce(mdl, raw.parsed())
     
     def TestFnNamedArgsSingleString(
@@ -3455,7 +3455,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleMapStringToClass(
         self,
-        myMap: int,
+        myMap: Dict[str, types.StringToClassEntry],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, partial_types.StringToClassEntry], Dict[str, types.StringToClassEntry]]:
       __tb__ = baml_options.get("tb", None)
@@ -3523,7 +3523,7 @@ class BamlStreamClient:
         self,
         myMap: Dict[str, str],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, str]]]:
+    ) -> baml_py.BamlSyncStream[Dict[str, Optional[str]], Dict[str, str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb
@@ -3542,10 +3542,10 @@ class BamlStreamClient:
         __cr__,
       )
 
-      mdl = create_model("TestFnNamedArgsSingleMapStringToStringReturnType", inner=(Dict[str, Dict[str, str]], ...))
-      partial_mdl = create_model("TestFnNamedArgsSingleMapStringToStringPartialReturnType", inner=(Dict[str, Dict[str, Optional[str]]], ...))
+      mdl = create_model("TestFnNamedArgsSingleMapStringToStringReturnType", inner=(Dict[str, str], ...))
+      partial_mdl = create_model("TestFnNamedArgsSingleMapStringToStringPartialReturnType", inner=(Dict[str, Optional[str]], ...))
 
-      return baml_py.BamlSyncStream[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, str]]](
+      return baml_py.BamlSyncStream[Dict[str, Optional[str]], Dict[str, str]](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

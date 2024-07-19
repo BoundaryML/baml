@@ -891,7 +891,7 @@ export class BamlSyncClient {
   }
   
   TestFnNamedArgsSingleMapStringToClass(
-      myMap: number,
+      myMap: Record<string, StringToClassEntry>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Record<string, StringToClassEntry> {
     const raw = this.runtime.callFunctionSync(
@@ -925,7 +925,7 @@ export class BamlSyncClient {
   TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): Record<string, Record<string, string>> {
+  ): Record<string, string> {
     const raw = this.runtime.callFunctionSync(
       "TestFnNamedArgsSingleMapStringToString",
       {
@@ -935,7 +935,7 @@ export class BamlSyncClient {
       __baml_options__?.tb?.__tb(),
       __baml_options__?.cr,
     )
-    return raw.parsed() as Record<string, Record<string, string>>
+    return raw.parsed() as Record<string, string>
   }
   
   TestFnNamedArgsSingleString(
