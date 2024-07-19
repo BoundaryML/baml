@@ -1,5 +1,6 @@
 mod array_helper;
 mod coerce_array;
+mod coerce_map;
 mod coerce_optional;
 mod coerce_primitive;
 mod coerce_union;
@@ -8,7 +9,7 @@ mod ir_ref;
 use anyhow::Result;
 use internal_baml_jinja::types::OutputFormatContent;
 
-use internal_baml_core::ir::{FieldType};
+use internal_baml_core::ir::FieldType;
 
 use super::types::BamlValueWithFlags;
 
@@ -119,9 +120,17 @@ impl ParsingContext<'_> {
             scope: self.scope.clone(),
         }
     }
+
     pub(crate) fn error_audio_not_supported(&self) -> ParsingError {
         ParsingError {
             reason: "Audio type is not supported here".to_string(),
+            scope: self.scope.clone(),
+        }
+    }
+
+    pub(crate) fn error_map_must_have_string_key(&self, key_type: &FieldType) -> ParsingError {
+        ParsingError {
+            reason: format!("Maps may only have strings for keys, but got {}", key_type),
             scope: self.scope.clone(),
         }
     }

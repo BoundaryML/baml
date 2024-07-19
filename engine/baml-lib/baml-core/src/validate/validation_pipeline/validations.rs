@@ -1,10 +1,10 @@
 mod classes;
 mod clients;
-mod common;
 mod configurations;
 mod cycle;
 mod enums;
 mod functions;
+mod types;
 mod variants;
 
 use super::context::Context;

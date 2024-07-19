@@ -48,6 +48,15 @@ describe "ruby<->baml integration tests" do
 
     res = b.TestFnNamedArgsSingleInt(myInt: 3566)
     assert_includes res, "3566"
+
+    res = b.TestFnNamedArgsSingleMapStringToString(myMap: {"lorem" => "ipsum"})
+    assert_equal res['lorem'], "ipsum"
+
+    res = b.TestFnNamedArgsSingleMapStringToClass(myMap: {"lorem" => {"word" => "ipsum"}})
+    assert_equal res['lorem'].word, "ipsum"
+
+    res = b.TestFnNamedArgsSingleMapStringToMap(myMap: {"lorem" => {"word" => "ipsum"}})
+    assert_equal res['lorem']['word'], "ipsum"
   end
 
   it "accepts subclass of baml type" do
@@ -109,7 +118,7 @@ describe "ruby<->baml integration tests" do
   end
 
   it "allows streaming" do
-    stream = b.stream.PromptTestOpenAI(input: "Programming languages are fun to create")
+    stream = b.stream.PromptTestOpenAIChat(input: "Programming languages are fun to create")
     msgs = []
     stream.each do |msg|
       msgs << msg
@@ -126,7 +135,7 @@ describe "ruby<->baml integration tests" do
   end
 
   it "allows uniterated streaming" do
-    final = b.stream.PromptTestOpenAI(input: "The color blue makes me sad").get_final_response
+    final = b.stream.PromptTestOpenAIChat(input: "The color blue makes me sad").get_final_response
     assert final.size > 0, "Expected non-empty final but got empty."
   end
 

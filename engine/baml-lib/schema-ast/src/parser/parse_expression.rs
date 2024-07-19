@@ -15,7 +15,7 @@ pub(crate) fn parse_expression(
     match first_child.as_rule() {
         Rule::numeric_literal => Expression::NumericValue(first_child.as_str().into(), span),
         Rule::string_literal => parse_string_literal(first_child, diagnostics),
-        Rule::dict_expression => parse_dict(first_child, diagnostics),
+        Rule::map_expression => parse_map(first_child, diagnostics),
         Rule::array_expression => parse_array(first_child, diagnostics),
         _ => unreachable_rule!(first_child, Rule::expression),
     }
@@ -74,36 +74,36 @@ fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expre
     }
 }
 
-fn parse_dict(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
+fn parse_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
     let mut entries: Vec<(Expression, Expression)> = vec![];
     let span = token.as_span();
 
     for current in token.into_inner() {
         match current.as_rule() {
-            Rule::dict_entry => {
-                if let Some(f) = parse_dict_entry(current, diagnostics) {
+            Rule::map_entry => {
+                if let Some(f) = parse_map_entry(current, diagnostics) {
                     entries.push(f)
                 }
             }
-            _ => parsing_catch_all(&current, "dictionary key value"),
+            _ => parsing_catch_all(&current, "map key value"),
         }
     }
 
     Expression::Map(entries, diagnostics.span(span))
 }
 
-fn parse_dict_entry(
+fn parse_map_entry(
     token: Pair<'_>,
     diagnostics: &mut Diagnostics,
 ) -> Option<(Expression, Expression)> {
-    assert_correct_parser!(token, Rule::dict_entry);
+    assert_correct_parser!(token, Rule::map_entry);
 
     let mut key = None;
     let mut value = None;
 
     for current in token.into_inner() {
         match current.as_rule() {
-            Rule::dict_key => key = Some(parse_dict_key(current, diagnostics)),
+            Rule::map_key => key = Some(parse_map_key(current, diagnostics)),
             Rule::expression => value = Some(parse_expression(current, diagnostics)),
             _ => parsing_catch_all(&current, "dict entry"),
         }
@@ -115,8 +115,8 @@ fn parse_dict_entry(
     }
 }
 
-fn parse_dict_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
-    assert_correct_parser!(token, Rule::dict_key);
+fn parse_map_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
+    assert_correct_parser!(token, Rule::map_key);
 
     let span = diagnostics.span(token.as_span());
     if let Some(current) = token.into_inner().next() {
@@ -126,10 +126,10 @@ fn parse_dict_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression 
                 current.into_inner().next().unwrap().as_str().to_string(),
                 span,
             ),
-            _ => unreachable_rule!(current, Rule::dict_key),
+            _ => unreachable_rule!(current, Rule::map_key),
         };
     }
-    unreachable!("Encountered impossible dict key during parsing")
+    unreachable!("Encountered impossible map key during parsing")
 }
 
 pub(super) fn parse_raw_string(token: Pair<'_>, diagnostics: &mut Diagnostics) -> RawString {

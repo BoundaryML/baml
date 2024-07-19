@@ -38,7 +38,7 @@ test_deserializer!(
     class Foo {
         a int
         b string
-        }"#,
+    }"#,
     r#"[{"a": 1, "b": "hello"}, {"a": 2, "b": "world"}]"#,
     FieldType::List(FieldType::Class("Foo".to_string()).into()),
     [{"a": 1, "b": "hello"}, {"a": 2, "b": "world"}]

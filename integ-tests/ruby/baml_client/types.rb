@@ -151,12 +151,15 @@ module Baml
     class OptionalTest_ReturnType < T::Struct; end
     class OrderInfo < T::Struct; end
     class Person < T::Struct; end
+    class Quantity < T::Struct; end
     class RaysData < T::Struct; end
     class ReceiptInfo < T::Struct; end
     class ReceiptItem < T::Struct; end
+    class Recipe < T::Struct; end
     class Resume < T::Struct; end
     class SearchParams < T::Struct; end
     class SomeClassNestedDynamic < T::Struct; end
+    class StringToClassEntry < T::Struct; end
     class TestClassAlias < T::Struct; end
     class TestClassNested < T::Struct; end
     class TestClassWithEnum < T::Struct; end
@@ -269,6 +272,11 @@ module Baml
       const :name, T.nilable(String)
       const :hair_color, T.nilable(Baml::Types::Color)
     end
+    class Quantity < T::Struct
+      include T::Struct::ActsAsComparable
+      const :amount, T.any(Integer, Float)
+      const :unit, T.nilable(String)
+    end
     class RaysData < T::Struct
       include T::Struct::ActsAsComparable
       const :dataType, Baml::Types::DataType
@@ -285,6 +293,10 @@ module Baml
       const :description, T.nilable(String)
       const :quantity, Integer
       const :price, Float
+    end
+    class Recipe < T::Struct
+      include T::Struct::ActsAsComparable
+      const :ingredients, T::Hash[String, Baml::Types::Quantity]
     end
     class Resume < T::Struct
       include T::Struct::ActsAsComparable
@@ -307,6 +319,10 @@ module Baml
     class SomeClassNestedDynamic < T::Struct
       include T::Struct::ActsAsComparable
       const :hi, String
+    end
+    class StringToClassEntry < T::Struct
+      include T::Struct::ActsAsComparable
+      const :word, String
     end
     class TestClassAlias < T::Struct
       include T::Struct::ActsAsComparable

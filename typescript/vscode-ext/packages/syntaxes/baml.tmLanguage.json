@@ -138,7 +138,18 @@
       "patterns": [
         {
           "match": "\\b(bool|int|float|string|null|image|audio)\\b",
-          "name": "storage.type.declaration.native"
+          "name": "storage.type.baml"
+        },
+        {
+          "begin": "(map)\\s*<",
+          "beginCaptures": {
+            "1": { "name": "storage.type.baml" }
+          },
+          "patterns": [
+            { "include": "#type_definition" },
+            { "include": "#type_definition" }
+          ],
+          "end": ">"
         },
         {
           "match": "\\w+",
@@ -146,16 +157,16 @@
         },
         {
           "match": "\\[\\]",
-          "name": "keyword.control"
+          "name": "keyword.control.baml"
         },
         {
           "match": "\\?",
-          "name": "keyword.control"
+          "name": "keyword.control.baml"
         },
         {
           "comment": "union a | b | c",
           "match": "\\|",
-          "name": "keyword.control"
+          "name": "keyword.control.baml"
         },
         {
           "comment": "Groups",

@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "fern-api": "^0.31.24"
+  }
+}

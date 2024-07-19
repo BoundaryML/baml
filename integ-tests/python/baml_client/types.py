@@ -16,7 +16,7 @@
 import baml_py
 from enum import Enum
 from pydantic import BaseModel, ConfigDict
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 
 class Category(str, Enum):
@@ -251,6 +251,12 @@ class Person(BaseModel):
     name: Optional[str] = None
     hair_color: Optional[Union["Color", str]] = None
 
+class Quantity(BaseModel):
+    
+    
+    amount: Union[int, float]
+    unit: Optional[str] = None
+
 class RaysData(BaseModel):
     
     
@@ -270,6 +276,11 @@ class ReceiptItem(BaseModel):
     description: Optional[str] = None
     quantity: int
     price: float
+
+class Recipe(BaseModel):
+    
+    
+    ingredients: Dict[str, "Quantity"]
 
 class Resume(BaseModel):
     
@@ -296,6 +307,11 @@ class SomeClassNestedDynamic(BaseModel):
     model_config = ConfigDict(extra='allow')
     
     hi: str
+
+class StringToClassEntry(BaseModel):
+    
+    
+    word: str
 
 class TestClassAlias(BaseModel):
     

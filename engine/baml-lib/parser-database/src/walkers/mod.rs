@@ -353,7 +353,7 @@ impl<'db> crate::ParserDatabase {
                 }
                 t
             }
-            FieldType::Dictionary(kv, _) => Type::Map(
+            FieldType::Map(kv, _) => Type::Map(
                 Box::new(self.to_jinja_type(&kv.0)),
                 Box::new(self.to_jinja_type(&kv.1)),
             ),

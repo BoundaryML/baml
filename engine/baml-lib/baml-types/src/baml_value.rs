@@ -5,7 +5,7 @@ use serde::{de::Visitor, ser::SerializeStruct, Deserialize, Deserializer};
 use crate::media::BamlMediaType;
 use crate::{BamlMap, BamlMedia};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum BamlValue {
     String(String),
     Int(i64),
