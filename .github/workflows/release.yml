@@ -99,7 +99,7 @@ jobs:
 
   build-release:
     strategy:
-      fail-fast: false 
+      fail-fast: false
       matrix:
         _:
           - target: aarch64-apple-darwin
@@ -115,7 +115,7 @@ jobs:
             host: ubuntu-latest
             # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
             # need a new version of manylinux to build crates on arm64-linux
-            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64	
+            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
             node_build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
 
           - target: x86_64-apple-darwin
