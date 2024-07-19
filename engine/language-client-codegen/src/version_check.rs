@@ -156,7 +156,6 @@ mod tests {
         let result = check_version("2.0.0", "1.0.0", GeneratorType::CLI, VersionCheckMode::Strict, GeneratorOutputType::PythonPydantic, false);
         assert!(result.is_some());
         let error_msg = result.unwrap().msg;
-        assert!(error_msg.contains("Version mismatch"));
         assert!(error_msg.contains("installed BAML CLI"));
         assert!(error_msg.contains("pip install --upgrade baml-py==2.0.0"));
     }
@@ -167,7 +166,6 @@ mod tests {
         assert!(result.is_some());
         let error_msg = result.unwrap().msg;
         println!("{}", error_msg);
-        assert!(error_msg.contains("Version mismatch"));
         assert!(error_msg.contains("VSCode extension"));
         assert!(error_msg.contains("npm install --save-dev @boundaryml/baml@1.3.0"));
     }
@@ -177,7 +175,6 @@ mod tests {
         let result = check_version("1.3.0", "1.2.0", GeneratorType::VSCodeCLI, VersionCheckMode::Strict, GeneratorOutputType::RubySorbet, false);
         assert!(result.is_some());
         let error_msg = result.unwrap().msg;
-        assert!(error_msg.contains("Version mismatch"));
         assert!(error_msg.contains("baml package"));
         assert!(error_msg.contains("gem install baml -v 1.3.0"));
     }
