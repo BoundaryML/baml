@@ -5,7 +5,7 @@ use baml_types::{BamlMap, BamlMedia, BamlValue};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},
-    types::{PyBool, PyBoolMethods, PyList},
+    types::{PyBool, PyBoolMethods, PyDict, PyList, PyString},
     PyErr, PyObject, PyResult, Python, ToPyObject,
 };
 
@@ -249,25 +249,40 @@ pub fn parse_py_type(
                         }
                     })
                     .unwrap_or("<UnnamedBaseModel>".to_string());
-                let fields = match t
+                let mut fields = HashMap::new();
+                // Get regular fields
+                if let Ok(model_fields) = t
                     .getattr("model_fields")?
                     .extract::<HashMap<String, PyObject>>()
                 {
-                    Ok(fields) => fields
-                        .keys()
-                        .filter_map(|k| {
-                            let v = any.getattr(py, k.as_str());
-                            if let Ok(v) = v {
-                                Some((k.clone(), v))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<HashMap<_, _>>(),
-                    Err(_) => {
-                        bail!("model_fields is not a dict")
+                    for (key, _) in model_fields {
+                        if let Ok(value) = any.getattr(py, key.as_str()) {
+                            fields.insert(key, value.to_object(py));
+                        }
                     }
-                };
+                }
+
+                // Get extra fields (like if this is a @@dynamic class)
+                if let Ok(extra) = any.getattr(py, "__pydantic_extra__") {
+                    if let Ok(extra_dict) = extra.downcast::<PyDict>(py) {
+                        for (key, value) in extra_dict.iter() {
+                            if let (Ok(key), value) = (key.extract::<String>(), value) {
+                                fields.insert(key, value.to_object(py));
+                            }
+                        }
+                    }
+                }
+
+                // Log the fields
+                // log::info!("Fields of {}:", name);
+                // for (key, value) in &fields {
+                //     let repr = py
+                //         .import_bound("builtins")?
+                //         .getattr("repr")?
+                //         .call1((value,))?;
+                //     let repr_str = repr.extract::<String>()?;
+                //     log::info!("  {}: {}", key, repr_str);
+                // }
                 Ok(MappedPyType::Class(name, fields))
                 // use downcast only
             } else if let Ok(list) = any.downcast_bound::<PyList>(py) {

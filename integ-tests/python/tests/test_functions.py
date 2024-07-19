@@ -10,7 +10,7 @@ from ..baml_client import b
 from ..baml_client.globals import (
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME,
 )
-from ..baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
+from ..baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass, DynInputOutput
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
 import datetime
@@ -553,6 +553,41 @@ async def test_stream_dynamic_class_output():
     print("final ", final.model_dump())
     print("final ", final.model_dump_json())
     assert final.hair_color == "black"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_inputs_list2():
+    tb = TypeBuilder()
+    tb.DynInputOutput.add_property("new_key", tb.string().optional())
+    custom_class = tb.add_class("MyBlah")
+    custom_class.add_property("nestedKey1", tb.string())
+    tb.DynInputOutput.add_property("blah", custom_class.type())
+
+    res = await b.DynamicListInputOutput(
+        [
+            DynInputOutput(**{
+                "new_key": "hi1",
+                "testKey": "myTest",
+                "blah": {
+                    "nestedKey1": "nestedVal",
+                },
+            }),
+            {
+                "new_key": "hi",
+                "testKey": "myTest",
+                "blah": {
+                    "nestedKey1": "nestedVal",
+                },
+            },
+        ],
+        {"tb": tb},
+    )
+    assert res[0].new_key == "hi1"
+    assert res[0].testKey == "myTest"
+    assert res[0].blah["nestedKey1"] == "nestedVal"
+    assert res[1].new_key == "hi"
+    assert res[1].testKey == "myTest"
+    assert res[1].blah["nestedKey1"] == "nestedVal"
 
 
 @pytest.mark.asyncio
