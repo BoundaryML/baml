@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from 'react'
+import { Suspense } from 'react'
 import './App.css'
 import 'allotment/dist/style.css'
 import { DevTools } from 'jotai-devtools'
