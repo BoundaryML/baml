@@ -520,7 +520,8 @@ const TestResults: React.FC = () => {
   const selectedFunction = useAtomValue(selectedFunctionAtom)
   const [showTests, setShowTests] = useAtom(showTestsAtom)
   const [showClientGraph, setClientGraph] = useAtom(showClientGraphAtom)
-
+  const currentClients = useAtomValue(currentClientsAtom)
+  console.log('currentClients', currentClients.length)
   // reset the tab when switching funcs
   useEffect(() => {
     setShowTests(false)
@@ -536,7 +537,9 @@ const TestResults: React.FC = () => {
               ? 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground underline'
               : 'bg-transparent text-vscode-foreground',
           )}
-          onClick={() => setClientGraph(true)}
+          onClick={() => {
+            setClientGraph(true)
+          }}
         >
           Client Graph ✨
         </Badge>

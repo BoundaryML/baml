@@ -134,6 +134,7 @@ export const selectedFunctionAtom = atom(
       const functions = get(availableFunctionsAtom)
       if (functions.find((f) => f.name === func)) {
         set(selectedFunctionStorageAtom, func)
+        set(orchIndexAtom, 0)
       }
     }
   },

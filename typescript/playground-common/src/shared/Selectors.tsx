@@ -188,7 +188,7 @@ export const ViewSelector: React.FC = () => {
           <ChevronRight className='w-4 h-4' />
         </div>
         <TestDropdown />
-        <Plus className='w-4, h-4' />
+        <ChevronRight className='w-4, h-4' />
         <ClientHeader />
       </div>
       <div className='absolute z-10 flex flex-row items-center justify-center gap-1 right-1 top-2 text-end'>
