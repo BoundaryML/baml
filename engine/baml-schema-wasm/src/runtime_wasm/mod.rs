@@ -9,13 +9,12 @@ use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
 use baml_types::{BamlMap, BamlValue};
-
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
+use internal_baml_core::ir::Expression;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-
 use wasm_bindgen::prelude::*;
 
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
@@ -24,7 +23,7 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
 pub fn on_wasm_init() {
-    match console_log::init_with_level(log::Level::Warn) {
+    match console_log::init_with_level(log::Level::Info) {
         Ok(_) => web_sys::console::log_1(&"Initialized BAML runtime logging".into()),
         Err(e) => web_sys::console::log_1(
             &format!("Failed to initialize BAML runtime logging: {:?}", e).into(),
@@ -253,6 +252,7 @@ pub struct WasmRuntime {
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Clone)]
 pub struct WasmFunction {
     #[wasm_bindgen(readonly)]
     pub name: String,
@@ -328,6 +328,8 @@ pub struct WasmTestCase {
     pub error: Option<String>,
     #[wasm_bindgen(readonly)]
     pub span: WasmSpan,
+    #[wasm_bindgen(readonly)]
+    pub parent_functions: Vec<String>,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -879,6 +881,7 @@ impl WasmRuntime {
                                 inputs: params,
                                 error,
                                 span: wasm_span,
+                                parent_functions: tc.test_case().parent_functions.clone(),
                             }
                         })
                         .collect(),
@@ -1055,10 +1058,11 @@ impl WasmRuntime {
         &self,
         file_name: &str,
         cursor_idx: usize,
+        selected_function: String,
     ) -> Option<WasmFunction> {
         let functions = self.list_functions();
 
-        for function in functions {
+        for function in functions.clone() {
             let span = function.span.clone(); // Clone the span
 
             if span.file_path.as_str().ends_with(file_name)
@@ -1066,18 +1070,24 @@ impl WasmRuntime {
             {
                 return Some(function);
             }
-
-            let test_cases = function.test_cases.clone();
-            for func_tc in test_cases {
-                let span = func_tc.span;
-                if span.file_path.as_str().ends_with(file_name)
-                    && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
-                {
-                    return Some(function);
-                }
-            }
         }
 
+        let testcases = self.list_testcases();
+
+        for tc in testcases {
+            let span = tc.span;
+            if span.file_path.as_str().ends_with(file_name)
+                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
+            {
+                let first_function = if tc.parent_functions.contains(&selected_function) {
+                    &selected_function
+                } else {
+                    tc.parent_functions.get(0)?
+                };
+                let matching_function = functions.into_iter().find(|f| f.name == *first_function);
+                return matching_function;
+            }
+        }
         None
     }
 
@@ -1148,6 +1158,7 @@ impl WasmRuntime {
                     inputs: params,
                     error,
                     span: wasm_span,
+                    parent_functions: tc.test_case().parent_functions.clone(),
                 }
             })
             .collect()

@@ -436,7 +436,6 @@ impl WithRepr<Expression> for ast::Expression {
 type TemplateStringId = String;
 
 #[derive(serde::Serialize, Debug)]
-
 pub struct TemplateString {
     pub name: TemplateStringId,
     pub params: Vec<Field>,
@@ -1097,6 +1096,7 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
 #[derive(serde::Serialize, Debug)]
 pub struct TestCase {
     pub name: String,
+    pub parent_functions: Vec<String>,
     pub args: IndexMap<String, Expression>,
 }
 
@@ -1110,6 +1110,12 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<TestCase> {
+        let parent_functions = self
+            .walk_functions()
+            .filter(|f| f.walk_tests().any(|tc| tc.name() == self.name()))
+            .map(|walker| Ok(walker.name().to_string()))
+            .collect::<Result<Vec<_>>>()?;
+
         Ok(TestCase {
             name: self.name().to_string(),
             args: self
@@ -1118,6 +1124,8 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
                 .iter()
                 .map(|(k, (_, v))| Ok((k.clone(), v.repr(db)?)))
                 .collect::<Result<IndexMap<_, _>>>()?,
+
+            parent_functions,
         })
     }
 }
