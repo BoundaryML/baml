@@ -42,8 +42,6 @@ client<llm> GPT4Turbo {
 
 client<llm> GPT35 {
   provider openai
-    // retry_policy Exponential
-
   options {
     model "gpt-3.5-turbo"
     api_key env.OPENAI_API_KEY
@@ -135,4 +133,13 @@ client<llm> Resilient_SimpleSyntax {
   }
 } 
  
-
+client<llm> Lottery_SimpleSyntax {
+  provider baml-round-robin
+  options {
+    start 0
+    strategy [
+      GPT35
+      Claude
+    ]
+  }
+}

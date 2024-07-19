@@ -36,7 +36,6 @@ pub async fn make_request(
     stream: bool,
 ) -> Result<(Response, web_time::SystemTime, web_time::Instant), LLMResponse> {
     let (system_now, instant_now) = (web_time::SystemTime::now(), web_time::Instant::now());
-    log::debug!("Making request using client {}", client.context().name);
 
     let req = match client
         .build_request(prompt, true, stream)
@@ -58,7 +57,7 @@ pub async fn make_request(
             }));
         }
     };
-    log::info!("built 1");
+
     log::debug!("Request: {:#?}", req);
     let req = match req.build() {
         Ok(req) => req,
