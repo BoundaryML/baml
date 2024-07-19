@@ -48,7 +48,9 @@ class BamlStream {
             if (event === null) {
                 break;
             }
-            yield this.partialCoerce(event.parsed());
+            if (event.isOk()) {
+                yield this.partialCoerce(event.parsed());
+            }
         }
     }
     async getFinalResponse() {

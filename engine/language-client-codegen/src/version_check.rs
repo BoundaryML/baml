@@ -3,7 +3,13 @@ use semver::Version;
 
 #[derive(Debug, PartialEq)]
 pub struct VersionCheckError {
-    pub msg: String,
+    msg: String,
+}
+
+impl VersionCheckError {
+    pub fn msg(&self) -> String {
+        format!("Version mismatch: {}", self.msg)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -58,7 +64,7 @@ pub fn check_version(
   
     if gen_version.major != runtime_version.major || gen_version.minor != runtime_version.minor {
         let base_message = format!(
-            "Version mismatch: Generator version ({}) does not match the {} version ({}). Major and minor versions must match.",
+            "Generator version ({}) does not match the {} version ({}). Major and minor versions must match.",
             gen_version,
             match generator_type {
                 GeneratorType::VSCode => "VSCode extension",
@@ -155,7 +161,7 @@ mod tests {
     fn test_mismatched_major_version_cli_python() {
         let result = check_version("2.0.0", "1.0.0", GeneratorType::CLI, VersionCheckMode::Strict, GeneratorOutputType::PythonPydantic, false);
         assert!(result.is_some());
-        let error_msg = result.unwrap().msg;
+        let error_msg = result.unwrap().msg();
         assert!(error_msg.contains("Version mismatch"));
         assert!(error_msg.contains("installed BAML CLI"));
         assert!(error_msg.contains("pip install --upgrade baml-py==2.0.0"));
@@ -165,7 +171,7 @@ mod tests {
     fn test_mismatched_minor_version_vscode_typescript() {
         let result = check_version("1.3.0", "1.2.0", GeneratorType::VSCode, VersionCheckMode::Strict, GeneratorOutputType::Typescript, false);
         assert!(result.is_some());
-        let error_msg = result.unwrap().msg;
+        let error_msg = result.unwrap().msg();
         println!("{}", error_msg);
         assert!(error_msg.contains("Version mismatch"));
         assert!(error_msg.contains("VSCode extension"));
@@ -176,7 +182,7 @@ mod tests {
     fn test_older_vscode_version_ruby() {
         let result = check_version("1.3.0", "1.2.0", GeneratorType::VSCodeCLI, VersionCheckMode::Strict, GeneratorOutputType::RubySorbet, false);
         assert!(result.is_some());
-        let error_msg = result.unwrap().msg;
+        let error_msg = result.unwrap().msg();
         assert!(error_msg.contains("Version mismatch"));
         assert!(error_msg.contains("baml package"));
         assert!(error_msg.contains("gem install baml -v 1.3.0"));

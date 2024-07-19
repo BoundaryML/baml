@@ -97,7 +97,7 @@ pub trait ExperimentalTracingInterface {
     fn drain_stats(&self) -> crate::InnerTraceStats;
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn set_log_event_callback(&self, callback: LogEventCallbackSync) -> Result<()>;
+    fn set_log_event_callback(&self, callback: Option<LogEventCallbackSync>) -> Result<()>;
 }
 
 pub trait InternalClientLookup<'a> {

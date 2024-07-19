@@ -8,7 +8,7 @@ export declare class BamlCtxManager {
     startTrace(name: string, args: Record<string, any>): [RuntimeContextManager, BamlSpan];
     endTrace(span: BamlSpan, response: any): void;
     flush(): void;
-    onLogEvent(callback: (event: BamlLogEvent) => void): void;
+    onLogEvent(callback: ((event: BamlLogEvent) => void) | undefined): void;
     traceFnSync<ReturnType, F extends (...args: any[]) => ReturnType>(name: string, func: F): F;
     traceFnAsync<ReturnType, F extends (...args: any[]) => Promise<ReturnType>>(name: string, func: F): F;
 }
