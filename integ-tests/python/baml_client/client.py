@@ -1162,7 +1162,7 @@ class BamlClient:
     
     async def TestFallbackClient(
         self,
-        input: str,
+        
         baml_options: BamlCallOptions = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
@@ -1175,7 +1175,7 @@ class BamlClient:
       raw = await self.__runtime.call_function(
         "TestFallbackClient",
         {
-          "input": input,
+          
         },
         self.__ctx_manager.get(),
         tb,
@@ -1542,30 +1542,6 @@ class BamlClient:
         __cr__,
       )
       mdl = create_model("TestRetryExponentialReturnType", inner=(str, ...))
-      return coerce(mdl, raw.parsed())
-    
-    async def TestRoundRobin(
-        self,
-        
-        baml_options: BamlCallOptions = {},
-    ) -> str:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      raw = await self.__runtime.call_function(
-        "TestRoundRobin",
-        {
-          
-        },
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-      )
-      mdl = create_model("TestRoundRobinReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
     async def TestVertex(
@@ -3150,7 +3126,7 @@ class BamlStreamClient:
     
     def TestFallbackClient(
         self,
-        input: str,
+        
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
       __tb__ = baml_options.get("tb", None)
@@ -3163,7 +3139,6 @@ class BamlStreamClient:
       raw = self.__runtime.stream_function(
         "TestFallbackClient",
         {
-          "input": input,
         },
         None,
         self.__ctx_manager.get(),
@@ -3667,38 +3642,6 @@ class BamlStreamClient:
 
       mdl = create_model("TestRetryExponentialReturnType", inner=(str, ...))
       partial_mdl = create_model("TestRetryExponentialPartialReturnType", inner=(Optional[str], ...))
-
-      return baml_py.BamlStream[Optional[str], str](
-        raw,
-        lambda x: coerce(partial_mdl, x),
-        lambda x: coerce(mdl, x),
-        self.__ctx_manager.get(),
-      )
-    
-    def TestRoundRobin(
-        self,
-        
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      raw = self.__runtime.stream_function(
-        "TestRoundRobin",
-        {
-        },
-        None,
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-      )
-
-      mdl = create_model("TestRoundRobinReturnType", inner=(str, ...))
-      partial_mdl = create_model("TestRoundRobinPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlStream[Optional[str], str](
         raw,

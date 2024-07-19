@@ -778,13 +778,13 @@ export class BamlClient {
   }
   
   async TestFallbackClient(
-      input: string,
+      
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestFallbackClient",
       {
-        "input": input
+        
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -1023,22 +1023,6 @@ export class BamlClient {
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestRetryExponential",
-      {
-        
-      },
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-      __baml_options__?.cr,
-    )
-    return raw.parsed() as string
-  }
-  
-  async TestRoundRobin(
-      
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): Promise<string> {
-    const raw = await this.runtime.callFunction(
-      "TestRoundRobin",
       {
         
       },
@@ -2146,13 +2130,13 @@ class BamlStreamClient {
   }
   
   TestFallbackClient(
-      input: string,
+      
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestFallbackClient",
       {
-        "input": input
+        
       },
       undefined,
       this.ctx_manager.cloneContext(),
@@ -2496,29 +2480,6 @@ class BamlStreamClient {
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestRetryExponential",
-      {
-        
-      },
-      undefined,
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-      __baml_options__?.cr,
-    )
-    return new BamlStream<RecursivePartialNull<string>, string>(
-      raw,
-      (a): a is RecursivePartialNull<string> => a,
-      (a): a is string => a,
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-    )
-  }
-  
-  TestRoundRobin(
-      
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): BamlStream<RecursivePartialNull<string>, string> {
-    const raw = this.runtime.streamFunction(
-      "TestRoundRobin",
       {
         
       },

@@ -971,18 +971,16 @@ module Baml
 
     sig {
       
-      params(
-        input: String,
-      ).returns(String)
+      returns(String)
       
     }
     def TestFallbackClient(
-        input:
+        
     )
       raw = @runtime.call_function(
         "TestFallbackClient",
         {
-          "input" => input,
+          
         },
         @ctx_manager,
       )
@@ -1277,24 +1275,6 @@ module Baml
     )
       raw = @runtime.call_function(
         "TestRetryExponential",
-        {
-          
-        },
-        @ctx_manager,
-      )
-      (raw.parsed_using_types(Baml::Types))
-    end
-
-    sig {
-      
-      returns(String)
-      
-    }
-    def TestRoundRobin(
-        
-    )
-      raw = @runtime.call_function(
-        "TestRoundRobin",
         {
           
         },
@@ -2324,16 +2304,16 @@ module Baml
 
     sig {
       params(
-        input: String,
+        
       ).returns(Baml::BamlStream[String])
     }
     def TestFallbackClient(
-        input:
+        
     )
       raw = @runtime.stream_function(
         "TestFallbackClient",
         {
-          "input" => input,
+          
         },
         @ctx_manager,
       )
@@ -2647,27 +2627,6 @@ module Baml
     )
       raw = @runtime.stream_function(
         "TestRetryExponential",
-        {
-          
-        },
-        @ctx_manager,
-      )
-      Baml::BamlStream[T.nilable(String), String].new(
-        ffi_stream: raw,
-        ctx_manager: @ctx_manager
-      )
-    end
-
-    sig {
-      params(
-        
-      ).returns(Baml::BamlStream[String])
-    }
-    def TestRoundRobin(
-        
-    )
-      raw = @runtime.stream_function(
-        "TestRoundRobin",
         {
           
         },
