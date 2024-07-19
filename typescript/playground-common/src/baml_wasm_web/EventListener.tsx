@@ -11,7 +11,7 @@ import { atomStore, sessionStore, vscodeLocalStorageStore } from './JotaiProvide
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { vscode } from '../utils/vscode'
-
+import { useRunHooks } from './test_uis/testHooks'
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
 const postMessageToExtension = (message: any) => {
@@ -488,6 +488,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom)
   const envVars = useAtomValue(envVarsAtom)
   const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
+  const { isRunning, run } = useRunHooks()
 
   useEffect(() => {
     if (wasm) {
@@ -571,10 +572,14 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             command: 'baml_cli_version'
             content: string
           }
+        | {
+            command: 'run_test'
+            content: { test_name: string }
+          }
       >,
     ) => {
       const { command, content } = event.data
-
+      console.log(`received command: ${command}`)
       switch (command) {
         case 'modify_file':
           updateFile({
@@ -632,6 +637,12 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             }
             return updated
           })
+          break
+
+        case 'run_test':
+          console.log(`received message to run test: ${content.test_name}`)
+          run([content.test_name])
+
           break
       }
     }

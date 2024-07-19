@@ -57,9 +57,16 @@ function TestAws(input: string) -> string {
 
 
 test TestProvider {
-  functions [TestAnthropic, TestVertex, TestOpenAI, TestAzure, TestOllama, TestGemini, TestAws]
+  functions [TestAnthropic, TestVertex, PromptTestOpenAI, TestAzure, TestOllama, TestGemini, TestAws]
   args {
     input "Donkey kong and peanut butter"
+  }
+}
+
+test TestProvide1r {
+  functions [TestAnthropic, TestVertex, PromptTestOpenAI, TestAzure, TestOllama, TestGemini, TestAws]
+  args {
+    input "Donkey kong and jelly beans"
   }
 }
 

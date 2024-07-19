@@ -295,6 +295,10 @@ class Project {
 
     return runtime.list_functions()
   }
+  list_testcases(): BamlWasm.WasmTestCase[] {
+    let runtime = this.runtime()
+    return runtime.list_testcases()
+  }
 
   list_generators(): BamlWasm.WasmGeneratorConfig[] {
     if (this.current_runtime == undefined) {
