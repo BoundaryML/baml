@@ -250,6 +250,7 @@ impl BamlRuntime {
             params,
             self.tracer.clone(),
             ctx.create_ctx(tb, cb)?,
+            #[cfg(not(target_arch = "wasm32"))]
             self.async_runtime.clone(),
         )
     }
