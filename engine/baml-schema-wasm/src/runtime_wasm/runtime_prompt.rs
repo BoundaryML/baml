@@ -114,7 +114,7 @@ impl WasmScope {
     pub fn name(&self) -> String {
         self.scope.name()
     }
-
+    #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen]
     pub fn get_orchestration_scope_info(&self) -> JsValue {
         self.scope.to_js_value()

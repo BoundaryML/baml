@@ -10,7 +10,13 @@ use internal_baml_jinja::RenderedPrompt;
 use js_sys;
 use serde::Serialize;
 use std::{collections::HashMap, sync::Arc};
-use wasm_bindgen::JsValue;
+
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
+        use wasm_bindgen::JsValue;
+    }
+}
+
 use web_time::Duration; // Add this line
 
 use crate::{
@@ -132,6 +138,7 @@ impl OrchestrationScope {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
     pub fn to_js_value(&self) -> JsValue {
         let array = js_sys::Array::new();
         for scope in &self.scope {
@@ -234,6 +241,7 @@ impl WithStreamable for OrchestratorNode {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 impl ExecutionScope {
     fn to_js_value(&self) -> JsValue {
         let obj = js_sys::Object::new();
