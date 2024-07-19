@@ -175,6 +175,10 @@ const updateCursorAtom = atom(
 
       if (selectedFunc) {
         set(selectedFunctionAtom, selectedFunc.name)
+        const selectedTestcase = runtime.get_testcase_from_position(selectedFunc, cursorIdx)
+        if (selectedTestcase) {
+          set(rawSelectedTestCaseAtom, selectedTestcase.name)
+        }
       }
     }
   },

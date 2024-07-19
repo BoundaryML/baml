@@ -16,3 +16,14 @@ test TestFnNamedArgsSingleMapStringToMap {
     }
   }
 }
+
+test TestFnNamedArgsSingleMapStringToMap2 {
+  functions [TestFnNamedArgsSingleMapStringToMap]
+  args {
+    myMap {
+      "outer-key" {
+        "key" "example string2"
+      }
+    }
+  }
+}

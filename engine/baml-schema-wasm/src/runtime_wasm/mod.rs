@@ -1061,13 +1061,114 @@ impl WasmRuntime {
         for function in functions {
             let span = function.span.clone(); // Clone the span
 
-            if span.file_path.as_str().contains(file_name)
+            if span.file_path.as_str().ends_with(file_name)
                 && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
             {
                 return Some(function);
             }
+
+            let test_cases = function.test_cases.clone();
+            for func_tc in test_cases {
+                let span = func_tc.span;
+                if span.file_path.as_str().ends_with(file_name)
+                    && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
+                {
+                    return Some(function);
+                }
+            }
         }
 
+        None
+    }
+
+    #[wasm_bindgen]
+    pub fn list_testcases(&self) -> Vec<WasmTestCase> {
+        self.runtime
+            .internal()
+            .ir()
+            .walk_tests()
+            .map(|tc| {
+                let params = match tc.test_case_params(&self.runtime.env_vars()) {
+                    Ok(params) => Ok(params
+                        .iter()
+                        .map(|(k, v)| {
+                            let as_str = match v {
+                                Ok(v) => match serde_json::to_string(v) {
+                                    Ok(s) => Ok(s),
+                                    Err(e) => Err(e.to_string()),
+                                },
+                                Err(e) => Err(e.to_string()),
+                            };
+
+                            let (value, error) = match as_str {
+                                Ok(s) => (Some(s), None),
+                                Err(e) => (None, Some(e)),
+                            };
+
+                            WasmParam {
+                                name: k.to_string(),
+                                value,
+                                error,
+                            }
+                        })
+                        .collect()),
+                    Err(e) => Err(e.to_string()),
+                };
+
+                let (mut params, error) = match params {
+                    Ok(p) => (p, None),
+                    Err(e) => (Vec::new(), Some(e)),
+                };
+
+                // Any missing params should be set to an error
+                let _ = tc.function().inputs().right().map(|func_params| {
+                    for (param_name, t) in func_params {
+                        if !params.iter().any(|p| p.name.cmp(param_name).is_eq())
+                            && !t.is_optional()
+                        {
+                            params.insert(
+                                0,
+                                WasmParam {
+                                    name: param_name.to_string(),
+                                    value: None,
+                                    error: Some("Missing parameter".to_string()),
+                                },
+                            );
+                        }
+                    }
+                });
+
+                let wasm_span = match tc.span() {
+                    Some(span) => span.into(),
+                    None => WasmSpan::default(),
+                };
+
+                WasmTestCase {
+                    name: tc.test_case().name.clone(),
+                    inputs: params,
+                    error,
+                    span: wasm_span,
+                }
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn get_testcase_from_position(
+        &self,
+        parent_function: WasmFunction,
+        cursor_idx: usize,
+    ) -> Option<WasmTestCase> {
+        let testcases = parent_function.test_cases;
+        for testcase in testcases {
+            let span = testcase.clone().span;
+
+            if span.file_path.as_str() == (parent_function.span.file_path)
+                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
+            {
+                return Some(testcase);
+            }
+        }
         None
     }
 }
