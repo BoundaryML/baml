@@ -3,7 +3,7 @@ import axios from 'axios'
 import glooLens from './LanguageToBamlCodeLensProvider'
 import { WebPanelView, openPlaygroundConfig } from './panels/WebPanelView'
 import plugins from './plugins'
-import { requestDiagnostics } from './plugins/language-server'
+import { requestBamlCLIVersion, requestDiagnostics } from './plugins/language-server'
 import { telemetry } from './plugins/language-server'
 import cors from 'cors'
 import { createProxyMiddleware } from 'http-proxy-middleware'
@@ -243,6 +243,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
       // sends project files as well to webview
       requestDiagnostics()
+
       openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
       WebPanelView.currentPanel?.postMessage('select_function', {
         root_path: 'default',
@@ -305,6 +306,10 @@ export function activate(context: vscode.ExtensionContext) {
     console.log(`vscode env: ${JSON.stringify(process.env, null, 2)}`)
     vscode.commands.executeCommand('baml.openBamlPanel')
   }
+
+  setInterval(() => {
+    requestBamlCLIVersion()
+  }, 30000)
 
   // TODO: Reactivate linter.
   // runDiagnostics();
