@@ -34,8 +34,32 @@ const loadDoorbell = () => {
   })(window, document, 'script')
 }
 
-export const useDoorbell = () => {
+const loadSignalZen = () => {
+  var _sz = (_sz || {}) as any
+  ;(_sz.appId = '03fb7e7f'),
+    (function () {
+      var e = document.createElement('script')
+      ;(e.src = 'https://cdn.signalzen.com/signalzen.js'),
+        e.setAttribute('async', 'true'),
+        document.documentElement.firstChild?.appendChild(e)
+      var t = setInterval(function () {
+        const SignalZen = (window as any).SignalZen
+        'undefined' != typeof SignalZen && (clearInterval(t), new SignalZen(_sz).load())
+      }, 10)
+    })()
+}
+
+const loadSmallChat = () => {
+  const e = document.createElement('script')
+  e.src = 'https://embed.small.chat/T03KV1PH19PC07DA5G14HY.js'
+  e.setAttribute('async', 'true')
+  document.documentElement.firstChild?.appendChild(e)
+}
+
+export const useFeedbackWidget = () => {
   useEffect(() => {
     loadDoorbell()
+    // loadSignalZen()
+    // loadSmallChat()
   }, [])
 }
