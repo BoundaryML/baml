@@ -585,7 +585,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
       >,
     ) => {
       const { command, content } = event.data
-      console.log(`received command: ${command}`)
+
       switch (command) {
         case 'modify_file':
           updateFile({
@@ -611,7 +611,6 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           }
           break
         case 'baml_cli_version':
-          console.log('Setting baml cli version', content)
           setBamlCliVersion(content)
           break
 
@@ -620,8 +619,6 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           break
 
         case 'port_number':
-          console.log('Setting port number', content.port)
-
           if (content.port === 0) {
             console.error('Port number is 0, cannot launch BAML extension')
 
@@ -646,7 +643,6 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           break
 
         case 'run_test':
-          console.log(`received message to run test: ${content.test_name}`)
           run([content.test_name])
 
           break
