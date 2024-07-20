@@ -319,6 +319,17 @@ impl Default for WasmSpan {
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Clone)]
+pub struct WasmParentFunction {
+    #[wasm_bindgen(readonly)]
+    pub start: usize,
+    #[wasm_bindgen(readonly)]
+    pub end: usize,
+    #[wasm_bindgen(readonly)]
+    pub name: String,
+}
+
+#[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Clone)]
 pub struct WasmTestCase {
     #[wasm_bindgen(readonly)]
     pub name: String,
@@ -329,7 +340,7 @@ pub struct WasmTestCase {
     #[wasm_bindgen(readonly)]
     pub span: WasmSpan,
     #[wasm_bindgen(readonly)]
-    pub parent_functions: Vec<String>,
+    pub parent_functions: Vec<WasmParentFunction>,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -881,7 +892,23 @@ impl WasmRuntime {
                                 inputs: params,
                                 error,
                                 span: wasm_span,
-                                parent_functions: tc.test_case().parent_functions.clone(),
+                                parent_functions: tc
+                                    .test_case()
+                                    .functions
+                                    .iter()
+                                    .map(|f| {
+                                        let (start, end) = f
+                                            .attributes
+                                            .span
+                                            .as_ref()
+                                            .map_or((0, 0), |f| (f.start, f.end));
+                                        WasmParentFunction {
+                                            start,
+                                            end,
+                                            name: f.elem.name().to_string(),
+                                        }
+                                    })
+                                    .collect(),
                             }
                         })
                         .collect(),
@@ -1057,8 +1084,8 @@ impl WasmRuntime {
     pub fn get_function_at_position(
         &self,
         file_name: &str,
+        selected_func: &str,
         cursor_idx: usize,
-        selected_function: String,
     ) -> Option<WasmFunction> {
         let functions = self.list_functions();
 
@@ -1079,13 +1106,41 @@ impl WasmRuntime {
             if span.file_path.as_str().ends_with(file_name)
                 && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
             {
-                let first_function = if tc.parent_functions.contains(&selected_function) {
-                    &selected_function
-                } else {
-                    tc.parent_functions.get(0)?
-                };
-                let matching_function = functions.into_iter().find(|f| f.name == *first_function);
-                return matching_function;
+                if let Some(parent_function) =
+                    tc.parent_functions.iter().find(|f| f.name == selected_func)
+                {
+                    return functions.into_iter().find(|f| f.name == selected_func);
+                } else if let Some(first_function) = tc.parent_functions.get(0) {
+                    return functions
+                        .into_iter()
+                        .find(|f| f.name == first_function.name);
+                }
+            }
+        }
+
+        None
+    }
+
+    #[wasm_bindgen]
+    pub fn get_function_of_testcase(
+        &self,
+        file_name: &str,
+        cursor_idx: usize,
+    ) -> Option<WasmParentFunction> {
+        let testcases = self.list_testcases();
+
+        for tc in testcases {
+            let span = tc.span;
+            if span.file_path.as_str().ends_with(file_name)
+                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
+            {
+                let first_function = tc
+                    .parent_functions
+                    .iter()
+                    .find(|f| f.start <= cursor_idx && cursor_idx <= f.end)
+                    .cloned();
+
+                return first_function;
             }
         }
         None
@@ -1158,7 +1213,23 @@ impl WasmRuntime {
                     inputs: params,
                     error,
                     span: wasm_span,
-                    parent_functions: tc.test_case().parent_functions.clone(),
+                    parent_functions: tc
+                        .test_case()
+                        .functions
+                        .iter()
+                        .map(|f| {
+                            let (start, end) = f
+                                .attributes
+                                .span
+                                .as_ref()
+                                .map_or((0, 0), |f| (f.start, f.end));
+                            WasmParentFunction {
+                                start,
+                                end,
+                                name: f.elem.name().to_string(),
+                            }
+                        })
+                        .collect(),
                 }
             })
             .collect()

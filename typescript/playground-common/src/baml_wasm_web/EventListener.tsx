@@ -170,14 +170,22 @@ const updateCursorAtom = atom(
       }
 
       cursorIdx += cursor.column
+      console.log('selectedFunc', get(selectedFunctionAtom)?.name ?? '')
 
-      const selectedFunc = runtime.get_function_at_position(fileName, cursorIdx, get(selectedFunctionAtom)?.name ?? '')
+      var selectedFunc = runtime.get_function_at_position(fileName, get(selectedFunctionAtom)?.name ?? '', cursorIdx)
 
       if (selectedFunc) {
         set(selectedFunctionAtom, selectedFunc.name)
         const selectedTestcase = runtime.get_testcase_from_position(selectedFunc, cursorIdx)
+        console.log('selectedTestcase', selectedTestcase?.name)
         if (selectedTestcase) {
           set(rawSelectedTestCaseAtom, selectedTestcase.name)
+          const nestedFunc = runtime.get_function_of_testcase(fileName, cursorIdx)
+          console.log('nestedFunc', nestedFunc?.name)
+          if (nestedFunc) {
+            set(selectedFunctionAtom, nestedFunc.name)
+            console.log(`set nested func to ${nestedFunc.name}`)
+          }
         }
       }
     }

@@ -543,12 +543,13 @@ export function startServer(options?: LSOptions): void {
               )
               testcase.parent_functions.forEach((parentFunction, index) => {
                 const command: Command = {
-                  title: testcase.parent_functions.length > 1 ? `▶ Run for ${parentFunction} 💥 ` : '▶ Run Test 💥',
+                  title:
+                    testcase.parent_functions.length > 1 ? `▶ Run for ${parentFunction.name} 💥 ` : '▶ Run Test 💥',
                   command: 'baml.runBamlTest',
                   arguments: [
                     {
                       projectId: proj,
-                      functionName: parentFunction,
+                      functionName: parentFunction.name,
                       showTests: true,
                       testCaseName: testcase.name,
                     },
