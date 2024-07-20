@@ -1,6 +1,9 @@
 pub mod types;
 
+use std::str::FromStr;
+
 use minijinja::{value::Kwargs, ErrorKind, Value};
+use strum::VariantNames;
 
 use crate::{types::RenderOptions, RenderContext};
 
@@ -111,6 +114,37 @@ impl minijinja::value::Object for OutputFormat {
             None
         };
 
+        let map_style = if kwargs.has("map_style") {
+            match kwargs
+                .get::<String>("map_style")
+                .map(|s| types::MapStyle::from_str(s.as_str()))
+            {
+                Ok(Ok(map_style)) => Some(map_style),
+                Ok(Err(e)) => {
+                    return Err(Error::new(
+                        ErrorKind::SyntaxError,
+                        format!(
+                            "Invalid value for map_style (expected one of {}): {}",
+                            types::MapStyle::VARIANTS.join(", "),
+                            e
+                        ),
+                    ))
+                }
+                Err(e) => {
+                    return Err(Error::new(
+                        ErrorKind::SyntaxError,
+                        format!(
+                            "Invalid value for map_style (expected one of {}): {}",
+                            types::MapStyle::VARIANTS.join(", "),
+                            e
+                        ),
+                    ))
+                }
+            }
+        } else {
+            None
+        };
+
         let Ok(_) = kwargs.assert_all_used() else {
             return Err(Error::new(
                 ErrorKind::TooManyArguments,
@@ -123,6 +157,7 @@ impl minijinja::value::Object for OutputFormat {
             or_splitter,
             enum_value_prefix,
             always_hoist_enums,
+            map_style,
         ))?;
 
         match content {

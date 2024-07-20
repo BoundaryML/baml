@@ -184,7 +184,7 @@ impl IRHelper for IntermediateRepr {
         for (param_name, param_type) in function_params {
             scope.push(param_name.to_string());
             if let Some(param_value) = params.get(param_name.as_str()) {
-                if let Some(baml_arg) = to_baml_arg::validate_arg(
+                if let Ok(baml_arg) = to_baml_arg::validate_arg(
                     self,
                     param_type,
                     param_value,
