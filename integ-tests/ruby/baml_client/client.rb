@@ -1110,7 +1110,7 @@ module Baml
     sig {
       
       params(
-        myMap: Integer,
+        myMap: T::Hash[String, Baml::Types::StringToClassEntry],
       ).returns(T::Hash[String, Baml::Types::StringToClassEntry])
       
     }
@@ -1151,7 +1151,7 @@ module Baml
       
       params(
         myMap: T::Hash[String, String],
-      ).returns(T::Hash[String, T::Hash[String, String]])
+      ).returns(T::Hash[String, String])
       
     }
     def TestFnNamedArgsSingleMapStringToString(
@@ -2531,7 +2531,7 @@ module Baml
 
     sig {
       params(
-        myMap: Integer,
+        myMap: T::Hash[String, Baml::Types::StringToClassEntry],
       ).returns(Baml::BamlStream[T::Hash[String, Baml::Types::StringToClassEntry]])
     }
     def TestFnNamedArgsSingleMapStringToClass(
@@ -2574,7 +2574,7 @@ module Baml
     sig {
       params(
         myMap: T::Hash[String, String],
-      ).returns(Baml::BamlStream[T::Hash[String, T::Hash[String, String]]])
+      ).returns(Baml::BamlStream[T::Hash[String, String]])
     }
     def TestFnNamedArgsSingleMapStringToString(
         myMap:
@@ -2586,7 +2586,7 @@ module Baml
         },
         @ctx_manager,
       )
-      Baml::BamlStream[T::Hash[String, T::Hash[String, T.nilable(String)]], T::Hash[String, T::Hash[String, String]]].new(
+      Baml::BamlStream[T::Hash[String, T.nilable(String)], T::Hash[String, String]].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
