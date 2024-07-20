@@ -891,7 +891,7 @@ export class BamlAsyncClient {
   }
   
   async TestFnNamedArgsSingleMapStringToClass(
-      myMap: number,
+      myMap: Record<string, StringToClassEntry>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<Record<string, StringToClassEntry>> {
     const raw = await this.runtime.callFunction(
@@ -925,7 +925,7 @@ export class BamlAsyncClient {
   async TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): Promise<Record<string, Record<string, string>>> {
+  ): Promise<Record<string, string>> {
     const raw = await this.runtime.callFunction(
       "TestFnNamedArgsSingleMapStringToString",
       {
@@ -935,7 +935,7 @@ export class BamlAsyncClient {
       __baml_options__?.tb?.__tb(),
       __baml_options__?.cr,
     )
-    return raw.parsed() as Record<string, Record<string, string>>
+    return raw.parsed() as Record<string, string>
   }
   
   async TestFnNamedArgsSingleString(
@@ -2356,7 +2356,7 @@ class BamlStreamClient {
   }
   
   TestFnNamedArgsSingleMapStringToClass(
-      myMap: number,
+      myMap: Record<string, StringToClassEntry>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<Record<string, StringToClassEntry>>, Record<string, StringToClassEntry>> {
     const raw = this.runtime.streamFunction(
@@ -2404,7 +2404,7 @@ class BamlStreamClient {
   TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): BamlStream<RecursivePartialNull<Record<string, Record<string, string>>>, Record<string, Record<string, string>>> {
+  ): BamlStream<RecursivePartialNull<Record<string, string>>, Record<string, string>> {
     const raw = this.runtime.streamFunction(
       "TestFnNamedArgsSingleMapStringToString",
       {
@@ -2415,10 +2415,10 @@ class BamlStreamClient {
       __baml_options__?.tb?.__tb(),
       __baml_options__?.cr,
     )
-    return new BamlStream<RecursivePartialNull<Record<string, Record<string, string>>>, Record<string, Record<string, string>>>(
+    return new BamlStream<RecursivePartialNull<Record<string, string>>, Record<string, string>>(
       raw,
-      (a): a is RecursivePartialNull<Record<string, Record<string, string>>> => a,
-      (a): a is Record<string, Record<string, string>> => a,
+      (a): a is RecursivePartialNull<Record<string, string>> => a,
+      (a): a is Record<string, string> => a,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )
