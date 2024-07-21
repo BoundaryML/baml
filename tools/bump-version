@@ -103,12 +103,17 @@ fi
 _repo_root="$(git rev-parse --show-toplevel)"
 cd "${_repo_root}/tools"
 
+
+version_bump="patch"
+
+git pull --tags
+
 if [ "$_all_mode" -eq 1 ]; then
-  bump2version --config-file ./versions/engine.cfg minor
-  bump2version --config-file ./versions/python.cfg minor --allow-dirty
-  bump2version --config-file ./versions/typescript.cfg minor --allow-dirty
-  bump2version --config-file ./versions/ruby.cfg minor --allow-dirty
-  bump2version --config-file ./versions/vscode.cfg minor --allow-dirty
+  bump2version --config-file ./versions/engine.cfg $version_bump --allow-dirty
+  bump2version --config-file ./versions/python.cfg $version_bump --allow-dirty
+  bump2version --config-file ./versions/typescript.cfg $version_bump --allow-dirty
+  bump2version --config-file ./versions/ruby.cfg $version_bump --allow-dirty
+  bump2version --config-file ./versions/vscode.cfg $version_bump --allow-dirty
 elif [ "$_ts_mode" -eq 1 ]; then
   bump2version --config-file ./versions/typescript.cfg patch
 elif [ "$_python_mode" -eq 1 ]; then

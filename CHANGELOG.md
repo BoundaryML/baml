@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.51.1](https://github.com/boundaryml/baml/compare/0.51.0..0.51.1) - 2024-07-21
+
+### Features
+
+- Add a feedback button to VSCode Extension (#811) - ([f371912](https://github.com/boundaryml/baml/commit/f3719127174d8f998579747f14fae8675dafba4c)) - Samuel Lijin
+
+### Bug
+
+- Allow default_client_mode in the generator #813 (#815) - ([6df7fca](https://github.com/boundaryml/baml/commit/6df7fcabc1eb55b08a50741f2346440f631abd63)) - hellovai
+
+### UNMATCHED
+
 ## [0.51.0](https://github.com/boundaryml/baml/compare/0.50.0..0.51.0) - 2024-07-19
 
 ### Bug Fixes

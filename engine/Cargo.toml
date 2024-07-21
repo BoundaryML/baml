@@ -60,7 +60,7 @@ internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja" }
 
 [workspace.package]
-version = "0.51.0"
+version = "0.51.1"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"
