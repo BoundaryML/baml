@@ -9,7 +9,12 @@ use crate::configuration::{
     Generator, GeneratorBuilder, GeneratorDefaultClientMode, GeneratorOutputType,
 };
 
-const FIRST_CLASS_PROPERTIES: &[&str] = &["output_type", "output_dir", "version"];
+const FIRST_CLASS_PROPERTIES: &[&str] = &[
+    "output_type",
+    "output_dir",
+    "version",
+    "default_client_mode",
+];
 
 fn parse_required_key<'a>(
     map: &'a HashMap<&str, &ast::Expression>,
