@@ -32,6 +32,10 @@ export class TypeBuilder {
     return this.tb
   }
 
+  null(): FieldType {
+    return this.tb.null()
+  }
+
   string(): FieldType {
     return this.tb.string()
   }
@@ -50,6 +54,14 @@ export class TypeBuilder {
 
   list(type: FieldType): FieldType {
     return this.tb.list(type)
+  }
+
+  map(keyType: FieldType, valueType: FieldType): FieldType {
+    return this.tb.map(keyType, valueType)
+  }
+
+  union(types: FieldType[]): FieldType {
+    return this.tb.union(types)
   }
 
   classBuilder<Name extends string, Properties extends string>(

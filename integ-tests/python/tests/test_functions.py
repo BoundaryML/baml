@@ -1,4 +1,5 @@
 import time
+from typing import List
 import pytest
 from assertpy import assert_that
 from dotenv import load_dotenv
@@ -11,11 +12,12 @@ from ..baml_client.sync_client import b as sync_b
 from ..baml_client.globals import (
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME,
 )
+from ..baml_client import partial_types
 from ..baml_client.types import (
     DynInputOutput,
     NamedArgsSingleEnumList,
     NamedArgsSingleClass,
-    StringToClassEntry,  
+    StringToClassEntry,
 )
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
@@ -23,7 +25,6 @@ import datetime
 import concurrent.futures
 import asyncio
 import random
-
 
 
 def test_sync():
@@ -94,18 +95,22 @@ class TestAllInputs:
 
     @pytest.mark.asyncio
     async def test_single_map_string_to_string(self):
-        res = await b.TestFnNamedArgsSingleMapStringToString({'lorem': 'ipsum', 'dolor': 'sit'})
-        assert 'lorem' in res
+        res = await b.TestFnNamedArgsSingleMapStringToString(
+            {"lorem": "ipsum", "dolor": "sit"}
+        )
+        assert "lorem" in res
 
     @pytest.mark.asyncio
     async def test_single_map_string_to_class(self):
-        res = await b.TestFnNamedArgsSingleMapStringToClass({'lorem': StringToClassEntry(word='ipsum')})
-        assert res['lorem'].word == 'ipsum'
+        res = await b.TestFnNamedArgsSingleMapStringToClass(
+            {"lorem": StringToClassEntry(word="ipsum")}
+        )
+        assert res["lorem"].word == "ipsum"
 
     @pytest.mark.asyncio
     async def test_single_map_string_to_map(self):
-        res = await b.TestFnNamedArgsSingleMapStringToMap({'lorem': {'word': 'ipsum'}})
-        assert res['lorem']['word'] == 'ipsum'
+        res = await b.TestFnNamedArgsSingleMapStringToMap({"lorem": {"word": "ipsum"}})
+        assert res["lorem"]["word"] == "ipsum"
 
 
 class MyCustomClass(NamedArgsSingleClass):
@@ -418,7 +423,7 @@ async def test_tracing_async_only():
 
 def test_tracing_sync():
     # res = parent_sync("first-arg-value")
-    res2 = sync_dummy_func("second-dummycall-arg")
+    _ = sync_dummy_func("second-dummycall-arg")
 
 
 def test_tracing_thread_pool():
@@ -491,7 +496,6 @@ def parent_sync(myStr: str):
     return "hello world parentsync"
 
 
-
 @trace
 async def async_dummy_func(myArgggg: str):
     await asyncio.sleep(0.5 + random.random())
@@ -504,7 +508,7 @@ def sync_dummy_func(dummyFuncArg: str):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def cleanup(request):
+def cleanup():
     """Cleanup a testing directory once we are finished."""
     flush()
 
@@ -600,7 +604,7 @@ async def test_dynamic_class_nested_output_stream():
         input="My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
         baml_options={"tb": tb},
     )
-    msgs = []
+    msgs: List[partial_types.DynamicOutput] = []
     async for msg in stream:
         print("streamed ", msg)
         print("streamed ", msg.model_dump())
@@ -630,7 +634,7 @@ async def test_stream_dynamic_class_output():
         input="My name is Harrison. My hair is black and I'm 6 feet tall.",
         baml_options={"tb": tb, "client_registry": cr},
     )
-    msgs = []
+    msgs: List[partial_types.DynamicOutput] = []
     async for msg in stream:
         print("streamed ", msg.model_dump())
         msgs.append(msg)
@@ -653,8 +657,8 @@ async def test_dynamic_inputs_list2():
 
     res = await b.DynamicListInputOutput(
         [
-            DynInputOutput(
-                **{
+            DynInputOutput.model_validate(
+                {
                     "new_key": "hi1",
                     "testKey": "myTest",
                     "blah": {
@@ -662,13 +666,15 @@ async def test_dynamic_inputs_list2():
                     },
                 }
             ),
-            {
-                "new_key": "hi",
-                "testKey": "myTest",
-                "blah": {
-                    "nestedKey1": "nestedVal",
-                },
-            },
+            DynInputOutput.model_validate(
+                {
+                    "new_key": "hi",
+                    "testKey": "myTest",
+                    "blah": {
+                        "nestedKey1": "nestedVal",
+                    },
+                }
+            ),
         ],
         {"tb": tb},
     )
@@ -690,20 +696,24 @@ async def test_dynamic_inputs_list():
 
     res = await b.DynamicListInputOutput(
         [
-            {
-                "new_key": "hi",
-                "testKey": "myTest",
-                "blah": {
-                    "nestedKey1": "nestedVal",
-                },
-            },
-            {
-                "new_key": "hi",
-                "testKey": "myTest",
-                "blah": {
-                    "nestedKey1": "nestedVal",
-                },
-            },
+            DynInputOutput.model_validate(
+                {
+                    "new_key": "hi",
+                    "testKey": "myTest",
+                    "blah": {
+                        "nestedKey1": "nestedVal",
+                    },
+                }
+            ),
+            DynInputOutput.model_validate(
+                {
+                    "new_key": "hi",
+                    "testKey": "myTest",
+                    "blah": {
+                        "nestedKey1": "nestedVal",
+                    },
+                }
+            ),
         ],
         {"tb": tb},
     )
@@ -716,11 +726,83 @@ async def test_dynamic_inputs_list():
 
 
 @pytest.mark.asyncio
+async def test_dynamic_output_map():
+    tb = TypeBuilder()
+    tb.DynamicOutput.add_property("hair_color", tb.string())
+    tb.DynamicOutput.add_property(
+        "attributes", tb.map(tb.string(), tb.string())
+    ).description("Things like 'eye_color' or 'facial_hair'")
+    print(tb.DynamicOutput.list_properties())
+    for prop, _ in tb.DynamicOutput.list_properties():
+        print(f"Property: {prop}")
+
+    res = await b.MyFunc(
+        input="My name is Harrison. My hair is black and I'm 6 feet tall. I have blue eyes and a beard.",
+        baml_options={"tb": tb},
+    )
+
+    print("final ", res)
+    print("final ", res.model_dump())
+    print("final ", res.model_dump_json())
+    assert res.hair_color == "black"
+    assert res.attributes["eye_color"] == "blue"
+    assert res.attributes["facial_hair"] == "beard"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_output_union():
+    tb = TypeBuilder()
+    tb.DynamicOutput.add_property("hair_color", tb.string())
+    tb.DynamicOutput.add_property(
+        "attributes", tb.map(tb.string(), tb.string())
+    ).description("Things like 'eye_color' or 'facial_hair'")
+    # Define two classes
+    class1 = tb.add_class("Class1")
+    class1.add_property("meters", tb.float())
+
+    class2 = tb.add_class("Class2")
+    class2.add_property("feet", tb.float())
+    class2.add_property("inches", tb.float().optional())
+
+    # Use the classes in a union property
+    tb.DynamicOutput.add_property("height", tb.union([class1.type(), class2.type()]))
+    print(tb.DynamicOutput.list_properties())
+    for prop, _ in tb.DynamicOutput.list_properties():
+        print(f"Property: {prop}")
+
+    res = await b.MyFunc(
+        input="My name is Harrison. My hair is black and I'm 6 feet tall. I have blue eyes and a beard. I am 30 years old.",
+        baml_options={"tb": tb},
+    )
+
+    print("final ", res)
+    print("final ", res.model_dump())
+    print("final ", res.model_dump_json())
+    assert res.hair_color == "black"
+    assert res.attributes["eye_color"] == "blue"
+    assert res.attributes["facial_hair"] == "beard"
+    assert res.height["feet"] == 6
+
+    res = await b.MyFunc(
+        input="My name is Harrison. My hair is black and I'm 1.8 meters tall. I have blue eyes and a beard. I am 30 years old.",
+        baml_options={"tb": tb},
+    )
+
+    print("final ", res)
+    print("final ", res.model_dump())
+    print("final ", res.model_dump_json())
+    assert res.hair_color == "black"
+    assert res.attributes["eye_color"] == "blue"
+    assert res.attributes["facial_hair"] == "beard"
+    assert res.height["meters"] == 1.8
+
+
+@pytest.mark.asyncio
 async def test_nested_class_streaming():
     stream = b.stream.FnOutputClassNested(
         input="My name is Harrison. My hair is black and I'm 6 feet tall."
     )
-    msgs = []
+    msgs: List[partial_types.TestClassNested] = []
     async for msg in stream:
         print("streamed ", msg.model_dump(mode="json"))
         msgs.append(msg)
@@ -791,7 +873,7 @@ async def test_stream_serialization_exception():
         async for msg in stream:
             print("streamed ", msg)
 
-        res = await stream.get_final_response()
+        _ = await stream.get_final_response()
 
     print("Exception message: ", excinfo)
     assert "Failed to coerce" in str(excinfo)
@@ -807,7 +889,7 @@ def test_stream2_serialization_exception():
             async for msg in stream:
                 print("streamed ", msg)
 
-            res = await stream.get_final_response()
+            _ = await stream.get_final_response()
 
         print("Exception message: ", excinfo)
         assert "Failed to coerce" in str(excinfo)
