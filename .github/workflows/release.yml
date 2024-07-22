@@ -10,6 +10,8 @@ on:
     tags:
       - "test-release/*.*"
       - "*.*"
+    branches:
+      - sam/build-checker
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -28,6 +30,7 @@ jobs:
     name: Build WASM
     steps:
       - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
@@ -38,10 +41,6 @@ jobs:
       - name: Bindgen
         run: cargo install -f wasm-bindgen-cli@0.2.92
         working-directory: engine/baml-schema-wasm
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 8
-          run_install: false
       # Set up Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -97,6 +96,9 @@ jobs:
           path: typescript/vscode-ext/packages/web-panel/dist
           if-no-files-found: error
 
+  build-ruby-release:
+    uses: ./.github/workflows/build-ruby-release.reusable.yaml
+
   build-release:
     strategy:
       fail-fast: false
@@ -105,6 +107,7 @@ jobs:
           - target: aarch64-apple-darwin
             host: macos-14
             node_build: pnpm build --target aarch64-apple-darwin
+            mise: true
 
           # Disabled as python is not supported on aarch64 windows
           # - target: aarch64-pc-windows-msvc
@@ -117,20 +120,27 @@ jobs:
             # need a new version of manylinux to build crates on arm64-linux
             container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
             node_build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+            baml_build_help: 'off'
 
           - target: x86_64-apple-darwin
             host: macos-latest
             node_build: pnpm build --target x86_64-apple-darwin
+            mise: true
 
           - target: x86_64-pc-windows-msvc
             host: windows-latest
             node_build: pnpm build --target x86_64-pc-windows-msvc
+            setup-python-architecture: x64
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+            baml_build_help: 'off'
 
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-latest
             # Using any of the manylinux containers breaks a bunch of stuff: actions/checkout here, pnpm build there - not worth it.
             container: null
             node_build: pnpm build --target x86_64-unknown-linux-gnu --use-napi-cross
+            mise: true
 
     name: Build ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
@@ -141,17 +151,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.8"
-          architecture: ${{ matrix._.host == 'windows-latest' && 'x64' || null }}
+          architecture: ${{ matrix._.setup-python-architecture }}
+
+      - uses: jdx/mise-action@v2
+        if: ${{ matrix._.mise != false }}
+
       - uses: pnpm/action-setup@v3
         with:
           version: 9.0.6
           run_install: false
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
           cache-dependency-path: |
             engine/language_client_typescript/pnpm-lock.yaml
+
       # Install rust
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -171,8 +187,10 @@ jobs:
           cache-on-failure: true
 
       - name: Build Rust
-        run: cargo build --release --target ${{ matrix._.target }}
+        run: cargo build --release --target ${{ matrix._.target }} ${{ matrix._.cargo_args }}
         working-directory: engine
+        env:
+          BAML_BUILD_HELP: ${{ matrix._.baml_build_help }}
 
       # Build Node
       - name: PNPM Build
@@ -202,11 +220,21 @@ jobs:
           name: bindings-${{ matrix._.target }}
           path: engine/language_client_typescript/*.node
           if-no-files-found: error
+  
+  # placeholder fan-in step
+  assert-all-builds-passed:
+    runs-on: ubuntu-latest
+    needs:
+      - build-release
+      - build-ruby-release
+      - build-wasm
+    steps:
+      - run: true
 
   publish-to-pypi:
     environment: release
     if: github.ref_type == 'tag'
-    needs: [build-release, build-wasm]
+    needs: [assert-all-builds-passed] 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -227,7 +255,7 @@ jobs:
   publish-to-npm:
     environment: release
     if: github.ref_type == 'tag'
-    needs: [build-release, build-wasm]
+    needs: [assert-all-builds-passed] 
     runs-on: ubuntu-latest
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -274,6 +302,35 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    
+  publish-to-rubygems:
+    environment: release
+    if: github.ref_type == 'tag'
+    needs: build-ruby-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: rubygems/configure-rubygems-credentials@main
+        with:
+          # https://rubygems.org/profile/oidc/api_key_roles/rg_oidc_akr_p6x4xz53qtk948na3bgy
+          role-to-assume: rg_oidc_akr_p6x4xz53qtk948na3bgy
+
+      - uses: jdx/mise-action@v2
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gem-*
+          path: engine/language_client_ruby/pkg/
+          merge-multiple: true
+
+      - working-directory: engine/language_client_ruby
+        run: |
+          set -euxo pipefail
+          find pkg
+          for i in $(ls pkg/*.gem); do
+            gem push $i
+          done
 
   # publish-vscode:
   #   environment: release
@@ -331,7 +388,11 @@ jobs:
   release-github:
     runs-on: ubuntu-latest
     if: github.ref_type == 'tag'
-    needs: [publish-to-pypi, publish-to-npm]
+    needs: 
+      - publish-to-pypi
+      - publish-to-npm
+      - publish-to-rubygems
+      # - publish-vscode
     steps:
       - uses: actions/checkout@v4
 
