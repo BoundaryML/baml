@@ -765,7 +765,7 @@ async def test_dynamic_output_union():
     class2.add_property("inches", tb.float().optional())
 
     # Use the classes in a union property
-    tb.DynamicOutput.add_property("height", tb.union(class1.type(), class2.type()))
+    tb.DynamicOutput.add_property("height", tb.union([class1.type(), class2.type()]))
     print(tb.DynamicOutput.list_properties())
     for prop, _ in tb.DynamicOutput.list_properties():
         print(f"Property: {prop}")

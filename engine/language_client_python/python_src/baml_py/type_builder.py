@@ -40,7 +40,7 @@ class TypeBuilder:
     def map(self, key: FieldType, value: FieldType):
         return self._tb.map(key, value)
 
-    def union(self, *types: FieldType):
+    def union(self, types: typing.List[FieldType]):
         return self._tb.union(*types)
 
     def add_class(self, name: str) -> "NewClassBuilder":
