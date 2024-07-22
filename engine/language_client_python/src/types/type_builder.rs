@@ -54,17 +54,6 @@ impl TypeBuilder {
         inner.inner.lock().unwrap().clone().as_optional().into()
     }
 
-    #[pyo3(signature = (merge))]
-    pub fn union<'py>(&self, merge: Bound<'_, PyList>) -> PyResult<FieldType> {
-        let mut types = vec![];
-        for idx in 0..merge.len()? {
-            let item = merge.get_item(idx)?;
-            let item = item.downcast::<FieldType>()?;
-            types.push(item.borrow().inner.lock().unwrap().clone());
-        }
-        Ok(baml_types::FieldType::union(types).into())
-    }
-
     pub fn string(&self) -> FieldType {
         baml_types::FieldType::string().into()
     }
