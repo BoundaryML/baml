@@ -1,0 +1,310 @@
+---
+slug: docs/calling-baml/assertions
+---
+BAML raises `BAMLValidationError` exceptions when it fails to parse the response according to your specified type definitions. With custom type assertions, you can further define a range of acceptable values for a field by validating it against specific constraints that you define.
+
+<Tip>Assertions **do not** modify the prompt or response data. They are only used to change the post hoc **validation logic** of the BAML parser. </Tip>
+
+
+## Field-level Assertions
+Field-level assertions are used to validate individual fields in a response. These assertions are written as inline attributes.
+
+### Using `@assert`
+BAML will raise an exception if `Foo.bar` is not between 0 and 10.
+```baml BAML
+class Foo {
+  bar int @assert(this > 0 and this < 10) //this = Foo.bar value
+}
+```
+
+
+### Using `@assert` with `Union` Types
+Note that when using [`Unions`](../snippets/supported-types.mdx#union-), it is crucial to specify where the `@assert` attribute is applied within the union type, as it is not known until runtime which type the value will be.
+```baml BAML
+class Foo {
+  bar (int @assert(this > 0 and this < 10)
+    | string @assert(this|length > 0 and this|contains("foobar"))) 
+}
+```
+
+In the above example, the `@assert` attribute is applied specifically to the `int` and `string` instances of the `Union`, rather than to the `Foo.bar` field as a whole.
+
+Likewise, the keyword `this` refers to the value of the type instance it is directly associated with (e.g., `int` or `string`).
+
+### Using `block` in `@assert`
+The `block` syntax can be used to reference other fields within the same class, whereas `this` is used to access the current field's value.
+
+This is useful when defining an assertion for a field that is dependent on the validated value of another field.
+```baml BAML
+class User {
+  user_age int @assert(
+	  this|length > 0, "user_age_invalid"
+  )
+
+  parent_age string @assert(
+    this > 0 and this > block.user_age, "parent_age_invalid"
+  )
+}
+```
+
+
+## Block-level Assertions
+To validate an entire object by considering multiple fields together after their individual validations, use a block-level assertion with `@@assert`.
+
+```baml BAML
+class Foo {
+  password string @assert(this|length > 10)
+  confirm_password string
+  
+  @@assert(this.confirm_password == this.password)
+}
+```
+In this example, the `password` field must be longer than 10 characters, and the `Foo` class includes a block-level assertion to ensure `password` and `confirm_password` match. 
+
+<Tip> For block-level assertions, you don't need to use the `block` keyword because `this` refers to the entire block. </Tip>
+
+## Dynamic Input Assertions
+Sometimes, you may need to validate a field differently for different instances of a class or based on the input to the function returning the class. 
+
+### Function Input
+Use constructor inputs for your class to define dynamic assertions. In this example, the `quote` field must be present in the `text` input string.
+```baml BAML
+class Citation(text: string) {
+  quote string @constraint(this in block.text, "exact_citation_not_found")
+  idx int
+}
+```
+
+Pass the `full_text` string to the `Citation` constructor to validate the `quote` field. The `block` keyword allows access to `full_text` for validation from the scope of the function.
+```baml BAML
+function GetCitations(full_text: string) -> Citation(text=block.full_text) {
+  client GPT4 
+  prompt #"
+    Generate a citation of the text below in MLA format:
+    {{full_text}}
+
+    {{ctx.output_format}}
+  
+  "#
+}
+```
+### Parent Class Input
+You may also use input assertions when composing a class from a parent class. In this example, the `quote` field must be present in the `contents` field of the `Book` class, which is passed as an input to the `Citation` class.
+```baml BAML
+class Citation(text: string) {
+  quote string @constraint(this in block.text, "exact_citation_not_found")
+  idx int
+}
+
+class Book(contents: string) {
+  citation Citation(text=block.contents)
+  author string
+  publisher string
+}
+
+function GetBookDetails(book_contents: string) -> Book(contents=block.book_contents) {
+  client GPT4 
+  prompt #"
+    Gather the details of the book with the following contents:
+    {{book_contents}}
+
+    {{ctx.output_format}}
+  "#
+}
+```
+
+
+## Writing Assertions
+Assertions are represented as Jinja expressions and can be used to validate various types of data. Possible constraints include checking the length of a string, comparing two values, or verifying the presence of a substring with regular expressions. 
+
+In the future, we plan to support shorthand syntax for common assertions to make writing them easier.
+
+For now, see our [Jinja cookbook / guide](../snippets/prompt-syntax/what-is-jinja.mdx) or the [Jinja docs](https://jinja.palletsprojects.com/en/3.0.x/templates/) for more information on writing expressions.
+
+
+{/* ### Operators
+| Assertion        | Types                  |
+|------------------|------------------------|
+| length           | array, map, string     |
+| regex match      | string                 |
+| eq, ne           | all                    |
+| gt, ge, lt, le   | int, float, string     |
+| xor              | int, float, bool       |
+| and, or          | int, float, bool       |
+| contains         | string, array, map     |
+| index []         | array, map, string     |
+| min, max         | int, float             | */}
+{/* 
+| custom function  | all                    |
+| unique           | array                  | every item is unique (consider using set type?)  |
+| default          | all                    | default value to fill if not found               |
+| reference        | all                    | when a value references another value            | */}
+
+{/* Operators are called using the `|` symbol, followed by the operator name.
+```baml BAML
+class Foo {
+  bar int @assert(this|gt 0)
+}
+``` */}
+
+
+### Expression keywords
+- `this` refers to the value of the current field being validated.
+- `block` refers to the entire object being validated. It can be used to reference other fields within the same class.
+
+
+`<keyword>.field` is used to refer to a specific field within the context of `this` or `block`.
+Access nested fields of a data type by chaining the field names together with a `.` as shown below.
+```baml BAML
+class Resume {
+  name string
+  experience string[]
+
+}
+
+class Person {
+  resume Resume @assert(this.experience|length > 0)
+  person_name name @assert(this == block.resume.name) //nested field access
+}
+```
+
+
+
+
+
+
+## Assertion Errors
+### Custom Error Messages
+When validations fail, your BAML function will raise a `BAMLValidationError` exception, same as when parsing fails. You can catch this exception and handle it as you see fit.
+
+You can define custom error messages for each assertion, which will be included in the exception for that failure case. If you don't define a custom message, BAML will use a default message.
+
+In this example, if the `quote` field is empty, BAML raises a `BAMLValidationError` with the message **exact_citation_not_found**. If the `website_link` field does not contain **"https://",** it raises a `BAMLValidationError` with the message **invalid_link**.
+```baml BAML
+class Citation {
+  //@assert(<expr>, <message>)
+  quote string @assert(
+	  this|length > 0, "exact_citation_not_found"
+  )
+
+  website_link string @assert(
+    this|contains("https://"), "invalid_link"
+  )
+}
+```
+
+### Validation Order
+
+When validating a class with multiple assertions, BAML raises a `BAMLValidationError` for the first failed assertion it finds, validating sequentially from top to bottom. 
+
+<Tip> BAML validates assertions with dependencies after validating their dependencies, so `parent_age` would be validated after `user_age`. </Tip> 
+```baml BAML
+class User {
+  parent_age string @assert(
+    this > 0 and this > block.user_age, "parent_age_invalid"
+  )
+
+  user_age int @assert(
+	  this|length > 0, "user_age_invalid"
+  )
+}
+```
+
+
+## Non-exception Raising Checks
+The default behavior of `@assert` is to raise an exception on a failed assertion. However, if you still want to access the data even when an assertion fails, you can use the `@check` attribute instead to receive both the raw data and the assertion error. This is useful in scenarios where you want to be informed of a validation failure but still need the data.
+
+To return both the data and the possible warning, BAML will return a `BamlCheckedValue<T>` object, which contains the parsed data and the validation results for each check.
+
+To access the value, use the `value` attribute of the `BamlCheckedValue` object, and use the `checks_results` attribute to access a map of the checks used and their results during validation.
+
+<Warning>
+`@assert` and `@check` attributes are mutually exclusive and cannot be applied to the same field.
+</Warning>
+
+```rust BamlCheckedValue
+interface BamlCheckedValue<T> {
+  value T
+  checks_results {} // map of error message to true (passed) or false (failed)
+}
+```
+
+```baml BAML
+class Citation {
+  //@check(<expr>, <message>)
+  quote string @check(
+	  this|length > 0, "exact_citation_not_found"
+  )
+  line_number string @assert(
+    this|length >= 0, "no_line_number"
+  )
+}
+
+function GetCitation(full_text: string) -> Citation {
+  client GPT4 
+  prompt #"
+    Generate a citation of the text below in MLA format:
+    {{full_text}}
+
+    {{ctx.output_format}}
+  "#
+}
+
+```
+
+Note that the `line_number` field uses `@assert` instead of `@check`. This means that while `quote` will return wrapped in a `BamlCheckedValue` object, `line_number` will raise an exception if the assertion fails and return as a regular field if it passes.
+<CodeBlocks>
+```python Python
+from baml_client import b
+from baml_client.types import Citation
+
+def main():
+    citation = b.GetCitation("SpaceX, is an American spacecraft manufacturer, launch service provider...")
+
+    # Access the value of the quote field
+    quote = citation.quote.value 
+    print(f"Quote: {quote}")
+
+    # Access the error messages for each assertion and its status
+    checks_results = citation.quote.checks_results
+    for assertion, result in checks_results.items():
+        print(f"Assertion {assertion}: {'passed' if result else 'failed'}")
+
+    # Access the author field directly, as it uses @assert
+    author = citation.author
+    print(f"Author: {author}")
+
+```
+
+```typescript Typescript
+import { b } from './baml_client'
+import { Citation } from './baml_client/types'
+
+const main = async () => {
+    const citation = await b.GetCitation("SpaceX, is an American spacecraft manufacturer, launch service provider...")
+    
+    // Access the value of the quote field
+    const quote = citation.quote.value 
+    console.log(`Quote: ${quote}`)
+
+    // Access the error messages for each assertion and its status
+    const checks_results = citation.quote.checks_results
+    for (const [assertion, result] of Object.entries(checks_results)) {
+        console.log(`Assertion ${assertion}: ${result ? 'passed' : 'failed'}`)
+    }
+
+    // Access the author field directly, as it uses @assert 
+    const author = citation.author
+    console.log(`Author: ${author}`)
+}
+```
+
+
+</CodeBlocks>
+
+
+
+
+
+
+

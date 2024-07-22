@@ -12,12 +12,13 @@ In the context of LLMs, classes describe the type of the variables you can injec
 </Warning>
 
 <CodeBlocks>
-```baml Baml
+```baml BAML
 class Foo {
   property1 string
   property2 int?
   property3 Bar[]
   property4 MyEnum
+  property5 int | string 
 }
 ```
 
@@ -31,6 +32,8 @@ class Foo(BaseModel):
   property2: Optional[int]= None
   property3: List[Bar]
   property4: MyEnum
+  property5: Union[int, str]
+
 ```
 
 ```typescript Typescript Equivalent
@@ -43,6 +46,7 @@ const FooZod = z.object({
   property2: z.number().int().nullable().optional(),
   property3: z.array(BarZod),
   property4: MyEnumZod,
+  property5: z.union([z.number().int(), z.string()])
 });
 
 type Foo = z.infer<typeof FooZod>;
@@ -56,7 +60,21 @@ type Foo = z.infer<typeof FooZod>;
   path="@@dynamic"
 >
 If set, will allow you to add fields to the class dynamically at runtime (in your python/ts/etc code). See [dynamic classes](../calling-baml/dynamic-types.mdx) for more information.
+
+```baml BAML
+class MyClass {
+  property1 string
+  property2 int?
+
+  @@dynamic // allows me to later property3 float[] at runtime
+}
+```
 </ParamField>
+
+<ParamField
+  path="@@assert"
+>
+Add class-level assertions using Jinja templates to ensure certain properties. If an assertion fails, a `BAMLValidationError` is raised. See [custom type assertions](../calling-baml/assertions.mdx) for details.
 
 
 ```baml BAML
@@ -64,14 +82,39 @@ class MyClass {
   property1 string
   property2 int?
 
-  @@dynamic // allows me to later propert3 float[] at runtime
+  @@assert(block.property2 > property1|length) // property2 must be greater than the length of property1
+}
+```
+</ParamField>
+
+<ParamField
+  path="@@check"
+>
+Use `@@check` to access data even if an assertion fails. This is useful in scenarios where you want to be informed of a validation failure but still need the data. It returns a `BamlCheckedValue<T>` object with the parsed data and validation results. Access the value via the `value` attribute and the validation results via the `checks_results` attribute. See [non-exception raising type checks](../calling-baml/assertions.mdx#non-exception-checks) for details.
+
+
+```baml BAML
+class MyClass {
+  property1 string
+  property2 int?
+
+  @@check(block.property2 > property1|length, "compare_prop1_length_with_prop2") // property2 must be greater than the length of property1
 }
 ```
 
+
+</ParamField>
+
+
+
+
+
 ## Field Attributes
 
-When prompt engineering, you can also alias values and add descriptions.
+When prompt engineering, you can also inline attributes to the fields of a class to provide additional context or constraints. Multiple attributes can be appended to a field.
 
+### Contextual Attributes
+Contextual attributes modify the prompt and serve to provide additional context to the LLM.
 <ParamField
   path="@alias"
   type="string"
@@ -79,6 +122,12 @@ When prompt engineering, you can also alias values and add descriptions.
 Aliasing renames the field for the llm to potentially "understand" your value better, while keeping the original name in your code, so you don't need to change your downstream code everytime.
 
 This will also be used for parsing the output of the LLM back into the original object.
+
+```baml BAML
+class MyClass {
+  property1 string @alias("name")
+}
+```
 </ParamField>
 
 <ParamField
@@ -86,8 +135,6 @@ This will also be used for parsing the output of the LLM back into the original 
   type="string"
 >
 This adds some additional context to the field in the prompt.
-</ParamField>
-
 
 ```baml BAML
 class MyClass {
@@ -95,6 +142,51 @@ class MyClass {
   age int? @description("The age of the object")
 }
 ```
+
+</ParamField>
+
+
+### Validation Attributes
+Validation attributes are used to enforce constraints on the fields of a class. They do not modify the prompt, but rather the post hoc validation logic of the BAML parser. 
+
+<Warning>
+`@assert` and `@check` attributes are mutually exclusive and cannot be applied to the same field.
+</Warning>
+<ParamField
+  path ="@assert"
+  type = "jinja"
+>
+Add field assertions using Jinja templates to ensure specific properties. If the assertion fails, the prompt will fail. Because assertions are evaluated at runtime, `Union` cases must have type-instance-specific assertions. See [custom type assertions](../calling-baml/assertions.mdx) for more information.
+
+```baml BAML
+class MyClass {
+  property1 string @alias("name") @assert(this|length > 0, "name_not_empty")
+  age int? @assert(this > 0, "age_positive")
+}
+```
+</ParamField>
+
+<ParamField
+  path ="@check"
+  type = "jinja"
+>
+The `@check` attribute allows you to access data even if an assertion fails. This is useful in scenarios where you want to be informed of a validation failure but still need the data. 
+
+When using `@check`, the field returns a `BamlCheckedValue<T>` object, which includes both the parsed data and the validation results. You can access the actual value through the `value` attribute and the validation results through the `checks_results` attribute. For more details, see [non-exception raising type checks](../calling-baml/assertions.mdx#non-exception-checks).
+
+```baml BAML
+class MyClass {
+  property1 string @alias("name") @check(this|length > 0, "name_not_empty")
+  age int? @check(this > 0, "age_positive")
+  hometown string @check(this == "New York", "hometown_new_york")
+}
+```
+
+</ParamField>
+
+
+
+
 
 ## Constraints
 

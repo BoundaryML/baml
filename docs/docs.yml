@@ -137,6 +137,8 @@ navigation:
         path: docs/calling-baml/dynamic-types.mdx
       - page: Client Registry
         path: docs/calling-baml/client-registry.mdx
+      - page: Custom Type Assertions
+        path: docs/calling-baml/assertions.mdx
   - section: BAML with Python/TS/Ruby
     contents:
       - page: Generate the BAML Client
@@ -149,7 +151,7 @@ navigation:
         path: docs/calling-baml/streaming.mdx
       - page: Concurrent function calls
         path: docs/calling-baml/concurrent-calls.mdx
-      - page: Multimodal
+      - page: Multimodal Input
         path: docs/calling-baml/multi-modal.mdx
   - section: Observability [Paid]
     contents:
