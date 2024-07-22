@@ -6,6 +6,12 @@ export PATH="/vercel/.cargo/bin:$PATH"
 source $HOME/.cargo/env
 
 which cargo
+# clang --version
+#llvm-config --version
+# g++ --version
+
+dnf install -y llvm
+dnf install -y clang
 
 cd ../../engine/baml-schema-wasm
 export OPENSSL_NO_VENDOR=1

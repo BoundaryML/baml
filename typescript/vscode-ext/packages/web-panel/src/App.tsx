@@ -14,8 +14,10 @@ import 'jotai-devtools/styles.css'
 import { Snippets } from './shared/Snippets'
 import { Dialog, DialogTrigger, DialogContent } from './components/ui/dialog'
 import { AppStateProvider } from './shared/AppStateContext' // Import the AppStateProvider
+import { useFeedbackWidget } from './lib/feedback_widget'
 
 function App() {
+  useFeedbackWidget()
   return (
     <CustomErrorBoundary>
       <DevTools />

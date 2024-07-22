@@ -248,6 +248,12 @@ export interface Person {
   [key: string]: any;
 }
 
+export interface Quantity {
+  amount: number | number
+  unit?: string | null
+  
+}
+
 export interface RaysData {
   dataType: DataType
   value: Resume | Event
@@ -265,6 +271,11 @@ export interface ReceiptItem {
   description?: string | null
   quantity: number
   price: number
+  
+}
+
+export interface Recipe {
+  ingredients: Record<string, Quantity>
   
 }
 
@@ -292,6 +303,11 @@ export interface SomeClassNestedDynamic {
   hi: string
   
   [key: string]: any;
+}
+
+export interface StringToClassEntry {
+  word: string
+  
 }
 
 export interface TestClassAlias {

@@ -117,7 +117,7 @@ pub enum FieldType {
     Tuple(FieldArity, Vec<FieldType>, Span),
     // Unions don't have arity, as they are can be flattened.
     Union(FieldArity, Vec<FieldType>, Span),
-    Dictionary(Box<(FieldType, FieldType)>, Span),
+    Map(Box<(FieldType, FieldType)>, Span),
 }
 
 impl FieldType {
@@ -126,7 +126,7 @@ impl FieldType {
             FieldType::Identifier(.., idn) => idn.span(),
             FieldType::Union(.., span) => span,
             FieldType::Tuple(.., span) => span,
-            FieldType::Dictionary(.., span) => span,
+            FieldType::Map(.., span) => span,
             FieldType::List(.., span) => span,
         }
     }
@@ -156,7 +156,7 @@ impl FieldType {
                 options.to_owned(),
                 span.to_owned(),
             )),
-            FieldType::Dictionary(.., span) => Err(DatamodelError::new_validation_error(
+            FieldType::Map(.., span) => Err(DatamodelError::new_validation_error(
                 "Dictionaries can not be optional",
                 span.clone(),
             )),
@@ -177,7 +177,7 @@ impl FieldType {
             }
             FieldType::Tuple(arity, ..) => arity.is_optional(),
             // Lists can't be nullable
-            FieldType::Dictionary(_kv, _) => false,
+            FieldType::Map(_kv, _) => false,
             FieldType::List(_t, _, _) => false,
         }
     }
@@ -193,7 +193,7 @@ impl FieldType {
             FieldType::Union(_arity, _f, ..) => false,
             FieldType::Tuple(_arity, ..) => true,
             // Lists can't be nullable
-            FieldType::Dictionary(_kv, _) => false,
+            FieldType::Map(_kv, _) => false,
             FieldType::List(_t, _, _) => false,
         }
     }
@@ -204,7 +204,7 @@ impl FieldType {
             FieldType::Identifier(.., idn) => vec![idn],
             FieldType::Union(_, f, ..) => f.iter().flat_map(|t| t.flat_idns()).collect(),
             FieldType::Tuple(_, f, ..) => f.iter().flat_map(|t| t.flat_idns()).collect(),
-            FieldType::Dictionary(kv, _) => {
+            FieldType::Map(kv, _) => {
                 let mut idns = kv.1.flat_idns();
                 idns.extend(kv.0.flat_idns());
                 idns
@@ -246,7 +246,7 @@ impl std::fmt::Display for FieldType {
                     if arity.is_optional() { "?" } else { "" }
                 )
             }
-            FieldType::Dictionary(kv, _) => write!(f, "map<{}, {}>", kv.0, kv.1),
+            FieldType::Map(kv, _) => write!(f, "map<{}, {}>", kv.0, kv.1),
             FieldType::List(t, _, _) => write!(f, "{}[]", t),
         }
     }

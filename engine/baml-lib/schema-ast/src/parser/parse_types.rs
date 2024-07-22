@@ -74,7 +74,7 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
                 parse_identifier(current, diagnostics),
             )),
             Rule::array_notation => parse_array(current, diagnostics),
-            Rule::dict => parse_dict(current, diagnostics),
+            Rule::map => parse_map(current, diagnostics),
             Rule::group => parse_group(current, diagnostics),
             Rule::tuple => parse_tuple(current, diagnostics),
             _ => unreachable_rule!(current, Rule::base_type),
@@ -94,7 +94,7 @@ fn parse_array(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         match current.as_rule() {
             Rule::base_type_without_array => field = parse_base_type(current, diagnostics),
             Rule::array_suffix => dims += 1,
-            _ => unreachable_rule!(current, Rule::dict),
+            _ => unreachable_rule!(current, Rule::map),
         }
     }
 
@@ -104,8 +104,8 @@ fn parse_array(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
     }
 }
 
-fn parse_dict(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    assert_correct_parser!(pair, Rule::dict);
+fn parse_map(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
+    assert_correct_parser!(pair, Rule::map);
 
     let mut fields = Vec::new();
     let span = diagnostics.span(pair.as_span());
@@ -117,18 +117,18 @@ fn parse_dict(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType
                     fields.push(f)
                 }
             }
-            _ => unreachable_rule!(current, Rule::dict),
+            _ => unreachable_rule!(current, Rule::map),
         }
     }
 
     match fields.len() {
         0 => None,
         1 => None,
-        2 => Some(FieldType::Dictionary(
+        2 => Some(FieldType::Map(
             Box::new((fields[0].to_owned(), fields[1].to_owned())),
             span,
         )),
-        _ => unreachable!("Impossible to have more than 2 field types in dictionary"),
+        _ => unreachable!("Maps must specify a key type and value type"),
     }
 }
 

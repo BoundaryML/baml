@@ -1,0 +1,235 @@
+>// here is a comment
+#^^^^^^^^^^^^^^^^^^^^ source.baml comment.line
+>
+>class OtherClass {
+#^^^^^ source.baml storage.type.declaration.interface
+#     ^ source.baml
+#      ^^^^^^^^^^ source.baml entity.name.type
+#                ^^ source.baml
+>  inner string
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^^^^^^ source.baml storage.type.baml
+>}
+#^ source.baml
+>
+>class MyClass {
+#^^^^^ source.baml storage.type.declaration.interface
+#     ^ source.baml
+#      ^^^^^^^ source.baml entity.name.type
+#             ^^ source.baml
+>  @@alias("this is an alias")
+#^^ source.baml
+#  ^^^^^^^ source.baml entity.name.function.attribute
+#         ^ source.baml
+#          ^^^^^^^^^^^^^^^^^^ source.baml string.quoted.double
+#                            ^ source.baml
+>
+>  field int
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^^^ source.baml storage.type.baml
+>  field null
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^^^^ source.baml storage.type.baml
+>  field string
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^^^^^^ source.baml storage.type.baml
+>  field bool
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^^^^ source.baml storage.type.baml
+>  field float
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^^^^^ source.baml storage.type.baml
+>  field OtherClass
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^^^^^^^^^^ source.baml support.type
+>
+>  field OtherClass?
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^^^^^^^^^^ source.baml support.type
+#                  ^ source.baml keyword.control.baml
+>
+>  field string[]
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^^^^^^ source.baml storage.type.baml
+#              ^^ source.baml keyword.control.baml
+>
+>  field (int | string | OtherClass)
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^ source.baml keyword.control
+#         ^^^ source.baml storage.type.baml
+#            ^ source.baml
+#             ^ source.baml keyword.control.baml
+#              ^ source.baml
+#               ^^^^^^ source.baml storage.type.baml
+#                     ^ source.baml
+#                      ^ source.baml keyword.control.baml
+#                       ^ source.baml
+#                        ^^^^^^^^^^ source.baml support.type
+#                                  ^ source.baml keyword.control
+>  field (int | string | OtherClass)[]
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^ source.baml keyword.control
+#         ^^^ source.baml storage.type.baml
+#            ^ source.baml
+#             ^ source.baml keyword.control.baml
+#              ^ source.baml
+#               ^^^^^^ source.baml storage.type.baml
+#                     ^ source.baml
+#                      ^ source.baml keyword.control.baml
+#                       ^ source.baml
+#                        ^^^^^^^^^^ source.baml support.type
+#                                  ^ source.baml keyword.control
+#                                   ^^ source.baml keyword.control
+>  field (int | string | OtherClass)?
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^ source.baml keyword.control
+#         ^^^ source.baml storage.type.baml
+#            ^ source.baml
+#             ^ source.baml keyword.control.baml
+#              ^ source.baml
+#               ^^^^^^ source.baml storage.type.baml
+#                     ^ source.baml
+#                      ^ source.baml keyword.control.baml
+#                       ^ source.baml
+#                        ^^^^^^^^^^ source.baml support.type
+#                                  ^ source.baml keyword.control
+#                                   ^ source.baml keyword.control
+>
+>  field map<string, string>
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^^^ source.baml storage.type.baml
+#           ^ source.baml
+#            ^^^^^^ source.baml storage.type.baml
+#                  ^^ source.baml
+#                    ^^^^^^ source.baml storage.type.baml
+#                          ^ source.baml
+>  field map<string, OtherClass>
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^^^ source.baml storage.type.baml
+#           ^ source.baml
+#            ^^^^^^ source.baml storage.type.baml
+#                  ^^ source.baml
+#                    ^^^^^^^^^^ source.baml support.type
+#                              ^ source.baml
+>  field map<string, map<string, string>>
+#^^ source.baml
+#  ^^^^^ source.baml variable.other.readwrite
+#       ^ source.baml
+#        ^^^ source.baml storage.type.baml
+#           ^ source.baml
+#            ^^^^^^ source.baml storage.type.baml
+#                  ^^ source.baml
+#                    ^^^ source.baml storage.type.baml
+#                       ^ source.baml
+#                        ^^^^^^ source.baml storage.type.baml
+#                              ^^ source.baml
+#                                ^^^^^^ source.baml storage.type.baml
+#                                      ^ source.baml
+#                                       ^ source.baml
+>}
+#^ source.baml
+>
+>function CallGpt(input: string) -> string[] {
+#^^^^^^^^ source.baml storage.type.declaration.function
+#        ^ source.baml
+#         ^^^^^^^ source.baml entity.name.function
+#                ^ source.baml
+#                 ^^^^^ source.baml variable.other.readwrite
+#                      ^ source.baml
+#                       ^ source.baml
+#                        ^^^^^^ source.baml storage.type.baml
+#                              ^ source.baml
+#                               ^ source.baml
+#                                ^^ source.baml keyword.control.baml.arrow
+#                                  ^ source.baml
+#                                   ^^^^^^ source.baml storage.type.baml
+#                                         ^^ source.baml keyword.control.baml
+#                                           ^ source.baml
+#                                            ^ source.baml
+>  client GptProvider
+#^^ source.baml
+#  ^^^^^^ source.baml meta.client.declaration variable.other.readwrite.client
+#        ^ source.baml meta.client.declaration
+#         ^^^^^^^^^^^ source.baml meta.client.declaration entity.name.other.client
+>  prompt #"
+#^^ source.baml
+#  ^^^^^^ source.baml variable.other.readwrite.prompt
+#        ^ source.baml
+#         ^ source.baml string.quoted.block.baml.prompt
+#          ^ source.baml string.quoted.block.baml.prompt
+>    Do something with {{ input }}
+#^^^^^^^^^^^^^^^^^^^^^^ source.baml string.quoted.block.baml.prompt
+#                      ^^ source.baml string.quoted.block.baml.prompt variable.meta.scope.jinja storage.type.jinja.delimiter
+#                        ^ source.baml string.quoted.block.baml.prompt variable.meta.scope.jinja
+#                         ^^^^^ source.baml string.quoted.block.baml.prompt variable.meta.scope.jinja variable.other.jinja
+#                              ^ source.baml string.quoted.block.baml.prompt variable.meta.scope.jinja
+#                               ^^ source.baml string.quoted.block.baml.prompt variable.meta.scope.jinja storage.type.jinja.delimiter
+>
+>    {{ ctx.output_format }}
+#^^^^ source.baml string.quoted.block.baml.prompt
+#    ^^ source.baml string.quoted.block.baml.prompt variable.meta.scope.jinja storage.type.jinja.delimiter
+#      ^ source.baml string.quoted.block.baml.prompt variable.meta.scope.jinja
+#       ^^^ source.baml string.quoted.block.baml.prompt variable.meta.scope.jinja variable.other.jinja
+#          ^ source.baml string.quoted.block.baml.prompt variable.meta.scope.jinja punctuation.other.jinja
+#           ^^^^^^^^^^^^^ source.baml string.quoted.block.baml.prompt variable.meta.scope.jinja variable.other.jinja.attribute
+#                        ^ source.baml string.quoted.block.baml.prompt variable.meta.scope.jinja
+#                         ^^ source.baml string.quoted.block.baml.prompt variable.meta.scope.jinja storage.type.jinja.delimiter
+>  "#
+#^^^^ source.baml string.quoted.block.baml.prompt
+>}
+#^ source.baml
+>
+>test CallGptTest {
+#^^^^ source.baml storage.type.declaration
+#    ^ source.baml
+#     ^^^^^^^^^^^ source.baml entity.name.type
+#                ^^ source.baml
+>  functions [CallGpt]
+#^^ source.baml
+#  ^^^^^^^^^ source.baml variable.other.readwrite
+#           ^^ source.baml
+#             ^^^^^^^ source.baml variable.other.readwrite.array
+#                    ^ source.baml
+>  args {
+#^^ source.baml
+#  ^^^^ source.baml variable.other.readwrite
+#      ^^ source.baml
+>    input "hello"
+#^^^^ source.baml variable.other.readwrite.nested
+#    ^^^^^ source.baml variable.other.readwrite.nested variable.other.readwrite
+#         ^ source.baml variable.other.readwrite.nested
+#          ^^^^^^^ source.baml variable.other.readwrite.nested string.quoted.double
+>  }
+#^^ source.baml variable.other.readwrite.nested
+#  ^ source.baml
+>}
+#^ source.baml
+>

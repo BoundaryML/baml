@@ -1,0 +1,125 @@
+from typing import Any, Dict, List, Optional, TypeVar, Union, TypedDict, Type
+from typing_extensions import NotRequired
+import pprint
+
+import baml_py
+from pydantic import BaseModel, ValidationError, create_model
+
+from . import partial_types, types
+from .type_builder import TypeBuilder
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
+
+OutputType = TypeVar('OutputType')
+
+def coerce(cls: Type[BaseModel], parsed: Any) -> Any:
+  try:
+    return cls.model_validate({"inner": parsed}).inner # type: ignore
+  except ValidationError as e:
+    raise TypeError(
+      "Internal BAML error while casting output to {}\n{}".format(
+        cls.__name__,
+        pprint.pformat(parsed)
+      )
+    ) from e
+
+# Define the TypedDict with optional parameters having default values
+class BamlCallOptions(TypedDict, total=False):
+    tb: NotRequired[TypeBuilder]
+    client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
+
+class BamlSyncClient:
+    __runtime: baml_py.BamlRuntime
+    __ctx_manager: baml_py.BamlCtxManager
+    __stream_client: "BamlStreamClient"
+
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
+      self.__runtime = runtime
+      self.__ctx_manager = ctx_manager
+      self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
+
+    @property
+    def stream(self):
+      return self.__stream_client
+
+    {% for fn in funcs %}
+    def {{ fn.name }}(
+        self,
+        {% for (name, type) in fn.args -%}
+        {{name}}: {{type}},
+        {%- endfor %}
+        baml_options: BamlCallOptions = {},
+    ) -> {{fn.return_type}}:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "{{fn.name}}",
+        {
+          {% for (name, _) in fn.args -%}
+          "{{name}}": {{name}},
+          {%- endfor %}
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
+      return coerce(mdl, raw.parsed())
+    {% endfor %}
+
+
+
+class BamlStreamClient:
+    __runtime: baml_py.BamlRuntime
+    __ctx_manager: baml_py.BamlCtxManager
+
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
+      self.__runtime = runtime
+      self.__ctx_manager = ctx_manager
+
+    {% for fn in funcs %}
+    def {{ fn.name }}(
+        self,
+        {% for (name, type) in fn.args -%}
+        {{name}}: {{type}},
+        {%- endfor %}
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[{{ fn.partial_return_type }}, {{ fn.return_type }}]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "{{fn.name}}",
+        {
+          {%- for (name, _) in fn.args %}
+          "{{name}}": {{name}},
+          {%- endfor %}
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
+      partial_mdl = create_model("{{ fn.name }}PartialReturnType", inner=({{ fn.partial_return_type }}, ...))
+
+      return baml_py.BamlSyncStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    {% endfor %}
+
+b = BamlSyncClient(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)
+
+__all__ = ["b"]

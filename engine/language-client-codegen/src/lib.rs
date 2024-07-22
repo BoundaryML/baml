@@ -1,7 +1,10 @@
 use anyhow::Result;
 use colored::*;
 use indexmap::IndexMap;
-use internal_baml_core::{configuration::GeneratorOutputType, ir::repr::IntermediateRepr};
+use internal_baml_core::{
+    configuration::{GeneratorDefaultClientMode, GeneratorOutputType},
+    ir::repr::IntermediateRepr,
+};
 use semver::Version;
 use std::{collections::BTreeMap, path::PathBuf};
 use version_check::{check_version, GeneratorType, VersionCheckMode};
@@ -23,6 +26,8 @@ pub struct GeneratorArgs {
 
     version: String,
     no_version_check: bool,
+    // Default call mode for functions
+    default_client_mode: GeneratorDefaultClientMode,
 }
 
 fn relative_path_to_baml_src(path: &PathBuf, baml_src: &PathBuf) -> Result<PathBuf> {
@@ -42,6 +47,7 @@ impl GeneratorArgs {
         input_files: impl IntoIterator<Item = (&'i PathBuf, &'i String)>,
         version: String,
         no_version_check: bool,
+        default_client_mode: GeneratorDefaultClientMode,
     ) -> Result<Self> {
         let baml_src = baml_src_dir.into();
         let input_file_map: BTreeMap<PathBuf, String> = input_files
@@ -56,6 +62,7 @@ impl GeneratorArgs {
             input_file_map,
             version,
             no_version_check,
+            default_client_mode,
         })
     }
 
@@ -140,7 +147,7 @@ fn version_check_with_error(
         true,
     );
     match res {
-        Some(e) => Err(anyhow::anyhow!("Version mismatch: {}", e.msg)),
+        Some(e) => Err(anyhow::anyhow!("{}", e.msg())),
         None => Ok(()),
     }
 }

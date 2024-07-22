@@ -10,13 +10,14 @@ from .baml_py import (
     invoke_runtime_cli,
     ClientRegistry,
 )
-from .stream import BamlStream
+from .stream import BamlStream, BamlSyncStream
 from .ctx_manager import CtxManager as BamlCtxManager
 
 __all__ = [
     "BamlRuntime",
     "ClientRegistry",
     "BamlStream",
+    "BamlSyncStream",
     "BamlCtxManager",
     "FunctionResult",
     "FunctionResultStream",

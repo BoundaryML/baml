@@ -126,18 +126,18 @@ field_attribute = { "@" ~ identifier ~ arguments_list? }
 field_type     = { (union | non_union) ~ optional_token? }
 optional_token = { "?" }
 union          = { base_type ~ ("|" ~ base_type)+ }
-base_type      = { array_notation | dict | identifier | group | tuple }
+base_type      = { array_notation | map | identifier | group | tuple }
 
 array_suffix   = { "[]" }
 array_notation = { base_type_without_array ~ array_suffix+ }
 
-dict  = { "{" ~ field_type ~ ":" ~ field_type ~ "}" }
+map   = { "map" ~ "<" ~ field_type ~ "," ~ field_type ~ ">" }
 group = { "(" ~ field_type ~ ")" }
 tuple = { "(" ~ field_type ~ ("," ~ field_type)+ ~ ")" }
 
-base_type_without_array = { dict | identifier | group | tuple }
+base_type_without_array = { map | identifier | group | tuple }
 
-non_union = { array_notation | dict | identifier | group | tuple }
+non_union = { array_notation | map | identifier | group | tuple }
 
 path_identifier =  { single_word ~ ("." ~ single_word)+ }
 identifier      =  { path_identifier | single_word }
@@ -156,12 +156,12 @@ arguments_list = { "(" ~ (NEWLINE?) ~ expression? ~ ("," ~ (NEWLINE?) ~ expressi
 // ######################################
 // Expressions & Functions
 // ######################################
-dict_key         =  { identifier | quoted_string_literal }
-dict_entry       =  { (comment_block | empty_lines)* ~ dict_key ~ expression ~ trailing_comment? }
+map_key          =  { identifier | quoted_string_literal }
+map_entry        =  { (comment_block | empty_lines)* ~ map_key ~ expression ~ trailing_comment? }
 splitter         = _{ ("," ~ NEWLINE?) | NEWLINE }
-dict_expression  =  { "{" ~ empty_lines? ~ (dict_entry ~ (splitter ~ dict_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
+map_expression   =  { "{" ~ empty_lines? ~ (map_entry ~ (splitter ~ map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
 array_expression =  { "[" ~ empty_lines? ~ (expression ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ expression ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ "]" }
-expression       =  { dict_expression | array_expression | numeric_literal | string_literal }
+expression       =  { map_expression | array_expression | numeric_literal | string_literal }
 
 // ######################################
 // Literals / Values

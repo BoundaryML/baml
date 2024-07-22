@@ -10,6 +10,11 @@ impl FunctionResult {
     }
 
     #[napi]
+    pub fn is_ok(&self) -> bool {
+        self.inner.parsed_content().is_ok()
+    }
+
+    #[napi]
     pub fn parsed(&self) -> napi::Result<serde_json::Value> {
         let parsed = self
             .inner

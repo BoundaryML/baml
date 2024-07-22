@@ -89,7 +89,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
         db: &'_ ParserDatabase,
     ) -> serde_json::Value {
         match self.1 {
-            FieldType::Tuple(..) | FieldType::Dictionary(..) => json!({
+            FieldType::Tuple(..) | FieldType::Map(..) => json!({
                 "rtype": "unsupported",
                 "optional": false,
             }),

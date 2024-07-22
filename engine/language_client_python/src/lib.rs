@@ -38,6 +38,7 @@ fn baml_py(_: Python<'_>, m: Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<types::FunctionResult>()?;
     m.add_class::<types::FunctionResultStream>()?;
+    m.add_class::<types::SyncFunctionResultStream>()?;
     m.add_class::<types::BamlImagePy>()?;
     m.add_class::<types::BamlAudioPy>()?;
     m.add_class::<types::RuntimeContextManager>()?;

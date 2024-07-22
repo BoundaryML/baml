@@ -2,7 +2,7 @@
   "name": "baml-extension",
   "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.50.0",
+  "version": "0.51.1",
   "publisher": "Boundary",
   "repository": "https://github.com/BoundaryML/baml",
   "homepage": "https://www.boundaryml.com",
@@ -109,7 +109,7 @@
       {
         "language": "baml-jinja",
         "scopeName": "source.baml-jinja",
-        "path": "./syntaxes/jinja.tmlLanguage.json"
+        "path": "./syntaxes/jinja.tmLanguage.json"
       }
     ],
     "snippets": [

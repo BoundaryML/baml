@@ -20,7 +20,9 @@ RTContextVar = contextvars.ContextVar[typing.Dict[int, RuntimeContextManager]]
 
 def current_thread_id() -> int:
     current_thread = threading.current_thread()
-    return current_thread.native_id or 0
+    if hasattr(current_thread, "native_id"):
+        return current_thread.native_id or 0
+    return current_thread.ident or 0
 
 
 class CtxManager:
@@ -65,7 +67,9 @@ class CtxManager:
     def flush(self) -> None:
         self.rt.flush()
 
-    def on_log_event(self, handler: typing.Callable[[BamlLogEvent], None]) -> None:
+    def on_log_event(
+        self, handler: typing.Optional[typing.Callable[[BamlLogEvent], None]]
+    ) -> None:
         self.rt.set_log_event_callback(handler)
 
     def trace_fn(self, func: F) -> F:

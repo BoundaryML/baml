@@ -75,8 +75,15 @@ generate code for each of them.
 generator target {
     // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
     output_type "python/pydantic"
+    
     // Where the generated code will be saved (relative to baml_src/)
     output_dir "../"
+    
+    // What interface you prefer to use for the generated code (sync/async)
+    // Both are generated regardless of the choice, just modifies what is exported
+    // at the top level
+    default_client_mode "sync"
+    
     // Version of runtime to generate code for (should match installed baml-py version)
     version "0.50.0"
 }
@@ -86,8 +93,15 @@ generator target {
 generator target {
     // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
     output_type "typescript"
+    
     // Where the generated code will be saved (relative to baml_src/)
     output_dir "../"
+    
+    // What interface you prefer to use for the generated code (sync/async)
+    // Both are generated regardless of the choice, just modifies what is exported
+    // at the top level
+    default_client_mode "async"
+    
     // Version of runtime to generate code for (should match the package @boundaryml/baml version)
     version "0.50.0"
 }
@@ -97,8 +111,13 @@ generator target {
 generator target {
     // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
     output_type "ruby/sorbet"
+
     // Where the generated code will be saved (relative to baml_src/)
     output_dir "../"
+    
+    // This is a no-op for Ruby and can be ignored as futures are colorless in Ruby
+    // default_client_mode "sync"
+
     // Version of runtime to generate code for (should match installed `baml` package version)
     version "0.50.0"
 }
@@ -154,7 +173,7 @@ BAML: Code Generation disabled due to version mismatch... See the fix.
 **To fix any version mismatch issues, update all these things to the same version:**
 1. VSCode extension
 2. the installed baml dependency (e.g., `baml-py`)
-  - python: `pip install --upgrade package_name`
+  - python: `pip install --upgrade baml-py`
   - typescript: `npm install @boundaryml/baml@latest`
 3. the `version` in your `generator` clause
 
@@ -173,14 +192,12 @@ You can also tweak the generator settings below for a better experience.
 <ParamField
   path="--from"
   type="string"
-  default="null">
-
+  default="./baml_src">
 Path to the BAML source directory. This is where the BAML files are located.
 </ParamField>
 
 <ParamField
   path="--no-version-check"
-  type="string"
-  default="false">
+  type="flag">
 If set, it will disable checking the BAML source version with the installed BAML package version before generating code.
 </ParamField>

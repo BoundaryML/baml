@@ -33,6 +33,7 @@ use baml_types::BamlValue;
 use client_registry::ClientRegistry;
 use indexmap::IndexMap;
 use internal_baml_core::configuration::GeneratorOutputType;
+use internal_core::configuration::Generator;
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
 
@@ -67,6 +68,8 @@ pub struct BamlRuntime {
     inner: InternalBamlRuntime,
     tracer: Arc<BamlTracer>,
     env_vars: HashMap<String, String>,
+    #[cfg(not(target_arch = "wasm32"))]
+    async_runtime: Arc<tokio::runtime::Runtime>,
 }
 
 impl BamlRuntime {
@@ -88,6 +91,8 @@ impl BamlRuntime {
             inner: InternalBamlRuntime::from_directory(path)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
+            #[cfg(not(target_arch = "wasm32"))]
+            async_runtime: tokio::runtime::Runtime::new()?.into(),
         })
     }
 
@@ -104,6 +109,8 @@ impl BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
+            #[cfg(not(target_arch = "wasm32"))]
+            async_runtime: tokio::runtime::Runtime::new()?.into(),
         })
     }
 
@@ -182,6 +189,19 @@ impl BamlRuntime {
         (response, target_id)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn call_function_sync(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
+        let fut = self.call_function(function_name, params, ctx, tb, cb);
+        self.async_runtime.block_on(fut)
+    }
+
     pub async fn call_function(
         &self,
         function_name: String,
@@ -231,6 +251,8 @@ impl BamlRuntime {
             params,
             self.tracer.clone(),
             ctx.create_ctx(tb, cb)?,
+            #[cfg(not(target_arch = "wasm32"))]
+            self.async_runtime.clone(),
         )
     }
 
@@ -252,7 +274,7 @@ impl BamlRuntime {
     ) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
         use internal_baml_codegen::GenerateClient;
 
-        let client_types: Vec<(GeneratorOutputType, internal_baml_codegen::GeneratorArgs)> = self
+        let client_types: Vec<(&Generator, internal_baml_codegen::GeneratorArgs)> = self
             .inner
             .ir()
             .configuration()
@@ -260,13 +282,14 @@ impl BamlRuntime {
             .iter()
             .map(|(generator, _)| {
                 Ok((
-                    generator.output_type.clone(),
+                    generator,
                     internal_baml_codegen::GeneratorArgs::new(
                         generator.output_dir(),
                         generator.baml_src.clone(),
                         input_files.iter(),
                         generator.version.clone(),
                         no_version_check,
+                        generator.default_client_mode(),
                     )?,
                 ))
             })
@@ -274,7 +297,18 @@ impl BamlRuntime {
 
         client_types
             .iter()
-            .map(|(client_type, args)| client_type.generate_client(self.inner.ir(), args))
+            .map(|(generator, args)| {
+                generator
+                    .output_type
+                    .generate_client(self.inner.ir(), args)
+                    .map_err(|e| {
+                        let ((line, col), _) = generator.span.line_and_column();
+                        anyhow::anyhow!(
+                            "Error in file {}:{line}:{col} {e}",
+                            generator.span.file.path()
+                        )
+                    })
+            })
             .collect()
     }
 }
@@ -354,7 +388,10 @@ impl ExperimentalTracingInterface for BamlRuntime {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) -> Result<()> {
+    fn set_log_event_callback(
+        &self,
+        log_event_callback: Option<LogEventCallbackSync>,
+    ) -> Result<()> {
         self.tracer.set_log_event_callback(log_event_callback);
         Ok(())
     }

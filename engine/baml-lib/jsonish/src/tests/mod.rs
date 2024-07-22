@@ -8,6 +8,7 @@ mod test_basics;
 mod test_class;
 mod test_enum;
 mod test_lists;
+mod test_maps;
 mod test_partials;
 mod test_unions;
 

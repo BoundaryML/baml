@@ -6,17 +6,51 @@ use std::path::PathBuf;
 use anyhow::Result;
 use either::Either;
 use indexmap::IndexMap;
-use internal_baml_core::ir::{repr::IntermediateRepr, FieldType, IRHelper};
+use internal_baml_core::{
+    configuration::GeneratorDefaultClientMode,
+    ir::{repr::IntermediateRepr, FieldType, IRHelper},
+};
 
 use self::typescript_language_features::{ToTypescript, TypescriptLanguageFeatures};
 use crate::dir_writer::FileCollector;
 
 #[derive(askama::Template)]
-#[template(path = "client.ts.j2", escape = "none")]
+#[template(path = "async_client.ts.j2", escape = "none")]
+struct AsyncTypescriptClient {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+}
+
+#[derive(askama::Template)]
+#[template(path = "sync_client.ts.j2", escape = "none")]
+struct SyncTypescriptClient {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+}
+
 struct TypescriptClient {
     funcs: Vec<TypescriptFunction>,
     types: Vec<String>,
 }
+
+impl From<TypescriptClient> for AsyncTypescriptClient {
+    fn from(value: TypescriptClient) -> Self {
+        Self {
+            funcs: value.funcs,
+            types: value.types,
+        }
+    }
+}
+
+impl From<TypescriptClient> for SyncTypescriptClient {
+    fn from(value: TypescriptClient) -> Self {
+        Self {
+            funcs: value.funcs,
+            types: value.types,
+        }
+    }
+}
+
 struct TypescriptFunction {
     name: String,
     // partial_return_type: String,
@@ -26,7 +60,9 @@ struct TypescriptFunction {
 
 #[derive(askama::Template)]
 #[template(path = "index.ts.j2", escape = "none")]
-struct TypescriptInit {}
+struct TypescriptInit {
+    default_client_mode: GeneratorDefaultClientMode,
+}
 
 #[derive(askama::Template)]
 #[template(path = "globals.ts.j2", escape = "none")]
@@ -51,13 +87,32 @@ pub(crate) fn generate(
     let mut collector = FileCollector::<TypescriptLanguageFeatures>::new();
     collector.add_template::<generate_types::TypescriptTypes>("types.ts", (ir, generator))?;
     collector.add_template::<generate_types::TypeBuilder>("type_builder.ts", (ir, generator))?;
-    collector.add_template::<TypescriptClient>("client.ts", (ir, generator))?;
+    collector.add_template::<AsyncTypescriptClient>("async_client.ts", (ir, generator))?;
+    collector.add_template::<SyncTypescriptClient>("sync_client.ts", (ir, generator))?;
     collector.add_template::<TypescriptGlobals>("globals.ts", (ir, generator))?;
     collector.add_template::<TypescriptTracing>("tracing.ts", (ir, generator))?;
     collector.add_template::<TypescriptInit>("index.ts", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlinedbaml.ts", (ir, generator))?;
 
     collector.commit(&generator.output_dir())
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for AsyncTypescriptClient {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for SyncTypescriptClient {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
+    }
 }
 
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptClient {
@@ -136,8 +191,10 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptTra
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptInit {
     type Error = anyhow::Error;
 
-    fn try_from(_: (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
-        Ok(TypescriptInit {})
+    fn try_from((_, gen): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
+        Ok(TypescriptInit {
+            default_client_mode: gen.default_client_mode.clone(),
+        })
     }
 }
 

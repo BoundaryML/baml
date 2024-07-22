@@ -9,11 +9,14 @@ pub enum Flag {
     DefaultButHadUnparseableValue(ParsingError),
     ObjectToString(crate::jsonish::Value),
     ObjectToPrimitive(crate::jsonish::Value),
+    ObjectToMap(crate::jsonish::Value),
     ExtraKey(String, crate::jsonish::Value),
     StrippedNonAlphaNumeric(String),
     SubstringMatch(String),
     SingleToArray,
     ArrayItemParseError(usize, ParsingError),
+    MapKeyParseError(usize, ParsingError),
+    MapValueParseError(String, ParsingError),
 
     JsonToString(crate::jsonish::Value),
     ImpliedKey(String),
@@ -94,6 +97,12 @@ impl std::fmt::Display for Flag {
             Flag::ArrayItemParseError(idx, error) => {
                 write!(f, "Error parsing item {}: {}", idx, error)?;
             }
+            Flag::MapKeyParseError(idx, error) => {
+                write!(f, "Error parsing map key {}: {}", idx, error)?;
+            }
+            Flag::MapValueParseError(key, error) => {
+                write!(f, "Error parsing map value for key {}: {}", key, error)?;
+            }
             Flag::SingleToArray => {
                 write!(f, "Converted a single value to an array")?;
             }
@@ -121,6 +130,10 @@ impl std::fmt::Display for Flag {
             }
             Flag::ObjectToPrimitive(value) => {
                 write!(f, "Object to field: ")?;
+                writeln!(f, "{:#?}", value)?;
+            }
+            Flag::ObjectToMap(value) => {
+                write!(f, "Object to map: ")?;
                 writeln!(f, "{:#?}", value)?;
             }
             Flag::StrippedNonAlphaNumeric(value) => {

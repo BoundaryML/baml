@@ -31,9 +31,10 @@ minijinja = { version = "1.0.16", default-features = false, features = [
 askama.workspace = true
 anyhow.workspace = true
 indexmap.workspace = true
+log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-log = "0.4.14"
+strum.workspace = true
 strsim = "0.11.1"
 colored = "2.1.0"
 

@@ -52,7 +52,9 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
         break
       }
 
-      yield this.partialCoerce(event.parsed())
+      if (event.isOk()) {
+        yield this.partialCoerce(event.parsed())
+      }
     }
   }
 

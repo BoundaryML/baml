@@ -13,10 +13,12 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-from .globals import b
 from . import types
 from . import tracing
 from . import partial_types
+
+from .async_client import b
+
 
 
 __all__ = [

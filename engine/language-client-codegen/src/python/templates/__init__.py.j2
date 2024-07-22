@@ -1,7 +1,11 @@
-from .globals import b
 from . import types
 from . import tracing
 from . import partial_types
+{% if default_client_mode == GeneratorDefaultClientMode::Async %}
+from .async_client import b
+{% else %}
+from .sync_client import b
+{% endif %}
 
 
 __all__ = [

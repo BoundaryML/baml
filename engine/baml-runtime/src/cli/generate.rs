@@ -1,7 +1,8 @@
 use crate::{runtime::runtime_interface::baml_src_files, BamlRuntime};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use colored::*;
-use std::{env, path::PathBuf};
+use internal_baml_core::configuration::GeneratorDefaultClientMode;
+use std::path::PathBuf;
 
 #[derive(clap::Args, Debug)]
 pub struct GenerateArgs {
@@ -40,6 +41,20 @@ impl GenerateArgs {
         // give the user a working config to copy-paste (so we need to run it through generator again)
         if generated.is_empty() {
             let client_type = caller_type.into();
+
+            let default_client_mode = match client_type {
+                internal_baml_core::configuration::GeneratorOutputType::PythonPydantic => {
+                    // TODO: Consider changing this default to sync
+                    GeneratorDefaultClientMode::Async
+                }
+                internal_baml_core::configuration::GeneratorOutputType::Typescript => {
+                    GeneratorDefaultClientMode::Async
+                }
+                internal_baml_core::configuration::GeneratorOutputType::RubySorbet => {
+                    GeneratorDefaultClientMode::Sync
+                }
+            };
+            // Normally `baml_client` is added via the generator, but since we're not running the generator, we need to add it manually.
             let output_dir_relative_to_baml_src = PathBuf::from("..");
             let version = env!("CARGO_PKG_VERSION");
             let generate_output = runtime.generate_client(
@@ -50,6 +65,7 @@ impl GenerateArgs {
                     all_files.iter(),
                     version.to_string(),
                     false,
+                    default_client_mode,
                 )?,
             )?;
 
