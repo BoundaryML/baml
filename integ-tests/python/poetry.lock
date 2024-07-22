@@ -330,6 +330,17 @@ files = [
 ]
 
 [[package]]
+name = "types-assertpy"
+version = "1.1.0.20240712"
+description = "Typing stubs for assertpy"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "types-assertpy-1.1.0.20240712.tar.gz", hash = "sha256:c332d09298b158f09890af12f14d83ebb9f0e5014e91219ae145a6a5af9220f9"},
+    {file = "types_assertpy-1.1.0.20240712-py3-none-any.whl", hash = "sha256:3962d4d863e4c091b9a8d7f02e3ee0d2ac06f25bdca0e6e4f848cf54c7214455"},
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.12.2"
 description = "Backported and Experimental Type Hints for Python 3.8+"
@@ -343,4 +354,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "75bc9294db7074ba805acc12ba1a8a201c8099a40f8ffe1d2e2aefb14d48e5e6"
+content-hash = "0f05e76164bce73b7880e1de6c9a7105771fda78f3bd70241e59a85e95027f40"

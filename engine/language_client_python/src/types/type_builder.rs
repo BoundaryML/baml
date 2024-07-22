@@ -1,6 +1,11 @@
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::BamlValue;
-use pyo3::pymethods;
+use pyo3::{
+    prelude::PyAnyMethods,
+    pymethods,
+    types::{PyTuple, PyTupleMethods},
+    Bound, PyResult,
+};
 
 crate::lang_wrapper!(TypeBuilder, type_builder::TypeBuilder);
 crate::lang_wrapper!(EnumBuilder, type_builder::EnumBuilder, sync_thread_safe, name: String);
@@ -66,6 +71,25 @@ impl TypeBuilder {
 
     pub fn null(&self) -> FieldType {
         baml_types::FieldType::null().into()
+    }
+
+    pub fn map(&self, key: &FieldType, value: &FieldType) -> FieldType {
+        baml_types::FieldType::map(
+            key.inner.lock().unwrap().clone(),
+            value.inner.lock().unwrap().clone(),
+        )
+        .into()
+    }
+
+    #[pyo3(signature = (*types))]
+    pub fn union<'py>(&self, types: &Bound<'_, PyTuple>) -> PyResult<FieldType> {
+        let mut rs_types = vec![];
+        for idx in 0..types.len() {
+            let item = types.get_item(idx)?;
+            let item = item.downcast::<FieldType>()?;
+            rs_types.push(item.borrow().inner.lock().unwrap().clone());
+        }
+        Ok(baml_types::FieldType::union(rs_types).into())
     }
 }
 

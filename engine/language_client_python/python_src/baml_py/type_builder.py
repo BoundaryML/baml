@@ -34,6 +34,15 @@ class TypeBuilder:
     def list(self, inner: FieldType):
         return self._tb.list(inner)
 
+    def null(self):
+        return self._tb.null()
+
+    def map(self, key: FieldType, value: FieldType):
+        return self._tb.map(key, value)
+
+    def union(self, *types: FieldType):
+        return self._tb.union(*types)
+
     def add_class(self, name: str) -> "NewClassBuilder":
         if name in self.__classes:
             raise ValueError(f"Class with name {name} already exists.")
