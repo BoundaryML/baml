@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 class FunctionResult:
     """The result of a BAML function call.
