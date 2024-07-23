@@ -137,7 +137,7 @@ navigation:
         path: docs/calling-baml/dynamic-types.mdx
       - page: Client Registry
         path: docs/calling-baml/client-registry.mdx
-      - page: Custom Type Assertions
+      - page: Custom Type Validations
         path: docs/calling-baml/assertions.mdx
   - section: BAML with Python/TS/Ruby
     contents:

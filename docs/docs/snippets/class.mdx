@@ -55,6 +55,9 @@ type Foo = z.infer<typeof FooZod>;
 </CodeBlocks>
 
 ## Class Attributes
+### Contextual Attributes
+Contextual attributes modify the prompt and serve to provide additional context to the LLM.
+
 
 <ParamField
   path="@@dynamic"
@@ -71,6 +74,8 @@ class MyClass {
 ```
 </ParamField>
 
+### Validation Attributes
+Validation attributes are used to enforce constraints on the fields of a class. They do not modify the prompt, but rather the post hoc validation logic of the BAML parser.
 <ParamField
   path="@@assert"
 >
@@ -149,9 +154,7 @@ class MyClass {
 ### Validation Attributes
 Validation attributes are used to enforce constraints on the fields of a class. They do not modify the prompt, but rather the post hoc validation logic of the BAML parser. 
 
-<Warning>
-`@assert` and `@check` attributes are mutually exclusive and cannot be applied to the same field.
-</Warning>
+
 <ParamField
   path ="@assert"
   type = "jinja"

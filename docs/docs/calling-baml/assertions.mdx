@@ -1,13 +1,20 @@
 ---
 slug: docs/calling-baml/assertions
 ---
-BAML raises `BAMLValidationError` exceptions when it fails to parse the response according to your specified type definitions. With custom type assertions, you can further define a range of acceptable values for a field by validating it against specific constraints that you define.
+BAML raises `BAMLValidationError` exceptions when it can't parse the response based on your type definitions. With custom type validations, you can set specific rules to ensure a field's value falls within an acceptable range.
 
-<Tip>Assertions **do not** modify the prompt or response data. They are only used to change the post hoc **validation logic** of the BAML parser. </Tip>
+<Tip>Validations **do not** modify the prompt or response data. They are only used to change the post hoc **validation logic** of the BAML parser. </Tip>
+
+BAML provides two types of validations:
+- `@assert` for strict, exception-raising validations
+- `@check` for non-exception-raising validations, which allow you to access the data even when validation fails along with the validation results of which checks pass and fail. 
+
+This guide covers how to write different types of `@assert` validations, but the same principles apply to `@check` validations.
+See [Non-exception Raising Checks](#non-exception-raising-checks) for more information.
 
 
 ## Field-level Assertions
-Field-level assertions are used to validate individual fields in a response. These assertions are written as inline attributes.
+Field-level assertions are used to validate individual fields in a response. These assertions can be written directly as inline attributes next to the field definition or on the line following the field definition.
 
 ### Using `@assert`
 BAML will raise an exception if `Foo.bar` is not between 0 and 10.
@@ -31,7 +38,7 @@ In the above example, the `@assert` attribute is applied specifically to the `in
 
 Likewise, the keyword `this` refers to the value of the type instance it is directly associated with (e.g., `int` or `string`).
 
-### Using `block` in `@assert`
+### Referencing other fields with `block`
 The `block` syntax can be used to reference other fields within the same class, whereas `this` is used to access the current field's value.
 
 This is useful when defining an assertion for a field that is dependent on the validated value of another field.
@@ -61,9 +68,23 @@ class Foo {
 ```
 In this example, the `password` field must be longer than 10 characters, and the `Foo` class includes a block-level assertion to ensure `password` and `confirm_password` match. 
 
-<Tip> For block-level assertions, you don't need to use the `block` keyword because `this` refers to the entire block. </Tip>
+{/* <Tip> For block-level assertions, you don't need to use the `block` keyword because `this` refers to the entire block. </Tip> */}
 
-## Dynamic Input Assertions
+
+## Chaining Assertions
+You can have multiple assertions on a single field by using the `and` operator or by chaining multiple `@assert` attributes.
+
+In this example, the asserts on `bar` and `baz` are equivalent.
+```baml BAML
+class Foo {
+  bar int @assert(this > 0 and this < 10)
+  baz int @assert(this > 0) @assert(this < 10)
+}
+```
+
+Chained asserts are evaluated in order from left to right. If the first assert fails, the second assert will not be evaluated.
+
+## Reference Assertion Parameters
 Sometimes, you may need to validate a field differently for different instances of a class or based on the input to the function returning the class. 
 
 ### Function Input
@@ -212,20 +233,18 @@ class User {
 
 
 ## Non-exception Raising Checks
-The default behavior of `@assert` is to raise an exception on a failed assertion. However, if you still want to access the data even when an assertion fails, you can use the `@check` attribute instead to receive both the raw data and the assertion error. This is useful in scenarios where you want to be informed of a validation failure but still need the data.
+
+Use `@check` to access data even if an assertion fails. It provides both the raw data and the assertion error without raising an exception, unlike `@assert`. This is useful when you need the data despite validation failures. Besides this, `@check` works the same as `@assert`.
+
 
 To return both the data and the possible warning, BAML will return a `BamlCheckedValue<T>` object, which contains the parsed data and the validation results for each check.
 
-To access the value, use the `value` attribute of the `BamlCheckedValue` object, and use the `checks_results` attribute to access a map of the checks used and their results during validation.
-
-<Warning>
-`@assert` and `@check` attributes are mutually exclusive and cannot be applied to the same field.
-</Warning>
+To access the value, use the `value` attribute of the `BamlCheckedValue` object, and use the `checks` attribute to access a map of the checks used and their results during validation.
 
 ```rust BamlCheckedValue
 interface BamlCheckedValue<T> {
   value T
-  checks_results {} // map of error message to true (passed) or false (failed)
+  checks {} // map of error message to true (passed) or false (failed)
 }
 ```
 
@@ -265,10 +284,10 @@ def main():
     quote = citation.quote.value 
     print(f"Quote: {quote}")
 
-    # Access the error messages for each assertion and its status
-    checks_results = citation.quote.checks_results
-    for assertion, result in checks_results.items():
-        print(f"Assertion {assertion}: {'passed' if result else 'failed'}")
+    # Access the error messages for each check and its status
+    checks = citation.quote.checks
+    for check_name, result in checks.items():
+        print(f"Check {check_name}: {'passed' if result else 'failed'}")
 
     # Access the author field directly, as it uses @assert
     author = citation.author
@@ -287,10 +306,10 @@ const main = async () => {
     const quote = citation.quote.value 
     console.log(`Quote: ${quote}`)
 
-    // Access the error messages for each assertion and its status
-    const checks_results = citation.quote.checks_results
-    for (const [assertion, result] of Object.entries(checks_results)) {
-        console.log(`Assertion ${assertion}: ${result ? 'passed' : 'failed'}`)
+    // Access the error messages for each check and its status
+    const checks = citation.quote.checks
+    for (const [check_name, result] of Object.entries(checks)) {
+        console.log(`Check ${check_name}: ${result ? 'passed' : 'failed'}`)
     }
 
     // Access the author field directly, as it uses @assert 
@@ -302,9 +321,16 @@ const main = async () => {
 
 </CodeBlocks>
 
-
-
-
+You can also chain multiple `@check` and `@assert` attributes on a single field.
+```baml BAML
+class Foo {
+  bar string @check(this|length > 0, "bar_empty") 
+  @assert(this|contains("foo"), "bar_no_foo") 
+  @check(this|contains("fizzle"), "bar_no_fizzle")
+  @assert(this|contains("baz"), "bar_no_baz")
+}
+```
+In this example, the `@assert` statements are checked during parsing of types, and if they fail, a `BAMLValidationError` is raised. The `@check` statements are checked after parsing, and the data is returned as a `BamlCheckedValue` object with the validation results.
 
 
 
