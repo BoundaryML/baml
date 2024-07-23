@@ -9,7 +9,7 @@ BAML provides two types of validations:
 - `@assert` for strict, exception-raising validations
 - `@check` for non-exception-raising validations, which allow you to access the data even when validation fails along with the validation results of which checks pass and fail. 
 
-This guide covers how to write different types of `@assert` validations, but the same principles apply to `@check` validations.
+This guide covers how to write different types of `@assert` validations, but the same principles and syntax apply to `@check` validations.
 See [Non-exception Raising Checks](#non-exception-raising-checks) for more information.
 
 
@@ -140,7 +140,7 @@ Assertions are represented as Jinja expressions and can be used to validate vari
 
 In the future, we plan to support shorthand syntax for common assertions to make writing them easier.
 
-For now, see our [Jinja cookbook / guide](../snippets/prompt-syntax/what-is-jinja.mdx) or the [Jinja docs](https://jinja.palletsprojects.com/en/3.0.x/templates/) for more information on writing expressions.
+For now, see our [Jinja cookbook / guide](../snippets/prompt-syntax/what-is-jinja.mdx) or the [Minijinja filters docs](https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions) for more information on writing expressions.
 
 
 {/* ### Operators
@@ -213,6 +213,59 @@ class Citation {
   )
 }
 ```
+
+`BAMLValidationError` will propagate up to the top-level function, where you can catch it and handle it as needed. 
+<CodeBlocks>
+
+```python Python
+from baml_client import b
+from baml_client.types import Citation
+
+def main():
+    try:
+        citation: Citation = b.GetCitation("SpaceX, is an American spacecraft manufacturer, launch service provider...")
+
+        # Access the value of the quote field
+        quote = citation.quote
+        website_link = citation.website_link
+        print(f"Quote: {quote} from {website_link}")
+        
+    except BAMLValidationError as e:
+        print(f"Validation error: {e.error_message}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+```
+
+```typescript Typescript
+import { b, BAMLValidationError } from './baml_client';
+import { Citation } from './baml_client/types';
+
+const main = () => {
+    try {
+        const citation: Citation = b.GetCitation("SpaceX, is an American spacecraft manufacturer, launch service provider...");
+        
+        const quote = citation.quote.value;
+        console.log(`Quote: ${quote}`);
+
+        const checks = citation.quote.checks;
+        for (const [check_name, result] of Object.entries(checks)) {
+            console.log(`Check ${check_name}: ${result ? 'passed' : 'failed'}`);
+        }
+
+        const author = citation.author;
+        console.log(`Author: ${author}`);
+    } catch (e) {
+        if (e instanceof BAMLValidationError) {
+            console.log(`Validation error: ${e.error_message}`);
+        } else {
+            console.error(e);
+        }
+    }
+};
+```
+
+</CodeBlocks>
 
 ### Validation Order
 
@@ -299,8 +352,8 @@ def main():
 import { b } from './baml_client'
 import { Citation } from './baml_client/types'
 
-const main = async () => {
-    const citation = await b.GetCitation("SpaceX, is an American spacecraft manufacturer, launch service provider...")
+const main = () => {
+    const citation = b.GetCitation("SpaceX, is an American spacecraft manufacturer, launch service provider...")
     
     // Access the value of the quote field
     const quote = citation.quote.value 
@@ -331,6 +384,71 @@ class Foo {
 }
 ```
 In this example, the `@assert` statements are checked during parsing of types, and if they fail, a `BAMLValidationError` is raised. The `@check` statements are checked after parsing, and the data is returned as a `BamlCheckedValue` object with the validation results.
+
+<Tip> When using `@check`, all checks on the response data are evaluated even if one fails. In contrast, with `@assert`, a failure will stop the parsing process and immediately raise an exception. </Tip>
+
+
+## Advanced Examples
+While the following examples show more complex minijinja expressions, see the [Minijinja filters docs](https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions) for more information on available operators to use in your assertions.
+
+
+--------
+The `Address` class below demonstrates how to validate a postal code based on the country field. The postal code must be 5 digits for the USA, 6 digits for Canada, and match a specific pattern for the UK.
+```baml BAML
+class Address {
+    street string @assert(this|length > 0)
+    city string @assert(this|length > 0)
+    country string @assert(this in ["USA", "Canada", "UK"])
+    postal_code string @assert(
+        (this|length == 5 and block.country == "USA") or
+        (this|length == 6 and block.country == "Canada") or
+        (this|matches("^[A-Z]{1,2}[0-9][A-Z0-9]? [0-9][ABD-HJLNP-UW-Z]{2}$") and block.country == "UK"),
+        "Invalid postal code for the specified country"
+    )
+}
+```
+--------
+
+The `Person` class below demonstrates how to individually validate a person's name, age, and email address. Additionally, it includes a block-level assertion to ensure that a person must be 18 or older to have a USA address.
+```baml BAML
+class Person {
+    name string @assert(this|length >= 2)
+    age int @assert(this >= 0)
+    email string @assert(this|matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"))
+    address Address
+    
+    @@assert(
+        this.age >= 18 or this.address.country != "USA",
+        "Person must be 18 or older to have a USA address"
+    )
+}
+```
+--------
+
+The `Book` and `Library` classes below demonstrate how to validate a book's title, author, ISBN, publication year, genres, and a library's name and books. The block-level assertion in the `Library` class ensures that all books have unique ISBNs.
+```baml BAML
+class Book {
+    title string @assert(this|length > 0)
+    author string @assert(this|length > 0)
+    isbn string @assert(
+        this|matches("^(97(8|9))?\\d{9}(\\d|X)$"),
+        "Invalid ISBN format"
+    )
+    publication_year int @assert(1000 <= this <= 2100)
+    genres string[] @assert(1 <= this|length <= 10)
+}
+
+class Library {
+    name string
+    books Book[] @assert(this|length > 0)
+    total_books int @assert(this == block.books|length)
+    
+    @@assert(
+        this.books|map(attribute='isbn')|unique()|length == this.books|length,
+        "All books must have unique ISBNs"
+    )
+}
+```
 
 
 

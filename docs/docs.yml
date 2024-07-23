@@ -131,7 +131,7 @@ navigation:
         path: docs/snippets/template-string.mdx
       - page: Test Cases
         path: docs/snippets/test-cases.mdx
-  - section: Advanced BAML Snippets
+  - section: Advanced BAML Features
     contents:
       - page: Dynamic Types
         path: docs/calling-baml/dynamic-types.mdx
