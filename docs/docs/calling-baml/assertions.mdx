@@ -70,7 +70,7 @@ Sometimes, you may need to validate a field differently for different instances 
 Use constructor inputs for your class to define dynamic assertions. In this example, the `quote` field must be present in the `text` input string.
 ```baml BAML
 class Citation(text: string) {
-  quote string @constraint(this in block.text, "exact_citation_not_found")
+  quote string @assert(this in block.text, "exact_citation_not_found")
   idx int
 }
 ```
@@ -92,7 +92,7 @@ function GetCitations(full_text: string) -> Citation(text=block.full_text) {
 You may also use input assertions when composing a class from a parent class. In this example, the `quote` field must be present in the `contents` field of the `Book` class, which is passed as an input to the `Citation` class.
 ```baml BAML
 class Citation(text: string) {
-  quote string @constraint(this in block.text, "exact_citation_not_found")
+  quote string @assert(this in block.text, "exact_citation_not_found")
   idx int
 }
 
