@@ -1,0 +1,41 @@
+name: sandbox
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - sam/mise-arm64
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-release:
+    strategy:
+      fail-fast: false
+      matrix:
+        _:
+          - target: aarch64-unknown-linux-gnu
+            host: ubuntu-latest
+            # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
+            # need a new version of manylinux to build crates on arm64-linux
+            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
+
+    name: Build ${{ matrix._.target }}
+    runs-on: ${{ matrix._.host }}
+    container: ${{ matrix._.container }}
+    steps:
+      - uses: actions/checkout@v4
+      # - uses: actions/setup-python@v5
+      #   with:
+      #     python-version: "3.8"
+      #     architecture: ${{ matrix._.host == 'windows-latest' && 'x64' || null }}
+      - uses: jdx/mise-action@v2
+        env:
+          MISE_DEBUG: 1
+        with:
+          version: 2024.7.4
+          mise_toml: |
+            [tools]
+            ruby = "3.1.6"
