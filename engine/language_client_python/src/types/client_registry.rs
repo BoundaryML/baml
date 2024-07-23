@@ -25,7 +25,7 @@ impl ClientRegistry {
         options: PyObject,
         retry_policy: Option<String>,
     ) -> PyResult<()> {
-        let Some(args) = parse_py_type(options.into_bound(py).to_object(py), false)? else {
+        let Some(args) = parse_py_type(options, false)? else {
             return Err(BamlError::new_err(
                 "Failed to parse args, perhaps you used a non-serializable type?",
             ));

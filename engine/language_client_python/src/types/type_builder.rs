@@ -6,6 +6,7 @@ use pyo3::{
     types::{PyTuple, PyTupleMethods},
     Bound, PyResult,
 };
+use pyo3::{PyObject, Python, ToPyObject};
 
 crate::lang_wrapper!(TypeBuilder, type_builder::TypeBuilder);
 crate::lang_wrapper!(EnumBuilder, type_builder::EnumBuilder, sync_thread_safe, name: String);

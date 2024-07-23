@@ -289,7 +289,7 @@ pub enum ChatMessagePart {
     Audio(BamlMedia),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum RenderedPrompt {
     Completion(String),
     Chat(Vec<RenderedChatMessage>),

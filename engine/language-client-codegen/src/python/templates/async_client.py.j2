@@ -38,6 +38,12 @@ class BamlAsyncClient:
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
 
+    def z_unstable_runtime(self) -> baml_py.BamlRuntime:
+      return self.__runtime
+
+    def z_unstable_ctx_manager(self) -> baml_py.BamlCtxManager:
+      return self.__ctx_manager
+
     @property
     def stream(self):
       return self.__stream_client

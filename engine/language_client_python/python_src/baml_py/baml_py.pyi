@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 class FunctionResult:
     """The result of a BAML function call.
@@ -18,6 +18,7 @@ class FunctionResult:
     def parsed(self) -> Any: ...
     # Returns True if the function call was successful, False otherwise
     def is_ok(self) -> bool: ...
+    def internals(self) -> str: ...
 
 class FunctionResultStream:
     """The result of a BAML function stream.
