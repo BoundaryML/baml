@@ -9,12 +9,12 @@ enum TestEnum {
   C @alias("k11") @description(#"
     User is sad
   "#)
-  D @alias("k44") @description(
+  D @alias("k44") @description(#"
     User is confused
-  )
-  E @description(
+  "#)
+  E @description(#"
     User is excited
-  )
+  "#)
   F @alias("k5") // only alias
   
   G @alias("k6") @description(#"
