@@ -1,2 +1,5 @@
 [tools]
+node = "latest"
 ruby = "3.1"
+pnpm = "latest"
+poetry = "latest"
