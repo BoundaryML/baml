@@ -421,6 +421,74 @@ describe('Integ tests', () => {
     expect(res[0]['testKey']).toEqual('myTest')
   })
 
+  it('should work with dynamic output map', async () => {
+    let tb = new TypeBuilder()
+    tb.DynamicOutput.addProperty('hair_color', tb.string())
+    tb.DynamicOutput.addProperty('attributes', tb.map(tb.string(), tb.string())).description(
+      "Things like 'eye_color' or 'facial_hair'",
+    )
+    console.log(tb.DynamicOutput.listProperties())
+    for (const [prop, _] of tb.DynamicOutput.listProperties()) {
+      console.log(`Property: ${prop}`)
+    }
+
+    const res = await b.MyFunc(
+      "My name is Harrison. My hair is black and I'm 6 feet tall. I have blue eyes and a beard.",
+      { tb },
+    )
+
+    console.log('final ', res)
+
+    expect(res.hair_color).toEqual('black')
+    expect(res.attributes['eye_color']).toEqual('blue')
+    expect(res.attributes['facial_hair']).toEqual('beard')
+  })
+
+  it('should work with dynamic output union', async () => {
+    let tb = new TypeBuilder()
+    tb.DynamicOutput.addProperty('hair_color', tb.string())
+    tb.DynamicOutput.addProperty('attributes', tb.map(tb.string(), tb.string())).description(
+      "Things like 'eye_color' or 'facial_hair'",
+    )
+
+    // Define two classes
+    const class1 = tb.addClass('Class1')
+    class1.addProperty('meters', tb.float())
+
+    const class2 = tb.addClass('Class2')
+    class2.addProperty('feet', tb.float())
+    class2.addProperty('inches', tb.float().optional())
+
+    // Use the classes in a union property
+    tb.DynamicOutput.addProperty('height', tb.union([class1.type(), class2.type()]))
+    console.log(tb.DynamicOutput.listProperties())
+    for (const [prop, _] of tb.DynamicOutput.listProperties()) {
+      console.log(`Property: ${prop}`)
+    }
+
+    let res = await b.MyFunc(
+      "My name is Harrison. My hair is black and I'm 6 feet tall. I have blue eyes and a beard. I am 30 years old.",
+      { tb },
+    )
+
+    console.log('final ', res)
+    expect(res.hair_color).toEqual('black')
+    expect(res.attributes['eye_color']).toEqual('blue')
+    expect(res.attributes['facial_hair']).toEqual('beard')
+    expect(res.height['feet']).toEqual(6)
+
+    res = await b.MyFunc(
+      "My name is Harrison. My hair is black and I'm 1.8 meters tall. I have blue eyes and a beard. I am 30 years old.",
+      { tb },
+    )
+
+    console.log('final ', res)
+    expect(res.hair_color).toEqual('black')
+    expect(res.attributes['eye_color']).toEqual('blue')
+    expect(res.attributes['facial_hair']).toEqual('beard')
+    expect(res.height['meters']).toEqual(1.8)
+  })
+
   // test with extra list, boolean in the input as well.
 
   it('should work with nested classes', async () => {
@@ -443,9 +511,10 @@ describe('Integ tests', () => {
     })
     clientRegistry.setPrimary('myClient')
 
-    await b.TestOllama('hi', {
+    const capitol = await b.ExpectFailure({
       clientRegistry,
     })
+    expect(capitol.toLowerCase()).toContain('london')
   })
 
   it("should work with 'onLogEvent'", async () => {

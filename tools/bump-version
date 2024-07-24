@@ -101,14 +101,47 @@ if [ "$((_ts_mode + _python_mode + _ruby_mode + _vscode_mode + _all_mode))" -eq 
 fi
 
 _repo_root="$(git rev-parse --show-toplevel)"
-cd "${_repo_root}/tools"
+cd "${_repo_root}"
+git pull --tags
 
+
+# # Ensure clean git status
+if ! git diff --quiet; then
+    echo "Error: Git status is not clean. Please commit or stash your changes."
+    exit 1
+fi
+
+PRE_BUMP_VERSION=$(grep "current_version =" tools/versions/engine.cfg | awk '{print $3}')
+
+CODE_GEN_CHANGES=$(git diff ${PRE_BUMP_VERSION} -- 'engine/language_client_codegen/src' | grep -c '^diff --git')
+
+if [ "$CODE_GEN_CHANGES" -gt 0 ]; then
+    version_bump="minor"
+    echo "Code generation changes detected since ${PRE_BUMP_VERSION}. Recommending a \033[33mminor\033[0m version bump."
+else
+    version_bump="patch"
+    echo "No code generation changes detected since ${PRE_BUMP_VERSION}. Recommending a \033[32mpatch\033[0m version bump."
+fi
+
+read -p $'Please confirm the version bump type (\033[33mminor\033[0m / \033[32mpatch\033[0m): ' user_confirmation
+if [[ "$user_confirmation" != "$version_bump" ]]; then
+    echo "\033[31mWarning: Confirmation does not match the recommended version bump type.\033[0m"
+    read -p "Are you sure you want to proceed with the different version bump type? Type 'yes' to confirm: " double_check
+    if [[ "$double_check" != "yes" ]]; then
+        echo "\033[31mError: Confirmation does not match the recommended version bump type.\033[0m"
+        exit 1
+    fi
+fi
+
+
+cd "${_repo_root}/tools"
 if [ "$_all_mode" -eq 1 ]; then
-  bump2version --config-file ./versions/engine.cfg minor
-  bump2version --config-file ./versions/python.cfg minor --allow-dirty
-  bump2version --config-file ./versions/typescript.cfg minor --allow-dirty
-  bump2version --config-file ./versions/ruby.cfg minor --allow-dirty
-  bump2version --config-file ./versions/vscode.cfg minor --allow-dirty
+  bump2version --config-file ./versions/engine.cfg $version_bump
+  bump2version --config-file ./versions/python.cfg $version_bump --allow-dirty
+  bump2version --config-file ./versions/typescript.cfg $version_bump --allow-dirty
+  bump2version --config-file ./versions/ruby.cfg $version_bump --allow-dirty
+  bump2version --config-file ./versions/vscode.cfg $version_bump --allow-dirty
+  bump2version --config-file ./versions/integ-tests.cfg $version_bump --allow-dirty
 elif [ "$_ts_mode" -eq 1 ]; then
   bump2version --config-file ./versions/typescript.cfg patch
 elif [ "$_python_mode" -eq 1 ]; then
@@ -120,11 +153,79 @@ elif [ "$_vscode_mode" -eq 1 ]; then
 fi
 
 cd "${_repo_root}"
+NEW_VERSION=$(grep "current_version =" tools/versions/engine.cfg | awk '{print $3}')
+
+_branch_name="bump-version-$NEW_VERSION"
+
+# If the branch already exists, delete it with user confirmation
+if git show-ref --verify --quiet "refs/heads/$_branch_name"; then
+    read -p "Branch $_branch_name already exists. Do you want to delete it? Type 'yes' to confirm: " delete_confirmation
+    if [[ "$delete_confirmation" != "yes" ]]; then
+        echo "Exiting without creating a new branch."
+        exit 1
+    fi
+    git branch -D "$_branch_name"
+fi
+
+git checkout -b "$_branch_name"
+git add .
+git commit -m "Bump version to $NEW_VERSION"
+
+# Generate the changelog
+git cliff --tag $NEW_VERSION -u --prepend CHANGELOG.md
+echo "Version bumped to $NEW_VERSION successfully! Please update CHANGELOG.md."
+
+# Ask the user to confirm CHANGELOG.md update
+while true; do
+    read -p "Have you updated CHANGELOG.md? Type 'yes' to confirm: " changelog_confirmation
+    if [[ "$changelog_confirmation" == "yes" ]]; then
+        if grep -q "### UNMATCHED" CHANGELOG.md; then
+            echo "### UNMATCHED section found in CHANGELOG.md. Please remove it before proceeding."
+        else
+            break
+        fi
+    else
+        echo "Please update CHANGELOG.md before proceeding."
+    fi
+done
+
+git add CHANGELOG.md
+git commit --amend --no-edit
+
+# Now run the build scripts for python and typescript integ tests
+cd "${_repo_root}/integ-tests/typescript"
+pnpm build
+pnpm generate
+
+cd "${_repo_root}/integ-tests/python"
+env -u CONDA_PREFIX poetry run maturin develop --manifest-path ${_repo_root}/engine/language_client_python/Cargo.toml
+poetry run baml-cli generate --from ../baml_src
+
+
+# Now run integ tests for each
+cd "${_repo_root}/integ-tests/typescript"
+# Echo version and date to integ-tests.log
+if pnpm integ-tests:ci; then
+    ts_tests_status="✅ Typescript integ tests"
+else
+    ts_tests_status="❌ Typescript integ tests"
+    echo "Typescript integ tests failed, but continuing..."
+fi
+
+cd "${_repo_root}/integ-tests/python"
+# Echo version and date to integ-tests.log
+if infisical run --env=test -- poetry run pytest --template=html1/index.html --report=report.html; then
+    python_tests_status="✅ Python integ tests"
+else
+    python_tests_status="❌ Python integ tests"
+    echo "Python integ tests failed, but continuing..."
+fi
+
+cd "${_repo_root}"
 git add .
 
+git commit -m "Run integ tests for $NEW_VERSION"
 
-VERSION=$(grep "current_version =" tools/versions/engine.cfg | awk '{print $3}')
-# Generate the change log
-git cliff --tag $VERSION -u --prepend CHANGELOG.md
+echo "All done! Please push the branch $_branch_name and create a PR."
 
-echo "Version bumped to $VERSION successfully! Please update CHANGELOG.md."
+gh pr create --title "chore: Bump version to $NEW_VERSION" --body "Bump version to $NEW_VERSION\n\n$ts_tests_status\n$python_tests_status\n\nGenerated by bump-version script."

@@ -311,6 +311,24 @@ module Baml
 
     sig {
       
+      returns(String)
+      
+    }
+    def ExpectFailure(
+        
+    )
+      raw = @runtime.call_function(
+        "ExpectFailure",
+        {
+          
+        },
+        @ctx_manager,
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      
       params(
         input: String,
       ).returns(T::Array[String])
@@ -1684,6 +1702,27 @@ module Baml
         @ctx_manager,
       )
       Baml::BamlStream[T::Array[Baml::PartialTypes::DynInputOutput], T::Array[Baml::Types::DynInputOutput]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        
+      ).returns(Baml::BamlStream[String])
+    }
+    def ExpectFailure(
+        
+    )
+      raw = @runtime.stream_function(
+        "ExpectFailure",
+        {
+          
+        },
+        @ctx_manager,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

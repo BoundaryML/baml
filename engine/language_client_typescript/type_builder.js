@@ -14,6 +14,9 @@ class TypeBuilder {
     _tb() {
         return this.tb;
     }
+    null() {
+        return this.tb.null();
+    }
     string() {
         return this.tb.string();
     }
@@ -28,6 +31,12 @@ class TypeBuilder {
     }
     list(type) {
         return this.tb.list(type);
+    }
+    map(keyType, valueType) {
+        return this.tb.map(keyType, valueType);
+    }
+    union(types) {
+        return this.tb.union(types);
     }
     classBuilder(name, properties) {
         return new ClassBuilder(this.tb, name, new Set(properties));
