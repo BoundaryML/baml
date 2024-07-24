@@ -3,19 +3,22 @@ title: openai
 slug: docs/snippets/clients/providers/openai
 ---
 
-
-The `openai` provider supports all APIs that use the same interface for the `/chat` endpoint.
+The `openai` provider supports the OpenAI `/chat` endpoint, setting OpenAI-specific
+default configuration options.
 
 <Tip>
-  For `ollama` ([Docs](ollama.mdx)) or `azure-openai` ([Docs](azure.mdx)) we recommend
-  using the respective provider instead.
+  For Azure, we recommend using [`azure-openai`](azure) instead.
+
+  For all other OpenAI-compatible API providers, such as Groq, HuggingFace,
+  Ollama, OpenRouter, Together AI, and others, we recommend using
+ [`openai-generic`](openai-generic) instead.
 </Tip>
 
 Example:
 
 ```baml BAML
 client<llm> MyClient {
-  provider openai
+  provider "openai"
   options {
     api_key env.MY_OPENAI_KEY
     model "gpt-3.5-turbo"
@@ -28,19 +31,24 @@ The options are passed through directly to the API, barring a few. Here's a shor
 
 ## Non-forwarded options
 
-<ParamField path="api_key" type="string">
-  Will be passed as a bearer token. **Default: `env.OPENAI_API_KEY`**
-  `Authorization: Bearer $api_key`
+<ParamField path="api_key" type="string" default="env.OPENAI_API_KEY">
+  Will be used to build the `Authorization` header, like so: `Authorization: Bearer $api_key`
+
+  **Default: `env.OPENAI_API_KEY`**
 </ParamField>
 
 <ParamField path="base_url" type="string">
-  The base URL for the API. **Default: `https://api.openai.com/v1`**
+  The base URL for the API.
+  
+  **Default: `https://api.openai.com/v1`**
 </ParamField>
 
 <ParamField path="default_role" type="string">
-  The default role for any prompts that don't specify a role. **Default:
-  `system`** We don't have any checks for this field, you can pass any string
-  you wish.
+  The default role for any prompts that don't specify a role.
+  
+  We don't do any validation of this field, so you can pass any string you wish.
+  
+  **Default: `system`**
 </ParamField>
 
 <ParamField path="headers" type="object">

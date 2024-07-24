@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::RuntimeContext;
 
@@ -14,15 +14,11 @@ pub fn resolve_properties(
         .remove("default_role")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "system".to_string());
+
     let base_url = properties
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
-
-    let api_key = properties
-        .remove("api_key")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .or_else(|| ctx.env.get("OPENAI_API_KEY").map(|s| s.to_string()));
+        .context("When using 'openai-generic', you must specify a base_url")?;
 
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
@@ -49,11 +45,9 @@ pub fn resolve_properties(
     Ok(PostRequestProperties {
         default_role,
         base_url,
-        api_key,
+        api_key: None,
         headers,
         properties,
-        // Replace proxy_url with code below to disable proxying
-        // proxy_url: None,
         proxy_url: ctx
             .env
             .get("BOUNDARY_PROXY_URL")

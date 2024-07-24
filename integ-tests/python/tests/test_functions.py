@@ -247,6 +247,40 @@ async def test_aws():
 
 
 @pytest.mark.asyncio
+async def test_openai_shorthand():
+    res = await b.TestOpenAIShorthand(input="Mt Rainier is tall")
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_openai_shorthand_streaming():
+    res = await b.stream.TestOpenAIShorthand(
+        input="Mt Rainier is tall"
+    ).get_final_response()
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_anthropic_shorthand():
+    res = await b.TestAnthropicShorthand(input="Mt Rainier is tall")
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_anthropic_shorthand_streaming():
+    res = await b.stream.TestAnthropicShorthand(
+        input="Mt Rainier is tall"
+    ).get_final_response()
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_fallback_to_shorthand():
+    res = await b.TestFallbackToShorthand(input="Mt Rainier is tall")
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
 async def test_aws_streaming():
     res = await b.stream.TestAws(input="Mt Rainier is tall").get_final_response()
     assert len(res) > 0, "Expected non-empty result but got empty."

@@ -237,6 +237,26 @@ describe('Integ tests', () => {
     expect(msgs.at(-1)).toEqual(final)
   })
 
+  it('should support OpenAI shorthand', async () => {
+    const res = await b.TestOpenAIShorthand('Dr. Pepper')
+    expect(res.length).toBeGreaterThan(0)
+  })
+
+  it('should support OpenAI shorthand streaming', async () => {
+    const res = await b.stream.TestOpenAIShorthand('Dr. Pepper').getFinalResponse()
+    expect(res.length).toBeGreaterThan(0)
+  })
+
+  it('should support anthropic shorthand', async () => {
+    const res = await b.TestAnthropicShorthand('Dr. Pepper')
+    expect(res.length).toBeGreaterThan(0)
+  })
+
+  it('should support anthropic shorthand streaming', async () => {
+    const res = await b.stream.TestAnthropicShorthand('Dr. Pepper').getFinalResponse()
+    expect(res.length).toBeGreaterThan(0)
+  })
+
   it('should support streaming without iterating', async () => {
     const final = await b.stream.PromptTestStreaming('Mt Rainier is tall').getFinalResponse()
     expect(final.length).toBeGreaterThan(0)

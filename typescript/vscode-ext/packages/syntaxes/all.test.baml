@@ -36,6 +36,15 @@ function CallGpt(input: string) -> string[] {
   "#
 }
 
+function CallClaude(input: string) -> string[] {
+  client "anthropic/claude-3-5"
+  prompt #"
+    Do something with {{ input }}
+
+    {{ ctx.output_format }}
+  "#
+}
+
 test CallGptTest {
   functions [CallGpt]
   args {

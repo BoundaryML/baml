@@ -1,14 +1,17 @@
+---
+title: Together AI
+slug: docs/snippets/clients/providers/together
+---
 
-
-https://www.together.ai/ - The fastest cloud platform for building and running generative AI.
-
-Together AI supports the OpenAI client, allowing you to use the [openai](/docs/snippets/clients/providers/openai) provider with an overriden `base_url`
+[Together AI](https://www.together.ai/) supports the OpenAI client, allowing you
+to use the [`openai-generic`](/docs/snippets/clients/providers/openai) provider
+with an overridden `base_url`.
 
 See https://docs.together.ai/docs/openai-api-compatibility for more information.
 
 ```baml BAML
 client<llm> MyClient {
-  provider openai
+  provider "openai-generic"
   options {
     base_url "https://api.together.ai/v1"
     api_key env.TOGETHER_API_KEY

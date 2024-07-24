@@ -118,7 +118,8 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         }
 
         // Ensure the client is correct.
-        match func.client() {
+        // TODO: message to the user that it should be either a client ref OR an inline client
+        match func.client_spec() {
             Some(_) => {}
             None => {
                 let client = func.metadata().client.as_ref().unwrap();

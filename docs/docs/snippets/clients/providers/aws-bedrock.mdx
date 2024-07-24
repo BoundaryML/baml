@@ -5,7 +5,8 @@ slug: docs/snippets/clients/providers/aws-bedrock
 ---
 
 
-The `aws-bedrock` provider supports all text-output models available via the [`Converse` API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html).
+The `aws-bedrock` provider supports all text-output models available via the
+[`Converse` API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html).
 
 Example:
 
@@ -22,7 +23,10 @@ client<llm> MyClient {
 
 ## Authorization
 
-We use the AWS SDK under the hood, which will respect [all authentication mechanisms supported by the SDK](https://docs.rs/aws-config/latest/aws_config/index.html), including but not limited to:
+We use the AWS SDK under the hood, which will respect [all authentication
+mechanisms supported by the
+SDK](https://docs.rs/aws-config/latest/aws_config/index.html), including but not
+limited to:
 
   - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as set in your environment variables
   - loading the specified `AWS_PROFILE` from `~/.aws/config`
@@ -52,7 +56,9 @@ We use the AWS SDK under the hood, which will respect [all authentication mechan
 | `mistral.mistral-7b-instruct-v0:2`        |                       |
 | `mistral.mixtral-8x7b-instruct-v0:1`      |                       |
 
-Run `aws bedrock list-foundation-models | jq '.modelSummaries.[].modelId` to get a list of available foundation models; you can also use any custom models you've deployed.
+Run `aws bedrock list-foundation-models | jq '.modelSummaries.[].modelId` to get
+a list of available foundation models; you can also use any custom models you've
+deployed.
 
 Note that to use any of these models you'll need to [request model access].
 
@@ -61,7 +67,8 @@ Note that to use any of these models you'll need to [request model access].
 </ParamField>
 
 <ParamField path="inference_configuration" type="object">
-  Additional inference configuration to send with the request; see [AWS Bedrock documentation](https://docs.rs/aws-sdk-bedrockruntime/latest/aws_sdk_bedrockruntime/types/struct.InferenceConfiguration.html).
+Additional inference configuration to send with the request; see [AWS Bedrock
+documentation](https://docs.rs/aws-sdk-bedrockruntime/latest/aws_sdk_bedrockruntime/types/struct.InferenceConfiguration.html).
 
 Example:
 

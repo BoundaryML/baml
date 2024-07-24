@@ -6,7 +6,10 @@ use anyhow::Result;
 use baml_types::{BamlValue, FieldType};
 use internal_baml_core::{
     error_unsupported,
-    ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
+    ir::{
+        repr::{ClientSpec, IntermediateRepr},
+        FunctionWalker, IRHelper,
+    },
 };
 use internal_baml_jinja::{
     types::OutputFormatContent, RenderContext, RenderContext_Client, RenderedPrompt,
@@ -17,7 +20,7 @@ use crate::RuntimeContext;
 
 pub struct PromptRenderer {
     function_name: String,
-    client_name: String,
+    client_spec: ClientSpec,
     output_defs: OutputFormatContent,
     output_type: FieldType,
 }
@@ -41,8 +44,8 @@ impl PromptRenderer {
 
         Ok(PromptRenderer {
             function_name: function.name().into(),
-            client_name: match &ctx.client_overrides {
-                Some((Some(client), _)) => client.clone(),
+            client_spec: match &ctx.client_overrides {
+                Some((Some(client), _)) => ClientSpec::Named(client.clone()),
                 _ => config.client.clone(),
             },
             output_defs: render_output_format(ir, ctx, &func_v2.output.elem)?,
@@ -50,8 +53,8 @@ impl PromptRenderer {
         })
     }
 
-    pub fn client_name(&self) -> &str {
-        &self.client_name
+    pub fn client_spec(&self) -> &ClientSpec {
+        &self.client_spec
     }
 
     pub fn parse(&self, raw_string: &str, allow_partials: bool) -> Result<BamlValueWithFlags> {

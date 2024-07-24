@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use crate::{
+    client_registry::ClientProperty,
     internal::{
         ir_features::{IrFeatures, WithInternal},
         llm_client::{
@@ -8,6 +9,7 @@ use crate::{
             orchestrator::{
                 orchestrate_call, IterOrchestrator, OrchestrationScope, OrchestratorNode,
             },
+            primitive::LLMPrimitiveProvider,
             retry_policy::CallablePolicy,
             traits::{WithPrompt, WithRenderRawCurl},
         },
@@ -22,7 +24,10 @@ use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
-    ir::{repr::IntermediateRepr, ArgCoercer, FunctionWalker, IRHelper},
+    ir::{
+        repr::{ClientSpec, IntermediateRepr},
+        ArgCoercer, FunctionWalker, IRHelper,
+    },
     validate,
 };
 use internal_baml_jinja::RenderedPrompt;
@@ -33,32 +38,59 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
     // Gets a top-level client/strategy by name
     fn get_llm_provider(
         &'a self,
-        client_name: &str,
+        client_spec: &ClientSpec,
         ctx: &RuntimeContext,
     ) -> Result<Arc<LLMProvider>> {
-        if let Some(client) = ctx
-            .client_overrides
-            .as_ref()
-            .and_then(|(_, c)| c.get(client_name))
-        {
-            return Ok(client.clone());
-        }
+        match client_spec {
+            ClientSpec::Shorthand(shorthand) => {
+                let (provider, model) = shorthand.split_once("/").context(format!(
+                    "Invalid client shorthand: {} (expected format: provider/model)",
+                    shorthand
+                ))?;
 
-        #[cfg(target_arch = "wasm32")]
-        let mut clients = self.clients.lock().unwrap();
-        #[cfg(not(target_arch = "wasm32"))]
-        let clients = &self.clients;
+                let client_property = ClientProperty {
+                    name: shorthand.clone(),
+                    provider: provider.into(),
+                    retry_policy: None,
+                    options: vec![("model".to_string(), BamlValue::String(model.to_string()))]
+                        .into_iter()
+                        .collect(),
+                };
+                // TODO: allow other providers
+                let llm_primitive_provider =
+                    LLMPrimitiveProvider::try_from((&client_property, ctx))
+                        .context(format!("Failed to parse client: {}", shorthand))?;
 
-        if let Some(client) = clients.get(client_name) {
-            return Ok(client.clone());
-        } else {
-            let walker = self
-                .ir()
-                .find_client(client_name)
-                .context(format!("Could not find client with name: {}", client_name))?;
-            let client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
-            clients.insert(client_name.into(), client.clone());
-            Ok(client)
+                Ok(Arc::new(LLMProvider::Primitive(Arc::new(
+                    llm_primitive_provider,
+                ))))
+            }
+            ClientSpec::Named(client_name) => {
+                if let Some(client) = ctx
+                    .client_overrides
+                    .as_ref()
+                    .and_then(|(_, c)| c.get(client_name))
+                {
+                    return Ok(client.clone());
+                }
+
+                #[cfg(target_arch = "wasm32")]
+                let mut clients = self.clients.lock().unwrap();
+                #[cfg(not(target_arch = "wasm32"))]
+                let clients = &self.clients;
+
+                if let Some(client) = clients.get(client_name) {
+                    return Ok(client.clone());
+                } else {
+                    let walker = self
+                        .ir()
+                        .find_client(client_name)
+                        .context(format!("Could not find client with name: {}", client_name))?;
+                    let client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
+                    clients.insert(client_name.into(), client.clone());
+                    Ok(client)
+                }
+            }
         }
     }
 
@@ -105,10 +137,10 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
 
     fn orchestration_graph(
         &self,
-        client_name: &str,
+        client_spec: &ClientSpec,
         ctx: &RuntimeContext,
     ) -> Result<Vec<OrchestratorNode>> {
-        let client = self.get_llm_provider(client_name, ctx)?;
+        let client = self.get_llm_provider(client_spec, ctx)?;
         Ok(client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self))
     }
 
@@ -134,19 +166,19 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         )?;
 
         let renderer = PromptRenderer::from_function(&func, &self.ir(), ctx)?;
-        let client_name = renderer.client_name().to_string();
 
-        let client = self.get_llm_provider(&client_name, ctx)?;
+        let client_spec = renderer.client_spec();
+        let client = self.get_llm_provider(client_spec, ctx)?;
         let mut selected =
             client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self);
         let node_index = node_index.unwrap_or(0);
 
         if node_index >= selected.len() {
             return Err(anyhow::anyhow!(
-                "Execution Node out of bounds: {} >= {} for client {}",
+                "Execution Node out of bounds (render prompt): {} >= {} for client {}",
                 node_index,
                 selected.len(),
-                client_name
+                client_spec,
             ));
         }
 
@@ -169,9 +201,9 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let func = self.get_function(function_name, ctx)?;
 
         let renderer = PromptRenderer::from_function(&func, &self.ir(), ctx)?;
-        let client_name = renderer.client_name().to_string();
 
-        let client = self.get_llm_provider(&client_name, ctx)?;
+        let client_spec = renderer.client_spec();
+        let client = self.get_llm_provider(client_spec, ctx)?;
         let mut selected =
             client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self);
 
@@ -179,10 +211,10 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
 
         if node_index >= selected.len() {
             return Err(anyhow::anyhow!(
-                "Execution Node out of bounds: {} >= {} for client {}",
+                "Execution Node out of bounds (raw curl): {} >= {} for client {}",
                 node_index,
                 selected.len(),
-                client_name
+                client_spec,
             ));
         }
 
@@ -361,8 +393,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         )?;
 
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
-        let client_name = renderer.client_name().to_string();
-        let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
+        let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
 
         // Now actually execute the code.
         let (history, _) =
@@ -384,8 +415,7 @@ impl RuntimeInterface for InternalBamlRuntime {
     ) -> Result<FunctionResultStream> {
         let func = self.get_function(&function_name, &ctx)?;
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
-        let client_name = renderer.client_name().to_string();
-        let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
+        let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
         let Some(baml_args) = self
             .ir
             .check_function_params(

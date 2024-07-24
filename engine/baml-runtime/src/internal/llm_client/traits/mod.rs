@@ -351,7 +351,7 @@ async fn process_media(
         BamlMediaContent::File(media_file) => {
             // Prompt rendering preserves files, because the vscode webview understands files.
             // In all other cases, we always convert files to base64.
-            if (!resolve_files) {
+            if !resolve_files {
                 return Ok(part.clone());
             }
 

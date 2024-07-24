@@ -5,11 +5,10 @@ use baml_types::FieldType;
 use either::Either;
 
 use indexmap::IndexMap;
-use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::{
     walkers::{
-        ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
-        FunctionWalker, TemplateStringWalker, VariantWalker,
+        self, ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker,
+        FieldWalker, FunctionWalker, TemplateStringWalker, VariantWalker,
     },
     ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes, WithStaticRenames,
 };
@@ -767,7 +766,43 @@ pub struct FunctionConfig {
     pub prompt_template: String,
     #[serde(skip)]
     pub prompt_span: ast::Span,
-    pub client: ClientId,
+    pub client: ClientSpec,
+}
+
+// NB(sam): we used to use this to bridge the wasm layer, but
+// I don't think we do anymore.
+#[derive(serde::Serialize, Clone, Debug)]
+pub enum ClientSpec {
+    Named(String),
+    Shorthand(String),
+}
+
+impl ClientSpec {
+    pub fn new_from_id(arg: String) -> Self {
+        if arg.contains("/") {
+            ClientSpec::Shorthand(arg)
+        } else {
+            ClientSpec::Named(arg)
+        }
+    }
+}
+
+impl From<walkers::ClientSpec> for ClientSpec {
+    fn from(spec: walkers::ClientSpec) -> Self {
+        match spec {
+            walkers::ClientSpec::Named(n) => ClientSpec::Named(n.to_string()),
+            walkers::ClientSpec::Shorthand(n) => ClientSpec::Shorthand(n.to_string()),
+        }
+    }
+}
+
+impl std::fmt::Display for ClientSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClientSpec::Named(n) => write!(f, "{}", n),
+            ClientSpec::Shorthand(n) => write!(f, "{}", n),
+        }
+    }
 }
 
 impl WithRepr<Implementation> for VariantWalker<'_> {
@@ -1003,11 +1038,8 @@ impl WithRepr<FunctionV2> for FunctionWalker<'_> {
                 name: "default_config".to_string(),
                 prompt_template: self.jinja_prompt().to_string(),
                 prompt_span: self.ast_function().span().clone(),
-                client: self
-                    .client()
-                    .context("Unable to generate ctx.client")?
-                    .name()
-                    .to_string(),
+                // TODO: actually return a compiler diagnostic
+                client: self.client_spec().context("client is not valid")?.into(),
             }],
             default_config: "default_config".to_string(),
             tests: self

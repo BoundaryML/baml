@@ -16,7 +16,7 @@ use crate::{
     },
     request::create_client,
 };
-use anyhow::{Context, Result};
+use anyhow::Result;
 use baml_types::{BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;

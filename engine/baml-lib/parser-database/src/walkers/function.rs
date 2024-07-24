@@ -158,12 +158,34 @@ impl<'db> FunctionWalker<'db> {
             .template
             .as_str()
     }
+}
 
-    /// The client for the function
-    pub fn client(self) -> Option<ClientWalker<'db>> {
+/// Reference to a client
+pub enum ClientSpec {
+    /// References a client by name
+    Named(String),
+
+    /// Defined inline using shorthand "<provider>/<model>" syntax
+    Shorthand(String),
+}
+
+impl<'db> FunctionWalker<'db> {
+    /// Returns the client spec for the function, if it is well-formed
+    pub fn client_spec(self) -> Option<ClientSpec> {
         assert!(self.id.0, "Only new functions have clients");
         let client = self.metadata().client.as_ref()?;
-        self.db.find_client(client.0.as_str())
+
+        match client.0.split_once("/") {
+            // TODO: do this in a more robust way
+            // actually validate which clients are and aren't allowed
+            Some((provider, model)) => {
+                Some(ClientSpec::Shorthand(format!("{}/{}", provider, model)))
+            }
+            None => match self.db.find_client(client.0.as_str()) {
+                Some(client) => Some(ClientSpec::Named(client.name().to_string())),
+                None => None,
+            },
+        }
     }
 }
 

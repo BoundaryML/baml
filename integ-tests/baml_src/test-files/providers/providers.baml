@@ -55,9 +55,26 @@ function TestAws(input: string) -> string {
   "#
 }
 
+function TestOpenAIShorthand(input: string) -> string {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Write a nice short story about {{ input }}
+  "#
+}
+
+function TestAnthropicShorthand(input: string) -> string {
+  client "anthropic/claude-3-haiku-20240307"
+  prompt #"
+    Write a nice short story about {{ input }}
+  "#
+}
 
 test TestProvider {
-  functions [TestAnthropic, TestVertex, PromptTestOpenAI, TestAzure, TestOllama, TestGemini, TestAws]
+  functions [
+    TestAnthropic, TestVertex, PromptTestOpenAI, TestAzure, TestOllama, TestGemini, TestAws,
+    TestOpenAIShorthand,
+    TestAnthropicShorthand
+  ]
   args {
     input "Donkey kong and peanut butter"
   }
