@@ -145,6 +145,8 @@ jobs:
     name: Build ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
     container: ${{ matrix._.container }}
+    env:
+      BAML_BUILD_HELP: ${{ matrix._.baml_build_help }}
     steps:
       - uses: actions/checkout@v4
       # Install python set up
@@ -189,16 +191,12 @@ jobs:
       - name: Build Rust
         run: cargo build --release --target ${{ matrix._.target }} ${{ matrix._.cargo_args }}
         working-directory: engine
-        env:
-          BAML_BUILD_HELP: ${{ matrix._.baml_build_help }}
-
+        
       # Build Node
       - name: PNPM Build
         run: ${{ matrix._.node_build }}
         working-directory: engine/language_client_typescript
-        env:
-          BAML_BUILD_HELP: ${{ matrix._.baml_build_help }}
-
+        
       # Build Python
       - name: Build Python
         uses: PyO3/maturin-action@v1
