@@ -263,9 +263,6 @@ export function activate(context: vscode.ExtensionContext) {
       showTests?: boolean
       testCaseName?: string
     }) => {
-      const config = vscode.workspace.getConfiguration()
-      config.update('baml.runBamlTest', true, vscode.ConfigurationTarget.Global)
-
       WebPanelView.render(context.extensionUri, getPort)
       if (telemetry) {
         telemetry.sendTelemetryEvent({

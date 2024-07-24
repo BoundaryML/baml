@@ -63,11 +63,5 @@ test TestProvider {
   }
 }
 
-test TestProvide1r {
-  functions [TestAnthropic, TestVertex, PromptTestOpenAI, TestAzure, TestOllama, TestGemini, TestAws]
-  args {
-    input "Donkey kong and jelly beans"
-  }
-}
 
 

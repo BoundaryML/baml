@@ -292,11 +292,16 @@ class Project {
 
   list_functions(): BamlWasm.WasmFunction[] {
     let runtime = this.runtime()
-
+    if (!runtime) {
+      throw new Error(`BAML Generate failed. Project has errors.`)
+    }
     return runtime.list_functions()
   }
   list_testcases(): BamlWasm.WasmTestCase[] {
     let runtime = this.runtime()
+    if (!runtime) {
+      throw new Error(`BAML Generate failed. Project has errors.`)
+    }
     return runtime.list_testcases()
   }
 
