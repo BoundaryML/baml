@@ -34,17 +34,18 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: gem-*
+          pattern: gem-arm64-darwin
           run-id: 10068132399
 
       - working-directory: engine/language_client_ruby
         run: |
+          find pkg
           for i in $(ls pkg/*.gem); do
             gem push $i
           done
 
 
-          
+
   mise-in-aarch64:
     if: false
     runs-on: ubuntu-latest
