@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.52.1](https://github.com/boundaryml/baml/compare/0.52.0..0.52.1) - 2024-07-24
+
+### Bug Fixes
+
+- build python x86_64-linux with an older glibc (#834) - ([db12540](https://github.com/boundaryml/baml/commit/db12540a92abf055e286c60864299f53c246b62a)) - Samuel Lijin
+
 ## [0.52.0](https://github.com/boundaryml/baml/compare/0.51.3..0.52.0) - 2024-07-24
 
 ### Features
