@@ -1,4 +1,4 @@
-import { BamlRuntime, FunctionResult, BamlCtxManager, BamlSyncStream, Image, ClientBuilder } from "@boundaryml/baml"
+import { BamlRuntime, FunctionResult, BamlCtxManager, BamlSyncStream, Image, ClientRegistry } from "@boundaryml/baml"
 import { 
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%} 
 } from "./types"
@@ -42,7 +42,7 @@ export class BamlSyncClient {
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
-      __baml_options__?.cr,
+      __baml_options__?.clientRegistry,
     )
     return raw.parsed() as {{fn.return_type}}
   }

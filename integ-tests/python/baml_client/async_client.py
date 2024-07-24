@@ -371,6 +371,30 @@ class BamlAsyncClient:
       mdl = create_model("DynamicListInputOutputReturnType", inner=(List[types.DynInputOutput], ...))
       return coerce(mdl, raw.parsed())
     
+    async def ExpectFailure(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "ExpectFailure",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("ExpectFailureReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def ExtractNames(
         self,
         input: str,
@@ -2128,6 +2152,38 @@ class BamlStreamClient:
       partial_mdl = create_model("DynamicListInputOutputPartialReturnType", inner=(List[partial_types.DynInputOutput], ...))
 
       return baml_py.BamlStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def ExpectFailure(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "ExpectFailure",
+        {
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("ExpectFailureReturnType", inner=(str, ...))
+      partial_mdl = create_model("ExpectFailurePartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),
