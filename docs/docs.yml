@@ -71,22 +71,22 @@ navigation:
                 path: docs/snippets/clients/providers/azure.mdx
               - page: google-ai
                 path: docs/snippets/clients/providers/gemini.mdx
+              - page: groq
+                path: docs/snippets/clients/providers/groq.mdx
+              - page: huggingface
+                path: docs/snippets/clients/providers/huggingface.mdx
               - page: ollama
                 path: docs/snippets/clients/providers/ollama.mdx
               - page: openai
                 path: docs/snippets/clients/providers/openai.mdx
-              - page: vertex-ai
-                path: docs/snippets/clients/providers/vertex.mdx
               - page: openrouter
                 path: docs/snippets/clients/providers/openrouter.mdx
               - page: together-ai
                 path: docs/snippets/clients/providers/together.mdx
-              - page: groq
-                path: docs/snippets/clients/providers/groq.mdx
+              - page: vertex-ai
+                path: docs/snippets/clients/providers/vertex.mdx
               - page: vllm
                 path: docs/snippets/clients/providers/vllm.mdx
-              - page: huggingface
-                path: docs/snippets/clients/providers/huggingface.mdx
           - section: provider strategies
             contents:
               - page: fallback

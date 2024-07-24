@@ -1,5 +1,5 @@
 ---
-slug: docs/snippets/clients/overview
+slug: docs/snippets/clients
 ---
 
 Clients are used to configure how LLMs are called.
@@ -26,6 +26,14 @@ function MakeHaiku(topic: string) -> string {
   "#
 }
 ```
+
+<Tip>
+If you want to specify which client to use at runtime, in your Python/TS/Ruby code,
+you can use the [client registry](/docs/calling-baml/client-registry) to do so.
+
+This can come in handy if you're trying to, say, send 10% of your requests to a
+different model.
+</Tip>
 
 ## Fields
 
