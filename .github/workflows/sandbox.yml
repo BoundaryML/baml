@@ -37,6 +37,7 @@ jobs:
           github-token: ${{ github.token }}
           pattern: gem-*
           path: engine/language_client_ruby/pkg/
+          merge-multiple: true
           run-id: 10068132399
 
       - working-directory: engine/language_client_ruby
