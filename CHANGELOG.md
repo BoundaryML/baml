@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.51.2](https://github.com/boundaryml/baml/compare/0.51.1..0.51.2) - 2024-07-24
+
+### Bug Fixes
+
+- use chatwoot for feedback, not doorbell (#818) - ([f749f2b](https://github.com/boundaryml/baml/commit/f749f2b19b247de2f050beccd1fe8e50b7625757)) - Samuel Lijin
+
+
+### UNMATCHED
+- Minor improvements across docs (#807) - ([bc0c176](https://github.com/boundaryml/baml/commit/bc0c1761699ee2485a0a8ee61cf4fda6b579f974)) - Anish Palakurthi
+- Add support for unions / maps / null in TypeBuilder. (#820) - ([8d9e92d](https://github.com/boundaryml/baml/commit/8d9e92d3050a67edbec5ee6056397becbcdb754b)) - hellovai
+
 ## [0.51.1](https://github.com/boundaryml/baml/compare/0.51.0..0.51.1) - 2024-07-21
 
 ### Features

@@ -438,8 +438,7 @@ describe('Integ tests', () => {
     )
 
     console.log('final ', res)
-    console.log('final ', res.modelDump())
-    console.log('final ', res.modelDumpJson())
+
     expect(res.hair_color).toEqual('black')
     expect(res.attributes['eye_color']).toEqual('blue')
     expect(res.attributes['facial_hair']).toEqual('beard')
