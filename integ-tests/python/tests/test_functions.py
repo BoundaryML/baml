@@ -818,11 +818,10 @@ async def test_dynamic_clients():
     cb.add_llm_client("MyClient", "openai", {"model": "gpt-3.5-turbo"})
     cb.set_primary("MyClient")
 
-    final = await b.TestOllama(
-        input="My name is Harrison. My hair is black and I'm 6 feet tall.",
+    capitol = await b.ExpectFailure(
         baml_options={"client_registry": cb},
     )
-    print("final ", final)
+    assert_that(capitol.lower()).contains("london")
 
 
 @pytest.mark.asyncio

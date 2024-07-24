@@ -511,9 +511,10 @@ describe('Integ tests', () => {
     })
     clientRegistry.setPrimary('myClient')
 
-    await b.TestOllama('hi', {
+    const capitol = await b.ExpectFailure({
       clientRegistry,
     })
+    expect(capitol.toLowerCase()).toContain('london')
   })
 
   it("should work with 'onLogEvent'", async () => {
