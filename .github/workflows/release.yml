@@ -154,7 +154,7 @@ jobs:
           architecture: ${{ matrix._.setup-python-architecture }}
 
       - uses: jdx/mise-action@v2
-        if: ${{ matrix._.mise != false }}
+        if: ${{ matrix._.mise }}
 
       - uses: pnpm/action-setup@v3
         with:
@@ -306,7 +306,7 @@ jobs:
   publish-to-rubygems:
     environment: release
     if: github.ref_type == 'tag'
-    needs: build-ruby-release
+    needs: [assert-all-builds-passed] 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
