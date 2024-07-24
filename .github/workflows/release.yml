@@ -10,8 +10,6 @@ on:
     tags:
       - "test-release/*.*"
       - "*.*"
-    branches:
-      - sam/build-checker
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
