@@ -295,7 +295,7 @@ pub fn recommended_update(current: &str, latest: &Option<String>) -> Option<Stri
 ///   - if we can't fetch updates, we fail explicitly
 ///   - if the latest versions are older than the current version, we ignore the latest version
 ///       and leave `$field.latest_version` unset
-pub fn check_for_updates(baml_dir_override: &Option<String>) -> Result<CheckedVersions, CliError> {
+pub fn check_for_updates(_baml_dir_override: &Option<String>) -> Result<CheckedVersions, CliError> {
     let mut ret = CheckedVersions {
         cli: CliVersion {
             current_version: clap::crate_version!().to_string(),

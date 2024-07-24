@@ -191,7 +191,7 @@ jobs:
           cache-on-failure: true
 
       - name: Build Rust
-        run: cargo build --release --target ${{ matrix._.target }} ${{ matrix._.cargo_args }}
+        run: cargo build --timings --release --target ${{ matrix._.target }} ${{ matrix._.cargo_args }}
         working-directory: engine
         env:
           BAML_BUILD_HELP: ${{ matrix._.baml_build_help }}
@@ -209,6 +209,13 @@ jobs:
           command: build
           args: --release --out engine/language_client_python/dist --manifest-path engine/language_client_python/Cargo.toml
           container: off
+
+      - name: Upload timings
+        uses: actions/upload-artifact@v4
+        with:
+          name: timing-${{ matrix._.target }}
+          path: engine/target/**/*.html
+          if-no-files-found: error
 
       # Upload
       - name: Upload Python

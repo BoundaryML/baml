@@ -1,5 +1,3 @@
-mod asserts;
-
 use std::path::PathBuf;
 
 use pretty_assertions::assert_eq;
