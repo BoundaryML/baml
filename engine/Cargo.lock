@@ -882,6 +882,7 @@ dependencies = [
  "indexmap 2.2.6",
  "indoc",
  "internal-baml-codegen",
+ "internal-baml-core",
  "js-sys",
  "log",
  "serde",

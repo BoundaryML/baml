@@ -5,6 +5,7 @@ use baml_types::FieldType;
 use either::Either;
 
 use indexmap::IndexMap;
+use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::{
     walkers::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
@@ -436,7 +437,6 @@ impl WithRepr<Expression> for ast::Expression {
 type TemplateStringId = String;
 
 #[derive(serde::Serialize, Debug)]
-
 pub struct TemplateString {
     pub name: TemplateStringId,
     pub params: Vec<Field>,
@@ -1095,9 +1095,36 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
 }
 
 #[derive(serde::Serialize, Debug)]
+pub struct TestCaseFunction(String);
+
+impl TestCaseFunction {
+    pub fn name(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(serde::Serialize, Debug)]
 pub struct TestCase {
     pub name: String,
+    pub functions: Vec<Node<TestCaseFunction>>,
     pub args: IndexMap<String, Expression>,
+}
+
+impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
+    fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
+        let span = self.0.test_case().functions[self.1].1.clone();
+        NodeAttributes {
+            meta: IndexMap::new(),
+            overrides: IndexMap::new(),
+            span: Some(span),
+        }
+    }
+
+    fn repr(&self, db: &ParserDatabase) -> Result<TestCaseFunction> {
+        Ok(TestCaseFunction(
+            self.0.test_case().functions[self.1].0.clone(),
+        ))
+    }
 }
 
 impl WithRepr<TestCase> for ConfigurationWalker<'_> {
@@ -1110,6 +1137,9 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<TestCase> {
+        let functions = (0..self.test_case().functions.len())
+            .map(|i| (self, i).node(db))
+            .collect::<Result<Vec<_>>>()?;
         Ok(TestCase {
             name: self.name().to_string(),
             args: self
@@ -1118,6 +1148,7 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
                 .iter()
                 .map(|(k, (_, v))| Ok((k.clone(), v.repr(db)?)))
                 .collect::<Result<IndexMap<_, _>>>()?,
+            functions,
         })
     }
 }

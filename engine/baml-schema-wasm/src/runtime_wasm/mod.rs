@@ -9,13 +9,12 @@ use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
 use baml_types::{BamlMap, BamlValue};
-
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
+use internal_baml_core::ir::Expression;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-
 use wasm_bindgen::prelude::*;
 
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
@@ -253,6 +252,7 @@ pub struct WasmRuntime {
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Clone)]
 pub struct WasmFunction {
     #[wasm_bindgen(readonly)]
     pub name: String,
@@ -319,6 +319,17 @@ impl Default for WasmSpan {
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Clone)]
+pub struct WasmParentFunction {
+    #[wasm_bindgen(readonly)]
+    pub start: usize,
+    #[wasm_bindgen(readonly)]
+    pub end: usize,
+    #[wasm_bindgen(readonly)]
+    pub name: String,
+}
+
+#[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Clone)]
 pub struct WasmTestCase {
     #[wasm_bindgen(readonly)]
     pub name: String,
@@ -328,6 +339,8 @@ pub struct WasmTestCase {
     pub error: Option<String>,
     #[wasm_bindgen(readonly)]
     pub span: WasmSpan,
+    #[wasm_bindgen(readonly)]
+    pub parent_functions: Vec<WasmParentFunction>,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -879,6 +892,23 @@ impl WasmRuntime {
                                 inputs: params,
                                 error,
                                 span: wasm_span,
+                                parent_functions: tc
+                                    .test_case()
+                                    .functions
+                                    .iter()
+                                    .map(|f| {
+                                        let (start, end) = f
+                                            .attributes
+                                            .span
+                                            .as_ref()
+                                            .map_or((0, 0), |f| (f.start, f.end));
+                                        WasmParentFunction {
+                                            start,
+                                            end,
+                                            name: f.elem.name().to_string(),
+                                        }
+                                    })
+                                    .collect(),
                             }
                         })
                         .collect(),
@@ -1054,20 +1084,173 @@ impl WasmRuntime {
     pub fn get_function_at_position(
         &self,
         file_name: &str,
+        selected_func: &str,
         cursor_idx: usize,
     ) -> Option<WasmFunction> {
         let functions = self.list_functions();
 
-        for function in functions {
+        for function in functions.clone() {
             let span = function.span.clone(); // Clone the span
 
-            if span.file_path.as_str().contains(file_name)
+            if span.file_path.as_str().ends_with(file_name)
                 && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
             {
                 return Some(function);
             }
         }
 
+        let testcases = self.list_testcases();
+
+        for tc in testcases {
+            let span = tc.span;
+            if span.file_path.as_str().ends_with(file_name)
+                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
+            {
+                if let Some(parent_function) =
+                    tc.parent_functions.iter().find(|f| f.name == selected_func)
+                {
+                    return functions.into_iter().find(|f| f.name == selected_func);
+                } else if let Some(first_function) = tc.parent_functions.get(0) {
+                    return functions
+                        .into_iter()
+                        .find(|f| f.name == first_function.name);
+                }
+            }
+        }
+
+        None
+    }
+
+    #[wasm_bindgen]
+    pub fn get_function_of_testcase(
+        &self,
+        file_name: &str,
+        cursor_idx: usize,
+    ) -> Option<WasmParentFunction> {
+        let testcases = self.list_testcases();
+
+        for tc in testcases {
+            let span = tc.span;
+            if span.file_path.as_str().ends_with(file_name)
+                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
+            {
+                let first_function = tc
+                    .parent_functions
+                    .iter()
+                    .find(|f| f.start <= cursor_idx && cursor_idx <= f.end)
+                    .cloned();
+
+                return first_function;
+            }
+        }
+        None
+    }
+
+    #[wasm_bindgen]
+    pub fn list_testcases(&self) -> Vec<WasmTestCase> {
+        self.runtime
+            .internal()
+            .ir()
+            .walk_tests()
+            .map(|tc| {
+                let params = match tc.test_case_params(&self.runtime.env_vars()) {
+                    Ok(params) => Ok(params
+                        .iter()
+                        .map(|(k, v)| {
+                            let as_str = match v {
+                                Ok(v) => match serde_json::to_string(v) {
+                                    Ok(s) => Ok(s),
+                                    Err(e) => Err(e.to_string()),
+                                },
+                                Err(e) => Err(e.to_string()),
+                            };
+
+                            let (value, error) = match as_str {
+                                Ok(s) => (Some(s), None),
+                                Err(e) => (None, Some(e)),
+                            };
+
+                            WasmParam {
+                                name: k.to_string(),
+                                value,
+                                error,
+                            }
+                        })
+                        .collect()),
+                    Err(e) => Err(e.to_string()),
+                };
+
+                let (mut params, error) = match params {
+                    Ok(p) => (p, None),
+                    Err(e) => (Vec::new(), Some(e)),
+                };
+
+                // Any missing params should be set to an error
+                let _ = tc.function().inputs().right().map(|func_params| {
+                    for (param_name, t) in func_params {
+                        if !params.iter().any(|p| p.name.cmp(param_name).is_eq())
+                            && !t.is_optional()
+                        {
+                            params.insert(
+                                0,
+                                WasmParam {
+                                    name: param_name.to_string(),
+                                    value: None,
+                                    error: Some("Missing parameter".to_string()),
+                                },
+                            );
+                        }
+                    }
+                });
+
+                let wasm_span = match tc.span() {
+                    Some(span) => span.into(),
+                    None => WasmSpan::default(),
+                };
+
+                WasmTestCase {
+                    name: tc.test_case().name.clone(),
+                    inputs: params,
+                    error,
+                    span: wasm_span,
+                    parent_functions: tc
+                        .test_case()
+                        .functions
+                        .iter()
+                        .map(|f| {
+                            let (start, end) = f
+                                .attributes
+                                .span
+                                .as_ref()
+                                .map_or((0, 0), |f| (f.start, f.end));
+                            WasmParentFunction {
+                                start,
+                                end,
+                                name: f.elem.name().to_string(),
+                            }
+                        })
+                        .collect(),
+                }
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn get_testcase_from_position(
+        &self,
+        parent_function: WasmFunction,
+        cursor_idx: usize,
+    ) -> Option<WasmTestCase> {
+        let testcases = parent_function.test_cases;
+        for testcase in testcases {
+            let span = testcase.clone().span;
+
+            if span.file_path.as_str() == (parent_function.span.file_path)
+                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
+            {
+                return Some(testcase);
+            }
+        }
         None
     }
 }
