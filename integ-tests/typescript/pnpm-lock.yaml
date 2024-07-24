@@ -31,6 +31,9 @@ devDependencies:
   jest:
     specifier: ^29.7.0
     version: 29.7.0(@types/node@20.11.30)(ts-node@10.9.2)
+  jest-html-reporter:
+    specifier: ^3.10.2
+    version: 3.10.2(jest@29.7.0)(typescript@5.4.3)
   ts-jest:
     specifier: ^29.1.2
     version: 29.1.2(@babel/core@7.24.3)(jest@29.7.0)(typescript@5.4.3)
@@ -1247,6 +1250,10 @@ packages:
       which: 2.0.2
     dev: true
 
+  /dateformat@3.0.2:
+    resolution: {integrity: sha512-EelsCzH0gMC2YmXuMeaZ3c6md1sUJQxyb1XXc4xaisi/K6qKukqZhKPrEQyRkdNIncgYyLoDTReq0nNyuKerTg==}
+    dev: true
+
   /debug@4.3.4:
     resolution: {integrity: sha512-PRWFHuSU3eDtQJPvnNY7Jcket1j0t5OuOsFzPPzsekD52Zl8qUfFIPEiswXqIvHWGVHOgX+7G/vCNNhehwxfkQ==}
     engines: {node: '>=6.0'}
@@ -1804,6 +1811,23 @@ packages:
       walker: 1.0.8
     optionalDependencies:
       fsevents: 2.3.3
+    dev: true
+
+  /jest-html-reporter@3.10.2(jest@29.7.0)(typescript@5.4.3):
+    resolution: {integrity: sha512-XRBa5ylHPUQoo8aJXEEdKsTruieTdlPbRktMx9WG9evMTxzJEKGFMaw5x+sQxJuClWdNR72GGwbOaz+6HIlksA==}
+    engines: {node: '>=4.8.3'}
+    peerDependencies:
+      jest: 19.x - 29.x
+      typescript: ^3.7.x || ^4.3.x || ^5.x
+    dependencies:
+      '@jest/test-result': 29.7.0
+      '@jest/types': 29.6.3
+      dateformat: 3.0.2
+      jest: 29.7.0(@types/node@20.11.30)(ts-node@10.9.2)
+      mkdirp: 1.0.4
+      strip-ansi: 6.0.1
+      typescript: 5.4.3
+      xmlbuilder: 15.0.0
     dev: true
 
   /jest-leak-detector@29.7.0:
@@ -2706,6 +2730,11 @@ packages:
     dependencies:
       imurmurhash: 0.1.4
       signal-exit: 3.0.7
+    dev: true
+
+  /xmlbuilder@15.0.0:
+    resolution: {integrity: sha512-KLu/G0DoWhkncQ9eHSI6s0/w+T4TM7rQaLhtCaL6tORv8jFlJPlnGumsgTcGfYeS1qZ/IHqrvDG7zJZ4d7e+nw==}
+    engines: {node: '>=8.0'}
     dev: true
 
   /xtend@4.0.2:
