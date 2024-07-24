@@ -100,7 +100,8 @@ jobs:
   build-ruby-release:
     uses: ./.github/workflows/build-ruby-release.reusable.yaml
 
-  build-release:
+  # NB(sam): we should bring back release_language_client_typescript.yaml and make it another reusable workflow
+  build-typescript-release:
     strategy:
       fail-fast: false
       matrix:
@@ -152,11 +153,6 @@ jobs:
       BAML_BUILD_HELP: ${{ matrix._.baml_build_help }}
     steps:
       - uses: actions/checkout@v4
-      # Install python set up
-      # - uses: actions/setup-python@v5
-      #   with:
-      #     python-version: "3.8"
-      #     architecture: ${{ matrix._.setup-python-architecture }}
 
       - uses: jdx/mise-action@v2
         if: ${{ matrix._.mise }}
@@ -200,23 +196,6 @@ jobs:
         run: ${{ matrix._.node_build }}
         working-directory: engine/language_client_typescript
         
-      # Build Python
-      # - name: Build Python
-      #   uses: PyO3/maturin-action@v1
-      #   with:
-      #     target: ${{ matrix._.target }}
-      #     command: build
-      #     args: --release --out engine/language_client_python/dist --manifest-path engine/language_client_python/Cargo.toml
-      #     container: off
-
-      # # Upload
-      # - name: Upload Python
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: wheels-${{ matrix._.target }}
-      #     path: engine/language_client_python/dist
-      #     if-no-files-found: error
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -228,8 +207,8 @@ jobs:
   assert-all-builds-passed:
     runs-on: ubuntu-latest
     needs:
-      - build-release
       - build-python-release
+      - build-typescript-release
       - build-ruby-release
       - build-wasm
     steps:
