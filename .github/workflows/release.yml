@@ -10,6 +10,7 @@ on:
     tags:
       - "test-release/*.*"
       - "*.*"
+    branches: [sam/fix-abi-easy]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -136,7 +137,7 @@ jobs:
             baml_build_help: "off"
 
           - target: x86_64-unknown-linux-gnu
-            host: ubuntu-latest
+            host: ubuntu-20.04
             # Using any of the manylinux containers breaks a bunch of stuff: actions/checkout here, pnpm build there - not worth it.
             container: null
             node_build: pnpm build --target x86_64-unknown-linux-gnu --use-napi-cross
