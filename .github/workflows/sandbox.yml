@@ -31,6 +31,7 @@ jobs:
       #   with:
       #     python-version: "3.8"
       #     architecture: ${{ matrix._.host == 'windows-latest' && 'x64' || null }}
+      - run: apt install libreadline-dev
       - uses: jdx/mise-action@v2
         env:
           MISE_DEBUG: 1
