@@ -187,17 +187,18 @@ jobs:
         with:
           workspaces: engine
           shared-key: engine-${{ github.job }}-${{ matrix._.target }}
+          prefix-key: "bust-the-key"
           cache-on-failure: true
 
       - name: Build Rust
         run: cargo build --release --target ${{ matrix._.target }} ${{ matrix._.cargo_args }}
         working-directory: engine
-        
+
       # Build Node
       - name: PNPM Build
         run: ${{ matrix._.node_build }}
         working-directory: engine/language_client_typescript
-        
+
       # Build Python
       - name: Build Python
         uses: PyO3/maturin-action@v1
