@@ -1,5 +1,5 @@
 generator lang_python {
-  output_type python/pydantic
+  output_type "python/pydantic"
   output_dir "../python"
   version "0.51.0"
 }
@@ -11,7 +11,7 @@ generator lang_typescript {
 }
 
 generator lang_ruby {
-  output_type ruby/sorbet
+  output_type "ruby/sorbet"
   output_dir "../ruby"
   version "0.51.0"
 }

@@ -17,6 +17,7 @@ pub(crate) fn parse_expression(
         Rule::string_literal => parse_string_literal(first_child, diagnostics),
         Rule::map_expression => parse_map(first_child, diagnostics),
         Rule::array_expression => parse_array(first_child, diagnostics),
+        Rule::identifier => Expression::Identifier(parse_identifier(first_child, diagnostics)),
         _ => unreachable_rule!(first_child, Rule::expression),
     }
 }

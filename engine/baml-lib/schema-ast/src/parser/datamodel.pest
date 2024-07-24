@@ -161,7 +161,7 @@ map_entry        =  { (comment_block | empty_lines)* ~ map_key ~ expression ~ tr
 splitter         = _{ ("," ~ NEWLINE?) | NEWLINE }
 map_expression   =  { "{" ~ empty_lines? ~ (map_entry ~ (splitter ~ map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
 array_expression =  { "[" ~ empty_lines? ~ (expression ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ expression ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ "]" }
-expression       =  { map_expression | array_expression | numeric_literal | string_literal }
+expression       =  { map_expression | array_expression | numeric_literal | string_literal | identifier }
 
 // ######################################
 // Literals / Values
@@ -206,7 +206,7 @@ unterminated_raw_string_literal    = ${
 }
 unterminated_quoted_string_literal = ${ "\"" ~ quoted_string_content }
 unterminated_string_literal        = ${ unterminated_raw_string_literal | unterminated_quoted_string_literal }
-string_literal                     =  { raw_string_literal | quoted_string_literal | unquoted_string_literal | unterminated_string_literal }
+string_literal                     =  { raw_string_literal | quoted_string_literal | unterminated_string_literal }
 
 // ######################################
 // Comments and Documentation Comments

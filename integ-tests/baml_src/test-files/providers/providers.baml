@@ -6,7 +6,7 @@ function TestAnthropic(input: string) -> string {
 }
 
 function PromptTestOpenAI(input: string) -> string {
-  client GPT35
+  client GPT4Turbo
   prompt #"
     Write a nice haiku about {{ input }}
   "#
@@ -57,7 +57,7 @@ function TestAws(input: string) -> string {
 
 
 test TestProvider {
-  functions [TestAnthropic, TestVertex, TestOpenAI, TestAzure, TestOllama, TestGemini, TestAws]
+  functions [TestAnthropic, TestVertex, PromptTestOpenAI, TestAzure, TestOllama, TestGemini, TestAws]
   args {
     input "Donkey kong and peanut butter"
   }

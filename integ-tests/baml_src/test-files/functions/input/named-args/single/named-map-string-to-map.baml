@@ -10,8 +10,8 @@ test TestFnNamedArgsSingleMapStringToMap {
   functions [TestFnNamedArgsSingleMapStringToMap]
   args {
     myMap {
-      "outer-key" {
-        "key" "example string"
+      "world" {
+        "country" "South Africa"
       }
     }
   }
