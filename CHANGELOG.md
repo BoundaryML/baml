@@ -2,16 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
-## [0.51.2](https://github.com/boundaryml/baml/compare/0.51.1..0.51.2) - 2024-07-24
+## [0.52.0](https://github.com/boundaryml/baml/compare/0.51.3..0.52.0) - 2024-07-24
+
+### Features
+
+- Add official support for ruby (#823) - ([e81cc79](https://github.com/boundaryml/baml/commit/e81cc79498809a79f427864704b140967a41277a)) - Samuel Lijin
 
 ### Bug Fixes
 
-- use chatwoot for feedback, not doorbell (#818) - ([f749f2b](https://github.com/boundaryml/baml/commit/f749f2b19b247de2f050beccd1fe8e50b7625757)) - Samuel Lijin
+- Fix ClientRegistry for Typescript code-gen (#828) - ([b69921f](https://github.com/boundaryml/baml/commit/b69921f45df0182072b09ab28fe6231ccfaa5767)) - hellovai
 
 
-### UNMATCHED
-- Minor improvements across docs (#807) - ([bc0c176](https://github.com/boundaryml/baml/commit/bc0c1761699ee2485a0a8ee61cf4fda6b579f974)) - Anish Palakurthi
+## [0.51.2](https://github.com/boundaryml/baml/compare/0.51.1..0.51.2) - 2024-07-24
+
+### Features
+
 - Add support for unions / maps / null in TypeBuilder. (#820) - ([8d9e92d](https://github.com/boundaryml/baml/commit/8d9e92d3050a67edbec5ee6056397becbcdb754b)) - hellovai
+
+
+### Bug Fixes
+
+- [Playground] Add a feedback button (#818) - ([f749f2b](https://github.com/boundaryml/baml/commit/f749f2b19b247de2f050beccd1fe8e50b7625757)) - Samuel Lijin
+
+### Documentation
+
+- Improvements across docs (#807) - ([bc0c176](https://github.com/boundaryml/baml/commit/bc0c1761699ee2485a0a8ee61cf4fda6b579f974)) - Anish Palakurthi
 
 ## [0.51.1](https://github.com/boundaryml/baml/compare/0.51.0..0.51.1) - 2024-07-21
 
@@ -22,8 +37,6 @@ All notable changes to this project will be documented in this file. See [conven
 ### Bug
 
 - Allow default_client_mode in the generator #813 (#815) - ([6df7fca](https://github.com/boundaryml/baml/commit/6df7fcabc1eb55b08a50741f2346440f631abd63)) - hellovai
-
-### UNMATCHED
 
 ## [0.51.0](https://github.com/boundaryml/baml/compare/0.50.0..0.51.0) - 2024-07-19
 
