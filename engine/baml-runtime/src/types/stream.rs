@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use internal_baml_core::ir::repr::IntermediateRepr;
 
-use std::{rc, sync::Arc};
+use std::{sync::Arc};
 
 use crate::{
     client_registry::ClientRegistry,

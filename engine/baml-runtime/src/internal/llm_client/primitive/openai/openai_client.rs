@@ -202,7 +202,7 @@ use crate::internal::llm_client::{
 };
 
 use super::properties::{
-    self, resolve_azure_properties, resolve_ollama_properties, resolve_openai_properties,
+    resolve_azure_properties, resolve_ollama_properties, resolve_openai_properties,
     PostRequestProperities,
 };
 use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta, FinishReason};

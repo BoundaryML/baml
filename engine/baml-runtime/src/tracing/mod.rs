@@ -8,14 +8,12 @@ use cfg_if::cfg_if;
 use colored::Colorize;
 use internal_baml_jinja::RenderedPrompt;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
 use crate::{
-    client_registry::ClientRegistry, internal::llm_client::LLMResponse,
-    tracing::api_wrapper::core_types::Role, type_builder::TypeBuilder, FunctionResult,
-    RuntimeContext, RuntimeContextManager, SpanCtx, TestResponse, TraceStats,
+    internal::llm_client::LLMResponse,
+    tracing::api_wrapper::core_types::Role, FunctionResult, RuntimeContextManager, SpanCtx, TestResponse, TraceStats,
 };
 
 use self::api_wrapper::{

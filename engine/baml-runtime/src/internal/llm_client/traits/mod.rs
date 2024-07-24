@@ -19,12 +19,11 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
 use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
 
-use reqwest::Url;
 
 use shell_escape::escape;
 use std::borrow::Cow;
 
-use std::str::FromStr; // Add this line at the top of your file // Add this line at the top of your file
+ // Add this line at the top of your file // Add this line at the top of your file
 
 // #[enum_dispatch]
 
@@ -452,7 +451,7 @@ async fn fetch_with_proxy(
     proxy_url: Option<&str>,
 ) -> Result<reqwest::Response, anyhow::Error> {
     let client = reqwest::Client::new();
-    let mut request = if let Some(proxy) = proxy_url {
+    let request = if let Some(proxy) = proxy_url {
         client.get(proxy).header("baml-original-url", url)
     } else {
         client.get(url)

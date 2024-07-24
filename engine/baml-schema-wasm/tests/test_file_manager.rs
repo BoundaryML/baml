@@ -2,9 +2,8 @@
 mod tests {
     use std::collections::HashMap;
 
-    use baml_schema_build::runtime_wasm::{WasmProject, WasmRuntime};
+    use baml_schema_build::runtime_wasm::WasmProject;
 
-    use baml_runtime::{BamlRuntime, RuntimeContext};
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;
@@ -107,7 +106,6 @@ mod tests {
         // Update BAML file
         let updated_content = "// A COMMENT".to_string();
         project.update_file("main.baml", Some(updated_content.clone()));
-        let project_files = project.files();
         assert!(project
             .files()
             .contains(&"main.bamlBAML_PATH_SPLTTER// A COMMENT".to_string()));

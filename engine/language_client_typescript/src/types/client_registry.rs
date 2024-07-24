@@ -1,7 +1,5 @@
-use std::borrow::BorrowMut;
 
 use baml_runtime::client_registry;
-use baml_types::BamlValue;
 use napi::Env;
 use napi::JsObject;
 use napi_derive::napi;

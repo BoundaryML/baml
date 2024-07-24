@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{Context, Result};
-use internal_baml_core::ir::ClientWalker;
+use anyhow::{Result};
 
 use crate::RuntimeContext;
 
