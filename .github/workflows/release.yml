@@ -10,7 +10,6 @@ on:
     tags:
       - "test-release/*.*"
       - "*.*"
-    branches: [sam/fix-abi]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
