@@ -196,6 +196,8 @@ jobs:
       - name: PNPM Build
         run: ${{ matrix._.node_build }}
         working-directory: engine/language_client_typescript
+        env:
+          BAML_BUILD_HELP: ${{ matrix._.baml_build_help }}
 
       # Build Python
       - name: Build Python
