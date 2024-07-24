@@ -105,7 +105,8 @@ jobs:
           - target: aarch64-apple-darwin
             host: macos-14
             node_build: pnpm build --target aarch64-apple-darwin
-            mise: true
+            baml_build_help: "off"
+            # mise: true
 
           # Disabled as python is not supported on aarch64 windows
           # - target: aarch64-pc-windows-msvc
@@ -119,19 +120,20 @@ jobs:
             container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
             node_build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
-            baml_build_help: 'off'
+            baml_build_help: "off"
 
           - target: x86_64-apple-darwin
             host: macos-latest
             node_build: pnpm build --target x86_64-apple-darwin
-            mise: true
+            baml_build_help: "off"
+            # mise: true
 
           - target: x86_64-pc-windows-msvc
             host: windows-latest
             node_build: pnpm build --target x86_64-pc-windows-msvc
             setup-python-architecture: x64
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
-            baml_build_help: 'off'
+            baml_build_help: "off"
 
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-latest
@@ -218,7 +220,7 @@ jobs:
           name: bindings-${{ matrix._.target }}
           path: engine/language_client_typescript/*.node
           if-no-files-found: error
-  
+
   # placeholder fan-in step
   assert-all-builds-passed:
     runs-on: ubuntu-latest
@@ -232,7 +234,7 @@ jobs:
   publish-to-pypi:
     environment: release
     if: github.ref_type == 'tag'
-    needs: [assert-all-builds-passed] 
+    needs: [assert-all-builds-passed]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -253,7 +255,7 @@ jobs:
   publish-to-npm:
     environment: release
     if: github.ref_type == 'tag'
-    needs: [assert-all-builds-passed] 
+    needs: [assert-all-builds-passed]
     runs-on: ubuntu-latest
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -300,11 +302,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-    
+
   publish-to-rubygems:
     environment: release
     if: github.ref_type == 'tag'
-    needs: [assert-all-builds-passed] 
+    needs: [assert-all-builds-passed]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -386,7 +388,7 @@ jobs:
   release-github:
     runs-on: ubuntu-latest
     if: github.ref_type == 'tag'
-    needs: 
+    needs:
       - publish-to-pypi
       - publish-to-npm
       - publish-to-rubygems
