@@ -42,7 +42,11 @@ jobs:
           for i in $(ls pkg/*.gem); do
             gem push $i
           done
+
+
+          
   mise-in-aarch64:
+    if: false
     runs-on: ubuntu-latest
     container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
     steps:
