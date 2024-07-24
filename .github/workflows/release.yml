@@ -10,6 +10,8 @@ on:
     tags:
       - "test-release/*.*"
       - "*.*"
+    branches:
+      - sam/build-speedup
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -145,6 +147,10 @@ jobs:
     container: ${{ matrix._.container }}
     steps:
       - uses: actions/checkout@v4
+
+      # Use mold as default linker
+      - uses: rui314/setup-mold@v1
+
       # Install python set up
       - uses: actions/setup-python@v5
         with:
