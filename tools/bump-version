@@ -106,23 +106,22 @@ git pull --tags
 
 
 # # Ensure clean git status
-# if ! git diff --quiet; then
-#     echo "Error: Git status is not clean. Please commit or stash your changes."
-#     exit 1
-# fi
+if ! git diff --quiet; then
+    echo "Error: Git status is not clean. Please commit or stash your changes."
+    exit 1
+fi
 
-# PRE_BUMP_VERSION=$(grep "current_version =" tools/versions/engine.cfg | awk '{print $3}')
+PRE_BUMP_VERSION=$(grep "current_version =" tools/versions/engine.cfg | awk '{print $3}')
 
-# CODE_GEN_CHANGES=$(git diff ${PRE_BUMP_VERSION} -- 'engine/language_client_codegen/src' | grep -c '^diff --git')
+CODE_GEN_CHANGES=$(git diff ${PRE_BUMP_VERSION} -- 'engine/language_client_codegen/src' | grep -c '^diff --git')
 
-# if [ "$CODE_GEN_CHANGES" -gt 0 ]; then
-#     version_bump="minor"
-#     echo "Code generation changes detected since ${PRE_BUMP_VERSION}. Recommending a \033[33mminor\033[0m version bump."
-# else
-#     version_bump="patch"
-#     echo "No code generation changes detected since ${PRE_BUMP_VERSION}. Recommending a \033[32mpatch\033[0m version bump."
-# fi
-version_bump="patch"
+if [ "$CODE_GEN_CHANGES" -gt 0 ]; then
+    version_bump="minor"
+    echo "Code generation changes detected since ${PRE_BUMP_VERSION}. Recommending a \033[33mminor\033[0m version bump."
+else
+    version_bump="patch"
+    echo "No code generation changes detected since ${PRE_BUMP_VERSION}. Recommending a \033[32mpatch\033[0m version bump."
+fi
 
 read -p $'Please confirm the version bump type (\033[33mminor\033[0m / \033[32mpatch\033[0m): ' user_confirmation
 if [[ "$user_confirmation" != "$version_bump" ]]; then
