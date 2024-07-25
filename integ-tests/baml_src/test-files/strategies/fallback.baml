@@ -16,6 +16,8 @@ client<llm> FallbackClient {
       FaultyClient,
       RetryClientConstant,
       GPT35
+      Gemini
+
     ]
   }
 }

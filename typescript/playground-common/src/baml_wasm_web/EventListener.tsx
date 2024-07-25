@@ -16,7 +16,6 @@ import type {
   WasmScope,
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { vscode } from '../utils/vscode'
-// import { v4 as uuid } from 'uuid'
 import { useRunHooks } from './test_uis/testHooks'
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
