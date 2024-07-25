@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    baml (0.1.9)
+    baml (0.51.1)
 
 GEM
   remote: https://rubygems.org/
@@ -32,7 +32,7 @@ GEM
     rake (13.1.0)
     rake-compiler (1.2.7)
       rake
-    rb_sys (0.9.97)
+    rb_sys (0.9.98)
     ruby-progressbar (1.13.0)
     safe_type (1.1.1)
     sorbet-coerce (0.7.0)
@@ -53,7 +53,7 @@ DEPENDENCIES
   minitest-reporters
   rake (~> 13.0)
   rake-compiler (~> 1.2)
-  rb_sys (= 0.9.97)
+  rb_sys (= 0.9.98)
   sorbet-coerce
   sorbet-runtime
   sorbet-struct-comparable

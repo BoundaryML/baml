@@ -24,7 +24,7 @@ client<llm> MyClient {
   }
 }
 ```
-## Authentication Instructions
+## Authorization
 The `vertex-ai` provider uses the Google Cloud SDK to authenticate with a temporary access token. We generate these Google Cloud Authentication Tokens using Google Cloud service account credentials. We do not store this token, and it is only used for the duration of the request.
 
 ### Instructions for downloading Google Cloud credentials
@@ -234,9 +234,10 @@ client<llm> MyClient {
   }
 }
 ```
-
-    
+   
 </ParamField>
+
+For all other options, see the [official Vertex AI documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/start/quickstarts/quickstart-multimodal).
 
 
 

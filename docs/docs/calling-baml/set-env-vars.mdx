@@ -17,6 +17,7 @@ Any of the following strategies are compatible with BAML:
   - load environment variables from secrets-store.csi.k8s.io
   - load environment variables from a secrets provider such as [Infisical](https://infisical.com/) / [Doppler](https://www.doppler.com/)
   - dotenv (`.env` file) cli (e.g. `dotenv -e .env python myscript.py`)
+  - using account credentials for ephemeral token generation (e.g. Vertex AI Auth Tokens)
 
 <Tip>If BAML doesn't work for your use case, please [contact us]!</Tip>
 
@@ -74,7 +75,6 @@ client<llm> GPT4o {
 We do not currently support any other mechanisms for providing authorization
 credentials, including but not limited to:
 
-  - exchanging refresh tokens for ephemeral authorization tokens
   - fetching credentials from a secret storage service, such as AWS Secrets
     Manager or HashiCorp Vault
 

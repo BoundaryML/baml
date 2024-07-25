@@ -31,7 +31,7 @@ navigation:
             path: docs/get-started/quickstart/editors-other.mdx
       - section: Debugging
         contents:
-          - page: Vscode Playground
+          - page: VSCode Playground
             path: docs/get-started/debugging/vscode-playground.mdx
           - page: Enable Logging
             path: docs/get-started/debugging/enable-logging.mdx
@@ -77,16 +77,24 @@ navigation:
                 path: docs/snippets/clients/providers/openai.mdx
               - page: vertex-ai
                 path: docs/snippets/clients/providers/vertex.mdx
-              - page: Others (e.g. groq, openrouter)
-                path: docs/snippets/clients/providers/other.mdx
+              - page: openrouter
+                path: docs/snippets/clients/providers/openrouter.mdx
+              - page: together-ai
+                path: docs/snippets/clients/providers/together.mdx
+              - page: groq
+                path: docs/snippets/clients/providers/groq.mdx
+              - page: vllm
+                path: docs/snippets/clients/providers/vllm.mdx
+              - page: huggingface
+                path: docs/snippets/clients/providers/huggingface.mdx
           - section: provider strategies
             contents:
               - page: fallback
                 path: docs/snippets/clients/fallback.mdx
               - page: round-robin
                 path: docs/snippets/clients/round-robin.mdx
-          - page: retry_policy
-            path: docs/snippets/clients/retry.mdx
+              - page: retry_policy
+                path: docs/snippets/clients/retry.mdx
       - section: Functions
         contents:
           - page: Overview
@@ -141,7 +149,7 @@ navigation:
         path: docs/calling-baml/streaming.mdx
       - page: Concurrent function calls
         path: docs/calling-baml/concurrent-calls.mdx
-      - page: Multi Modal
+      - page: Multimodal
         path: docs/calling-baml/multi-modal.mdx
   - section: Observability [Paid]
     contents:

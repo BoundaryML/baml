@@ -251,7 +251,7 @@ impl BamlRuntime {
     pub fn set_log_event_callback(
         &mut self,
         env: Env,
-        #[napi(ts_arg_type = "undefined | (err: any, param: BamlLogEvent) => void")] func: Option<
+        #[napi(ts_arg_type = "undefined | ((err: any, param: BamlLogEvent) => void)")] func: Option<
             JsFunction,
         >,
     ) -> napi::Result<JsUndefined> {

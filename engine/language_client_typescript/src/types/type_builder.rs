@@ -74,6 +74,26 @@ impl TypeBuilder {
     pub fn null(&self) -> FieldType {
         baml_types::FieldType::null().into()
     }
+
+    #[napi]
+    pub fn map(&self, key: &FieldType, value: &FieldType) -> FieldType {
+        baml_types::FieldType::map(
+            key.inner.lock().unwrap().clone(),
+            value.inner.lock().unwrap().clone(),
+        )
+        .into()
+    }
+
+    #[napi]
+    pub fn union(&self, types: Vec<&FieldType>) -> FieldType {
+        baml_types::FieldType::union(
+            types
+                .iter()
+                .map(|t| t.inner.lock().unwrap().clone())
+                .collect(),
+        )
+        .into()
+    }
 }
 
 #[napi]

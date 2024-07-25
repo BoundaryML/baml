@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.51.0",
+  "version": "0.52.1",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
