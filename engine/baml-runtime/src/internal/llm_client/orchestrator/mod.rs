@@ -245,74 +245,34 @@ impl WithStreamable for OrchestratorNode {
 impl ExecutionScope {
     fn to_js_value(&self) -> JsValue {
         let obj = js_sys::Object::new();
+        let set_property = |obj: &js_sys::Object, key: &str, value: JsValue| {
+            js_sys::Reflect::set(obj, &JsValue::from_str(key), &value).is_ok()
+        };
+
         match self {
             ExecutionScope::Direct(name) => {
-                js_sys::Reflect::set(
-                    &obj,
-                    &JsValue::from_str("type"),
-                    &JsValue::from_str("Direct"),
-                )
-                .unwrap();
-                js_sys::Reflect::set(&obj, &JsValue::from_str("name"), &JsValue::from_str(name))
-                    .unwrap();
+                set_property(&obj, "type", JsValue::from_str("Direct"));
+                set_property(&obj, "name", JsValue::from_str(name));
             }
             ExecutionScope::Retry(name, count, delay) => {
-                js_sys::Reflect::set(
-                    &obj,
-                    &JsValue::from_str("type"),
-                    &JsValue::from_str("Retry"),
-                )
-                .unwrap();
-                js_sys::Reflect::set(&obj, &JsValue::from_str("name"), &JsValue::from_str(name))
-                    .unwrap();
-                js_sys::Reflect::set(
-                    &obj,
-                    &JsValue::from_str("count"),
-                    &JsValue::from_f64(*count as f64),
-                )
-                .unwrap();
-                js_sys::Reflect::set(
-                    &obj,
-                    &JsValue::from_str("delay"),
-                    &JsValue::from_f64(delay.as_millis() as f64),
-                )
-                .unwrap();
+                set_property(&obj, "type", JsValue::from_str("Retry"));
+                set_property(&obj, "name", JsValue::from_str(name));
+                set_property(&obj, "count", JsValue::from_f64(*count as f64));
+                set_property(&obj, "delay", JsValue::from_f64(delay.as_millis() as f64));
             }
             ExecutionScope::RoundRobin(strategy, index) => {
-                js_sys::Reflect::set(
+                set_property(&obj, "type", JsValue::from_str("RoundRobin"));
+                set_property(
                     &obj,
-                    &JsValue::from_str("type"),
-                    &JsValue::from_str("RoundRobin"),
-                )
-                .unwrap();
-                js_sys::Reflect::set(
-                    &obj,
-                    &JsValue::from_str("strategy_name"),
-                    &JsValue::from_str(&format!("{:?}", strategy.name)),
-                )
-                .unwrap();
-                js_sys::Reflect::set(
-                    &obj,
-                    &JsValue::from_str("index"),
-                    &JsValue::from_f64(*index as f64),
-                )
-                .unwrap();
+                    "strategy_name",
+                    JsValue::from_str(&format!("{:?}", strategy.name)),
+                );
+                set_property(&obj, "index", JsValue::from_f64(*index as f64));
             }
             ExecutionScope::Fallback(name, index) => {
-                js_sys::Reflect::set(
-                    &obj,
-                    &JsValue::from_str("type"),
-                    &JsValue::from_str("Fallback"),
-                )
-                .unwrap();
-                js_sys::Reflect::set(&obj, &JsValue::from_str("name"), &JsValue::from_str(name))
-                    .unwrap();
-                js_sys::Reflect::set(
-                    &obj,
-                    &JsValue::from_str("index"),
-                    &JsValue::from_f64(*index as f64),
-                )
-                .unwrap();
+                set_property(&obj, "type", JsValue::from_str("Fallback"));
+                set_property(&obj, "name", JsValue::from_str(name));
+                set_property(&obj, "index", JsValue::from_f64(*index as f64));
             }
         }
         obj.into()

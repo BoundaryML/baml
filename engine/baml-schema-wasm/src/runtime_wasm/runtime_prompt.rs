@@ -142,7 +142,10 @@ impl ScopeIterator {
         if self.index < self.scopes.len() {
             let scope = &self.scopes[self.index];
             self.index += 1;
-            to_value(scope).unwrap() // Use serde_wasm_bindgen::to_value
+            match to_value(scope) {
+                Ok(value) => value,
+                Err(_) => JsValue::NULL,
+            }
         } else {
             JsValue::NULL
         }
