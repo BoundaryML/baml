@@ -20,6 +20,7 @@ client<llm> MyClient {
   provider openai
   options {
     model gpt-4o
+    // api_key defaults to env.OPENAI_API_KEY
   }
 }
 
@@ -32,7 +33,11 @@ function MakeHaiku(topic: string) -> string {
 ```
 
 Consult the [provider documentation](#fields) for a list of supported providers
-and models.
+and models, and the default options.
+
+If you want to override options like `api_key` to use a different environment
+variable, or you want to point `base_url` to a different endpoint, you should use
+the latter form.
 
 <Tip>
 If you want to specify which client to use at runtime, in your Python/TS/Ruby code,
