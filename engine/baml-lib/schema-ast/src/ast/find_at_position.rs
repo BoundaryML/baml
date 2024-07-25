@@ -43,7 +43,7 @@ pub enum SchemaPosition<'ast> {
     /// In-between top-level items
     TopLevel,
     /// In an enum
-    Enum(ast::EnumId, EnumPosition<'ast>),
+    Enum(ast::Type, EnumPosition<'ast>),
 }
 
 /// A cursor position in a context.

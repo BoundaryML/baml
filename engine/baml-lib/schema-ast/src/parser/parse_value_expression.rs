@@ -2,18 +2,19 @@ use super::{
     helpers::{parsing_catch_all, Pair},
     parse_attribute::parse_attribute,
     parse_comments::*,
-    parse_config::parse_key_value,
     parse_identifier::parse_identifier,
+    parse_named_args_list::{parse_function_arg, parse_named_arguement_list},
     Rule,
 };
-use crate::{assert_correct_parser, ast::*, parser::parse_types::parse_field_type};
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
-pub(crate) fn parse_function(
+use crate::{assert_correct_parser, ast::*, parser::parse_types::parse_field_type};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics}; // Add this line
+
+pub(crate) fn parse_value_expression(
     pair: Pair<'_>,
     doc_comment: Option<Pair<'_>>,
     diagnostics: &mut Diagnostics,
-) -> Result<Function, DatamodelError> {
+) -> Result<ValueExp, DatamodelError> {
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
     let mut attributes: Vec<Attribute> = Vec::new();
@@ -21,17 +22,23 @@ pub(crate) fn parse_function(
     let mut output = None;
     let mut fields = vec![];
     let mut has_arrow = false;
+    let mut sub_type: Option<SubValueExp> = None;
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::FUNCTION_KEYWORD | Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
+            Rule::FUNCTION_KEYWORD => sub_type = Some(SubValueExp::Function),
+            Rule::TEST_KEYWORD => sub_type = Some(SubValueExp::Test),
+            Rule::CLIENT_KEYWORD => sub_type = Some(SubValueExp::Client),
+            Rule::RETRY_POLICY_KEYWORD => sub_type = Some(SubValueExp::RetryPolicy),
+            Rule::GENERATOR_KEYWORD => sub_type = Some(SubValueExp::Generator),
+            Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
             Rule::ARROW => {
                 has_arrow = true;
             }
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
             Rule::named_argument_list => match parse_named_arguement_list(current, diagnostics) {
-                Ok(FunctionArgs::Named(arg)) => input = Some(FunctionArgs::Named(arg)),
-                Ok(FunctionArgs::Unnamed(arg)) => {
+                Ok(BlockArgs::Named(arg)) => input = Some(BlockArgs::Named(arg)),
+                Ok(BlockArgs::Unnamed(arg)) => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         "Unnamed arguments are not supported for function input. Define a new class instead.",
                         arg.span,
@@ -41,7 +48,7 @@ pub(crate) fn parse_function(
             },
             Rule::field_type => {
               match parse_function_arg(current, diagnostics) {
-                Ok(arg) => output = Some(FunctionArgs::Unnamed(arg)),
+                Ok(arg) => output = Some(BlockArgs::Unnamed(arg)),
                 Err(err) => diagnostics.push_error(err),
               }
             }
@@ -80,14 +87,15 @@ pub(crate) fn parse_function(
             let msg = match (input, output) {
                 (Some(input), Some(output)) => {
                     if has_arrow {
-                        return Ok(Function {
+                        return Ok(ValueExp {
                             name,
-                            input,
-                            output,
+                            input: Some(input),
+                            output: Some(output),
                             attributes,
                             fields,
                             documentation: doc_comment.and_then(parse_comment_block),
                             span: diagnostics.span(pair_span),
+                            sub_type: sub_type.unwrap_or(SubValueExp::Function), // Unwrap or provide a default
                         });
                     } else {
                         "Invalid function syntax."
@@ -120,80 +128,54 @@ function {}(param1: String, param2: String) -> ReturnType {{
         diagnostics.span(pair_span),
     ))
 }
-
-fn parse_named_arguement_list(
+pub(crate) fn parse_key_value(
     pair: Pair<'_>,
+    doc_comment: Option<Pair<'_>>,
     diagnostics: &mut Diagnostics,
-) -> Result<FunctionArgs, DatamodelError> {
-    assert!(
-        pair.as_rule() == Rule::named_argument_list,
-        "parse_named_arguement_list called on the wrong rule: {:?}",
-        pair.as_rule()
-    );
-    let span = diagnostics.span(pair.as_span());
-    let mut args: Vec<(Identifier, FunctionArg)> = Vec::new();
-    for named_arg in pair.into_inner() {
-        if matches!(named_arg.as_rule(), Rule::SPACER_TEXT) {
-            continue;
-        }
-        assert_correct_parser!(named_arg, Rule::named_argument);
+) -> ConfigBlockProperty {
+    assert_correct_parser!(pair, Rule::key_value);
 
-        let mut name = None;
-        let mut r#type = None;
-        for arg in named_arg.into_inner() {
-            match arg.as_rule() {
-                Rule::identifier => {
-                    name = Some(parse_identifier(arg, diagnostics));
-                }
-                Rule::colon => {}
-                Rule::field_type => {
-                    r#type = Some(parse_function_arg(arg, diagnostics)?);
-                }
-                _ => parsing_catch_all(&arg, "named_argument_list"),
-            }
-        }
+    let mut name: Option<Identifier> = None;
+    let mut value: Option<Expression> = None;
+    let mut attributes = Vec::new();
+    let mut comment: Option<Comment> = doc_comment.and_then(parse_comment_block);
+    let mut template_args = None;
+    let (pair_span, pair_str) = (pair.as_span(), pair.as_str());
 
-        match (name, r#type) {
-            (Some(name), Some(r#type)) => args.push((name, r#type)),
-            (Some(name), None) => diagnostics.push_error(DatamodelError::new_validation_error(
-                &format!(
-                    "No type specified for argument: {name}. Expected: `{name}: type`",
-                    name = name.name()
-                ),
-                name.span().clone(),
-            )),
-            (None, _) => {
-                unreachable!("parse_function_field_type: unexpected rule:")
+    for current in pair.into_inner() {
+        match current.as_rule() {
+            Rule::identifier => {
+                name = Some(parse_identifier(current, diagnostics));
             }
+            Rule::field_attribute => attributes.push(parse_attribute(current, diagnostics)),
+            Rule::expression => value = Some(parse_expression(current, diagnostics)),
+            Rule::trailing_comment => {
+                comment = match (comment, parse_trailing_comment(current)) {
+                    (c, None) | (None, c) => c,
+                    (Some(existing), Some(new)) => Some(Comment {
+                        text: [existing.text, new.text].join("\n"),
+                    }),
+                };
+            }
+            Rule::template_args => {
+                template_args = parse_template_args(current, diagnostics);
+            }
+            _ => unreachable_rule!(current, Rule::key_value),
         }
     }
 
-    Ok(FunctionArgs::Named(NamedFunctionArgList {
-        documentation: None,
-        args,
-        span,
-    }))
-}
-
-fn parse_function_arg(
-    pair: Pair<'_>,
-    diagnostics: &mut Diagnostics,
-) -> Result<FunctionArg, DatamodelError> {
-    assert!(
-        pair.as_rule() == Rule::field_type,
-        "parse_function_arg called on the wrong rule: {:?}",
-        pair.as_rule()
-    );
-    let span = diagnostics.span(pair.as_span());
-
-    match parse_field_type(pair, diagnostics) {
-        Some(ftype) => Ok(FunctionArg {
-            span,
-            field_type: ftype,
-        }),
-        None => Err(DatamodelError::new_validation_error(
-            "Failed to find type",
-            span,
-        )),
+    match name {
+        Some(name) => ConfigBlockProperty {
+            name,
+            template_args,
+            value,
+            attributes,
+            span: diagnostics.span(pair_span),
+            documentation: comment,
+        },
+        _ => unreachable!(
+            "Encountered impossible source property declaration during parsing: {:?}",
+            pair_str,
+        ),
     }
 }

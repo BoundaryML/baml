@@ -1,26 +1,33 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, Identifier, Span, WithDocumentation,
+    traits::WithAttributes, Attribute, Comment, Field, Identifier, Span, WithDocumentation,
     WithIdentifier, WithSpan,
 };
 
 /// An opaque identifier for a value in an AST enum. Use the
 /// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct EnumValueId(pub u32);
+pub struct FieldId(pub u32);
 
-impl EnumValueId {
+impl FieldId {
     /// Used for range bounds when iterating over BTreeMaps.
-    pub const MIN: EnumValueId = EnumValueId(0);
+    pub const MIN: FieldId = FieldId(0);
     /// Used for range bounds when iterating over BTreeMaps.
-    pub const MAX: EnumValueId = EnumValueId(u32::MAX);
+    pub const MAX: FieldId = FieldId(u32::MAX);
 }
 
-impl std::ops::Index<EnumValueId> for Enum {
-    type Output = EnumValue;
+impl std::ops::Index<FieldId> for TypeExpression {
+    type Output = Field;
 
-    fn index(&self, index: EnumValueId) -> &Self::Output {
-        &self.values[index.0 as usize]
+    fn index(&self, index: FieldId) -> &Self::Output {
+        &self.fields[index.0 as usize]
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum SubType {
+    Enum,
+    Class,
+    Other(String),
 }
 
 /// An enum declaration. Enumeration can either be in the database schema, or completely a Prisma level concept.
@@ -29,7 +36,7 @@ impl std::ops::Index<EnumValueId> for Enum {
 /// the table definition. On MongoDB the enumerations are handled in the Query
 /// Engine.
 #[derive(Debug, Clone)]
-pub struct Enum {
+pub struct TypeExpression {
     /// The name of the enum.
     ///
     /// ```ignore
@@ -47,7 +54,7 @@ pub struct Enum {
     ///   ^^^^^^
     /// }
     /// ```
-    pub values: Vec<EnumValue>,
+    pub fields: Vec<Field>, // needs to support field as well
 
     /// The attributes of this enum.
     ///
@@ -75,71 +82,93 @@ pub struct Enum {
     pub(crate) documentation: Option<Comment>,
     /// The location of this enum in the text representation.
     pub span: Span,
+
+    /// This is used to distinguish between enums and classes.
+    pub sub_type: SubType,
 }
 
-impl Enum {
-    pub fn iter_values(&self) -> impl ExactSizeIterator<Item = (EnumValueId, &EnumValue)> {
-        self.values
+impl TypeExpression {
+    pub fn iter_values(&self) -> impl ExactSizeIterator<Item = (FieldId, &Field)> {
+        self.fields
             .iter()
             .enumerate()
-            .map(|(idx, field)| (EnumValueId(idx as u32), field))
+            .map(|(idx, field)| (FieldId(idx as u32), field))
+    }
+
+    pub fn values(&self) -> &[Field] {
+        &self.fields
     }
 }
 
-impl WithIdentifier for Enum {
+impl WithIdentifier for TypeExpression {
     fn identifier(&self) -> &Identifier {
         &self.name
     }
 }
 
-impl WithSpan for Enum {
+impl WithSpan for TypeExpression {
     fn span(&self) -> &Span {
         &self.span
     }
 }
 
-impl WithAttributes for Enum {
+impl WithAttributes for TypeExpression {
     fn attributes(&self) -> &[Attribute] {
         &self.attributes
     }
 }
 
-impl WithDocumentation for Enum {
+impl WithDocumentation for TypeExpression {
     fn documentation(&self) -> Option<&str> {
         self.documentation.as_ref().map(|doc| doc.text.as_str())
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum ValueUnion {
+    Identifier(Identifier),
+    Field(Field),
+}
+
+impl ValueUnion {
+    pub fn name(&self) -> &Identifier {
+        match self {
+            ValueUnion::Identifier(name) => name,
+            ValueUnion::Field(field) => field.identifier(),
+        }
+    }
+}
+
 /// An enum value definition.
 #[derive(Debug, Clone)]
-pub struct EnumValue {
+pub struct TypeValue {
     /// The name of the enum value as it will be exposed by the api.
-    pub name: Identifier,
+    pub data: ValueUnion,
     pub attributes: Vec<Attribute>,
     pub(crate) documentation: Option<Comment>,
     /// The location of this enum value in the text representation.
     pub span: Span,
 }
 
-impl WithIdentifier for EnumValue {
+impl WithIdentifier for TypeValue {
     fn identifier(&self) -> &Identifier {
-        &self.name
+        &self.data.name()
     }
 }
 
-impl WithAttributes for EnumValue {
+impl WithAttributes for TypeValue {
     fn attributes(&self) -> &[Attribute] {
         &self.attributes
     }
 }
 
-impl WithSpan for EnumValue {
+impl WithSpan for TypeValue {
     fn span(&self) -> &Span {
         &self.span
     }
 }
 
-impl WithDocumentation for EnumValue {
+impl WithDocumentation for TypeValue {
     fn documentation(&self) -> Option<&str> {
         self.documentation.as_ref().map(|doc| doc.text.as_str())
     }

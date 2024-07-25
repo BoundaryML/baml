@@ -49,14 +49,6 @@ pub enum AttributeContainer {
     ClassField(super::ClassId, super::FieldId),
     Enum(super::EnumId),
     EnumValue(super::EnumId, super::EnumValueId),
-    Variant(super::VariantConfigId),
-    VariantField(super::VariantConfigId, super::VariantFieldId),
-    VariantSerializer(super::VariantConfigId, super::VariantSerializerId),
-    VariantSerializerField(
-        super::VariantConfigId,
-        super::VariantSerializerId,
-        super::SerializerFieldId,
-    ),
 }
 
 impl From<(super::VariantConfigId, super::VariantFieldId)> for AttributeContainer {

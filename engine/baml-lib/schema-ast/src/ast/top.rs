@@ -1,32 +1,28 @@
 use super::{
-    traits::WithSpan, Class, Client, Configuration, Enum, Function, GeneratorConfig, Identifier,
-    Span, TemplateString, Variant, WithIdentifier,
+    traits::WithSpan, Identifier, Span, TemplateString, TypeExpression, ValueExp, WithIdentifier,
 };
 
 /// Enum for distinguishing between top-level entries
 #[derive(Debug, Clone)]
 pub enum Top {
     /// An enum declaration
-    Enum(Enum),
+    Enum(TypeExpression),
     // A class declaration
-    Class(Class),
+    Class(TypeExpression),
     // A function declaration
-    FunctionOld(Function),
-    Function(Function),
+    Function(ValueExp),
 
     // Clients to run
-    Client(Client),
-
-    // Variant to run
-    Variant(Variant),
+    Client(ValueExp),
 
     TemplateString(TemplateString),
 
-    // Abritrary config (things with names and key-value pairs where keys are known)
-    Config(Configuration),
-
     // Generator
-    Generator(GeneratorConfig),
+    Generator(ValueExp),
+
+    TestCase(ValueExp),
+
+    RetryPolicy(ValueExp),
 }
 
 impl Top {
@@ -36,64 +32,47 @@ impl Top {
             // Top::CompositeType(_) => "composite type",
             Top::Enum(_) => "enum",
             Top::Class(_) => "class",
-            Top::FunctionOld(_) => "function[deprecated signature]",
             Top::Function(_) => "function",
-            Top::Client(m) if m.is_llm() => "client<llm>",
-            Top::Client(_) => "client<?>",
+            Top::Client(_) => "client<llm>",
             Top::TemplateString(_) => "template_string",
-            Top::Variant(v) if v.is_llm() => "impl<llm>",
-            Top::Variant(_) => "impl<?>",
             Top::Generator(_) => "generator",
-            Top::Config(c) => c.get_type(),
+            Top::TestCase(_) => "test_case",
+            Top::RetryPolicy(_) => "retry_policy",
         }
     }
 
     /// Try to interpret the item as an enum declaration.
-    pub fn as_enum(&self) -> Option<&Enum> {
+    pub fn as_enum(&self) -> Option<&TypeExpression> {
         match self {
             Top::Enum(r#enum) => Some(r#enum),
             _ => None,
         }
     }
 
-    pub fn as_class(&self) -> Option<&Class> {
+    pub fn as_class(&self) -> Option<&TypeExpression> {
         match self {
             Top::Class(class) => Some(class),
             _ => None,
         }
     }
 
-    pub fn as_function_old(&self) -> Option<&Function> {
-        match self {
-            Top::FunctionOld(func) => Some(func),
-            _ => None,
-        }
-    }
-
-    pub fn as_function(&self) -> Option<&Function> {
+    pub fn as_function(&self) -> Option<&ValueExp> {
         match self {
             Top::Function(func) => Some(func),
             _ => None,
         }
     }
 
-    pub fn as_client(&self) -> Option<&Client> {
+    pub fn as_client(&self) -> Option<&ValueExp> {
         match self {
             Top::Client(client) => Some(client),
             _ => None,
         }
     }
 
-    pub fn as_generator(&self) -> Option<&GeneratorConfig> {
+    pub fn as_generator(&self) -> Option<&ValueExp> {
         match self {
             Top::Generator(gen) => Some(gen),
-            _ => None,
-        }
-    }
-
-    pub fn as_variant(&self) -> Option<&Variant> {
-        match self {
-            Top::Variant(variant) => Some(variant),
             _ => None,
         }
     }
@@ -105,9 +84,16 @@ impl Top {
         }
     }
 
-    pub fn as_configurations(&self) -> Option<&Configuration> {
+    pub fn as_test_case(&self) -> Option<&ValueExp> {
         match self {
-            Top::Config(config) => Some(config),
+            Top::TestCase(test) => Some(test),
+            _ => None,
+        }
+    }
+
+    pub fn as_retry_policy(&self) -> Option<&ValueExp> {
+        match self {
+            Top::RetryPolicy(retry) => Some(retry),
             _ => None,
         }
     }
@@ -120,12 +106,12 @@ impl WithIdentifier for Top {
             // Top::CompositeType(ct) => &ct.name,
             Top::Enum(x) => x.identifier(),
             Top::Class(x) => x.identifier(),
-            Top::Function(x) | Top::FunctionOld(x) => x.identifier(),
+            Top::Function(x) => x.identifier(),
             Top::Client(x) => x.identifier(),
             Top::TemplateString(x) => x.identifier(),
-            Top::Variant(x) => x.identifier(),
             Top::Generator(x) => x.identifier(),
-            Top::Config(x) => x.identifier(),
+            Top::TestCase(x) => x.identifier(),
+            Top::RetryPolicy(x) => x.identifier(),
         }
     }
 }
@@ -135,12 +121,12 @@ impl WithSpan for Top {
         match self {
             Top::Enum(en) => en.span(),
             Top::Class(class) => class.span(),
-            Top::Function(func) | Top::FunctionOld(func) => func.span(),
+            Top::Function(func) => func.span(),
             Top::TemplateString(template) => template.span(),
             Top::Client(client) => client.span(),
-            Top::Variant(variant) => variant.span(),
             Top::Generator(gen) => gen.span(),
-            Top::Config(config) => config.span(),
+            Top::TestCase(test) => test.span(),
+            Top::RetryPolicy(retry) => retry.span(),
         }
     }
 }

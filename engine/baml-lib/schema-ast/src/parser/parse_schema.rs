@@ -1,11 +1,10 @@
 use std::path::PathBuf;
 
 use super::{
-    parse_class::parse_class, parse_config, parse_enum::parse_enum, parse_function::parse_function,
-    parse_old_function::parse_old_function, parse_template_string::parse_template_string,
-    parse_test::parse_test_from_json, BAMLParser, Rule,
+    parse_template_string::parse_template_string, parse_type_expression::parse_type_expression,
+    parse_value_expression::parse_value_expression, BAMLParser, Rule,
 };
-use crate::{ast::*, parser::parse_variant};
+use crate::ast::*;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
 use pest::Parser;
 
@@ -32,16 +31,12 @@ pub fn parse_schema(
     let mut diagnostics = Diagnostics::new(root_path.clone());
     diagnostics.set_source(source);
 
-    if !source.path().ends_with(".json") && !source.path().ends_with(".baml") {
+    if !source.path().ends_with(".baml") {
         diagnostics.push_error(DatamodelError::new_validation_error(
-            "A BAML file must have the file extension `.baml` or `.json`.",
+            "A BAML file must have the file extension `.baml`",
             Span::empty(source.clone()),
         ));
         return Err(diagnostics);
-    }
-
-    if source.path().ends_with(".json") {
-        return parse_test_from_json(source, &mut diagnostics).map(|ast| (ast, diagnostics));
     }
 
     let datamodel_result = BAMLParser::parse(Rule::schema, source.as_str());
@@ -61,54 +56,26 @@ pub fn parse_schema(
 
             while let Some(current) = pairs.next() {
                 match current.as_rule() {
-                    Rule::enum_declaration => top_level_definitions.push(Top::Enum(parse_enum(current,pending_block_comment.take(),  &mut diagnostics))),
-                    Rule::interface_declaration => {
-                        let keyword = current.clone().into_inner().find(|pair| matches!(pair.as_rule(), Rule::CLASS_KEYWORD | Rule::FUNCTION_KEYWORD) ).expect("Expected class keyword");
-                        match keyword.as_rule() {
-                            Rule::CLASS_KEYWORD => {
-                                top_level_definitions.push(Top::Class(parse_class(current, pending_block_comment.take(), &mut diagnostics)));
-                            },
-                            _ => unreachable!("Expected class keyword"),
-                        };
+
+
+                    Rule::type_expression_block => {
+                        top_level_definitions.push(Top::Class(parse_type_expression(current, pending_block_comment.take(), &mut diagnostics)));
                     }
-                    Rule::function_declaration => {
-                        match parse_function(current, pending_block_comment.take(), &mut diagnostics) {
-                            Ok(function) => top_level_definitions.push(Top::Function(function)),
-                            Err(e) => diagnostics.push_error(e),
-                        }
-                    },
-                    Rule::old_function_declaration => {
-                        match parse_old_function(current, pending_block_comment.take(), &mut diagnostics) {
-                            Ok(function) => top_level_definitions.push(Top::FunctionOld(function)),
-                            Err(e) => diagnostics.push_error(e),
-                        }
-                    },
-                    Rule::config_block => {
-                        match parse_config::parse_config_block(
-                            current,
-                            pending_block_comment.take(),
-                            &mut diagnostics,
-                        ) {
-                            Ok(config) => top_level_definitions.push(config),
+
+                    Rule::value_expression_block => {
+                        match parse_value_expression(current, pending_block_comment.take(), &mut diagnostics) {
+                            Ok(value_exp) => top_level_definitions.push(Top::Function(value_exp)),
                             Err(e) => diagnostics.push_error(e),
                         }
                     }
-                    Rule::variant_block => {
-                        match parse_variant::parse_variant_block(
-                            current,
-                            pending_block_comment.take(),
-                            &mut diagnostics,
-                        ) {
-                            Ok(config) => top_level_definitions.push(Top::Variant(config)),
-                            Err(e) => diagnostics.push_error(e),
-                        }
-                    }
+
                     Rule::template_declaration => {
                         match parse_template_string(current, pending_block_comment.take(), &mut diagnostics) {
                             Ok(template) => top_level_definitions.push(Top::TemplateString(template)),
                             Err(e) => diagnostics.push_error(e),
                         }
                     }
+
                     Rule::EOI => {}
                     Rule::CATCH_ALL => diagnostics.push_error(DatamodelError::new_validation_error(
                         "This line is invalid. It does not start with any known Baml schema keyword.",
@@ -119,18 +86,14 @@ pub fn parse_schema(
                             Some(Rule::empty_lines) => {
                                 // free floating
                             }
-                            Some(Rule::enum_declaration) => {
-                                pending_block_comment = Some(current);
-                            }
+                            // Some(Rule::enum_declaration) => {
+                            //     pending_block_comment = Some(current);
+                            // }
                             _ => (),
                         }
                     },
                     // We do nothing here.
                     Rule::raw_string_literal => (),
-                    Rule::arbitrary_block => diagnostics.push_error(DatamodelError::new_validation_error(
-                        "This block is invalid. It does not start with any known BAML keyword. Common keywords include 'enum', 'class', 'function', and 'impl'.",
-                        diagnostics.span(current.as_span()),
-                    )),
                     Rule::empty_lines => (),
                     _ => unreachable!("Encountered an unknown rule: {:?}", current.as_rule()),
                 }

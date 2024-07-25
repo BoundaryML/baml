@@ -15,7 +15,7 @@ pub struct Field {
     /// name String
     ///      ^^^^^^
     /// ```
-    pub field_type: FieldType,
+    pub field_type: Option<FieldType>,
     /// The name of the field.
     ///
     /// ```ignore

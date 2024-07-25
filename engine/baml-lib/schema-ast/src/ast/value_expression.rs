@@ -6,7 +6,7 @@ use super::{
 /// An opaque identifier for a value in an AST enum. Use the
 /// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FuncArguementId(pub u32);
+pub struct ArgumentId(pub u32);
 
 /// An opaque identifier for a field in an AST model. Use the
 /// `model[field_id]` syntax to resolve the id to an `ast::Field`.
@@ -20,7 +20,7 @@ impl FieldId {
     pub const MAX: FieldId = FieldId(u32::MAX);
 }
 
-impl std::ops::Index<FieldId> for Function {
+impl std::ops::Index<FieldId> for ValueExp {
     type Output = ConfigBlockProperty;
 
     fn index(&self, index: FieldId) -> &Self::Output {
@@ -28,32 +28,32 @@ impl std::ops::Index<FieldId> for Function {
     }
 }
 
-impl FuncArguementId {
+impl ArgumentId {
     /// Used for range bounds when iterating over BTreeMaps.
-    pub const MIN: FuncArguementId = FuncArguementId(0);
+    pub const MIN: ArgumentId = ArgumentId(0);
     /// Used for range bounds when iterating over BTreeMaps.
-    pub const MAX: FuncArguementId = FuncArguementId(u32::MAX);
+    pub const MAX: ArgumentId = ArgumentId(u32::MAX);
 }
 
-impl std::ops::Index<FuncArguementId> for NamedFunctionArgList {
-    type Output = (Identifier, FunctionArg);
+impl std::ops::Index<ArgumentId> for BlockArgList {
+    type Output = (Identifier, BlockArg);
 
-    fn index(&self, index: FuncArguementId) -> &Self::Output {
+    fn index(&self, index: ArgumentId) -> &Self::Output {
         &self.args[index.0 as usize]
     }
 }
 
-impl std::ops::Index<FuncArguementId> for FunctionArg {
-    type Output = FunctionArg;
+impl std::ops::Index<ArgumentId> for BlockArg {
+    type Output = BlockArg;
 
-    fn index(&self, index: FuncArguementId) -> &Self::Output {
-        assert_eq!(index, FuncArguementId(0), "FunctionArg only has one arg");
+    fn index(&self, index: ArgumentId) -> &Self::Output {
+        assert_eq!(index, ArgumentId(0), "BlockArg only has one arg");
         self
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct FunctionArg {
+pub struct BlockArg {
     /// The field's type.
     pub field_type: FieldType,
 
@@ -62,33 +62,42 @@ pub struct FunctionArg {
 }
 
 #[derive(Debug, Clone)]
-pub struct NamedFunctionArgList {
+pub struct BlockArgList {
     pub(crate) documentation: Option<Comment>,
-    pub args: Vec<(Identifier, FunctionArg)>,
+    pub args: Vec<(Identifier, BlockArg)>,
     pub(crate) span: Span,
 }
+#[derive(Debug, Clone)]
 
-impl NamedFunctionArgList {
+pub enum SubValueExp {
+    Function,
+    Client,
+    Generator,
+    RetryPolicy,
+    Test,
+}
+
+impl BlockArgList {
     pub fn iter_args(
         &self,
-    ) -> impl ExactSizeIterator<Item = (FuncArguementId, &(Identifier, FunctionArg))> {
+    ) -> impl ExactSizeIterator<Item = (ArgumentId, &(Identifier, BlockArg))> {
         self.args
             .iter()
             .enumerate()
-            .map(|(id, arg)| (FuncArguementId(id as u32), arg))
+            .map(|(id, arg)| (ArgumentId(id as u32), arg))
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum FunctionArgs {
-    Unnamed(FunctionArg),
-    Named(NamedFunctionArgList),
+pub enum BlockArgs {
+    Unnamed(BlockArg),
+    Named(BlockArgList),
 }
 
-impl FunctionArgs {
+impl BlockArgs {
     pub fn flat_idns(&self) -> Vec<&Identifier> {
         match self {
-            FunctionArgs::Unnamed(arg) => arg
+            BlockArgs::Unnamed(arg) => arg
                 .field_type
                 .flat_idns()
                 .iter()
@@ -97,7 +106,7 @@ impl FunctionArgs {
                     _ => Some(*f),
                 })
                 .collect(),
-            FunctionArgs::Named(named) => named
+            BlockArgs::Named(named) => named
                 .args
                 .iter()
                 .flat_map(|(_, arg)| arg.field_type.flat_idns())
@@ -112,7 +121,7 @@ impl FunctionArgs {
 
 /// A model declaration.
 #[derive(Debug, Clone)]
-pub struct Function {
+pub struct ValueExp {
     /// The name of the model.
     ///
     /// ```ignore
@@ -130,8 +139,8 @@ pub struct Function {
     ///   ^^^^^^^^^^^^
     /// }
     /// ```
-    pub(crate) input: FunctionArgs,
-    pub(crate) output: FunctionArgs,
+    pub(crate) input: Option<BlockArgs>,
+    pub(crate) output: Option<BlockArgs>,
     /// The documentation for this model.
     ///
     /// ```ignore
@@ -160,14 +169,22 @@ pub struct Function {
     /// The location of this model in the text representation.
     pub(crate) span: Span,
     pub fields: Vec<ConfigBlockProperty>,
+
+    pub sub_type: SubValueExp,
 }
 
-impl Function {
-    pub fn input(&self) -> &FunctionArgs {
-        &self.input
+impl ValueExp {
+    pub fn input(&self) -> Option<&BlockArgs> {
+        match &self.input {
+            Some(input) => Some(input),
+            None => None,
+        }
     }
-    pub fn output(&self) -> &FunctionArgs {
-        &self.output
+    pub fn output(&self) -> Option<&BlockArgs> {
+        match &self.output {
+            Some(output) => Some(output),
+            None => None,
+        }
     }
 
     pub fn iter_fields(
@@ -184,48 +201,48 @@ impl Function {
     }
 }
 
-impl WithIdentifier for Function {
+impl WithIdentifier for ValueExp {
     fn identifier(&self) -> &Identifier {
         &self.name
     }
 }
 
-impl WithSpan for Function {
+impl WithSpan for ValueExp {
     fn span(&self) -> &Span {
         &self.span
     }
 }
 
-impl WithAttributes for Function {
+impl WithAttributes for ValueExp {
     fn attributes(&self) -> &[Attribute] {
         &self.attributes
     }
 }
 
-impl WithDocumentation for Function {
+impl WithDocumentation for ValueExp {
     fn documentation(&self) -> Option<&str> {
         self.documentation.as_ref().map(|doc| doc.text.as_str())
     }
 }
 
-impl WithSpan for NamedFunctionArgList {
+impl WithSpan for BlockArgList {
     fn span(&self) -> &Span {
         &self.span
     }
 }
-impl WithSpan for FunctionArg {
+impl WithSpan for BlockArg {
     fn span(&self) -> &Span {
         &self.span
     }
 }
 
-impl WithDocumentation for NamedFunctionArgList {
+impl WithDocumentation for BlockArgList {
     fn documentation(&self) -> Option<&str> {
         self.documentation.as_ref().map(|doc| doc.text.as_str())
     }
 }
 
-impl WithDocumentation for FunctionArg {
+impl WithDocumentation for BlockArg {
     fn documentation(&self) -> Option<&str> {
         None
     }
