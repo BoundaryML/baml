@@ -3,15 +3,17 @@ title: ollama
 slug: docs/snippets/clients/providers/ollama
 ---
 
-For `ollama`, we provide a client that can be used to interact with [ollama](https://ollama.com/) `/chat/completions` endpoint.
 
-<Info>What is ollama? Ollama is an easy way to run LLMs locally!</Info>
+[Ollama](https://ollama.com/) supports the OpenAI client, allowing you to use the
+[`openai-generic`](/docs/snippets/clients/providers/openai) provider with an
+overridden `base_url`.
 
 Example:
 ```baml BAML
 client<llm> MyClient {
-  provider ollama
+  provider "openai-generic"
   options {
+    base_url "http://localhost:11434/v1"
     model llama2
   }
 }

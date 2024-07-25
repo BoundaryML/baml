@@ -67,8 +67,6 @@ navigation:
         contents:
           - page: Overview
             path: docs/snippets/clients/overview.mdx
-          - page: Accordion
-            path: docs/snippets/clients/accordion.mdx
           - section: providers
             contents:
               - page: anthropic
@@ -87,6 +85,8 @@ navigation:
                 path: docs/snippets/clients/providers/ollama.mdx
               - page: openai
                 path: docs/snippets/clients/providers/openai.mdx
+              - page: openai-generic
+                path: docs/snippets/clients/providers/openai-generic.mdx
               - page: openrouter
                 path: docs/snippets/clients/providers/openrouter.mdx
               - page: together-ai

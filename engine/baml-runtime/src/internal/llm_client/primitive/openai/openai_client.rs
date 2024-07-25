@@ -7,6 +7,13 @@ use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use serde_json::json;
 
+use crate::internal::llm_client::{
+    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse,
+};
+
+use super::properties::{self, PostRequestProperties};
+use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta, FinishReason};
+
 use crate::client_registry::ClientProperty;
 use crate::internal::llm_client::primitive::request::{
     make_parsed_request, make_request, RequestBuilder,
@@ -29,7 +36,7 @@ pub struct OpenAIClient {
     retry_policy: Option<String>,
     context: RenderContext_Client,
     features: ModelFeatures,
-    properties: PostRequestProperities,
+    properties: PostRequestProperties,
     // clients
     client: reqwest::Client,
 }
@@ -196,16 +203,6 @@ impl WithChat for OpenAIClient {
         })
     }
 }
-
-use crate::internal::llm_client::{
-    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse,
-};
-
-use super::properties::{
-    self, resolve_azure_properties, resolve_ollama_properties, resolve_openai_properties,
-    PostRequestProperities,
-};
-use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta, FinishReason};
 
 impl RequestBuilder for OpenAIClient {
     fn http_client(&self) -> &reqwest::Client {
@@ -451,24 +448,30 @@ macro_rules! make_openai_client {
 impl OpenAIClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
-        let properties = resolve_openai_properties(properties, ctx)?;
+        let properties = properties::openai::resolve_properties(properties, ctx)?;
         make_openai_client!(client, properties, "openai")
+    }
+
+    pub fn new_generic(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
+        let properties = properties::generic::resolve_properties(properties, ctx)?;
+        make_openai_client!(client, properties, "openai-generic")
     }
 
     pub fn new_ollama(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
-        let properties = resolve_ollama_properties(properties, ctx)?;
+        let properties = properties::ollama::resolve_properties(properties, ctx)?;
         make_openai_client!(client, properties, "ollama")
     }
 
     pub fn new_azure(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
-        let properties = resolve_azure_properties(properties, ctx)?;
+        let properties = properties::azure::resolve_properties(properties, ctx)?;
         make_openai_client!(client, properties, "azure")
     }
 
     pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<OpenAIClient> {
-        let properties = resolve_openai_properties(
+        let properties = properties::openai::resolve_properties(
             client
                 .options
                 .iter()
@@ -479,11 +482,26 @@ impl OpenAIClient {
         make_openai_client!(client, properties, "openai", dynamic)
     }
 
+    pub fn dynamic_new_generic(
+        client: &ClientProperty,
+        ctx: &RuntimeContext,
+    ) -> Result<OpenAIClient> {
+        let properties = properties::generic::resolve_properties(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            ctx,
+        )?;
+        make_openai_client!(client, properties, "openai-generic", dynamic)
+    }
+
     pub fn dynamic_new_ollama(
         client: &ClientProperty,
         ctx: &RuntimeContext,
     ) -> Result<OpenAIClient> {
-        let properties = resolve_ollama_properties(
+        let properties = properties::ollama::resolve_properties(
             client
                 .options
                 .iter()
@@ -498,7 +516,7 @@ impl OpenAIClient {
         client: &ClientProperty,
         ctx: &RuntimeContext,
     ) -> Result<OpenAIClient> {
-        let properties = resolve_azure_properties(
+        let properties = properties::azure::resolve_properties(
             client
                 .options
                 .iter()

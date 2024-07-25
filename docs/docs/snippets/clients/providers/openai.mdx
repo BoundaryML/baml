@@ -3,19 +3,21 @@ title: openai
 slug: docs/snippets/clients/providers/openai
 ---
 
-
 The `openai` provider supports all APIs that use the same interface for the `/chat` endpoint.
 
 <Tip>
-  For `ollama` ([Docs](ollama.mdx)) or `azure-openai` ([Docs](azure.mdx)) we recommend
-  using the respective provider instead.
+  For Azure, we recommend using [`azure-openai`](azure) instead.
+
+  For all other OpenAI-compatible API providers, such as Groq, HuggingFace,
+  Ollama, OpenRouter, Together AI, and others, we recommend using
+ [`openai-generic`](openai-generic) instead.
 </Tip>
 
 Example:
 
 ```baml BAML
 client<llm> MyClient {
-  provider openai
+  provider "openai"
   options {
     api_key env.MY_OPENAI_KEY
     model "gpt-3.5-turbo"

@@ -18,6 +18,7 @@ cfg-if.workspace = true
 clap = { version = "4.4.6", features = ["cargo", "derive"] }
 colored = "2.1.0"
 dashmap.workspace = true
+derive_more.workspace = true
 dunce = "1.0.4"
 either.workspace = true
 env_logger.workspace = true

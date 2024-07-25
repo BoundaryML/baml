@@ -1,16 +1,15 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use internal_baml_core::ir::ClientWalker;
 
 use crate::RuntimeContext;
 
-use super::PostRequestProperities;
+use super::PostRequestProperties;
 
 pub fn resolve_properties(
     mut properties: HashMap<String, serde_json::Value>,
     ctx: &RuntimeContext,
-) -> Result<PostRequestProperities> {
+) -> Result<PostRequestProperties> {
     // POST https://{your-resource-name}.openai.azure.com/openai/deployments/{deployment-id}/chat/completions?api-version={api-version}
 
     let default_role = properties
@@ -87,7 +86,7 @@ pub fn resolve_properties(
         .entry("max_tokens".into())
         .or_insert_with(|| 4096.into());
 
-    Ok(PostRequestProperities {
+    Ok(PostRequestProperties {
         default_role,
         base_url,
         api_key: None,

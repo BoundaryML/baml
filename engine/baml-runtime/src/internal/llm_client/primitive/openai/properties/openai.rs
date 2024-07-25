@@ -4,12 +4,12 @@ use anyhow::Result;
 
 use crate::RuntimeContext;
 
-use super::PostRequestProperities;
+use super::PostRequestProperties;
 
 pub fn resolve_properties(
     mut properties: HashMap<String, serde_json::Value>,
     ctx: &RuntimeContext,
-) -> Result<PostRequestProperities> {
+) -> Result<PostRequestProperties> {
     let default_role = properties
         .remove("default_role")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
@@ -46,7 +46,7 @@ pub fn resolve_properties(
         None => Default::default(),
     };
 
-    Ok(PostRequestProperities {
+    Ok(PostRequestProperties {
         default_role,
         base_url,
         api_key,
