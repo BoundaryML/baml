@@ -731,15 +731,14 @@ name = "baml-fmt"
 version = "0.52.1"
 dependencies = [
  "anyhow",
- "baml-lib",
  "base64 0.22.1",
- "colored",
  "dissimilar",
  "either",
  "enumflags2",
  "expect-test",
  "indoc",
- "internal-baml-jinja",
+ "internal-baml-core",
+ "internal-baml-schema-ast",
  "log",
  "lsp-types",
  "once_cell",

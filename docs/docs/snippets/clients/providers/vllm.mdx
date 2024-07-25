@@ -7,7 +7,7 @@ See https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html for mor
 
 ```baml BAML
 client<llm> MyClient {
-  provider openai
+  provider openai-generic
   options {
     base_url "http://localhost:8000/v1"
     api_key "token-abc123"

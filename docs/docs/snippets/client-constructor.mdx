@@ -5,13 +5,17 @@ The configuration modifies the URL request BAML runtime makes.
 
 | Provider Name  | Docs                             | Notes                                                      |
 | -------------- | -------------------------------- | ---------------------------------------------------------- |
-| `openai`       | [OpenAI](/docs/snippets/clients/providers/openai)       | Anything that follows openai's API exactly                 |
-| `ollama`       | [Ollama](/docs/snippets/clients/providers/ollama)       | Alias for an openai client but with default ollama options |
-| `azure-openai` | [Azure OpenAI](/docs/snippets/clients/providers/azure)  |                                                            |
 | `anthropic`    | [Anthropic](/docs/snippets/clients/providers/anthropic) |                                                            |
-| `google-ai`    | [Google AI](/docs/snippets/clients/providers/gemini)    |                                                            |
-| `vertex-ai`    | [Vertex AI](/docs/snippets/clients/providers/vertex)    |                                                            |
 | `aws-bedrock`  | [AWS Bedrock](/docs/snippets/clients/providers/aws-bedrock)    |                                                            |
+| `azure-openai` | [Azure OpenAI](/docs/snippets/clients/providers/azure)  |                                                            |
+| `google-ai`    | [Google AI](/docs/snippets/clients/providers/gemini)    |                                                            |
+| `ollama`       | [Ollama](/docs/snippets/clients/providers/ollama)       | Alias for an OpenAI client but with default ollama options |
+| `openai`       | [OpenAI](/docs/snippets/clients/providers/openai)       | Anything that follows OpenAI's API exactly                 |
+| `vertex-ai`    | [Vertex AI](/docs/snippets/clients/providers/vertex)    |                                                            |
+
+We also have some special providers that allow composing clients together:
+| Provider Name  | Docs                             | Notes                                                      |
+| -------------- | -------------------------------- | ---------------------------------------------------------- |
 | `fallback`     | [Fallback](/docs/snippets/clients/fallback)             | Used to chain models conditional on failures               |
 | `round-robin`  | [Round Robin](/docs/snippets/clients/round-robin)       | Used to load balance                                       |
 
