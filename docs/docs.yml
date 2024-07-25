@@ -67,6 +67,8 @@ navigation:
         contents:
           - page: Overview
             path: docs/snippets/clients/overview.mdx
+          - page: Accordion
+            path: docs/snippets/clients/accordion.mdx
           - section: providers
             contents:
               - page: anthropic

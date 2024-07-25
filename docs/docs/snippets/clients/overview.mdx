@@ -1,5 +1,5 @@
 ---
-slug: docs/snippets/clients
+slug: docs/snippets/clients/overview
 ---
 
 Clients are used to configure how LLMs are called, like so:
@@ -13,13 +13,13 @@ function MakeHaiku(topic: string) -> string {
 }
 ```
 
-This is `provider/model` shorthand for:
+This is `<provider>/<model>` shorthand for:
 
 ```rust BAML
 client<llm> MyClient {
-  provider openai
+  provider "openai"
   options {
-    model gpt-4o
+    model "gpt-4o"
     // api_key defaults to env.OPENAI_API_KEY
   }
 }
