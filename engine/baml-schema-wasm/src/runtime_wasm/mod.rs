@@ -28,7 +28,7 @@ use self::runtime_prompt::WasmScope;
 
 #[wasm_bindgen(start)]
 pub fn on_wasm_init() {
-    match console_log::init_with_level(log::Level::Warn) {
+    match console_log::init_with_level(log::Level::Info) {
         Ok(_) => web_sys::console::log_1(&"Initialized BAML runtime logging".into()),
         Err(e) => web_sys::console::log_1(
             &format!("Failed to initialize BAML runtime logging: {:?}", e).into(),
@@ -1214,6 +1214,7 @@ impl WasmFunction {
         let renderer = PromptRenderer::from_function(&walker, ir, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
         let client_name = renderer.client_name().to_string();
+        log::info!("Client name: {}", client_name);
 
         let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
         let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
