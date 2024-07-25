@@ -2,23 +2,27 @@
 slug: docs/snippets/clients
 ---
 
-Clients are used to configure how LLMs are called.
+Clients are used to configure how LLMs are called, like so:
 
-Here's an example of a client configuration:
-
-```baml BAML
-client<llm> MyClient {
-  provider openai
-  options {
-    model gpt-4o    // Configure which model is used
-    temperature 0.7 // Pass additional options to the model
-  }
+```rust BAML
+function MakeHaiku(topic: string) -> string {
+  client "openai/gpt-4o"
+  prompt #"
+    Write a haiku about {{ topic }}.
+  "#
 }
 ```
 
-Usage:
+This is `provider/model` shorthand for:
 
 ```rust BAML
+client<llm> MyClient {
+  provider openai
+  options {
+    model gpt-4o
+  }
+}
+
 function MakeHaiku(topic: string) -> string {
   client MyClient
   prompt #"
@@ -26,6 +30,9 @@ function MakeHaiku(topic: string) -> string {
   "#
 }
 ```
+
+Consult the [provider documentation](#fields) for a list of supported providers
+and models.
 
 <Tip>
 If you want to specify which client to use at runtime, in your Python/TS/Ruby code,

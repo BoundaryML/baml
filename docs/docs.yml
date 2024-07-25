@@ -10,6 +10,10 @@ instances:
 
 title: BAML Documentation
 
+redirects:
+  - source: /docs/snippets/clients/providers/anthropic
+    destination: docs/snippets/clients/providers/overview#anthropic
+
 navigation:
   - section: Get started
     contents:
@@ -18,6 +22,7 @@ navigation:
       - page: Interactive Demos
         path: docs/get-started/interactive-demos.mdx
       - section: Quickstart
+        collapsed: false
         contents:
           - page: Python
             path: docs/get-started/quickstart/python.mdx
@@ -30,6 +35,7 @@ navigation:
           - page: Other Editors
             path: docs/get-started/quickstart/editors-other.mdx
       - section: Debugging
+        collapsed: false
         contents:
           - page: VSCode Playground
             path: docs/get-started/debugging/vscode-playground.mdx
