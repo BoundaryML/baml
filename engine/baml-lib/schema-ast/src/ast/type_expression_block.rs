@@ -1,6 +1,6 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, Field, Identifier, Span, WithDocumentation,
-    WithIdentifier, WithSpan,
+    traits::WithAttributes, Attribute, Comment, Field, FieldType, Identifier, Span,
+    WithDocumentation, WithIdentifier, WithSpan,
 };
 
 /// An opaque identifier for a value in an AST enum. Use the
@@ -15,8 +15,8 @@ impl FieldId {
     pub const MAX: FieldId = FieldId(u32::MAX);
 }
 
-impl std::ops::Index<FieldId> for TypeExpression {
-    type Output = Field;
+impl std::ops::Index<FieldId> for TypeExpressionBlock {
+    type Output = Field<FieldType>;
 
     fn index(&self, index: FieldId) -> &Self::Output {
         &self.fields[index.0 as usize]
@@ -36,7 +36,7 @@ pub enum SubType {
 /// the table definition. On MongoDB the enumerations are handled in the Query
 /// Engine.
 #[derive(Debug, Clone)]
-pub struct TypeExpression {
+pub struct TypeExpressionBlock {
     /// The name of the enum.
     ///
     /// ```ignore
@@ -54,7 +54,7 @@ pub struct TypeExpression {
     ///   ^^^^^^
     /// }
     /// ```
-    pub fields: Vec<Field>, // needs to support field as well
+    pub fields: Vec<Field<FieldType>>, // needs to support field as well
 
     /// The attributes of this enum.
     ///
@@ -87,88 +87,38 @@ pub struct TypeExpression {
     pub sub_type: SubType,
 }
 
-impl TypeExpression {
-    pub fn iter_values(&self) -> impl ExactSizeIterator<Item = (FieldId, &Field)> {
+impl TypeExpressionBlock {
+    pub fn iter_fields(&self) -> impl ExactSizeIterator<Item = (FieldId, &Field<FieldType>)> {
         self.fields
             .iter()
             .enumerate()
             .map(|(idx, field)| (FieldId(idx as u32), field))
     }
 
-    pub fn values(&self) -> &[Field] {
+    pub fn values(&self) -> &[Field<FieldType>] {
         &self.fields
     }
 }
 
-impl WithIdentifier for TypeExpression {
+impl WithIdentifier for TypeExpressionBlock {
     fn identifier(&self) -> &Identifier {
         &self.name
     }
 }
 
-impl WithSpan for TypeExpression {
+impl WithSpan for TypeExpressionBlock {
     fn span(&self) -> &Span {
         &self.span
     }
 }
 
-impl WithAttributes for TypeExpression {
+impl WithAttributes for TypeExpressionBlock {
     fn attributes(&self) -> &[Attribute] {
         &self.attributes
     }
 }
 
-impl WithDocumentation for TypeExpression {
-    fn documentation(&self) -> Option<&str> {
-        self.documentation.as_ref().map(|doc| doc.text.as_str())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum ValueUnion {
-    Identifier(Identifier),
-    Field(Field),
-}
-
-impl ValueUnion {
-    pub fn name(&self) -> &Identifier {
-        match self {
-            ValueUnion::Identifier(name) => name,
-            ValueUnion::Field(field) => field.identifier(),
-        }
-    }
-}
-
-/// An enum value definition.
-#[derive(Debug, Clone)]
-pub struct TypeValue {
-    /// The name of the enum value as it will be exposed by the api.
-    pub data: ValueUnion,
-    pub attributes: Vec<Attribute>,
-    pub(crate) documentation: Option<Comment>,
-    /// The location of this enum value in the text representation.
-    pub span: Span,
-}
-
-impl WithIdentifier for TypeValue {
-    fn identifier(&self) -> &Identifier {
-        &self.data.name()
-    }
-}
-
-impl WithAttributes for TypeValue {
-    fn attributes(&self) -> &[Attribute] {
-        &self.attributes
-    }
-}
-
-impl WithSpan for TypeValue {
-    fn span(&self) -> &Span {
-        &self.span
-    }
-}
-
-impl WithDocumentation for TypeValue {
+impl WithDocumentation for TypeExpressionBlock {
     fn documentation(&self) -> Option<&str> {
         self.documentation.as_ref().map(|doc| doc.text.as_str())
     }

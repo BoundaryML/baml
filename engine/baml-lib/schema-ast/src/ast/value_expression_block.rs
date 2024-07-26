@@ -1,5 +1,5 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, ConfigBlockProperty, FieldType, Identifier, Span,
+    traits::WithAttributes, Attribute, Comment, Expression, Field, FieldType, Identifier, Span,
     WithDocumentation, WithIdentifier, WithSpan,
 };
 
@@ -20,8 +20,8 @@ impl FieldId {
     pub const MAX: FieldId = FieldId(u32::MAX);
 }
 
-impl std::ops::Index<FieldId> for ValueExp {
-    type Output = ConfigBlockProperty;
+impl std::ops::Index<FieldId> for ValueExprBlock {
+    type Output = Field<Expression>;
 
     fn index(&self, index: FieldId) -> &Self::Output {
         &self.fields[index.0 as usize]
@@ -35,7 +35,7 @@ impl ArgumentId {
     pub const MAX: ArgumentId = ArgumentId(u32::MAX);
 }
 
-impl std::ops::Index<ArgumentId> for BlockArgList {
+impl std::ops::Index<ArgumentId> for BlockArgs {
     type Output = (Identifier, BlockArg);
 
     fn index(&self, index: ArgumentId) -> &Self::Output {
@@ -62,14 +62,14 @@ pub struct BlockArg {
 }
 
 #[derive(Debug, Clone)]
-pub struct BlockArgList {
+pub struct BlockArgs {
     pub(crate) documentation: Option<Comment>,
     pub args: Vec<(Identifier, BlockArg)>,
     pub(crate) span: Span,
 }
-#[derive(Debug, Clone)]
 
-pub enum SubValueExp {
+#[derive(Debug, Clone)]
+pub enum ValueExprBlockType {
     Function,
     Client,
     Generator,
@@ -77,7 +77,17 @@ pub enum SubValueExp {
     Test,
 }
 
-impl BlockArgList {
+impl BlockArgs {
+    pub fn flat_idns(&self) -> Vec<&Identifier> {
+        self.args
+            .iter()
+            .flat_map(|(_, arg)| arg.field_type.flat_idns())
+            .filter_map(|f| match f {
+                Identifier::String(..) => None,
+                _ => Some(f),
+            })
+            .collect()
+    }
     pub fn iter_args(
         &self,
     ) -> impl ExactSizeIterator<Item = (ArgumentId, &(Identifier, BlockArg))> {
@@ -88,40 +98,9 @@ impl BlockArgList {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum BlockArgs {
-    Unnamed(BlockArg),
-    Named(BlockArgList),
-}
-
-impl BlockArgs {
-    pub fn flat_idns(&self) -> Vec<&Identifier> {
-        match self {
-            BlockArgs::Unnamed(arg) => arg
-                .field_type
-                .flat_idns()
-                .iter()
-                .filter_map(|f| match f {
-                    Identifier::Primitive(..) => None,
-                    _ => Some(*f),
-                })
-                .collect(),
-            BlockArgs::Named(named) => named
-                .args
-                .iter()
-                .flat_map(|(_, arg)| arg.field_type.flat_idns())
-                .filter_map(|f| match f {
-                    Identifier::Primitive(..) => None,
-                    _ => Some(f),
-                })
-                .collect(),
-        }
-    }
-}
-
 /// A model declaration.
 #[derive(Debug, Clone)]
-pub struct ValueExp {
+pub struct ValueExprBlock {
     /// The name of the model.
     ///
     /// ```ignore
@@ -140,7 +119,7 @@ pub struct ValueExp {
     /// }
     /// ```
     pub(crate) input: Option<BlockArgs>,
-    pub(crate) output: Option<BlockArgs>,
+    pub(crate) output: Option<BlockArg>,
     /// The documentation for this model.
     ///
     /// ```ignore
@@ -168,19 +147,19 @@ pub struct ValueExp {
     pub attributes: Vec<Attribute>,
     /// The location of this model in the text representation.
     pub(crate) span: Span,
-    pub fields: Vec<ConfigBlockProperty>,
+    pub fields: Vec<Field<Expression>>,
 
-    pub sub_type: SubValueExp,
+    pub block_type: ValueExprBlockType,
 }
 
-impl ValueExp {
+impl ValueExprBlock {
     pub fn input(&self) -> Option<&BlockArgs> {
         match &self.input {
             Some(input) => Some(input),
             None => None,
         }
     }
-    pub fn output(&self) -> Option<&BlockArgs> {
+    pub fn output(&self) -> Option<&BlockArg> {
         match &self.output {
             Some(output) => Some(output),
             None => None,
@@ -189,43 +168,43 @@ impl ValueExp {
 
     pub fn iter_fields(
         &self,
-    ) -> impl ExactSizeIterator<Item = (FieldId, &ConfigBlockProperty)> + Clone {
+    ) -> impl ExactSizeIterator<Item = (FieldId, &Field<Expression>)> + Clone {
         self.fields
             .iter()
             .enumerate()
             .map(|(idx, field)| (FieldId(idx as u32), field))
     }
 
-    pub fn fields(&self) -> &[ConfigBlockProperty] {
+    pub fn fields(&self) -> &[Field<Expression>] {
         &self.fields
     }
 }
 
-impl WithIdentifier for ValueExp {
+impl WithIdentifier for ValueExprBlock {
     fn identifier(&self) -> &Identifier {
         &self.name
     }
 }
 
-impl WithSpan for ValueExp {
+impl WithSpan for ValueExprBlock {
     fn span(&self) -> &Span {
         &self.span
     }
 }
 
-impl WithAttributes for ValueExp {
+impl WithAttributes for ValueExprBlock {
     fn attributes(&self) -> &[Attribute] {
         &self.attributes
     }
 }
 
-impl WithDocumentation for ValueExp {
+impl WithDocumentation for ValueExprBlock {
     fn documentation(&self) -> Option<&str> {
         self.documentation.as_ref().map(|doc| doc.text.as_str())
     }
 }
 
-impl WithSpan for BlockArgList {
+impl WithSpan for BlockArgs {
     fn span(&self) -> &Span {
         &self.span
     }
@@ -236,7 +215,7 @@ impl WithSpan for BlockArg {
     }
 }
 
-impl WithDocumentation for BlockArgList {
+impl WithDocumentation for BlockArgs {
     fn documentation(&self) -> Option<&str> {
         self.documentation.as_ref().map(|doc| doc.text.as_str())
     }

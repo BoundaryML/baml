@@ -8,9 +8,9 @@ mod parse_identifier;
 mod parse_named_args_list;
 mod parse_schema;
 mod parse_template_string;
-mod parse_type_expression;
+mod parse_type_expression_block;
 mod parse_types;
-mod parse_value_expression;
+mod parse_value_expression_block;
 pub use parse_schema::parse_schema;
 
 // The derive is placed here because it generates the `Rule` enum which is used in all parsing functions.

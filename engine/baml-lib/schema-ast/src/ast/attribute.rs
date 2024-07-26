@@ -45,41 +45,21 @@ impl WithSpan for Attribute {
 /// A node containing attributes.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum AttributeContainer {
-    Class(super::ClassId),
-    ClassField(super::ClassId, super::FieldId),
-    Enum(super::EnumId),
-    EnumValue(super::EnumId, super::EnumValueId),
+    Class(super::TypeExpId),
+    ClassField(super::TypeExpId, super::FieldId),
+    Enum(super::TypeExpId),
+    EnumValue(super::TypeExpId, super::FieldId),
 }
 
-impl From<(super::VariantConfigId, super::VariantFieldId)> for AttributeContainer {
-    fn from((enm, val): (super::VariantConfigId, super::VariantFieldId)) -> Self {
-        Self::VariantField(enm, val)
-    }
-}
-
-impl From<super::EnumId> for AttributeContainer {
-    fn from(v: super::EnumId) -> Self {
+impl From<super::TypeExpId> for AttributeContainer {
+    fn from(v: super::TypeExpId) -> Self {
         Self::Enum(v)
     }
 }
 
-impl From<(super::EnumId, super::EnumValueId)> for AttributeContainer {
-    fn from((enm, val): (super::EnumId, super::EnumValueId)) -> Self {
+impl From<(super::TypeExpId, super::FieldId)> for AttributeContainer {
+    fn from((enm, val): (super::TypeExpId, super::FieldId)) -> Self {
         Self::EnumValue(enm, val)
-    }
-}
-
-// For Class variant
-impl From<super::ClassId> for AttributeContainer {
-    fn from(v: super::ClassId) -> Self {
-        Self::Class(v)
-    }
-}
-
-// For ClassField variant
-impl From<(super::ClassId, super::FieldId)> for AttributeContainer {
-    fn from((cls, fld): (super::ClassId, super::FieldId)) -> Self {
-        Self::ClassField(cls, fld)
     }
 }
 

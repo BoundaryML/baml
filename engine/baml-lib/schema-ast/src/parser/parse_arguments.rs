@@ -22,7 +22,7 @@ pub(crate) fn parse_arguments_list(
                 value: parse_expression(current, diagnostics),
                 span: diagnostics.span(current_span),
             }),
-            _ => parsing_catch_all(&current, "attribute arguments"),
+            _ => parsing_catch_all(current, "attribute arguments"),
         }
     }
 }

@@ -1,28 +1,29 @@
 use super::{
-    traits::WithSpan, Identifier, Span, TemplateString, TypeExpression, ValueExp, WithIdentifier,
+    traits::WithSpan, Identifier, Span, TemplateString, TypeExpressionBlock, ValueExprBlock,
+    WithIdentifier,
 };
 
 /// Enum for distinguishing between top-level entries
 #[derive(Debug, Clone)]
 pub enum Top {
     /// An enum declaration
-    Enum(TypeExpression),
+    Enum(TypeExpressionBlock),
     // A class declaration
-    Class(TypeExpression),
+    Class(TypeExpressionBlock),
     // A function declaration
-    Function(ValueExp),
+    Function(ValueExprBlock),
 
     // Clients to run
-    Client(ValueExp),
+    Client(ValueExprBlock),
 
     TemplateString(TemplateString),
 
     // Generator
-    Generator(ValueExp),
+    Generator(ValueExprBlock),
 
-    TestCase(ValueExp),
+    TestCase(ValueExprBlock),
 
-    RetryPolicy(ValueExp),
+    RetryPolicy(ValueExprBlock),
 }
 
 impl Top {
@@ -42,7 +43,7 @@ impl Top {
     }
 
     /// Try to interpret the item as an enum declaration.
-    pub fn as_type_expression(&self) -> Option<&TypeExpression> {
+    pub fn as_type_expression(&self) -> Option<&TypeExpressionBlock> {
         match self {
             Top::Enum(r#enum) => Some(r#enum),
             Top::Class(class) => Some(class),
@@ -50,7 +51,7 @@ impl Top {
         }
     }
 
-    pub fn as_value_exp(&self) -> Option<&ValueExp> {
+    pub fn as_value_exp(&self) -> Option<&ValueExprBlock> {
         match self {
             Top::Function(func) => Some(func),
             Top::Client(client) => Some(client),

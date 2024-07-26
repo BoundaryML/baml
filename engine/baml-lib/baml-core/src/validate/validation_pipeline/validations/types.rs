@@ -41,7 +41,7 @@ fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
     match field_type {
         FieldType::Map(kv_types, _) => {
             match &kv_types.0 {
-                FieldType::Identifier(
+                FieldType::Symbol(
                     FieldArity::Required,
                     Identifier::Primitive(TypeValue::String, _),
                 ) => {}
@@ -55,7 +55,7 @@ fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
             validate_type_allowed(ctx, &kv_types.1);
             // TODO:assert key_type is string or int or null
         }
-        FieldType::Identifier(_, _) => {}
+        FieldType::Symbol(_, _) => {}
         FieldType::List(field_type, _, _) => validate_type_allowed(ctx, field_type),
         FieldType::Tuple(_, field_types, _) | FieldType::Union(_, field_types, _) => {
             for field_type in field_types {

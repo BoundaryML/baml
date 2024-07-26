@@ -201,7 +201,7 @@ fn validate_variable_path(
             "List types are not yet indexable in the prompt",
             variable.span.clone(),
         )),
-        ast::FieldType::Identifier(_, idn) => match db.find_type(idn) {
+        ast::FieldType::Symbol(_, idn) => match db.find_type(idn) {
             Some(Either::Left(cls)) => {
                 match cls
                     .static_fields()

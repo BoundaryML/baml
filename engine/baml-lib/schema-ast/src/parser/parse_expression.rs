@@ -29,7 +29,7 @@ fn parse_array(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
     for current in token.into_inner() {
         match current.as_rule() {
             Rule::expression => elements.push(parse_expression(current, diagnostics)),
-            _ => parsing_catch_all(&current, "array"),
+            _ => parsing_catch_all(current, "array"),
         }
     }
 
@@ -86,7 +86,7 @@ fn parse_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
                     entries.push(f)
                 }
             }
-            _ => parsing_catch_all(&current, "map key value"),
+            _ => parsing_catch_all(current, "map key value"),
         }
     }
 
@@ -106,7 +106,7 @@ fn parse_map_entry(
         match current.as_rule() {
             Rule::map_key => key = Some(parse_map_key(current, diagnostics)),
             Rule::expression => value = Some(parse_expression(current, diagnostics)),
-            _ => parsing_catch_all(&current, "dict entry"),
+            _ => parsing_catch_all(current, "dict entry"),
         }
     }
 

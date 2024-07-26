@@ -15,16 +15,16 @@ use crate::{
 use super::{field::FieldWalker, EnumWalker, VariantWalker};
 
 /// A `class` declaration in the Prisma schema.
-pub type ClassWalker<'db> = super::Walker<'db, ast::ClassId>;
+pub type ClassWalker<'db> = super::Walker<'db, ast::TypeExpId>;
 
 impl<'db> ClassWalker<'db> {
     /// The ID of the class in the db
-    pub fn class_id(self) -> ast::ClassId {
+    pub fn class_id(self) -> ast::TypeExpId {
         self.id
     }
 
     /// The AST node.
-    pub fn ast_class(self) -> &'db ast::Class {
+    pub fn ast_class(self) -> &'db ast::TypeExpressionBlock {
         &self.db.ast[self.id]
     }
 

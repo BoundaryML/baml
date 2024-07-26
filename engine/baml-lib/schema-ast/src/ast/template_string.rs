@@ -1,5 +1,5 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, Expression, FunctionArgs, Identifier, Span,
+    traits::WithAttributes, Attribute, BlockArgs, Comment, Expression, Identifier, Span,
     WithDocumentation, WithIdentifier, WithSpan,
 };
 
@@ -38,7 +38,7 @@ pub struct TemplateString {
     ///   ^^^^^^^^^^^^
     /// }
     /// ```
-    pub(crate) input: Option<FunctionArgs>,
+    pub(crate) input: Option<BlockArgs>,
     pub attributes: Vec<Attribute>,
     /// The location of this model in the text representation.
     pub span: Span,
@@ -50,7 +50,7 @@ impl TemplateString {
         &self.value
     }
 
-    pub fn input(&self) -> Option<&FunctionArgs> {
+    pub fn input(&self) -> Option<&BlockArgs> {
         self.input.as_ref()
     }
 }

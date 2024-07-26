@@ -1,25 +1,28 @@
 use internal_baml_diagnostics::Diagnostics;
 
+use super::{
+    helpers::parsing_catch_all, parse_identifier::parse_identifier, parse_types::parse_field_type,
+};
 use crate::{
     assert_correct_parser,
-    ast::{Identifier, RefIdentifier},
+    ast::{BlockArg, BlockArgs, Identifier, WithName, WithSpan},
     parser::Rule,
-    unreachable_rule,
 };
+use internal_baml_diagnostics::DatamodelError; // Add this line
 
 use super::helpers::Pair;
 
-pub fn parse_named_arguement_list(
+pub(crate) fn parse_named_argument_list(
     pair: Pair<'_>,
     diagnostics: &mut Diagnostics,
-) -> Result<FunctionArgs, DatamodelError> {
+) -> Result<BlockArgs, DatamodelError> {
     assert!(
         pair.as_rule() == Rule::named_argument_list,
-        "parse_named_arguement_list called on the wrong rule: {:?}",
+        "parse_named_argument_list called on the wrong rule: {:?}",
         pair.as_rule()
     );
     let span = diagnostics.span(pair.as_span());
-    let mut args: Vec<(Identifier, FunctionArg)> = Vec::new();
+    let mut args: Vec<(Identifier, BlockArg)> = Vec::new();
     for named_arg in pair.into_inner() {
         if matches!(named_arg.as_rule(), Rule::SPACER_TEXT) {
             continue;
@@ -37,7 +40,7 @@ pub fn parse_named_arguement_list(
                 Rule::field_type => {
                     r#type = Some(parse_function_arg(arg, diagnostics)?);
                 }
-                _ => parsing_catch_all(&arg, "named_argument_list"),
+                _ => parsing_catch_all(arg, "named_argument_list"),
             }
         }
 
@@ -56,17 +59,17 @@ pub fn parse_named_arguement_list(
         }
     }
 
-    Ok(FunctionArgs::Named(NamedFunctionArgList {
+    Ok(BlockArgs {
         documentation: None,
         args,
         span,
-    }))
+    })
 }
 
 pub fn parse_function_arg(
     pair: Pair<'_>,
     diagnostics: &mut Diagnostics,
-) -> Result<FunctionArg, DatamodelError> {
+) -> Result<BlockArg, DatamodelError> {
     assert!(
         pair.as_rule() == Rule::field_type,
         "parse_function_arg called on the wrong rule: {:?}",
@@ -75,7 +78,7 @@ pub fn parse_function_arg(
     let span = diagnostics.span(pair.as_span());
 
     match parse_field_type(pair, diagnostics) {
-        Some(ftype) => Ok(FunctionArg {
+        Some(ftype) => Ok(BlockArg {
             span,
             field_type: ftype,
         }),

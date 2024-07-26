@@ -69,9 +69,12 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
 
     if let Some(current) = pair.into_inner().next() {
         return match current.as_rule() {
-            Rule::identifier => Some(FieldType::Identifier(
+            Rule::identifier => Some(FieldType::Symbol(
                 FieldArity::Required,
-                parse_identifier(current, diagnostics),
+                parse_identifier(current.clone(), diagnostics)
+                    .name()
+                    .to_string(),
+                diagnostics.span(current.as_span()),
             )),
             Rule::array_notation => parse_array(current, diagnostics),
             Rule::map => parse_map(current, diagnostics),

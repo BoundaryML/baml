@@ -767,7 +767,7 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
             .iter_adapters()
             .fold((None, None), |prev, (idx, adapter)| {
                 let is_input = match &adapter.from {
-                    FieldType::Identifier(arity, idn) if idn.name() == "input" => {
+                    FieldType::Symbol(arity, idn) if idn.name() == "input" => {
                         if arity.is_optional() {
                             ctx.push_error(DatamodelError::new_validation_error(
                                 "The `input` adapter cannot be optional.",
@@ -782,7 +782,7 @@ fn visit_variant<'db>(idx: VariantConfigId, variant: &'db ast::Variant, ctx: &mu
                 };
 
                 let is_output = match &adapter.to {
-                    FieldType::Identifier(arity, idn) if idn.name() == "output" => {
+                    FieldType::Symbol(arity, idn) if idn.name() == "output" => {
                         if arity.is_optional() {
                             ctx.push_error(DatamodelError::new_validation_error(
                                 "The `output` adapter cannot be optional.",

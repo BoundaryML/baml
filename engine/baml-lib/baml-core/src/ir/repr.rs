@@ -139,8 +139,7 @@ impl IntermediateRepr {
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
             functions: db
-                .walk_old_functions()
-                .chain(db.walk_new_functions())
+                .walk_new_functions()
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
             clients: db
@@ -292,7 +291,7 @@ fn type_with_arity(t: FieldType, arity: &FieldArity) -> FieldType {
 impl WithRepr<FieldType> for ast::FieldType {
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
         Ok(match self {
-            ast::FieldType::Identifier(arity, idn) => type_with_arity(
+            ast::FieldType::Symbol(arity, idn) => type_with_arity(
                 match idn {
                     ast::Identifier::Primitive(t, ..) => FieldType::Primitive(*t),
                     ast::Identifier::Local(name, _) => match db.find_type(idn) {
@@ -497,19 +496,6 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
             span: Some(self.span().clone()),
         };
 
-        for r#fn in db.walk_old_functions() {
-            for r#impl in r#fn.walk_variants() {
-                let node_attributes = to_ir_attributes(db, self.get_override(&r#impl));
-
-                if !node_attributes.is_empty() {
-                    attributes.overrides.insert(
-                        (r#fn.name().to_string(), r#impl.name().to_string()),
-                        node_attributes,
-                    );
-                }
-            }
-        }
-
         attributes
     }
 
@@ -527,19 +513,6 @@ impl WithRepr<Enum> for EnumWalker<'_> {
         };
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
-
-        for r#fn in db.walk_old_functions() {
-            for r#impl in r#fn.walk_variants() {
-                let node_attributes =
-                    to_ir_attributes(db, r#impl.find_serializer_attributes(self.name()));
-                if !node_attributes.is_empty() {
-                    attributes.overrides.insert(
-                        (r#fn.name().to_string(), r#impl.name().to_string()),
-                        node_attributes,
-                    );
-                }
-            }
-        }
 
         attributes
     }
@@ -568,18 +541,6 @@ impl WithRepr<Field> for FieldWalker<'_> {
             overrides: IndexMap::new(),
             span: Some(self.span().clone()),
         };
-
-        for r#fn in db.walk_old_functions() {
-            for r#impl in r#fn.walk_variants() {
-                let node_attributes = to_ir_attributes(db, self.get_override(&r#impl));
-                if !node_attributes.is_empty() {
-                    attributes.overrides.insert(
-                        (r#fn.name().to_string(), r#impl.name().to_string()),
-                        node_attributes,
-                    );
-                }
-            }
-        }
 
         attributes
     }
@@ -610,19 +571,6 @@ impl WithRepr<Class> for ClassWalker<'_> {
         };
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
-
-        for r#fn in db.walk_old_functions() {
-            for r#impl in r#fn.walk_variants() {
-                let node_attributes =
-                    to_ir_attributes(db, r#impl.find_serializer_attributes(self.name()));
-                if !node_attributes.is_empty() {
-                    attributes.overrides.insert(
-                        (r#fn.name().to_string(), r#impl.name().to_string()),
-                        node_attributes,
-                    );
-                }
-            }
-        }
 
         attributes
     }

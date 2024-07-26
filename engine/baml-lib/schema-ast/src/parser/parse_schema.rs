@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
 use super::{
-    parse_template_string::parse_template_string, parse_type_expression::parse_type_expression,
-    parse_value_expression::parse_value_expression, BAMLParser, Rule,
+    parse_template_string::parse_template_string,
+    parse_type_expression_block::parse_type_expression,
+    parse_value_expression_block::parse_value_expression, BAMLParser, Rule,
 };
 use crate::ast::*;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
@@ -57,14 +58,30 @@ pub fn parse_schema(
             while let Some(current) = pairs.next() {
                 match current.as_rule() {
 
-
                     Rule::type_expression_block => {
-                        top_level_definitions.push(Top::Class(parse_type_expression(current, pending_block_comment.take(), &mut diagnostics)));
+                        
+                    
+                    let type_expr = parse_type_expression(current, pending_block_comment.take(), &mut diagnostics);
+                    match type_expr.sub_type {
+                        SubType::Class => top_level_definitions.push(Top::Class(type_expr)),
+                        SubType::Enum => top_level_definitions.push(Top::Enum(type_expr)),
+                        _ => (), // may need to save other somehow for error propagation
+                        }
                     }
-
                     Rule::value_expression_block => {
-                        match parse_value_expression(current, pending_block_comment.take(), &mut diagnostics) {
-                            Ok(value_exp) => top_level_definitions.push(Top::Function(value_exp)),
+                        let val_expr = parse_value_expression(current, pending_block_comment.take(), &mut diagnostics);
+                        match val_expr {
+                            Ok(val) => {
+                                if let Some(top) = match val.block_type {
+                                    ValueExprBlockType::Function => Some(Top::Function(val)),
+                                    ValueExprBlockType::Test => Some(Top::TestCase(val)),
+                                    ValueExprBlockType::Client => Some(Top::Client(val)),
+                                    ValueExprBlockType::RetryPolicy => Some(Top::RetryPolicy(val)),
+                                    ValueExprBlockType::Generator => Some(Top::Generator(val)),
+                                } {
+                                    top_level_definitions.push(top);
+                                }
+                            }
                             Err(e) => diagnostics.push_error(e),
                         }
                     }

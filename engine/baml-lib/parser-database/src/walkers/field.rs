@@ -103,7 +103,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                 "dims": dims,
                 "inner": (self.0, ft.deref()).serialize_data(variant, db),
             }),
-            FieldType::Identifier(arity, Identifier::Primitive(name, ..)) => {
+            FieldType::Symbol(arity, Identifier::Primitive(name, ..)) => {
                 json!({
                     "rtype": "primitive",
                     "optional": arity.is_optional(),
@@ -118,7 +118,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                     }
                 })
             }
-            FieldType::Identifier(arity, Identifier::Local(name, ..)) => {
+            FieldType::Symbol(arity, Identifier::Local(name, ..)) => {
                 match self.0.find_type_by_str(name) {
                     Some(either::Either::Left(cls)) => {
                         let mut class_type = cls.serialize_data(variant, db);
@@ -141,7 +141,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                     }),
                 }
             }
-            FieldType::Identifier(..) => serde_json::Value::Null,
+            FieldType::Symbol(..) => serde_json::Value::Null,
         }
     }
 }

@@ -6,17 +6,16 @@ mod config;
 
 mod expression;
 mod field;
-mod find_at_position;
+
 mod identifier;
 mod indentation_type;
 mod newline_type;
-mod type_expression;
-mod value_expression;
 
 mod template_string;
 mod top;
 mod traits;
-
+mod type_expression_block;
+mod value_expression_block;
 pub(crate) use self::comment::Comment;
 
 pub use argument::{ArguementId, Argument, ArgumentsList};
@@ -24,7 +23,6 @@ pub use attribute::{Attribute, AttributeContainer, AttributeId};
 pub use config::ConfigBlockProperty;
 pub use expression::{Expression, RawString};
 pub use field::{Field, FieldArity, FieldType};
-pub use find_at_position::*;
 pub use identifier::{Identifier, RefIdentifier};
 pub use indentation_type::IndentationType;
 pub use internal_baml_diagnostics::Span;
@@ -32,8 +30,11 @@ pub use newline_type::NewlineType;
 pub use template_string::TemplateString;
 pub use top::Top;
 pub use traits::{WithAttributes, WithDocumentation, WithIdentifier, WithName, WithSpan};
-pub use type_expression::{SubType, TypeExpression, TypeValue};
-pub use value_expression::{ArgumentId, BlockArg, BlockArgList, BlockArgs, SubValueExp, ValueExp};
+pub use type_expression_block::{FieldId, SubType, TypeExpressionBlock};
+pub use value_expression_block::{
+    ArgumentId, BlockArg, BlockArgs, ValueExprBlock, ValueExprBlockType,
+};
+
 /// AST representation of a prisma schema.
 ///
 /// This module is used internally to represent an AST. The AST's nodes can be used
@@ -69,7 +70,7 @@ impl SchemaAst {
     }
 
     /// Iterate over all the generator blocks in the schema.
-    pub fn generators(&self) -> impl Iterator<Item = &ValueExp> {
+    pub fn generators(&self) -> impl Iterator<Item = &ValueExprBlock> {
         self.tops.iter().filter_map(|top| {
             if let Top::Generator(gen) = top {
                 Some(gen)
@@ -84,7 +85,7 @@ impl SchemaAst {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TypeExpId(u32);
 impl std::ops::Index<TypeExpId> for SchemaAst {
-    type Output = TypeExpression;
+    type Output = TypeExpressionBlock;
 
     fn index(&self, index: TypeExpId) -> &Self::Output {
         self.tops[index.0 as usize]
@@ -96,9 +97,9 @@ impl std::ops::Index<TypeExpId> for SchemaAst {
 /// An opaque identifier for a model in a schema AST. Use the
 /// `schema[model_id]` syntax to resolve the id to an `ast::Model`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ValExpId((u32));
+pub struct ValExpId(u32);
 impl std::ops::Index<ValExpId> for SchemaAst {
-    type Output = ValueExp;
+    type Output = ValueExprBlock;
 
     fn index(&self, index: ValExpId) -> &Self::Output {
         let idx = index.0;
@@ -138,8 +139,6 @@ pub enum TopId {
 
     // A generator declaration
     Generator(ValExpId),
-
-    // A variant declaration
 
     // Template Strings
     TemplateString(TemplateStringId),
@@ -191,14 +190,14 @@ impl TopId {
 
     pub fn as_retry_policy_id(self) -> Option<ValExpId> {
         match self {
-            TopId::RetryPolicy((id)) => Some(id),
+            TopId::RetryPolicy(id) => Some(id),
             _ => None,
         }
     }
 
     pub fn as_test_case_id(self) -> Option<ValExpId> {
         match self {
-            TopId::TestCase((id)) => Some(id),
+            TopId::TestCase(id) => Some(id),
             _ => None,
         }
     }
