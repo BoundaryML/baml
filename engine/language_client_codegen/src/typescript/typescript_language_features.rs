@@ -1,5 +1,5 @@
 use crate::dir_writer::LanguageFeatures;
-use internal_baml_core::ir::TypeValue;
+use baml_types::{BamlMediaType, TypeValue};
 
 #[derive(Default)]
 pub(super) struct TypescriptLanguageFeatures {}
@@ -32,14 +32,15 @@ pub(super) trait ToTypescript {
 
 impl ToTypescript for TypeValue {
     fn to_typescript(&self) -> String {
-        match self {
-            TypeValue::Bool => "boolean".to_string(),
-            TypeValue::Float => "number".to_string(),
-            TypeValue::Int => "number".to_string(),
-            TypeValue::String => "string".to_string(),
-            TypeValue::Null => "null".to_string(),
-            TypeValue::Image => "Image".to_string(),
-            TypeValue::Audio => "Audio".to_string(),
-        }
+        let var_name = &match self {
+            TypeValue::Bool => "boolean",
+            TypeValue::Float => "number",
+            TypeValue::Int => "number",
+            TypeValue::String => "string",
+            TypeValue::Null => "null",
+            TypeValue::Media(BamlMediaType::Image) => "Image",
+            TypeValue::Media(BamlMediaType::Audio) => "Audio",
+        };
+        var_name.to_string()
     }
 }

@@ -218,15 +218,9 @@ fn render_minijinja(
                         .unwrap_or(part);
 
                     match serde_json::from_str::<BamlMedia>(media_data) {
-                        Ok(media) => match media {
-                            BamlMedia::Url(media_type, _) => match media_type {
-                                BamlMediaType::Image => parts.push(ChatMessagePart::Image(media)),
-                                BamlMediaType::Audio => parts.push(ChatMessagePart::Audio(media)),
-                            },
-                            BamlMedia::Base64(media_type, _) => match media_type {
-                                BamlMediaType::Image => parts.push(ChatMessagePart::Image(media)),
-                                BamlMediaType::Audio => parts.push(ChatMessagePart::Audio(media)),
-                            },
+                        Ok(m) => match m.media_type() {
+                            BamlMediaType::Image => parts.push(ChatMessagePart::Image(m)),
+                            BamlMediaType::Audio => parts.push(ChatMessagePart::Audio(m)),
                         },
                         Err(_) => {
                             Err(minijinja::Error::new(

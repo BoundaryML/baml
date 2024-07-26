@@ -66,11 +66,56 @@ test Test1 {
 ```
 
 ## Images
-An `image` input type is translated into this object (assuming the function signature is `function MyFunction(myImage: image) -> ...`):
 
-URL input
+For a function that takes an image as input, like so:
+
+```baml
+function MyFunction(myImage: image) -> string {
+  client GPT4o
+  prompt #"
+    Describe this image: {{myImage}}
+  "#
+}
+```
+
+You can define test cases using image files, URLs, or base64 strings.
+
+### Using a file
+
+<Warning>
+  Committing a lot of images into your repository can make it slow to clone and
+  pull your repository. If you expect to commit >500MiB of images, please read
+  [GitHub's size limit documentation][github-large-files] and consider setting
+  up [large file storage][github-lfs].
+</Warning>
+
+[github-large-files]: https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github
+[github-lfs]: https://docs.github.com/en/repositories/working-with-files/managing-large-files/configuring-git-large-file-storage
+
 ```baml
 test Test1 {
+  functions [MyFunction]
+  args {
+    myImage {
+      file "baml_src://path/to/image.png"
+      media_type "image/png"
+    }
+  }
+}
+```
+
+<ParamField path="file" type="string" required="true">
+  The path in `baml_src` to the image file.
+</ParamField>
+
+<ParamField path="media_type" type="string" required="true">
+  The type of image file.
+</ParamField>
+
+### Using a URL
+```baml
+test Test1 {
+  functions [MyFunction]
   args {
     myImage {
       url "https...."
@@ -78,7 +123,8 @@ test Test1 {
   }
 }
 ```
-base64 input
+
+### Using a base64 string
 ```baml
 test Test1 {
   args {
@@ -89,25 +135,72 @@ test Test1 {
   }
 }
 ```
-file input (coming soon)
 
 
 ## Audio
-Audio inputs are similar to images:
 
-URL input
-```rust
-...
- {
-   url "https//domain.com/somefile.mp3"
- }
-...
-```
-Base64 input
-```rust
-{
-  media_type "audio/mp3"
-  base64 "base64string"
+For a function that takes audio as input, like so:
+
+```baml
+function MyFunction(myAudio: audio) -> string {
+  client GPT4o
+  prompt #"
+    Describe this audio: {{myAudio}}
+  "#
 }
 ```
-file input (coming soon)
+
+You can define test cases using audio files, URLs, or base64 strings.
+
+### Using a file
+
+<Warning>
+  Committing a lot of audio files into your repository can make it slow to clone and
+  pull your repository. If you expect to commit >500MiB of audio, please read
+  [GitHub's size limit documentation][github-large-files] and consider setting
+  up [large file storage][github-lfs].
+</Warning>
+
+```baml
+test Test1 {
+  functions [MyFunction]
+  args {
+    myAudio {
+      file "baml_src://path/to/audio.mp3"
+      media_type "audio/mp3"
+    }
+  }
+}
+```
+
+<ParamField path="file" type="string" required="true">
+  The path in `baml_src` to the audio file.
+</ParamField>
+
+<ParamField path="media_type" type="string" required="true">
+  The type of audio file.
+</ParamField>
+
+### Using a URL
+```baml
+test Test1 {
+  functions [MyFunction]
+  args {
+    myAudio {
+      url "https...."
+    }
+  }
+}
+```
+
+### Using a base64 string
+```baml
+test Test1 {
+  args {
+    myAudio {
+      base64 "base64string"
+      media_type "audio/mp3"
+    }
+  }
+}
+```

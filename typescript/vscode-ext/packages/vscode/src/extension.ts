@@ -49,6 +49,10 @@ interface LinterRuleOutput {
   ruleName: string
 }
 
+const postMessageToWebview = ({ command, content }: VscodeToWebviewCommand) => {
+  WebPanelView.currentPanel?.postMessage(command, content)
+}
+
 async function runDiagnostics(): Promise<void> {
   const editor = vscode.window.activeTextEditor
   if (!editor) {
@@ -146,6 +150,7 @@ async function runDiagnostics(): Promise<void> {
 
 import type { Express } from 'express'
 import StatusBarPanel from './panels/StatusBarPanel'
+import { VscodeToWebviewCommand } from './rpc'
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('BAML extension activating')
@@ -170,8 +175,11 @@ export function activate(context: vscode.ExtensionContext) {
   var port: number
   const server = app.listen(0, () => {
     console.log('Server started on port ' + getPort())
-    WebPanelView.currentPanel?.postMessage('port_number', {
-      port: port,
+    postMessageToWebview({
+      command: 'port_number',
+      content: {
+        port: port,
+      },
     })
   })
 
@@ -245,9 +253,12 @@ export function activate(context: vscode.ExtensionContext) {
       requestDiagnostics()
 
       openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
-      WebPanelView.currentPanel?.postMessage('select_function', {
-        root_path: 'default',
-        function_name: args?.functionName ?? 'default',
+      postMessageToWebview({
+        command: 'select_function',
+        content: {
+          root_path: 'default',
+          function_name: args?.functionName ?? 'default',
+        },
       })
 
       console.info('Opening BAML panel')
@@ -275,13 +286,19 @@ export function activate(context: vscode.ExtensionContext) {
       requestDiagnostics()
 
       openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
-      WebPanelView.currentPanel?.postMessage('select_function', {
-        root_path: 'default',
-        function_name: args?.functionName ?? 'default',
+      postMessageToWebview({
+        command: 'select_function',
+        content: {
+          root_path: 'default',
+          function_name: args?.functionName ?? 'default',
+        },
       })
 
-      WebPanelView.currentPanel?.postMessage('run_test', {
-        test_name: args?.testCaseName ?? 'default',
+      postMessageToWebview({
+        command: 'run_test',
+        content: {
+          test_name: args?.testCaseName ?? 'default',
+        },
       })
 
       console.info('Opening BAML panel')
@@ -311,12 +328,15 @@ export function activate(context: vscode.ExtensionContext) {
       const text = editor.document.getText()
 
       // TODO: buggy when used with multiple functions, needs a fix.
-      WebPanelView.currentPanel?.postMessage('update_cursor', {
-        cursor: {
-          fileName: name,
-          fileText: text,
-          line: position.line + 1,
-          column: position.character,
+      postMessageToWebview({
+        command: 'update_cursor',
+        content: {
+          cursor: {
+            fileName: name,
+            fileText: text,
+            line: position.line + 1,
+            column: position.character,
+          },
         },
       })
     }
@@ -341,9 +361,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand('baml.openBamlPanel')
   }
 
-  setInterval(() => {
-    requestBamlCLIVersion()
-  }, 30000)
+  // TODO: uncomment this
+  // setInterval(() => {
+  //   requestBamlCLIVersion()
+  // }, 30000)
 
   // TODO: Reactivate linter.
   // runDiagnostics();

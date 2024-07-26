@@ -39,6 +39,7 @@ use runtime::InternalBamlRuntime;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::CallerType;
+pub use runtime_context::BamlSrcReader;
 use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
 use runtime_interface::RuntimeInterface;
@@ -124,8 +125,12 @@ impl BamlRuntime {
         cli::RuntimeCli::parse_from(argv.into_iter()).run(caller_type)
     }
 
-    pub fn create_ctx_manager(&self, language: BamlValue) -> RuntimeContextManager {
-        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone());
+    pub fn create_ctx_manager(
+        &self,
+        language: BamlValue,
+        baml_src_reader: BamlSrcReader,
+    ) -> RuntimeContextManager {
+        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader);
         let tags: HashMap<String, BamlValue> = [("baml.language", language)]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
@@ -152,20 +157,30 @@ impl BamlRuntime {
             Ok(rctx) => {
                 let params = self.inner.get_test_params(function_name, test_name, &rctx);
                 match params {
-                    Ok(params) => {
-                        match self.stream_function(function_name.into(), &params, ctx, None, None) {
-                            Ok(mut stream) => {
-                                let (response, span) = stream.run(on_event, ctx, None, None).await;
-                                let response = response.map(|res| TestResponse {
-                                    function_response: res,
-                                    function_span: span,
-                                });
-
-                                response
+                    Ok(params) => match ctx.create_ctx(None, None) {
+                        Ok(rctx_stream) => {
+                            let stream = self.inner.stream_function_impl(
+                                function_name.into(),
+                                &params,
+                                self.tracer.clone(),
+                                rctx_stream,
+                                #[cfg(not(target_arch = "wasm32"))]
+                                self.async_runtime.clone(),
+                            );
+                            match stream {
+                                Ok(mut stream) => {
+                                    let (response, span) =
+                                        stream.run(on_event, ctx, None, None).await;
+                                    response.map(|res| TestResponse {
+                                        function_response: res,
+                                        function_span: span,
+                                    })
+                                }
+                                Err(e) => Err(e),
                             }
-                            Err(e) => Err(e),
                         }
-                    }
+                        Err(e) => Err(e),
+                    },
                     Err(e) => Err(e),
                 }
             }

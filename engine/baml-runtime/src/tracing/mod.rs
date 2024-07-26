@@ -625,25 +625,29 @@ impl From<&RenderedPrompt> for Template {
                                 internal_baml_jinja::ChatMessagePart::Image(media)
                                 | internal_baml_jinja::ChatMessagePart::Audio(media) => match media
                                 {
-                                    baml_types::BamlMedia::Base64(media_type, data) => {
-                                        match media_type {
-                                            BamlMediaType::Image => {
-                                                ContentPart::B64Image(data.base64.clone())
-                                            }
-                                            BamlMediaType::Audio => {
-                                                ContentPart::B64Audio(data.base64.clone())
-                                            }
-                                        }
+                                    baml_types::BamlMedia::File(BamlMediaType::Image, data) => {
+                                        ContentPart::FileImage(
+                                            data.baml_path.clone(),
+                                            data.relpath.clone(),
+                                        )
                                     }
-                                    baml_types::BamlMedia::Url(media_type, data) => {
-                                        match media_type {
-                                            BamlMediaType::Image => {
-                                                ContentPart::UrlImage(data.url.clone())
-                                            }
-                                            BamlMediaType::Audio => {
-                                                ContentPart::UrlAudio(data.url.clone())
-                                            }
-                                        }
+                                    baml_types::BamlMedia::Base64(BamlMediaType::Image, data) => {
+                                        ContentPart::B64Image(data.base64.clone())
+                                    }
+                                    baml_types::BamlMedia::Url(BamlMediaType::Image, data) => {
+                                        ContentPart::UrlImage(data.url.clone())
+                                    }
+                                    baml_types::BamlMedia::File(BamlMediaType::Audio, data) => {
+                                        ContentPart::FileAudio(
+                                            data.baml_path.clone(),
+                                            data.relpath.clone(),
+                                        )
+                                    }
+                                    baml_types::BamlMedia::Base64(BamlMediaType::Audio, data) => {
+                                        ContentPart::B64Audio(data.base64.clone())
+                                    }
+                                    baml_types::BamlMedia::Url(BamlMediaType::Audio, data) => {
+                                        ContentPart::UrlAudio(data.url.clone())
                                     }
                                 },
                             })

@@ -10,9 +10,7 @@ use tokio::{
     task,
 };
 
-use baml_runtime::{
-    BamlRuntime, InternalRuntimeInterface, RuntimeContextManager, TestResponse,
-};
+use baml_runtime::{BamlRuntime, InternalRuntimeInterface, RuntimeContextManager, TestResponse};
 
 use super::filter::FilterArgs;
 
@@ -283,6 +281,7 @@ impl TestCommand {
                 // println!("Updated state: {} {}", function_name, test_name);
 
                 let (res, _) = rt
+                    // TODO: this impl isn't really correct, i haven't yet defined the semantics for what get_baml_src_cb should do
                     .run_test(&function_name, &test_name, &ctx, Some(|_| ()))
                     .await;
                 res
@@ -328,7 +327,7 @@ impl TestCommand {
             let sem_clone = semaphore.clone();
 
             let state_clone = locked_state.clone();
-            let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()));
+            let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()), None);
             let handle = self.test_handler(sem_clone, &test, state_clone, &ctx, bars.clone());
 
             handles.push(handle);

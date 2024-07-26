@@ -1,4 +1,5 @@
-use internal_baml_core::ir::{Expression, Identifier, TypeValue};
+use baml_types::{BamlMediaType, TypeValue};
+use internal_baml_core::ir::{Expression, Identifier};
 
 use super::ruby_language_features::ToRuby;
 
@@ -42,13 +43,14 @@ impl ToRuby for Expression {
 impl ToRuby for TypeValue {
     fn to_ruby(&self) -> String {
         match self {
-            TypeValue::Bool => "boolean".to_string(),
-            TypeValue::Float => "number".to_string(),
-            TypeValue::Int => "number".to_string(),
-            TypeValue::String => "string".to_string(),
-            TypeValue::Null => "null".to_string(),
-            TypeValue::Image => "Image".to_string(),
-            TypeValue::Audio => "Audio".to_string(),
+            TypeValue::Bool => "boolean",
+            TypeValue::Float => "number",
+            TypeValue::Int => "number",
+            TypeValue::String => "string",
+            TypeValue::Null => "null",
+            TypeValue::Media(BamlMediaType::Image) => "Image",
+            TypeValue::Media(BamlMediaType::Audio) => "Audio",
         }
+        .to_string()
     }
 }

@@ -22,7 +22,7 @@ use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
-    ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
+    ir::{repr::IntermediateRepr, ArgCoercer, FunctionWalker, IRHelper},
     validate,
 };
 use internal_baml_jinja::RenderedPrompt;
@@ -124,7 +124,14 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         node_index: Option<usize>,
     ) -> Result<(RenderedPrompt, OrchestrationScope)> {
         let func = self.get_function(function_name, ctx)?;
-        let baml_args = self.ir().check_function_params(&func, params, false)?;
+        let baml_args = self.ir().check_function_params(
+            &func,
+            params,
+            ArgCoercer {
+                test_path: None,
+                allow_implicit_cast_to_string: false,
+            },
+        )?;
 
         let renderer = PromptRenderer::from_function(&func, &self.ir(), ctx)?;
         let client_name = renderer.client_name().to_string();
@@ -227,8 +234,17 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
                     ));
                 }
 
-                let baml_args = self.ir().check_function_params(&func, &params, true)?;
-                Ok(baml_args.as_map_owned().unwrap())
+                let baml_args = self.ir().check_function_params(
+                    &func,
+                    &params,
+                    ArgCoercer {
+                        test_path: test.span().map(|s| s.file.path_buf().clone()),
+                        allow_implicit_cast_to_string: true,
+                    },
+                )?;
+                baml_args
+                    .as_map_owned()
+                    .context("Test params must be a map")
             }
             Err(e) => return Err(anyhow::anyhow!("Unable to resolve test params: {:?}", e)),
         }
@@ -331,7 +347,14 @@ impl RuntimeInterface for InternalBamlRuntime {
         ctx: RuntimeContext,
     ) -> Result<crate::FunctionResult> {
         let func = self.get_function(&function_name, &ctx)?;
-        let baml_args = self.ir().check_function_params(&func, &params, false)?;
+        let baml_args = self.ir().check_function_params(
+            &func,
+            &params,
+            ArgCoercer {
+                test_path: None,
+                allow_implicit_cast_to_string: false,
+            },
+        )?;
 
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
         let client_name = renderer.client_name().to_string();
@@ -361,7 +384,14 @@ impl RuntimeInterface for InternalBamlRuntime {
         let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
         let Some(baml_args) = self
             .ir
-            .check_function_params(&func, &params, false)?
+            .check_function_params(
+                &func,
+                &params,
+                ArgCoercer {
+                    test_path: None,
+                    allow_implicit_cast_to_string: false,
+                },
+            )?
             .as_map_owned()
         else {
             anyhow::bail!("Expected parameters to be a map for: {}", function_name);

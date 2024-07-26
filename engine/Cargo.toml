@@ -50,6 +50,7 @@ strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = "0.26.2"
 time = { version = "0.3.36", features = ["formatting"] }
 pin-project-lite = "0.2.14"
+url = "2.5.2"
 walkdir = "2.5.0"
 web-time = "1.1.0"
 

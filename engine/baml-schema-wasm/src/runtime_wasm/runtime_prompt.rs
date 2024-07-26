@@ -84,9 +84,13 @@ impl WasmChatMessagePart {
     pub fn as_image(&self) -> Option<String> {
         if let ChatMessagePart::Image(s) = &self.part {
             Some(match s {
-                BamlMedia::Url(BamlMediaType::Image, u) => u.url.clone(),
-                BamlMedia::Base64(BamlMediaType::Image, b) => b.base64.clone(),
-                _ => return None, // This will match any other case and return None
+                BamlMedia::Url(_, u) => u.url.clone(),
+                BamlMedia::Base64(_, b) => b.base64.clone(),
+                BamlMedia::File(_, f) => match f.baml_path.parent() {
+                    // TODO: this doesn't handle non-UTF8 paths
+                    Some(parent) => parent.join(&f.relpath).to_string_lossy().into_owned(),
+                    None => "<error: unresolveable path>".to_string(),
+                },
             })
         } else {
             None
