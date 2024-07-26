@@ -1,17 +1,13 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
-import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import React, { useCallback } from 'react'
-
-import '@xyflow/react/dist/style.css'
+import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import {
   renderPromptAtom,
+  selectedBamlSrcAtom,
   selectedFunctionAtom,
   curlAtom,
   streamCurl,
-  orchestration_nodes,
-  GroupEntry,
-  Edge,
+  imageUrlAtomFamily,
 } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
@@ -23,6 +19,8 @@ import { Button } from '../components/ui/button'
 import { CheckboxHeader } from './CheckboxHeader'
 import { Switch } from '../components/ui/switch'
 import CustomErrorBoundary from '../utils/ErrorFallback'
+import { vscode } from '../utils/vscode'
+import { atomFamily } from 'jotai/utils'
 const handleCopy = (text: string) => () => {
   navigator.clipboard.writeText(text)
 }
@@ -63,6 +61,24 @@ const CurlSnippet: React.FC = () => {
         showCopy={true}
       />
     </div>
+  )
+}
+
+const WebviewImage = ({ imageUrl }: { imageUrl: string }) => {
+  const bamlSrcRoot = useAtomValue(selectedBamlSrcAtom)
+
+  if (!bamlSrcRoot) {
+    return null
+  }
+
+  const [processedUrl] = useAtom(imageUrlAtomFamily([bamlSrcRoot, imageUrl]))
+
+  return (
+    <CustomErrorBoundary>
+      <a href={imageUrl} target='_blank' rel='noopener noreferrer'>
+        <img src={processedUrl} className='max-w-[400px] object-cover' />
+      </a>
+    </CustomErrorBoundary>
   )
 }
 
@@ -125,12 +141,9 @@ const PromptPreview: React.FC = () => {
                   }}
                 />
               )
-            if (part.is_image())
-              return (
-                <a key={idx} href={part.as_image()} target='_blank'>
-                  <img key={idx} src={part.as_image()} className='max-w-[400px] object-cover' />
-                </a>
-              )
+            if (part.is_image()) {
+              return <WebviewImage imageUrl={part.as_image()!} />
+            }
             if (part.is_audio()) {
               const audioUrl = part.as_audio()
               if (audioUrl) {

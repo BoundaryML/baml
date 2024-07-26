@@ -274,16 +274,10 @@ impl OutputFormatContent {
                 TypeValue::Float => "float".to_string(),
                 TypeValue::Bool => "bool".to_string(),
                 TypeValue::Null => "null".to_string(),
-                TypeValue::Image => {
+                TypeValue::Media(media_type) => {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
-                        "Image type is not supported in outputs",
-                    ))
-                }
-                TypeValue::Audio => {
-                    return Err(minijinja::Error::new(
-                        minijinja::ErrorKind::BadSerialization,
-                        "Audio type is not supported in outputs",
+                        format!("type '{media_type}' is not supported in outputs"),
                     ))
                 }
             },

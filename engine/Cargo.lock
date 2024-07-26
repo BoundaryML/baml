@@ -889,6 +889,7 @@ dependencies = [
  "serde-wasm-bindgen 0.4.5",
  "serde_json",
  "time",
+ "url",
  "uuid",
  "walkdir",
  "wasm-bindgen",
@@ -2283,6 +2284,7 @@ version = "0.53.0"
 dependencies = [
  "anyhow",
  "askama",
+ "baml-types",
  "base64 0.22.1",
  "cfg-if",
  "colored",

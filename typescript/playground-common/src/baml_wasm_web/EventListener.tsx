@@ -17,6 +17,7 @@ import type {
   WasmScope,
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { vscode } from '../utils/vscode'
+import { EchoRequest, EchoResponse, GetBamlSrcRequest, GetBamlSrcResponse, VscodeToWebviewCommand } from './rpc'
 import { useRunHooks } from './test_uis/testHooks'
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
@@ -316,6 +317,20 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
   }))
 })
 
+export const selectedBamlSrcAtom = atom((get) => {
+  const selectedProject = get(selectedProjectAtom)
+  if (selectedProject === null) {
+    return
+  }
+
+  const project = get(projectFamilyAtom(selectedProject))
+  if (!project) {
+    return null
+  }
+
+  return project.root_dir_name
+})
+
 export const selectedRuntimeAtom = atom((get) => {
   const project = get(selectedProjectAtom)
   if (!project) {
@@ -392,6 +407,14 @@ const asyncCurlAtom = atom(async (get) => {
     return `${e}`
   }
 })
+
+export const imageUrlAtomFamily = atomFamily(
+  ([bamlSrc, imageUrl]: [string, string]) =>
+    atom(async () => {
+      return await vscode.asWebviewUri(bamlSrc, imageUrl)
+    }),
+  (a, b) => a[0] === b[0] && a[1] === b[1],
+)
 
 export const curlAtom = unwrap(asyncCurlAtom)
 
@@ -928,58 +951,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [wasm, envVars])
 
   useEffect(() => {
-    const fn = (
-      event: MessageEvent<
-        | {
-            command: 'modify_file'
-            content: {
-              root_path: string
-              name: string
-              content: string | undefined
-            }
-          }
-        | {
-            command: 'add_project'
-            content: {
-              root_path: string
-              files: Record<string, string>
-            }
-          }
-        | {
-            command: 'remove_project'
-            content: {
-              root_path: string
-            }
-          }
-        | {
-            command: 'select_function'
-            content: {
-              root_path: string
-              function_name: string
-            }
-          }
-        | {
-            command: 'update_cursor'
-            content: {
-              cursor: { fileName: string; fileText: string; line: number; column: number }
-            }
-          }
-        | {
-            command: 'port_number'
-            content: {
-              port: number
-            }
-          }
-        | {
-            command: 'baml_cli_version'
-            content: string
-          }
-        | {
-            command: 'run_test'
-            content: { test_name: string }
-          }
-      >,
-    ) => {
+    const fn = (event: MessageEvent<VscodeToWebviewCommand>) => {
       const { command, content } = event.data
 
       switch (command) {
@@ -1042,6 +1014,28 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           run([content.test_name])
           setShowTests(true)
           setClientGraph(false)
+          ;(async () => {
+            try {
+              const echoResp = await vscode.rpc<EchoRequest, EchoResponse>({
+                vscodeCommand: 'ECHO',
+                message: 'lorem ipsum',
+              })
+              console.log('Echo response', echoResp)
+            } catch (e) {
+              console.error(e)
+            }
+            try {
+              const getBamlSrcResp = await vscode.rpc<GetBamlSrcRequest, GetBamlSrcResponse>({
+                vscodeCommand: 'GET_BAML_SRC',
+                path: 'baml_src://xkcd-grownups.png',
+              })
+              // contents comes back as { data: Uint8Array, type: 'Buffer' }
+              console.log('get-baml-src response', ((getBamlSrcResp.contents as any).data as Uint8Array).length)
+            } catch (e) {
+              console.error(e)
+            }
+          })()
+
           break
       }
     }

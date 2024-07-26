@@ -1,23 +1,29 @@
 pub mod generator;
 pub mod runtime_prompt;
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
+use anyhow::Context;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
 use baml_runtime::internal_core::configuration::GeneratorOutputType;
+use baml_runtime::BamlSrcReader;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
-use baml_types::{BamlMap, BamlValue};
+use baml_types::{BamlMap, BamlMediaType, BamlValue, TypeValue};
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
 
 use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
+use internal_baml_core::ir::Expression;
+use js_sys::Promise;
+use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
 
 use self::runtime_prompt::WasmScope;
 use wasm_bindgen::JsValue;
@@ -25,7 +31,8 @@ use wasm_bindgen::JsValue;
 use anyhow::Result;
 
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
-// but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+// but for browser we likely need to do
+//         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 // Node is run using: wasm-pack test --node --features internal,wasm
 
 #[wasm_bindgen(start)]
@@ -40,11 +47,12 @@ pub fn on_wasm_init() {
     console_error_panic_hook::set_once();
 }
 
-#[wasm_bindgen(inspectable)]
+#[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Serialize, Deserialize)]
 
 pub struct WasmProject {
-    root_dir_name: String,
+    #[wasm_bindgen(readonly)]
+    pub root_dir_name: String,
     // This is the version of the file on disk
     files: HashMap<String, String>,
     // This is the version of the file that is currently being edited
@@ -145,11 +153,6 @@ impl WasmProject {
             files,
             unsaved_files: HashMap::new(),
         })
-    }
-
-    #[wasm_bindgen]
-    pub fn root_dir_name(&self) -> String {
-        self.root_dir_name.clone()
     }
 
     #[wasm_bindgen]
@@ -656,7 +659,7 @@ fn get_dummy_value(
     match t {
         baml_runtime::FieldType::Primitive(t) => {
             let dummy = match t {
-                baml_runtime::TypeValue::String => {
+                TypeValue::String => {
                     if allow_multiline {
                         format!(
                             "#\"\n{indent1}hello world\n{indent_str}\"#",
@@ -666,14 +669,14 @@ fn get_dummy_value(
                         "\"a_string\"".to_string()
                     }
                 }
-                baml_runtime::TypeValue::Int => "123".to_string(),
-                baml_runtime::TypeValue::Float => "0.5".to_string(),
-                baml_runtime::TypeValue::Bool => "true".to_string(),
-                baml_runtime::TypeValue::Null => "null".to_string(),
-                baml_runtime::TypeValue::Image => {
+                TypeValue::Int => "123".to_string(),
+                TypeValue::Float => "0.5".to_string(),
+                TypeValue::Bool => "true".to_string(),
+                TypeValue::Null => "null".to_string(),
+                TypeValue::Media(BamlMediaType::Image) => {
                     "{ url \"https://imgs.xkcd.com/comics/standards.png\"}".to_string()
                 }
-                baml_runtime::TypeValue::Audio => {
+                TypeValue::Media(BamlMediaType::Audio) => {
                     "{ url \"https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg\"}".to_string()
                 }
             };
@@ -771,7 +774,6 @@ impl WasmRuntime {
 #[wasm_bindgen]
 impl WasmRuntime {
     #[wasm_bindgen]
-
     pub fn check_if_in_prompt(&self, cursor_idx: usize) -> bool {
         self.runtime
             .internal()
@@ -1297,6 +1299,40 @@ impl From<&OrchestratorNode> for SerializableOrchestratorNode {
     }
 }
 
+fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader {
+    Some(Box::new(move |path| {
+        Box::pin({
+            // TODO: this doesn't handle non-UTF8 paths
+            let path = path.to_string_lossy().into_owned();
+            let get_baml_src_cb = get_baml_src_cb.clone();
+            async move {
+                let null = JsValue::NULL;
+                let Ok(read) = get_baml_src_cb.call1(&null, &JsValue::from(path.clone())) else {
+                    anyhow::bail!(
+                        "Failed to read file {} because get-baml-src callback failed",
+                        path
+                    )
+                };
+                log::info!("get-baml-src rust: got promise back from js for {}", path);
+
+                let read = JsFuture::from(Promise::unchecked_from_js(read)).await;
+
+                let Ok(read) = read else {
+                    anyhow::bail!(
+                        "Failed to read file {} because get-baml-src promise rejected",
+                        path
+                    )
+                };
+
+                log::info!("get-baml-src rust: future resolved {}", path);
+
+                // TODO: how does JsValue -> Uint8Array work without try_from?
+                Ok(Uint8Array::from(read).to_vec())
+            }
+        })
+    }))
+}
+
 #[wasm_bindgen]
 impl WasmFunction {
     #[wasm_bindgen]
@@ -1311,7 +1347,7 @@ impl WasmFunction {
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
         let ctx = rt
             .runtime
-            .create_ctx_manager(BamlValue::String("wasm".to_string()))
+            .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default(missing_env_vars.iter());
 
         rt.runtime
@@ -1329,7 +1365,7 @@ impl WasmFunction {
     #[wasm_bindgen]
     pub fn client_name(&self, rt: &WasmRuntime) -> Result<String, JsValue> {
         let rt: &BamlRuntime = &rt.runtime;
-        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
+        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
         let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
         let ir = rt.internal().ir();
         let walker = ir
@@ -1355,7 +1391,7 @@ impl WasmFunction {
 
         let ctx = rt
             .runtime
-            .create_ctx_manager(BamlValue::String("wasm".to_string()))
+            .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default(missing_env_vars.iter());
 
         let result =
@@ -1384,6 +1420,7 @@ impl WasmFunction {
         rt: &mut WasmRuntime,
         test_name: String,
         cb: js_sys::Function,
+        get_baml_src_cb: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
         let rt = &rt.runtime;
 
@@ -1398,7 +1435,10 @@ impl WasmFunction {
             cb.call1(&this, &res).unwrap();
         });
 
-        let ctx = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
+        let ctx = rt.create_ctx_manager(
+            BamlValue::String("wasm".to_string()),
+            js_fn_to_baml_src_reader(get_baml_src_cb),
+        );
         let (test_response, span) = rt
             .run_test(&function_name, &test_name, &ctx, Some(cb))
             .await;
@@ -1412,7 +1452,7 @@ impl WasmFunction {
 
     pub fn orchestration_graph(&self, rt: &WasmRuntime) -> Result<Vec<WasmScope>, JsValue> {
         let rt: &BamlRuntime = &rt.runtime;
-        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
+        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
         let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
         let ir = rt.internal().ir();
         let walker = ir

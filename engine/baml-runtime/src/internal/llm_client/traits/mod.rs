@@ -1,6 +1,6 @@
-use std::pin::Pin;
+use std::{path::PathBuf, pin::Pin};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 mod chat;
 mod completion;
@@ -79,11 +79,13 @@ where
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse {
         let resolve_media = self.model_features().resolve_media_urls;
         let if_mime = resolve_media == ResolveMedia::MissingMime;
-        if resolve_media == ResolveMedia::Always || if_mime {
-            if let RenderedPrompt::Chat(ref chat) = prompt {
+        // TODO: this is a workaround
+        //if resolve_media == ResolveMedia::Always || if_mime {
+        if true {
+            if let RenderedPrompt::Chat(chat) = &prompt {
                 match process_media_urls(if_mime, ctx, chat).await {
                     Ok(messages) => return self.chat(ctx, &messages).await,
-                    Err(e) => return LLMResponse::OtherFailure(format!("Error occurred: {}", e)),
+                    Err(e) => return LLMResponse::OtherFailure(format!("Error occurred: {:#}", e)),
                 }
             }
         }
@@ -111,7 +113,7 @@ where
             if let RenderedPrompt::Chat(ref chat) = prompt {
                 return process_media_urls(if_mime, ctx, chat)
                     .await
-                    .map_err(|e| LLMResponse::OtherFailure(format!("Error occurred: {}", e)));
+                    .map_err(|e| LLMResponse::OtherFailure(format!("Error occurred: {:#}", e)));
             }
         }
 
@@ -276,12 +278,16 @@ where
     async fn stream(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> StreamResponse {
         if let RenderedPrompt::Chat(ref chat) = prompt {
             let resolve_media = self.model_features().resolve_media_urls;
-            if resolve_media == ResolveMedia::Always || resolve_media == ResolveMedia::MissingMime {
+            // if resolve_media == ResolveMedia::Always || resolve_media == ResolveMedia::MissingMime {
+            if true {
                 let if_mime = resolve_media == ResolveMedia::MissingMime;
                 match process_media_urls(if_mime, ctx, chat).await {
                     Ok(messages) => return self.stream_chat(ctx, &messages).await,
                     Err(e) => {
-                        return Err(LLMResponse::OtherFailure(format!("Error occurred: {}", e)))
+                        return Err(LLMResponse::OtherFailure(format!(
+                            "Error occurred: {:#}",
+                            e
+                        )))
                     }
                 }
             }
@@ -305,6 +311,54 @@ async fn process_media_urls(
             .iter()
             .map(|part| async move {
                 match part {
+                    ChatMessagePart::Image(BamlMedia::File(_, media_file))
+                    | ChatMessagePart::Audio(BamlMedia::File(_, media_file)) => {
+                        let Some(ref baml_src_reader) = *ctx.baml_src else {
+                            anyhow::bail!("Internal error: no baml src reader provided");
+                        };
+
+                        // TODO: ask the proxy in wasm
+                        let media_path = media_file
+                            .baml_path
+                            .parent()
+                            .context("Internal error: no path to resolve against")?
+                            .join(&media_file.relpath);
+                        let bytes = baml_src_reader(media_path.as_os_str())
+                            .await
+                            .context(format!("Failed to read file {:#}", media_path.display()))?;
+
+                        // let inferred_type = infer::get(&bytes);
+                        // if media_file.media_type.is_empty() {
+                        //     let mime_type = inferred_type
+                        //         .map(|t| t.extension().to_string())
+                        //         .unwrap_or_else(|| "application/octet-stream".into());
+                        // } else {
+                        //     Ok(part.clone())
+                        // }
+                        if matches!(part, ChatMessagePart::Image(_)) {
+                            Ok(ChatMessagePart::Image(BamlMedia::Base64(
+                                BamlMediaType::Image,
+                                MediaBase64 {
+                                    base64: BASE64_STANDARD.encode(&bytes),
+                                    media_type: media_file
+                                        .media_type
+                                        .clone()
+                                        .unwrap_or("image/???".into()),
+                                },
+                            )))
+                        } else {
+                            Ok(ChatMessagePart::Audio(BamlMedia::Base64(
+                                BamlMediaType::Audio,
+                                MediaBase64 {
+                                    base64: BASE64_STANDARD.encode(&bytes),
+                                    media_type: media_file
+                                        .media_type
+                                        .clone()
+                                        .unwrap_or("audio/???".into()),
+                                },
+                            )))
+                        }
+                    }
                     ChatMessagePart::Image(BamlMedia::Url(_, media_url))
                     | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
                         if !if_mime || media_url.media_type.as_deref().unwrap_or("").is_empty() {
@@ -350,6 +404,7 @@ async fn process_media_urls(
                                     }
                                 };
                                 let base64 = BASE64_STANDARD.encode(&bytes);
+                                // TODO: infer based on file extension?
                                 let inferred_type = infer::get(&bytes);
                                 let mime_type = inferred_type.map_or_else(
                                     || "application/octet-stream".into(),

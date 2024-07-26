@@ -1,5 +1,5 @@
 function TestImageInput(img: image) -> string{
-  client Gemini
+  client GPT4o
   prompt #"
     {{ _.role("user") }}
 
@@ -25,6 +25,17 @@ test  shrek {
     img {
       
       url "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+    }
+  }
+}
+test  ashrek2 {
+  functions [TestImageInput]
+  args {
+    img {
+      media_type "image/png"
+      // file "baml_src://shrek.png"
+      file "shrek 2.png"
+      //file "shrek-🐵.png"
     }
   }
 }
