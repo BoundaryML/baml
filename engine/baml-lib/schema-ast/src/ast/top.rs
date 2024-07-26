@@ -42,37 +42,21 @@ impl Top {
     }
 
     /// Try to interpret the item as an enum declaration.
-    pub fn as_enum(&self) -> Option<&TypeExpression> {
+    pub fn as_type_expression(&self) -> Option<&TypeExpression> {
         match self {
             Top::Enum(r#enum) => Some(r#enum),
-            _ => None,
-        }
-    }
-
-    pub fn as_class(&self) -> Option<&TypeExpression> {
-        match self {
             Top::Class(class) => Some(class),
             _ => None,
         }
     }
 
-    pub fn as_function(&self) -> Option<&ValueExp> {
+    pub fn as_value_exp(&self) -> Option<&ValueExp> {
         match self {
             Top::Function(func) => Some(func),
-            _ => None,
-        }
-    }
-
-    pub fn as_client(&self) -> Option<&ValueExp> {
-        match self {
             Top::Client(client) => Some(client),
-            _ => None,
-        }
-    }
-
-    pub fn as_generator(&self) -> Option<&ValueExp> {
-        match self {
             Top::Generator(gen) => Some(gen),
+            Top::TestCase(test) => Some(test),
+            Top::RetryPolicy(retry) => Some(retry),
             _ => None,
         }
     }
@@ -80,20 +64,6 @@ impl Top {
     pub fn as_template_string(&self) -> Option<&TemplateString> {
         match self {
             Top::TemplateString(t) => Some(t),
-            _ => None,
-        }
-    }
-
-    pub fn as_test_case(&self) -> Option<&ValueExp> {
-        match self {
-            Top::TestCase(test) => Some(test),
-            _ => None,
-        }
-    }
-
-    pub fn as_retry_policy(&self) -> Option<&ValueExp> {
-        match self {
-            Top::RetryPolicy(retry) => Some(retry),
             _ => None,
         }
     }

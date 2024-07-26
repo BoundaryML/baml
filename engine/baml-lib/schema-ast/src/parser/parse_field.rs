@@ -43,7 +43,7 @@ pub(crate) fn parse_field(
 
     match (name, field_type) {
         (Some(name), Some(field_type)) => Ok(Field {
-            field_type,
+            field_type: Some(field_type),
             name,
             attributes,
             documentation: comment,
