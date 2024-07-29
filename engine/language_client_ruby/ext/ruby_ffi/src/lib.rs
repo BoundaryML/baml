@@ -8,7 +8,6 @@ use magnus::{
     scan_args::get_kwargs, Error, RHash, Ruby,
 };
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 

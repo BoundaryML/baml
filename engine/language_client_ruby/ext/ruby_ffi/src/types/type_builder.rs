@@ -1,8 +1,7 @@
 use crate::Result;
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::BamlValue;
-use magnus::{block::Proc, class, function, method, Module, Object, RModule, Ruby};
-use std::sync::{Arc, Mutex};
+use magnus::{class, function, method, Module, Object, RModule};
 
 #[magnus::wrap(class = "Baml::Ffi::TypeBuilder", free_immediately, size)]
 pub(crate) struct TypeBuilder {

@@ -1,12 +1,11 @@
 use baml_types::{BamlMap, BamlValue};
-use core::hash;
 use indexmap::IndexMap;
 use magnus::{
     class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
     scan_args::get_kwargs, value::Value, Error, Float, Integer, IntoValue, RArray, RClass, RHash,
     RModule, RString, Ruby, Symbol,
 };
-use std::{collections::HashMap, result::Result};
+use std::result::Result;
 
 struct SerializationError {
     position: Vec<String>,
