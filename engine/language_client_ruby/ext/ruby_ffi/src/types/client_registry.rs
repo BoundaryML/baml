@@ -6,7 +6,7 @@ use crate::ruby_to_json;
 use crate::Result;
 
 #[magnus::wrap(class = "Baml::Ffi::ClientRegistry", free_immediately, size)]
-struct ClientRegistry {
+pub(crate) struct ClientRegistry {
     // TODO(sam): this shouldn't need Ar
     inner: Arc<Mutex<client_registry::ClientRegistry>>,
 }
