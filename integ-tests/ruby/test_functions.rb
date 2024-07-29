@@ -169,4 +169,114 @@ describe "ruby<->baml integration tests" do
     assert msgs.size > 0, "Expected at least one streamed response but got none."
     assert msgs.last == final, "Expected last stream message to match final response."
   end
+
+  it "tests dynamic" do
+    tb = Baml::TypeBuilder.new
+    tb.Person.add_property("last_name", tb.string.list)
+    tb.Person.add_property("height", tb.float.optional).description("Height in meters")
+
+    tb.Hobby.add_value("chess")
+    tb.Hobby.list_values.each do |name, val|
+      val.alias(name.downcase)
+    end
+
+    tb.Person.add_property("hobbies", tb.Hobby.type.list).description(
+      "Some suggested hobbies they might be good at"
+    )
+
+    tb_res = b.ExtractPeople(
+      "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
+      {"tb" => tb}
+    )
+
+    refute_empty(tb_res, "Expected non-empty result but got empty.")
+
+    tb_res.each do |r|
+      puts r.model_dump
+    end
+  end
+
+  it "tests dynamic class output" do
+    tb = Baml::TypeBuilder.new
+    tb.DynamicOutput.add_property("hair_color", tb.string)
+    puts tb.DynamicOutput.list_properties
+    tb.DynamicOutput.list_properties.each do |prop|
+      puts "Property: #{prop}"
+    end
+
+    output = b.MyFunc(
+      input: "My name is Harrison. My hair is black and I'm 6 feet tall.",
+      baml_options: {tb: tb} 
+    )
+    output = b.MyFunc(
+      input: "My name is Harrison. My hair is black and I'm 6 feet tall.",
+      baml_options: {tb: tb} 
+    )
+    puts output.model_dump_json
+    assert_equal("black", output.hair_color)
+  end
+
+  it "tests dynamic class nested output no stream" do
+    tb = Baml::TypeBuilder.new
+    nested_class = tb.add_class("Name")
+    nested_class.add_property("first_name", tb.string)
+    nested_class.add_property("last_name", tb.string.optional)
+    nested_class.add_property("middle_name", tb.string.optional)
+
+    other_nested_class = tb.add_class("Address")
+
+    tb.DynamicOutput.add_property("name", nested_class.type.optional)
+    tb.DynamicOutput.add_property("address", other_nested_class.type.optional)
+    tb.DynamicOutput.add_property("hair_color", tb.string).alias("hairColor")
+    tb.DynamicOutput.add_property("height", tb.float.optional)
+
+    output = b.MyFunc(
+      input: "My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
+      baml_options: {tb: tb} 
+    )
+    puts output.model_dump_json
+    assert_equal(
+      '{"name":{"first_name":"Mark","last_name":"Gonzalez","middle_name":null},"address":null,"hair_color":"black","height":6.0}',
+      output.model_dump_json
+    )
+  end
+
+  it "tests dynamic class nested output stream" do
+    tb = Baml::TypeBuilder.new
+    nested_class = tb.add_class("Name")
+    nested_class.add_property("first_name", tb.string)
+    nested_class.add_property("last_name", tb.string.optional)
+
+    tb.DynamicOutput.add_property("name", nested_class.type.optional)
+    tb.DynamicOutput.add_property("hair_color", tb.string)
+
+    stream = b.stream.MyFunc(
+      input: "My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
+      baml_options: {tb: tb} 
+    )
+    msgs = []
+    stream.each do |msg|
+      puts "streamed #{msg}"
+      puts "streamed #{msg.model_dump}"
+      msgs << msg
+    end
+    output = stream.get_final_response
+
+    puts output.model_dump_json
+    assert_equal(
+      '{"name":{"first_name":"Mark","last_name":"Gonzalez"},"hair_color":"black"}',
+      output.model_dump_json
+    )
+  end
+
+  it "tests dynamic clients" do
+    cb = BAML::ClientRegistry.new
+    cb.add_llm_client("MyClient", "openai", { model: "gpt-3.5-turbo" })
+    cb.set_primary("MyClient")
+
+    capitol = await BAML::ExpectFailure.new(
+      baml_options: { client_registry: cb }
+    )
+    assert_match(/london/, capitol.downcase)
+  end
 end

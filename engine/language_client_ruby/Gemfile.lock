@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    baml (0.51.1)
+    baml (0.52.1)
 
 GEM
   remote: https://rubygems.org/

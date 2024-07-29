@@ -20,6 +20,7 @@ mod function_result;
 mod function_result_stream;
 mod ruby_to_json;
 mod runtime_ctx_manager;
+mod types;
 
 type Result<T> = std::result::Result<T, magnus::Error>;
 
