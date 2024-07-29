@@ -72,6 +72,7 @@ const loadChatwoot = () => {
     s.parentNode.insertBefore(g, s)
     g.onload = function () {
       ;(window as any).chatwootSDK.run({
+        position: 'left',
         websiteToken: 'M4EXKvdb9NGgxqZzkTZfeFV7',
         baseUrl: BASE_URL,
       })
