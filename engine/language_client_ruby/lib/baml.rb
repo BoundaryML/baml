@@ -13,7 +13,6 @@ module Baml
   class Image; end
 
   ClientRegistry = Baml::Ffi::ClientRegistry
-  TypeRegistry = Baml::Ffi::TypeBuilder
 
   # Dynamically + idempotently define Baml::TypeConverter
   # NB: this does not respect raise_coercion_error = false
