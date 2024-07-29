@@ -10,7 +10,7 @@ use internal_baml_parser_database::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
         FunctionWalker, TemplateStringWalker,
     },
-    ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes, WithStaticRenames,
+    ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes,
 };
 
 use internal_baml_schema_ast::ast::{self, FieldArity, WithName, WithSpan};
@@ -139,7 +139,7 @@ impl IntermediateRepr {
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
             functions: db
-                .walk_new_functions()
+                .walk_functions()
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
             clients: db
@@ -197,13 +197,6 @@ pub struct NodeAttributes {
     ///   - @get(python code) becomes ("get/python", python code)
     #[serde(with = "indexmap::map::serde_seq")]
     meta: IndexMap<String, Expression>,
-
-    /// Overrides for the specified AST node in a given implementation (which is keyed by FunctionId
-    /// and ImplementationId). In .baml files these are represented in the implementation, but in the
-    /// IR AST we attach them to the AST node so that all metadata associated with an IRnode can be
-    /// accessed from that node, rather than through a different IR node.
-    #[serde(with = "indexmap::map::serde_seq")]
-    overrides: IndexMap<(FunctionId, ImplementationId), IndexMap<String, Expression>>,
 
     // Spans
     #[serde(skip)]
@@ -266,7 +259,6 @@ pub trait WithRepr<T> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
-            overrides: IndexMap::new(),
             span: None,
         }
     }
@@ -291,18 +283,26 @@ fn type_with_arity(t: FieldType, arity: &FieldArity) -> FieldType {
 impl WithRepr<FieldType> for ast::FieldType {
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
         Ok(match self {
-            ast::FieldType::Symbol(arity, idn) => type_with_arity(
+            ast::FieldType::Symbol(arity, idn, _) => type_with_arity(
                 match idn {
-                    ast::Identifier::Primitive(t, ..) => FieldType::Primitive(*t),
-                    ast::Identifier::Local(name, _) => match db.find_type(idn) {
-                        Some(Either::Left(_class_walker)) => Ok(FieldType::Class(name.clone())),
-                        Some(Either::Right(_enum_walker)) => Ok(FieldType::Enum(name.clone())),
+                    ast::Identifier::Local(name, _) => match db.find_type_by_str(idn) {
+                        Some(Either::Left(class_walker)) => {
+                            Ok(FieldType::Class(class_walker.name().to_string()))
+                        }
+                        Some(Either::Right(enum_walker)) => {
+                            Ok(FieldType::Enum(enum_walker.name().to_string()))
+                        }
                         None => Err(anyhow!("Field type uses unresolvable local identifier")),
                     }?,
                     _ => bail!("Field type uses unsupported identifier type"),
                 },
                 arity,
             ),
+            ast::FieldType::Primitive(arity, typeval, span) => {
+                let mut repr = FieldType::Primitive(typeval.clone());
+
+                repr
+            }
             ast::FieldType::List(ft, dims, _) => {
                 // NB: potential bug: this hands back a 1D list when dims == 0
                 let mut repr = FieldType::List(Box::new(ft.repr(db)?));
@@ -413,9 +413,7 @@ impl WithRepr<Expression> for ast::Expression {
                     // because that's modelled as Identifier::ENV, not Identifier::Ref
                     Ok(Expression::String(r.full_name.clone()))
                 }
-                ast::Identifier::Primitive(p, _) => {
-                    Ok(Expression::Identifier(Identifier::Primitive(*p)))
-                }
+
                 ast::Identifier::Invalid(_, _) => {
                     Err(anyhow!("Cannot represent an invalid parser-AST identifier"))
                 }
@@ -446,7 +444,7 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: Default::default(),
-            overrides: Default::default(),
+
             span: Some(self.span().clone()),
         }
     }
@@ -455,8 +453,7 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
         Ok(TemplateString {
             name: self.name().to_string(),
             params: self.ast_node().input().map_or(vec![], |e| match e {
-                ast::FunctionArgs::Named(arg_list) => arg_list
-                    .args
+                ast::BlockArgs { args, .. } => args
                     .iter()
                     .filter_map(|(id, arg)| {
                         arg.field_type
@@ -468,15 +465,12 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
                             .ok()
                     })
                     .collect::<Vec<_>>(),
-                ast::FunctionArgs::Unnamed(_) => {
-                    vec![]
-                }
+                _ => vec![],
             }),
             content: self.template_string().to_string(),
         })
     }
 }
-
 type EnumId = String;
 
 #[derive(serde::Serialize, Debug)]
@@ -492,7 +486,6 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
         let mut attributes = NodeAttributes {
             meta: to_ir_attributes(db, self.get_default_attributes()),
-            overrides: IndexMap::new(),
             span: Some(self.span().clone()),
         };
 
@@ -508,7 +501,6 @@ impl WithRepr<Enum> for EnumWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
         let mut attributes = NodeAttributes {
             meta: to_ir_attributes(db, self.get_default_attributes()),
-            overrides: IndexMap::new(),
             span: Some(self.span().clone()),
         };
 
@@ -538,7 +530,6 @@ impl WithRepr<Field> for FieldWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
         let mut attributes = NodeAttributes {
             meta: to_ir_attributes(db, self.get_default_attributes()),
-            overrides: IndexMap::new(),
             span: Some(self.span().clone()),
         };
 
@@ -548,7 +539,7 @@ impl WithRepr<Field> for FieldWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Result<Field> {
         Ok(Field {
             name: self.name().to_string(),
-            r#type: self.ast_field().field_type.node(db)?,
+            r#type: self.ast_field().expr.node(db),
         })
     }
 }
@@ -566,7 +557,6 @@ impl WithRepr<Class> for ClassWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
         let mut attributes = NodeAttributes {
             meta: to_ir_attributes(db, self.get_default_attributes()),
-            overrides: IndexMap::new(),
             span: Some(self.span().clone()),
         };
 
@@ -645,62 +635,30 @@ pub enum FunctionArgs {
 
 type FunctionId = String;
 
-#[derive(serde::Serialize, Debug)]
-#[serde(tag = "version")]
-pub enum Function {
-    V1(FunctionV1),
-    V2(FunctionV2),
-}
-
 impl Function {
     pub fn name(&self) -> &str {
-        match self {
-            Function::V1(f) => &f.name,
-            Function::V2(f) => &f.name,
-        }
+        &self.name
     }
 
     pub fn output(&self) -> &FieldType {
-        match &self {
-            Function::V1(f) => &f.output.elem,
-            Function::V2(f) => &f.output.elem,
-        }
+        &self.output.elem
     }
 
-    pub fn inputs(&self) -> either::Either<&FunctionArgs, &Vec<(String, FieldType)>> {
-        match &self {
-            Function::V1(f) => either::Either::Left(&f.inputs),
-            Function::V2(f) => either::Either::Right(&f.inputs),
-        }
+    pub fn inputs(&self) -> &Vec<(String, FieldType)> {
+        &self.inputs
     }
 
     pub fn tests(&self) -> &Vec<Node<TestCase>> {
-        match &self {
-            Function::V1(f) => &f.tests,
-            Function::V2(f) => &f.tests,
-        }
+        &self.tests
     }
 
     pub fn configs(&self) -> Option<&Vec<FunctionConfig>> {
-        match &self {
-            Function::V1(_) => None,
-            Function::V2(f) => Some(&f.configs),
-        }
+        Some(&self.configs)
     }
 }
 
 #[derive(serde::Serialize, Debug)]
-pub struct FunctionV1 {
-    pub name: FunctionId,
-    pub inputs: FunctionArgs,
-    pub output: Node<FieldType>,
-    pub impls: Vec<Node<Implementation>>,
-    pub tests: Vec<Node<TestCase>>,
-    pub default_impl: Option<ImplementationId>,
-}
-
-#[derive(serde::Serialize, Debug)]
-pub struct FunctionV2 {
+pub struct Function {
     pub name: FunctionId,
     pub inputs: Vec<(String, FieldType)>,
     pub output: Node<FieldType>,
@@ -766,79 +724,28 @@ impl WithRepr<Function> for FunctionWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: Default::default(),
-            overrides: Default::default(),
             span: Some(self.span().clone()),
         }
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<Function> {
         if self.is_old_function() {
-            Ok(Function::V1(self.repr(db)?))
-        } else {
-            Ok(Function::V2(self.repr(db)?))
-        }
-    }
-}
-
-impl WithRepr<FunctionV1> for FunctionWalker<'_> {
-    fn repr(&self, db: &ParserDatabase) -> Result<FunctionV1> {
-        if !self.is_old_function() {
             bail!("Cannot represent a new function as a FunctionV1")
         }
-        Ok(FunctionV1 {
+        Ok(Function {
             name: self.name().to_string(),
-            inputs: match self.ast_function().input() {
-                ast::FunctionArgs::Named(arg_list) => FunctionArgs::NamedArgList(
-                    arg_list
-                        .args
-                        .iter()
-                        .map(|(id, arg)| Ok((id.name().to_string(), arg.field_type.repr(db)?)))
-                        .collect::<Result<Vec<_>>>()?,
-                ),
-                ast::FunctionArgs::Unnamed(arg) => {
-                    FunctionArgs::UnnamedArg(arg.field_type.node(db)?.elem)
-                }
-            },
-            output: match self.ast_function().output() {
-                ast::FunctionArgs::Named(_) => bail!("Functions may not return named args"),
-                ast::FunctionArgs::Unnamed(arg) => arg.field_type.node(db),
-            }?,
-            default_impl: self.metadata().default_impl.as_ref().map(|f| f.0.clone()),
-            impls: {
-                let mut impls = self
-                    .walk_variants()
-                    .map(|e| e.node(db))
-                    .collect::<Result<Vec<_>>>()?;
-                impls.sort_by(|a, b| a.elem.name.cmp(&&b.elem.name));
-                impls
-            },
-            tests: self
-                .walk_tests()
-                .map(|e| e.node(db))
+            inputs: self
+                .ast_function()
+                .input()
+                .iter()
+                .map(|(id, arg)| Ok((id.name().to_string(), arg.field_type.repr(db)?)))
                 .collect::<Result<Vec<_>>>()?,
-        })
-    }
-}
-
-impl WithRepr<FunctionV2> for FunctionWalker<'_> {
-    fn repr(&self, db: &ParserDatabase) -> Result<FunctionV2> {
-        if self.is_old_function() {
-            bail!("Cannot represent a new function as a FunctionV1")
-        }
-        Ok(FunctionV2 {
-            name: self.name().to_string(),
-            inputs: match self.ast_function().input() {
-                ast::FunctionArgs::Named(arg_list) => arg_list
-                    .args
-                    .iter()
-                    .map(|(id, arg)| Ok((id.name().to_string(), arg.field_type.repr(db)?)))
-                    .collect::<Result<Vec<_>>>()?,
-                ast::FunctionArgs::Unnamed(_) => bail!("Unnamed args not supported"),
-            },
-            output: match self.ast_function().output() {
-                ast::FunctionArgs::Named(_) => bail!("Functions may not return named args"),
-                ast::FunctionArgs::Unnamed(arg) => arg.field_type.node(db),
-            }?,
+            output: self
+                .ast_function()
+                .output()
+                .expect("need block arg")
+                .field_type
+                .node(db)?,
             configs: vec![FunctionConfig {
                 name: "default_config".to_string(),
                 prompt_template: self.jinja_prompt().to_string(),
@@ -872,7 +779,6 @@ impl WithRepr<Client> for ClientWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
-            overrides: IndexMap::new(),
             span: Some(self.span().clone()),
         }
     }
@@ -913,7 +819,6 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
-            overrides: IndexMap::new(),
             span: Some(self.span().clone()),
         }
     }
@@ -944,7 +849,6 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
-            overrides: IndexMap::new(),
             span: Some(self.span().clone()),
         }
     }
