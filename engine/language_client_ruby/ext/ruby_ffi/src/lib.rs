@@ -240,6 +240,13 @@ fn init(ruby: &Ruby) -> Result<()> {
     FunctionResultStream::define_in_ruby(&module)?;
     RuntimeContextManager::define_in_ruby(&module)?;
 
+    types::type_builder::TypeBuilder::define_in_ruby(&module)?;
+    types::type_builder::EnumBuilder::define_in_ruby(&module)?;
+    types::type_builder::ClassBuilder::define_in_ruby(&module)?;
+    types::type_builder::EnumValueBuilder::define_in_ruby(&module)?;
+    types::type_builder::ClassPropertyBuilder::define_in_ruby(&module)?;
+    types::type_builder::FieldType::define_in_ruby(&module)?;
+
     // everything below this is for our own testing purposes
     module.define_module_function(
         "roundtrip",

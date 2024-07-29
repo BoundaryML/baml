@@ -5,7 +5,7 @@ use magnus::{block::Proc, class, method, Module, RModule, Ruby};
 use std::sync::{Arc, Mutex};
 
 #[magnus::wrap(class = "Baml::Ffi::TypeBuilder", free_immediately, size)]
-struct TypeBuilder {
+pub(crate) struct TypeBuilder {
     inner: type_builder::TypeBuilder,
 }
 

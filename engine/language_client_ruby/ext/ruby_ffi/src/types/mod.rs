@@ -1,2 +1,2 @@
 mod lang_wrapper;
-mod type_builder;
+pub(crate) mod type_builder;
