@@ -178,6 +178,16 @@ impl ValueExprBlock {
     pub fn fields(&self) -> &[Field<Expression>] {
         &self.fields
     }
+
+    pub fn get_type(&self) -> &'static str {
+        match &self.block_type {
+            ValueExprBlockType::RetryPolicy => "retry_policy",
+            ValueExprBlockType::Function => "function",
+            ValueExprBlockType::Client => "client",
+            ValueExprBlockType::Generator => "generator",
+            ValueExprBlockType::Test => "test",
+        }
+    }
 }
 
 impl WithIdentifier for ValueExprBlock {

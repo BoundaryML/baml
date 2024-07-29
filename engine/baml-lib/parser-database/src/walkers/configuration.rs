@@ -1,13 +1,13 @@
 use internal_baml_schema_ast::ast::{self, WithIdentifier, WithSpan};
 
-use crate::types::{PrinterType, RetryPolicy, TestCase};
+use crate::types::{RetryPolicy, TestCase};
 
 /// A `class` declaration in the Prisma schema.
-pub type ConfigurationWalker<'db> = super::Walker<'db, (ast::ConfigurationId, &'static str)>;
+pub type ConfigurationWalker<'db> = super::Walker<'db, (ast::ValExpId, &'static str)>;
 
 impl ConfigurationWalker<'_> {
     /// Get the AST node for this class.
-    pub fn ast_node(&self) -> &ast::Configuration {
+    pub fn ast_node(&self) -> &ast::ValueExprBlock {
         &self.db.ast[self.id.0]
     }
 
@@ -15,12 +15,6 @@ impl ConfigurationWalker<'_> {
     pub fn retry_policy(&self) -> &RetryPolicy {
         assert!(self.id.1 == "retry_policy");
         &self.db.types.retry_policies[&self.id.0]
-    }
-
-    /// Get as a printer configuration.
-    pub fn printer(&self) -> &PrinterType {
-        assert!(self.id.1 == "printer");
-        &self.db.types.printers[&self.id.0]
     }
 
     /// Get as a test case configuration.
@@ -40,15 +34,6 @@ impl ConfigurationWalker<'_> {
 
     /// If adapters are not present we can stream
     pub fn is_streaming_supported(&self) -> bool {
-        let is_legacy = self.walk_functions().any(|f| {
-            f.is_old_function()
-                && f.walk_variants()
-                    .any(|v| v.properties().output_adapter.is_some())
-        });
-
-        if is_legacy {
-            return false;
-        }
         return true;
     }
 }

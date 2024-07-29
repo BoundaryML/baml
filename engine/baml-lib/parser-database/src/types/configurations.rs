@@ -1,7 +1,5 @@
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
-use internal_baml_schema_ast::ast::{
-    ConfigurationId, PrinterConfig, RetryPolicyConfig, WithIdentifier, WithName, WithSpan,
-};
+use internal_baml_schema_ast::ast::{ValExpId, ValueExprBlock, WithIdentifier, WithName, WithSpan};
 use regex::Regex;
 
 use crate::{coerce, coerce_array, coerce_expression::coerce_map, context::Context};
@@ -33,71 +31,9 @@ fn dedent(s: &str) -> String {
         .to_string()
 }
 
-pub(crate) fn visit_printer<'db>(
-    idx: ConfigurationId,
-    config: &'db PrinterConfig,
-    ctx: &mut Context<'db>,
-) {
-    let mut template = None;
-
-    config
-        .iter_fields()
-        .for_each(|(_idx, f)| match (f.name(), &f.value) {
-            (name, None) => {
-                ctx.push_error(DatamodelError::new_config_property_missing_value_error(
-                    name,
-                    config.name(),
-                    "printer",
-                    f.identifier().span().clone(),
-                ))
-            }
-            ("template", Some(val)) => match coerce::string_with_span(val, ctx.diagnostics) {
-                Some((t, span)) => template = Some((dedent(t), span.clone())),
-                None => {}
-            },
-            (name, Some(_)) => ctx.push_error(DatamodelError::new_property_not_known_error(
-                name,
-                f.identifier().span().clone(),
-                ["template"].to_vec(),
-            )),
-        });
-
-    match (
-        template,
-        coerce::string_with_span(&config.printer_type, ctx.diagnostics),
-    ) {
-        (None, _) => ctx.push_error(DatamodelError::new_validation_error(
-            "Missing `template` property",
-            config.identifier().span().clone(),
-        )),
-        (Some(template), Some(("enum", _))) => {
-            ctx.types
-                .printers
-                .insert(idx, PrinterType::Enum(Printer { template }));
-        }
-        (Some(template), Some(("type", _))) => {
-            ctx.types
-                .printers
-                .insert(idx, PrinterType::Type(Printer { template }));
-        }
-        (Some(_), Some((name, span))) => {
-            ctx.push_error(DatamodelError::new_validation_error(
-                &format!(
-                    "Unknown printer type: {}. Options are `type` or `enum`",
-                    name
-                ),
-                span.clone(),
-            ));
-        }
-        (Some(_), None) => {
-            // errors are handled by coerce::string_with_span
-        }
-    }
-}
-
 pub(crate) fn visit_retry_policy<'db>(
-    idx: ConfigurationId,
-    config: &'db RetryPolicyConfig,
+    idx: ValExpId,
+    config: &'db ValueExprBlock,
     ctx: &mut Context<'db>,
 ) {
     let mut max_reties = None;
@@ -109,7 +45,7 @@ pub(crate) fn visit_retry_policy<'db>(
 
     config
         .iter_fields()
-        .for_each(|(_idx, f)| match (f.name(), &f.value) {
+        .for_each(|(_idx, f)| match (f.name(), &f.expr) {
             (name, None) => {
                 ctx.push_error(DatamodelError::new_config_property_missing_value_error(
                     name,
@@ -261,8 +197,8 @@ fn visit_strategy(
 }
 
 pub(crate) fn visit_test_case<'db>(
-    idx: ConfigurationId,
-    config: &'db RetryPolicyConfig,
+    idx: ValExpId,
+    config: &'db ValueExprBlock,
     ctx: &mut Context<'db>,
 ) {
     let mut functions = None;
@@ -270,7 +206,7 @@ pub(crate) fn visit_test_case<'db>(
 
     config
         .iter_fields()
-        .for_each(|(_idx, f)| match (f.name(), &f.value) {
+        .for_each(|(_idx, f)| match (f.name(), &f.expr) {
             (name, None) => {
                 ctx.push_error(DatamodelError::new_config_property_missing_value_error(
                     name,

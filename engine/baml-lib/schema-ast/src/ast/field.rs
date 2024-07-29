@@ -116,7 +116,7 @@ pub enum FieldType {
     // The second field is the number of dims for the list
     List(Box<FieldType>, u32, Span),
     Tuple(FieldArity, Vec<FieldType>, Span),
-    // Unions don't have arity, as they are can be flattened.
+    // Unions don't have arity, as they can be flattened.
     Union(FieldArity, Vec<FieldType>, Span),
     Map(Box<(FieldType, FieldType)>, Span),
 }

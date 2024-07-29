@@ -7,12 +7,12 @@ use serde_json::json;
 use std::collections::HashMap;
 
 use crate::{
-    printer::{serialize_with_printer, WithSerializeableContent, WithStaticRenames},
+    printer::{serialize_with_printer, WithSerializeableContent},
     types::ToStringAttributes,
     ParserDatabase, WithSerialize,
 };
 
-use super::{field::FieldWalker, EnumWalker, VariantWalker};
+use super::{field::FieldWalker, EnumWalker};
 
 /// A `class` declaration in the Prisma schema.
 pub type ClassWalker<'db> = super::Walker<'db, ast::TypeExpId>;
@@ -109,33 +109,14 @@ impl<'db> WithSpan for ClassWalker<'db> {
 }
 
 impl<'db> WithSerializeableContent for ClassWalker<'db> {
-    fn serialize_data(
-        &self,
-        variant: Option<&VariantWalker<'_>>,
-        db: &'_ ParserDatabase,
-    ) -> serde_json::Value {
+    fn serialize_data(&self, db: &'_ ParserDatabase) -> serde_json::Value {
         json!({
             "rtype": "class",
             "optional": false,
-            "name": self.alias(variant, db),
-            "meta": self.meta(variant, db),
-            "fields": self.static_fields().map(|f| f.serialize_data(variant, db)).collect::<Vec<_>>(),
+            "name": self.name(),
+            "fields": self.static_fields().map(|f| f.serialize_data(db)).collect::<Vec<_>>(),
             // Dynamic fields are not serialized.
         })
-    }
-}
-
-impl<'db> WithStaticRenames<'db> for ClassWalker<'db> {
-    fn get_override(&self, variant: &VariantWalker<'db>) -> Option<&'db ToStringAttributes> {
-        variant.find_serializer_attributes(self.name())
-    }
-
-    fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
-        self.db
-            .types
-            .class_attributes
-            .get(&self.id)
-            .and_then(|f| f.serilizer.as_ref())
     }
 }
 
@@ -143,19 +124,10 @@ impl<'db> WithSerialize for ClassWalker<'db> {
     fn serialize(
         &self,
         db: &'_ ParserDatabase,
-        variant: Option<&VariantWalker<'_>>,
-        block: Option<&internal_baml_prompt_parser::ast::PrinterBlock>,
         span: &internal_baml_diagnostics::Span,
     ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
-        let printer_template = match &block.and_then(|b| b.printer.as_ref()) {
-            Some((p, _)) => self
-                .db
-                .find_printer(p)
-                .map(|w| w.printer().template().to_string()),
-            _ => None,
-        };
         // Eventually we should validate what parameters are in meta.
-        match serialize_with_printer(false, printer_template, self.serialize_data(variant, db)) {
+        match serialize_with_printer(false, self.serialize_data(db)) {
             Ok(val) => Ok(val),
             Err(e) => Err(DatamodelError::new_validation_error(
                 &format!("Error serializing class: {}\n{}", self.name(), e),
@@ -169,18 +141,16 @@ impl<'db> WithSerialize for ClassWalker<'db> {
         db: &'_ ParserDatabase,
         span: &internal_baml_diagnostics::Span,
     ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
-        let class_schema = self.serialize(db, None, None, span)?;
+        let class_schema = self.serialize(db, span)?;
 
         let mut enum_schemas = self
             .required_enums()
             // TODO(sam) - if enum serialization fails, then we do not surface the error to the user.
             // That is bad!!!!!!!
-            .filter_map(
-                |e| match e.serialize(db, None, None, e.identifier().span()) {
-                    Ok(enum_schema) => Some((e.name().to_string(), enum_schema)),
-                    Err(_) => None,
-                },
-            )
+            .filter_map(|e| match e.serialize(db, e.identifier().span()) {
+                Ok(enum_schema) => Some((e.name().to_string(), enum_schema)),
+                Err(_) => None,
+            })
             .collect::<Vec<_>>();
         // Enforce a stable order on enum schemas. Without this, the order is actually unstable, and the order can ping-pong
         // when the vscode ext re-renders the live preview

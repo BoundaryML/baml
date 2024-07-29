@@ -5,7 +5,8 @@ use crate::{
     coerce, coerce_array, Context, DatamodelError, StaticType, StringId,
 };
 
-use internal_baml_schema_ast::ast::{ConfigBlockProperty, WithIdentifier};
+use baml_types::FieldType;
+use internal_baml_schema_ast::ast::{ConfigBlockProperty, Expression, Field, WithIdentifier};
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use validate_reserved_names::*;
@@ -21,7 +22,7 @@ pub(super) struct Names {
     pub(super) generators: HashMap<StringId, TopId>,
     /// Tests have their own namespace.
     pub(super) tests: HashMap<StringId, HashMap<StringId, TopId>>,
-    pub(super) model_fields: HashMap<(ast::ClassId, StringId), ast::FieldId>,
+    pub(super) model_fields: HashMap<(ast::TypeExpId, StringId), ast::FieldId>,
     // pub(super) composite_type_fields: HashMap<(ast::CompositeTypeId, StringId), ast::FieldId>,
 }
 
@@ -31,7 +32,6 @@ pub(super) struct Names {
 /// - Model, enum and type alias names
 /// - Generators
 /// - Model fields for each model
-/// - Enum variants for each enum
 pub(super) fn resolve_names(ctx: &mut Context<'_>) {
     let mut tmp_names: HashSet<&str> = HashSet::default(); // throwaway container for duplicate checking
     let mut names = Names::default();
@@ -45,15 +45,16 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 validate_enum_name(ast_enum, ctx.diagnostics);
                 validate_attribute_identifiers(ast_enum, ctx);
 
-                for value in &ast_enum.values {
+                for value in &ast_enum.fields {
                     validate_enum_value_name(value, ctx.diagnostics);
+
                     validate_attribute_identifiers(value, ctx);
 
-                    if !tmp_names.insert(value.name.name()) {
+                    if !tmp_names.insert(value.name()) {
                         ctx.push_error(DatamodelError::new_duplicate_enum_value_error(
                             ast_enum.name.name(),
-                            value.name.name(),
-                            value.span.clone(),
+                            value.name(),
+                            value.span().clone(),
                         ))
                     }
                 }
@@ -65,7 +66,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 validate_attribute_identifiers(ast_class, ctx);
 
                 for (field_id, field) in ast_class.iter_fields() {
-                    validate_class_fiel_name(field, ctx.diagnostics);
+                    validate_class_field_name(field, ctx.diagnostics);
                     validate_attribute_identifiers(field, ctx);
 
                     let field_name_id = ctx.interner.intern(field.name());
@@ -97,15 +98,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
             (_, ast::Top::TemplateString(_)) => {
                 unreachable!("Encountered impossible template_string declaration during parsing")
             }
-            (ast::TopId::Function(_function_id), ast::Top::FunctionOld(ast_function)) => {
-                validate_function_name(ast_function, ctx.diagnostics);
-                validate_attribute_identifiers(ast_function, ctx);
 
-                Some(either::Left(&mut names.tops))
-            }
-            (_, ast::Top::FunctionOld(_)) => {
-                unreachable!("Encountered impossible function declaration during parsing")
-            }
             (ast::TopId::Function(_function_id), ast::Top::Function(ast_function)) => {
                 validate_function_name(ast_function, ctx.diagnostics);
                 validate_attribute_identifiers(ast_function, ctx);
@@ -120,45 +113,33 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 check_for_duplicate_properties(top, generator.fields(), &mut tmp_names, ctx);
                 Some(either::Left(&mut names.generators))
             }
-            (_, ast::Top::Variant(variant)) => {
-                validate_variant_name(variant, ctx.diagnostics);
-                check_for_duplicate_properties(top, &variant.fields, &mut tmp_names, ctx);
-                Some(either::Left(&mut names.tops))
-            }
-            (_, ast::Top::Client(client)) => {
-                validate_client_name(client, ctx.diagnostics);
-                check_for_duplicate_properties(top, client.fields(), &mut tmp_names, ctx);
-                Some(either::Left(&mut names.tops))
-            }
-            (_, ast::Top::Config(config)) => {
-                validate_config_name(config, ctx.diagnostics);
-                check_for_duplicate_properties(top, config.fields(), &mut tmp_names, ctx);
-                match config {
-                    ast::Configuration::TestCase(t) => {
-                        // TODO: I think we should do this later after all parsing, as duplication
-                        // would work best as a validation error with walkers.
-                        let function_ids = t
-                            .iter_fields()
-                            .find(|f| f.1.name() == "functions")
-                            .and_then(|f| match f.1.value {
-                                Some(ref v) => coerce_array(v, &coerce::string, ctx.diagnostics),
-                                None => None,
-                            });
 
-                        match function_ids {
-                            Some(f) => Some(either::Right(f)),
-                            None => {
-                                ctx.push_error(DatamodelError::new_validation_error(
-                                    "Test case must have a functions field",
-                                    t.identifier().span().clone(),
-                                ));
-                                None
-                            }
-                        }
+            (ast::TopId::TestCase(testcase_id), ast::Top::TestCase(testcase)) => {
+                validate_test(testcase, ctx.diagnostics);
+                check_for_duplicate_properties(top, testcase.fields(), &mut tmp_names, ctx);
+
+                // TODO: I think we should do this later after all parsing, as duplication
+                // would work best as a validation error with walkers.
+                let function_ids = testcase
+                    .iter_fields()
+                    .find(|f| f.1.name() == "functions")
+                    .and_then(|f| match f.1.expr {
+                        Some(ref v) => coerce_array(v, &coerce::string, ctx.diagnostics),
+                        None => None,
+                    });
+
+                match function_ids {
+                    Some(f) => Some(either::Right(f)),
+                    None => {
+                        ctx.push_error(DatamodelError::new_validation_error(
+                            "Test case must have a functions field",
+                            testcase.identifier().span().clone(),
+                        ));
+                        None
                     }
-                    _ => Some(either::Left(&mut names.tops)),
                 }
             }
+            _ => None,
         };
 
         match namespace {
@@ -195,22 +176,6 @@ fn insert_name(
     let name = ctx.interner.intern(top.name());
 
     if let Some(existing) = namespace.insert(name, top_id) {
-        // For variants, we do extra checks.
-        if let (Some(existing_variant), Some(current_variant)) =
-            (ctx.ast[existing].as_variant(), top.as_variant())
-        {
-            let existing_function_name = existing_variant.function_name().name();
-            let current_function_name = current_variant.function_name().name();
-
-            let existing_type = ctx.ast[existing].get_type();
-            let current_type = top.get_type();
-
-            if existing_type == current_type && existing_function_name == current_function_name {
-                ctx.push_error(duplicate_top_error(&ctx.ast[existing], top));
-                return;
-            }
-        }
-
         let current_type = top.get_type();
         if current_type != "impl<llm>" && current_type != "impl<?>" {
             ctx.push_error(duplicate_top_error(&ctx.ast[existing], top));
@@ -238,17 +203,17 @@ fn assert_is_not_a_reserved_scalar_type(ident: &ast::Identifier, ctx: &mut Conte
 
 fn check_for_duplicate_properties<'a>(
     top: &ast::Top,
-    props: &'a [ConfigBlockProperty],
+    props: &'a [Field<Expression>],
     tmp_names: &mut HashSet<&'a str>,
     ctx: &mut Context<'_>,
 ) {
     tmp_names.clear();
     for arg in props {
-        if !tmp_names.insert(arg.name.name()) {
+        if !tmp_names.insert(arg.name()) {
             ctx.push_error(DatamodelError::new_duplicate_config_key_error(
                 &format!("{} \"{}\"", top.get_type(), top.name()),
-                arg.name.name(),
-                arg.name.span().clone(),
+                arg.name(),
+                arg.span().clone(),
             ));
         }
     }

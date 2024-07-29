@@ -111,7 +111,11 @@ impl<'db> crate::ParserDatabase {
     /// Find a function by name.
     pub fn find_function_by_name(&'db self, name: &str) -> Option<FunctionWalker<'db>> {
         self.find_top_by_str(name)
-            .and_then(|top_id| top_id.as_function_id())
+            .and_then(|top_id| {
+                top_id
+                    .as_function_id()
+                    .map(|function_id| (true, function_id))
+            })
             .map(|function_id| self.walk(function_id))
     }
 
@@ -242,36 +246,12 @@ impl<'db> crate::ParserDatabase {
     pub fn to_jinja_type(&self, ft: &FieldType) -> internal_baml_jinja::Type {
         use internal_baml_jinja::Type;
         match ft {
-            FieldType::Symbol(arity, idn) => {
-                let t = match idn {
-                    ast::Identifier::ENV(_, _) => Type::String,
-                    ast::Identifier::Ref(x, _) => match self.find_type(idn) {
-                        None => Type::Undefined,
-                        Some(Either::Left(_)) => Type::ClassRef(x.full_name.clone()),
-                        Some(Either::Right(_)) => Type::String,
-                    },
-                    ast::Identifier::Local(x, _) => match self.find_type(idn) {
-                        None => Type::Undefined,
-                        Some(Either::Left(_)) => Type::ClassRef(x.clone()),
-                        Some(Either::Right(_)) => Type::String,
-                    },
-                    ast::Identifier::Primitive(idx, _) => match idx {
-                        baml_types::TypeValue::String => Type::String,
-                        baml_types::TypeValue::Int => Type::Int,
-                        baml_types::TypeValue::Float => Type::Float,
-                        baml_types::TypeValue::Bool => Type::Bool,
-                        baml_types::TypeValue::Null => Type::None,
-                        baml_types::TypeValue::Image => Type::Image,
-                        baml_types::TypeValue::Audio => Type::Audio,
-                    },
-                    ast::Identifier::String(_, _) => Type::String,
-                    ast::Identifier::Invalid(_, _) => Type::Unknown,
-                };
+            FieldType::Symbol(arity, idn, _) => {
+                let mut t = Type::String;
                 if arity.is_optional() {
-                    Type::None | t
-                } else {
-                    t
+                    t = Type::None | t;
                 }
+                t
             }
             FieldType::List(inner, dims, _) => {
                 let mut t = self.to_jinja_type(inner);
@@ -298,6 +278,19 @@ impl<'db> crate::ParserDatabase {
                 Box::new(self.to_jinja_type(&kv.0)),
                 Box::new(self.to_jinja_type(&kv.1)),
             ),
+            FieldType::Primitive(arity, t, _) => {
+                let mut t = match t.to_string().as_str() {
+                    "string" => Type::String,
+                    "int" => Type::Int,
+                    "float" => Type::Float,
+                    "bool" => Type::Bool,
+                    _ => Type::Unknown,
+                };
+                if arity.is_optional() {
+                    t = Type::None | t;
+                }
+                t
+            }
         }
     }
 }

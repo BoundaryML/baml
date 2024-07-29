@@ -8,7 +8,7 @@ use indexmap::IndexMap;
 use internal_baml_parser_database::{
     walkers::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
-        FunctionWalker, TemplateStringWalker, VariantWalker,
+        FunctionWalker, TemplateStringWalker,
     },
     ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes, WithStaticRenames,
 };
@@ -716,114 +716,6 @@ pub struct FunctionConfig {
     #[serde(skip)]
     pub prompt_span: ast::Span,
     pub client: ClientId,
-}
-
-impl WithRepr<Implementation> for VariantWalker<'_> {
-    fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
-        NodeAttributes {
-            meta: IndexMap::new(),
-            overrides: IndexMap::new(),
-            span: Some(self.span().clone()),
-        }
-    }
-
-    fn repr(&self, db: &ParserDatabase) -> Result<Implementation> {
-        let function_name = self.ast_variant().function_name().name();
-        let impl_name = self.name();
-        // Convert the IndexMap to a Vec of tuples
-        let mut replacers_vec: Vec<(_, _)> = self
-            .properties()
-            .replacers
-            // NB: .0 should really be .input
-            .0
-            .iter()
-            .map(|r| (r.0.key(), r.1.clone()))
-            .collect();
-        // Sort the Vec by the keys
-        replacers_vec.sort_by(|a, b| a.0.cmp(&b.0));
-        // Convert the sorted Vec back to an IndexMap
-        let sorted_replacers: IndexMap<String, String> = replacers_vec
-            .into_iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-
-        Ok(Implementation {
-            r#type: OracleType::LLM,
-            name: self.name().to_string(),
-            function_name: function_name.to_string(),
-            prompt: self.properties().to_prompt().repr(db)?,
-            input_replacers: sorted_replacers,
-            output_replacers: self
-                .properties()
-                .replacers
-                // NB: .1 should really be .output
-                .1
-                .iter()
-                .map(|r| (r.0.key(), r.1.clone()))
-                .collect(),
-            client: self.properties().client.value.clone(),
-            overrides: self
-                .ast_variant()
-                .iter_serializers()
-                .filter_map(|(_k, v)| {
-                    let matches = match self.db.find_type_by_str(v.name()) {
-                        Some(either) => match either {
-                            Either::Left(left_value) => {
-                                let cls_res = left_value.repr(db);
-                                match cls_res {
-                                    Ok(cls) => cls
-                                        .static_fields
-                                        .iter()
-                                        .flat_map(|f| {
-                                            process_field(
-                                                &f.attributes.overrides,
-                                                &f.elem.name,
-                                                function_name,
-                                                impl_name,
-                                            )
-                                        })
-                                        .collect::<Vec<_>>(),
-
-                                    _ => vec![],
-                                }
-                            }
-                            Either::Right(right_value) => {
-                                let enm_res = right_value.repr(db);
-                                match enm_res {
-                                    Ok(enm) => enm
-                                        .values
-                                        .iter()
-                                        .flat_map(|f| {
-                                            process_field(
-                                                &f.attributes.overrides,
-                                                &f.elem.0,
-                                                function_name,
-                                                impl_name,
-                                            )
-                                        })
-                                        .collect::<Vec<_>>(),
-
-                                    _ => vec![],
-                                }
-                            }
-                        },
-                        None => {
-                            vec![]
-                        }
-                    };
-
-                    if matches.is_empty() {
-                        None
-                    } else {
-                        Some(AliasOverride {
-                            name: v.name().to_string(),
-                            aliased_keys: matches,
-                        })
-                    }
-                })
-                .collect::<Vec<_>>(),
-        })
-    }
 }
 
 fn process_field(
