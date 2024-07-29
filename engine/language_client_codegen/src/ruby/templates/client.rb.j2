@@ -37,29 +37,29 @@ module Baml
 
     {% for fn in funcs -%}
     sig {
-      {% if fn.args.len() > 0 %}
       params(
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}},
         {%- endfor %}
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns({{ fn.return_type }})
-      {% else %}
-      returns({{ fn.return_type }})
-      {% endif %}
     }
     def {{fn.name}}(
         {% for (name, _) in fn.args -%}
-        {{name}}:{% if !loop.last %},{% endif %}
+        {{name}}:,
         {%- endfor %}
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "{{fn.name}}",
         {
           {% for (name, _) in fn.args -%}
-          "{{name}}" => {{name}},
+          {{name}}: {{name}},
           {%- endfor %}
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
@@ -83,18 +83,20 @@ module Baml
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}},
         {%- endfor %}
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[{{ fn.return_type }}])
     }
     def {{fn.name}}(
         {% for (name, _) in fn.args -%}
-        {{name}}:{% if !loop.last %},{% endif %}
+        {{name}}:,
         {%- endfor %}
+        baml_options:
     )
       raw = @runtime.stream_function(
         "{{fn.name}}",
         {
           {% for (name, _) in fn.args -%}
-          "{{name}}" => {{name}},
+          name: {{name}},
           {%- endfor %}
         },
         @ctx_manager,

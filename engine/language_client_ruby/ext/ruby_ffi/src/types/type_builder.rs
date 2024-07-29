@@ -5,7 +5,7 @@ use magnus::{class, function, method, Module, Object, RModule};
 
 #[magnus::wrap(class = "Baml::Ffi::TypeBuilder", free_immediately, size)]
 pub(crate) struct TypeBuilder {
-    inner: type_builder::TypeBuilder,
+    pub(crate) inner: type_builder::TypeBuilder,
 }
 
 crate::lang_wrapper!(EnumBuilder, "Baml::Ffi::EnumBuilder", type_builder::EnumBuilder, sync_thread_safe, name: String);

@@ -1,5 +1,7 @@
 use baml_runtime::client_registry;
+use magnus::typed_data::Obj;
 use magnus::{class, function, method, Error, Module, Object, RHash, Ruby};
+use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
 use crate::ruby_to_json;
@@ -7,20 +9,20 @@ use crate::Result;
 
 #[magnus::wrap(class = "Baml::Ffi::ClientRegistry", free_immediately, size)]
 pub(crate) struct ClientRegistry {
-    // TODO(sam): this shouldn't need Ar
-    inner: Arc<Mutex<client_registry::ClientRegistry>>,
+    // This is the pattern suggeested in https://github.com/matsadler/magnus/blob/main/examples/mut_point.rs
+    pub(crate) inner: RefCell<client_registry::ClientRegistry>,
 }
 
 impl ClientRegistry {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(client_registry::ClientRegistry::new())),
+            inner: RefCell::new(client_registry::ClientRegistry::new()),
         }
     }
 
     pub fn add_llm_client(
         ruby: &Ruby,
-        rb_self: &ClientRegistry,
+        rb_self: &Self,
         name: String,
         provider: String,
         options: RHash,
@@ -43,12 +45,12 @@ impl ClientRegistry {
             options,
         };
 
-        rb_self.inner.lock().unwrap().add_client(client_property);
+        rb_self.inner.borrow_mut().add_client(client_property);
         Ok(())
     }
 
     pub fn set_primary(&self, primary: String) {
-        self.inner.lock().unwrap().set_primary(primary);
+        self.inner.borrow_mut().set_primary(primary);
     }
 
     pub fn define_in_ruby(module: &magnus::RModule) -> Result<()> {

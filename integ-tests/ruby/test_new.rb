@@ -18,7 +18,7 @@ describe "ruby<->baml integration tests" do
     cb.add_llm_client("MyClient", "openai", { model: "gpt-3.5-turbo" })
     cb.set_primary("MyClient")
 
-    capitol = await BAML::ExpectFailure.new(
+    capitol = Baml.Client.ExpectFailure.new(
       baml_options: { client_registry: cb }
     )
     assert_match(/london/, capitol.downcase)

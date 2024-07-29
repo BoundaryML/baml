@@ -50,272 +50,300 @@ module Baml
     end
 
     sig {
-      
       params(
         recipe: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::Recipe)
-      
     }
     def AaaSamOutputFormat(
-        recipe:
+        recipe:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "AaaSamOutputFormat",
         {
-          "recipe" => recipe,
+          recipe: recipe,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         aud: Baml::Audio,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def AudioInput(
-        aud:
+        aud:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "AudioInput",
         {
-          "aud" => aud,
+          aud: aud,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::Category)
-      
     }
     def ClassifyMessage(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "ClassifyMessage",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::Category)
-      
     }
     def ClassifyMessage2(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "ClassifyMessage2",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::Category)
-      
     }
     def ClassifyMessage3(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "ClassifyMessage3",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         img: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def DescribeImage(
-        img:
+        img:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "DescribeImage",
         {
-          "img" => img,
+          img: img,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def DescribeImage2(
-        classWithImage:,img2:
+        classWithImage:,img2:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "DescribeImage2",
         {
-          "classWithImage" => classWithImage,"img2" => img2,
+          classWithImage: classWithImage,img2: img2,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def DescribeImage3(
-        classWithImage:,img2:
+        classWithImage:,img2:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "DescribeImage3",
         {
-          "classWithImage" => classWithImage,"img2" => img2,
+          classWithImage: classWithImage,img2: img2,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def DescribeImage4(
-        classWithImage:,img2:
+        classWithImage:,img2:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "DescribeImage4",
         {
-          "classWithImage" => classWithImage,"img2" => img2,
+          classWithImage: classWithImage,img2: img2,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::DummyOutput)
-      
     }
     def DummyOutputFunction(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "DummyOutputFunction",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: Baml::Types::DynamicClassOne,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::DynamicClassTwo)
-      
     }
     def DynamicFunc(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "DynamicFunc",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: Baml::Types::DynInputOutput,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::DynInputOutput)
-      
     }
     def DynamicInputOutput(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "DynamicInputOutput",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: T::Array[Baml::Types::DynInputOutput],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T::Array[Baml::Types::DynInputOutput])
-      
     }
     def DynamicListInputOutput(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "DynamicListInputOutput",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
-      returns(String)
-      
+      params(
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
+      ).returns(String)
     }
     def ExpectFailure(
         
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "ExpectFailure",
@@ -323,697 +351,769 @@ module Baml
           
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T::Array[String])
-      
     }
     def ExtractNames(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "ExtractNames",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         text: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T::Array[Baml::Types::Person])
-      
     }
     def ExtractPeople(
-        text:
+        text:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "ExtractPeople",
         {
-          "text" => text,
+          text: text,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         email: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::ReceiptInfo)
-      
     }
     def ExtractReceiptInfo(
-        email:
+        email:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "ExtractReceiptInfo",
         {
-          "email" => email,
+          email: email,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         resume: String,img: T.nilable(Baml::Image),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::Resume)
-      
     }
     def ExtractResume(
-        resume:,img:
+        resume:,img:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "ExtractResume",
         {
-          "resume" => resume,"img" => img,
+          resume: resume,img: img,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         resume: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::Resume)
-      
     }
     def ExtractResume2(
-        resume:
+        resume:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "ExtractResume2",
         {
-          "resume" => resume,
+          resume: resume,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Types::ClassOptionalOutput))
-      
     }
     def FnClassOptionalOutput(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnClassOptionalOutput",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Types::ClassOptionalOutput2))
-      
     }
     def FnClassOptionalOutput2(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnClassOptionalOutput2",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T::Array[Baml::Types::EnumOutput])
-      
     }
     def FnEnumListOutput(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnEnumListOutput",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::EnumOutput)
-      
     }
     def FnEnumOutput(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnEnumOutput",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myString: T.nilable(String),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def FnNamedArgsSingleStringOptional(
-        myString:
+        myString:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnNamedArgsSingleStringOptional",
         {
-          "myString" => myString,
+          myString: myString,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T::Boolean)
-      
     }
     def FnOutputBool(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnOutputBool",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestOutputClass)
-      
     }
     def FnOutputClass(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnOutputClass",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T::Array[Baml::Types::TestOutputClass])
-      
     }
     def FnOutputClassList(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnOutputClassList",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestClassNested)
-      
     }
     def FnOutputClassNested(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnOutputClassNested",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestClassWithEnum)
-      
     }
     def FnOutputClassWithEnum(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnOutputClassWithEnum",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T::Array[String])
-      
     }
     def FnOutputStringList(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnOutputStringList",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestEnum)
-      
     }
     def FnTestAliasedEnumOutput(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnTestAliasedEnumOutput",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestClassAlias)
-      
     }
     def FnTestClassAlias(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnTestClassAlias",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myArg: Baml::Types::NamedArgsSingleEnum,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def FnTestNamedArgsSingleEnum(
-        myArg:
+        myArg:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "FnTestNamedArgsSingleEnum",
         {
-          "myArg" => myArg,
+          myArg: myArg,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         text: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::RaysData)
-      
     }
     def GetDataType(
-        text:
+        text:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "GetDataType",
         {
-          "text" => text,
+          text: text,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         email: Baml::Types::Email,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::OrderInfo)
-      
     }
     def GetOrderInfo(
-        email:
+        email:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "GetOrderInfo",
         {
-          "email" => email,
+          email: email,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         query: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::SearchParams)
-      
     }
     def GetQuery(
-        query:
+        query:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "GetQuery",
         {
-          "query" => query,
+          query: query,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::DynamicOutput)
-      
     }
     def MyFunc(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "MyFunc",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)])
-      
     }
     def OptionalTest_Function(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "OptionalTest_Function",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def PromptTestClaude(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "PromptTestClaude",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def PromptTestClaudeChat(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "PromptTestClaudeChat",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def PromptTestClaudeChatNoSystem(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "PromptTestClaudeChatNoSystem",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def PromptTestOpenAI(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "PromptTestOpenAI",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def PromptTestOpenAIChat(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "PromptTestOpenAIChat",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def PromptTestOpenAIChatNoSystem(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "PromptTestOpenAIChatNoSystem",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def PromptTestStreaming(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "PromptTestStreaming",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestAnthropic(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestAnthropic",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestAws(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestAws",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestAzure(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestAzure",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
-      returns(String)
-      
+      params(
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
+      ).returns(String)
     }
     def TestFallbackClient(
         
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestFallbackClient",
@@ -1021,337 +1121,373 @@ module Baml
           
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myBool: T::Boolean,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestFnNamedArgsSingleBool(
-        myBool:
+        myBool:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleBool",
         {
-          "myBool" => myBool,
+          myBool: myBool,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myArg: Baml::Types::NamedArgsSingleClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestFnNamedArgsSingleClass(
-        myArg:
+        myArg:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleClass",
         {
-          "myArg" => myArg,
+          myArg: myArg,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myArg: T::Array[Baml::Types::NamedArgsSingleEnumList],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestFnNamedArgsSingleEnumList(
-        myArg:
+        myArg:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleEnumList",
         {
-          "myArg" => myArg,
+          myArg: myArg,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myFloat: Float,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestFnNamedArgsSingleFloat(
-        myFloat:
+        myFloat:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleFloat",
         {
-          "myFloat" => myFloat,
+          myFloat: myFloat,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myInt: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestFnNamedArgsSingleInt(
-        myInt:
+        myInt:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleInt",
         {
-          "myInt" => myInt,
+          myInt: myInt,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myMap: T::Hash[String, Baml::Types::StringToClassEntry],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T::Hash[String, Baml::Types::StringToClassEntry])
-      
     }
     def TestFnNamedArgsSingleMapStringToClass(
-        myMap:
+        myMap:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleMapStringToClass",
         {
-          "myMap" => myMap,
+          myMap: myMap,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myMap: T::Hash[String, T::Hash[String, String]],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T::Hash[String, T::Hash[String, String]])
-      
     }
     def TestFnNamedArgsSingleMapStringToMap(
-        myMap:
+        myMap:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleMapStringToMap",
         {
-          "myMap" => myMap,
+          myMap: myMap,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myMap: T::Hash[String, String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(T::Hash[String, String])
-      
     }
     def TestFnNamedArgsSingleMapStringToString(
-        myMap:
+        myMap:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleMapStringToString",
         {
-          "myMap" => myMap,
+          myMap: myMap,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myString: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestFnNamedArgsSingleString(
-        myString:
+        myString:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleString",
         {
-          "myString" => myString,
+          myString: myString,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myStringArray: T::Array[String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestFnNamedArgsSingleStringArray(
-        myStringArray:
+        myStringArray:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleStringArray",
         {
-          "myStringArray" => myStringArray,
+          myStringArray: myStringArray,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myArg: T::Array[String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestFnNamedArgsSingleStringList(
-        myArg:
+        myArg:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleStringList",
         {
-          "myArg" => myArg,
+          myArg: myArg,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestGemini(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestGemini",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         img: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestImageInput(
-        img:
+        img:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestImageInput",
         {
-          "img" => img,
+          img: img,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestMulticlassNamedArgs(
-        myArg:,myArg2:
+        myArg:,myArg2:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestMulticlassNamedArgs",
         {
-          "myArg" => myArg,"myArg2" => myArg2,
+          myArg: myArg,myArg2: myArg2,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestOllama(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestOllama",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestOpenAILegacyProvider(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestOpenAILegacyProvider",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
-      returns(String)
-      
+      params(
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
+      ).returns(String)
     }
     def TestRetryConstant(
         
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestRetryConstant",
@@ -1359,17 +1495,21 @@ module Baml
           
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
-      returns(String)
-      
+      params(
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
+      ).returns(String)
     }
     def TestRetryExponential(
         
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestRetryExponential",
@@ -1377,46 +1517,52 @@ module Baml
           
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(String)
-      
     }
     def TestVertex(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "TestVertex",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
 
     sig {
-      
       params(
         input: T.any(String, T::Boolean),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::Types::UnionTest_ReturnType)
-      
     }
     def UnionTest_Function(
-        input:
+        input:,
+        baml_options: {}
     )
       raw = @runtime.call_function(
         "UnionTest_Function",
         {
-          "input" => input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_builder],
+        baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
     end
@@ -1437,15 +1583,17 @@ module Baml
     sig {
       params(
         recipe: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Recipe])
     }
     def AaaSamOutputFormat(
-        recipe:
+        recipe:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "AaaSamOutputFormat",
         {
-          "recipe" => recipe,
+          name: recipe,
         },
         @ctx_manager,
       )
@@ -1458,15 +1606,17 @@ module Baml
     sig {
       params(
         aud: Baml::Audio,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def AudioInput(
-        aud:
+        aud:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "AudioInput",
         {
-          "aud" => aud,
+          name: aud,
         },
         @ctx_manager,
       )
@@ -1479,15 +1629,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Category])
     }
     def ClassifyMessage(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "ClassifyMessage",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1500,15 +1652,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Category])
     }
     def ClassifyMessage2(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "ClassifyMessage2",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1521,15 +1675,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Category])
     }
     def ClassifyMessage3(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "ClassifyMessage3",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1542,15 +1698,17 @@ module Baml
     sig {
       params(
         img: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeImage(
-        img:
+        img:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "DescribeImage",
         {
-          "img" => img,
+          name: img,
         },
         @ctx_manager,
       )
@@ -1563,15 +1721,17 @@ module Baml
     sig {
       params(
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeImage2(
-        classWithImage:,img2:
+        classWithImage:,img2:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "DescribeImage2",
         {
-          "classWithImage" => classWithImage,"img2" => img2,
+          name: classWithImage,name: img2,
         },
         @ctx_manager,
       )
@@ -1584,15 +1744,17 @@ module Baml
     sig {
       params(
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeImage3(
-        classWithImage:,img2:
+        classWithImage:,img2:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "DescribeImage3",
         {
-          "classWithImage" => classWithImage,"img2" => img2,
+          name: classWithImage,name: img2,
         },
         @ctx_manager,
       )
@@ -1605,15 +1767,17 @@ module Baml
     sig {
       params(
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeImage4(
-        classWithImage:,img2:
+        classWithImage:,img2:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "DescribeImage4",
         {
-          "classWithImage" => classWithImage,"img2" => img2,
+          name: classWithImage,name: img2,
         },
         @ctx_manager,
       )
@@ -1626,15 +1790,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::DummyOutput])
     }
     def DummyOutputFunction(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "DummyOutputFunction",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1647,15 +1813,17 @@ module Baml
     sig {
       params(
         input: Baml::Types::DynamicClassOne,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::DynamicClassTwo])
     }
     def DynamicFunc(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "DynamicFunc",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1668,15 +1836,17 @@ module Baml
     sig {
       params(
         input: Baml::Types::DynInputOutput,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::DynInputOutput])
     }
     def DynamicInputOutput(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "DynamicInputOutput",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1689,15 +1859,17 @@ module Baml
     sig {
       params(
         input: T::Array[Baml::Types::DynInputOutput],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[Baml::Types::DynInputOutput]])
     }
     def DynamicListInputOutput(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "DynamicListInputOutput",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1710,10 +1882,12 @@ module Baml
     sig {
       params(
         
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def ExpectFailure(
         
+        baml_options:
     )
       raw = @runtime.stream_function(
         "ExpectFailure",
@@ -1731,15 +1905,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[String]])
     }
     def ExtractNames(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "ExtractNames",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1752,15 +1928,17 @@ module Baml
     sig {
       params(
         text: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[Baml::Types::Person]])
     }
     def ExtractPeople(
-        text:
+        text:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "ExtractPeople",
         {
-          "text" => text,
+          name: text,
         },
         @ctx_manager,
       )
@@ -1773,15 +1951,17 @@ module Baml
     sig {
       params(
         email: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::ReceiptInfo])
     }
     def ExtractReceiptInfo(
-        email:
+        email:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "ExtractReceiptInfo",
         {
-          "email" => email,
+          name: email,
         },
         @ctx_manager,
       )
@@ -1794,15 +1974,17 @@ module Baml
     sig {
       params(
         resume: String,img: T.nilable(Baml::Image),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Resume])
     }
     def ExtractResume(
-        resume:,img:
+        resume:,img:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "ExtractResume",
         {
-          "resume" => resume,"img" => img,
+          name: resume,name: img,
         },
         @ctx_manager,
       )
@@ -1815,15 +1997,17 @@ module Baml
     sig {
       params(
         resume: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Resume])
     }
     def ExtractResume2(
-        resume:
+        resume:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "ExtractResume2",
         {
-          "resume" => resume,
+          name: resume,
         },
         @ctx_manager,
       )
@@ -1836,15 +2020,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T.nilable(Baml::Types::ClassOptionalOutput)])
     }
     def FnClassOptionalOutput(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnClassOptionalOutput",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1857,15 +2043,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T.nilable(Baml::Types::ClassOptionalOutput2)])
     }
     def FnClassOptionalOutput2(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnClassOptionalOutput2",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1878,15 +2066,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[Baml::Types::EnumOutput]])
     }
     def FnEnumListOutput(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnEnumListOutput",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1899,15 +2089,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::EnumOutput])
     }
     def FnEnumOutput(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnEnumOutput",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1920,15 +2112,17 @@ module Baml
     sig {
       params(
         myString: T.nilable(String),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def FnNamedArgsSingleStringOptional(
-        myString:
+        myString:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnNamedArgsSingleStringOptional",
         {
-          "myString" => myString,
+          name: myString,
         },
         @ctx_manager,
       )
@@ -1941,15 +2135,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Boolean])
     }
     def FnOutputBool(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnOutputBool",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1962,15 +2158,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::TestOutputClass])
     }
     def FnOutputClass(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnOutputClass",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -1983,15 +2181,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[Baml::Types::TestOutputClass]])
     }
     def FnOutputClassList(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnOutputClassList",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2004,15 +2204,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::TestClassNested])
     }
     def FnOutputClassNested(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnOutputClassNested",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2025,15 +2227,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::TestClassWithEnum])
     }
     def FnOutputClassWithEnum(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnOutputClassWithEnum",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2046,15 +2250,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[String]])
     }
     def FnOutputStringList(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnOutputStringList",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2067,15 +2273,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::TestEnum])
     }
     def FnTestAliasedEnumOutput(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnTestAliasedEnumOutput",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2088,15 +2296,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::TestClassAlias])
     }
     def FnTestClassAlias(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnTestClassAlias",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2109,15 +2319,17 @@ module Baml
     sig {
       params(
         myArg: Baml::Types::NamedArgsSingleEnum,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def FnTestNamedArgsSingleEnum(
-        myArg:
+        myArg:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "FnTestNamedArgsSingleEnum",
         {
-          "myArg" => myArg,
+          name: myArg,
         },
         @ctx_manager,
       )
@@ -2130,15 +2342,17 @@ module Baml
     sig {
       params(
         text: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::RaysData])
     }
     def GetDataType(
-        text:
+        text:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "GetDataType",
         {
-          "text" => text,
+          name: text,
         },
         @ctx_manager,
       )
@@ -2151,15 +2365,17 @@ module Baml
     sig {
       params(
         email: Baml::Types::Email,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::OrderInfo])
     }
     def GetOrderInfo(
-        email:
+        email:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "GetOrderInfo",
         {
-          "email" => email,
+          name: email,
         },
         @ctx_manager,
       )
@@ -2172,15 +2388,17 @@ module Baml
     sig {
       params(
         query: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::SearchParams])
     }
     def GetQuery(
-        query:
+        query:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "GetQuery",
         {
-          "query" => query,
+          name: query,
         },
         @ctx_manager,
       )
@@ -2193,15 +2411,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::DynamicOutput])
     }
     def MyFunc(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "MyFunc",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2214,15 +2434,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)]])
     }
     def OptionalTest_Function(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "OptionalTest_Function",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2235,15 +2457,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestClaude(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "PromptTestClaude",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2256,15 +2480,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestClaudeChat(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "PromptTestClaudeChat",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2277,15 +2503,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestClaudeChatNoSystem(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "PromptTestClaudeChatNoSystem",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2298,15 +2526,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestOpenAI(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "PromptTestOpenAI",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2319,15 +2549,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestOpenAIChat(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "PromptTestOpenAIChat",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2340,15 +2572,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestOpenAIChatNoSystem(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "PromptTestOpenAIChatNoSystem",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2361,15 +2595,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestStreaming(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "PromptTestStreaming",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2382,15 +2618,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestAnthropic(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestAnthropic",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2403,15 +2641,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestAws(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestAws",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2424,15 +2664,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestAzure(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestAzure",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2445,10 +2687,12 @@ module Baml
     sig {
       params(
         
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFallbackClient(
         
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestFallbackClient",
@@ -2466,15 +2710,17 @@ module Baml
     sig {
       params(
         myBool: T::Boolean,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleBool(
-        myBool:
+        myBool:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleBool",
         {
-          "myBool" => myBool,
+          name: myBool,
         },
         @ctx_manager,
       )
@@ -2487,15 +2733,17 @@ module Baml
     sig {
       params(
         myArg: Baml::Types::NamedArgsSingleClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleClass(
-        myArg:
+        myArg:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleClass",
         {
-          "myArg" => myArg,
+          name: myArg,
         },
         @ctx_manager,
       )
@@ -2508,15 +2756,17 @@ module Baml
     sig {
       params(
         myArg: T::Array[Baml::Types::NamedArgsSingleEnumList],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleEnumList(
-        myArg:
+        myArg:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleEnumList",
         {
-          "myArg" => myArg,
+          name: myArg,
         },
         @ctx_manager,
       )
@@ -2529,15 +2779,17 @@ module Baml
     sig {
       params(
         myFloat: Float,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleFloat(
-        myFloat:
+        myFloat:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleFloat",
         {
-          "myFloat" => myFloat,
+          name: myFloat,
         },
         @ctx_manager,
       )
@@ -2550,15 +2802,17 @@ module Baml
     sig {
       params(
         myInt: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleInt(
-        myInt:
+        myInt:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleInt",
         {
-          "myInt" => myInt,
+          name: myInt,
         },
         @ctx_manager,
       )
@@ -2571,15 +2825,17 @@ module Baml
     sig {
       params(
         myMap: T::Hash[String, Baml::Types::StringToClassEntry],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Hash[String, Baml::Types::StringToClassEntry]])
     }
     def TestFnNamedArgsSingleMapStringToClass(
-        myMap:
+        myMap:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleMapStringToClass",
         {
-          "myMap" => myMap,
+          name: myMap,
         },
         @ctx_manager,
       )
@@ -2592,15 +2848,17 @@ module Baml
     sig {
       params(
         myMap: T::Hash[String, T::Hash[String, String]],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Hash[String, T::Hash[String, String]]])
     }
     def TestFnNamedArgsSingleMapStringToMap(
-        myMap:
+        myMap:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleMapStringToMap",
         {
-          "myMap" => myMap,
+          name: myMap,
         },
         @ctx_manager,
       )
@@ -2613,15 +2871,17 @@ module Baml
     sig {
       params(
         myMap: T::Hash[String, String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Hash[String, String]])
     }
     def TestFnNamedArgsSingleMapStringToString(
-        myMap:
+        myMap:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleMapStringToString",
         {
-          "myMap" => myMap,
+          name: myMap,
         },
         @ctx_manager,
       )
@@ -2634,15 +2894,17 @@ module Baml
     sig {
       params(
         myString: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleString(
-        myString:
+        myString:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleString",
         {
-          "myString" => myString,
+          name: myString,
         },
         @ctx_manager,
       )
@@ -2655,15 +2917,17 @@ module Baml
     sig {
       params(
         myStringArray: T::Array[String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleStringArray(
-        myStringArray:
+        myStringArray:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleStringArray",
         {
-          "myStringArray" => myStringArray,
+          name: myStringArray,
         },
         @ctx_manager,
       )
@@ -2676,15 +2940,17 @@ module Baml
     sig {
       params(
         myArg: T::Array[String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleStringList(
-        myArg:
+        myArg:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleStringList",
         {
-          "myArg" => myArg,
+          name: myArg,
         },
         @ctx_manager,
       )
@@ -2697,15 +2963,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestGemini(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestGemini",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2718,15 +2986,17 @@ module Baml
     sig {
       params(
         img: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestImageInput(
-        img:
+        img:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestImageInput",
         {
-          "img" => img,
+          name: img,
         },
         @ctx_manager,
       )
@@ -2739,15 +3009,17 @@ module Baml
     sig {
       params(
         myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestMulticlassNamedArgs(
-        myArg:,myArg2:
+        myArg:,myArg2:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestMulticlassNamedArgs",
         {
-          "myArg" => myArg,"myArg2" => myArg2,
+          name: myArg,name: myArg2,
         },
         @ctx_manager,
       )
@@ -2760,15 +3032,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestOllama(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestOllama",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2781,15 +3055,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAILegacyProvider(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestOpenAILegacyProvider",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2802,10 +3078,12 @@ module Baml
     sig {
       params(
         
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestRetryConstant(
         
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestRetryConstant",
@@ -2823,10 +3101,12 @@ module Baml
     sig {
       params(
         
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestRetryExponential(
         
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestRetryExponential",
@@ -2844,15 +3124,17 @@ module Baml
     sig {
       params(
         input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestVertex(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "TestVertex",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )
@@ -2865,15 +3147,17 @@ module Baml
     sig {
       params(
         input: T.any(String, T::Boolean),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::UnionTest_ReturnType])
     }
     def UnionTest_Function(
-        input:
+        input:,
+        baml_options:
     )
       raw = @runtime.stream_function(
         "UnionTest_Function",
         {
-          "input" => input,
+          name: input,
         },
         @ctx_manager,
       )

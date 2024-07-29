@@ -8,6 +8,7 @@ use magnus::{
     scan_args::get_kwargs, Error, RHash, Ruby,
 };
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -115,6 +116,8 @@ impl BamlRuntimeFfi {
         function_name: String,
         args: RHash,
         ctx: &RuntimeContextManager,
+        tb: Option<&types::type_builder::TypeBuilder>,
+        cb: Option<&types::client_registry::ClientRegistry>,
     ) -> Result<FunctionResult> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -126,14 +129,20 @@ impl BamlRuntimeFfi {
             }
         };
 
-        log::debug!("Calling {function_name} with:\nargs: {args:#?}\nctx ???");
+        log::debug!(
+            "Calling {function_name} with:\nargs: {args:#?}\nctx ???\ntb:{:?}\ncb:{:?}",
+            tb.is_some(),
+            cb.is_some()
+        );
+
+        // let cb = cb.map(|cb| cb.inner.lock().unwrap().deref());
 
         let retval = match rb_self.t.block_on(rb_self.inner.call_function(
             function_name.clone(),
             &args,
             &ctx.inner,
-            None,
-            None,
+            tb.map(|tb| &tb.inner),
+            cb.map(|cb| cb.inner.borrow_mut()).as_deref(),
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(
@@ -210,7 +219,7 @@ fn init(ruby: &Ruby) -> Result<()> {
     ) {
         eprintln!("Failed to initialize BAML logger: {:#}", e);
     };
-    println!("Initializing BAML Ruby FFI");
+    log::info!("Initializing BAML Ruby FFI");
 
     let module = ruby.define_module("Baml")?.define_module("Ffi")?;
 
@@ -224,12 +233,12 @@ fn init(ruby: &Ruby) -> Result<()> {
     )?;
     runtime_class
         .define_singleton_method("from_files", function!(BamlRuntimeFfi::from_files, 3))?;
-    //runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 2))?;
     runtime_class.define_method(
         "create_context_manager",
         method!(BamlRuntimeFfi::create_context_manager, 0),
     )?;
-    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 3))?;
+    log::info!("call_function takes 5 args");
+    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 5))?;
     runtime_class.define_method(
         "stream_function",
         method!(BamlRuntimeFfi::stream_function, 3),

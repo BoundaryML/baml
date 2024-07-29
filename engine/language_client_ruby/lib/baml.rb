@@ -1,15 +1,19 @@
 puts "loading baml gem"
-begin
-  ruby_version = /(\d+\.\d+)/.match(RUBY_VERSION)
-  require_relative "baml/#{ruby_version}/ruby_ffi"
-rescue LoadError
-  require_relative "baml/ruby_ffi"
-end
+# begin
+#   ruby_version = /(\d+\.\d+)/.match(RUBY_VERSION)
+#   require_relative "baml/#{ruby_version}/ruby_ffi"
+# rescue LoadError
+#   require_relative "baml/ruby_ffi"
+# end
+require_relative "baml/ruby_ffi"
 require_relative "stream"
 
 module Baml
   # TODO: implement image support
   class Image; end
+
+  ClientRegistry = Baml::Ffi::ClientRegistry
+  TypeRegistry = Baml::Ffi::TypeBuilder
 
   # Dynamically + idempotently define Baml::TypeConverter
   # NB: this does not respect raise_coercion_error = false
