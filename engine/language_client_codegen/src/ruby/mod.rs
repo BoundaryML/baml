@@ -3,7 +3,7 @@ mod field_type;
 mod generate_types;
 mod ruby_language_features;
 
-use std::{path::PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -45,6 +45,7 @@ pub(crate) fn generate(
     collector
         .add_template::<generate_types::RubyStreamTypes>("partial-types.rb", (ir, generator))?;
     collector.add_template::<generate_types::RubyTypes>("types.rb", (ir, generator))?;
+    collector.add_template::<generate_types::TypeBuilder>("type_builder.rb", (ir, generator))?;
     collector.add_template::<RubyClient>("client.rb", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlined.rb", (ir, generator))?;
 

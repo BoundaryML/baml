@@ -9,14 +9,8 @@ GEM
       builder
       minitest (>= 5.0)
       ruby-progressbar
-    polyfill (1.9.0)
     rake (13.2.1)
     ruby-progressbar (1.13.0)
-    safe_type (1.1.1)
-    sorbet-coerce (0.7.0)
-      polyfill (~> 1.8)
-      safe_type (~> 1.1, >= 1.1.1)
-      sorbet-runtime (>= 0.4.4704)
     sorbet-runtime (0.5.11409)
     sorbet-struct-comparable (1.3.0)
       sorbet-runtime (>= 0.5)
@@ -28,7 +22,6 @@ PLATFORMS
 DEPENDENCIES
   minitest-reporters
   rake (~> 13.0)
-  sorbet-coerce
   sorbet-runtime
   sorbet-struct-comparable
 

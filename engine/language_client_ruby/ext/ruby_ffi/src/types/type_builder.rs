@@ -1,7 +1,7 @@
 use crate::Result;
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::BamlValue;
-use magnus::{block::Proc, class, method, Module, RModule, Ruby};
+use magnus::{block::Proc, class, function, method, Module, Object, RModule, Ruby};
 use std::sync::{Arc, Mutex};
 
 #[magnus::wrap(class = "Baml::Ffi::TypeBuilder", free_immediately, size)]
@@ -31,10 +31,11 @@ crate::lang_wrapper!(
 );
 
 impl TypeBuilder {
-    // #[new]
-    // pub fn new() -> Self {
-    //     type_builder::TypeBuilder::new().into()
-    // }
+    pub fn new() -> Self {
+        Self {
+            inner: type_builder::TypeBuilder::new(),
+        }
+    }
 
     pub fn r#enum(&self, name: String) -> EnumBuilder {
         EnumBuilder {
@@ -102,6 +103,7 @@ impl TypeBuilder {
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("TypeBuilder", class::object())?;
 
+        cls.define_singleton_method("new", function!(TypeBuilder::new, 0))?;
         cls.define_method("enum", method!(TypeBuilder::r#enum, 1))?;
         cls.define_method("class_", method!(TypeBuilder::class, 1))?;
         cls.define_method("list", method!(TypeBuilder::list, 1))?;

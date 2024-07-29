@@ -13,11 +13,13 @@ pub(crate) struct RubyTypes<'ir> {
 struct RubyEnum<'ir> {
     pub name: &'ir str,
     pub values: Vec<&'ir str>,
+    dynamic: bool,
 }
 
 struct RubyStruct<'ir> {
     name: &'ir str,
     fields: Vec<(&'ir str, String)>,
+    dynamic: bool,
 }
 
 #[derive(askama::Template)]
@@ -31,6 +33,13 @@ struct PartialRubyStruct<'ir> {
     name: &'ir str,
     // the name, and the type of the field
     fields: Vec<(&'ir str, String)>,
+}
+
+#[derive(askama::Template)]
+#[template(path = "type_builder.rb.j2", escape = "none")]
+pub(crate) struct TypeBuilder<'ir> {
+    enums: Vec<RubyEnum<'ir>>,
+    classes: Vec<RubyStruct<'ir>>,
 }
 
 impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir crate::GeneratorArgs)> for RubyTypes<'ir> {
@@ -48,6 +57,7 @@ impl<'ir> From<EnumWalker<'ir>> for RubyEnum<'ir> {
     fn from(e: EnumWalker<'ir>) -> RubyEnum<'ir> {
         RubyEnum {
             name: e.name(),
+            dynamic: e.item.attributes.get("dynamic_type").is_some(),
             values: e
                 .item
                 .elem
@@ -63,6 +73,7 @@ impl<'ir> From<ClassWalker<'ir>> for RubyStruct<'ir> {
     fn from(c: ClassWalker<'ir>) -> RubyStruct<'ir> {
         RubyStruct {
             name: c.name(),
+            dynamic: c.item.attributes.get("dynamic_type").is_some(),
             fields: c
                 .item
                 .elem
@@ -149,5 +160,18 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             ),
             FieldType::Optional(inner) => inner.to_partial_type_ref(),
         }
+    }
+}
+
+impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for TypeBuilder<'ir> {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        (ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs),
+    ) -> Result<TypeBuilder<'ir>> {
+        Ok(TypeBuilder {
+            enums: ir.walk_enums().map(RubyEnum::from).collect::<Vec<_>>(),
+            classes: ir.walk_classes().map(RubyStruct::from).collect::<Vec<_>>(),
+        })
     }
 }

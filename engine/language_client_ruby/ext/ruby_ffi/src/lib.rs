@@ -211,6 +211,7 @@ fn init(ruby: &Ruby) -> Result<()> {
     ) {
         eprintln!("Failed to initialize BAML logger: {:#}", e);
     };
+    println!("Initializing BAML Ruby FFI");
 
     let module = ruby.define_module("Baml")?.define_module("Ffi")?;
 
@@ -237,6 +238,7 @@ fn init(ruby: &Ruby) -> Result<()> {
 
     FunctionResult::define_in_ruby(&module)?;
     FunctionResultStream::define_in_ruby(&module)?;
+    println!("defined functionresultstream <--------------");
 
     RuntimeContextManager::define_in_ruby(&module)?;
 
@@ -247,7 +249,9 @@ fn init(ruby: &Ruby) -> Result<()> {
     types::type_builder::ClassPropertyBuilder::define_in_ruby(&module)?;
     types::type_builder::FieldType::define_in_ruby(&module)?;
 
+    println!("defining clientregistry <--------------");
     types::client_registry::ClientRegistry::define_in_ruby(&module)?;
+    println!("defined clientregistry <--------------");
 
     // everything below this is for our own testing purposes
     module.define_module_function(

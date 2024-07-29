@@ -270,7 +270,7 @@ describe "ruby<->baml integration tests" do
   end
 
   it "tests dynamic clients" do
-    cb = BAML::ClientRegistry.new
+    cb = Baml::Ffi::ClientRegistry.new
     cb.add_llm_client("MyClient", "openai", { model: "gpt-3.5-turbo" })
     cb.set_primary("MyClient")
 
