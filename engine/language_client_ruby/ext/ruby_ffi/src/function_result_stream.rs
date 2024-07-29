@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use magnus::{block::Proc, class, method, Module, RModule, Ruby};
 
+use super::types::runtime_ctx_manager::RuntimeContextManager;
 use crate::function_result::FunctionResult;
-use crate::runtime_ctx_manager::RuntimeContextManager;
 use crate::Error;
 use crate::Result;
 

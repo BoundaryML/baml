@@ -14,12 +14,11 @@ use std::sync::Arc;
 
 use function_result::FunctionResult;
 use function_result_stream::FunctionResultStream;
-use runtime_ctx_manager::RuntimeContextManager;
+use types::runtime_ctx_manager::RuntimeContextManager;
 
 mod function_result;
 mod function_result_stream;
 mod ruby_to_json;
-mod runtime_ctx_manager;
 mod types;
 
 type Result<T> = std::result::Result<T, magnus::Error>;
@@ -238,6 +237,7 @@ fn init(ruby: &Ruby) -> Result<()> {
 
     FunctionResult::define_in_ruby(&module)?;
     FunctionResultStream::define_in_ruby(&module)?;
+
     RuntimeContextManager::define_in_ruby(&module)?;
 
     types::type_builder::TypeBuilder::define_in_ruby(&module)?;
