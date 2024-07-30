@@ -284,17 +284,14 @@ impl WithRepr<FieldType> for ast::FieldType {
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
         Ok(match self {
             ast::FieldType::Symbol(arity, idn, _) => type_with_arity(
-                match idn {
-                    ast::Identifier::Local(name, _) => match db.find_type_by_str(idn) {
-                        Some(Either::Left(class_walker)) => {
-                            Ok(FieldType::Class(class_walker.name().to_string()))
-                        }
-                        Some(Either::Right(enum_walker)) => {
-                            Ok(FieldType::Enum(enum_walker.name().to_string()))
-                        }
-                        None => Err(anyhow!("Field type uses unresolvable local identifier")),
-                    }?,
-                    _ => bail!("Field type uses unsupported identifier type"),
+                match db.find_type_by_str(idn) {
+                    Some(Either::Left(class_walker)) => {
+                        FieldType::Class(class_walker.name().to_string())
+                    }
+                    Some(Either::Right(enum_walker)) => {
+                        FieldType::Enum(enum_walker.name().to_string())
+                    }
+                    None => return Err(anyhow!("Field type uses unresolvable local identifier")),
                 },
                 arity,
             ),
@@ -539,7 +536,15 @@ impl WithRepr<Field> for FieldWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Result<Field> {
         Ok(Field {
             name: self.name().to_string(),
-            r#type: self.ast_field().expr.node(db),
+            r#type: Node {
+                elem: self
+                    .ast_field()
+                    .expr
+                    .clone()
+                    .ok_or(anyhow!("Field type is None"))?
+                    .repr(db)?,
+                attributes: self.attributes(db),
+            },
         })
     }
 }
@@ -729,16 +734,18 @@ impl WithRepr<Function> for FunctionWalker<'_> {
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<Function> {
-        if self.is_old_function() {
-            bail!("Cannot represent a new function as a FunctionV1")
-        }
         Ok(Function {
             name: self.name().to_string(),
             inputs: self
                 .ast_function()
                 .input()
+                .expect("msg")
+                .args
                 .iter()
-                .map(|(id, arg)| Ok((id.name().to_string(), arg.field_type.repr(db)?)))
+                .map(|arg| {
+                    let field_type = arg.1.field_type.repr(db)?;
+                    Ok((arg.0.to_string(), field_type))
+                })
                 .collect::<Result<Vec<_>>>()?,
             output: self
                 .ast_function()

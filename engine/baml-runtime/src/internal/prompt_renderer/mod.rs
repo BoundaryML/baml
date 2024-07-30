@@ -28,13 +28,7 @@ impl PromptRenderer {
         ir: &IntermediateRepr,
         ctx: &RuntimeContext,
     ) -> Result<PromptRenderer> {
-        let Some(func_v2) = function.as_v2() else {
-            error_unsupported!(
-                "function",
-                function.name(),
-                "legacy functions are not supported in the runtime"
-            )
-        };
+        let func_v2 = function.elem();
         let Some(config) = func_v2.configs.first() else {
             error_unsupported!("function", function.name(), "no valid prompt found")
         };
@@ -72,13 +66,7 @@ impl PromptRenderer {
     ) -> Result<RenderedPrompt> {
         let func = ir.find_function(&self.function_name)?;
 
-        let Some(func_v2) = func.as_v2() else {
-            error_unsupported!(
-                "function",
-                self.function_name,
-                "legacy functions are not supported in the runtime"
-            )
-        };
+        let func_v2 = func.elem();
 
         let Some(config) = func_v2.configs.first() else {
             error_unsupported!("function", self.function_name, "no valid prompt found")

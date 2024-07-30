@@ -17,6 +17,14 @@ impl<'a> Walker<'a, &'a FunctionNode> {
         self.elem().name()
     }
 
+    pub fn is_v1(&self) -> bool {
+        false
+    }
+
+    pub fn is_v2(&self) -> bool {
+        true
+    }
+
     pub fn client_name(&self) -> Option<&'a str> {
         if let Some(c) = self.elem().configs.first() {
             return Some(c.client.as_str());
@@ -24,7 +32,14 @@ impl<'a> Walker<'a, &'a FunctionNode> {
 
         None
     }
-
+    pub fn walk_impls(
+        &'a self,
+    ) -> impl Iterator<Item = Walker<'a, (&'a repr::Function, &'a FunctionConfig)>> {
+        self.elem().configs.iter().map(|c| Walker {
+            db: self.db,
+            item: (self.elem(), c),
+        })
+    }
     pub fn walk_tests(
         &'a self,
     ) -> impl Iterator<Item = Walker<'a, (&'a FunctionNode, &'a TestCase)>> {

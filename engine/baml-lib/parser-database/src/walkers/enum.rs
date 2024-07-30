@@ -53,6 +53,15 @@ impl<'db> EnumWalker<'db> {
                 }
             })
     }
+
+    /// Get the default attributes for this enum.
+    pub fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
+        self.db
+            .types
+            .enum_attributes
+            .get(&self.id)
+            .and_then(|f| f.serilizer.as_ref())
+    }
 }
 
 impl<'db> EnumValueWalker<'db> {
@@ -63,6 +72,15 @@ impl<'db> EnumValueWalker<'db> {
     /// The enum documentation
     pub fn documentation(self) -> Option<&'db str> {
         self.r#enum().ast_enum()[self.id.1].documentation()
+    }
+
+    /// The enum value attributes.
+    pub fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
+        self.db
+            .types
+            .enum_attributes
+            .get(&self.id.0)
+            .and_then(|f| f.value_serilizers.get(&self.id.1))
     }
 }
 

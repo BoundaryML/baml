@@ -751,17 +751,12 @@ impl WasmRuntime {
     #[wasm_bindgen]
 
     pub fn check_if_in_prompt(&self, cursor_idx: usize) -> bool {
-        self.runtime
-            .internal()
-            .ir()
-            .walk_functions()
-            .any(|f| match f.as_v2() {
-                Some(func_v2) => func_v2.configs.iter().any(|config| {
-                    let span = &config.prompt_span;
-                    cursor_idx >= span.start && cursor_idx <= span.end
-                }),
-                None => false,
+        self.runtime.internal().ir().walk_functions().any(|f| {
+            f.elem().configs().expect("configs").iter().any(|config| {
+                let span = &config.prompt_span;
+                cursor_idx >= span.start && cursor_idx <= span.end
             })
+        })
     }
 
     #[wasm_bindgen]
@@ -782,15 +777,11 @@ impl WasmRuntime {
                     name = f.name(),
                     args = f
                         .inputs()
-                        .right()
-                        .map(|func_params| {
-                            func_params
-                                .iter()
-                                .filter_map(|(k, t)| get_dummy_field(2, k, t))
-                                .collect::<Vec<_>>()
-                                .join("\n")
-                        })
-                        .unwrap_or_default()
+                        .iter()
+                        .map(|(k, t)| get_dummy_field(2, k, t))
+                        .filter_map(|x| x) // Add this line to filter out None values
+                        .collect::<Vec<_>>()
+                        .join("\n")
                 );
 
                 let wasm_span = match f.span() {
@@ -804,15 +795,12 @@ impl WasmRuntime {
                     signature: {
                         let inputs = f
                             .inputs()
-                            .right()
-                            .map(|func_params| {
-                                func_params
-                                    .iter()
-                                    .map(|(k, t)| format!("{}: {}", k, t))
-                                    .collect::<Vec<_>>()
-                                    .join(", ")
-                            })
-                            .unwrap_or_default();
+                            .iter()
+                            .map(|(k, t)| get_dummy_field(2, k, t))
+                            .filter_map(|x| x) // Add this line to filter out None values
+                            .collect::<Vec<_>>()
+                            .join(",");
+
                         format!("({}) -> {}", inputs, f.output().to_string())
                     },
                     test_snippet: snippet,
@@ -852,20 +840,17 @@ impl WasmRuntime {
                             };
 
                             // Any missing params should be set to an error
-                            let _ = f.inputs().right().map(|func_params| {
-                                for (param_name, t) in func_params {
-                                    if !params.iter().any(|p| p.name.cmp(param_name).is_eq())
-                                        && !t.is_optional()
-                                    {
-                                        params.insert(
-                                            0,
-                                            WasmParam {
-                                                name: param_name.to_string(),
-                                                value: None,
-                                                error: Some("Missing parameter".to_string()),
-                                            },
-                                        );
-                                    }
+                            f.inputs().iter().for_each(|(param_name, t)| {
+                                if !params.iter().any(|p| p.name == *param_name) && !t.is_optional()
+                                {
+                                    params.insert(
+                                        0,
+                                        WasmParam {
+                                            name: param_name.to_string(),
+                                            value: None,
+                                            error: Some("Missing parameter".to_string()),
+                                        },
+                                    );
                                 }
                             });
 

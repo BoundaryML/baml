@@ -70,6 +70,15 @@ impl<'db> FieldWalker<'db> {
             None => None,
         }
     }
+
+    /// The field's default attributes.
+    pub fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
+        self.db
+            .types
+            .class_attributes
+            .get(&self.id.0)
+            .and_then(|f| f.field_serilizers.get(&self.id.1))
+    }
 }
 
 impl<'db> WithName for FieldWalker<'db> {

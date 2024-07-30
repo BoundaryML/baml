@@ -24,6 +24,15 @@ pub enum Identifier {
 }
 
 impl Identifier {
+    pub fn to_string(&self) -> String {
+        match self {
+            Identifier::ENV(s, _) => format!("env.{}", s),
+            Identifier::Ref(ref_identifier, _) => ref_identifier.full_name.clone(),
+            Identifier::Local(s, _) => s.clone(),
+            Identifier::String(s, _) => s.clone(),
+            Identifier::Invalid(s, _) => s.clone(),
+        }
+    }
     pub fn is_valid_type(&self) -> bool {
         match self {
             Identifier::ENV(_, _) => false,
