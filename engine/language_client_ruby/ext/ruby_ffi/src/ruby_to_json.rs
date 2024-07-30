@@ -31,34 +31,22 @@ impl<'rb> RubyToJson<'rb> {
                     hash.aset(k, v)?;
                 }
                 match types.const_get::<_, RClass>(class_name.as_str()) {
-                    Ok(class_type) => {
-                        log::debug!("class {} with fields {:?}", class_name, class_fields.len());
-                        class_type.funcall("new", (hash,))
-                    }
+                    Ok(class_type) => class_type.funcall("new", (hash,)),
                     Err(_) => {
-                        log::debug!(
-                            "before dynamic class {} with fields {:?}",
-                            class_name,
-                            class_fields.len()
-                        );
                         let dynamic_class_type = ruby.eval::<RClass>("Baml::DynamicStruct")?;
-                        log::debug!(
-                            "Creating dynamic class {} with fields {:?}",
-                            class_name,
-                            class_fields.len()
-                        );
                         dynamic_class_type.funcall("new", (hash,))
                     }
                 }
             }
             BamlValue::Enum(enum_name, enum_value) => {
-                match types.const_get::<_, RClass>(enum_name.as_str()) {
-                    Ok(enum_type) => {
-                        let enum_value = ruby.str_new(enum_value);
-                        enum_type.funcall("deserialize", (enum_value,))
+                if let Ok(enum_type) = types.const_get::<_, RClass>(enum_name.as_str()) {
+                    let enum_value = ruby.str_new(enum_value);
+                    if let Ok(enum_instance) = enum_type.funcall("deserialize", (enum_value,)) {
+                        return Ok(enum_instance);
                     }
-                    Err(_) => Ok(ruby.str_new(enum_value).into_value_with(ruby)),
                 }
+
+                Ok(ruby.str_new(enum_value).into_value_with(ruby))
             }
             BamlValue::Map(m) => {
                 let hash = ruby.hash_new();

@@ -1,3 +1,4 @@
+require 'json'
 require 'minitest/autorun'
 require 'minitest/reporters'
 
@@ -186,7 +187,7 @@ describe "ruby<->baml integration tests" do
     )
 
     t_res = b.ExtractPeople(
-      text: "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
+      text: "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good on a chessboard.",
       baml_options: {type_registry: t}
     )
 
