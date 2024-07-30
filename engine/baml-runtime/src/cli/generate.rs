@@ -29,7 +29,37 @@ impl GenerateArgs {
     }
 
     fn generate_clients(&self, caller_type: super::CallerType) -> Result<()> {
-        let src_dir = PathBuf::from(&self.from);
+        let mut src_dir = PathBuf::from(&self.from);
+
+        if !src_dir.exists() {
+            anyhow::bail!(
+                "Expected --from '{}' to be a baml_src/ directory, but it does not exist",
+                src_dir.display()
+            );
+        }
+
+        if !src_dir.is_dir() {
+            anyhow::bail!(
+                "Expected --from '{}' to be a baml_src/ directory, but it is not",
+                src_dir.display()
+            );
+        }
+
+        if src_dir.file_name() != Some(std::ffi::OsStr::new("baml_src")) {
+            let contained = src_dir.join("baml_src");
+
+            if contained.exists() && contained.is_dir() {
+                src_dir = contained;
+            } else {
+                anyhow::bail!(
+                    "Expected --from '{}' to be a baml_src/ directory, but it is not",
+                    src_dir.display()
+                );
+            }
+        }
+
+        let src_dir = src_dir;
+
         let runtime = BamlRuntime::from_directory(&src_dir, std::env::vars().collect())?;
         let src_files = baml_src_files(&src_dir)?;
         let all_files = src_files

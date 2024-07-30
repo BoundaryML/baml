@@ -1,5 +1,7 @@
 use baml_runtime::client_registry;
-use magnus::{class, function, method, Error, Module, Object, RHash, Ruby};
+use magnus::{
+    class, function, method, scan_args::scan_args, Error, Module, Object, RHash, Ruby, Value,
+};
 use std::cell::RefCell;
 
 use crate::ruby_to_json;
@@ -18,14 +20,12 @@ impl ClientRegistry {
         }
     }
 
-    pub fn add_llm_client(
-        ruby: &Ruby,
-        rb_self: &Self,
-        name: String,
-        provider: String,
-        options: RHash,
-        retry_policy: Option<String>,
-    ) -> Result<()> {
+    pub fn add_llm_client(ruby: &Ruby, rb_self: &Self, args: &[Value]) -> Result<()> {
+        log::info!("add_llm_client called");
+        let args = scan_args::<_, _, (), (), (), ()>(args)?;
+        let (name, provider, options): (String, String, RHash) = args.required;
+        let (retry_policy,): (Option<String>,) = args.optional;
+
         let options = match ruby_to_json::RubyToJson::convert_hash_to_json(options) {
             Ok(options) => options,
             Err(e) => {
@@ -52,11 +52,13 @@ impl ClientRegistry {
     }
 
     pub fn define_in_ruby(module: &magnus::RModule) -> Result<()> {
-        log::info!("Defining ClientRegistry in Ruby");
         let cls = module.define_class("ClientRegistry", class::object())?;
 
         cls.define_singleton_method("new", function!(ClientRegistry::new, 0))?;
-        cls.define_method("add_llm_client", method!(ClientRegistry::add_llm_client, 4))?;
+        cls.define_method(
+            "add_llm_client",
+            method!(ClientRegistry::add_llm_client, -1),
+        )?;
         cls.define_method("set_primary", method!(ClientRegistry::set_primary, 1))?;
 
         Ok(())

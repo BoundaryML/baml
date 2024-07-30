@@ -97,10 +97,12 @@ module Baml
         "{{fn.name}}",
         {
           {% for (name, _) in fn.args -%}
-          name: {{name}},
+          {{name}}: {{name}},
           {%- endfor %}
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[{{fn.partial_return_type}}, {{fn.return_type}}].new(
         ffi_stream: raw,

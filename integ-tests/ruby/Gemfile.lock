@@ -2,6 +2,7 @@ GEM
   remote: https://rubygems.org/
   specs:
     ansi (1.5.0)
+    baml (0.52.2-arm64-darwin-23)
     builder (3.2.4)
     minitest (5.23.1)
     minitest-reporters (1.6.1)
@@ -11,15 +12,15 @@ GEM
       ruby-progressbar
     rake (13.2.1)
     ruby-progressbar (1.13.0)
-    sorbet-runtime (0.5.11409)
+    sorbet-runtime (0.5.11500)
     sorbet-struct-comparable (1.3.0)
       sorbet-runtime (>= 0.5)
 
 PLATFORMS
   arm64-darwin-23
-  ruby
 
 DEPENDENCIES
+  baml
   minitest-reporters
   rake (~> 13.0)
   sorbet-runtime

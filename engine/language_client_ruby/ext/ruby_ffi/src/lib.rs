@@ -109,8 +109,8 @@ impl BamlRuntimeFfi {
         function_name: String,
         args: RHash,
         ctx: &RuntimeContextManager,
-        tb: Option<&types::type_builder::TypeBuilder>,
-        cb: Option<&types::client_registry::ClientRegistry>,
+        type_registry: Option<&types::type_builder::TypeBuilder>,
+        client_registry: Option<&types::client_registry::ClientRegistry>,
     ) -> Result<FunctionResult> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -122,20 +122,12 @@ impl BamlRuntimeFfi {
             }
         };
 
-        log::debug!(
-            "Calling {function_name} with:\nargs: {args:#?}\nctx ???\ntb:{:?}\ncb:{:?}",
-            tb.is_some(),
-            cb.is_some()
-        );
-
-        // let cb = cb.map(|cb| cb.inner.lock().unwrap().deref());
-
         let retval = match rb_self.t.block_on(rb_self.inner.call_function(
             function_name.clone(),
             &args,
             &ctx.inner,
-            tb.map(|tb| &tb.inner),
-            cb.map(|cb| cb.inner.borrow_mut()).as_deref(),
+            type_registry.map(|t| &t.inner),
+            client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(
@@ -156,6 +148,8 @@ impl BamlRuntimeFfi {
         function_name: String,
         args: RHash,
         ctx: &RuntimeContextManager,
+        type_registry: Option<&types::type_builder::TypeBuilder>,
+        client_registry: Option<&types::client_registry::ClientRegistry>,
     ) -> Result<FunctionResultStream> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -173,8 +167,8 @@ impl BamlRuntimeFfi {
             function_name.clone(),
             &args,
             &ctx.inner,
-            None,
-            None,
+            type_registry.map(|t| &t.inner),
+            client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
         ) {
             Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
             Err(e) => Err(Error::new(
@@ -212,7 +206,6 @@ fn init(ruby: &Ruby) -> Result<()> {
     ) {
         eprintln!("Failed to initialize BAML logger: {:#}", e);
     };
-    log::info!("Initializing BAML Ruby FFI");
 
     let module = ruby.define_module("Baml")?.define_module("Ffi")?;
 
@@ -230,16 +223,14 @@ fn init(ruby: &Ruby) -> Result<()> {
         "create_context_manager",
         method!(BamlRuntimeFfi::create_context_manager, 0),
     )?;
-    log::info!("call_function takes 5 args");
     runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 5))?;
     runtime_class.define_method(
         "stream_function",
-        method!(BamlRuntimeFfi::stream_function, 3),
+        method!(BamlRuntimeFfi::stream_function, 5),
     )?;
 
     FunctionResult::define_in_ruby(&module)?;
     FunctionResultStream::define_in_ruby(&module)?;
-    println!("defined functionresultstream <--------------");
 
     RuntimeContextManager::define_in_ruby(&module)?;
 
@@ -250,9 +241,7 @@ fn init(ruby: &Ruby) -> Result<()> {
     types::type_builder::ClassPropertyBuilder::define_in_ruby(&module)?;
     types::type_builder::FieldType::define_in_ruby(&module)?;
 
-    println!("defining clientregistry <--------------");
     types::client_registry::ClientRegistry::define_in_ruby(&module)?;
-    println!("defined clientregistry <--------------");
 
     // everything below this is for our own testing purposes
     module.define_module_function(

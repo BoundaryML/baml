@@ -17,9 +17,9 @@ env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 log.workspace = true
-# Must be kept in sync with ../../Gemfile
 magnus = { version = "0.7.1", features = ["rb-sys"] }
-rb-sys = { version = "0.9.98", features = [
+# Must be kept in sync with ../../Gemfile
+rb-sys = { version = "0.9.99", features = [
   "global-allocator",
   "bindgen-rbimpls",
   "bindgen-deprecated-types",
@@ -32,7 +32,7 @@ serde_magnus = { git = "https://github.com/BoundaryML/serde-magnus.git", branch 
 tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies.magnus]
-version = "0.6.4"
+version = "0.7.1"
 features = ["rb-sys", "embed"]
 
 [build-dependencies]

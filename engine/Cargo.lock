@@ -2599,18 +2599,6 @@ dependencies = [
 
 [[package]]
 name = "magnus"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1597ef40aa8c36be098249e82c9a20cf7199278ac1c1a1a995eeead6a184479"
-dependencies = [
- "magnus-macros",
- "rb-sys",
- "rb-sys-env",
- "seq-macro",
-]
-
-[[package]]
-name = "magnus"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d87ae53030f3a22e83879e666cb94e58a7bdf31706878a0ba48752994146dab"
@@ -3305,18 +3293,18 @@ dependencies = [
 
 [[package]]
 name = "rb-sys"
-version = "0.9.98"
+version = "0.9.99"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8914b2e6af10bd50dd7aaac8c5146872d3924d6012929b4ff504e988f6badd24"
+checksum = "d83151cfea2b67db2444f68c53b119ff77cff235ad711c765072e4daf8f3185b"
 dependencies = [
  "rb-sys-build",
 ]
 
 [[package]]
 name = "rb-sys-build"
-version = "0.9.98"
+version = "0.9.99"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12af68c9757d419b82d65a12b5db538990dfe9416049fea3f0ba4b9a8ca108cd"
+checksum = "32d038214c118ad4a75db555ccb78672e17e1c5c10f344456cd129008dbaa7de"
 dependencies = [
  "bindgen",
  "lazy_static",
@@ -3533,8 +3521,7 @@ dependencies = [
  "futures",
  "indexmap 2.2.6",
  "log",
- "magnus 0.6.4",
- "magnus 0.7.1",
+ "magnus",
  "rb-sys",
  "rb-sys-env",
  "serde",
@@ -3838,7 +3825,7 @@ name = "serde_magnus"
 version = "0.9.0"
 source = "git+https://github.com/BoundaryML/serde-magnus.git?branch=sam/magnus-0.7.1#c547ef5ef475087ce57322b8e74c4a73ee2ab84b"
 dependencies = [
- "magnus 0.7.1",
+ "magnus",
  "serde",
  "tap",
 ]

@@ -1594,9 +1594,11 @@ module Baml
       raw = @runtime.stream_function(
         "AaaSamOutputFormat",
         {
-          name: recipe,
+          recipe: recipe,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::Recipe, Baml::Types::Recipe].new(
         ffi_stream: raw,
@@ -1617,9 +1619,11 @@ module Baml
       raw = @runtime.stream_function(
         "AudioInput",
         {
-          name: aud,
+          aud: aud,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -1640,9 +1644,11 @@ module Baml
       raw = @runtime.stream_function(
         "ClassifyMessage",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
         ffi_stream: raw,
@@ -1663,9 +1669,11 @@ module Baml
       raw = @runtime.stream_function(
         "ClassifyMessage2",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
         ffi_stream: raw,
@@ -1686,9 +1694,11 @@ module Baml
       raw = @runtime.stream_function(
         "ClassifyMessage3",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
         ffi_stream: raw,
@@ -1709,9 +1719,11 @@ module Baml
       raw = @runtime.stream_function(
         "DescribeImage",
         {
-          name: img,
+          img: img,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -1732,9 +1744,11 @@ module Baml
       raw = @runtime.stream_function(
         "DescribeImage2",
         {
-          name: classWithImage,name: img2,
+          classWithImage: classWithImage,img2: img2,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -1755,9 +1769,11 @@ module Baml
       raw = @runtime.stream_function(
         "DescribeImage3",
         {
-          name: classWithImage,name: img2,
+          classWithImage: classWithImage,img2: img2,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -1778,9 +1794,11 @@ module Baml
       raw = @runtime.stream_function(
         "DescribeImage4",
         {
-          name: classWithImage,name: img2,
+          classWithImage: classWithImage,img2: img2,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -1801,9 +1819,11 @@ module Baml
       raw = @runtime.stream_function(
         "DummyOutputFunction",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::DummyOutput, Baml::Types::DummyOutput].new(
         ffi_stream: raw,
@@ -1824,9 +1844,11 @@ module Baml
       raw = @runtime.stream_function(
         "DynamicFunc",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::DynamicClassTwo, Baml::Types::DynamicClassTwo].new(
         ffi_stream: raw,
@@ -1847,9 +1869,11 @@ module Baml
       raw = @runtime.stream_function(
         "DynamicInputOutput",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::DynInputOutput, Baml::Types::DynInputOutput].new(
         ffi_stream: raw,
@@ -1870,9 +1894,11 @@ module Baml
       raw = @runtime.stream_function(
         "DynamicListInputOutput",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T::Array[Baml::PartialTypes::DynInputOutput], T::Array[Baml::Types::DynInputOutput]].new(
         ffi_stream: raw,
@@ -1896,6 +1922,8 @@ module Baml
           
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -1916,9 +1944,11 @@ module Baml
       raw = @runtime.stream_function(
         "ExtractNames",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
         ffi_stream: raw,
@@ -1939,9 +1969,11 @@ module Baml
       raw = @runtime.stream_function(
         "ExtractPeople",
         {
-          name: text,
+          text: text,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T::Array[Baml::PartialTypes::Person], T::Array[Baml::Types::Person]].new(
         ffi_stream: raw,
@@ -1962,9 +1994,11 @@ module Baml
       raw = @runtime.stream_function(
         "ExtractReceiptInfo",
         {
-          name: email,
+          email: email,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::ReceiptInfo, Baml::Types::ReceiptInfo].new(
         ffi_stream: raw,
@@ -1985,9 +2019,11 @@ module Baml
       raw = @runtime.stream_function(
         "ExtractResume",
         {
-          name: resume,name: img,
+          resume: resume,img: img,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::Resume, Baml::Types::Resume].new(
         ffi_stream: raw,
@@ -2008,9 +2044,11 @@ module Baml
       raw = @runtime.stream_function(
         "ExtractResume2",
         {
-          name: resume,
+          resume: resume,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::Resume, Baml::Types::Resume].new(
         ffi_stream: raw,
@@ -2031,9 +2069,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnClassOptionalOutput",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::ClassOptionalOutput, T.nilable(Baml::Types::ClassOptionalOutput)].new(
         ffi_stream: raw,
@@ -2054,9 +2094,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnClassOptionalOutput2",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::ClassOptionalOutput2, T.nilable(Baml::Types::ClassOptionalOutput2)].new(
         ffi_stream: raw,
@@ -2077,9 +2119,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnEnumListOutput",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::Types::EnumOutput)], T::Array[Baml::Types::EnumOutput]].new(
         ffi_stream: raw,
@@ -2100,9 +2144,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnEnumOutput",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(Baml::Types::EnumOutput), Baml::Types::EnumOutput].new(
         ffi_stream: raw,
@@ -2123,9 +2169,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnNamedArgsSingleStringOptional",
         {
-          name: myString,
+          myString: myString,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2146,9 +2194,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnOutputBool",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(T::Boolean), T::Boolean].new(
         ffi_stream: raw,
@@ -2169,9 +2219,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnOutputClass",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::TestOutputClass, Baml::Types::TestOutputClass].new(
         ffi_stream: raw,
@@ -2192,9 +2244,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnOutputClassList",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T::Array[Baml::PartialTypes::TestOutputClass], T::Array[Baml::Types::TestOutputClass]].new(
         ffi_stream: raw,
@@ -2215,9 +2269,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnOutputClassNested",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::TestClassNested, Baml::Types::TestClassNested].new(
         ffi_stream: raw,
@@ -2238,9 +2294,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnOutputClassWithEnum",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::TestClassWithEnum, Baml::Types::TestClassWithEnum].new(
         ffi_stream: raw,
@@ -2261,9 +2319,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnOutputStringList",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
         ffi_stream: raw,
@@ -2284,9 +2344,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnTestAliasedEnumOutput",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(Baml::Types::TestEnum), Baml::Types::TestEnum].new(
         ffi_stream: raw,
@@ -2307,9 +2369,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnTestClassAlias",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::TestClassAlias, Baml::Types::TestClassAlias].new(
         ffi_stream: raw,
@@ -2330,9 +2394,11 @@ module Baml
       raw = @runtime.stream_function(
         "FnTestNamedArgsSingleEnum",
         {
-          name: myArg,
+          myArg: myArg,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2353,9 +2419,11 @@ module Baml
       raw = @runtime.stream_function(
         "GetDataType",
         {
-          name: text,
+          text: text,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::RaysData, Baml::Types::RaysData].new(
         ffi_stream: raw,
@@ -2376,9 +2444,11 @@ module Baml
       raw = @runtime.stream_function(
         "GetOrderInfo",
         {
-          name: email,
+          email: email,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::OrderInfo, Baml::Types::OrderInfo].new(
         ffi_stream: raw,
@@ -2399,9 +2469,11 @@ module Baml
       raw = @runtime.stream_function(
         "GetQuery",
         {
-          name: query,
+          query: query,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::SearchParams, Baml::Types::SearchParams].new(
         ffi_stream: raw,
@@ -2422,9 +2494,11 @@ module Baml
       raw = @runtime.stream_function(
         "MyFunc",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::DynamicOutput, Baml::Types::DynamicOutput].new(
         ffi_stream: raw,
@@ -2445,9 +2519,11 @@ module Baml
       raw = @runtime.stream_function(
         "OptionalTest_Function",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T::Array[Baml::PartialTypes::OptionalTest_ReturnType], T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)]].new(
         ffi_stream: raw,
@@ -2468,9 +2544,11 @@ module Baml
       raw = @runtime.stream_function(
         "PromptTestClaude",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2491,9 +2569,11 @@ module Baml
       raw = @runtime.stream_function(
         "PromptTestClaudeChat",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2514,9 +2594,11 @@ module Baml
       raw = @runtime.stream_function(
         "PromptTestClaudeChatNoSystem",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2537,9 +2619,11 @@ module Baml
       raw = @runtime.stream_function(
         "PromptTestOpenAI",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2560,9 +2644,11 @@ module Baml
       raw = @runtime.stream_function(
         "PromptTestOpenAIChat",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2583,9 +2669,11 @@ module Baml
       raw = @runtime.stream_function(
         "PromptTestOpenAIChatNoSystem",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2606,9 +2694,11 @@ module Baml
       raw = @runtime.stream_function(
         "PromptTestStreaming",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2629,9 +2719,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestAnthropic",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2652,9 +2744,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestAws",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2675,9 +2769,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestAzure",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2701,6 +2797,8 @@ module Baml
           
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2721,9 +2819,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleBool",
         {
-          name: myBool,
+          myBool: myBool,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2744,9 +2844,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleClass",
         {
-          name: myArg,
+          myArg: myArg,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2767,9 +2869,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleEnumList",
         {
-          name: myArg,
+          myArg: myArg,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2790,9 +2894,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleFloat",
         {
-          name: myFloat,
+          myFloat: myFloat,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2813,9 +2919,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleInt",
         {
-          name: myInt,
+          myInt: myInt,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2836,9 +2944,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleMapStringToClass",
         {
-          name: myMap,
+          myMap: myMap,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T::Hash[String, Baml::PartialTypes::StringToClassEntry], T::Hash[String, Baml::Types::StringToClassEntry]].new(
         ffi_stream: raw,
@@ -2859,9 +2969,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleMapStringToMap",
         {
-          name: myMap,
+          myMap: myMap,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T::Hash[String, T::Hash[String, T.nilable(String)]], T::Hash[String, T::Hash[String, String]]].new(
         ffi_stream: raw,
@@ -2882,9 +2994,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleMapStringToString",
         {
-          name: myMap,
+          myMap: myMap,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T::Hash[String, T.nilable(String)], T::Hash[String, String]].new(
         ffi_stream: raw,
@@ -2905,9 +3019,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleString",
         {
-          name: myString,
+          myString: myString,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2928,9 +3044,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleStringArray",
         {
-          name: myStringArray,
+          myStringArray: myStringArray,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2951,9 +3069,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleStringList",
         {
-          name: myArg,
+          myArg: myArg,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2974,9 +3094,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestGemini",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -2997,9 +3119,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestImageInput",
         {
-          name: img,
+          img: img,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -3020,9 +3144,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestMulticlassNamedArgs",
         {
-          name: myArg,name: myArg2,
+          myArg: myArg,myArg2: myArg2,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -3043,9 +3169,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestOllama",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -3066,9 +3194,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestOpenAILegacyProvider",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -3092,6 +3222,8 @@ module Baml
           
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -3115,6 +3247,8 @@ module Baml
           
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -3135,9 +3269,11 @@ module Baml
       raw = @runtime.stream_function(
         "TestVertex",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -3158,9 +3294,11 @@ module Baml
       raw = @runtime.stream_function(
         "UnionTest_Function",
         {
-          name: input,
+          input: input,
         },
         @ctx_manager,
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::UnionTest_ReturnType, Baml::Types::UnionTest_ReturnType].new(
         ffi_stream: raw,
