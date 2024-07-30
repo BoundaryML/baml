@@ -5,6 +5,7 @@ require "sorbet-runtime"
 require_relative "inlined"
 require_relative "partial-types"
 require_relative "types"
+require_relative "type-registry"
 
 module Baml
   @instance = nil
@@ -58,7 +59,7 @@ module Baml
           {%- endfor %}
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))

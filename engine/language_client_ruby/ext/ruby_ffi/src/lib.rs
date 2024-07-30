@@ -1,14 +1,7 @@
-use baml_runtime::{BamlRuntime, RuntimeContext};
+use baml_runtime::BamlRuntime;
 use baml_types::BamlValue;
-use indexmap::IndexMap;
-use magnus::block::Proc;
-use magnus::IntoValue;
-use magnus::{
-    class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
-    scan_args::get_kwargs, Error, RHash, Ruby,
-};
+use magnus::{class, function, method, prelude::*, Error, RHash, Ruby};
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 

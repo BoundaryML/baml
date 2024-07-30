@@ -36,8 +36,8 @@ struct PartialRubyStruct<'ir> {
 }
 
 #[derive(askama::Template)]
-#[template(path = "type_builder.rb.j2", escape = "none")]
-pub(crate) struct TypeBuilder<'ir> {
+#[template(path = "type-registry.rb.j2", escape = "none")]
+pub(crate) struct TypeRegistry<'ir> {
     enums: Vec<RubyEnum<'ir>>,
     classes: Vec<RubyStruct<'ir>>,
 }
@@ -163,13 +163,13 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
     }
 }
 
-impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for TypeBuilder<'ir> {
+impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for TypeRegistry<'ir> {
     type Error = anyhow::Error;
 
     fn try_from(
         (ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs),
-    ) -> Result<TypeBuilder<'ir>> {
-        Ok(TypeBuilder {
+    ) -> Result<TypeRegistry<'ir>> {
+        Ok(TypeRegistry {
             enums: ir.walk_enums().map(RubyEnum::from).collect::<Vec<_>>(),
             classes: ir.walk_classes().map(RubyStruct::from).collect::<Vec<_>>(),
         })

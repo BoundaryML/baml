@@ -19,6 +19,7 @@ require "sorbet-runtime"
 require_relative "inlined"
 require_relative "partial-types"
 require_relative "types"
+require_relative "type-registry"
 
 module Baml
   @instance = nil
@@ -65,7 +66,7 @@ module Baml
           recipe: recipe,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -87,7 +88,7 @@ module Baml
           aud: aud,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -109,7 +110,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -131,7 +132,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -153,7 +154,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -175,7 +176,7 @@ module Baml
           img: img,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -197,7 +198,7 @@ module Baml
           classWithImage: classWithImage,img2: img2,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -219,7 +220,7 @@ module Baml
           classWithImage: classWithImage,img2: img2,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -241,7 +242,7 @@ module Baml
           classWithImage: classWithImage,img2: img2,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -263,7 +264,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -285,7 +286,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -307,7 +308,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -329,7 +330,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -351,7 +352,7 @@ module Baml
           
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -373,7 +374,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -395,7 +396,7 @@ module Baml
           text: text,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -417,7 +418,7 @@ module Baml
           email: email,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -439,7 +440,7 @@ module Baml
           resume: resume,img: img,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -461,7 +462,7 @@ module Baml
           resume: resume,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -483,7 +484,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -505,7 +506,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -527,7 +528,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -549,7 +550,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -571,7 +572,7 @@ module Baml
           myString: myString,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -593,7 +594,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -615,7 +616,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -637,7 +638,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -659,7 +660,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -681,7 +682,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -703,7 +704,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -725,7 +726,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -747,7 +748,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -769,7 +770,7 @@ module Baml
           myArg: myArg,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -791,7 +792,7 @@ module Baml
           text: text,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -813,7 +814,7 @@ module Baml
           email: email,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -835,7 +836,7 @@ module Baml
           query: query,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -857,7 +858,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -879,7 +880,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -901,7 +902,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -923,7 +924,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -945,7 +946,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -967,7 +968,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -989,7 +990,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1011,7 +1012,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1033,7 +1034,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1055,7 +1056,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1077,7 +1078,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1099,7 +1100,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1121,7 +1122,7 @@ module Baml
           
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1143,7 +1144,7 @@ module Baml
           myBool: myBool,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1165,7 +1166,7 @@ module Baml
           myArg: myArg,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1187,7 +1188,7 @@ module Baml
           myArg: myArg,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1209,7 +1210,7 @@ module Baml
           myFloat: myFloat,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1231,7 +1232,7 @@ module Baml
           myInt: myInt,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1253,7 +1254,7 @@ module Baml
           myMap: myMap,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1275,7 +1276,7 @@ module Baml
           myMap: myMap,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1297,7 +1298,7 @@ module Baml
           myMap: myMap,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1319,7 +1320,7 @@ module Baml
           myString: myString,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1341,7 +1342,7 @@ module Baml
           myStringArray: myStringArray,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1363,7 +1364,7 @@ module Baml
           myArg: myArg,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1385,7 +1386,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1407,7 +1408,7 @@ module Baml
           img: img,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1429,7 +1430,7 @@ module Baml
           myArg: myArg,myArg2: myArg2,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1451,7 +1452,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1473,7 +1474,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1495,7 +1496,7 @@ module Baml
           
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1517,7 +1518,7 @@ module Baml
           
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1539,7 +1540,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))
@@ -1561,7 +1562,7 @@ module Baml
           input: input,
         },
         @ctx_manager,
-        baml_options[:type_builder],
+        baml_options[:type_registry],
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))

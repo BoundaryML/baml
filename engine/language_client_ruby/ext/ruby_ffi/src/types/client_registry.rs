@@ -1,8 +1,6 @@
 use baml_runtime::client_registry;
-use magnus::typed_data::Obj;
 use magnus::{class, function, method, Error, Module, Object, RHash, Ruby};
 use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
 
 use crate::ruby_to_json;
 use crate::Result;
