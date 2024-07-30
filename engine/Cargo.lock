@@ -2610,6 +2610,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "magnus"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d87ae53030f3a22e83879e666cb94e58a7bdf31706878a0ba48752994146dab"
+dependencies = [
+ "magnus-macros",
+ "rb-sys",
+ "rb-sys-env",
+ "seq-macro",
+]
+
+[[package]]
 name = "magnus-macros"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3521,7 +3533,8 @@ dependencies = [
  "futures",
  "indexmap 2.2.6",
  "log",
- "magnus",
+ "magnus 0.6.4",
+ "magnus 0.7.1",
  "rb-sys",
  "rb-sys-env",
  "serde",
@@ -3822,11 +3835,10 @@ dependencies = [
 
 [[package]]
 name = "serde_magnus"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76c20da583b5e1016e9199ef5f3260f7a8d1b253307d232600f6b12737262dbd"
+version = "0.9.0"
+source = "git+https://github.com/BoundaryML/serde-magnus.git?branch=sam/magnus-0.7.1#c547ef5ef475087ce57322b8e74c4a73ee2ab84b"
 dependencies = [
- "magnus",
+ "magnus 0.7.1",
  "serde",
  "tap",
 ]
