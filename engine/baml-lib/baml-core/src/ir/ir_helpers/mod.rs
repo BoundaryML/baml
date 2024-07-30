@@ -7,7 +7,7 @@ use crate::{
     error_not_found, error_unsupported,
     ir::{
         repr::{IntermediateRepr, Walker},
-        Class, Client, Enum, EnumValue, Field, Function, RetryPolicy, TemplateString, TestCase,
+        Class, Client, Enum, EnumValue, Field, FunctionNode, RetryPolicy, TemplateString, TestCase,
     },
 };
 use anyhow::Result;
@@ -15,14 +15,14 @@ use baml_types::{BamlMap, BamlValue};
 
 use super::repr;
 
-pub type FunctionWalker<'a> = Walker<'a, &'a Function>;
+pub type FunctionWalker<'a> = Walker<'a, &'a FunctionNode>;
 pub type EnumWalker<'a> = Walker<'a, &'a Enum>;
 pub type EnumValueWalker<'a> = Walker<'a, &'a EnumValue>;
 pub type ClassWalker<'a> = Walker<'a, &'a Class>;
 pub type TemplateStringWalker<'a> = Walker<'a, &'a TemplateString>;
 pub type ClientWalker<'a> = Walker<'a, &'a Client>;
 pub type RetryPolicyWalker<'a> = Walker<'a, &'a RetryPolicy>;
-pub type TestCaseWalker<'a> = Walker<'a, (&'a Function, &'a TestCase)>;
+pub type TestCaseWalker<'a> = Walker<'a, (&'a FunctionNode, &'a TestCase)>;
 pub type ClassFieldWalker<'a> = Walker<'a, &'a Field>;
 
 pub trait IRHelper {
@@ -89,22 +89,11 @@ impl IRHelper for IntermediateRepr {
     fn find_function<'a>(&'a self, function_name: &str) -> Result<FunctionWalker<'a>> {
         match self.walk_functions().find(|f| f.name() == function_name) {
             Some(f) => match f.item.elem {
-                repr::Function::V1(_) => {
-                    error_unsupported!(
-                        "function",
-                        function_name,
-                        "legacy functions cannot use the runtime"
-                    )
-                }
-                repr::Function::V2(_) => Ok(f),
+                repr::Function { .. } => Ok(f),
             },
             None => {
                 // Get best match.
-                let functions = self
-                    .walk_functions()
-                    .filter(|f| f.is_v2())
-                    .map(|f| f.name())
-                    .collect::<Vec<_>>();
+                let functions = self.walk_functions().map(|f| f.name()).collect::<Vec<_>>();
                 error_not_found!("function", function_name, &functions)
             }
         }
@@ -166,17 +155,7 @@ impl IRHelper for IntermediateRepr {
         params: &BamlMap<String, BamlValue>,
         allow_implicit_cast_to_string: bool,
     ) -> Result<BamlValue> {
-        let function_params = match function.inputs() {
-            either::Either::Left(_) => {
-                // legacy functions are not supported
-                error_unsupported!(
-                    "function",
-                    function.name(),
-                    "legacy functions cannot use the runtime"
-                )
-            }
-            either::Either::Right(defs) => defs,
-        };
+        let function_params = function.inputs();
 
         // Now check that all required parameters are present.
         let mut scope = ScopeStack::new();

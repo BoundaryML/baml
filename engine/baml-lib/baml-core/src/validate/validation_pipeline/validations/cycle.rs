@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_schema_ast::ast::{ClassId, WithIdentifier, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{TypeExpId, WithIdentifier, WithName, WithSpan};
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -27,7 +27,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         .collect::<Vec<_>>();
 
     // Now we can check for cycles using topological sort.
-    let mut stack: Vec<(ClassId, Vec<ClassId>)> = Vec::new(); // This stack now also keeps track of the path
+    let mut stack: Vec<(TypeExpId, Vec<TypeExpId>)> = Vec::new(); // This stack now also keeps track of the path
     let mut visited = HashSet::new();
     let mut in_stack = HashSet::new();
 

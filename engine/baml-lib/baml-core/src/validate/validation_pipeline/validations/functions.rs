@@ -34,9 +34,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         };
 
         defined_types.start_scope();
-        if let Some(internal_baml_schema_ast::ast::FunctionArgs::Named(p)) =
-            template.ast_node().input()
-        {
+        if let Some(p) = template.ast_node().input() {
             p.args.iter().for_each(|(name, t)| {
                 defined_types.add_variable(name.name(), ctx.db.to_jinja_type(&t.field_type))
             });
@@ -71,7 +69,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         defined_types.errors_mut().clear();
     }
 
-    for func in ctx.db.walk_new_functions() {
+    for func in ctx.db.walk_functions() {
         for args in func.walk_input_args().chain(func.walk_output_args()) {
             let arg = args.ast_arg();
             validate_type(ctx, &arg.1.field_type)

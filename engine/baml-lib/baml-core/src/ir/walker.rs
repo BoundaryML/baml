@@ -8,59 +8,26 @@ use std::collections::HashMap;
 
 use super::{
     repr::{self, FunctionConfig},
-    Class, Client, Enum, EnumValue, Expression, Field, Function, FunctionV2, Identifier, Impl,
+    Class, Client, Enum, EnumValue, Expression, Field, Function, FunctionNode, Identifier, Impl,
     RetryPolicy, TemplateString, TestCase, Walker,
 };
 
-impl<'a> Walker<'a, &'a Function> {
+impl<'a> Walker<'a, &'a FunctionNode> {
     pub fn name(&self) -> &'a str {
         self.elem().name()
     }
 
-    pub fn is_v1(&self) -> bool {
-        matches!(self.item.elem, repr::Function::V1(_))
-    }
-
-    pub fn is_v2(&self) -> bool {
-        matches!(self.item.elem, repr::Function::V2(_))
-    }
-
-    pub fn as_v2(&self) -> Option<&'a FunctionV2> {
-        match &self.item.elem {
-            repr::Function::V1(_) => None,
-            repr::Function::V2(f) => Some(f),
-        }
-    }
-
     pub fn client_name(&self) -> Option<&'a str> {
-        if let Some(v2) = self.as_v2() {
-            if let Some(c) = v2.configs.first() {
-                return Some(c.client.as_str());
-            }
+        if let Some(c) = self.elem().configs.first() {
+            return Some(c.client.as_str());
         }
 
         None
     }
 
-    pub fn walk_impls(
+    pub fn walk_tests(
         &'a self,
-    ) -> either::Either<
-        impl Iterator<Item = Walker<'a, (&'a Function, &'a Impl)>>,
-        impl Iterator<Item = Walker<'a, (&'a Function, &'a FunctionConfig)>>,
-    > {
-        match &self.item.elem {
-            repr::Function::V1(f) => either::Either::Left(f.impls.iter().map(|i| Walker {
-                db: self.db,
-                item: (self.item, i),
-            })),
-            repr::Function::V2(f) => either::Either::Right(f.configs.iter().map(|c| Walker {
-                db: self.db,
-                item: (self.item, c),
-            })),
-        }
-    }
-
-    pub fn walk_tests(&'a self) -> impl Iterator<Item = Walker<'a, (&'a Function, &'a TestCase)>> {
+    ) -> impl Iterator<Item = Walker<'a, (&'a FunctionNode, &'a TestCase)>> {
         self.elem().tests().iter().map(|i| Walker {
             db: self.db,
             item: (self.item, i),
@@ -70,7 +37,7 @@ impl<'a> Walker<'a, &'a Function> {
     pub fn find_test(
         &'a self,
         test_name: &str,
-    ) -> Option<Walker<'a, (&'a Function, &'a TestCase)>> {
+    ) -> Option<Walker<'a, (&'a FunctionNode, &'a TestCase)>> {
         self.walk_tests().find(|t| t.item.1.elem.name == test_name)
     }
 
@@ -79,16 +46,11 @@ impl<'a> Walker<'a, &'a Function> {
     }
 
     pub fn output(&self) -> &'a baml_types::FieldType {
-        match &self.item.elem {
-            repr::Function::V1(f) => &f.output.elem,
-            repr::Function::V2(f) => &f.output.elem,
-        }
+        self.elem().output()
     }
 
-    pub fn inputs(
-        &self,
-    ) -> either::Either<&'a repr::FunctionArgs, &'a Vec<(String, baml_types::FieldType)>> {
-        self.item.elem.inputs()
+    pub fn inputs(&self) -> &'a Vec<(String, baml_types::FieldType)> {
+        self.elem().inputs()
     }
 
     pub fn span(&self) -> Option<&crate::Span> {
@@ -234,9 +196,9 @@ impl Expression {
     }
 }
 
-impl<'a> Walker<'a, (&'a Function, &'a Impl)> {
+impl<'a> Walker<'a, (&'a FunctionNode, &'a Impl)> {
     #[allow(dead_code)]
-    pub fn function(&'a self) -> Walker<'a, &'a Function> {
+    pub fn function(&'a self) -> Walker<'a, &'a FunctionNode> {
         Walker {
             db: self.db,
             item: self.item.0,
@@ -248,7 +210,7 @@ impl<'a> Walker<'a, (&'a Function, &'a Impl)> {
     }
 }
 
-impl<'a> Walker<'a, (&'a Function, &'a TestCase)> {
+impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
     pub fn matches(&self, function_name: &str, test_name: &str) -> bool {
         self.item.0.elem.name() == function_name && self.item.1.elem.name == test_name
     }
@@ -279,7 +241,7 @@ impl<'a> Walker<'a, (&'a Function, &'a TestCase)> {
             .collect()
     }
 
-    pub fn function(&'a self) -> Walker<'a, &'a Function> {
+    pub fn function(&'a self) -> Walker<'a, &'a FunctionNode> {
         Walker {
             db: self.db,
             item: self.item.0,

@@ -77,7 +77,7 @@ pub(crate) fn parse_generator(
     let args = ast_generator
         .fields()
         .iter()
-        .map(|arg| match &arg.value {
+        .map(|arg| match &arg.expr {
             Some(expr) => {
                 if FIRST_CLASS_PROPERTIES.iter().any(|k| *k == arg.name()) {
                     Ok((arg.name(), expr))

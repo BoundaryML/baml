@@ -30,10 +30,7 @@ fn validate_type_exists(ctx: &mut Context<'_>, field_type: &FieldType) {
         .iter()
         .for_each(|f| match ctx.db.find_type(f) {
             Some(_) => {}
-            None => match f {
-                Identifier::Primitive(..) => {}
-                _ => errors_with_names(ctx, f),
-            },
+            None => errors_with_names(ctx, f),
         });
 }
 
@@ -41,10 +38,7 @@ fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
     match field_type {
         FieldType::Map(kv_types, _) => {
             match &kv_types.0 {
-                FieldType::Symbol(
-                    FieldArity::Required,
-                    Identifier::Primitive(TypeValue::String, _),
-                ) => {}
+                FieldType::Primitive(FieldArity::Required, _, _) => {}
                 key_type => {
                     ctx.push_error(DatamodelError::new_validation_error(
                         "Maps may only have strings as keys",
@@ -55,8 +49,9 @@ fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
             validate_type_allowed(ctx, &kv_types.1);
             // TODO:assert key_type is string or int or null
         }
-        FieldType::Symbol(_, _) => {}
-        FieldType::List(field_type, _, _) => validate_type_allowed(ctx, field_type),
+        FieldType::Primitive(..) => {}
+        FieldType::Symbol(..) => {}
+        FieldType::List(field_type, ..) => validate_type_allowed(ctx, field_type),
         FieldType::Tuple(_, field_types, _) | FieldType::Union(_, field_types, _) => {
             for field_type in field_types {
                 validate_type_allowed(ctx, field_type);

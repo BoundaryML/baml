@@ -5,7 +5,7 @@ use serde_json::json;
 
 use super::{
     repr::{self},
-    Class, Enum, FieldType, Function, FunctionArgs, IntermediateRepr, Walker,
+    Class, Enum, FieldType, FunctionArgs, FunctionNode, IntermediateRepr, Walker,
 };
 
 pub trait WithJsonSchema {
@@ -43,20 +43,14 @@ impl WithJsonSchema for IntermediateRepr {
     }
 }
 
-impl WithJsonSchema for (&Function, bool) {
+impl WithJsonSchema for (&FunctionNode, bool) {
     fn json_schema(&self) -> serde_json::Value {
         let (f, is_input) = self;
 
         let mut res = if *is_input {
-            match &f.elem {
-                repr::Function::V1(f) => f.inputs.json_schema(),
-                repr::Function::V2(f) => f.inputs.json_schema(),
-            }
+            f.elem.inputs.json_schema()
         } else {
-            match &f.elem {
-                repr::Function::V1(f) => f.output.elem.json_schema(),
-                repr::Function::V2(f) => f.output.elem.json_schema(),
-            }
+            f.elem.output.elem.json_schema()
         };
 
         // Add a title field to the schema

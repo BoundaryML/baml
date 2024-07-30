@@ -8,11 +8,15 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
 
         for c in cls.static_fields() {
             let field = c.ast_field();
-            validate_type(ctx, &field.field_type);
+            if let Some(ft) = &field.expr {
+                validate_type(ctx, &ft);
+            }
         }
         for c in cls.dynamic_fields() {
             let field = c.ast_field();
-            validate_type(ctx, &field.field_type);
+            if let Some(ft) = &field.expr {
+                validate_type(ctx, &ft);
+            }
         }
     }
 }
