@@ -39,18 +39,28 @@ module Baml
     {% for fn in funcs -%}
     sig {
       params(
+        varargs: T.untyped,
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}},
         {%- endfor %}
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
+        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)])
       ).returns({{ fn.return_type }})
     }
     def {{fn.name}}(
+        *varargs,
         {% for (name, _) in fn.args -%}
         {{name}}:,
         {%- endfor %}
         baml_options: {}
     )
+      if varargs.any?
+        {# We rely on sorbet-runtime to give errors about the list of allowed kwargs #}
+        raise ArgumentError.new("{{fn.name}} may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :type_registry]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :type_registry): #{baml_options.keys - [:client_registry, :type_registry]}")
+      end
+
       raw = @runtime.call_function(
         "{{fn.name}}",
         {
@@ -81,18 +91,28 @@ module Baml
     {% for fn in funcs -%}
     sig {
       params(
+        varargs: T.untyped,
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}},
         {%- endfor %}
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)]
+        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeRegistry, Baml::ClientRegistry)])
       ).returns(Baml::BamlStream[{{ fn.return_type }}])
     }
     def {{fn.name}}(
+        *varargs,
         {% for (name, _) in fn.args -%}
         {{name}}:,
         {%- endfor %}
-        baml_options:
+        baml_options: {}
     )
+      if varargs.any?
+        {# We rely on sorbet-runtime to give errors about the list of allowed kwargs #}
+        raise ArgumentError.new("{{fn.name}} may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :type_registry]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :type_registry): #{baml_options.keys - [:client_registry, :type_registry]}")
+      end
+
       raw = @runtime.stream_function(
         "{{fn.name}}",
         {

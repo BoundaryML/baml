@@ -171,88 +171,86 @@ describe "ruby<->baml integration tests" do
   end
 
   it "tests dynamic" do
-    tb = Baml::TypeBuilder.new
-    tb.Person.add_property("last_name", tb.string.list)
-    tb.Person.add_property("height", tb.float.optional).description("Height in meters")
+    t = Baml::TypeRegistry.new
+    t.Person.add_property("last_name", t.string.list)
+    t.Person.add_property("height", t.float.optional).description("Height in meters")
 
-    tb.Hobby.add_value("chess")
-    tb.Hobby.list_values.each do |name, val|
-      val.alias(name.downcase)
-    end
+    t.Hobby.add_value("chess")
+    # TODO: figure out a non-naive impl of #list_values in Ruby
+    # t.Hobby.list_values.each do |name, val|
+    #   val.alias(name.downcase)
+    # end
 
-    tb.Person.add_property("hobbies", tb.Hobby.type.list).description(
+    t.Person.add_property("hobbies", t.Hobby.type.list).description(
       "Some suggested hobbies they might be good at"
     )
 
-    tb_res = b.ExtractPeople(
-      "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
-      {"tb" => tb}
+    t_res = b.ExtractPeople(
+      text: "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
+      baml_options: {type_registry: t}
     )
 
-    refute_empty(tb_res, "Expected non-empty result but got empty.")
+    refute_empty(t_res, "Expected non-empty result but got empty.")
 
-    tb_res.each do |r|
-      puts r.model_dump
+    t_res.each do |r|
+      puts r.inspect
     end
   end
 
   it "tests dynamic class output" do
-    tb = Baml::TypeBuilder.new
-    tb.DynamicOutput.add_property("hair_color", tb.string)
-    puts tb.DynamicOutput.list_properties
-    tb.DynamicOutput.list_properties.each do |prop|
-      puts "Property: #{prop}"
-    end
+    t = Baml::TypeRegistry.new
+    t.DynamicOutput.add_property("hair_color", t.string)
+    # TODO: figure out a non-naive impl of #list_properties in Ruby
+    # puts t.DynamicOutput.list_properties
+    # t.DynamicOutput.list_properties.each do |prop|
+    #   puts "Property: #{prop}"
+    # end
 
     output = b.MyFunc(
       input: "My name is Harrison. My hair is black and I'm 6 feet tall.",
-      baml_options: {tb: tb} 
+      baml_options: {type_registry: t} 
     )
-    output = b.MyFunc(
-      input: "My name is Harrison. My hair is black and I'm 6 feet tall.",
-      baml_options: {tb: tb} 
-    )
-    puts output.model_dump_json
+    puts output.inspect
     assert_equal("black", output.hair_color)
   end
 
   it "tests dynamic class nested output no stream" do
-    tb = Baml::TypeBuilder.new
-    nested_class = tb.add_class("Name")
-    nested_class.add_property("first_name", tb.string)
-    nested_class.add_property("last_name", tb.string.optional)
-    nested_class.add_property("middle_name", tb.string.optional)
+    t = Baml::TypeRegistry.new
+    nested_class = t.add_class("Name")
+    nested_class.add_property("first_name", t.string)
+    nested_class.add_property("last_name", t.string.optional)
+    nested_class.add_property("middle_name", t.string.optional)
 
-    other_nested_class = tb.add_class("Address")
+    other_nested_class = t.add_class("Address")
 
-    tb.DynamicOutput.add_property("name", nested_class.type.optional)
-    tb.DynamicOutput.add_property("address", other_nested_class.type.optional)
-    tb.DynamicOutput.add_property("hair_color", tb.string).alias("hairColor")
-    tb.DynamicOutput.add_property("height", tb.float.optional)
+    t.DynamicOutput.add_property("name", nested_class.type.optional)
+    t.DynamicOutput.add_property("address", other_nested_class.type.optional)
+    t.DynamicOutput.add_property("hair_color", t.string).alias("hairColor")
+    t.DynamicOutput.add_property("height", t.float.optional)
 
     output = b.MyFunc(
       input: "My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
-      baml_options: {tb: tb} 
+      baml_options: {type_registry: t} 
     )
-    puts output.model_dump_json
+    puts output.inspect
     assert_equal(
       '{"name":{"first_name":"Mark","last_name":"Gonzalez","middle_name":null},"address":null,"hair_color":"black","height":6.0}',
-      output.model_dump_json
+      output.to_json
     )
   end
 
   it "tests dynamic class nested output stream" do
-    tb = Baml::TypeBuilder.new
-    nested_class = tb.add_class("Name")
-    nested_class.add_property("first_name", tb.string)
-    nested_class.add_property("last_name", tb.string.optional)
+    t = Baml::TypeRegistry.new
+    nested_class = t.add_class("Name")
+    nested_class.add_property("first_name", t.string)
+    nested_class.add_property("last_name", t.string.optional)
 
-    tb.DynamicOutput.add_property("name", nested_class.type.optional)
-    tb.DynamicOutput.add_property("hair_color", tb.string)
+    t.DynamicOutput.add_property("name", nested_class.type.optional)
+    t.DynamicOutput.add_property("hair_color", t.string)
 
     stream = b.stream.MyFunc(
       input: "My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
-      baml_options: {tb: tb} 
+      baml_options: {type_registry: t} 
     )
     msgs = []
     stream.each do |msg|
@@ -262,10 +260,10 @@ describe "ruby<->baml integration tests" do
     end
     output = stream.get_final_response
 
-    puts output.model_dump_json
+    puts output.inspect
     assert_equal(
       '{"name":{"first_name":"Mark","last_name":"Gonzalez"},"hair_color":"black"}',
-      output.model_dump_json
+      output.to_json
     )
   end
 
@@ -274,7 +272,7 @@ describe "ruby<->baml integration tests" do
     cb.add_llm_client("MyClient", "openai", { model: "gpt-3.5-turbo" })
     cb.set_primary("MyClient")
 
-    capitol = await BAML::ExpectFailure.new(
+    capitol = b.ExpectFailure(
       baml_options: { client_registry: cb }
     )
     assert_match(/london/, capitol.downcase)

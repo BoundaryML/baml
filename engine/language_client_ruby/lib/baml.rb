@@ -1,6 +1,5 @@
 require 'ostruct'
 
-puts "loading baml gem"
 # begin
 #   ruby_version = /(\d+\.\d+)/.match(RUBY_VERSION)
 #   require_relative "baml/#{ruby_version}/ruby_ffi"
@@ -9,6 +8,7 @@ puts "loading baml gem"
 # end
 require_relative "baml/ruby_ffi"
 require_relative "stream"
+require_relative "struct"
 
 
 module Baml

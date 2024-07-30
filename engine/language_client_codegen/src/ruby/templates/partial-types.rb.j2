@@ -1,6 +1,5 @@
 # typed: false
 require "sorbet-runtime"
-require "sorbet-struct-comparable"
 
 require_relative "types"
 
@@ -15,24 +14,20 @@ module Baml
     {#- https://sorbet.org/docs/tstruct #}
     {%- for cls in partial_classes %}
     class {{cls.name}} < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
 
       {%- for (name, type) in cls.fields %}
       const :{{name}}, {{type}}
       {%- endfor %}
 
-      def initialize(args)
+      def initialize(props)
         super(
           {%- for (name, _) in cls.fields %}
-          {{name}}: args[:{{name}}],
+          {{name}}: props[:{{name}}],
           {%- endfor %}
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     {%- endfor %}

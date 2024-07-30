@@ -41,7 +41,7 @@ impl<'rb> RubyToJson<'rb> {
                             class_name,
                             class_fields.len()
                         );
-                        let dynamic_class_type = ruby.eval::<RClass>("OpenStruct")?;
+                        let dynamic_class_type = ruby.eval::<RClass>("Baml::DynamicStruct")?;
                         log::debug!(
                             "Creating dynamic class {} with fields {:?}",
                             class_name,

@@ -14,7 +14,6 @@
 # formatter:off
 # typed: false
 require "sorbet-runtime"
-require "sorbet-struct-comparable"
 
 require_relative "types"
 
@@ -57,471 +56,371 @@ module Baml
     class UnionTest_ReturnType < T::Struct; end
     class WithReasoning < T::Struct; end
     class Blah < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :prop4, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          prop4: args[:prop4],
+          prop4: props[:prop4],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class ClassOptionalOutput < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          prop1: args[:prop1],
-          prop2: args[:prop2],
+          prop1: props[:prop1],
+          prop2: props[:prop2],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class ClassOptionalOutput2 < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(String)
       const :prop3, Baml::PartialTypes::Blah
 
-      def initialize(args)
+      def initialize(props)
         super(
-          prop1: args[:prop1],
-          prop2: args[:prop2],
-          prop3: args[:prop3],
+          prop1: props[:prop1],
+          prop2: props[:prop2],
+          prop3: props[:prop3],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class ClassWithImage < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :myImage, T.nilable(Baml::Image)
       const :param2, T.nilable(String)
       const :fake_image, Baml::PartialTypes::FakeImage
 
-      def initialize(args)
+      def initialize(props)
         super(
-          myImage: args[:myImage],
-          param2: args[:param2],
-          fake_image: args[:fake_image],
+          myImage: props[:myImage],
+          param2: props[:param2],
+          fake_image: props[:fake_image],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class DummyOutput < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :nonce, T.nilable(String)
       const :nonce2, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          nonce: args[:nonce],
-          nonce2: args[:nonce2],
+          nonce: props[:nonce],
+          nonce2: props[:nonce2],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class DynInputOutput < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :testKey, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          testKey: args[:testKey],
+          testKey: props[:testKey],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class DynamicClassOne < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
 
-      def initialize(args)
+      def initialize(props)
         super(
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class DynamicClassTwo < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :hi, T.nilable(String)
       const :some_class, Baml::PartialTypes::SomeClassNestedDynamic
       const :status, T.nilable(Baml::Types::DynEnumOne)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          hi: args[:hi],
-          some_class: args[:some_class],
-          status: args[:status],
+          hi: props[:hi],
+          some_class: props[:some_class],
+          status: props[:status],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class DynamicOutput < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
 
-      def initialize(args)
+      def initialize(props)
         super(
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class Education < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :institution, T.nilable(String)
       const :location, T.nilable(String)
       const :degree, T.nilable(String)
       const :major, T::Array[T.nilable(String)]
       const :graduation_date, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          institution: args[:institution],
-          location: args[:location],
-          degree: args[:degree],
-          major: args[:major],
-          graduation_date: args[:graduation_date],
+          institution: props[:institution],
+          location: props[:location],
+          degree: props[:degree],
+          major: props[:major],
+          graduation_date: props[:graduation_date],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class Email < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :subject, T.nilable(String)
       const :body, T.nilable(String)
       const :from_address, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          subject: args[:subject],
-          body: args[:body],
-          from_address: args[:from_address],
+          subject: props[:subject],
+          body: props[:body],
+          from_address: props[:from_address],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class Event < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :title, T.nilable(String)
       const :date, T.nilable(String)
       const :location, T.nilable(String)
       const :description, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          title: args[:title],
-          date: args[:date],
-          location: args[:location],
-          description: args[:description],
+          title: props[:title],
+          date: props[:date],
+          location: props[:location],
+          description: props[:description],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class FakeImage < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :url, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          url: args[:url],
+          url: props[:url],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class InnerClass < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(String)
       const :inner, Baml::PartialTypes::InnerClass2
 
-      def initialize(args)
+      def initialize(props)
         super(
-          prop1: args[:prop1],
-          prop2: args[:prop2],
-          inner: args[:inner],
+          prop1: props[:prop1],
+          prop2: props[:prop2],
+          inner: props[:inner],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class InnerClass2 < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :prop2, T.nilable(Integer)
       const :prop3, T.nilable(Float)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          prop2: args[:prop2],
-          prop3: args[:prop3],
+          prop2: props[:prop2],
+          prop3: props[:prop3],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class NamedArgsSingleClass < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :key, T.nilable(String)
       const :key_two, T.nilable(T::Boolean)
       const :key_three, T.nilable(Integer)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          key: args[:key],
-          key_two: args[:key_two],
-          key_three: args[:key_three],
+          key: props[:key],
+          key_two: props[:key_two],
+          key_three: props[:key_three],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class OptionalTest_Prop1 < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :omega_a, T.nilable(String)
       const :omega_b, T.nilable(Integer)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          omega_a: args[:omega_a],
-          omega_b: args[:omega_b],
+          omega_a: props[:omega_a],
+          omega_b: props[:omega_b],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class OptionalTest_ReturnType < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :omega_1, Baml::PartialTypes::OptionalTest_Prop1
       const :omega_2, T.nilable(String)
       const :omega_3, T::Array[T.nilable(Baml::Types::OptionalTest_CategoryType)]
 
-      def initialize(args)
+      def initialize(props)
         super(
-          omega_1: args[:omega_1],
-          omega_2: args[:omega_2],
-          omega_3: args[:omega_3],
+          omega_1: props[:omega_1],
+          omega_2: props[:omega_2],
+          omega_3: props[:omega_3],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class OrderInfo < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :order_status, T.nilable(Baml::Types::OrderStatus)
       const :tracking_number, T.nilable(String)
       const :estimated_arrival_date, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          order_status: args[:order_status],
-          tracking_number: args[:tracking_number],
-          estimated_arrival_date: args[:estimated_arrival_date],
+          order_status: props[:order_status],
+          tracking_number: props[:tracking_number],
+          estimated_arrival_date: props[:estimated_arrival_date],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class Person < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :name, T.nilable(String)
       const :hair_color, T.nilable(Baml::Types::Color)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          name: args[:name],
-          hair_color: args[:hair_color],
+          name: props[:name],
+          hair_color: props[:hair_color],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class Quantity < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :amount, T.nilable(T.any(T.nilable(Integer), T.nilable(Float)))
       const :unit, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          amount: args[:amount],
-          unit: args[:unit],
+          amount: props[:amount],
+          unit: props[:unit],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class RaysData < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :dataType, T.nilable(Baml::Types::DataType)
       const :value, T.nilable(T.any(Baml::PartialTypes::Resume, Baml::PartialTypes::Event))
 
-      def initialize(args)
+      def initialize(props)
         super(
-          dataType: args[:dataType],
-          value: args[:value],
+          dataType: props[:dataType],
+          value: props[:value],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class ReceiptInfo < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :items, T::Array[Baml::PartialTypes::ReceiptItem]
       const :total_cost, T.nilable(Float)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          items: args[:items],
-          total_cost: args[:total_cost],
+          items: props[:items],
+          total_cost: props[:total_cost],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class ReceiptItem < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :name, T.nilable(String)
       const :description, T.nilable(String)
       const :quantity, T.nilable(Integer)
       const :price, T.nilable(Float)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          name: args[:name],
-          description: args[:description],
-          quantity: args[:quantity],
-          price: args[:price],
+          name: props[:name],
+          description: props[:description],
+          quantity: props[:quantity],
+          price: props[:price],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class Recipe < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :ingredients, T::Hash[String, Baml::PartialTypes::Quantity]
 
-      def initialize(args)
+      def initialize(props)
         super(
-          ingredients: args[:ingredients],
+          ingredients: props[:ingredients],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class Resume < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :name, T.nilable(String)
       const :email, T.nilable(String)
       const :phone, T.nilable(String)
@@ -529,25 +428,21 @@ module Baml
       const :education, T::Array[T.nilable(String)]
       const :skills, T::Array[T.nilable(String)]
 
-      def initialize(args)
+      def initialize(props)
         super(
-          name: args[:name],
-          email: args[:email],
-          phone: args[:phone],
-          experience: args[:experience],
-          education: args[:education],
-          skills: args[:skills],
+          name: props[:name],
+          email: props[:email],
+          phone: props[:phone],
+          experience: props[:experience],
+          education: props[:education],
+          skills: props[:skills],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class SearchParams < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :dateRange, T.nilable(Integer)
       const :location, T::Array[T.nilable(String)]
       const :jobTitle, Baml::PartialTypes::WithReasoning
@@ -555,169 +450,133 @@ module Baml
       const :description, T::Array[Baml::PartialTypes::WithReasoning]
       const :tags, T::Array[T.nilable(T.any(T.nilable(Baml::Types::Tag), T.nilable(String)))]
 
-      def initialize(args)
+      def initialize(props)
         super(
-          dateRange: args[:dateRange],
-          location: args[:location],
-          jobTitle: args[:jobTitle],
-          company: args[:company],
-          description: args[:description],
-          tags: args[:tags],
+          dateRange: props[:dateRange],
+          location: props[:location],
+          jobTitle: props[:jobTitle],
+          company: props[:company],
+          description: props[:description],
+          tags: props[:tags],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class SomeClassNestedDynamic < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :hi, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          hi: args[:hi],
+          hi: props[:hi],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class StringToClassEntry < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :word, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          word: args[:word],
+          word: props[:word],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class TestClassAlias < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :key, T.nilable(String)
       const :key2, T.nilable(String)
       const :key3, T.nilable(String)
       const :key4, T.nilable(String)
       const :key5, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          key: args[:key],
-          key2: args[:key2],
-          key3: args[:key3],
-          key4: args[:key4],
-          key5: args[:key5],
+          key: props[:key],
+          key2: props[:key2],
+          key3: props[:key3],
+          key4: props[:key4],
+          key5: props[:key5],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class TestClassNested < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :prop1, T.nilable(String)
       const :prop2, Baml::PartialTypes::InnerClass
 
-      def initialize(args)
+      def initialize(props)
         super(
-          prop1: args[:prop1],
-          prop2: args[:prop2],
+          prop1: props[:prop1],
+          prop2: props[:prop2],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class TestClassWithEnum < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(Baml::Types::EnumInClass)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          prop1: args[:prop1],
-          prop2: args[:prop2],
+          prop1: props[:prop1],
+          prop2: props[:prop2],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class TestOutputClass < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(Integer)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          prop1: args[:prop1],
-          prop2: args[:prop2],
+          prop1: props[:prop1],
+          prop2: props[:prop2],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class UnionTest_ReturnType < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :prop1, T.nilable(T.any(T.nilable(String), T.nilable(T::Boolean)))
       const :prop2, T::Array[T.nilable(T.any(T.nilable(Float), T.nilable(T::Boolean)))]
       const :prop3, T.nilable(T.any(T::Array[T.nilable(T::Boolean)], T::Array[T.nilable(Integer)]))
 
-      def initialize(args)
+      def initialize(props)
         super(
-          prop1: args[:prop1],
-          prop2: args[:prop2],
-          prop3: args[:prop3],
+          prop1: props[:prop1],
+          prop2: props[:prop2],
+          prop3: props[:prop3],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
     class WithReasoning < T::Struct
-      include T::Struct::ActsAsComparable
+      include Baml::Sorbet::Struct
       const :value, T.nilable(String)
       const :reasoning, T.nilable(String)
 
-      def initialize(args)
+      def initialize(props)
         super(
-          value: args[:value],
-          reasoning: args[:reasoning],
+          value: props[:value],
+          reasoning: props[:reasoning],
         )
 
-        @args = args
-      end
-
-      def method_missing(symbol)
-        @args[symbol]
+        @props = props
       end
     end
   end
