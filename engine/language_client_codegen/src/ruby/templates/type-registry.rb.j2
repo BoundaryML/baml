@@ -63,9 +63,9 @@ module Baml
         end
 
         class ClassBuilder
-            def initialize(registry, name)
+            def initialize(registry, name, properties = nil)
                 @builder = registry.class_(name)
-                @properties = Set.new
+                @properties = properties == nil ? Set.new : properties
             end
 
             def type
@@ -82,9 +82,9 @@ module Baml
         end
 
         class EnumBuilder
-            def initialize(enum_builder, name)
-                @builder = builder
-                @values = Set.new
+            def initialize(registry, name, values = nil)
+                @builder = registry.enum(name)
+                @values = values == nil ? Set.new : values
             end
 
             def type
@@ -102,57 +102,13 @@ module Baml
 
         {% for cls in classes if cls.dynamic %}
         def {{cls.name}}
-            Baml::GeneratedTypeBuilder::{{cls.name}}Builder.new(self)
+            ClassBuilder.new(@registry, "{{cls.name}}", Set[{% for (name, _) in cls.fields %} "{{name}}", {% endfor %}])
         end
         {% endfor %}
 
         {% for enum in enums if enum.dynamic %}
         def {{enum.name}}
-            Baml::GeneratedTypeBuilder::{{enum.name}}Builder.new(self)
-        end
-        {% endfor %}
-    end
-
-    module GeneratedTypeBuilder
-        {% for cls in classes if cls.dynamic -%}
-        class {{cls.name}}Builder
-            def initialize(registry)
-                @builder = registry.class_("{{cls.name}}")
-                @properties = Set[{% for (name, _) in cls.fields %} "{{name}}", {% endfor %}]
-            end
-
-            def type
-                @builder.field
-            end
-
-            def add_property(name, type)
-                if @properties.include?(name)
-                    raise "Property #{name} already exists."
-                end
-                @properties.add(name)
-                @builder.property(name).type(type)
-            end
-        end
-        {% endfor %}
-
-        {% for enum in enums if enum.dynamic %}
-        class {{enum.name}}Builder
-            def initialize(registry)
-                @builder = registry.enum("{{enum.name}}")
-                @values = Set[{% for value in enum.values %} "{{value}}", {% endfor %}]
-            end
-
-            def type
-                @builder.field
-            end
-
-            def add_value(name)
-                if @values.include?(name)
-                    raise ValueError(f"Value {name} already exists.")
-                end
-                @values.add(name)
-                @builder.value(name)
-            end
+            EnumBuilder.new(@registry, "{{enum.name}}", Set[{% for value in enum.values %} "{{value}}", {% endfor %}])
         end
         {% endfor %}
     end

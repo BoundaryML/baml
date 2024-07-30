@@ -12,6 +12,7 @@ class TypeBuilder(_TypeBuilder):
 {% for cls in classes %}{% if cls.dynamic %}
 
     @property
+    {# BUG: this resets the class properties list on each access #}
     def {{cls.name}}(self) -> "{{cls.name}}Builder":
         return {{cls.name}}Builder(self)
 {% endif %}{% endfor %}

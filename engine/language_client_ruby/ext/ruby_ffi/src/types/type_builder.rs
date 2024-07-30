@@ -43,8 +43,6 @@ impl TypeBuilder {
         }
     }
 
-    // Rename to "class_"
-    // #[pyo3(name = "class_")]
     pub fn class(&self, name: String) -> ClassBuilder {
         ClassBuilder {
             inner: self.inner.class(name.as_str()).into(),
@@ -104,6 +102,7 @@ impl TypeBuilder {
 
         cls.define_singleton_method("new", function!(TypeBuilder::new, 0))?;
         cls.define_method("enum", method!(TypeBuilder::r#enum, 1))?;
+        // "class" is used by Kernel: https://ruby-doc.org/core-3.0.2/Kernel.html#method-i-class
         cls.define_method("class_", method!(TypeBuilder::class, 1))?;
         cls.define_method("list", method!(TypeBuilder::list, 1))?;
         cls.define_method("optional", method!(TypeBuilder::optional, 1))?;
@@ -156,7 +155,7 @@ impl EnumBuilder {
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
-        let cls = module.define_class("FieldType", class::object())?;
+        let cls = module.define_class("EnumBuilder", class::object())?;
 
         cls.define_method("value", method!(EnumBuilder::value, 1))?;
         cls.define_method("alias", method!(EnumBuilder::alias, 1))?;
@@ -213,7 +212,7 @@ impl ClassBuilder {
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
-        let cls = module.define_class("FieldType", class::object())?;
+        let cls = module.define_class("ClassBuilder", class::object())?;
 
         cls.define_method("field", method!(ClassBuilder::field, 0))?;
         cls.define_method("property", method!(ClassBuilder::property, 1))?;
@@ -248,7 +247,7 @@ impl ClassPropertyBuilder {
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
-        let cls = module.define_class("FieldType", class::object())?;
+        let cls = module.define_class("ClassPropertyBuilder", class::object())?;
 
         cls.define_method("type", method!(ClassPropertyBuilder::r#type, 1))?;
         cls.define_method("alias", method!(ClassPropertyBuilder::alias, 1))?;

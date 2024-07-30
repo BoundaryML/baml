@@ -59,7 +59,7 @@ module Baml
           {%- endfor %}
         },
         @ctx_manager,
-        baml_options[:type_registry],
+        baml_options[:type_registry]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
       )
       (raw.parsed_using_types(Baml::Types))

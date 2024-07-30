@@ -1,3 +1,5 @@
+require 'ostruct'
+
 puts "loading baml gem"
 # begin
 #   ruby_version = /(\d+\.\d+)/.match(RUBY_VERSION)
@@ -7,6 +9,7 @@ puts "loading baml gem"
 # end
 require_relative "baml/ruby_ffi"
 require_relative "stream"
+
 
 module Baml
   # TODO: implement image support

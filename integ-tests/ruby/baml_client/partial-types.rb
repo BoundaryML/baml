@@ -59,44 +59,158 @@ module Baml
     class Blah < T::Struct
       include T::Struct::ActsAsComparable
       const :prop4, T.nilable(String)
+
+      def initialize(args)
+        super(
+          prop4: args[:prop4],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class ClassOptionalOutput < T::Struct
       include T::Struct::ActsAsComparable
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(String)
+
+      def initialize(args)
+        super(
+          prop1: args[:prop1],
+          prop2: args[:prop2],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class ClassOptionalOutput2 < T::Struct
       include T::Struct::ActsAsComparable
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(String)
       const :prop3, Baml::PartialTypes::Blah
+
+      def initialize(args)
+        super(
+          prop1: args[:prop1],
+          prop2: args[:prop2],
+          prop3: args[:prop3],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class ClassWithImage < T::Struct
       include T::Struct::ActsAsComparable
       const :myImage, T.nilable(Baml::Image)
       const :param2, T.nilable(String)
       const :fake_image, Baml::PartialTypes::FakeImage
+
+      def initialize(args)
+        super(
+          myImage: args[:myImage],
+          param2: args[:param2],
+          fake_image: args[:fake_image],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class DummyOutput < T::Struct
       include T::Struct::ActsAsComparable
       const :nonce, T.nilable(String)
       const :nonce2, T.nilable(String)
+
+      def initialize(args)
+        super(
+          nonce: args[:nonce],
+          nonce2: args[:nonce2],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class DynInputOutput < T::Struct
       include T::Struct::ActsAsComparable
       const :testKey, T.nilable(String)
+
+      def initialize(args)
+        super(
+          testKey: args[:testKey],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class DynamicClassOne < T::Struct
       include T::Struct::ActsAsComparable
+
+      def initialize(args)
+        super(
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class DynamicClassTwo < T::Struct
       include T::Struct::ActsAsComparable
       const :hi, T.nilable(String)
       const :some_class, Baml::PartialTypes::SomeClassNestedDynamic
       const :status, T.nilable(Baml::Types::DynEnumOne)
+
+      def initialize(args)
+        super(
+          hi: args[:hi],
+          some_class: args[:some_class],
+          status: args[:status],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class DynamicOutput < T::Struct
       include T::Struct::ActsAsComparable
+
+      def initialize(args)
+        super(
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class Education < T::Struct
       include T::Struct::ActsAsComparable
@@ -105,12 +219,42 @@ module Baml
       const :degree, T.nilable(String)
       const :major, T::Array[T.nilable(String)]
       const :graduation_date, T.nilable(String)
+
+      def initialize(args)
+        super(
+          institution: args[:institution],
+          location: args[:location],
+          degree: args[:degree],
+          major: args[:major],
+          graduation_date: args[:graduation_date],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class Email < T::Struct
       include T::Struct::ActsAsComparable
       const :subject, T.nilable(String)
       const :body, T.nilable(String)
       const :from_address, T.nilable(String)
+
+      def initialize(args)
+        super(
+          subject: args[:subject],
+          body: args[:body],
+          from_address: args[:from_address],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class Event < T::Struct
       include T::Struct::ActsAsComparable
@@ -118,64 +262,225 @@ module Baml
       const :date, T.nilable(String)
       const :location, T.nilable(String)
       const :description, T.nilable(String)
+
+      def initialize(args)
+        super(
+          title: args[:title],
+          date: args[:date],
+          location: args[:location],
+          description: args[:description],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class FakeImage < T::Struct
       include T::Struct::ActsAsComparable
       const :url, T.nilable(String)
+
+      def initialize(args)
+        super(
+          url: args[:url],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class InnerClass < T::Struct
       include T::Struct::ActsAsComparable
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(String)
       const :inner, Baml::PartialTypes::InnerClass2
+
+      def initialize(args)
+        super(
+          prop1: args[:prop1],
+          prop2: args[:prop2],
+          inner: args[:inner],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class InnerClass2 < T::Struct
       include T::Struct::ActsAsComparable
       const :prop2, T.nilable(Integer)
       const :prop3, T.nilable(Float)
+
+      def initialize(args)
+        super(
+          prop2: args[:prop2],
+          prop3: args[:prop3],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class NamedArgsSingleClass < T::Struct
       include T::Struct::ActsAsComparable
       const :key, T.nilable(String)
       const :key_two, T.nilable(T::Boolean)
       const :key_three, T.nilable(Integer)
+
+      def initialize(args)
+        super(
+          key: args[:key],
+          key_two: args[:key_two],
+          key_three: args[:key_three],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class OptionalTest_Prop1 < T::Struct
       include T::Struct::ActsAsComparable
       const :omega_a, T.nilable(String)
       const :omega_b, T.nilable(Integer)
+
+      def initialize(args)
+        super(
+          omega_a: args[:omega_a],
+          omega_b: args[:omega_b],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class OptionalTest_ReturnType < T::Struct
       include T::Struct::ActsAsComparable
       const :omega_1, Baml::PartialTypes::OptionalTest_Prop1
       const :omega_2, T.nilable(String)
       const :omega_3, T::Array[T.nilable(Baml::Types::OptionalTest_CategoryType)]
+
+      def initialize(args)
+        super(
+          omega_1: args[:omega_1],
+          omega_2: args[:omega_2],
+          omega_3: args[:omega_3],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class OrderInfo < T::Struct
       include T::Struct::ActsAsComparable
       const :order_status, T.nilable(Baml::Types::OrderStatus)
       const :tracking_number, T.nilable(String)
       const :estimated_arrival_date, T.nilable(String)
+
+      def initialize(args)
+        super(
+          order_status: args[:order_status],
+          tracking_number: args[:tracking_number],
+          estimated_arrival_date: args[:estimated_arrival_date],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class Person < T::Struct
       include T::Struct::ActsAsComparable
       const :name, T.nilable(String)
       const :hair_color, T.nilable(Baml::Types::Color)
+
+      def initialize(args)
+        super(
+          name: args[:name],
+          hair_color: args[:hair_color],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class Quantity < T::Struct
       include T::Struct::ActsAsComparable
       const :amount, T.nilable(T.any(T.nilable(Integer), T.nilable(Float)))
       const :unit, T.nilable(String)
+
+      def initialize(args)
+        super(
+          amount: args[:amount],
+          unit: args[:unit],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class RaysData < T::Struct
       include T::Struct::ActsAsComparable
       const :dataType, T.nilable(Baml::Types::DataType)
       const :value, T.nilable(T.any(Baml::PartialTypes::Resume, Baml::PartialTypes::Event))
+
+      def initialize(args)
+        super(
+          dataType: args[:dataType],
+          value: args[:value],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class ReceiptInfo < T::Struct
       include T::Struct::ActsAsComparable
       const :items, T::Array[Baml::PartialTypes::ReceiptItem]
       const :total_cost, T.nilable(Float)
+
+      def initialize(args)
+        super(
+          items: args[:items],
+          total_cost: args[:total_cost],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class ReceiptItem < T::Struct
       include T::Struct::ActsAsComparable
@@ -183,10 +488,37 @@ module Baml
       const :description, T.nilable(String)
       const :quantity, T.nilable(Integer)
       const :price, T.nilable(Float)
+
+      def initialize(args)
+        super(
+          name: args[:name],
+          description: args[:description],
+          quantity: args[:quantity],
+          price: args[:price],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class Recipe < T::Struct
       include T::Struct::ActsAsComparable
       const :ingredients, T::Hash[String, Baml::PartialTypes::Quantity]
+
+      def initialize(args)
+        super(
+          ingredients: args[:ingredients],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class Resume < T::Struct
       include T::Struct::ActsAsComparable
@@ -196,6 +528,23 @@ module Baml
       const :experience, T::Array[Baml::PartialTypes::Education]
       const :education, T::Array[T.nilable(String)]
       const :skills, T::Array[T.nilable(String)]
+
+      def initialize(args)
+        super(
+          name: args[:name],
+          email: args[:email],
+          phone: args[:phone],
+          experience: args[:experience],
+          education: args[:education],
+          skills: args[:skills],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class SearchParams < T::Struct
       include T::Struct::ActsAsComparable
@@ -205,14 +554,55 @@ module Baml
       const :company, Baml::PartialTypes::WithReasoning
       const :description, T::Array[Baml::PartialTypes::WithReasoning]
       const :tags, T::Array[T.nilable(T.any(T.nilable(Baml::Types::Tag), T.nilable(String)))]
+
+      def initialize(args)
+        super(
+          dateRange: args[:dateRange],
+          location: args[:location],
+          jobTitle: args[:jobTitle],
+          company: args[:company],
+          description: args[:description],
+          tags: args[:tags],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class SomeClassNestedDynamic < T::Struct
       include T::Struct::ActsAsComparable
       const :hi, T.nilable(String)
+
+      def initialize(args)
+        super(
+          hi: args[:hi],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class StringToClassEntry < T::Struct
       include T::Struct::ActsAsComparable
       const :word, T.nilable(String)
+
+      def initialize(args)
+        super(
+          word: args[:word],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class TestClassAlias < T::Struct
       include T::Struct::ActsAsComparable
@@ -221,32 +611,114 @@ module Baml
       const :key3, T.nilable(String)
       const :key4, T.nilable(String)
       const :key5, T.nilable(String)
+
+      def initialize(args)
+        super(
+          key: args[:key],
+          key2: args[:key2],
+          key3: args[:key3],
+          key4: args[:key4],
+          key5: args[:key5],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class TestClassNested < T::Struct
       include T::Struct::ActsAsComparable
       const :prop1, T.nilable(String)
       const :prop2, Baml::PartialTypes::InnerClass
+
+      def initialize(args)
+        super(
+          prop1: args[:prop1],
+          prop2: args[:prop2],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class TestClassWithEnum < T::Struct
       include T::Struct::ActsAsComparable
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(Baml::Types::EnumInClass)
+
+      def initialize(args)
+        super(
+          prop1: args[:prop1],
+          prop2: args[:prop2],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class TestOutputClass < T::Struct
       include T::Struct::ActsAsComparable
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(Integer)
+
+      def initialize(args)
+        super(
+          prop1: args[:prop1],
+          prop2: args[:prop2],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class UnionTest_ReturnType < T::Struct
       include T::Struct::ActsAsComparable
       const :prop1, T.nilable(T.any(T.nilable(String), T.nilable(T::Boolean)))
       const :prop2, T::Array[T.nilable(T.any(T.nilable(Float), T.nilable(T::Boolean)))]
       const :prop3, T.nilable(T.any(T::Array[T.nilable(T::Boolean)], T::Array[T.nilable(Integer)]))
+
+      def initialize(args)
+        super(
+          prop1: args[:prop1],
+          prop2: args[:prop2],
+          prop3: args[:prop3],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     class WithReasoning < T::Struct
       include T::Struct::ActsAsComparable
       const :value, T.nilable(String)
       const :reasoning, T.nilable(String)
+
+      def initialize(args)
+        super(
+          value: args[:value],
+          reasoning: args[:reasoning],
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
   end
 end

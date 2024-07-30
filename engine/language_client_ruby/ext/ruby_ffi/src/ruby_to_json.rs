@@ -24,19 +24,41 @@ impl<'rb> RubyToJson<'rb> {
     pub fn serialize_baml(ruby: &Ruby, types: RModule, from: &BamlValue) -> crate::Result<Value> {
         match from {
             BamlValue::Class(class_name, class_fields) => {
-                let class_type: RClass = types.const_get(class_name.as_str())?;
                 let hash = ruby.hash_new();
                 for (k, v) in class_fields.iter() {
                     let k = ruby.sym_new(k.as_str());
                     let v = RubyToJson::serialize_baml(ruby, types, v)?;
                     hash.aset(k, v)?;
                 }
-                class_type.funcall("new", (hash,))
+                match types.const_get::<_, RClass>(class_name.as_str()) {
+                    Ok(class_type) => {
+                        log::debug!("class {} with fields {:?}", class_name, class_fields.len());
+                        class_type.funcall("new", (hash,))
+                    }
+                    Err(_) => {
+                        log::debug!(
+                            "before dynamic class {} with fields {:?}",
+                            class_name,
+                            class_fields.len()
+                        );
+                        let dynamic_class_type = ruby.eval::<RClass>("OpenStruct")?;
+                        log::debug!(
+                            "Creating dynamic class {} with fields {:?}",
+                            class_name,
+                            class_fields.len()
+                        );
+                        dynamic_class_type.funcall("new", (hash,))
+                    }
+                }
             }
             BamlValue::Enum(enum_name, enum_value) => {
-                let enum_type: RClass = types.const_get(enum_name.as_str())?;
-                let enum_value = ruby.str_new(enum_value);
-                enum_type.funcall("deserialize", (enum_value,))
+                match types.const_get::<_, RClass>(enum_name.as_str()) {
+                    Ok(enum_type) => {
+                        let enum_value = ruby.str_new(enum_value);
+                        enum_type.funcall("deserialize", (enum_value,))
+                    }
+                    Err(_) => Ok(ruby.str_new(enum_value).into_value_with(ruby)),
+                }
             }
             BamlValue::Map(m) => {
                 let hash = ruby.hash_new();

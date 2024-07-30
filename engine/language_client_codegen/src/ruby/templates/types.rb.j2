@@ -31,6 +31,20 @@ module Baml
       {%- for (name, type) in cls.fields %}
       const :{{name}}, {{type}}
       {%- endfor %}
+
+      def initialize(args)
+        super(
+          {%- for (name, _) in cls.fields %}
+          {{name}}: args[:{{name}}],
+          {%- endfor %}
+        )
+
+        @args = args
+      end
+
+      def method_missing(symbol)
+        @args[symbol]
+      end
     end
     {%- endfor %}
   end
