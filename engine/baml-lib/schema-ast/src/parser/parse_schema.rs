@@ -59,14 +59,12 @@ pub fn parse_schema(
                 match current.as_rule() {
 
                     Rule::type_expression_block => {
-                        
-                    
-                    let type_expr = parse_type_expression(current, pending_block_comment.take(), &mut diagnostics);
-                    match type_expr.sub_type {
-                        SubType::Class => top_level_definitions.push(Top::Class(type_expr)),
-                        SubType::Enum => top_level_definitions.push(Top::Enum(type_expr)),
-                        _ => (), // may need to save other somehow for error propagation
-                        }
+                        let type_expr = parse_type_expression(current, pending_block_comment.take(), &mut diagnostics);
+                        match type_expr.sub_type {
+                            SubType::Class => top_level_definitions.push(Top::Class(type_expr)),
+                            SubType::Enum => top_level_definitions.push(Top::Enum(type_expr)),
+                            _ => (), // may need to save other somehow for error propagation
+                            }
                     }
                     Rule::value_expression_block => {
                         let val_expr = parse_value_expression(current, pending_block_comment.take(), &mut diagnostics);
@@ -146,6 +144,44 @@ pub fn parse_schema(
 
             diagnostics.push_error(DatamodelError::new_parser_error(expected, location));
             Err(diagnostics)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::parse_schema;
+    use crate::ast::*; // Add this line to import the ast module
+    use internal_baml_diagnostics::SourceFile;
+
+    #[test]
+    // #[test_log::test]
+    fn test_parse_schema() {
+        let input = r#"
+            class MyClass {
+                myProperty string[]
+                @description("This is a description")
+            }
+        "#;
+
+        let root_path = "test_file.baml";
+        let source = SourceFile::new_static(root_path.into(), input);
+
+        let result = parse_schema(&root_path.into(), &source);
+
+        assert!(result.is_ok());
+        let (schema_ast, _) = result.unwrap();
+
+        assert_eq!(schema_ast.tops.len(), 1);
+
+        match &schema_ast.tops[0] {
+            Top::Class(model) => {
+                assert_eq!(model.name.name(), "MyClass");
+                assert_eq!(model.fields.len(), 1);
+                assert_eq!(model.fields[0].name.name(), "myProperty");
+            }
+            _ => panic!("Expected a model declaration"),
         }
     }
 }

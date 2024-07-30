@@ -1,4 +1,4 @@
-use super::{helpers::Pair, Rule};
+use super::{helpers::Pair, parse_attribute::parse_attribute, Rule};
 use crate::{
     assert_correct_parser, ast::*, parser::parse_identifier::parse_identifier, unreachable_rule,
 };
@@ -48,6 +48,7 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
                     types.push(f)
                 }
             }
+            Rule::base_type_with_attr => {}
             _ => unreachable_rule!(current, Rule::union),
         }
     }
@@ -57,6 +58,29 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         1 => Some(types[0].to_owned()),
         _ => Some(FieldType::Union(FieldArity::Required, types, span)),
     }
+}
+
+fn parse_base_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
+    let mut attributes = Vec::new();
+    for current in pair.into_inner() {
+        match current.as_rule() {
+            Rule::base_type => {
+                if let Some(f) = parse_base_type(current, diagnostics) {
+                    return Some(f);
+                }
+            }
+            Rule::field_attribute => {
+                if let att = parse_attribute(current, diagnostics) {
+                    attributes.push(att);
+                }
+            }
+
+            // Handle attributes if needed
+            // INSERT_YOUR_REWRITE_HERE
+            _ => unreachable_rule!(current, Rule::base_type_with_attr),
+        }
+    }
+    None
 }
 
 fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
