@@ -73,10 +73,10 @@ async function run() {
 require_relative '../baml_client'
 
 def run
-  tb = Baml::TypeBuilder.new
-  tb.Category.add_value('VALUE3')
-  tb.Category.add_value('VALUE4')
-  res = Baml.Client.dynamic_categorizer("some input", baml_options: {tb: tb})
+  t = Baml::TypeRegistry.new
+  t.Category.add_value('VALUE3')
+  t.Category.add_value('VALUE4')
+  res = Baml.Client.dynamic_categorizer(input: "some input", baml_options: {type_registry: t})
   # Now res can be VALUE1, VALUE2, VALUE3, or VALUE4
   puts res
 end
@@ -142,11 +142,11 @@ async function run() {
 require_relative 'baml_client/client'
 
 def run
-  tb = Baml::TypeBuilder.new
-  tb.User.add_property('email', tb.string)
-  tb.User.add_property('address', tb.string)
+  t = Baml::TypeRegistry.new
+  t.User.add_property('email', tb.string)
+  t.User.add_property('address', tb.string)
   
-  res = Baml.Client.dynamic_user_creator("some user info", baml_options: {tb: tb})
+  res = Baml.Client.dynamic_user_creator(input: "some user info", baml_options: {type_registry: t})
   # Now res can have email and address fields
   puts res
 end
@@ -206,18 +206,18 @@ async function run() {
 require_relative 'baml_client/client'
 
 def run
-  tb = Baml::TypeBuilder.new
-  hobbies_enum = tb.add_enum('Hobbies')
+  t = Baml::TypeRegistry.new
+  hobbies_enum = t.add_enum('Hobbies')
   hobbies_enum.add_value('Soccer')
   hobbies_enum.add_value('Reading')
 
-  address_class = tb.add_class('Address')
-  address_class.add_property('street', tb.string)
+  address_class = t.add_class('Address')
+  address_class.add_property('street', t.string)
 
-  tb.User.add_property('hobby', hobbies_enum.type.optional)
-  tb.User.add_property('address', address_class.type.optional)
+  t.User.add_property('hobby', hobbies_enum.type.optional)
+  t.User.add_property('address', address_class.type.optional)
   
-  res = Baml::Client.dynamic_user_creator("some user info", baml_options: { tb: tb })
+  res = Baml::Client.dynamic_user_creator(input: "some user info", baml_options: { type_registry: t })
   # Now res might have the hobby property, which can be Soccer or Reading
   puts res
 end
@@ -239,8 +239,8 @@ tb.User.addProperty("email", tb.string()).description("The user's email")
 ```
 
 ```ruby Ruby
-tb = Baml::TypeBuilder.new
-tb.User.add_property("email", tb.string).description("The user's email")
+t = Baml::TypeRegistry.new
+t.User.add_property("email", t.string).description("The user's email")
 ```
 
 </CodeBlocks>
@@ -293,12 +293,12 @@ const res = await b.ExtractPeople(
 ```
 
 ```ruby Ruby
-tb = Baml::TypeBuilder.new
-tb.unstable_features.add_json_schema(...)
+t = Baml::TypeRegistry.new
+t.unstable_features.add_json_schema(...)
 
 res = Baml::Client.extract_people(
-  "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
-  baml_options: { tb: tb }
+  input: "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+  baml_options: { type_registry: t }
 )
 
 puts res

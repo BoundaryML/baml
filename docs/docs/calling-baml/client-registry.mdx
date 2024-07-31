@@ -67,7 +67,7 @@ def run
   cr.set_primary('MyAmazingClient')
 
   # ExtractResume will now use MyAmazingClient as the calling client
-  res = Baml.Client.extract_resume('...', client_registry: cr)
+  res = Baml.Client.extract_resume(input: '...', baml_options: { client_registry: cr })
 end
 
 # Call the asynchronous function
