@@ -160,8 +160,7 @@ mod tests {
     fn test_parse_schema() {
         let input = r#"
             class MyClass {
-                myProperty string[]
-                @description("This is a description")
+                myProperty string[] @description("This is a description") @alias("MP")
             }
         "#;
 
@@ -180,6 +179,7 @@ mod tests {
                 assert_eq!(model.name.name(), "MyClass");
                 assert_eq!(model.fields.len(), 1);
                 assert_eq!(model.fields[0].name.name(), "myProperty");
+                assert_eq!(model.fields[0].attributes.len(), 2)
             }
             _ => panic!("Expected a model declaration"),
         }

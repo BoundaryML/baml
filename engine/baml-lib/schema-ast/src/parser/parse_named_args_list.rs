@@ -27,7 +27,10 @@ pub(crate) fn parse_named_argument_list(
         if matches!(named_arg.as_rule(), Rule::SPACER_TEXT) {
             continue;
         }
-        assert_correct_parser!(named_arg, Rule::named_argument);
+        // if named_arg.as_rule() == Rule::named_argument || named_arg.as_rule() == Rule::openParan {
+        //     assert_correct_parser!(named_arg, named_arg.as_rule());
+        // }
+        // assert_correct_parser!(named_arg, Rule::named_argument);
 
         let mut name = None;
         let mut r#type = None;

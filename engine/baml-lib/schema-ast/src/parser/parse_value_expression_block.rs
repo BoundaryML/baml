@@ -28,11 +28,14 @@ pub(crate) fn parse_value_expression(
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::FUNCTION_KEYWORD => sub_type = Some(ValueExprBlockType::Function),
-            Rule::TEST_KEYWORD => sub_type = Some(ValueExprBlockType::Test),
-            Rule::CLIENT_KEYWORD => sub_type = Some(ValueExprBlockType::Client),
-            Rule::RETRY_POLICY_KEYWORD => sub_type = Some(ValueExprBlockType::RetryPolicy),
-            Rule::GENERATOR_KEYWORD => sub_type = Some(ValueExprBlockType::Generator),
+            Rule::value_expression_keyword => match current.as_str() {
+                "function" => sub_type = Some(ValueExprBlockType::Function),
+                "test" => sub_type = Some(ValueExprBlockType::Test),
+                "client" | "client<llm>" => sub_type = Some(ValueExprBlockType::Client),
+                "retry_policy" => sub_type = Some(ValueExprBlockType::RetryPolicy),
+                "generator" => sub_type = Some(ValueExprBlockType::Generator),
+                _ => panic!("Unexpected value expression keyword: {}", current.as_str()),
+            },
             Rule::ARROW => {
                 has_arrow = true;
             }
