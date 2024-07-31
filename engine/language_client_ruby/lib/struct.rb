@@ -5,6 +5,7 @@ require "ostruct"
 
 module Baml
   module Sorbet
+    # Provides dynamic properties on statically defined classes
     module Struct
       # Needed to allow accessing dynamic types
       def method_missing(symbol)
@@ -51,6 +52,7 @@ module Baml
     end
   end
 
+  # Dynamically defined output classes are instantiated using this class
   class DynamicStruct < OpenStruct
     def to_json(*args)
       @table.to_json(*args)
