@@ -172,7 +172,7 @@ describe "ruby<->baml integration tests" do
   end
 
   it "tests dynamic" do
-    t = Baml::TypeRegistry.new
+    t = Baml::TypeBuilder.new
     t.Person.add_property("last_name", t.string.list)
     t.Person.add_property("height", t.float.optional).description("Height in meters")
 
@@ -188,7 +188,7 @@ describe "ruby<->baml integration tests" do
 
     t_res = b.ExtractPeople(
       text: "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good on a chessboard.",
-      baml_options: {type_registry: t}
+      baml_options: {tb: t}
     )
 
     refute_empty(t_res, "Expected non-empty result but got empty.")
@@ -201,7 +201,7 @@ describe "ruby<->baml integration tests" do
   end
 
   it "tests dynamic class output" do
-    t = Baml::TypeRegistry.new
+    t = Baml::TypeBuilder.new
     t.DynamicOutput.add_property("hair_color", t.string)
     # TODO: figure out a non-naive impl of #list_properties in Ruby
     # puts t.DynamicOutput.list_properties
@@ -211,14 +211,14 @@ describe "ruby<->baml integration tests" do
 
     output = b.MyFunc(
       input: "My name is Harrison. My hair is black and I'm 6 feet tall.",
-      baml_options: {type_registry: t} 
+      baml_options: {tb: t} 
     )
     puts output.inspect
     assert_equal("black", output.hair_color)
   end
 
   it "tests dynamic class nested output no stream" do
-    t = Baml::TypeRegistry.new
+    t = Baml::TypeBuilder.new
     nested_class = t.add_class("Name")
     nested_class.add_property("first_name", t.string)
     nested_class.add_property("last_name", t.string.optional)
@@ -233,7 +233,7 @@ describe "ruby<->baml integration tests" do
 
     output = b.MyFunc(
       input: "My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
-      baml_options: {type_registry: t} 
+      baml_options: {tb: t} 
     )
     puts output.inspect
     assert_equal(
@@ -243,7 +243,7 @@ describe "ruby<->baml integration tests" do
   end
 
   it "tests dynamic class nested output stream" do
-    t = Baml::TypeRegistry.new
+    t = Baml::TypeBuilder.new
     nested_class = t.add_class("Name")
     nested_class.add_property("first_name", t.string)
     nested_class.add_property("last_name", t.string.optional)
@@ -253,7 +253,7 @@ describe "ruby<->baml integration tests" do
 
     stream = b.stream.MyFunc(
       input: "My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
-      baml_options: {type_registry: t} 
+      baml_options: {tb: t} 
     )
     msgs = []
     stream.each do |msg|

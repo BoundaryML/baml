@@ -1,7 +1,7 @@
 require 'set'
 
 module Baml
-    class TypeRegistry
+    class TypeBuilder
         def initialize
             @registry = Baml::Ffi::TypeBuilder.new
             @classes = Set.new(["Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","Education","Email","Event","FakeImage","InnerClass","InnerClass2","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","Quantity","RaysData","ReceiptInfo","ReceiptItem","Recipe","Resume","SearchParams","SomeClassNestedDynamic","StringToClassEntry","TestClassAlias","TestClassNested","TestClassWithEnum","TestOutputClass","UnionTest_ReturnType","WithReasoning",])
