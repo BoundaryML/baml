@@ -12,10 +12,9 @@ require_relative "struct"
 
 
 module Baml
-  # TODO: implement image support
-  class Image; end
-
   ClientRegistry = Baml::Ffi::ClientRegistry
+  Image = Baml::Ffi::Image
+  Audio = Baml::Ffi::Audio
 
   # Dynamically + idempotently define Baml::TypeConverter
   # NB: this does not respect raise_coercion_error = false

@@ -1,7 +1,10 @@
 use crate::Result;
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::BamlValue;
-use magnus::{class, function, method, Module, Object, RModule};
+use magnus::{
+    class, function, method, scan_args::scan_args, try_convert::TryConvertOwned, typed_data::Obj,
+    Module, Object, RModule, TryConvert, Value,
+};
 
 #[magnus::wrap(class = "Baml::Ffi::TypeBuilder", free_immediately, size)]
 pub(crate) struct TypeBuilder {
@@ -86,16 +89,17 @@ impl TypeBuilder {
         .into()
     }
 
-    // #[pyo3(signature = (*types))]
-    // pub fn union<'py>(&self, types: &Bound<'_, PyTuple>) -> PyResult<FieldType> {
-    //     let mut rs_types = vec![];
-    //     for idx in 0..types.len() {
-    //         let item = types.get_item(idx)?;
-    //         let item = item.downcast::<FieldType>()?;
-    //         rs_types.push(item.borrow().inner.lock().unwrap().clone());
-    //     }
-    //     Ok(baml_types::FieldType::union(rs_types).into())
-    // }
+    pub fn union(&self, args: &[Value]) -> Result<FieldType> {
+        let args = scan_args::<(), (), _, (), (), ()>(args)?;
+        let types: Vec<&FieldType> = args.splat;
+        Ok(baml_types::FieldType::union(
+            types
+                .into_iter()
+                .map(|t| t.inner.lock().unwrap().clone())
+                .collect(),
+        )
+        .into())
+    }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("TypeBuilder", class::object())?;
@@ -112,7 +116,7 @@ impl TypeBuilder {
         cls.define_method("bool", method!(TypeBuilder::bool, 0))?;
         cls.define_method("null", method!(TypeBuilder::null, 0))?;
         cls.define_method("map", method!(TypeBuilder::map, 2))?;
-        // cls.define_method("union", method!(TypeBuilder::union, 1))?;
+        cls.define_method("union", method!(TypeBuilder::union, -1))?;
 
         Ok(())
     }
@@ -136,6 +140,13 @@ impl FieldType {
         Ok(())
     }
 }
+
+// magnus makes it non-ergonomic to convert a ScanArgsSplat into a Vec<&T> because Vec puts
+// stuff on the heap, and moving Ruby-owned objects to the heap is very unsafe. It does so
+// by bounding ScanArgsSplat using TryConvertOwned, which is not implemented for &TypedData,
+// so we have to implement it ourselves. This is perfectly safe to do because FieldType does
+// not have any references to Ruby objects.
+unsafe impl TryConvertOwned for &FieldType {}
 
 impl EnumBuilder {
     pub fn value(&self, name: String) -> EnumValueBuilder {

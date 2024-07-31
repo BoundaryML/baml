@@ -1,10 +1,15 @@
 use baml_types::{BamlMap, BamlValue};
 use indexmap::IndexMap;
 use magnus::{
-    prelude::*, value::Value, Error, Float, Integer, IntoValue, RArray, RClass, RHash, RModule,
-    RString, Ruby, Symbol,
+    prelude::*, typed_data::Obj, value::Value, Error, Float, Integer, IntoValue, RArray, RClass,
+    RHash, RModule, RString, Ruby, Symbol, TypedData,
 };
 use std::result::Result;
+
+use crate::types::{
+    self,
+    media::{Audio, Image},
+};
 
 struct SerializationError {
     position: Vec<String>,
@@ -173,6 +178,32 @@ impl<'rb> RubyToJson<'rb> {
 
             if superclass == "T::Enum" {
                 return self.sorbet_to_json(any, field_pos);
+            }
+        }
+
+        if self.is_type::<Audio>(any) {
+            return self.to_type::<Audio>(any, field_pos);
+        }
+
+        if self.is_type::<Image>(any) {
+            return self.to_type::<Image>(any, field_pos);
+        }
+
+        if any
+            .class()
+            .eql(Image::class(&Ruby::get_with(any)))
+            .is_ok_and(|is_eql| is_eql)
+        {
+            match Obj::<Image>::try_convert(any) {
+                Ok(o) => {
+                    return Ok(BamlValue::Media(o.inner.clone()));
+                }
+                Err(e) => {
+                    return Err(vec![SerializationError {
+                        position: field_pos,
+                        message: format!("failed to convert Image: {:#?}", e),
+                    }]);
+                }
             }
         }
 
@@ -470,6 +501,26 @@ impl<'rb> RubyToJson<'rb> {
                 any
             ),
         }]);
+    }
+
+    fn is_type<T: TypedData>(&self, any: Value) -> bool {
+        any.class()
+            .eql(T::class(&Ruby::get_with(any)))
+            .is_ok_and(|is_eql| is_eql)
+    }
+
+    fn to_type<T: TypedData + types::media::CloneAsBamlValue>(
+        &self,
+        any: Value,
+        field_pos: Vec<String>,
+    ) -> Result<BamlValue, Vec<SerializationError>> {
+        match Obj::<T>::try_convert(any) {
+            Ok(o) => Ok(o.clone_as_baml_value()),
+            Err(e) => Err(vec![SerializationError {
+                position: field_pos,
+                message: format!("failed to convert {}: {:#?}", any.class(), e),
+            }]),
+        }
     }
 
     fn sorbet_to_json(

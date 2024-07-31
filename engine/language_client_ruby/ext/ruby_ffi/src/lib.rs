@@ -242,6 +242,8 @@ fn init(ruby: &Ruby) -> Result<()> {
     types::type_builder::FieldType::define_in_ruby(&module)?;
 
     types::client_registry::ClientRegistry::define_in_ruby(&module)?;
+    types::media::Audio::define_in_ruby(&module)?;
+    types::media::Image::define_in_ruby(&module)?;
 
     // everything below this is for our own testing purposes
     module.define_module_function(
