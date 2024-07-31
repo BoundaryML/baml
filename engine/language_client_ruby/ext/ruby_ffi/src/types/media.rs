@@ -1,9 +1,6 @@
 use crate::Result;
 use baml_types::BamlValue;
-use magnus::{
-    class, function, method, scan_args::scan_args, try_convert::TryConvertOwned, typed_data::Obj,
-    Module, Object, RModule, TryConvert, Value,
-};
+use magnus::{class, function, Module, Object, RModule};
 
 pub(crate) trait CloneAsBamlValue {
     fn clone_as_baml_value(&self) -> BamlValue;

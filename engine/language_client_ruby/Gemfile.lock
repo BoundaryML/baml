@@ -20,8 +20,6 @@ GEM
     fiber-local (1.1.0)
       fiber-storage
     fiber-storage (0.1.1)
-    io-event (1.6.0)
-    json (2.7.2)
     minitest (5.22.3)
     minitest-reporters (1.6.1)
       ansi

@@ -2,8 +2,8 @@ use crate::Result;
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::BamlValue;
 use magnus::{
-    class, function, method, scan_args::scan_args, try_convert::TryConvertOwned, typed_data::Obj,
-    Module, Object, RModule, TryConvert, Value,
+    class, function, method, scan_args::scan_args, try_convert::TryConvertOwned, Module, Object,
+    RModule, Value,
 };
 
 #[magnus::wrap(class = "Baml::Ffi::TypeBuilder", free_immediately, size)]
