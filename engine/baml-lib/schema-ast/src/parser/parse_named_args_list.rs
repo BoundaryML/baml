@@ -27,10 +27,14 @@ pub(crate) fn parse_named_argument_list(
         if matches!(named_arg.as_rule(), Rule::SPACER_TEXT) {
             continue;
         }
-        // if named_arg.as_rule() == Rule::named_argument || named_arg.as_rule() == Rule::openParan {
-        //     assert_correct_parser!(named_arg, named_arg.as_rule());
-        // }
+        if named_arg.as_rule() == Rule::named_argument || named_arg.as_rule() == Rule::openParan {
+            assert_correct_parser!(named_arg, named_arg.as_rule());
+        }
         // assert_correct_parser!(named_arg, Rule::named_argument);
+
+        if named_arg.as_rule() == Rule::openParan || named_arg.as_rule() == Rule::closeParan {
+            continue;
+        }
 
         let mut name = None;
         let mut r#type = None;
@@ -57,7 +61,7 @@ pub(crate) fn parse_named_argument_list(
                 name.span().clone(),
             )),
             (None, _) => {
-                unreachable!("parse_function_field_type: unexpected rule:")
+                unreachable!("parse_named_args_list:, none for name of field/missing type")
             }
         }
     }

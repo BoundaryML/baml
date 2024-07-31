@@ -27,7 +27,7 @@ pub(crate) fn parse_type_expression(
 
     for current in pair.into_inner() {
         let mut input: Option<BlockArgs> = None;
-        println!("Parsing type_expression block: {:?}", current.as_rule());
+        
 
         match current.as_rule() {
             Rule::type_expression_keyword => {
@@ -50,7 +50,7 @@ pub(crate) fn parse_type_expression(
                 let mut pending_field_comment: Option<Pair<'_>> = None;
 
                 for item in current.into_inner() {
-                    println!("Parsing type_expression_contents: {:?}", item.as_rule());
+                    
 
                     match item.as_rule() {
                         Rule::block_attribute => {
