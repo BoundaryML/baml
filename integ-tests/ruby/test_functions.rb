@@ -94,6 +94,13 @@ describe "ruby<->baml integration tests" do
    assert_includes res.downcase, "green"
   end
 
+  it "should work with audio" do
+    # from URL
+    res = b.AudioInput(
+      aud: Baml::Audio.from_url("https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg")
+    )
+  end
+
   it "works with unions" do
     res = b.UnionTest_Function(input: "a")
     assert_includes res.inspect, "prop1"

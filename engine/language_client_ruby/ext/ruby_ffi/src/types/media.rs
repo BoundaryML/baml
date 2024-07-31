@@ -21,7 +21,7 @@ impl Image {
         }
     }
 
-    pub fn from_base64(base64: String, media_type: String) -> Self {
+    pub fn from_base64(media_type: String, base64: String) -> Self {
         Self {
             inner: baml_types::BamlMedia::Base64(
                 baml_types::BamlMediaType::Image,
@@ -59,7 +59,7 @@ impl Audio {
             ),
         }
     }
-    pub fn from_base64(base64: String, media_type: String) -> Self {
+    pub fn from_base64(media_type: String, base64: String) -> Self {
         Self {
             inner: baml_types::BamlMedia::Base64(
                 baml_types::BamlMediaType::Audio,

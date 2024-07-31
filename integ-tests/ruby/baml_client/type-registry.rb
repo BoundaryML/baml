@@ -2,7 +2,7 @@
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ bundle add baml sorbet-runtime sorbet-struct-comparable
+#  $ bundle add baml sorbet-runtime
 #
 ###############################################################################
 
@@ -15,11 +15,11 @@
 require 'set'
 
 module Baml
-    class TypeRegistry
+    class TypeBuilder
         def initialize
             @registry = Baml::Ffi::TypeBuilder.new
-            @classes = Set.new(["Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","Education","Email","Event","FakeImage","InnerClass","InnerClass2","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","Quantity","RaysData","ReceiptInfo","ReceiptItem","Recipe","Resume","SearchParams","SomeClassNestedDynamic","StringToClassEntry","TestClassAlias","TestClassNested","TestClassWithEnum","TestOutputClass","UnionTest_ReturnType","WithReasoning",])
-            @enums = Set.new(["Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumTwo","EnumInClass","EnumOutput","Hobby","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",])
+            @classes = Set[ "Blah",  "ClassOptionalOutput",  "ClassOptionalOutput2",  "ClassWithImage",  "DummyOutput",  "DynInputOutput",  "DynamicClassOne",  "DynamicClassTwo",  "DynamicOutput",  "Education",  "Email",  "Event",  "FakeImage",  "InnerClass",  "InnerClass2",  "NamedArgsSingleClass",  "OptionalTest_Prop1",  "OptionalTest_ReturnType",  "OrderInfo",  "Person",  "Quantity",  "RaysData",  "ReceiptInfo",  "ReceiptItem",  "Recipe",  "Resume",  "SearchParams",  "SomeClassNestedDynamic",  "StringToClassEntry",  "TestClassAlias",  "TestClassNested",  "TestClassWithEnum",  "TestOutputClass",  "UnionTest_ReturnType",  "WithReasoning", ]
+            @enums = Set[ "Category",  "Category2",  "Category3",  "Color",  "DataType",  "DynEnumOne",  "DynEnumTwo",  "EnumInClass",  "EnumOutput",  "Hobby",  "NamedArgsSingleEnum",  "NamedArgsSingleEnumList",  "OptionalTest_CategoryType",  "OrderStatus",  "Tag",  "TestEnum", ]
         end
 
         def string
