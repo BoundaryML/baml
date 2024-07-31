@@ -36,8 +36,8 @@ module Baml
             @registry.map(key_type, value_type)
         end
 
-        def union(types)
-            @registry.union(types)
+        def union(*types)
+            @registry.union(*types)
         end
 
         def add_class(name)
