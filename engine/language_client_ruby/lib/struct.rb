@@ -21,6 +21,11 @@ module Baml
         [self.class, @props].hash
       end
 
+      def [](key)
+        key = key.to_sym if key.is_a?(String)
+        @props[key]
+      end
+
       def inspect
         PP.pp(self, +"", 79)
       end

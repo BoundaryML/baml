@@ -195,6 +195,8 @@ describe "ruby<->baml integration tests" do
 
     t_res.each do |r|
       puts r.inspect
+      assert_kind_of(Float, r['height'])
+      assert_kind_of(Float, r[:height])
     end
   end
 
