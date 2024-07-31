@@ -1,12 +1,12 @@
 require 'ostruct'
 
-# begin
-#   ruby_version = /(\d+\.\d+)/.match(RUBY_VERSION)
-#   require_relative "baml/#{ruby_version}/ruby_ffi"
-# rescue LoadError
-#   require_relative "baml/ruby_ffi"
-# end
-require_relative "baml/ruby_ffi"
+begin
+  ruby_version = /(\d+\.\d+)/.match(RUBY_VERSION)
+  require_relative "baml/#{ruby_version}/ruby_ffi"
+rescue LoadError
+  require_relative "baml/ruby_ffi"
+end
+# require_relative "baml/ruby_ffi"
 require_relative "stream"
 require_relative "struct"
 
