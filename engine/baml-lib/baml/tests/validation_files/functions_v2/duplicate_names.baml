@@ -8,9 +8,18 @@ function Bar(a: string, b: int | bool) -> int {
   prompt #"fa"#
 }
 
-// error: The function "Bar" cannot be defined because a function[deprecated signature] with that name already exists.
-//   -->  functions_v2/duplicate_names.baml:6
+// error: Error validating function "Bar": Invalid function syntax. Valid function syntax is
+// ```
+// function Bar(param1: String, param2: String) -> ReturnType {
+//     client SomeClient
+//     prompt #"..."#
+// }
+// ```
+//   -->  functions_v2/duplicate_names.baml:1
 //    | 
-//  5 | 
-//  6 | function Bar(a: string, b: int | bool) -> int {
+//    | 
+//  1 | function Bar {
+//  2 |   input string
+//  3 |   output string
+//  4 | }
 //    | 

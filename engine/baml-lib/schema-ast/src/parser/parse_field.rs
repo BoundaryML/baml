@@ -69,29 +69,34 @@ pub(crate) fn parse_expr_as_type(
 ) -> Result<Field<FieldType>, DatamodelError> {
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
-    let mut attributes: Vec<Attribute> = Vec::new();
+    let mut enum_attributes = Vec::<Attribute>::new();
     let mut field_type = None;
     let mut comment: Option<Comment> = block_comment.and_then(parse_comment_block);
 
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
-            Rule::field_attribute => {
-                attributes.push(parse_attribute(current, diagnostics));
-            }
             Rule::trailing_comment => {
                 comment = merge_comments(comment, parse_trailing_comment(current));
             }
             Rule::field_type_chain => field_type = parse_field_type_chain(current, diagnostics),
+            Rule::field_attribute => enum_attributes.push(parse_attribute(current, diagnostics)),
             _ => parsing_catch_all(current, "field"),
         }
     }
 
     match (name, field_type) {
         (Some(name), Some(field_type)) => Ok(Field {
-            expr: Some(field_type),
+            expr: Some(field_type.clone()),
             name,
-            attributes,
+            attributes: field_type.attributes().to_vec(),
+            documentation: comment,
+            span: diagnostics.span(pair_span),
+        }),
+        (Some(name), None) => Ok(Field {
+            expr: None,
+            name,
+            attributes: enum_attributes,
             documentation: comment,
             span: diagnostics.span(pair_span),
         }),
@@ -138,9 +143,7 @@ fn parse_field_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> 
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::field_type => field_type = parse_field_type(current, diagnostics),
-            Rule::field_attribute => {
-                // Ignore field attributes here, they're handled at the field level
-            }
+            // Rule::field_attribute => {}
             _ => parsing_catch_all(current, "field_type_with_attr"),
         }
     }
@@ -178,6 +181,7 @@ fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
                 start: earliest_start,
                 end: latest_end,
             },
+            None,
         );
     }
 

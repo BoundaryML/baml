@@ -283,7 +283,7 @@ fn type_with_arity(t: FieldType, arity: &FieldArity) -> FieldType {
 impl WithRepr<FieldType> for ast::FieldType {
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
         Ok(match self {
-            ast::FieldType::Symbol(arity, idn, _) => type_with_arity(
+            ast::FieldType::Symbol(arity, idn, ..) => type_with_arity(
                 match db.find_type_by_str(idn) {
                     Some(Either::Left(class_walker)) => {
                         FieldType::Class(class_walker.name().to_string())
@@ -295,12 +295,12 @@ impl WithRepr<FieldType> for ast::FieldType {
                 },
                 arity,
             ),
-            ast::FieldType::Primitive(arity, typeval, span) => {
+            ast::FieldType::Primitive(arity, typeval, ..) => {
                 let mut repr = FieldType::Primitive(typeval.clone());
 
                 repr
             }
-            ast::FieldType::List(ft, dims, _) => {
+            ast::FieldType::List(ft, dims, ..) => {
                 // NB: potential bug: this hands back a 1D list when dims == 0
                 let mut repr = FieldType::List(Box::new(ft.repr(db)?));
 
@@ -310,11 +310,11 @@ impl WithRepr<FieldType> for ast::FieldType {
 
                 repr
             }
-            ast::FieldType::Map(kv, _) => {
+            ast::FieldType::Map(kv, ..) => {
                 // NB: we can't just unpack (*kv) into k, v because that would require a move/copy
                 FieldType::Map(Box::new((*kv).0.repr(db)?), Box::new((*kv).1.repr(db)?))
             }
-            ast::FieldType::Union(arity, t, _) => {
+            ast::FieldType::Union(arity, t, ..) => {
                 // NB: preempt union flattening by mixing arity into union types
                 let mut types = t.iter().map(|ft| ft.repr(db)).collect::<Result<Vec<_>>>()?;
 
@@ -324,7 +324,7 @@ impl WithRepr<FieldType> for ast::FieldType {
 
                 FieldType::Union(types)
             }
-            ast::FieldType::Tuple(arity, t, _) => type_with_arity(
+            ast::FieldType::Tuple(arity, t, ..) => type_with_arity(
                 FieldType::Tuple(t.iter().map(|ft| ft.repr(db)).collect::<Result<Vec<_>>>()?),
                 arity,
             ),

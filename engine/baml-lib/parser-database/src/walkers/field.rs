@@ -101,17 +101,17 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                 "rtype": "unsupported",
                 "optional": false,
             }),
-            FieldType::Union(arity, fts, _) => json!({
+            FieldType::Union(arity, fts, ..) => json!({
                 "rtype": "union",
                 "optional": arity.is_optional(),
                 "options": fts.iter().map(|ft| (self.0, ft).serialize_data( db)).collect::<Vec<_>>(),
             }),
-            FieldType::List(ft, dims, _) => json!({
+            FieldType::List(ft, dims, ..) => json!({
                 "rtype": "list",
                 "dims": dims,
                 "inner": (self.0, ft.deref()).serialize_data( db),
             }),
-            FieldType::Primitive(arity, t, _) => json!({
+            FieldType::Primitive(arity, t, ..) => json!({
                 "rtype": match t.to_string().as_str() {
                     "string" => "string",
                     "int" => "int",
@@ -121,7 +121,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                 },
                 "optional": arity.is_optional(),
             }),
-            FieldType::Symbol(arity, name, _) => match self.0.find_type_by_str(name) {
+            FieldType::Symbol(arity, name, ..) => match self.0.find_type_by_str(name) {
                 Some(either::Either::Left(cls)) => {
                     let mut class_type = cls.serialize_data(db);
                     let Some(obj) = class_type.as_object_mut() else {

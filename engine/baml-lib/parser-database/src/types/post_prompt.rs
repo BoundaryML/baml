@@ -165,7 +165,7 @@ fn validate_variable_path(
 
     let next_path_name = variable.path[next_index].clone();
     match current {
-        ast::FieldType::Union(_, ft, _) => match ft
+        ast::FieldType::Union(_, ft, ..) => match ft
             .iter()
             .any(|ft| validate_variable_path(db, variable, next_index, ft).is_ok())
         {
@@ -175,23 +175,23 @@ fn validate_variable_path(
                 variable.span.clone(),
             )),
         },
-        ast::FieldType::Primitive(_, ft, _) => Err(DatamodelError::new_validation_error(
+        ast::FieldType::Primitive(_, ft, _, ..) => Err(DatamodelError::new_validation_error(
             "Primitive types are not indexable in the prompt",
             variable.span.clone(),
         )),
-        ast::FieldType::Map(_, _) => Err(DatamodelError::new_validation_error(
+        ast::FieldType::Map(_, _, ..) => Err(DatamodelError::new_validation_error(
             "Dictionary types are not supported",
             variable.span.clone(),
         )),
-        ast::FieldType::Tuple(_, _, _) => Err(DatamodelError::new_validation_error(
+        ast::FieldType::Tuple(_, _, _, _) => Err(DatamodelError::new_validation_error(
             "Tuple types are not supported",
             variable.span.clone(),
         )),
-        ast::FieldType::List(_, _, _) => Err(DatamodelError::new_validation_error(
+        ast::FieldType::List(_, _, _, _) => Err(DatamodelError::new_validation_error(
             "List types are not yet indexable in the prompt",
             variable.span.clone(),
         )),
-        ast::FieldType::Symbol(_, idn, _) => match db.find_type_by_str(idn) {
+        ast::FieldType::Symbol(_, idn, ..) => match db.find_type_by_str(idn) {
             Some(Either::Left(cls)) => {
                 match cls
                     .static_fields()

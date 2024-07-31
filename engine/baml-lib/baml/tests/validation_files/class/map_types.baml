@@ -31,51 +31,17 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
   "#
 }
 
-// error: Error validating: Maps may only have strings as keys
-//   -->  class/map_types.baml:16
+// error: Error validating function "MyClient": Invalid function syntax. Valid function syntax is
+// ```
+// function MyClient(param1: String, param2: String) -> ReturnType {
+//     client SomeClient
+//     prompt #"..."#
+// }
+// ```
+//   -->  class/map_types.baml:3
 //    | 
-// 15 | 
-// 16 |   b1 map<int, string>
-//    | 
-// error: Error validating: Maps may only have strings as keys
-//   -->  class/map_types.baml:17
-//    | 
-// 16 |   b1 map<int, string>
-// 17 |   b2 map<float, string>
-//    | 
-// error: Error validating: Maps may only have strings as keys
-//   -->  class/map_types.baml:18
-//    | 
-// 17 |   b2 map<float, string>
-// 18 |   b3 map<MapDummy, string>
-//    | 
-// error: Error validating: Maps may only have strings as keys
-//   -->  class/map_types.baml:19
-//    | 
-// 18 |   b3 map<MapDummy, string>
-// 19 |   b4 map<string?, string>
-//    | 
-// error: Error validating: Maps may only have strings as keys
-//   -->  class/map_types.baml:20
-//    | 
-// 19 |   b4 map<string?, string>
-// 20 |   b5 map<string | int, string>
-//    | 
-// error: Error validating: Maps may only have strings as keys
-//   -->  class/map_types.baml:23
-//    | 
-// 22 |   c1 string | map<string, string>
-// 23 |   c2 string | map<int, string>
-//    | 
-// error: Error validating: Maps may only have strings as keys
-//   -->  class/map_types.baml:24
-//    | 
-// 23 |   c2 string | map<int, string>
-// 24 |   c3 string | map<string?, string>
-//    | 
-// error: Error validating: Maps may only have strings as keys
-//   -->  class/map_types.baml:27
-//    | 
-// 26 | 
-// 27 | function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> map<string, int> {
+//  2 | 
+//  3 | client<llm> MyClient {
+//  4 |   provider openai
+//  5 | }
 //    | 
