@@ -1,8 +1,7 @@
 # This file should NOT be imported from baml.rb; we don't want
 # to introduce a hard dependency on Sorbet for the baml gem.
-require "sorbet-runtime"
 require "ostruct"
-require "pp"
+#require "pp"
 
 module Baml
   module Sorbet
