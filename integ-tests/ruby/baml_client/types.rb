@@ -168,7 +168,7 @@ module Baml
     class WithReasoning < T::Struct; end
     class Blah < T::Struct
       include T::Struct::ActsAsComparable
-      const :prop4, T.nilable(String)
+      const :prop4, String
     end
     class ClassOptionalOutput < T::Struct
       include T::Struct::ActsAsComparable
@@ -177,8 +177,8 @@ module Baml
     end
     class ClassOptionalOutput2 < T::Struct
       include T::Struct::ActsAsComparable
-      const :prop1, T.nilable(String)
-      const :prop2, T.nilable(String)
+      const :prop1, String
+      const :prop2, String
       const :prop3, T.nilable(Baml::Types::Blah)
     end
     class ClassWithImage < T::Struct
@@ -214,7 +214,7 @@ module Baml
       const :location, String
       const :degree, String
       const :major, T::Array[String]
-      const :graduation_date, T.nilable(String)
+      const :graduation_date, String
     end
     class Email < T::Struct
       include T::Struct::ActsAsComparable
@@ -258,39 +258,39 @@ module Baml
     class OptionalTest_ReturnType < T::Struct
       include T::Struct::ActsAsComparable
       const :omega_1, T.nilable(Baml::Types::OptionalTest_Prop1)
-      const :omega_2, T.nilable(String)
+      const :omega_2, String
       const :omega_3, T::Array[T.nilable(Baml::Types::OptionalTest_CategoryType)]
     end
     class OrderInfo < T::Struct
       include T::Struct::ActsAsComparable
       const :order_status, Baml::Types::OrderStatus
-      const :tracking_number, T.nilable(String)
-      const :estimated_arrival_date, T.nilable(String)
+      const :tracking_number, String
+      const :estimated_arrival_date, String
     end
     class Person < T::Struct
       include T::Struct::ActsAsComparable
-      const :name, T.nilable(String)
+      const :name, String
       const :hair_color, T.nilable(Baml::Types::Color)
     end
     class Quantity < T::Struct
       include T::Struct::ActsAsComparable
-      const :amount, T.any(Integer, Float)
-      const :unit, T.nilable(String)
+      const :amount, T.any(T.any(Integer), T.any(Float))
+      const :unit, String
     end
     class RaysData < T::Struct
       include T::Struct::ActsAsComparable
       const :dataType, Baml::Types::DataType
-      const :value, T.any(Baml::Types::Resume, Baml::Types::Event)
+      const :value, T.any(T.any(Baml::Types::Resume), T.any(Baml::Types::Event))
     end
     class ReceiptInfo < T::Struct
       include T::Struct::ActsAsComparable
       const :items, T::Array[Baml::Types::ReceiptItem]
-      const :total_cost, T.nilable(Float)
+      const :total_cost, Float
     end
     class ReceiptItem < T::Struct
       include T::Struct::ActsAsComparable
       const :name, String
-      const :description, T.nilable(String)
+      const :description, String
       const :quantity, Integer
       const :price, Float
     end
@@ -309,12 +309,12 @@ module Baml
     end
     class SearchParams < T::Struct
       include T::Struct::ActsAsComparable
-      const :dateRange, T.nilable(Integer)
+      const :dateRange, Integer
       const :location, T::Array[String]
       const :jobTitle, T.nilable(Baml::Types::WithReasoning)
       const :company, T.nilable(Baml::Types::WithReasoning)
       const :description, T::Array[Baml::Types::WithReasoning]
-      const :tags, T::Array[T.any(Baml::Types::Tag, String)]
+      const :tags, T::Array[T.any(T.any(Baml::Types::Tag), T.any(String))]
     end
     class SomeClassNestedDynamic < T::Struct
       include T::Struct::ActsAsComparable
@@ -349,9 +349,9 @@ module Baml
     end
     class UnionTest_ReturnType < T::Struct
       include T::Struct::ActsAsComparable
-      const :prop1, T.any(String, T::Boolean)
-      const :prop2, T::Array[T.any(Float, T::Boolean)]
-      const :prop3, T.any(T::Array[T::Boolean], T::Array[Integer])
+      const :prop1, T.any(T.any(String), T.any(T::Boolean))
+      const :prop2, T::Array[T.any(T.any(Float), T.any(T::Boolean))]
+      const :prop3, T.any(T.any(T::Array[T::Boolean]), T.any(T::Array[Integer]))
     end
     class WithReasoning < T::Struct
       include T::Struct::ActsAsComparable

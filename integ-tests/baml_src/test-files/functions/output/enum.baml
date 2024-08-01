@@ -4,6 +4,9 @@ enum EnumOutput {
   THREE
 
   @@alias("VALUE_ENUM")
+  // @@description(#"
+  //   hello
+  // "#)
 }
 
 function FnEnumOutput(input: string) -> EnumOutput {

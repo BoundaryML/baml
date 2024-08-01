@@ -11,7 +11,20 @@ pub enum TypeValue {
     Image,
     Audio,
 }
-
+impl TypeValue {
+    pub fn from_str(s: &str) -> Option<TypeValue> {
+        match s {
+            "string" => Some(TypeValue::String),
+            "int" => Some(TypeValue::Int),
+            "float" => Some(TypeValue::Float),
+            "bool" => Some(TypeValue::Bool),
+            "null" => Some(TypeValue::Null),
+            "image" => Some(TypeValue::Image),
+            "audio" => Some(TypeValue::Audio),
+            _ => None,
+        }
+    }
+}
 impl std::fmt::Display for TypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

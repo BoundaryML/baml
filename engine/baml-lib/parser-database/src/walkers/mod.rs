@@ -98,13 +98,9 @@ impl<'db> crate::ParserDatabase {
 
     /// Find a client by name.
     pub fn find_client(&'db self, name: &str) -> Option<ClientWalker<'db>> {
-        log::info!("Finding client: {}", name);
         self.find_top_by_str(name)
             .and_then(|top_id| top_id.as_client_id())
-            .map(|model_id| {
-                log::info!("Iterating client: {}", name);
-                self.walk(model_id)
-            })
+            .map(|model_id| self.walk(model_id))
     }
 
     /// Find a function by name.

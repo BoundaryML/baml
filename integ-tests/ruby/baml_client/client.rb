@@ -372,7 +372,7 @@ module Baml
     sig {
       
       params(
-        resume: String,img: T.nilable(Baml::Image),
+        resume: String,img: Baml::Image,
       ).returns(Baml::Types::Resume)
       
     }
@@ -492,7 +492,7 @@ module Baml
     sig {
       
       params(
-        myString: T.nilable(String),
+        myString: String,
       ).returns(String)
       
     }
@@ -1386,7 +1386,7 @@ module Baml
     sig {
       
       params(
-        input: T.any(String, T::Boolean),
+        input: T.any(T.any(String), T.any(T::Boolean)),
       ).returns(Baml::Types::UnionTest_ReturnType)
       
     }
@@ -1754,7 +1754,7 @@ module Baml
 
     sig {
       params(
-        resume: String,img: T.nilable(Baml::Image),
+        resume: String,img: Baml::Image,
       ).returns(Baml::BamlStream[Baml::Types::Resume])
     }
     def ExtractResume(
@@ -1880,7 +1880,7 @@ module Baml
 
     sig {
       params(
-        myString: T.nilable(String),
+        myString: String,
       ).returns(Baml::BamlStream[String])
     }
     def FnNamedArgsSingleStringOptional(
@@ -2825,7 +2825,7 @@ module Baml
 
     sig {
       params(
-        input: T.any(String, T::Boolean),
+        input: T.any(T.any(String), T.any(T::Boolean)),
       ).returns(Baml::BamlStream[Baml::Types::UnionTest_ReturnType])
     }
     def UnionTest_Function(

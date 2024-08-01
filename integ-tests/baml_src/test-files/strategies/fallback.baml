@@ -27,3 +27,10 @@ function TestFallbackClient() -> string {
     Say a haiku about mexico.
   "#
 }
+
+test TestFBClient {
+  functions [TestFallbackClient]
+  args {
+
+  }
+}

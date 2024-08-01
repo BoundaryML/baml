@@ -445,7 +445,7 @@ class BamlAsyncClient:
     
     async def ExtractResume(
         self,
-        resume: str,img: Optional[baml_py.Image],
+        resume: str,img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> types.Resume:
       __tb__ = baml_options.get("tb", None)
@@ -589,7 +589,7 @@ class BamlAsyncClient:
     
     async def FnNamedArgsSingleStringOptional(
         self,
-        myString: Optional[str],
+        myString: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
@@ -1669,7 +1669,7 @@ class BamlAsyncClient:
     
     async def UnionTest_Function(
         self,
-        input: Union[str, bool],
+        input: Union[Union[str], Union[bool]],
         baml_options: BamlCallOptions = {},
     ) -> types.UnionTest_ReturnType:
       __tb__ = baml_options.get("tb", None)
@@ -2235,7 +2235,7 @@ class BamlStreamClient:
     
     def ExtractResume(
         self,
-        resume: str,img: Optional[baml_py.Image],
+        resume: str,img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.Resume, types.Resume]:
       __tb__ = baml_options.get("tb", None)
@@ -2434,7 +2434,7 @@ class BamlStreamClient:
     
     def FnNamedArgsSingleStringOptional(
         self,
-        myString: Optional[str],
+        myString: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
       __tb__ = baml_options.get("tb", None)
@@ -3917,7 +3917,7 @@ class BamlStreamClient:
     
     def UnionTest_Function(
         self,
-        input: Union[str, bool],
+        input: Union[Union[str], Union[bool]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.UnionTest_ReturnType, types.UnionTest_ReturnType]:
       __tb__ = baml_options.get("tb", None)

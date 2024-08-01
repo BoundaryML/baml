@@ -1,10 +1,11 @@
 enum EnumInClass {
-  ONE
+  ONE 
   TWO
+
 }
 
 class TestClassWithEnum {
-  prop1 string
+  prop1 string 
   prop2 EnumInClass
 }
 

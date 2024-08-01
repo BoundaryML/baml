@@ -2,6 +2,7 @@ use super::{helpers::Pair, parse_attribute::parse_attribute, Rule};
 use crate::{
     assert_correct_parser, ast::*, parser::parse_identifier::parse_identifier, unreachable_rule,
 };
+use baml_types::TypeValue;
 use internal_baml_diagnostics::Diagnostics;
 
 pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
@@ -10,32 +11,24 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     let mut ftype = None;
 
     for current in pair.into_inner() {
-        println!("field type current {}", current.to_string());
-        println!("current rule: {:?}", current.as_rule());
         match current.as_rule() {
             Rule::union => {
-                println!("Parsing union");
                 let result = parse_union(current, diagnostics);
-                println!("returned from parse_union: ");
-                println!("Result of parse_union: {:?}", result);
+
                 ftype = result;
             }
             Rule::non_union => {
-                println!("Parsing non_union");
                 let result = parse_base_type(current, diagnostics);
-                println!("Result of parse_base_type: {:?}", result);
+
                 ftype = result;
             }
             Rule::optional_token => arity = FieldArity::Optional,
             _ => {
-                println!("Caught rule: {:?}", current.as_rule());
                 unreachable_rule!(current, Rule::field_type)
             }
         }
-        println!("ftype currently is : {:?}", ftype);
     }
 
-    println!("field type ftype {:?}\n", ftype);
     match ftype {
         Some(ftype) => {
             if arity.is_optional() {
@@ -62,7 +55,6 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
     let span = diagnostics.span(pair.as_span());
     let mut types = Vec::new();
     for current in pair.into_inner() {
-        println!("current rule in parse_union: {:?}", current.as_rule());
         match current.as_rule() {
             Rule::base_type => {
                 if let Some(f) = parse_base_type(current, diagnostics) {
@@ -87,7 +79,6 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         last_type.reset_attributes();
     }
 
-    println!("types: {:?}", types);
     match types.len() {
         0 => unreachable!("A union must have atleast 1 type"),
         1 => Some(types[0].to_owned()),
@@ -105,10 +96,6 @@ fn parse_base_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> O
     let mut base_type = None;
 
     for current in pair.into_inner() {
-        println!(
-            "current rule in parse_base_type_with_attr: {:?}",
-            current.as_rule()
-        );
         match current.as_rule() {
             Rule::base_type => {
                 base_type = parse_base_type(current, diagnostics);
@@ -121,7 +108,6 @@ fn parse_base_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> O
         }
     }
 
-    println!("base_type: {:?}", base_type);
     base_type.map(|f| {
         let span = f.span().clone();
         let arity = match f {
@@ -155,16 +141,27 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
     );
 
     if let Some(current) = pair.into_inner().next() {
-        println!("current rule in parse_base_type: {:?}", current.as_rule());
         return match current.as_rule() {
-            Rule::identifier => Some(FieldType::Symbol(
-                FieldArity::Required,
-                parse_identifier(current.clone(), diagnostics)
-                    .name()
-                    .to_string(),
-                diagnostics.span(current.as_span()),
-                None,
-            )),
+            Rule::identifier => {
+                let identifier = parse_identifier(current.clone(), diagnostics);
+                let field_type = match current.as_str() {
+                    "string" | "int" | "float" | "bool" | "image" | "audio" => {
+                        FieldType::Primitive(
+                            FieldArity::Required,
+                            TypeValue::from_str(identifier.name()).expect("Invalid type value"),
+                            diagnostics.span(current.as_span()),
+                            None,
+                        )
+                    }
+                    _ => FieldType::Symbol(
+                        FieldArity::Required,
+                        identifier.name().to_string(),
+                        diagnostics.span(current.as_span()),
+                        None,
+                    ),
+                };
+                Some(field_type)
+            }
             Rule::array_notation => parse_array(current, diagnostics),
             Rule::map => parse_map(current, diagnostics),
             Rule::group => parse_group(current, diagnostics),
@@ -228,12 +225,10 @@ fn parse_map(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType>
 fn parse_group(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     assert_correct_parser!(pair, Rule::group);
 
-    println!("parse_group pair: {:?}", pair);
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::openParan | Rule::closeParan => continue,
             Rule::field_type => {
-                println!("current rule in parse_group: {:?}", current.as_rule());
                 return parse_field_type(current, diagnostics);
             }
             _ => unreachable_rule!(current, Rule::group),

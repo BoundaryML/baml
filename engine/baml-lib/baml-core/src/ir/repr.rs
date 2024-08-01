@@ -283,6 +283,11 @@ fn type_with_arity(t: FieldType, arity: &FieldArity) -> FieldType {
 impl WithRepr<FieldType> for ast::FieldType {
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
         Ok(match self {
+            ast::FieldType::Primitive(_, typeval, ..) => {
+                let repr = FieldType::Primitive(typeval.clone());
+
+                repr
+            }
             ast::FieldType::Symbol(arity, idn, ..) => type_with_arity(
                 match db.find_type_by_str(idn) {
                     Some(Either::Left(class_walker)) => {
@@ -295,11 +300,6 @@ impl WithRepr<FieldType> for ast::FieldType {
                 },
                 arity,
             ),
-            ast::FieldType::Primitive(arity, typeval, ..) => {
-                let mut repr = FieldType::Primitive(typeval.clone());
-
-                repr
-            }
             ast::FieldType::List(ft, dims, ..) => {
                 // NB: potential bug: this hands back a 1D list when dims == 0
                 let mut repr = FieldType::List(Box::new(ft.repr(db)?));

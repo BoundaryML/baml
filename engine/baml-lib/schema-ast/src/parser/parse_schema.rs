@@ -56,8 +56,6 @@ pub fn parse_schema(
             let mut pairs = datamodel.into_inner().peekable();
 
             while let Some(current) = pairs.next() {
-                println!("Schema rule: {:?}", current.as_rule());
-
                 match current.as_rule() {
 
                     Rule::type_expression_block => {

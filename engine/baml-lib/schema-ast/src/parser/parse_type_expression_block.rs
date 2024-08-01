@@ -91,21 +91,7 @@ pub(crate) fn parse_type_expression(
             }
         }
     }
-    if let Some(ref name) = name {
-        println!("Populated name: {:?}", name);
-    }
-    if !fields.is_empty() {
-        println!("Populated fields: {:?}", fields);
-    }
-    if !attributes.is_empty() {
-        println!("Populated attributes: {:?}", attributes);
-    }
-    if let Some(ref doc_comment) = doc_comment {
-        println!("Populated documentation comment: {:?}", doc_comment);
-    }
-    if let Some(ref sub_type) = sub_type {
-        println!("Populated sub_type: {:?}", sub_type);
-    }
+
     match name {
         Some(name) => TypeExpressionBlock {
             name,

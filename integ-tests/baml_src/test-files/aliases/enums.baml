@@ -23,6 +23,9 @@ enum TestEnum {
   "#)
    
   @@alias("Category")
+  @@description(#"
+    what
+  "#)
 }
 
 function FnTestAliasedEnumOutput(input: string) -> TestEnum {
