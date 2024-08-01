@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{BamlMedia, BamlValue};
 
 impl From<BamlValue> for minijinja::Value {
@@ -56,8 +58,12 @@ impl std::fmt::Display for MinijinjaBamlImage {
 }
 
 impl minijinja::value::Object for MinijinjaBamlImage {
+    fn repr(self: &Arc<Self>) -> minijinja::value::ObjectRepr {
+        minijinja::value::ObjectRepr::Plain
+    }
+
     fn call(
-        &self,
+        self: &Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         args: &[minijinja::value::Value],
     ) -> Result<minijinja::value::Value, minijinja::Error> {
@@ -65,5 +71,13 @@ impl minijinja::value::Object for MinijinjaBamlImage {
             minijinja::ErrorKind::UnknownMethod,
             format!("BamlImage has no callable attribute '{:#?}'", args),
         ))
+    }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{MAGIC_IMAGE_DELIMITER}:baml-start-image:{}:baml-end-image:{MAGIC_IMAGE_DELIMITER}",
+            serde_json::json!(self.image)
+        )
     }
 }
