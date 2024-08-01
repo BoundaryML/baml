@@ -26,43 +26,43 @@ impl From<BamlValue> for minijinja::Value {
     }
 }
 
-struct MinijinjaBamlImage {
-    image: BamlMedia,
+struct MinijinjaBamlMedia {
+    media: BamlMedia,
 }
 
-impl From<BamlMedia> for MinijinjaBamlImage {
-    fn from(image: BamlMedia) -> MinijinjaBamlImage {
-        MinijinjaBamlImage { image }
+impl From<BamlMedia> for MinijinjaBamlMedia {
+    fn from(media: BamlMedia) -> MinijinjaBamlMedia {
+        MinijinjaBamlMedia { media }
     }
 }
 
 impl From<BamlMedia> for minijinja::Value {
     fn from(arg: BamlMedia) -> minijinja::Value {
-        minijinja::Value::from_object(MinijinjaBamlImage::from(arg))
+        minijinja::Value::from_object(MinijinjaBamlMedia::from(arg))
     }
 }
 
-const MAGIC_IMAGE_DELIMITER: &'static str = "BAML_IMAGE_MAGIC_STRING_DELIMITER";
+const MAGIC_MEDIA_DELIMITER: &'static str = "BAML_MEDIA_MAGIC_STRING_DELIMITER";
 
-impl std::fmt::Display for MinijinjaBamlImage {
+impl std::fmt::Display for MinijinjaBamlMedia {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
-            "{MAGIC_IMAGE_DELIMITER}:baml-start-image:{}:baml-end-image:{MAGIC_IMAGE_DELIMITER}",
-            serde_json::json!(self.image)
+            "{MAGIC_MEDIA_DELIMITER}:baml-start-media:{}:baml-end-media:{MAGIC_MEDIA_DELIMITER}",
+            serde_json::json!(self.media)
         )
     }
 }
 
 // Necessary for nested instances of MinijinjaBamlImage to get rendered correctly in prompts
 // See https://github.com/BoundaryML/baml/pull/855 for explanation
-impl std::fmt::Debug for MinijinjaBamlImage {
+impl std::fmt::Debug for MinijinjaBamlMedia {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
     }
 }
 
-impl minijinja::value::Object for MinijinjaBamlImage {
+impl minijinja::value::Object for MinijinjaBamlMedia {
     fn call(
         &self,
         _state: &minijinja::State<'_, '_>,
