@@ -1,3 +1,4 @@
+# see notes in https://www.notion.so/gloochat/Ruby-tracing-8a8ec84e52364fa785e2b379ec4f8194?pvs=4
 
 module Baml
   module Tracing1

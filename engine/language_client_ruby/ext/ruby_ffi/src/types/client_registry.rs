@@ -21,7 +21,6 @@ impl ClientRegistry {
     }
 
     pub fn add_llm_client(ruby: &Ruby, rb_self: &Self, args: &[Value]) -> Result<()> {
-        log::info!("add_llm_client called");
         let args = scan_args::<_, _, (), (), (), ()>(args)?;
         let (name, provider, options): (String, String, RHash) = args.required;
         let (retry_policy,): (Option<String>,) = args.optional;

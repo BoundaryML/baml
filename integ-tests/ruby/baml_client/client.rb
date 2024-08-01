@@ -54,7 +54,7 @@ module Baml
       params(
         varargs: T.untyped,
         recipe: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Recipe)
     }
     def AaaSamOutputFormat(
@@ -86,7 +86,7 @@ module Baml
       params(
         varargs: T.untyped,
         aud: Baml::Audio,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def AudioInput(
@@ -118,7 +118,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Category)
     }
     def ClassifyMessage(
@@ -150,7 +150,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Category)
     }
     def ClassifyMessage2(
@@ -182,7 +182,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Category)
     }
     def ClassifyMessage3(
@@ -214,7 +214,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def DescribeImage(
@@ -246,7 +246,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def DescribeImage2(
@@ -278,7 +278,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def DescribeImage3(
@@ -310,7 +310,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def DescribeImage4(
@@ -342,7 +342,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::DummyOutput)
     }
     def DummyOutputFunction(
@@ -374,7 +374,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::DynamicClassOne,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::DynamicClassTwo)
     }
     def DynamicFunc(
@@ -406,7 +406,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::DynInputOutput,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::DynInputOutput)
     }
     def DynamicInputOutput(
@@ -438,7 +438,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[Baml::Types::DynInputOutput],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[Baml::Types::DynInputOutput])
     }
     def DynamicListInputOutput(
@@ -470,7 +470,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def ExpectFailure(
@@ -502,7 +502,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[String])
     }
     def ExtractNames(
@@ -534,7 +534,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[Baml::Types::Person])
     }
     def ExtractPeople(
@@ -566,7 +566,7 @@ module Baml
       params(
         varargs: T.untyped,
         email: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::ReceiptInfo)
     }
     def ExtractReceiptInfo(
@@ -598,7 +598,7 @@ module Baml
       params(
         varargs: T.untyped,
         resume: String,img: T.nilable(Baml::Image),
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Resume)
     }
     def ExtractResume(
@@ -630,7 +630,7 @@ module Baml
       params(
         varargs: T.untyped,
         resume: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Resume)
     }
     def ExtractResume2(
@@ -662,7 +662,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Types::ClassOptionalOutput))
     }
     def FnClassOptionalOutput(
@@ -694,7 +694,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Types::ClassOptionalOutput2))
     }
     def FnClassOptionalOutput2(
@@ -726,7 +726,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[Baml::Types::EnumOutput])
     }
     def FnEnumListOutput(
@@ -758,7 +758,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::EnumOutput)
     }
     def FnEnumOutput(
@@ -790,7 +790,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: T.nilable(String),
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def FnNamedArgsSingleStringOptional(
@@ -822,7 +822,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Boolean)
     }
     def FnOutputBool(
@@ -854,7 +854,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestOutputClass)
     }
     def FnOutputClass(
@@ -886,7 +886,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[Baml::Types::TestOutputClass])
     }
     def FnOutputClassList(
@@ -918,7 +918,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestClassNested)
     }
     def FnOutputClassNested(
@@ -950,7 +950,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestClassWithEnum)
     }
     def FnOutputClassWithEnum(
@@ -982,7 +982,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[String])
     }
     def FnOutputStringList(
@@ -1014,7 +1014,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestEnum)
     }
     def FnTestAliasedEnumOutput(
@@ -1046,7 +1046,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestClassAlias)
     }
     def FnTestClassAlias(
@@ -1078,7 +1078,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleEnum,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def FnTestNamedArgsSingleEnum(
@@ -1110,7 +1110,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::RaysData)
     }
     def GetDataType(
@@ -1142,7 +1142,7 @@ module Baml
       params(
         varargs: T.untyped,
         email: Baml::Types::Email,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::OrderInfo)
     }
     def GetOrderInfo(
@@ -1174,7 +1174,7 @@ module Baml
       params(
         varargs: T.untyped,
         query: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::SearchParams)
     }
     def GetQuery(
@@ -1206,7 +1206,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::DynamicOutput)
     }
     def MyFunc(
@@ -1238,7 +1238,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)])
     }
     def OptionalTest_Function(
@@ -1270,7 +1270,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestClaude(
@@ -1302,7 +1302,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestClaudeChat(
@@ -1334,7 +1334,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestClaudeChatNoSystem(
@@ -1366,7 +1366,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestOpenAI(
@@ -1398,7 +1398,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestOpenAIChat(
@@ -1430,7 +1430,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestOpenAIChatNoSystem(
@@ -1462,7 +1462,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestStreaming(
@@ -1494,7 +1494,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAnthropic(
@@ -1526,7 +1526,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAws(
@@ -1558,7 +1558,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAzure(
@@ -1590,7 +1590,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFallbackClient(
@@ -1622,7 +1622,7 @@ module Baml
       params(
         varargs: T.untyped,
         myBool: T::Boolean,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleBool(
@@ -1654,7 +1654,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleClass,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleClass(
@@ -1686,7 +1686,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T::Array[Baml::Types::NamedArgsSingleEnumList],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleEnumList(
@@ -1718,7 +1718,7 @@ module Baml
       params(
         varargs: T.untyped,
         myFloat: Float,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleFloat(
@@ -1750,7 +1750,7 @@ module Baml
       params(
         varargs: T.untyped,
         myInt: Integer,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleInt(
@@ -1782,7 +1782,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, Baml::Types::StringToClassEntry],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, Baml::Types::StringToClassEntry])
     }
     def TestFnNamedArgsSingleMapStringToClass(
@@ -1814,7 +1814,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, T::Hash[String, String]],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, T::Hash[String, String]])
     }
     def TestFnNamedArgsSingleMapStringToMap(
@@ -1846,7 +1846,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, String],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, String])
     }
     def TestFnNamedArgsSingleMapStringToString(
@@ -1878,7 +1878,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleString(
@@ -1910,7 +1910,7 @@ module Baml
       params(
         varargs: T.untyped,
         myStringArray: T::Array[String],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleStringArray(
@@ -1942,7 +1942,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T::Array[String],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleStringList(
@@ -1974,7 +1974,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestGemini(
@@ -2006,7 +2006,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestImageInput(
@@ -2038,7 +2038,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestMulticlassNamedArgs(
@@ -2070,7 +2070,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOllama(
@@ -2102,7 +2102,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenAILegacyProvider(
@@ -2134,7 +2134,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestRetryConstant(
@@ -2166,7 +2166,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestRetryExponential(
@@ -2198,7 +2198,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestVertex(
@@ -2230,7 +2230,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(String, T::Boolean),
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::UnionTest_ReturnType)
     }
     def UnionTest_Function(
@@ -2275,7 +2275,7 @@ module Baml
       params(
         varargs: T.untyped,
         recipe: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Recipe])
     }
     def AaaSamOutputFormat(
@@ -2310,7 +2310,7 @@ module Baml
       params(
         varargs: T.untyped,
         aud: Baml::Audio,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def AudioInput(
@@ -2345,7 +2345,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Category])
     }
     def ClassifyMessage(
@@ -2380,7 +2380,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Category])
     }
     def ClassifyMessage2(
@@ -2415,7 +2415,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Category])
     }
     def ClassifyMessage3(
@@ -2450,7 +2450,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeImage(
@@ -2485,7 +2485,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeImage2(
@@ -2520,7 +2520,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeImage3(
@@ -2555,7 +2555,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeImage4(
@@ -2590,7 +2590,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::DummyOutput])
     }
     def DummyOutputFunction(
@@ -2625,7 +2625,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::DynamicClassOne,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::DynamicClassTwo])
     }
     def DynamicFunc(
@@ -2660,7 +2660,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::DynInputOutput,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::DynInputOutput])
     }
     def DynamicInputOutput(
@@ -2695,7 +2695,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[Baml::Types::DynInputOutput],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[Baml::Types::DynInputOutput]])
     }
     def DynamicListInputOutput(
@@ -2730,7 +2730,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def ExpectFailure(
@@ -2765,7 +2765,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[String]])
     }
     def ExtractNames(
@@ -2800,7 +2800,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[Baml::Types::Person]])
     }
     def ExtractPeople(
@@ -2835,7 +2835,7 @@ module Baml
       params(
         varargs: T.untyped,
         email: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::ReceiptInfo])
     }
     def ExtractReceiptInfo(
@@ -2870,7 +2870,7 @@ module Baml
       params(
         varargs: T.untyped,
         resume: String,img: T.nilable(Baml::Image),
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Resume])
     }
     def ExtractResume(
@@ -2905,7 +2905,7 @@ module Baml
       params(
         varargs: T.untyped,
         resume: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Resume])
     }
     def ExtractResume2(
@@ -2940,7 +2940,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T.nilable(Baml::Types::ClassOptionalOutput)])
     }
     def FnClassOptionalOutput(
@@ -2975,7 +2975,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T.nilable(Baml::Types::ClassOptionalOutput2)])
     }
     def FnClassOptionalOutput2(
@@ -3010,7 +3010,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[Baml::Types::EnumOutput]])
     }
     def FnEnumListOutput(
@@ -3045,7 +3045,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::EnumOutput])
     }
     def FnEnumOutput(
@@ -3080,7 +3080,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: T.nilable(String),
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def FnNamedArgsSingleStringOptional(
@@ -3115,7 +3115,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Boolean])
     }
     def FnOutputBool(
@@ -3150,7 +3150,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::TestOutputClass])
     }
     def FnOutputClass(
@@ -3185,7 +3185,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[Baml::Types::TestOutputClass]])
     }
     def FnOutputClassList(
@@ -3220,7 +3220,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::TestClassNested])
     }
     def FnOutputClassNested(
@@ -3255,7 +3255,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::TestClassWithEnum])
     }
     def FnOutputClassWithEnum(
@@ -3290,7 +3290,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[String]])
     }
     def FnOutputStringList(
@@ -3325,7 +3325,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::TestEnum])
     }
     def FnTestAliasedEnumOutput(
@@ -3360,7 +3360,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::TestClassAlias])
     }
     def FnTestClassAlias(
@@ -3395,7 +3395,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleEnum,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def FnTestNamedArgsSingleEnum(
@@ -3430,7 +3430,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::RaysData])
     }
     def GetDataType(
@@ -3465,7 +3465,7 @@ module Baml
       params(
         varargs: T.untyped,
         email: Baml::Types::Email,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::OrderInfo])
     }
     def GetOrderInfo(
@@ -3500,7 +3500,7 @@ module Baml
       params(
         varargs: T.untyped,
         query: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::SearchParams])
     }
     def GetQuery(
@@ -3535,7 +3535,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::DynamicOutput])
     }
     def MyFunc(
@@ -3570,7 +3570,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)]])
     }
     def OptionalTest_Function(
@@ -3605,7 +3605,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestClaude(
@@ -3640,7 +3640,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestClaudeChat(
@@ -3675,7 +3675,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestClaudeChatNoSystem(
@@ -3710,7 +3710,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestOpenAI(
@@ -3745,7 +3745,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestOpenAIChat(
@@ -3780,7 +3780,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestOpenAIChatNoSystem(
@@ -3815,7 +3815,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestStreaming(
@@ -3850,7 +3850,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestAnthropic(
@@ -3885,7 +3885,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestAws(
@@ -3920,7 +3920,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestAzure(
@@ -3955,7 +3955,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFallbackClient(
@@ -3990,7 +3990,7 @@ module Baml
       params(
         varargs: T.untyped,
         myBool: T::Boolean,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleBool(
@@ -4025,7 +4025,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleClass,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleClass(
@@ -4060,7 +4060,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T::Array[Baml::Types::NamedArgsSingleEnumList],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleEnumList(
@@ -4095,7 +4095,7 @@ module Baml
       params(
         varargs: T.untyped,
         myFloat: Float,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleFloat(
@@ -4130,7 +4130,7 @@ module Baml
       params(
         varargs: T.untyped,
         myInt: Integer,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleInt(
@@ -4165,7 +4165,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, Baml::Types::StringToClassEntry],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Hash[String, Baml::Types::StringToClassEntry]])
     }
     def TestFnNamedArgsSingleMapStringToClass(
@@ -4200,7 +4200,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, T::Hash[String, String]],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Hash[String, T::Hash[String, String]]])
     }
     def TestFnNamedArgsSingleMapStringToMap(
@@ -4235,7 +4235,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, String],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Hash[String, String]])
     }
     def TestFnNamedArgsSingleMapStringToString(
@@ -4270,7 +4270,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleString(
@@ -4305,7 +4305,7 @@ module Baml
       params(
         varargs: T.untyped,
         myStringArray: T::Array[String],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleStringArray(
@@ -4340,7 +4340,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T::Array[String],
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleStringList(
@@ -4375,7 +4375,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestGemini(
@@ -4410,7 +4410,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestImageInput(
@@ -4445,7 +4445,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestMulticlassNamedArgs(
@@ -4480,7 +4480,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestOllama(
@@ -4515,7 +4515,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAILegacyProvider(
@@ -4550,7 +4550,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestRetryConstant(
@@ -4585,7 +4585,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestRetryExponential(
@@ -4620,7 +4620,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestVertex(
@@ -4655,7 +4655,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(String, T::Boolean),
-        baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)])
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::UnionTest_ReturnType])
     }
     def UnionTest_Function(
