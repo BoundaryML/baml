@@ -78,6 +78,8 @@ class NewClassBuilder:
     def add_property(self, name: str, type: FieldType) -> "ClassPropertyBuilder":
         if name in self.__properties:
             raise ValueError(f"Property {name} already exists.")
+        # BUG: we don't add to self.__properties here
+        # correct fix is to implement this logic in rust, not python
         return ClassPropertyBuilder(self.__bldr.property(name).type(type))
 
     @property
@@ -129,6 +131,7 @@ class NewEnumBuilder:
         if name in self.__values:
             raise ValueError(f"Value {name} already exists.")
         self.__values.add(name)
+        # NOTE(sam): why is this inconsistent between classes and enums?
         return self.__bldr.value(name)
 
 

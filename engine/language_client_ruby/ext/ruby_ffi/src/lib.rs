@@ -1,25 +1,18 @@
-use baml_runtime::{BamlRuntime, RuntimeContext};
+use baml_runtime::BamlRuntime;
 use baml_types::BamlValue;
-use indexmap::IndexMap;
-use magnus::block::Proc;
-use magnus::IntoValue;
-use magnus::{
-    class, error::RubyUnavailableError, exception::runtime_error, function, method, prelude::*,
-    scan_args::get_kwargs, Error, RHash, Ruby,
-};
+use magnus::{class, function, method, prelude::*, Error, RHash, Ruby};
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use function_result::FunctionResult;
 use function_result_stream::FunctionResultStream;
-use runtime_ctx_manager::RuntimeContextManager;
+use types::runtime_ctx_manager::RuntimeContextManager;
 
 mod function_result;
 mod function_result_stream;
 mod ruby_to_json;
-mod runtime_ctx_manager;
+mod types;
 
 type Result<T> = std::result::Result<T, magnus::Error>;
 
@@ -116,6 +109,8 @@ impl BamlRuntimeFfi {
         function_name: String,
         args: RHash,
         ctx: &RuntimeContextManager,
+        type_registry: Option<&types::type_builder::TypeBuilder>,
+        client_registry: Option<&types::client_registry::ClientRegistry>,
     ) -> Result<FunctionResult> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -127,14 +122,12 @@ impl BamlRuntimeFfi {
             }
         };
 
-        log::debug!("Calling {function_name} with:\nargs: {args:#?}\nctx ???");
-
         let retval = match rb_self.t.block_on(rb_self.inner.call_function(
             function_name.clone(),
             &args,
             &ctx.inner,
-            None,
-            None,
+            type_registry.map(|t| &t.inner),
+            client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(
@@ -155,6 +148,8 @@ impl BamlRuntimeFfi {
         function_name: String,
         args: RHash,
         ctx: &RuntimeContextManager,
+        type_registry: Option<&types::type_builder::TypeBuilder>,
+        client_registry: Option<&types::client_registry::ClientRegistry>,
     ) -> Result<FunctionResultStream> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -172,8 +167,8 @@ impl BamlRuntimeFfi {
             function_name.clone(),
             &args,
             &ctx.inner,
-            None,
-            None,
+            type_registry.map(|t| &t.inner),
+            client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
         ) {
             Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
             Err(e) => Err(Error::new(
@@ -224,20 +219,31 @@ fn init(ruby: &Ruby) -> Result<()> {
     )?;
     runtime_class
         .define_singleton_method("from_files", function!(BamlRuntimeFfi::from_files, 3))?;
-    //runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 2))?;
     runtime_class.define_method(
         "create_context_manager",
         method!(BamlRuntimeFfi::create_context_manager, 0),
     )?;
-    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 3))?;
+    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 5))?;
     runtime_class.define_method(
         "stream_function",
-        method!(BamlRuntimeFfi::stream_function, 3),
+        method!(BamlRuntimeFfi::stream_function, 5),
     )?;
 
     FunctionResult::define_in_ruby(&module)?;
     FunctionResultStream::define_in_ruby(&module)?;
+
     RuntimeContextManager::define_in_ruby(&module)?;
+
+    types::type_builder::TypeBuilder::define_in_ruby(&module)?;
+    types::type_builder::EnumBuilder::define_in_ruby(&module)?;
+    types::type_builder::ClassBuilder::define_in_ruby(&module)?;
+    types::type_builder::EnumValueBuilder::define_in_ruby(&module)?;
+    types::type_builder::ClassPropertyBuilder::define_in_ruby(&module)?;
+    types::type_builder::FieldType::define_in_ruby(&module)?;
+
+    types::client_registry::ClientRegistry::define_in_ruby(&module)?;
+    types::media::Audio::define_in_ruby(&module)?;
+    types::media::Image::define_in_ruby(&module)?;
 
     // everything below this is for our own testing purposes
     module.define_module_function(

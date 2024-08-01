@@ -1,3 +1,4 @@
+require 'json'
 require 'minitest/autorun'
 require 'minitest/reporters'
 
@@ -86,12 +87,19 @@ describe "ruby<->baml integration tests" do
     refute_nil myEnum
   end
 
-  #it "should work with image" do
-  #  res = b.TestImageInput(
-  #    img: Baml::Image.from_url("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png")
-  #  )
-  #  assert_includes res.downcase, "green"
-  #end
+  it "should work with image" do
+   res = b.TestImageInput(
+     img: Baml::Image.from_url("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png")
+   )
+   assert_includes res.downcase, "green"
+  end
+
+  it "should work with audio" do
+    # from URL
+    res = b.AudioInput(
+      aud: Baml::Audio.from_url("https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg")
+    )
+  end
 
   it "works with unions" do
     res = b.UnionTest_Function(input: "a")
@@ -168,5 +176,115 @@ describe "ruby<->baml integration tests" do
     puts final
     assert msgs.size > 0, "Expected at least one streamed response but got none."
     assert msgs.last == final, "Expected last stream message to match final response."
+  end
+
+  it "tests dynamic" do
+    t = Baml::TypeBuilder.new
+    t.Person.add_property("last_name", t.string.list)
+    t.Person.add_property("height", t.float.optional).description("Height in meters")
+
+    t.Hobby.add_value("chess")
+    # TODO: figure out a non-naive impl of #list_values in Ruby
+    # t.Hobby.list_values.each do |name, val|
+    #   val.alias(name.downcase)
+    # end
+
+    t.Person.add_property("hobbies", t.Hobby.type.list).description(
+      "Some suggested hobbies they might be good at"
+    )
+
+    t_res = b.ExtractPeople(
+      text: "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good on a chessboard.",
+      baml_options: {tb: t}
+    )
+
+    refute_empty(t_res, "Expected non-empty result but got empty.")
+
+    t_res.each do |r|
+      puts r.inspect
+      assert_kind_of(Float, r['height'])
+      assert_kind_of(Float, r[:height])
+    end
+  end
+
+  it "tests dynamic class output" do
+    t = Baml::TypeBuilder.new
+    t.DynamicOutput.add_property("hair_color", t.string)
+    # TODO: figure out a non-naive impl of #list_properties in Ruby
+    # puts t.DynamicOutput.list_properties
+    # t.DynamicOutput.list_properties.each do |prop|
+    #   puts "Property: #{prop}"
+    # end
+
+    output = b.MyFunc(
+      input: "My name is Harrison. My hair is black and I'm 6 feet tall.",
+      baml_options: {tb: t} 
+    )
+    puts output.inspect
+    assert_equal("black", output.hair_color)
+  end
+
+  it "tests dynamic class nested output no stream" do
+    t = Baml::TypeBuilder.new
+    nested_class = t.add_class("Name")
+    nested_class.add_property("first_name", t.string)
+    nested_class.add_property("last_name", t.string.optional)
+    nested_class.add_property("middle_name", t.string.optional)
+
+    other_nested_class = t.add_class("Address")
+
+    t.DynamicOutput.add_property("name", nested_class.type.optional)
+    t.DynamicOutput.add_property("address", other_nested_class.type.optional)
+    t.DynamicOutput.add_property("hair_color", t.string).alias("hairColor")
+    t.DynamicOutput.add_property("height", t.float.optional)
+
+    output = b.MyFunc(
+      input: "My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
+      baml_options: {tb: t} 
+    )
+    puts output.inspect
+    assert_equal(
+      '{"name":{"first_name":"Mark","last_name":"Gonzalez","middle_name":null},"address":null,"hair_color":"black","height":6.0}',
+      output.to_json
+    )
+  end
+
+  it "tests dynamic class nested output stream" do
+    t = Baml::TypeBuilder.new
+    nested_class = t.add_class("Name")
+    nested_class.add_property("first_name", t.string)
+    nested_class.add_property("last_name", t.string.optional)
+
+    t.DynamicOutput.add_property("name", nested_class.type.optional)
+    t.DynamicOutput.add_property("hair_color", t.string)
+
+    stream = b.stream.MyFunc(
+      input: "My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
+      baml_options: {tb: t} 
+    )
+    msgs = []
+    stream.each do |msg|
+      puts "streamed #{msg}"
+      puts "streamed #{msg.model_dump}"
+      msgs << msg
+    end
+    output = stream.get_final_response
+
+    puts output.inspect
+    assert_equal(
+      '{"name":{"first_name":"Mark","last_name":"Gonzalez"},"hair_color":"black"}',
+      output.to_json
+    )
+  end
+
+  it "tests dynamic clients" do
+    cb = Baml::Ffi::ClientRegistry.new
+    cb.add_llm_client("MyClient", "openai", { model: "gpt-3.5-turbo" })
+    cb.set_primary("MyClient")
+
+    capitol = b.ExpectFailure(
+      baml_options: { client_registry: cb }
+    )
+    assert_match(/london/, capitol.downcase)
   end
 end

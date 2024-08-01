@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use baml_types::{BamlMap, BamlMedia, BamlValue};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},
-    types::{PyBool, PyBoolMethods, PyDict, PyList, PyString},
+    types::{PyBool, PyBoolMethods, PyDict, PyList},
     PyErr, PyObject, PyResult, Python, ToPyObject,
 };
 

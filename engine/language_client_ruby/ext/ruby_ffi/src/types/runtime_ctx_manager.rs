@@ -1,7 +1,4 @@
-use baml_types::BamlValue;
-use magnus::{
-    class, exception::runtime_error, method, prelude::*, value::Value, Error, RModule, Ruby,
-};
+use magnus::{class, prelude::*, RModule};
 
 use crate::Result;
 

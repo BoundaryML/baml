@@ -14,7 +14,7 @@ This VS Code extension provides support for the Baml language used to define LLM
 
 - python: `pip install baml-py`
 - typescript: `npm install @boundaryml/baml`
-- ruby: `bundle init && bundle add baml sorbet-runtime sorbet-struct-comparable`
+- ruby: `bundle init && bundle add baml sorbet-runtime`
 
 2. **Create a baml_src directory with a main.baml file and you're all set!**
 

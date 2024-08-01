@@ -1,0 +1,115 @@
+require 'set'
+
+module Baml
+    class TypeBuilder
+        def initialize
+            @registry = Baml::Ffi::TypeBuilder.new
+            @classes = Set[{% for cls in classes %} "{{cls.name}}", {% endfor %}]
+            @enums = Set[{% for enum in enums %} "{{enum.name}}", {% endfor %}]
+        end
+
+        def string
+            @registry.string
+        end
+    
+        def int
+            @registry.int
+        end
+
+        def float
+            @registry.float
+        end
+
+        def bool
+            @registry.bool
+        end
+
+        def list(inner_type)
+            @registry.list(inner_type)
+        end
+        
+        def null
+            @registry.null
+        end
+
+        def map(key_type, value_type)
+            @registry.map(key_type, value_type)
+        end
+
+        def union(*types)
+            @registry.union(*types)
+        end
+
+        def add_class(name)
+            if @classes.include?(name)
+                raise "Class with name #{name} already exists."
+            end
+            if @enums.include?(name)
+                raise "Enum with name #{name} already exists."
+            end
+            @classes.add(name)
+            ClassBuilder.new(@registry, name)
+        end
+
+        def add_enum(name)
+            if @classes.include?(name)
+                raise "Class with name #{name} already exists."
+            end
+            if @enums.include?(name)
+                raise "Enum with name #{name} already exists."
+            end
+            @enums.add(name)
+            EnumBuilder.new(@registry, name)
+        end
+
+        class ClassBuilder
+            def initialize(registry, name, properties = nil)
+                @builder = registry.class_(name)
+                @properties = properties == nil ? Set.new : properties
+            end
+
+            def type
+                @builder.field
+            end
+
+            def add_property(name, type)
+                if @properties.include?(name)
+                    raise "Property #{name} already exists."
+                end
+                @properties.add(name)
+                @builder.property(name).type(type)
+            end
+        end
+
+        class EnumBuilder
+            def initialize(registry, name, values = nil)
+                @builder = registry.enum(name)
+                @values = values == nil ? Set.new : values
+            end
+
+            def type
+                @builder.field
+            end
+
+            def add_value(name)
+                if @values.include?(name)
+                    raise "Value #{name} already exists."
+                end
+                @values.add(name)
+                @builder.value(name)
+            end
+        end
+
+        {% for cls in classes if cls.dynamic %}
+        def {{cls.name}}
+            ClassBuilder.new(@registry, "{{cls.name}}", Set[{% for (name, _) in cls.fields %} "{{name}}", {% endfor %}])
+        end
+        {% endfor %}
+
+        {% for enum in enums if enum.dynamic %}
+        def {{enum.name}}
+            EnumBuilder.new(@registry, "{{enum.name}}", Set[{% for value in enum.values %} "{{value}}", {% endfor %}])
+        end
+        {% endfor %}
+    end
+end
