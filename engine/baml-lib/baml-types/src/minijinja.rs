@@ -26,7 +26,6 @@ impl From<BamlValue> for minijinja::Value {
     }
 }
 
-#[derive(Debug)]
 struct MinijinjaBamlImage {
     image: BamlMedia,
 }
@@ -52,6 +51,13 @@ impl std::fmt::Display for MinijinjaBamlImage {
             "{MAGIC_IMAGE_DELIMITER}:baml-start-image:{}:baml-end-image:{MAGIC_IMAGE_DELIMITER}",
             serde_json::json!(self.image)
         )
+    }
+}
+
+// Necessary for nested instances of MinijinjaBamlImage to get serialized correctly
+impl std::fmt::Debug for MinijinjaBamlImage {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }
 
