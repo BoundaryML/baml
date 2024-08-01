@@ -247,6 +247,17 @@ impl FieldType {
             | FieldType::List(.., attr) => *attr = None,
         }
     }
+
+    pub fn set_attributes(&mut self, attributes: Vec<Attribute>) {
+        match self {
+            FieldType::Symbol(.., attr)
+            | FieldType::Primitive(.., attr)
+            | FieldType::Union(.., attr)
+            | FieldType::Tuple(.., attr)
+            | FieldType::Map(.., attr)
+            | FieldType::List(.., attr) => *attr = Some(attributes),
+        }
+    }
 }
 
 // Impl display for FieldType
