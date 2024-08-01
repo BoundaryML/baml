@@ -128,6 +128,8 @@ impl<'db> FunctionWalker<'db> {
     pub fn client(self) -> Option<ClientWalker<'db>> {
         assert!(self.id.0, "Only new functions have clients");
         let client = self.metadata().client.as_ref()?;
+
+        log::info!("Client: {:?}", client.0);
         self.db.find_client(client.0.as_str())
     }
 }

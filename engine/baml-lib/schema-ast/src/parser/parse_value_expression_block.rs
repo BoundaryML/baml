@@ -19,7 +19,7 @@ pub(crate) fn parse_value_expression(
 ) -> Result<ValueExprBlock, DatamodelError> {
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
-    let mut attributes: Vec<Attribute> = Vec::new();
+    let attributes: Vec<Attribute> = Vec::new();
     let mut input = None;
     let mut output = None;
     let mut fields: Vec<Field<Expression>> = vec![];
@@ -94,26 +94,23 @@ pub(crate) fn parse_value_expression(
 
     let response = match name {
         Some(name) => {
-            let msg = match (input, output) {
-                (Some(input), Some(output)) => {
-                    return Ok(ValueExprBlock {
-                        name,
-                        input: Some(input),
-                        output: Some(output),
-                        attributes,
-                        fields,
-                        documentation: doc_comment.and_then(parse_comment_block),
-                        span: diagnostics.span(pair_span),
-                        block_type: sub_type.unwrap_or(ValueExprBlockType::Function), // Unwrap or provide a default
-                    });
-                }
-                (Some(_), None) => "No return type specified.",
-                (None, Some(_)) => "No input parameters specified.",
-                _ => "Invalid function syntax.",
-            };
-            (msg, Some(name.name().to_string()))
+            return Ok(ValueExprBlock {
+                name,
+                input,
+                output,
+                attributes,
+                fields,
+                documentation: doc_comment.and_then(parse_comment_block),
+                span: diagnostics.span(pair_span),
+                block_type: sub_type.unwrap_or(ValueExprBlockType::Function), // Unwrap or provide a default
+            });
+            // (msg, Some(name.name().to_string()))
         }
-        None => ("Invalid function syntax.", None),
+        None => (
+            "Could not match on name for value expression.",
+            None::<String>,
+            None::<String>,
+        ),
     };
 
     Err(DatamodelError::new_model_validation_error(

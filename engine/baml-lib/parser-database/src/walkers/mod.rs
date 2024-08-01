@@ -60,9 +60,14 @@ impl<'db> crate::ParserDatabase {
     }
 
     fn find_top_by_str(&'db self, name: &str) -> Option<&TopId> {
-        self.interner
+        log::info!("Finding top: {}", name);
+        let topResult = self
+            .interner
             .lookup(name)
-            .and_then(|name_id| self.names.tops.get(&name_id))
+            .and_then(|name_id| self.names.tops.get(&name_id));
+
+        // log::info!("Top result: {:?}", topResult);
+        topResult
     }
 
     /// Find a type by name.
@@ -98,9 +103,13 @@ impl<'db> crate::ParserDatabase {
 
     /// Find a client by name.
     pub fn find_client(&'db self, name: &str) -> Option<ClientWalker<'db>> {
+        log::info!("Finding client: {}", name);
         self.find_top_by_str(name)
             .and_then(|top_id| top_id.as_client_id())
-            .map(|model_id| self.walk(model_id))
+            .map(|model_id| {
+                log::info!("Iterating client: {}", name);
+                self.walk(model_id)
+            })
     }
 
     /// Find a function by name.

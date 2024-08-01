@@ -75,6 +75,9 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             validate_type(ctx, &arg.1.field_type)
         }
 
+        log::info!("Validating function: {}", func.name());
+        // log::info!("Client: {:?}", func.metadata().client.as_ref().unwrap().0);
+
         // Ensure the client is correct.
         match func.client() {
             Some(_) => {}

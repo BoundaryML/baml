@@ -21,7 +21,11 @@ impl StringInterner {
 
     /// Get an already-interned string.
     pub(crate) fn lookup(&self, s: &str) -> Option<StringId> {
-        self.map.get_index_of(s).map(StringId)
+        log::info!("Looking up: {}", s);
+        log::info!("Current contents of self.map: {:?}", self.map);
+        let result = self.map.get_index_of(s).map(StringId);
+        log::info!("Result: {:?}", result);
+        result
     }
 
     pub(crate) fn intern(&mut self, s: &str) -> StringId {
