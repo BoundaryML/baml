@@ -100,6 +100,12 @@ export enum OrderStatus {
   CANCELLED = "CANCELLED",
 }
 
+export enum SubEnum {
+  Yeet = "Yeet",
+  Foo = "Foo",
+  Bar = "Bar",
+}
+
 export enum Tag {
   Security = "Security",
   AI = "AI",
@@ -310,11 +316,15 @@ export interface StringToClassEntry {
   
 }
 
+export interface SubType {
+  fieldA: string
+  
+}
+
 export interface TestClassAlias {
   key: string
   key2: string
   key3: string
-  key4: string
   key5: string
   
 }
@@ -347,5 +357,10 @@ export interface UnionTest_ReturnType {
 export interface WithReasoning {
   value: string
   reasoning: string
+  
+}
+
+export interface Yoink {
+  hrm: SubEnum
   
 }

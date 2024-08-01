@@ -90,7 +90,11 @@ impl<'db> ClassWalker<'db> {
         types.add_class(
             self.name(),
             self.static_fields()
-                .map(|f| (f.name().to_string(), self.db.to_jinja_type(f.r#type())))
+                .filter_map(|f| {
+                    f.r#type()
+                        .as_ref()
+                        .map(|field_type| (f.name().to_string(), self.db.to_jinja_type(field_type)))
+                })
                 .collect::<HashMap<_, _>>(),
         )
     }

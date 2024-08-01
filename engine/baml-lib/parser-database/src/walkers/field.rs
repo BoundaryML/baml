@@ -21,11 +21,8 @@ impl<'db> FieldWalker<'db> {
     }
 
     /// The field type.
-    pub fn r#type(self) -> &'db FieldType {
-        self.ast_field()
-            .expr
-            .as_ref()
-            .expect("Expected a FieldType")
+    pub fn r#type(self) -> &'db Option<FieldType> {
+        &self.ast_field().expr
     }
 
     /// Traverse the field's parent model.
@@ -148,9 +145,14 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
 
 impl<'db> WithSerializeableContent for FieldWalker<'db> {
     fn serialize_data(&self, db: &'_ ParserDatabase) -> serde_json::Value {
+        let type_meta = match self.r#type() {
+            Some(field_type) => (self.db, field_type).serialize_data(db),
+            None => json!(null),
+        };
+
         json!({
             "name": self.name(),
-            "type_meta": (self.db, self.r#type()).serialize_data( db),
+            "type_meta": type_meta,
         })
     }
 }

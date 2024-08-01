@@ -103,6 +103,12 @@ class OrderStatus(str, Enum):
     DELIVERED = "DELIVERED"
     CANCELLED = "CANCELLED"
 
+class SubEnum(str, Enum):
+    
+    Yeet = "Yeet"
+    Foo = "Foo"
+    Bar = "Bar"
+
 class Tag(str, Enum):
     
     Security = "Security"
@@ -313,13 +319,17 @@ class StringToClassEntry(BaseModel):
     
     word: str
 
+class SubType(BaseModel):
+    
+    
+    fieldA: str
+
 class TestClassAlias(BaseModel):
     
     
     key: str
     key2: str
     key3: str
-    key4: str
     key5: str
 
 class TestClassNested(BaseModel):
@@ -352,3 +362,8 @@ class WithReasoning(BaseModel):
     
     value: str
     reasoning: str
+
+class Yoink(BaseModel):
+    
+    
+    hrm: "SubEnum"

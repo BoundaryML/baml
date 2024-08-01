@@ -50,12 +50,14 @@ module Baml
     class SearchParams < T::Struct; end
     class SomeClassNestedDynamic < T::Struct; end
     class StringToClassEntry < T::Struct; end
+    class SubType < T::Struct; end
     class TestClassAlias < T::Struct; end
     class TestClassNested < T::Struct; end
     class TestClassWithEnum < T::Struct; end
     class TestOutputClass < T::Struct; end
     class UnionTest_ReturnType < T::Struct; end
     class WithReasoning < T::Struct; end
+    class Yoink < T::Struct; end
     class Blah < T::Struct
       include T::Struct::ActsAsComparable
       const :prop4, T.nilable(String)
@@ -214,12 +216,15 @@ module Baml
       include T::Struct::ActsAsComparable
       const :word, T.nilable(String)
     end
+    class SubType < T::Struct
+      include T::Struct::ActsAsComparable
+      const :fieldA, T.nilable(String)
+    end
     class TestClassAlias < T::Struct
       include T::Struct::ActsAsComparable
       const :key, T.nilable(String)
       const :key2, T.nilable(String)
       const :key3, T.nilable(String)
-      const :key4, T.nilable(String)
       const :key5, T.nilable(String)
     end
     class TestClassNested < T::Struct
@@ -247,6 +252,10 @@ module Baml
       include T::Struct::ActsAsComparable
       const :value, T.nilable(String)
       const :reasoning, T.nilable(String)
+    end
+    class Yoink < T::Struct
+      include T::Struct::ActsAsComparable
+      const :hrm, T.nilable(Baml::Types::SubEnum)
     end
   end
 end

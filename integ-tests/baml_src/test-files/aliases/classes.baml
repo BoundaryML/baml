@@ -10,10 +10,33 @@ class TestClassAlias {
   // "#)
   key2 string @alias("key21")
   key3 string @alias("key with space")
-  key4 string //unaliased
+  // key4 Yeet //unaliased
   key5 string @alias("key.with.punctuation/123")
+
 }
 
+class SubType {
+  fieldA string
+  @@description(#"
+    yurt
+  "#)
+}
+
+class Yoink {
+  hrm SubEnum
+}
+
+
+
+enum SubEnum {
+  Yeet @description("ye")
+  Foo 
+  Bar
+
+  @@description(#"
+    ye
+  "#)
+}
 
 
 function FnTestClassAlias(input: string) -> TestClassAlias {

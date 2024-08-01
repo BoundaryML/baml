@@ -222,13 +222,17 @@ class StringToClassEntry(BaseModel):
     
     word: Optional[str] = None
 
+class SubType(BaseModel):
+    
+    
+    fieldA: Optional[str] = None
+
 class TestClassAlias(BaseModel):
     
     
     key: Optional[str] = None
     key2: Optional[str] = None
     key3: Optional[str] = None
-    key4: Optional[str] = None
     key5: Optional[str] = None
 
 class TestClassNested(BaseModel):
@@ -261,3 +265,8 @@ class WithReasoning(BaseModel):
     
     value: Optional[str] = None
     reasoning: Optional[str] = None
+
+class Yoink(BaseModel):
+    
+    
+    hrm: Optional[types.SubEnum] = None

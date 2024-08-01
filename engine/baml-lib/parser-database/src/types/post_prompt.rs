@@ -198,8 +198,33 @@ fn validate_variable_path(
                     .find(|f| f.name() == next_path_name.as_str())
                 {
                     Some(field) => {
-                        let t = field.r#type();
-                        validate_variable_path(db, variable, next_index + 1, t)
+                        if let Some(t) = field.r#type() {
+                            validate_variable_path(db, variable, next_index + 1, t)
+                        } else {
+                            match cls
+                                .dynamic_fields()
+                                .find(|f| f.name() == next_path_name.as_str())
+                            {
+                                Some(_) => {
+                                    // Throw an error if the next path is not the last path.
+                                    if next_index + 1 < variable.path.len() {
+                                        Err(DatamodelError::new_validation_error(
+                                            "get properties must be the last path in the prompt",
+                                            variable.span.clone(),
+                                        ))
+                                    } else {
+                                        Ok(())
+                                    }
+                                }
+                                None => Err(DatamodelError::new_validation_error(
+                                    &format!(
+                                        "Unknown field `{}` in class `{}`",
+                                        next_path_name, idn
+                                    ),
+                                    variable.span.clone(),
+                                )),
+                            }
+                        }
                     }
                     None => match cls
                         .dynamic_fields()
@@ -223,6 +248,7 @@ fn validate_variable_path(
                     },
                 }
             }
+
             Some(Either::Right(_)) => Err(DatamodelError::new_validation_error(
                 "Enum values are not indexable in the prompt",
                 variable.span.clone(),
