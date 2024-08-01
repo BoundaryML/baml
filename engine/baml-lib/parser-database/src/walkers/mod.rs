@@ -60,14 +60,9 @@ impl<'db> crate::ParserDatabase {
     }
 
     fn find_top_by_str(&'db self, name: &str) -> Option<&TopId> {
-        log::info!("Finding top: {}", name);
-        let topResult = self
-            .interner
+        self.interner
             .lookup(name)
-            .and_then(|name_id| self.names.tops.get(&name_id));
-
-        // log::info!("Top result: {:?}", topResult);
-        topResult
+            .and_then(|name_id| self.names.tops.get(&name_id))
     }
 
     /// Find a type by name.

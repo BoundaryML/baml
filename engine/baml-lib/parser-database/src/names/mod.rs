@@ -110,11 +110,11 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 unreachable!("Encountered impossible function declaration during parsing")
             }
 
-            (ast::TopId::Client(client_id), ast::Top::Client(ast_client)) => {
+            (ast::TopId::Client(_), ast::Top::Client(ast_client)) => {
                 validate_client_name(ast_client, ctx.diagnostics);
                 validate_attribute_identifiers(ast_client, ctx);
 
-                let field_name_id = ctx.interner.intern(ast_client.identifier().name());
+                ctx.interner.intern(ast_client.identifier().name());
 
                 Some(either::Left(&mut names.tops))
             }
@@ -122,11 +122,11 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                 unreachable!("Encountered impossible client declaration during parsing")
             }
 
-            (ast::TopId::RetryPolicy(retry_policy_id), ast::Top::RetryPolicy(ast_retry_policy)) => {
+            (ast::TopId::RetryPolicy(_), ast::Top::RetryPolicy(ast_retry_policy)) => {
                 validate_retry(ast_retry_policy, ctx.diagnostics);
                 validate_attribute_identifiers(ast_retry_policy, ctx);
 
-                let field_name_id = ctx.interner.intern(ast_retry_policy.identifier().name());
+                ctx.interner.intern(ast_retry_policy.identifier().name());
 
                 Some(either::Left(&mut names.tops))
             }
