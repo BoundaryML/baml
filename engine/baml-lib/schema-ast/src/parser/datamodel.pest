@@ -11,12 +11,12 @@ type_expression_contents = {
     (type_expression | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 type_expression = {
-    identifier ~ field_type_chain? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? 
+    identifier ~ field_type_chain? ~ (NEWLINE? ~ (field_attribute | trailing_comment))* ~ NEWLINE? 
 }
 
 field_operator = { "|" | "&" }
 field_type_chain = { field_type_with_attr ~ (field_operator ~ field_type_with_attr)* }
-field_type_with_attr = { field_type ~ (NEWLINE? ~ field_attribute)* }
+field_type_with_attr = { field_type ~ (NEWLINE? ~ (field_attribute | trailing_comment))* }
 
 // ######################################
 // Unified Block for Function, Test, Client, Generator
