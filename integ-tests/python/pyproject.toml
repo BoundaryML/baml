@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{ include = "app" }]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.8"
 # Use client in production
 # baml-py = "^0.14.1"
 ruff = "^0.3.3"
