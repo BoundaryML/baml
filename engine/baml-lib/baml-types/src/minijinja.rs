@@ -54,7 +54,8 @@ impl std::fmt::Display for MinijinjaBamlImage {
     }
 }
 
-// Necessary for nested instances of MinijinjaBamlImage to get serialized correctly
+// Necessary for nested instances of MinijinjaBamlImage to get rendered correctly in prompts
+// See https://github.com/BoundaryML/baml/pull/855 for explanation
 impl std::fmt::Debug for MinijinjaBamlImage {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
