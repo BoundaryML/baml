@@ -429,7 +429,7 @@ pub fn render_prompt(
         anyhow::bail!("args must be a map");
     }
 
-    let minijinja_args: Value = args.clone().into();
+    let minijinja_args: minijinja::Value = args.clone().into();
     let default_role = ctx.client.default_role.clone();
     let rendered = render_minijinja(
         template,

@@ -904,7 +904,7 @@ name = "baml-types"
 version = "0.52.1"
 dependencies = [
  "indexmap 2.2.6",
- "minijinja",
+ "minijinja 2.1.1",
  "serde",
  "serde_json",
 ]
@@ -2357,7 +2357,7 @@ dependencies = [
  "env_logger",
  "indexmap 2.2.6",
  "log",
- "minijinja",
+ "minijinja 1.0.21",
  "serde",
  "serde_json",
  "strsim 0.11.1",
@@ -2671,6 +2671,20 @@ name = "minijinja"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55e877d961d4f96ce13615862322df7c0b6d169d40cab71a7ef3f9b9e594451e"
+dependencies = [
+ "aho-corasick",
+ "indexmap 1.9.3",
+ "serde",
+ "serde_json",
+ "unicase",
+ "unicode-ident",
+]
+
+[[package]]
+name = "minijinja"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4bf71af278c578cbcc91d0b1ff092910208bc86f7b3750364642bd424e3dcd3"
 dependencies = [
  "aho-corasick",
  "indexmap 1.9.3",
