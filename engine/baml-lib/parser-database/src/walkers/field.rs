@@ -70,11 +70,16 @@ impl<'db> FieldWalker<'db> {
 
     /// The field's default attributes.
     pub fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
-        self.db
+        println!("Field is triggered");
+
+        let result = self
+            .db
             .types
             .class_attributes
             .get(&self.id.0)
-            .and_then(|f| f.field_serilizers.get(&self.id.1))
+            .and_then(|f| f.field_serilizers.get(&self.id.1));
+        println!("Result: {:?}", result);
+        result
     }
 }
 

@@ -1,9 +1,8 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, default};
 
 use anyhow::{anyhow, bail, Context, Result};
 use baml_types::FieldType;
 use either::Either;
-
 use indexmap::IndexMap;
 use internal_baml_parser_database::{
     walkers::{
@@ -12,6 +11,7 @@ use internal_baml_parser_database::{
     },
     ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes,
 };
+use internal_baml_schema_ast::ast::SubType;
 
 use internal_baml_schema_ast::ast::{self, FieldArity, WithName, WithSpan};
 use serde::Serialize;
@@ -496,12 +496,11 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
 
 impl WithRepr<Enum> for EnumWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
-        let mut attributes = NodeAttributes {
-            meta: to_ir_attributes(db, self.get_default_attributes()),
+        let attributes = NodeAttributes {
+            meta: to_ir_attributes(db, self.get_default_attributes(SubType::Enum)),
             span: Some(self.span().clone()),
         };
-
-        attributes.meta = to_ir_attributes(db, self.get_default_attributes());
+        println!("Enum Attributes: {:?}", attributes);
 
         attributes
     }
@@ -560,14 +559,14 @@ pub struct Class {
 
 impl WithRepr<Class> for ClassWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
-        let mut attributes = NodeAttributes {
-            meta: to_ir_attributes(db, self.get_default_attributes()),
+        let default_attributes = self.get_default_attributes(SubType::Class);
+        println!("Default Attributes: {:?}", default_attributes);
+        let attributes = NodeAttributes {
+            meta: to_ir_attributes(db, default_attributes),
             span: Some(self.span().clone()),
         };
 
-        attributes.meta = to_ir_attributes(db, self.get_default_attributes());
-
-        println!(" Attributes to IR {:#?}", attributes);
+        println!("Class Attributes: {:?}", attributes);
         attributes
     }
 

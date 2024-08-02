@@ -1,16 +1,16 @@
 use std::collections::HashSet;
 
-use either::Either;
-use internal_baml_diagnostics::DatamodelError;
-use internal_baml_schema_ast::ast::{self, WithIdentifier, WithName, WithSpan};
-use serde_json::json;
-use std::collections::HashMap;
-
 use crate::{
     printer::{serialize_with_printer, WithSerializeableContent},
     types::ToStringAttributes,
     ParserDatabase, WithSerialize,
 };
+use either::Either;
+use internal_baml_diagnostics::DatamodelError;
+use internal_baml_schema_ast::ast::SubType;
+use internal_baml_schema_ast::ast::{self, WithIdentifier, WithName, WithSpan};
+use serde_json::json;
+use std::collections::HashMap;
 
 use super::{field::FieldWalker, EnumWalker};
 
@@ -97,6 +97,23 @@ impl<'db> ClassWalker<'db> {
                 })
                 .collect::<HashMap<_, _>>(),
         )
+    }
+    /// get gejoge
+    pub fn get_default_attributes(&self, sub_type: SubType) -> Option<&'db ToStringAttributes> {
+        match sub_type {
+            SubType::Enum => self
+                .db
+                .types
+                .enum_attributes
+                .get(&self.id)
+                .and_then(|f| f.serilizer.as_ref()),
+            _ => self
+                .db
+                .types
+                .class_attributes
+                .get(&self.id)
+                .and_then(|f| f.serilizer.as_ref()),
+        }
     }
 }
 
