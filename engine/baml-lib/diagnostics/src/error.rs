@@ -400,8 +400,19 @@ impl DatamodelError {
         type_name: &str,
         name: &str,
         span: Span,
-        names: Vec<String>,
+        mut names: Vec<String>,
     ) -> DatamodelError {
+        // Include a list of primitives in the names
+        let primitives = vec![
+            "int".to_string(),
+            "float".to_string(),
+            "bool".to_string(),
+            "string".to_string(),
+            "image".to_string(),
+            "audio".to_string(),
+        ];
+        names.extend(primitives);
+
         let close_names = sort_by_match(name, &names, Some(3));
         let suggestions = if names.is_empty() {
             "".to_string()
@@ -498,34 +509,6 @@ impl DatamodelError {
             format!(
                 "Type `{}` does not exist. Did you mean one of these: `{}`? (error.rs l.499)",
                 type_name, suggestions
-            )
-        };
-
-        Self::new(msg, span)
-    }
-
-    pub fn new_impl_not_found_error(
-        impl_name: &str,
-        names: Vec<String>,
-        span: Span,
-    ) -> DatamodelError {
-        let close_names = sort_by_match(impl_name, &names, Some(10));
-
-        let msg = if close_names.is_empty() {
-            // If no names are close enough, suggest nothing or provide a generic message
-            format!("impl `{}` does not exist.", impl_name)
-        } else if close_names.len() == 1 {
-            // If there's only one close name, suggest it
-            format!(
-                "impl `{}` does not exist. Did you mean `{}`?",
-                impl_name, close_names[0]
-            )
-        } else {
-            // If there are multiple close names, suggest them all
-            let suggestions = close_names.join("`, `");
-            format!(
-                "impl `{}` does not exist. Did you mean one of these: `{}`?",
-                impl_name, suggestions
             )
         };
 

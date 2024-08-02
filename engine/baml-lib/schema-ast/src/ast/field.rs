@@ -129,6 +129,14 @@ fn arity_suffix(arity: &FieldArity) -> &'static str {
 }
 
 impl FieldType {
+    pub fn name(&self) -> String {
+        match self {
+            FieldType::Symbol(_, name, ..) => name.clone(),
+            FieldType::Primitive(_, name, ..) => name.to_string(),
+            _ => "Unknown".to_string(),
+        }
+    }
+
     pub fn span(&self) -> &Span {
         match self {
             FieldType::Primitive(.., span, _) => span,

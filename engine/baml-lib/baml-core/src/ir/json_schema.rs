@@ -50,7 +50,7 @@ impl WithJsonSchema for (&FunctionNode, bool) {
         let mut res = if *is_input {
             f.elem.inputs.json_schema()
         } else {
-            f.elem.output.elem.json_schema()
+            f.elem.output.json_schema()
         };
 
         // Add a title field to the schema

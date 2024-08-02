@@ -1,15 +1,6 @@
-use internal_baml_diagnostics::DatamodelError;
+use crate::{ast, types::ToStringAttributes, walkers::Walker};
 
-use crate::{
-    ast,
-    printer::{serialize_with_printer, WithSerialize, WithSerializeableContent},
-    types::ToStringAttributes,
-    walkers::Walker,
-    ParserDatabase,
-};
-use internal_baml_schema_ast::ast::SubType;
-use internal_baml_schema_ast::ast::{WithDocumentation, WithIdentifier, WithName, WithSpan};
-use serde_json::json;
+use internal_baml_schema_ast::ast::{WithDocumentation, WithName, WithSpan};
 
 /// An `enum` declaration in the schema.
 pub type EnumWalker<'db> = Walker<'db, ast::TypeExpId>;
@@ -66,19 +57,13 @@ impl<'db> EnumValueWalker<'db> {
 
     /// The enum value attributes.
     pub fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
-        println!("Value is triggered");
-        // println!(
-        //     "Enum attributes available: {:?}",
-        //     self.db.types.enum_attributes
-        // );
-
         let result = self
             .db
             .types
             .enum_attributes
             .get(&self.id.0)
             .and_then(|f| f.value_serilizers.get(&self.id.1));
-        println!("Result: {:?}", result);
+
         result
     }
 }

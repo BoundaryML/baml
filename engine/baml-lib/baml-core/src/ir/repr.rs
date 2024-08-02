@@ -4,6 +4,9 @@ use anyhow::{anyhow, bail, Context, Result};
 use baml_types::FieldType;
 use either::Either;
 use indexmap::IndexMap;
+
+use internal_baml_diagnostics::DatamodelError;
+
 use internal_baml_parser_database::{
     walkers::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
@@ -524,7 +527,7 @@ pub struct Field {
 
 impl WithRepr<Field> for FieldWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
-        let mut attributes = NodeAttributes {
+        let attributes = NodeAttributes {
             meta: to_ir_attributes(db, self.get_default_attributes()),
             span: Some(self.span().clone()),
         };
@@ -646,7 +649,7 @@ impl Function {
     }
 
     pub fn output(&self) -> &FieldType {
-        &self.output.elem
+        &self.output
     }
 
     pub fn inputs(&self) -> &Vec<(String, FieldType)> {
@@ -666,7 +669,7 @@ impl Function {
 pub struct Function {
     pub name: FunctionId,
     pub inputs: Vec<(String, FieldType)>,
-    pub output: Node<FieldType>,
+    pub output: FieldType,
     pub tests: Vec<Node<TestCase>>,
     pub configs: Vec<FunctionConfig>,
     pub default_config: String,
@@ -752,7 +755,7 @@ impl WithRepr<Function> for FunctionWalker<'_> {
                 .output()
                 .expect("need block arg")
                 .field_type
-                .node(db)?,
+                .repr(db)?,
             configs: vec![FunctionConfig {
                 name: "default_config".to_string(),
                 prompt_template: self.jinja_prompt().to_string(),

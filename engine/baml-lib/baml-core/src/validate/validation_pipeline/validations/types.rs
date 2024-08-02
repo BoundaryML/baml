@@ -49,8 +49,32 @@ fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
             validate_type_allowed(ctx, &kv_types.1);
             // TODO:assert key_type is string or int or null
         }
-        FieldType::Primitive(..) => {}
-        FieldType::Symbol(..) => {}
+
+        FieldType::Primitive(_, type_value, span, _) => {
+            let primitives = vec!["int", "float", "bool", "string", "image", "audio"];
+            if !primitives.contains(&type_value.to_string().as_str()) {
+                ctx.push_error(DatamodelError::not_found_error(
+                    "Primitive type",
+                    &type_value.to_string(),
+                    span.clone(),
+                    primitives.iter().map(|&s| s.to_string()).collect(),
+                ));
+            }
+        }
+        FieldType::Symbol(_, name, span, _) => {
+            if ctx.db.find_type_by_str(name).is_none() {
+                ctx.push_error(DatamodelError::not_found_error(
+                    "Type",
+                    name,
+                    span.clone(),
+                    ctx.db
+                        .walk_classes()
+                        .chain(ctx.db.walk_enums())
+                        .map(|c| c.name().to_string())
+                        .collect(),
+                ));
+            }
+        }
         FieldType::List(field_type, ..) => validate_type_allowed(ctx, field_type),
         FieldType::Tuple(_, field_types, ..) | FieldType::Union(_, field_types, ..) => {
             for field_type in field_types {

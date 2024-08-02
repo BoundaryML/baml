@@ -61,6 +61,11 @@ pub struct BlockArg {
     pub(crate) span: Span,
 }
 
+impl BlockArg {
+    pub fn name(&self) -> String {
+        self.field_type.name()
+    }
+}
 #[derive(Debug, Clone)]
 pub struct BlockArgs {
     pub(crate) documentation: Option<Comment>,

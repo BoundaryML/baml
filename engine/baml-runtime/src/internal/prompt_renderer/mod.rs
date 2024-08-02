@@ -39,8 +39,8 @@ impl PromptRenderer {
                 Some((Some(client), _)) => client.clone(),
                 _ => config.client.clone(),
             },
-            output_defs: render_output_format(ir, ctx, &func_v2.output.elem)?,
-            output_type: func_v2.output.elem.clone(),
+            output_defs: render_output_format(ir, ctx, &func_v2.output)?,
+            output_type: func_v2.output.clone(),
         })
     }
 
