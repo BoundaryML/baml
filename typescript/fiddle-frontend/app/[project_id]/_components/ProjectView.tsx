@@ -142,7 +142,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
               <div className='flex items-center justify-start h-full pt-0.5 '>
                 <Button asChild variant={'ghost'} className='h-full py-1 gap-x-1 hover:bg-indigo-600'>
                   <Link
-                    href='https://docs.boundaryml.com'
+                    href='https://boundaryml.com'
                     target='_blank'
                     className='text-sm hover:text-foreground text-foreground '
                   >
