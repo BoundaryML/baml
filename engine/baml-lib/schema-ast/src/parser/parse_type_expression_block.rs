@@ -12,7 +12,7 @@ use crate::{ast::TypeExpressionBlock, parser::parse_field::parse_expr_as_type}; 
 
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
-pub(crate) fn parse_type_expression(
+pub(crate) fn parse_type_expression_block(
     pair: Pair<'_>,
     doc_comment: Option<Pair<'_>>,
     diagnostics: &mut Diagnostics,
@@ -69,7 +69,10 @@ pub(crate) fn parse_type_expression(
                                     pending_field_comment.take(),
                                     diagnostics,
                                 ) {
-                                    Ok(field) => fields.push(field),
+                                    Ok(field) => {
+                                        
+                                        fields.push(field);
+                                    },
                                     Err(err) => diagnostics.push_error(err),
                                 }
                         }
@@ -91,7 +94,7 @@ pub(crate) fn parse_type_expression(
             }
         }
     }
-
+  
     match name {
         Some(name) => TypeExpressionBlock {
             name,

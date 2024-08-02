@@ -24,12 +24,6 @@ class ComplexTypes {
 //  3 |   a map<string[], (int | bool[]) | apple_pie[][]>
 //    | 
 // error: Error validating: Maps may only have strings as keys
-//   -->  class/secure_types.baml:4
-//    | 
-//  3 |   a map<string[], (int | bool[]) | apple_pie[][]>
-//  4 |   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
-//    | 
-// error: Error validating: Maps may only have strings as keys
 //   -->  class/secure_types.baml:6
 //    | 
 //  5 |   c apple123_456_pie | (stringer, bool[], (int | char))[]

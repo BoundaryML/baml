@@ -3,18 +3,15 @@ generator default {
   o o
 }
 
-// error: Error validating function "default": Invalid function syntax. Valid function syntax is
-// ```
-// function default(param1: String, param2: String) -> ReturnType {
-//     client SomeClient
-//     prompt #"..."#
-// }
-// ```
-//   -->  generators/error.baml:1
-//    | 
+// error: Property not known: "language". Did you mean one of these: "version", "output_type", "output_dir", "default_client_mode"?
+//   -->  generators/error.baml:2
 //    | 
 //  1 | generator default {
 //  2 |   language python
+//    | 
+// error: Property not known: "o". Did you mean one of these: "version", "output_dir", "output_type", "default_client_mode"?
+//   -->  generators/error.baml:3
+//    | 
+//  2 |   language python
 //  3 |   o o
-//  4 | }
 //    | 

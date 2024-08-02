@@ -79,27 +79,37 @@ pub(crate) fn parse_expr_as_type(
             Rule::trailing_comment => {
                 comment = merge_comments(comment, parse_trailing_comment(current));
             }
-            Rule::field_type_chain => field_type = parse_field_type_chain(current, diagnostics),
+            Rule::field_type_chain => {
+                field_type = parse_field_type_chain(current, diagnostics);
+                // println!("Parsed field type chain: {:?}", field_type);
+            }
             Rule::field_attribute => enum_attributes.push(parse_attribute(current, diagnostics)),
             _ => parsing_catch_all(current, "field"),
         }
     }
 
     match (name, field_type) {
-        (Some(name), Some(field_type)) => Ok(Field {
-            expr: Some(field_type.clone()),
-            name,
-            attributes: field_type.attributes().to_vec(),
-            documentation: comment,
-            span: diagnostics.span(pair_span),
-        }),
-        (Some(name), None) => Ok(Field {
-            expr: None,
-            name,
-            attributes: enum_attributes,
-            documentation: comment,
-            span: diagnostics.span(pair_span),
-        }),
+        (Some(name), Some(field_type)) => {
+            // println!("Case: class field");
+            // println!("Attributes: {:?}", field_type.attributes().to_vec());
+            Ok(Field {
+                expr: Some(field_type.clone()),
+                name,
+                attributes: field_type.attributes().to_vec(),
+                documentation: comment,
+                span: diagnostics.span(pair_span),
+            })
+        },
+        (Some(name), None) => {
+
+            Ok(Field {
+                expr: None,
+                name,
+                attributes: enum_attributes,
+                documentation: comment,
+                span: diagnostics.span(pair_span),
+            })
+        },
         _ => Err(DatamodelError::new_model_validation_error(
             "expr as type!! This field declaration is invalid. It is either missing a name or a type.",
             container_type,
@@ -134,7 +144,10 @@ fn parse_field_type_chain(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Opti
         }
     }
 
-    combine_field_types(types)
+    //do not need to pass in operators, as the only operator we can have is of union (|) type, so we handle this implicitly in the combine_field_types function
+    let res = combine_field_types(types);
+
+    res
 }
 
 fn parse_field_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
@@ -150,7 +163,6 @@ fn parse_field_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> 
             Rule::field_attribute => field_attributes.push(parse_attribute(current, diagnostics)),
             Rule::trailing_comment => {}
             _ => {
-                log::info!("Encountered rule: {:?}", current.as_rule());
                 parsing_catch_all(current, "yikes!");
             }
         }
@@ -159,6 +171,7 @@ fn parse_field_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> 
     match field_type {
         Some(mut ft) => {
             ft.set_attributes(field_attributes);
+
             Some(ft) // Return the field type with attributes
         }
         None => {
@@ -175,6 +188,7 @@ fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
     let mut combined_type = types[0].clone();
 
     let mut seen_types = vec![combined_type.clone()];
+
     let mut earliest_start = combined_type.span().start;
     let mut latest_end = combined_type.span().end;
 

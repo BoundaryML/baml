@@ -62,17 +62,9 @@ function InputImage(image: image) -> string {
   prompt #" image {{ image }} "#
 }
 
-// error: Error validating function "Bar": Invalid function syntax. Valid function syntax is
-// ```
-// function Bar(param1: String, param2: String) -> ReturnType {
-//     client SomeClient
-//     prompt #"..."#
-// }
-// ```
-//   -->  functions_v2/valid.baml:1
+// warning: 'email' is a string, expected class
+//   -->  functions_v2/valid.baml:22
 //    | 
-//    | 
-//  1 | client<llm> Bar {
-//  2 |   provider baml-openai-chat
-//  3 | }
+// 21 |   client Bar
+// 22 |   prompt #" subject line {{ email.subject }} "#
 //    | 

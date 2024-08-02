@@ -567,6 +567,7 @@ impl WithRepr<Class> for ClassWalker<'_> {
 
         attributes.meta = to_ir_attributes(db, self.get_default_attributes());
 
+        println!(" Attributes to IR {:#?}", attributes);
         attributes
     }
 

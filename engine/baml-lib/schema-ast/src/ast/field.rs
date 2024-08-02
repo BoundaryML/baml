@@ -121,6 +121,13 @@ pub enum FieldType {
     Map(Box<(FieldType, FieldType)>, Span, Option<Vec<Attribute>>),
 }
 
+fn arity_suffix(arity: &FieldArity) -> &'static str {
+    match arity {
+        FieldArity::Required => "",
+        FieldArity::Optional => "?",
+    }
+}
+
 impl FieldType {
     pub fn span(&self) -> &Span {
         match self {

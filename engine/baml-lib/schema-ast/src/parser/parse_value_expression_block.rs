@@ -12,7 +12,7 @@ use super::{
 use crate::ast::*;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics}; // Add this line
 
-pub(crate) fn parse_value_expression(
+pub(crate) fn parse_value_expression_block(
     pair: Pair<'_>,
     doc_comment: Option<Pair<'_>>,
     diagnostics: &mut Diagnostics,

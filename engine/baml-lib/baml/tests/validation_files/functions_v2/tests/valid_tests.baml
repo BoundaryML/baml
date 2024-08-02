@@ -74,49 +74,9 @@ test Foo {
   }
 }
 
-// error: Error validating function "Bar": Invalid function syntax. Valid function syntax is
-// ```
-// function Bar(param1: String, param2: String) -> ReturnType {
-//     client SomeClient
-//     prompt #"..."#
-// }
-// ```
-//   -->  functions_v2/tests/valid_tests.baml:1
+// warning: 'email' is a string, expected class
+//   -->  functions_v2/tests/valid_tests.baml:22
 //    | 
-//    | 
-//  1 | client<llm> Bar {
-//  2 |   provider baml-openai-chat
-//  3 | }
-//    | 
-// error: Error validating function "Foo": Invalid function syntax. Valid function syntax is
-// ```
-// function Foo(param1: String, param2: String) -> ReturnType {
-//     client SomeClient
-//     prompt #"..."#
-// }
-// ```
-//   -->  functions_v2/tests/valid_tests.baml:65
-//    | 
-// 64 | 
-// 65 | test Foo {
-// 66 |   functions [InputImage]
-// 67 |   args {
-// 68 |   }
-// 69 | }
-//    | 
-// error: Error validating function "Foo": Invalid function syntax. Valid function syntax is
-// ```
-// function Foo(param1: String, param2: String) -> ReturnType {
-//     client SomeClient
-//     prompt #"..."#
-// }
-// ```
-//   -->  functions_v2/tests/valid_tests.baml:71
-//    | 
-// 70 | 
-// 71 | test Foo {
-// 72 |   functions [InputEnum]
-// 73 |   args {
-// 74 |   }
-// 75 | }
+// 21 |   client Bar
+// 22 |   prompt #" subject line {{ email.subject }} "#
 //    | 
