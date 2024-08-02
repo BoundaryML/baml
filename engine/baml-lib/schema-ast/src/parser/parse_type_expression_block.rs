@@ -68,6 +68,7 @@ pub(crate) fn parse_type_expression_block(
                                     item,
                                     pending_field_comment.take(),
                                     diagnostics,
+                                matches!(sub_type, Some(SubType::Enum))
                                 ) {
                                     Ok(field) => {
                                         

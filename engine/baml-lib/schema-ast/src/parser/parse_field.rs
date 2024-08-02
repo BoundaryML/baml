@@ -66,6 +66,7 @@ pub(crate) fn parse_expr_as_type(
     pair: Pair<'_>,
     block_comment: Option<Pair<'_>>,
     diagnostics: &mut Diagnostics,
+    is_enum: bool,
 ) -> Result<Field<FieldType>, DatamodelError> {
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
@@ -80,8 +81,9 @@ pub(crate) fn parse_expr_as_type(
                 comment = merge_comments(comment, parse_trailing_comment(current));
             }
             Rule::field_type_chain => {
-                field_type = parse_field_type_chain(current, diagnostics);
-                // println!("Parsed field type chain: {:?}", field_type);
+                if !is_enum {
+                    field_type = parse_field_type_chain(current, diagnostics);
+                }
             }
             Rule::field_attribute => enum_attributes.push(parse_attribute(current, diagnostics)),
             _ => parsing_catch_all(current, "field"),
@@ -90,8 +92,7 @@ pub(crate) fn parse_expr_as_type(
 
     match (name, field_type) {
         (Some(name), Some(field_type)) => {
-            // println!("Case: class field");
-            // println!("Attributes: {:?}", field_type.attributes().to_vec());
+
             Ok(Field {
                 expr: Some(field_type.clone()),
                 name,
