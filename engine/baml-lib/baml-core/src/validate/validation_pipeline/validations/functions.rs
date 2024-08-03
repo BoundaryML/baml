@@ -1,7 +1,7 @@
 use crate::validate::validation_pipeline::context::Context;
-use either::Either;
+
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
-use internal_baml_schema_ast::ast::FieldType;
+
 use internal_baml_schema_ast::ast::{WithIdentifier, WithName, WithSpan};
 
 use super::types::validate_type;
@@ -34,9 +34,15 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             }
         };
 
+        log::info!("Validating template {}", template.name());
         defined_types.start_scope();
         if let Some(p) = template.ast_node().input() {
             p.args.iter().for_each(|(name, t)| {
+                log::info!(
+                    "Adding variable {} with type {:?}",
+                    name.name(),
+                    t.field_type
+                );
                 defined_types.add_variable(name.name(), ctx.db.to_jinja_type(&t.field_type))
             });
         }
@@ -113,9 +119,11 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
 
         let prompt = func.metadata().prompt.as_ref().unwrap();
         defined_types.start_scope();
+        log::info!("Validating function {}", func.name());
         func.walk_input_args().for_each(|arg| {
-            let name = arg.ast_arg().1.name().to_string(); // Store the name in a variable
+            let name = arg.ast_arg().0.unwrap().name().to_string();
             let field_type = ctx.db.to_jinja_type(arg.field_type());
+            log::info!("Adding variable {} with type {:?}", name, field_type);
             defined_types.add_variable(&name, field_type);
         });
         match internal_baml_jinja::validate_template(
