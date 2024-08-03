@@ -97,9 +97,6 @@ fn tracker_visit_expr<'a>(
     state: &mut ScopeTracker,
     types: &PredefinedTypes,
 ) -> Type {
-    log::info!("Visiting expression: {:#?}", expr);
-    log::info!("types' variable names: {:#?}", types.variable_names());
-
     match expr {
         ast::Expr::Var(var) => match types.resolve(var.id) {
             Some(t) => t,

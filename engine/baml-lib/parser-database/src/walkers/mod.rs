@@ -246,13 +246,11 @@ impl<'db> crate::ParserDatabase {
     pub fn to_jinja_type(&self, ft: &FieldType) -> internal_baml_jinja::Type {
         use internal_baml_jinja::Type;
         match ft {
-            FieldType::Symbol(arity, idn, ..) => {
-                let mut t = Type::String;
-                if arity.is_optional() {
-                    t = Type::None | t;
-                }
-                t
-            }
+            FieldType::Symbol(arity, idn, ..) => match self.find_type_by_str(idn) {
+                None => Type::Undefined,
+                Some(Either::Left(_)) => Type::ClassRef(idn.to_string()),
+                Some(Either::Right(_)) => Type::String,
+            },
             FieldType::List(inner, dims, ..) => {
                 let mut t = self.to_jinja_type(inner);
                 for _ in 0..*dims {

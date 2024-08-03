@@ -116,7 +116,8 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
 
         func.walk_input_args().for_each(|arg| {
             let name = arg.ast_arg().0.unwrap().name().to_string();
-            let field_type = ctx.db.to_jinja_type(arg.field_type());
+
+            let field_type = ctx.db.to_jinja_type(&arg.ast_arg().1.field_type);
 
             defined_types.add_variable(&name, field_type);
         });

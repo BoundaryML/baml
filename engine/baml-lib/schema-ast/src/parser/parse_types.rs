@@ -143,6 +143,7 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
     if let Some(current) = pair.into_inner().next() {
         return match current.as_rule() {
             Rule::identifier => {
+                // log::info!("Parsing identifier {:?}", current.as_str());
                 let identifier = parse_identifier(current.clone(), diagnostics);
                 let field_type = match current.as_str() {
                     "string" | "int" | "float" | "bool" | "image" | "audio" => {

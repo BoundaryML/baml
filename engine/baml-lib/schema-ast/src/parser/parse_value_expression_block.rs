@@ -92,6 +92,8 @@ pub(crate) fn parse_value_expression_block(
         }
     }
 
+    log::info!("Input = {:?}", input);
+
     let response = match name {
         Some(name) => {
             return Ok(ValueExprBlock {
