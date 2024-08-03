@@ -90,7 +90,6 @@ pub(crate) fn parse_type_expression_block(
             }
 
             _ => {
-                println!("Encountered rule: {:?}", current.as_rule());
                 parsing_catch_all(current, "type_expression")
             }
         }

@@ -98,7 +98,7 @@ impl<'db> ClassWalker<'db> {
                 .collect::<HashMap<_, _>>(),
         )
     }
-    /// get gejoge
+    /// Getter for default attributes
     pub fn get_default_attributes(&self, sub_type: SubType) -> Option<&'db ToStringAttributes> {
         match sub_type {
             SubType::Enum => self

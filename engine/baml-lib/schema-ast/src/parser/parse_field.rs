@@ -146,9 +146,7 @@ fn parse_field_type_chain(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Opti
     }
 
     //do not need to pass in operators, as the only operator we can have is of union (|) type, so we handle this implicitly in the combine_field_types function
-    let res = combine_field_types(types);
-
-    res
+    combine_field_types(types)
 }
 
 fn parse_field_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
@@ -158,13 +156,11 @@ fn parse_field_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> 
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::field_type => field_type = parse_field_type(current, diagnostics),
-            Rule::field_type_with_attr => {
-                // field_type = parse_field_type_with_attr(current, diagnostics);
-            }
+            Rule::field_type_with_attr => {}
             Rule::field_attribute => field_attributes.push(parse_attribute(current, diagnostics)),
             Rule::trailing_comment => {}
             _ => {
-                parsing_catch_all(current, "yikes!");
+                parsing_catch_all(current, "field_type_with_attr!");
             }
         }
     }

@@ -43,7 +43,6 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
             Some(ftype)
         }
         None => {
-            println!("Error: ftype is None after processing all inner pairs");
             unreachable!("Ftype should always be defined")
         }
     }
