@@ -163,14 +163,14 @@ class Person(BaseModel):
 class Quantity(BaseModel):
     
     
-    amount: Optional[Union[Optional[Union[Optional[int]]], Optional[Union[Optional[float]]]]] = None
+    amount: Optional[Union[Optional[int], Optional[float]]] = None
     unit: Optional[str] = None
 
 class RaysData(BaseModel):
     
     
     dataType: Optional[types.DataType] = None
-    value: Optional[Union[Optional[Union["Resume"]], Optional[Union["Event"]]]] = None
+    value: Optional[Union["Resume", "Event"]] = None
 
 class ReceiptInfo(BaseModel):
     
@@ -209,7 +209,7 @@ class SearchParams(BaseModel):
     jobTitle: Optional["WithReasoning"] = None
     company: Optional["WithReasoning"] = None
     description: List["WithReasoning"]
-    tags: List[Optional[Union[Optional[Union[Optional[types.Tag]]], Optional[Union[Optional[str]]]]]]
+    tags: List[Optional[Union[Optional[types.Tag], Optional[str]]]]
 
 class SomeClassNestedDynamic(BaseModel):
     
@@ -252,9 +252,9 @@ class TestOutputClass(BaseModel):
 class UnionTest_ReturnType(BaseModel):
     
     
-    prop1: Optional[Union[Optional[Union[Optional[str]]], Optional[Union[Optional[bool]]]]] = None
-    prop2: List[Optional[Union[Optional[Union[Optional[float]]], Optional[Union[Optional[bool]]]]]]
-    prop3: Optional[Union[Optional[Union[List[Optional[bool]]]], Optional[Union[List[Optional[int]]]]]] = None
+    prop1: Optional[Union[Optional[str], Optional[bool]]] = None
+    prop2: List[Optional[Union[Optional[float], Optional[bool]]]]
+    prop3: Optional[Union[List[Optional[bool]], List[Optional[int]]]] = None
 
 class WithReasoning(BaseModel):
     

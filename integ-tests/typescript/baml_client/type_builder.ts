@@ -126,6 +126,18 @@ export default class TypeBuilder {
         return this.tb.list(type)
     }
 
+    null(): FieldType {
+        return this.tb.null()
+    }
+
+    map(key: FieldType, value: FieldType): FieldType {
+        return this.tb.map(key, value)
+    }
+
+    union(types: FieldType[]): FieldType {
+        return this.tb.union(types)
+    }
+
     addClass<Name extends string>(name: Name): ClassBuilder<Name> {
         return this.tb.addClass(name);
     }
