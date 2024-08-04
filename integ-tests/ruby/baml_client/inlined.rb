@@ -2,7 +2,7 @@
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ bundle add baml sorbet-runtime
+#  $ bundle add baml sorbet-runtime sorbet-struct-comparable
 #
 ###############################################################################
 

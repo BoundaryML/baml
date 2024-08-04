@@ -369,7 +369,15 @@ impl SseResponseTrait for OpenAIClient {
                                     inner.metadata.finish_reason =
                                         Some(FinishReason::Stop.to_string());
                                 }
-                                _ => (),
+                                finish_reason => {
+                                    log::info!(
+                                        "Received a non-stop finish reason: {:?}",
+                                        finish_reason
+                                    );
+                                    inner.metadata.baml_is_complete = false;
+                                    inner.metadata.finish_reason =
+                                        finish_reason.as_ref().map(|r| r.to_string());
+                                }
                             }
                         }
                         inner.latency = instant_start.elapsed();
@@ -529,6 +537,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                     })})
                 }
                 BamlMedia::Base64(BamlMediaType::Image, image) => {
+                    // TODO: validate the media_type is present!
                     json!({"type": "image_url", "image_url": json!({
                        "url" : format!("data:{};base64,{}", image.media_type, image.base64)
                     })})

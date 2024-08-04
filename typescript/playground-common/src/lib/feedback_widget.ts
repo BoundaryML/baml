@@ -74,6 +74,7 @@ const loadChatwoot = () => {
       ;(window as any).chatwootSDK.run({
         websiteToken: 'M4EXKvdb9NGgxqZzkTZfeFV7',
         baseUrl: BASE_URL,
+        position: 'left',
       })
     }
   })(document, 'script')

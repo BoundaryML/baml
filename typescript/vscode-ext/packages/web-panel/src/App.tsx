@@ -24,7 +24,7 @@ function App() {
       <Suspense fallback={<div>Loading...</div>}>
         <EventListener>
           <AppStateProvider>
-            <div className='flex flex-col w-full gap-2 px-2 pb-4'>
+            <div className='flex flex-col w-full gap-2 px-2 pb-1 h-[100vh] overflow-y-clip'>
               <div className='flex flex-row items-center justify-start gap-1'>
                 <ViewSelector />
               </div>
