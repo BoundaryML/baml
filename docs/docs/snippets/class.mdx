@@ -58,11 +58,6 @@ type Foo = z.infer<typeof FooZod>;
 If set, will allow you to add fields to the class dynamically at runtime (in your python/ts/etc code). See [dynamic classes](../calling-baml/dynamic-types.mdx) for more information.
 </ParamField>
 
-<ParamField
-  path="@@assert"
->
-Add class-level assertions using Jinja templates to ensure certain properties. If an assertion fails, a `BAMLValidationError` is raised. See [custom type assertions](../calling-baml/assertions.mdx) for details.
-
 
 ```baml BAML
 class MyClass {
@@ -101,51 +96,6 @@ class MyClass {
 }
 ```
 
-</ParamField>
-
-
-### Validation Attributes
-Validation attributes are used to enforce constraints on the fields of a class. They do not modify the prompt, but rather the post hoc validation logic of the BAML parser. 
-
-<Warning>
-`@assert` and `@check` attributes are mutually exclusive and cannot be applied to the same field.
-</Warning>
-<ParamField
-  path ="@assert"
-  type = "jinja"
->
-Add field assertions using Jinja templates to ensure specific properties. If the assertion fails, the prompt will fail. Because assertions are evaluated at runtime, `Union` cases must have type-instance-specific assertions. See [custom type assertions](../calling-baml/assertions.mdx) for more information.
-
-```baml BAML
-class MyClass {
-  property1 string @alias("name") @assert(this|length > 0, "name_not_empty")
-  age int? @assert(this > 0, "age_positive")
-}
-```
-</ParamField>
-
-<ParamField
-  path ="@check"
-  type = "jinja"
->
-The `@check` attribute allows you to access data even if an assertion fails. This is useful in scenarios where you want to be informed of a validation failure but still need the data. 
-
-When using `@check`, the field returns a `BamlCheckedValue<T>` object, which includes both the parsed data and the validation results. You can access the actual value through the `value` attribute and the validation results through the `checks_results` attribute. For more details, see [non-exception raising type checks](../calling-baml/assertions.mdx#non-exception-checks).
-
-```baml BAML
-class MyClass {
-  property1 string @alias("name") @check(this|length > 0, "name_not_empty")
-  age int? @check(this > 0, "age_positive")
-  hometown string @check(this == "New York", "hometown_new_york")
-}
-```
-
-</ParamField>
-
-
-
-
-
 ## Constraints
 
 Classes may have any number of properties.
@@ -164,4 +114,3 @@ The type of a property can be any [supported type](supported-types.mdx)
 ## Inheritance
 
 Never supported. Like rust, we take the stance that [composition is better than inheritance](https://www.digitalocean.com/community/tutorials/composition-vs-inheritance).
-
