@@ -1034,6 +1034,22 @@ export class BamlAsyncClient {
     return raw.parsed() as string
   }
   
+  async TestImageListInput(
+      imgs: Image[],
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestImageListInput",
+      {
+        "imgs": imgs
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as string
+  }
+  
   async TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -2563,6 +2579,29 @@ class BamlStreamClient {
       "TestImageInput",
       {
         "img": img
+      },
+      undefined,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return new BamlStream<RecursivePartialNull<string>, string>(
+      raw,
+      (a): a is RecursivePartialNull<string> => a,
+      (a): a is string => a,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  TestImageListInput(
+      imgs: Image[],
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): BamlStream<RecursivePartialNull<string>, string> {
+    const raw = this.runtime.streamFunction(
+      "TestImageListInput",
+      {
+        "imgs": imgs
       },
       undefined,
       this.ctx_manager.cloneContext(),

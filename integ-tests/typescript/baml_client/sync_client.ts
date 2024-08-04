@@ -1034,6 +1034,22 @@ export class BamlSyncClient {
     return raw.parsed() as string
   }
   
+  TestImageListInput(
+      imgs: Image[],
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    const raw = this.runtime.callFunctionSync(
+      "TestImageListInput",
+      {
+        "imgs": imgs
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as string
+  }
+  
   TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }

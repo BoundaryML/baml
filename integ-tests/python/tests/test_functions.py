@@ -40,7 +40,6 @@ def test_sync():
 
 
 class TestAllInputs:
-
     @pytest.mark.asyncio
     async def test_single_bool(self):
         res = await b.TestFnNamedArgsSingleBool(True)
@@ -163,6 +162,21 @@ async def test_should_work_with_image_url():
 
 
 @pytest.mark.asyncio
+async def test_should_work_with_image_list():
+    res = await b.TestImageListInput(
+        imgs=[
+            baml_py.Image.from_url(
+                "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+            ),
+            baml_py.Image.from_url(
+                "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png"
+            ),
+        ]
+    )
+    assert_that(res.lower()).matches(r"(green|yellow)")
+
+
+@pytest.mark.asyncio
 async def test_should_work_with_vertex():
     res = await b.TestVertex("donkey kong")
     assert_that("donkey kong" in res.lower())
@@ -266,11 +280,12 @@ async def test_streaming():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
@@ -310,11 +325,12 @@ def test_streaming_sync():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
@@ -337,11 +353,12 @@ async def test_streaming_claude():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     print("msgs:")
     print(msgs[-1])
@@ -362,11 +379,12 @@ async def test_streaming_gemini():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     print("msgs:")
     print(msgs[-1])
@@ -377,7 +395,6 @@ async def test_streaming_gemini():
 
 @pytest.mark.asyncio
 async def test_tracing_async_only():
-
     @trace
     async def top_level_async_tracing():
         @trace

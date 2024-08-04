@@ -1,17 +1,22 @@
 <a href="https://boundaryml.com?utm_source=github" target="_blank" rel="noopener noreferrer">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://www.boundaryml.com/gloo-ai-square-256.png">
-    <img src="https://www.boundaryml.com/gloo-ai-square-256.png" height="64">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/baml-lamb-white.png">
+    <img src="docs/assets/baml-lamb-white.png" height="64">
   </picture>
   
 </a>
 
 # BAML
 
-**BAML is a domain-specific-language to write and test LLM functions.**
+BAML is a domain-specific-language to write and test LLM functions.
 
 An LLM function is a prompt template with some defined input variables, and a specific output type like a class, enum, union, optional string, etc.
-With BAML you can write and test a complex LLM function in 1/10 of the time it takes to setup a python LLM testing environment.
+
+BAML LLM functions plug into python, TS, and other languages, which makes it easy to focus more on engineering and less on prompting.
+
+BAML outperforms all other current methods of getting structured data, even when using it with GPT3.5. It also outperforms models fine-tuned for tool-use. See the [Berkeley Function Calling Benchmark](https://gorilla.cs.berkeley.edu/leaderboard.html) results. [Read more on our Schema-Aligned Parser](https://www.boundaryml.com/blog/schema-aligned-parsing).
+
+<img src="docs/assets/bfcl-baml.png" width="80%" alt="Boundary Studio">
 
 ## Try it out in the playground -- [PromptFiddle.com](https://promptfiddle.com)
 
@@ -186,7 +191,7 @@ Showcase of applications using BAML
 
 Analyze, label, and trace each request in [Boundary Studio](https://app.boundaryml.com).
 
-<img src="docs/images/v3/pipeline_view.png" width="80%" alt="Boundary Studio">
+<img src="docs/assets/images/v3/pipeline_view.png" width="80%" alt="Boundary Studio">
 
 ## Why not just use an existing Python framework?
 

@@ -91,7 +91,7 @@ pub struct TemplateStringMacro {
 }
 
 const MAGIC_CHAT_ROLE_DELIMITER: &'static str = "BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER";
-const MAGIC_IMAGE_DELIMITER: &'static str = "BAML_IMAGE_MAGIC_STRING_DELIMITER";
+const MAGIC_MEDIA_DELIMITER: &'static str = "BAML_MEDIA_MAGIC_STRING_DELIMITER";
 
 fn render_minijinja(
     template: &str,
@@ -190,7 +190,7 @@ fn render_minijinja(
 
     let rendered = tmpl.render(args)?;
 
-    if !rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) && !rendered.contains(MAGIC_IMAGE_DELIMITER) {
+    if !rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) && !rendered.contains(MAGIC_MEDIA_DELIMITER) {
         return Ok(RenderedPrompt::Completion(rendered));
     }
 
@@ -209,15 +209,15 @@ fn render_minijinja(
             // If there's only whitespace before the first `_.chat()` directive, we discard that chunk
         } else {
             let mut parts = vec![];
-            for part in chunk.split(MAGIC_IMAGE_DELIMITER) {
-                if part.starts_with(":baml-start-image:") && part.ends_with(":baml-end-image:") {
-                    let image_data = part
-                        .strip_prefix(":baml-start-image:")
+            for part in chunk.split(MAGIC_MEDIA_DELIMITER) {
+                if part.starts_with(":baml-start-media:") && part.ends_with(":baml-end-media:") {
+                    let media_data = part
+                        .strip_prefix(":baml-start-media:")
                         .unwrap_or(part)
-                        .strip_suffix(":baml-end-image:")
+                        .strip_suffix(":baml-end-media:")
                         .unwrap_or(part);
 
-                    match serde_json::from_str::<BamlMedia>(image_data) {
+                    match serde_json::from_str::<BamlMedia>(media_data) {
                         Ok(media) => match media {
                             BamlMedia::Url(media_type, _) => match media_type {
                                 BamlMediaType::Image => parts.push(ChatMessagePart::Image(media)),
@@ -231,7 +231,7 @@ fn render_minijinja(
                         Err(_) => {
                             Err(minijinja::Error::new(
                                 ErrorKind::CannotUnpack,
-                                format!("Image variable had unrecognizable data: {}", image_data),
+                                format!("Media variable had unrecognizable data: {}", media_data),
                             ))?;
                         }
                     }
