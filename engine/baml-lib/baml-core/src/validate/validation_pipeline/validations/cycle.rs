@@ -16,15 +16,28 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                 f.dependencies()
                     .into_iter()
                     .filter(|f| match ctx.db.find_type_by_str(f) {
-                        Some(either::Either::Left(_cls)) => true,
+                        Some(either::Either::Left(_cls)) => {
+                            println!("Found class dependency");
+                            true
+                        }
                         // Don't worry about enum dependencies, they can't form cycles.
-                        Some(either::Either::Right(_enm)) => false,
-                        None => panic!("Unknown class `{}`", f),
+                        Some(either::Either::Right(_enm)) => {
+                            println!("Found enum dependency");
+                            false
+                        }
+                        None => {
+                            println!("Encountered an unknown class: {}", f);
+                            panic!("Unknown class `{}`", f);
+                        }
                     })
                     .collect::<HashSet<_>>(),
             )
         })
         .collect::<Vec<_>>();
+
+    for dependency in deps_list.iter() {
+        println!("dependency: {:#?}", dependency);
+    }
 
     // Now we can check for cycles using topological sort.
     let mut stack: Vec<(TypeExpId, Vec<TypeExpId>)> = Vec::new(); // This stack now also keeps track of the path

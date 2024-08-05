@@ -292,7 +292,7 @@ impl WithRepr<FieldType> for ast::FieldType {
                 repr
             }
             ast::FieldType::Symbol(arity, idn, ..) => type_with_arity(
-                match db.find_type_by_str(idn) {
+                match db.find_type(idn) {
                     Some(Either::Left(class_walker)) => {
                         FieldType::Class(class_walker.name().to_string())
                     }

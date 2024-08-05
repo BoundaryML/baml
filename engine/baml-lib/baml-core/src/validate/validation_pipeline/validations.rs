@@ -16,6 +16,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
     configurations::validate(ctx);
 
     if !ctx.diagnostics.has_errors() {
+        println!("validating cycle dependencies!");
         cycle::validate(ctx);
     }
 }

@@ -111,7 +111,7 @@ impl FieldArity {
 
 #[derive(Debug, Clone)]
 pub enum FieldType {
-    Symbol(FieldArity, String, Span, Option<Vec<Attribute>>),
+    Symbol(FieldArity, Identifier, Option<Vec<Attribute>>),
     Primitive(FieldArity, TypeValue, Span, Option<Vec<Attribute>>),
     // The second field is the number of dims for the list
     List(Box<FieldType>, u32, Span, Option<Vec<Attribute>>),
@@ -131,7 +131,7 @@ fn arity_suffix(arity: &FieldArity) -> &'static str {
 impl FieldType {
     pub fn name(&self) -> String {
         match self {
-            FieldType::Symbol(_, name, ..) => name.clone(),
+            FieldType::Symbol(_, name, ..) => name.name().to_string(),
             FieldType::Primitive(_, name, ..) => name.to_string(),
             _ => "Unknown".to_string(),
         }
@@ -140,7 +140,7 @@ impl FieldType {
     pub fn span(&self) -> &Span {
         match self {
             FieldType::Primitive(.., span, _) => span,
-            FieldType::Symbol(.., span, _) => span,
+            FieldType::Symbol(.., idn, _) => idn.span(),
             FieldType::Union(.., span, _) => span,
             FieldType::Tuple(.., span, _) => span,
             FieldType::Map(.., span, _) => span,
@@ -153,10 +153,9 @@ impl FieldType {
             return Ok(self.to_owned());
         }
         match self {
-            FieldType::Symbol(_arity, idn, span, attributes) => Ok(FieldType::Symbol(
+            FieldType::Symbol(_arity, idn, attributes) => Ok(FieldType::Symbol(
                 FieldArity::Optional,
-                idn.to_owned(),
-                span.to_owned(),
+                Identifier::Local(idn.name().to_string(), idn.span().clone()),
                 attributes.to_owned(),
             )),
             FieldType::Primitive(_arity, type_value, span, attributes) => Ok(FieldType::Primitive(
@@ -200,7 +199,7 @@ impl FieldType {
 
     pub fn is_nullable(&self) -> bool {
         match self {
-            FieldType::Symbol(arity, t, _, _) => arity.is_optional(),
+            FieldType::Symbol(arity, ..) => arity.is_optional(),
             FieldType::Union(arity, f, _, _) => {
                 arity.is_optional() || f.iter().any(|t| t.is_nullable())
             }
@@ -228,7 +227,10 @@ impl FieldType {
     // All the identifiers used in this type.
     pub fn flat_idns(&self) -> Vec<&Identifier> {
         match self {
-            FieldType::Symbol(_, idn, ..) => vec![],
+            FieldType::Symbol(_, idn, ..) => {
+                vec![&idn]
+            }
+
             FieldType::Union(_, f, ..) => f.iter().flat_map(|t| t.flat_idns()).collect(),
             FieldType::Tuple(_, f, ..) => f.iter().flat_map(|t| t.flat_idns()).collect(),
             FieldType::Map(kv, ..) => {
@@ -280,7 +282,12 @@ impl std::fmt::Display for FieldType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FieldType::Symbol(arity, idn, ..) => {
-                write!(f, "{}{}", idn, if arity.is_optional() { "?" } else { "" })
+                write!(
+                    f,
+                    "{:#?}{}",
+                    idn,
+                    if arity.is_optional() { "?" } else { "" }
+                )
             }
             FieldType::Union(arity, ft, ..) => {
                 let mut ft = ft.iter().map(|t| t.to_string()).collect::<Vec<_>>();

@@ -123,7 +123,7 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                 },
                 "optional": arity.is_optional(),
             }),
-            FieldType::Symbol(arity, name, ..) => match self.0.find_type_by_str(name) {
+            FieldType::Symbol(arity, name, ..) => match self.0.find_type(name) {
                 Some(either::Either::Left(cls)) => {
                     let mut class_type = cls.serialize_data(db);
                     let Some(obj) = class_type.as_object_mut() else {

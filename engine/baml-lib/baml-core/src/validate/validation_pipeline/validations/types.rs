@@ -61,12 +61,13 @@ fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
                 ));
             }
         }
-        FieldType::Symbol(_, name, span, _) => {
-            if ctx.db.find_type_by_str(name).is_none() {
+        FieldType::Symbol(_, idn, _) => {
+            if ctx.db.find_type(idn).is_none() {
+                println!("Type not found: {:?}", idn.name());
                 ctx.push_error(DatamodelError::not_found_error(
                     "Type",
-                    name,
-                    span.clone(),
+                    idn.name(),
+                    idn.span().clone(),
                     ctx.db
                         .walk_classes()
                         .chain(ctx.db.walk_enums())

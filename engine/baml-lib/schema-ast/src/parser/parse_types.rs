@@ -155,8 +155,10 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
                     }
                     _ => FieldType::Symbol(
                         FieldArity::Required,
-                        identifier.name().to_string(),
-                        diagnostics.span(current.as_span()),
+                        Identifier::Local(
+                            identifier.name().to_string(),
+                            diagnostics.span(current.as_span()),
+                        ),
                         None,
                     ),
                 };

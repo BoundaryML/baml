@@ -60,7 +60,11 @@ impl<'db> ClassWalker<'db> {
 
     /// Iterate all the scalar fields in a given class in the order they were defined.
     pub fn dependencies(self) -> &'db HashSet<String> {
-        &self.db.types.class_dependencies[&self.id]
+        {
+            let dependencies = &self.db.types.class_dependencies[&self.id];
+            println!("From dependencies call: {:?}", dependencies);
+            dependencies
+        }
     }
 
     /// Find all enums used by this class and any of its fields.

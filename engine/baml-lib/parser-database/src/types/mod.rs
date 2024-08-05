@@ -19,9 +19,6 @@ mod prompt;
 mod to_string_attributes;
 mod types;
 
-use log::info;
-use prompt::validate_prompt;
-
 pub use to_string_attributes::{
     DynamicStringAttributes, StaticStringAttributes, ToStringAttributes,
 };
@@ -36,7 +33,10 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
             (ast::TopId::Enum(idx), ast::Top::Enum(model)) => visit_enum(model, ctx),
             (_, ast::Top::Enum(enm)) => unreachable!("Enum misconfigured"),
 
-            (ast::TopId::Class(idx), ast::Top::Class(model)) => visit_class(idx, model, ctx),
+            (ast::TopId::Class(idx), ast::Top::Class(model)) => {
+                visit_class(idx, model, ctx);
+                println!("inside block, classes: {:#?}", ctx.types.class_dependencies);
+            }
             (_, ast::Top::Class(_)) => unreachable!("Class misconfigured"),
             (ast::TopId::TemplateString(idx), ast::Top::TemplateString(template_string)) => {
                 visit_template_string(idx, template_string, ctx)
@@ -64,6 +64,11 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
             _ => {}
         }
     }
+
+    println!(
+        "end of resolve types, class depenedencies: {:#?}",
+        ctx.types.class_dependencies
+    );
 }
 #[derive(Debug, Clone)]
 /// Variables used inside of raw strings.
@@ -302,16 +307,16 @@ fn visit_class<'db>(
     let used_types = class
         .iter_fields()
         .flat_map(|(_, f)| f.expr.iter().flat_map(|e| e.flat_idns()))
-        // .filter(|id| {
-        //     id.is_valid_type()
-        //         && match id {
-        //             ast::Identifier::Primitive(..) => false,
-        //             _ => true,
-        //         }
-        // })
         .map(|id| id.name().to_string())
         .collect::<HashSet<_>>();
+
+    for (field_id, field) in class.iter_fields() {
+        println!("Field ID: {:?}, Field: {:?}", field_id, field);
+    }
+    println!("visit_class: used types: {:#?}", used_types);
     ctx.types.class_dependencies.insert(class_id, used_types);
+
+    println!("visit_class: {:#?}", ctx.types.class_dependencies);
 }
 
 fn visit_function<'db>(idx: ValExpId, function: &'db ast::ValueExprBlock, ctx: &mut Context<'db>) {

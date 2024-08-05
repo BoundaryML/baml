@@ -246,7 +246,7 @@ impl<'db> crate::ParserDatabase {
     pub fn to_jinja_type(&self, ft: &FieldType) -> internal_baml_jinja::Type {
         use internal_baml_jinja::Type;
         match ft {
-            FieldType::Symbol(arity, idn, ..) => match self.find_type_by_str(idn) {
+            FieldType::Symbol(arity, idn, ..) => match self.find_type(idn) {
                 None => Type::Undefined,
                 Some(Either::Left(_)) => Type::ClassRef(idn.to_string()),
                 Some(Either::Right(_)) => Type::String,

@@ -152,6 +152,8 @@ impl ParserDatabase {
             })
             .collect::<Vec<_>>();
 
+        // println!("deps: {:#?}", deps);
+
         // Can only process deps which have 0 class dependencies.
         let mut max_loops = 100;
         while !deps.is_empty() && max_loops > 0 {

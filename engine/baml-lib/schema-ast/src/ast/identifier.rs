@@ -1,4 +1,5 @@
 use super::{Span, WithName, WithSpan};
+use std::fmt::Display;
 
 /// An identifier the refers to a field or type in a different location.
 #[derive(Debug, Clone, PartialEq)]
@@ -111,5 +112,11 @@ impl From<(&str, Span)> for Identifier {
             other if other.contains('-') => Identifier::String(other.to_string(), span),
             other => Identifier::Local(other.to_string(), span),
         }
+    }
+}
+
+impl Display for Identifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
     }
 }
