@@ -35,7 +35,6 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
 
             (ast::TopId::Class(idx), ast::Top::Class(model)) => {
                 visit_class(idx, model, ctx);
-                println!("inside block, classes: {:#?}", ctx.types.class_dependencies);
             }
             (_, ast::Top::Class(_)) => unreachable!("Class misconfigured"),
             (ast::TopId::TemplateString(idx), ast::Top::TemplateString(template_string)) => {
@@ -64,11 +63,6 @@ pub(super) fn resolve_types(ctx: &mut Context<'_>) {
             _ => {}
         }
     }
-
-    println!(
-        "end of resolve types, class depenedencies: {:#?}",
-        ctx.types.class_dependencies
-    );
 }
 #[derive(Debug, Clone)]
 /// Variables used inside of raw strings.
@@ -310,13 +304,7 @@ fn visit_class<'db>(
         .map(|id| id.name().to_string())
         .collect::<HashSet<_>>();
 
-    for (field_id, field) in class.iter_fields() {
-        println!("Field ID: {:?}, Field: {:?}", field_id, field);
-    }
-    println!("visit_class: used types: {:#?}", used_types);
     ctx.types.class_dependencies.insert(class_id, used_types);
-
-    println!("visit_class: {:#?}", ctx.types.class_dependencies);
 }
 
 fn visit_function<'db>(idx: ValExpId, function: &'db ast::ValueExprBlock, ctx: &mut Context<'db>) {

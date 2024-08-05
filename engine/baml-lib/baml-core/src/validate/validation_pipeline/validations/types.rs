@@ -63,7 +63,6 @@ fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
         }
         FieldType::Symbol(_, idn, _) => {
             if ctx.db.find_type(idn).is_none() {
-                println!("Type not found: {:?}", idn.name());
                 ctx.push_error(DatamodelError::not_found_error(
                     "Type",
                     idn.name(),

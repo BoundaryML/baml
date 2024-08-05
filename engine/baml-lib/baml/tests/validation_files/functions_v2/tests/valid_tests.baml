@@ -74,9 +74,9 @@ test Foo {
   }
 }
 
-// warning: 'email' is a string, expected class
-//   -->  functions_v2/tests/valid_tests.baml:22
+// error: Primitive type null not found. Did you mean one of these: `bool`, `bool`, `int`? (from error.rs l.422)
+//   -->  functions_v2/tests/valid_tests.baml:46
 //    | 
-// 21 |   client Bar
-// 22 |   prompt #" subject line {{ email.subject }} "#
+// 45 |   // But we should do something...
+// 46 |   baz: (string | int?)[]
 //    | 
