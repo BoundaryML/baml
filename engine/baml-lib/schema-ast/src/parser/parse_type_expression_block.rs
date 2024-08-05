@@ -80,7 +80,10 @@ pub(crate) fn parse_type_expression_block(
                         Rule::comment_block => pending_field_comment = Some(item),
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                "This line is not a valid field or attribute definition. A valid class property looks like: 'myProperty string[] @description(\"This is a description\")'",
+                                match sub_type {
+                                    Some(SubType::Enum) => "This line is not an enum value definition. BAML enums don't have commas, and all values must be all caps.",
+                                    _ => "This line is not a valid field or attribute definition. A valid class property looks like: 'myProperty string[] @description(\"This is a description\")'",
+                                },
                                 diagnostics.span(item.as_span()),
                             ))
                         }
