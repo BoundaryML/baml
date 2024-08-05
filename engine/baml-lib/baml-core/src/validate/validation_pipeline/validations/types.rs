@@ -37,8 +37,9 @@ fn validate_type_exists(ctx: &mut Context<'_>, field_type: &FieldType) {
 fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
     match field_type {
         FieldType::Map(kv_types, ..) => {
+            println!("Index of map: {:?}", kv_types.0);
             match &kv_types.0 {
-                FieldType::Primitive(FieldArity::Required, _, ..) => {}
+                FieldType::Primitive(FieldArity::Required, TypeValue::String, ..) => {}
                 key_type => {
                     ctx.push_error(DatamodelError::new_validation_error(
                         "Maps may only have strings as keys",
