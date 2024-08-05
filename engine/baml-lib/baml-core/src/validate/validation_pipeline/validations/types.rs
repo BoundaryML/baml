@@ -20,18 +20,25 @@ fn errors_with_names<'a>(ctx: &'a mut Context<'_>, idn: &Identifier) {
 ///   1. Verify that the type is resolveable (for REF types)
 ///   2. Verify that the type is well-formed/allowed in the language
 pub(crate) fn validate_type(ctx: &mut Context<'_>, field_type: &FieldType) {
-    validate_type_exists(ctx, field_type);
-    validate_type_allowed(ctx, field_type);
+    if validate_type_exists(ctx, field_type) == false {
+        validate_type_allowed(ctx, field_type);
+    }
 }
 
-fn validate_type_exists(ctx: &mut Context<'_>, field_type: &FieldType) {
+fn validate_type_exists(ctx: &mut Context<'_>, field_type: &FieldType) -> bool {
+    let mut errors = false;
     field_type
         .flat_idns()
         .iter()
         .for_each(|f| match ctx.db.find_type(f) {
             Some(_) => {}
-            None => errors_with_names(ctx, f),
+
+            None => {
+                errors_with_names(ctx, f);
+                errors = true
+            }
         });
+    errors
 }
 
 fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
