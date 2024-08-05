@@ -91,28 +91,22 @@ pub(crate) fn parse_expr_as_type(
     }
 
     match (name, field_type) {
-        (Some(name), Some(field_type)) => {
-
-            Ok(Field {
-                expr: Some(field_type.clone()),
-                name,
-                attributes: field_type.attributes().to_vec(),
-                documentation: comment,
-                span: diagnostics.span(pair_span),
-            })
-        },
-        (Some(name), None) => {
-
-            Ok(Field {
-                expr: None,
-                name,
-                attributes: enum_attributes,
-                documentation: comment,
-                span: diagnostics.span(pair_span),
-            })
-        },
+        (Some(name), Some(field_type)) => Ok(Field {
+            expr: Some(field_type.clone()),
+            name,
+            attributes: field_type.attributes().to_vec(),
+            documentation: comment,
+            span: diagnostics.span(pair_span),
+        }),
+        (Some(name), None) => Ok(Field {
+            expr: None,
+            name,
+            attributes: enum_attributes,
+            documentation: comment,
+            span: diagnostics.span(pair_span),
+        }),
         _ => Err(DatamodelError::new_model_validation_error(
-            "expr as type!! This field declaration is invalid. It is either missing a name or a type.",
+            "This field declaration is invalid. It is either missing a name or a type.",
             container_type,
             model_name.as_ref().map_or("<unknown>", |f| f.name()),
             diagnostics.span(pair_span),

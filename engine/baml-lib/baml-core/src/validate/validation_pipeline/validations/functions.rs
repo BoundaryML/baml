@@ -80,7 +80,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         match func.client() {
             Some(_) => {}
             None => {
-                let client = func.metadata().client.as_ref().unwrap();
+                let client = func.metadata().client.as_ref().unwrap(); // TODO(unwrap)
                 ctx.push_error(DatamodelError::not_found_error(
                     "Client",
                     &client.0,
@@ -111,11 +111,11 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         //     }
         // }
 
-        let prompt = func.metadata().prompt.as_ref().unwrap();
+        let prompt = func.metadata().prompt.as_ref().unwrap(); //TODO(unwrap)
         defined_types.start_scope();
 
         func.walk_input_args().for_each(|arg| {
-            let name = arg.ast_arg().0.unwrap().name().to_string();
+            let name = arg.ast_arg().0.unwrap().name().to_string(); //TODO(unwrap)
 
             let field_type = ctx.db.to_jinja_type(&arg.ast_arg().1.field_type);
 

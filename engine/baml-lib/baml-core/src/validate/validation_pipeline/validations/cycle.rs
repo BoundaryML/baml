@@ -45,7 +45,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         let span = ctx.db.ast()[current].span();
 
         if in_stack.contains(&current) {
-            // If current is in in_stack, then we're revisiting a node, which means there's a cycle
+            // If current is in in_stack, then we're revisiting a node, which means there's a cycle TODO(unwrap)!!!
             let cycle_start_index = path.iter().position(|&x| x == current).unwrap();
             let cycle = path[cycle_start_index..]
                 .iter()

@@ -28,3 +28,13 @@ function FooBar(arg) -> bar {
 //  5 | 
 //  6 | function FooBar(arg) -> bar {
 //    | 
+// error: Error validating: Missing `prompt` and `client` fields in function. Add to the block:
+// ```
+// client GPT4
+// prompt #"..."#
+// ```
+//   -->  functions_v2/invalid.baml:6
+//    | 
+//  5 | 
+//  6 | function FooBar(arg) -> bar {
+//    | 

@@ -22,6 +22,8 @@ pub(crate) fn parse_value_expression_block(
     let attributes: Vec<Attribute> = Vec::new();
     let mut input = None;
     let mut output = None;
+    let mut client = false;
+    let mut prompt = false;
     let mut fields: Vec<Field<Expression>> = vec![];
     let mut sub_type: Option<ValueExprBlockType> = None;
     let mut has_arrow = false;
@@ -56,7 +58,7 @@ pub(crate) fn parse_value_expression_block(
                 for item in current.into_inner() {
                     match item.as_rule() {
                         Rule::value_expression => {
-                            fields.push(parse_expr_as_value(
+                            match parse_expr_as_value(
                                 &name,
                                 sub_type
                                     .clone()
@@ -71,7 +73,17 @@ pub(crate) fn parse_value_expression_block(
                                 item,
                                 pending_field_comment.take(),
                                 diagnostics,
-                            )?);
+                            ) {
+                                Ok(parsed_value) => {
+                                    // if parsed_value.name() == "client" {
+                                    //     client = true;
+                                    // } else if parsed_value.name() == "prompt" {
+                                    //     prompt = true;
+                                    // }
+                                    fields.push(parsed_value);
+                                }
+                                Err(err) => diagnostics.push_error(err),
+                            }
 
                             pending_field_comment = None;
                         }
@@ -91,8 +103,6 @@ pub(crate) fn parse_value_expression_block(
             _ => parsing_catch_all(current, "function"),
         }
     }
-
-    log::info!("Input = {:?}", input);
 
     let response = match name {
         Some(name) => {

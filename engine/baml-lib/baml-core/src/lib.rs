@@ -46,7 +46,7 @@ impl std::fmt::Debug for ValidatedSchema {
 pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema {
     let mut diagnostics = Diagnostics::new(root_path.clone());
     let mut db = internal_baml_parser_database::ParserDatabase::new();
-
+    println!("validating!");
     {
         let diagnostics = Mutex::new(&mut diagnostics);
         let db = Mutex::new(&mut db);
@@ -64,14 +64,6 @@ pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema 
                 }
             }
         });
-    }
-
-    if diagnostics.has_errors() {
-        return ValidatedSchema {
-            db,
-            diagnostics,
-            configuration: Configuration::new(),
-        };
     }
 
     if let Err(d) = db.validate(&mut diagnostics) {
