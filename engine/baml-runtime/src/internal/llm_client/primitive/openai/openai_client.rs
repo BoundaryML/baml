@@ -370,10 +370,10 @@ impl SseResponseTrait for OpenAIClient {
                                         Some(FinishReason::Stop.to_string());
                                 }
                                 finish_reason => {
-                                    log::info!(
-                                        "Received a non-stop finish reason: {:?}",
-                                        finish_reason
-                                    );
+                                    // log::info!(
+                                    //     "Received a non-stop finish reason: {:?}",
+                                    //     finish_reason
+                                    // );
                                     inner.metadata.baml_is_complete = false;
                                     inner.metadata.finish_reason =
                                         finish_reason.as_ref().map(|r| r.to_string());
