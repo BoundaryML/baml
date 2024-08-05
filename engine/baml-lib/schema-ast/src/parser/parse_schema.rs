@@ -57,19 +57,25 @@ pub fn parse_schema(
 
             while let Some(current) = pairs.next() {
                 match current.as_rule() {
-
                     Rule::type_expression_block => {
-                        let type_expr = parse_type_expression_block(current, pending_block_comment.take(), &mut diagnostics);
+                        let type_expr = parse_type_expression_block(
+                            current,
+                            pending_block_comment.take(),
+                            &mut diagnostics,
+                        );
 
-                        
                         match type_expr.sub_type {
                             SubType::Class => top_level_definitions.push(Top::Class(type_expr)),
                             SubType::Enum => top_level_definitions.push(Top::Enum(type_expr)),
                             _ => (), // may need to save other somehow for error propagation
-                            }
+                        }
                     }
                     Rule::value_expression_block => {
-                        let val_expr = parse_value_expression_block(current, pending_block_comment.take(), &mut diagnostics);
+                        let val_expr = parse_value_expression_block(
+                            current,
+                            pending_block_comment.take(),
+                            &mut diagnostics,
+                        );
                         match val_expr {
                             Ok(val) => {
                                 if let Some(top) = match val.block_type {
@@ -87,17 +93,26 @@ pub fn parse_schema(
                     }
 
                     Rule::template_declaration => {
-                        match parse_template_string(current, pending_block_comment.take(), &mut diagnostics) {
-                            Ok(template) => top_level_definitions.push(Top::TemplateString(template)),
+                        match parse_template_string(
+                            current,
+                            pending_block_comment.take(),
+                            &mut diagnostics,
+                        ) {
+                            Ok(template) => {
+                                top_level_definitions.push(Top::TemplateString(template))
+                            }
                             Err(e) => diagnostics.push_error(e),
                         }
                     }
 
                     Rule::EOI => {}
-                    Rule::CATCH_ALL => diagnostics.push_error(DatamodelError::new_validation_error(
+                    Rule::CATCH_ALL => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
                         "This line is invalid. It does not start with any known Baml schema keyword.",
                         diagnostics.span(current.as_span()),
-                    )),
+                    ));
+                        break;
+                    }
                     Rule::comment_block => {
                         match pairs.peek().map(|b| b.as_rule()) {
                             Some(Rule::empty_lines) => {
@@ -108,7 +123,7 @@ pub fn parse_schema(
                             // }
                             _ => (),
                         }
-                    },
+                    }
                     // We do nothing here.
                     Rule::raw_string_literal => (),
                     Rule::empty_lines => (),

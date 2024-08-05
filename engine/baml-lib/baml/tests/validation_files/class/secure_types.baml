@@ -47,6 +47,12 @@ class ComplexTypes {
 //  3 |   a map<string[], (int | bool[]) | apple_pie[][]>
 //  4 |   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    | 
+// error: Error validating: Maps may only have strings as keys
+//   -->  class/secure_types.baml:4
+//    | 
+//  3 |   a map<string[], (int | bool[]) | apple_pie[][]>
+//  4 |   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
+//    | 
 // error: Type char not found. Did you mean one of these: `int`, `float`, `bool`? (from error.rs l.422)
 //   -->  class/secure_types.baml:4
 //    | 
