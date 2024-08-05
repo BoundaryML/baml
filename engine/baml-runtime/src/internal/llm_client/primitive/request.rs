@@ -74,7 +74,7 @@ pub async fn make_request(
         }
     };
 
-    log::debug!("built request: {:?}", req);
+    log::debug!("LLM request: {:?} body: {:?}", req, req.body());
 
     let response = match client.http_client().execute(req).await {
         Ok(response) => response,

@@ -32,6 +32,16 @@ export const Snippets = () => {
           of the language.
         </DialogDescription>
       </DialogHeader>
+      <div className='flex justify-center'>
+        <a href='https://docs.boundaryml.com' target='_blank' rel='noopener noreferrer'>
+          <Button
+            variant={'ghost'}
+            className='flex flex-row items-center px-2 py-1 mt-3 mr-2 text-base whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foreground'
+          >
+            <span className='whitespace-nowrap'>View our full docs!</span>
+          </Button>
+        </a>
+      </div>
 
       {/* Use flex-row to layout the FileViewer alongside the snippet carousels */}
       <div className='flex flex-row items-start w-full h-full'>
@@ -49,16 +59,6 @@ export const Snippets = () => {
             {snippetGroups ? <div className='flex flex-col overflow-auto gap-y-4'></div> : <div>Loading...</div>}
           </div>
         </div>
-      </div>
-      <div className='flex justify-center'>
-        <a href='https://docs.boundaryml.com' target='_blank' rel='noopener noreferrer'>
-          <Button
-            variant={'ghost'}
-            className='flex flex-row items-center px-2 py-1 mt-3 mr-2 text-base whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2 text-vscode-button-foreground'
-          >
-            <span className='whitespace-nowrap'>View our full docs!</span>
-          </Button>
-        </a>
       </div>
     </div>
   )

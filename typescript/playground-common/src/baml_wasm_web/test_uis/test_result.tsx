@@ -122,6 +122,7 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
     latency_ms: llm_response?.latency_ms,
     output_tokens: llm_response?.output_tokens,
     model: llm_response?.model,
+    stop_reason: llm_response?.stop_reason,
   })
 
   const details = [
@@ -134,7 +135,8 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
     .filter((x) => x[0] !== undefined)
     .map((x) => x[1])
 
-  const detailsText = details.length > 0 ? ` (${details.join(', ')})` : ''
+  const stopReasonText = llm_response?.stop_reason ? ` |  StopReason: ${llm_response?.stop_reason} | ` : ''
+  const detailsText = details.length > 0 ? `${stopReasonText}  (${details.join(', ')})` : ''
 
   return (
     <div className='flex flex-col w-full gap-1'>
@@ -372,6 +374,12 @@ const TestStatusBanner: React.FC = () => {
       }
       return newFilter
     })
+  }
+
+  const isNextJS = (window as any).next?.version!!
+  if (isNextJS) {
+    // simplify UI in promptfiddle
+    return null
   }
 
   return (

@@ -16,6 +16,14 @@ pub struct FunctionResult {
 
 impl std::fmt::Display for FunctionResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // print out the number of previous tries only if there was more than 1
+        if self.event_chain.len() > 1 {
+            writeln!(
+                f,
+                "{}",
+                format!("({} other previous tries)", self.event_chain.len() - 1).yellow()
+            )?;
+        }
         writeln!(f, "{}", self.llm_response())?;
         match &self.parsed() {
             Some(Ok(val)) => {

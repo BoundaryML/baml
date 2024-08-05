@@ -290,7 +290,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis; /* Ensures text is truncated with ellipsis if it overflows */
-  
 }
 
 /* TextComponent.css */
@@ -308,9 +307,9 @@
   border-radius: 8px;
 }
 
-
 /* Ensure arrows and icons have appropriate spacing */
-.tree-container .arrow, .tree-container .icon {
+.tree-container .arrow,
+.tree-container .icon {
   margin-right: 8px;
 }
 
@@ -336,7 +335,17 @@
   margin-right: 8px;
 }
 
+#cw-widget-holder {
+  @apply left-0 ml-0;
+}
 
+button.woot-widget-bubble:nth-child(1) {
+  @apply scale-50 origin-bottom-left left-1 bottom-1;
+}
+
+button.woot-elements--right:nth-child(2) {
+  @apply scale-50 origin-bottom-left left-1 bottom-1;
+}
 
 /* .json-view {
   color: var(--vscode-terminal-background);
