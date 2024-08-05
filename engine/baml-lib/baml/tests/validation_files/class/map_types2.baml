@@ -35,20 +35,6 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
   "#
 }
 
-// error: Error validating function "MyClient": Invalid syntax: missing input parameters and return type. Valid function syntax is
-// ```
-// function MyClient(param1: String, param2: String) -> ReturnType {
-//     client SomeClient
-//     prompt #"..."#
-// }
-// ```
-//   -->  class/map_types2.baml:3
-//    | 
-//  2 | 
-//  3 | client<llm> MyClient {
-//  4 |   provider openai
-//  5 | }
-//    | 
 // error: Error validating: This line is not a valid field or attribute definition. A valid class property looks like: 'myProperty string[] @description("This is a description")'
 //   -->  class/map_types2.baml:26
 //    | 

@@ -80,65 +80,15 @@ test Bar {
   }
 }
 
-// error: Error validating function "Bar": Invalid syntax: missing input parameters and return type. Valid function syntax is
-// ```
-// function Bar(param1: String, param2: String) -> ReturnType {
-//     client SomeClient
-//     prompt #"..."#
-// }
-// ```
-//   -->  functions_v2/tests/failing_tests.baml:1
-//    | 
-//    | 
-//  1 | client<llm> Bar {
-//  2 |   provider baml-openai-chat
-//  3 | }
-//    | 
-// error: Error validating function "Foo": Invalid syntax: missing input parameters and return type. Valid function syntax is
-// ```
-// function Foo(param1: String, param2: String) -> ReturnType {
-//     client SomeClient
-//     prompt #"..."#
-// }
-// ```
-//   -->  functions_v2/tests/failing_tests.baml:65
-//    | 
-// 64 | 
-// 65 | test Foo {
-// 66 |   functions [InputImage]
-// 67 |   args {
-// 68 |   }
-// 69 | }
-//    | 
-// error: Error validating function "Foo": Invalid syntax: missing input parameters and return type. Valid function syntax is
-// ```
-// function Foo(param1: String, param2: String) -> ReturnType {
-//     client SomeClient
-//     prompt #"..."#
-// }
-// ```
+// error: Test "Foo" is already defined for function "InputImage".
 //   -->  functions_v2/tests/failing_tests.baml:71
 //    | 
 // 70 | 
 // 71 | test Foo {
-// 72 |   functions [InputImage]
-// 73 |   args {
-// 74 |   }
-// 75 | }
 //    | 
-// error: Error validating function "Bar": Invalid syntax: missing input parameters and return type. Valid function syntax is
-// ```
-// function Bar(param1: String, param2: String) -> ReturnType {
-//     client SomeClient
-//     prompt #"..."#
-// }
-// ```
+// error: Test "Bar" is already defined for function "InputEnum".
 //   -->  functions_v2/tests/failing_tests.baml:77
 //    | 
 // 76 | 
 // 77 | test Bar {
-// 78 |   functions [InputEnum, InputEnum]
-// 79 |   args {
-// 80 |   }
-// 81 | }
 //    | 

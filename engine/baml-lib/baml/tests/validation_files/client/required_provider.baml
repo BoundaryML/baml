@@ -4,13 +4,7 @@ client<llm> MyClient {
   }
 }
 
-// error: Error validating function "MyClient": Invalid syntax: missing input parameters and return type. Valid function syntax is
-// ```
-// function MyClient(param1: String, param2: String) -> ReturnType {
-//     client SomeClient
-//     prompt #"..."#
-// }
-// ```
+// error: Error validating: Missing `provider` field in client. e.g. `provider openai`
 //   -->  client/required_provider.baml:1
 //    | 
 //    | 

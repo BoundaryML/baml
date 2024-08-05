@@ -7,7 +7,7 @@ function FooBar(arg) -> bar {
 
 }
 
-// error: Error validating function "Foo": No return type specified. Valid function syntax is
+// error: Error validating value expression "Foo": No return type specified. Valid function syntax is
 // ```
 // function Foo(param1: String, param2: String) -> ReturnType {
 //     client SomeClient

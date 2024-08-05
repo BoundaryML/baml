@@ -2,7 +2,8 @@ use super::{
     traits::WithAttributes, Attribute, Comment, Expression, Field, FieldType, Identifier, Span,
     WithDocumentation, WithIdentifier, WithSpan,
 };
-
+use std::fmt::Display;
+use std::fmt::Formatter;
 /// An opaque identifier for a value in an AST enum. Use the
 /// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -80,6 +81,18 @@ pub enum ValueExprBlockType {
     Generator,
     RetryPolicy,
     Test,
+}
+
+impl Display for ValueExprBlockType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValueExprBlockType::Function => write!(f, "function"),
+            ValueExprBlockType::Client => write!(f, "client"),
+            ValueExprBlockType::Generator => write!(f, "generator"),
+            ValueExprBlockType::RetryPolicy => write!(f, "retry_policy"),
+            ValueExprBlockType::Test => write!(f, "test"),
+        }
+    }
 }
 
 impl BlockArgs {

@@ -96,9 +96,9 @@ pub(crate) fn parse_value_expression_block(
 
     let response = match name {
         Some(name) => {
-            let msg = match (input.is_some(), output.is_some()) {
-                (true, true) => {
-                    if has_arrow {
+            let msg = if has_arrow {
+                match (input.is_some(), output.is_some()) {
+                    (true, true) => {
                         return Ok(ValueExprBlock {
                             name,
                             input,
@@ -109,14 +109,24 @@ pub(crate) fn parse_value_expression_block(
                             span: diagnostics.span(pair_span),
                             block_type: sub_type.unwrap_or(ValueExprBlockType::Function), // Unwrap or provide a default
                         });
-                    } else {
-                        "Invalid syntax: missing arrow for return type."
                     }
+                    (true, false) => "No return type specified.",
+                    (false, true) => "No input parameters specified.",
+                    _ => "Invalid syntax: missing input parameters and return type.",
                 }
-                (true, false) => "No return type specified.",
-                (false, true) => "No input parameters specified.",
-                _ => "Invalid syntax: missing input parameters and return type.",
+            } else {
+                return Ok(ValueExprBlock {
+                    name,
+                    input,
+                    output,
+                    attributes,
+                    fields,
+                    documentation: doc_comment.and_then(parse_comment_block),
+                    span: diagnostics.span(pair_span),
+                    block_type: sub_type.unwrap_or(ValueExprBlockType::Function), // Unwrap or provide a default
+                });
             };
+
             (msg, Some(name.name().to_string()))
         }
         None => ("Invalid syntax: missing name.", None),
@@ -135,7 +145,7 @@ function {}(param1: String, param2: String) -> ReturnType {{
             response.1.as_deref().unwrap_or("MyFunction")
         )
         .as_str(),
-        "function",
+        "value expression",
         response.1.as_deref().unwrap_or("<unknown>"),
         diagnostics.span(pair_span),
     ))
