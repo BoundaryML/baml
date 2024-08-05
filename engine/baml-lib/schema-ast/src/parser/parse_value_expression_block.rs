@@ -96,23 +96,30 @@ pub(crate) fn parse_value_expression_block(
 
     let response = match name {
         Some(name) => {
-            return Ok(ValueExprBlock {
-                name,
-                input,
-                output,
-                attributes,
-                fields,
-                documentation: doc_comment.and_then(parse_comment_block),
-                span: diagnostics.span(pair_span),
-                block_type: sub_type.unwrap_or(ValueExprBlockType::Function), // Unwrap or provide a default
-            });
-            // (msg, Some(name.name().to_string()))
+            let msg = match (input.is_some(), output.is_some()) {
+                (true, true) => {
+                    if has_arrow {
+                        return Ok(ValueExprBlock {
+                            name,
+                            input,
+                            output,
+                            attributes,
+                            fields,
+                            documentation: doc_comment.and_then(parse_comment_block),
+                            span: diagnostics.span(pair_span),
+                            block_type: sub_type.unwrap_or(ValueExprBlockType::Function), // Unwrap or provide a default
+                        });
+                    } else {
+                        "Invalid syntax: missing arrow for return type."
+                    }
+                }
+                (true, false) => "No return type specified.",
+                (false, true) => "No input parameters specified.",
+                _ => "Invalid syntax: missing input parameters and return type.",
+            };
+            (msg, Some(name.name().to_string()))
         }
-        None => (
-            "Could not match on name for value expression.",
-            None::<String>,
-            None::<String>,
-        ),
+        None => ("Invalid syntax: missing name.", None),
     };
 
     Err(DatamodelError::new_model_validation_error(

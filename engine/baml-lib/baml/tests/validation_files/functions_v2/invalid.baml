@@ -7,6 +7,21 @@ function FooBar(arg) -> bar {
 
 }
 
+// error: Error validating function "Foo": No return type specified. Valid function syntax is
+// ```
+// function Foo(param1: String, param2: String) -> ReturnType {
+//     client SomeClient
+//     prompt #"..."#
+// }
+// ```
+//   -->  functions_v2/invalid.baml:1
+//    | 
+//    | 
+//  1 | function Foo() -> {
+//  2 |   client Bar
+//  3 |   prompt #"fa"#
+//  4 | }
+//    | 
 // error: Error validating: No type specified for argument: arg. Expected: `arg: type`
 //   -->  functions_v2/invalid.baml:6
 //    | 

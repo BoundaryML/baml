@@ -52,7 +52,7 @@ pub(crate) fn parse_expr_as_value(
             span: diagnostics.span(pair_span),
         }),
         _ => Err(DatamodelError::new_model_validation_error(
-            "expr as val!! This field declaration is invalid. It is either missing a name or a type.",
+            "This field declaration is invalid. It is either missing a name or a type.",
             container_type,
             model_name.as_ref().map_or("<unknown>", |f| f.name()),
             diagnostics.span(pair_span),

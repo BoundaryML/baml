@@ -38,15 +38,17 @@ function Bar1(a: string) -> int {
   "#
 }
 
-// warning: Variable `b` does not exist. Did you mean one of these: `_`, `ctx`?
-//   -->  functions_v2/prompt_errors/prompt1.baml:6
+// error: Error validating function "Bar": Invalid syntax: missing input parameters and return type. Valid function syntax is
+// ```
+// function Bar(param1: String, param2: String) -> ReturnType {
+//     client SomeClient
+//     prompt #"..."#
+// }
+// ```
+//   -->  functions_v2/prompt_errors/prompt1.baml:1
 //    | 
-//  5 | template_string Foo() #"
-//  6 |   This! {{ b}}
 //    | 
-// warning: Function 'Foo' expects 0 arguments, but got 1
-//   -->  functions_v2/prompt_errors/prompt1.baml:24
-//    | 
-// 23 |   prompt #"
-// 24 |     {{ Foo(a) }}
+//  1 | client<llm> Bar {
+//  2 |   provider baml-openai-chat
+//  3 | }
 //    | 

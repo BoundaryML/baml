@@ -51,7 +51,7 @@ fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
         }
 
         FieldType::Primitive(_, type_value, span, _) => {
-            let primitives = vec!["int", "float", "bool", "string", "image", "audio"];
+            let primitives = vec!["int", "float", "bool", "string", "image", "audio", "null"];
             if !primitives.contains(&type_value.to_string().as_str()) {
                 ctx.push_error(DatamodelError::not_found_error(
                     "Primitive type",

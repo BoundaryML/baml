@@ -410,6 +410,7 @@ impl DatamodelError {
             "string".to_string(),
             "image".to_string(),
             "audio".to_string(),
+            "null".to_string(),
         ];
         names.extend(primitives);
 

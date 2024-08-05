@@ -62,7 +62,7 @@ impl<'db> ClassWalker<'db> {
     pub fn dependencies(self) -> &'db HashSet<String> {
         {
             let dependencies = &self.db.types.class_dependencies[&self.id];
-            println!("From dependencies call: {:?}", dependencies);
+
             dependencies
         }
     }

@@ -8,7 +8,7 @@ client<llm> Hello {
   }
 }
 
-// error: Error validating Client "Hello": expr as val!! This field declaration is invalid. It is either missing a name or a type.
+// error: Error validating Client "Hello": This field declaration is invalid. It is either missing a name or a type.
 //   -->  strings/unquoted_strings.baml:3
 //    | 
 //  2 |   provider openai

@@ -137,7 +137,7 @@ class ComplexTypes {
 //  6 |   d map<int[][], ((int | float) | char[])>
 //  7 |   e ((int, string | char) | ((float, double) | long[], bool)[][][])
 //    | 
-// error: Type double not found. Did you mean one of these: `bool`, `image`, `audio`? (from error.rs l.422)
+// error: Type double not found. Did you mean one of these: `bool`, `null`, `image`? (from error.rs l.422)
 //   -->  class/secure_types.baml:7
 //    | 
 //  6 |   d map<int[][], ((int | float) | char[])>
@@ -179,7 +179,7 @@ class ComplexTypes {
 //  8 |   f VeryLongWord_With_123_Numbers[][][][]
 //  9 |   g (int, (float, char, bool), string[]) | tuple_inside_tuple[]
 //    | 
-// error: Type tuple_inside_tuple not found. Did you mean one of these: `ComplexTypes`, `int`, `float`? (from error.rs l.422)
+// error: Type tuple_inside_tuple not found. Did you mean one of these: `ComplexTypes`, `int`, `null`? (from error.rs l.422)
 //   -->  class/secure_types.baml:9
 //    | 
 //  8 |   f VeryLongWord_With_123_Numbers[][][][]
@@ -281,7 +281,7 @@ class ComplexTypes {
 // 11 |   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
 // 12 |   j ((char, int[][], (bool | string[][])) | double[][][][], (float, int)[])
 //    | 
-// error: Type double not found. Did you mean one of these: `bool`, `image`, `audio`? (from error.rs l.422)
+// error: Type double not found. Did you mean one of these: `bool`, `null`, `image`? (from error.rs l.422)
 //   -->  class/secure_types.baml:12
 //    | 
 // 11 |   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
@@ -317,7 +317,7 @@ class ComplexTypes {
 // 12 |   j ((char, int[][], (bool | string[][])) | double[][][][], (float, int)[])
 // 13 |   k map<string[], (int | long[])> | map<float[][], double[][]>
 //    | 
-// error: Type double not found. Did you mean one of these: `bool`, `image`, `audio`? (from error.rs l.422)
+// error: Type double not found. Did you mean one of these: `bool`, `null`, `image`? (from error.rs l.422)
 //   -->  class/secure_types.baml:13
 //    | 
 // 12 |   j ((char, int[][], (bool | string[][])) | double[][][][], (float, int)[])
@@ -377,31 +377,31 @@ class ComplexTypes {
 // 14 |   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 // 15 |   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
 //    | 
-// error: Type tuple_1 not found. Did you mean one of these: `float`, `bool`, `image`? (from error.rs l.422)
+// error: Type tuple_1 not found. Did you mean one of these: `null`, `float`, `bool`? (from error.rs l.422)
 //   -->  class/secure_types.baml:15
 //    | 
 // 14 |   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 // 15 |   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
 //    | 
-// error: Type tuple_2 not found. Did you mean one of these: `float`, `bool`, `image`? (from error.rs l.422)
+// error: Type tuple_2 not found. Did you mean one of these: `null`, `float`, `bool`? (from error.rs l.422)
 //   -->  class/secure_types.baml:15
 //    | 
 // 14 |   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 // 15 |   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
 //    | 
-// error: Type tuple_3 not found. Did you mean one of these: `float`, `bool`, `image`? (from error.rs l.422)
+// error: Type tuple_3 not found. Did you mean one of these: `null`, `float`, `bool`? (from error.rs l.422)
 //   -->  class/secure_types.baml:15
 //    | 
 // 14 |   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 // 15 |   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
 //    | 
-// error: Type tuple_4 not found. Did you mean one of these: `float`, `bool`, `image`? (from error.rs l.422)
+// error: Type tuple_4 not found. Did you mean one of these: `null`, `float`, `bool`? (from error.rs l.422)
 //   -->  class/secure_types.baml:15
 //    | 
 // 14 |   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 // 15 |   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
 //    | 
-// error: Type tuple_5 not found. Did you mean one of these: `float`, `bool`, `image`? (from error.rs l.422)
+// error: Type tuple_5 not found. Did you mean one of these: `null`, `float`, `bool`? (from error.rs l.422)
 //   -->  class/secure_types.baml:15
 //    | 
 // 14 |   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
@@ -443,7 +443,7 @@ class ComplexTypes {
 // 16 |   n map<complex_key_type[], map<another_key, (int | string[])>>
 // 17 |   o (((int | string) | bool[]), (float, double) | long_long_identifier_123)
 //    | 
-// error: Type double not found. Did you mean one of these: `bool`, `image`, `audio`? (from error.rs l.422)
+// error: Type double not found. Did you mean one of these: `bool`, `null`, `image`? (from error.rs l.422)
 //   -->  class/secure_types.baml:17
 //    | 
 // 16 |   n map<complex_key_type[], map<another_key, (int | string[])>>
