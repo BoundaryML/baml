@@ -80,7 +80,16 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         match func.client() {
             Some(_) => {}
             None => {
-                let client = func.metadata().client.as_ref().unwrap(); // TODO(unwrap)
+                let client = match func.metadata().client.as_ref() {
+                    Some(client) => client,
+                    None => {
+                        ctx.push_error(DatamodelError::new_validation_error(
+                            "Client metadata is missing.",
+                            func.span().clone(),
+                        ));
+                        continue;
+                    }
+                };
                 ctx.push_error(DatamodelError::not_found_error(
                     "Client",
                     &client.0,
@@ -111,11 +120,29 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         //     }
         // }
 
-        let prompt = func.metadata().prompt.as_ref().unwrap(); //TODO(unwrap)
+        let prompt = match func.metadata().prompt.as_ref() {
+            Some(prompt) => prompt,
+            None => {
+                ctx.push_error(DatamodelError::new_validation_error(
+                    "Prompt metadata is missing.",
+                    func.span().clone(),
+                ));
+                continue;
+            }
+        };
         defined_types.start_scope();
 
         func.walk_input_args().for_each(|arg| {
-            let name = arg.ast_arg().0.unwrap().name().to_string(); //TODO(unwrap)
+            let name = match arg.ast_arg().0 {
+                Some(arg) => arg.name().to_string(),
+                None => {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Argument name is missing.",
+                        arg.ast_arg().1.span().clone(),
+                    ));
+                    return;
+                }
+            };
 
             let field_type = ctx.db.to_jinja_type(&arg.ast_arg().1.field_type);
 

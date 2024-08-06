@@ -3,9 +3,8 @@ mod internal_tests {
     use std::collections::HashMap;
 
     use baml_runtime::BamlRuntime;
-    
+
     use baml_types::BamlValue;
-    
 
     use wasm_bindgen_test::*;
     use wasm_logger;
@@ -111,7 +110,6 @@ mod internal_tests {
             .await;
 
         assert!(res.is_ok(), "Result: {:#?}", res.err());
-        log::info!("Result: {}", res.ok().unwrap());
 
         Ok(())
     }

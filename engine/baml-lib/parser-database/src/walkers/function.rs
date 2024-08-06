@@ -205,12 +205,6 @@ impl WithSpan for FunctionWalker<'_> {
     }
 }
 
-// impl WithIdentifier for ArgWalker<'_> {
-//     fn identifier(&self) -> &ast::Identifier {
-//         self.ast_arg().0.unwrap()
-//     }
-// }
-
 impl<'db> WithSerializeableContent for ArgWalker<'db> {
     fn serialize_data(&self, db: &'_ ParserDatabase) -> serde_json::Value {
         json!({

@@ -45,8 +45,16 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         let span = ctx.db.ast()[current].span();
 
         if in_stack.contains(&current) {
-            // If current is in in_stack, then we're revisiting a node, which means there's a cycle TODO(unwrap)!!!
-            let cycle_start_index = path.iter().position(|&x| x == current).unwrap();
+            let cycle_start_index = match path.iter().position(|&x| x == current) {
+                Some(index) => index,
+                None => {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Cycle start index not found in the path.",
+                        span.clone(),
+                    ));
+                    return;
+                }
+            };
             let cycle = path[cycle_start_index..]
                 .iter()
                 .map(|&x| ctx.db.ast()[x].name())
