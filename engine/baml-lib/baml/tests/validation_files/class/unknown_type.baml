@@ -9,9 +9,3 @@ class InterfaceTwo {
 //  2 |   interface string
 //  3 |   prop2 Bar
 //    | 
-// error: Type Bar not found. Did you mean one of these: `int`, `bool`, `float`? (from error.rs l.422)
-//   -->  class/unknown_type.baml:3
-//    | 
-//  2 |   interface string
-//  3 |   prop2 Bar
-//    | 
