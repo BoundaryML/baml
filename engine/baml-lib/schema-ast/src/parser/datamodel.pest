@@ -89,7 +89,7 @@ arguments_list = { "(" ~ (NEWLINE?) ~ expression? ~ ("," ~ (NEWLINE?) ~ expressi
 // Expressions & Functions
 // ######################################
 map_key   = { identifier | quoted_string_literal }
-map_entry = { (comment_block | empty_lines)* ~ map_key ~ (expression | ENTRY_CATCH_ALL)? ~ ENTRY_CATCH_ALL? ~ trailing_comment? }
+map_entry = { (comment_block | empty_lines)* ~ map_key ~ (expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
 
 splitter         = _{ ("," ~ NEWLINE?) | NEWLINE }
 map_expression   =  { "{" ~ empty_lines? ~ (map_entry ~ (splitter ~ map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
