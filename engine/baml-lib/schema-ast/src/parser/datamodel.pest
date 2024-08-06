@@ -1,50 +1,46 @@
 schema = {
-    SOI ~ (value_expression_block | type_expression_block | template_declaration  | type_alias | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
+    SOI ~ (value_expression_block | type_expression_block | template_declaration | type_alias | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
 }
 
 // ######################################
 // Unified Block for Class and Enum
 // ######################################
-type_expression_keyword = { ENUM_KEYWORD | CLASS_KEYWORD | identifier } 
-type_expression_block = { type_expression_keyword ~ identifier ~ named_argument_list? ~ BLOCK_OPEN ~ type_expression_contents ~ BLOCK_CLOSE }
-type_expression_contents = { 
+type_expression_keyword  = { ENUM_KEYWORD | CLASS_KEYWORD | identifier }
+type_expression_block    = { type_expression_keyword ~ identifier ~ named_argument_list? ~ BLOCK_OPEN ~ type_expression_contents ~ BLOCK_CLOSE }
+type_expression_contents = {
     (type_expression | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
-type_expression = {
-    identifier ~ field_type_chain? ~ (NEWLINE? ~ (field_attribute | trailing_comment))* ~ NEWLINE? 
+type_expression          = {
+    identifier ~ field_type_chain? ~ (NEWLINE? ~ (field_attribute | trailing_comment))* ~ NEWLINE?
 }
 
-field_operator = { "|" | "&" }
-field_type_chain = { field_type_with_attr ~ (field_operator ~ field_type_with_attr)* }
+field_operator       = { "|" | "&" }
+field_type_chain     = { field_type_with_attr ~ (field_operator ~ field_type_with_attr)* }
 field_type_with_attr = { field_type ~ (NEWLINE? ~ (field_attribute | trailing_comment))* }
 
 // ######################################
 // Unified Block for Function, Test, Client, Generator
 // ######################################
-value_expression_keyword = { FUNCTION_KEYWORD | TEST_KEYWORD | CLIENT_KEYWORD | RETRY_POLICY_KEYWORD | GENERATOR_KEYWORD }
-value_expression_block = { value_expression_keyword ~ identifier ~ named_argument_list? ~ ARROW? ~ field_type? ~ SPACER_TEXT ~ BLOCK_OPEN ~ value_expression_contents ~ BLOCK_CLOSE }
+value_expression_keyword  = { FUNCTION_KEYWORD | TEST_KEYWORD | CLIENT_KEYWORD | RETRY_POLICY_KEYWORD | GENERATOR_KEYWORD }
+value_expression_block    = { value_expression_keyword ~ identifier ~ named_argument_list? ~ ARROW? ~ field_type? ~ SPACER_TEXT ~ BLOCK_OPEN ~ value_expression_contents ~ BLOCK_CLOSE }
 value_expression_contents = {
     (value_expression | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
-value_expression = { identifier ~ expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
+value_expression          = { identifier ~ expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
 
 // ######################################
 ARROW = { SPACER_TEXT ~ "->" ~ SPACER_TEXT }
 
-
 // ######################################
 // Template Declaration
 // ######################################
-assignment = { "=" }
+assignment           = { "=" }
 template_declaration = { TEMPLATE_KEYWORD ~ identifier ~ assignment? ~ named_argument_list? ~ raw_string_literal }
-
 
 colon          = { ":" }
 named_argument = { identifier ~ ((":" ~ field_type) | colon)? }
 // Be forgiving and allow trailing comma
 named_argument_list = { openParan ~ SPACER_TEXT ~ named_argument? ~ ("," ~ SPACER_TEXT ~ named_argument)* ~ ","? ~ SPACER_TEXT ~ closeParan }
-
-
 
 // ######################################
 // Attributes
@@ -52,29 +48,28 @@ named_argument_list = { openParan ~ SPACER_TEXT ~ named_argument? ~ ("," ~ SPACE
 block_attribute = { "@@" ~ identifier ~ arguments_list? }
 field_attribute = { "@" ~ identifier ~ arguments_list? }
 
-
 // Pest is greedy, order is very important here.
-field_type = { (union | non_union ) ~ optional_token? }
-optional_token = { "?" }
-union = { base_type_with_attr ~ (field_operator ~ base_type_with_attr)+ }
+field_type          = { (union | non_union) ~ optional_token? }
+optional_token      = { "?" }
+union               = { base_type_with_attr ~ (field_operator ~ base_type_with_attr)+ }
 base_type_with_attr = { base_type ~ (NEWLINE? ~ field_attribute)* }
-base_type = { array_notation | map | identifier | group | tuple | parenthesized_type }
+base_type           = { array_notation | map | identifier | group | tuple | parenthesized_type }
 
-array_suffix = { "[]" }
+array_suffix   = { "[]" }
 array_notation = { base_type_without_array ~ array_suffix+ }
 
 map = { "map" ~ "<" ~ field_type ~ "," ~ field_type ~ ">" }
 
-openParan = { "(" }
+openParan  = { "(" }
 closeParan = { ")" }
-group = { openParan ~ field_type ~closeParan }
-tuple = { openParan ~ field_type ~ ("," ~ field_type)+ ~ closeParan }
+group      = { openParan ~ field_type ~ closeParan }
+tuple      = { openParan ~ field_type ~ ("," ~ field_type)+ ~ closeParan }
 
 base_type_without_array = { map | identifier | group | tuple }
 
 non_union = { array_notation | map | identifier | group | tuple }
 
-parenthesized_type = {openParan ~ field_type_with_attr ~ closeParan }
+parenthesized_type = { openParan ~ field_type_with_attr ~ closeParan }
 
 path_identifier =  { single_word ~ ("." ~ single_word)+ }
 identifier      =  { path_identifier | single_word }
@@ -93,12 +88,15 @@ arguments_list = { "(" ~ (NEWLINE?) ~ expression? ~ ("," ~ (NEWLINE?) ~ expressi
 // ######################################
 // Expressions & Functions
 // ######################################
-map_key          =  { identifier | quoted_string_literal }
-map_entry        =  { (comment_block | empty_lines)* ~ map_key ~ expression ~ trailing_comment? }
+map_key   = { identifier | quoted_string_literal }
+map_entry = {
+    (comment_block | empty_lines)* ~ map_key ~ ((expression ~ trailing_comment?) | BLOCK_LEVEL_CATCH_ALL)?
+}
 splitter         = _{ ("," ~ NEWLINE?) | NEWLINE }
 map_expression   =  { "{" ~ empty_lines? ~ (map_entry ~ (splitter ~ map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
-array_expression =  { "[" ~ empty_lines? ~ (expression ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ expression ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ "]" }
+array_expression =  { "[" ~ empty_lines? ~ ((expression | ARRAY_CATCH_ALL) ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ (expression | ARRAY_CATCH_ALL) ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ "]" }
 expression       =  { map_expression | array_expression | numeric_literal | string_literal | identifier }
+ARRAY_CATCH_ALL  =  { !"]" ~ CATCH_ALL }
 
 // ######################################
 // Literals / Values
@@ -146,7 +144,6 @@ unterminated_quoted_string_literal = ${ "\"" ~ quoted_string_content }
 unterminated_string_literal        = ${ unterminated_raw_string_literal | unterminated_quoted_string_literal }
 string_literal                     =  { raw_string_literal | quoted_string_literal | unquoted_string_literal | unterminated_string_literal }
 
-
 // ######################################
 // Comments and Documentation Comments
 // ######################################
@@ -177,12 +174,12 @@ BLOCK_CLOSE = { "}" }
 BLOCK_LEVEL_CATCH_ALL = { !BLOCK_CLOSE ~ CATCH_ALL }
 CATCH_ALL             = { (!NEWLINE ~ ANY)+ ~ NEWLINE? }
 
-TYPE_KEYWORD     = { "type" }
-ENUM_KEYWORD     = { "enum" }
-CLASS_KEYWORD    = { "class" }
-FUNCTION_KEYWORD = { "function" }
-TEMPLATE_KEYWORD = { "template_string" | "string_template" }
-TEST_KEYWORD     = { "test" }
+TYPE_KEYWORD         = { "type" }
+ENUM_KEYWORD         = { "enum" }
+CLASS_KEYWORD        = { "class" }
+FUNCTION_KEYWORD     = { "function" }
+TEMPLATE_KEYWORD     = { "template_string" | "string_template" }
+TEST_KEYWORD         = { "test" }
 CLIENT_KEYWORD       = { "client<llm>" | "client" }
 GENERATOR_KEYWORD    = { "generator" }
 RETRY_POLICY_KEYWORD = { "retry_policy" }

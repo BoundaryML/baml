@@ -8,7 +8,7 @@ use super::{
 };
 
 use crate::{assert_correct_parser, ast::*};
-use crate::{ast::TypeExpressionBlock, parser::parse_field::parse_expr_as_type}; // Add this line to import DatamodelParser
+use crate::{ast::TypeExpressionBlock, parser::parse_field::parse_type_expr}; // Add this line to import DatamodelParser
 
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
@@ -58,7 +58,7 @@ pub(crate) fn parse_type_expression_block(
                         }
                         Rule::type_expression =>{
                             
-                            match parse_expr_as_type(
+                            match parse_type_expr(
                                     &name,
                                     sub_type.clone().map(|st| match st {
                                         SubType::Enum => "Enum",

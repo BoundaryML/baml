@@ -2,7 +2,7 @@
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ bundle add baml sorbet-runtime
+#  $ bundle add baml sorbet-runtime sorbet-struct-comparable
 #
 ###############################################################################
 
@@ -14,6 +14,7 @@
 # formatter:off
 # typed: false
 require "sorbet-runtime"
+require "sorbet-struct-comparable"
 
 module Baml
   
@@ -166,528 +167,196 @@ module Baml
     class UnionTest_ReturnType < T::Struct; end
     class WithReasoning < T::Struct; end
     class Blah < T::Struct
-      include Baml::Sorbet::Struct
-      const :prop4, T.nilable(String)
-
-      def initialize(props)
-        super(
-          prop4: props[:prop4],
-        )
-
-        @props = props
-      end
+      include T::Struct::ActsAsComparable
+      const :prop4, String
     end
     class ClassOptionalOutput < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :prop1, String
       const :prop2, String
-
-      def initialize(props)
-        super(
-          prop1: props[:prop1],
-          prop2: props[:prop2],
-        )
-
-        @props = props
-      end
     end
     class ClassOptionalOutput2 < T::Struct
-      include Baml::Sorbet::Struct
-      const :prop1, T.nilable(String)
-      const :prop2, T.nilable(String)
+      include T::Struct::ActsAsComparable
+      const :prop1, String
+      const :prop2, String
       const :prop3, T.nilable(Baml::Types::Blah)
-
-      def initialize(props)
-        super(
-          prop1: props[:prop1],
-          prop2: props[:prop2],
-          prop3: props[:prop3],
-        )
-
-        @props = props
-      end
     end
     class ClassWithImage < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :myImage, Baml::Image
       const :param2, String
       const :fake_image, Baml::Types::FakeImage
-
-      def initialize(props)
-        super(
-          myImage: props[:myImage],
-          param2: props[:param2],
-          fake_image: props[:fake_image],
-        )
-
-        @props = props
-      end
     end
     class DummyOutput < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :nonce, String
       const :nonce2, String
-
-      def initialize(props)
-        super(
-          nonce: props[:nonce],
-          nonce2: props[:nonce2],
-        )
-
-        @props = props
-      end
     end
     class DynInputOutput < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :testKey, String
-
-      def initialize(props)
-        super(
-          testKey: props[:testKey],
-        )
-
-        @props = props
-      end
     end
     class DynamicClassOne < T::Struct
-      include Baml::Sorbet::Struct
-
-      def initialize(props)
-        super(
-        )
-
-        @props = props
-      end
+      include T::Struct::ActsAsComparable
     end
     class DynamicClassTwo < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :hi, String
       const :some_class, Baml::Types::SomeClassNestedDynamic
       const :status, Baml::Types::DynEnumOne
-
-      def initialize(props)
-        super(
-          hi: props[:hi],
-          some_class: props[:some_class],
-          status: props[:status],
-        )
-
-        @props = props
-      end
     end
     class DynamicOutput < T::Struct
-      include Baml::Sorbet::Struct
-
-      def initialize(props)
-        super(
-        )
-
-        @props = props
-      end
+      include T::Struct::ActsAsComparable
     end
     class Education < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :institution, String
       const :location, String
       const :degree, String
       const :major, T::Array[String]
-      const :graduation_date, T.nilable(String)
-
-      def initialize(props)
-        super(
-          institution: props[:institution],
-          location: props[:location],
-          degree: props[:degree],
-          major: props[:major],
-          graduation_date: props[:graduation_date],
-        )
-
-        @props = props
-      end
+      const :graduation_date, String
     end
     class Email < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :subject, String
       const :body, String
       const :from_address, String
-
-      def initialize(props)
-        super(
-          subject: props[:subject],
-          body: props[:body],
-          from_address: props[:from_address],
-        )
-
-        @props = props
-      end
     end
     class Event < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :title, String
       const :date, String
       const :location, String
       const :description, String
-
-      def initialize(props)
-        super(
-          title: props[:title],
-          date: props[:date],
-          location: props[:location],
-          description: props[:description],
-        )
-
-        @props = props
-      end
     end
     class FakeImage < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :url, String
-
-      def initialize(props)
-        super(
-          url: props[:url],
-        )
-
-        @props = props
-      end
     end
     class InnerClass < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :prop1, String
       const :prop2, String
       const :inner, Baml::Types::InnerClass2
-
-      def initialize(props)
-        super(
-          prop1: props[:prop1],
-          prop2: props[:prop2],
-          inner: props[:inner],
-        )
-
-        @props = props
-      end
     end
     class InnerClass2 < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :prop2, Integer
       const :prop3, Float
-
-      def initialize(props)
-        super(
-          prop2: props[:prop2],
-          prop3: props[:prop3],
-        )
-
-        @props = props
-      end
     end
     class NamedArgsSingleClass < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :key, String
       const :key_two, T::Boolean
       const :key_three, Integer
-
-      def initialize(props)
-        super(
-          key: props[:key],
-          key_two: props[:key_two],
-          key_three: props[:key_three],
-        )
-
-        @props = props
-      end
     end
     class OptionalTest_Prop1 < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :omega_a, String
       const :omega_b, Integer
-
-      def initialize(props)
-        super(
-          omega_a: props[:omega_a],
-          omega_b: props[:omega_b],
-        )
-
-        @props = props
-      end
     end
     class OptionalTest_ReturnType < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :omega_1, T.nilable(Baml::Types::OptionalTest_Prop1)
-      const :omega_2, T.nilable(String)
+      const :omega_2, String
       const :omega_3, T::Array[T.nilable(Baml::Types::OptionalTest_CategoryType)]
-
-      def initialize(props)
-        super(
-          omega_1: props[:omega_1],
-          omega_2: props[:omega_2],
-          omega_3: props[:omega_3],
-        )
-
-        @props = props
-      end
     end
     class OrderInfo < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :order_status, Baml::Types::OrderStatus
-      const :tracking_number, T.nilable(String)
-      const :estimated_arrival_date, T.nilable(String)
-
-      def initialize(props)
-        super(
-          order_status: props[:order_status],
-          tracking_number: props[:tracking_number],
-          estimated_arrival_date: props[:estimated_arrival_date],
-        )
-
-        @props = props
-      end
+      const :tracking_number, String
+      const :estimated_arrival_date, String
     end
     class Person < T::Struct
-      include Baml::Sorbet::Struct
-      const :name, T.nilable(String)
+      include T::Struct::ActsAsComparable
+      const :name, String
       const :hair_color, T.nilable(Baml::Types::Color)
-
-      def initialize(props)
-        super(
-          name: props[:name],
-          hair_color: props[:hair_color],
-        )
-
-        @props = props
-      end
     end
     class Quantity < T::Struct
-      include Baml::Sorbet::Struct
-      const :amount, T.any(Integer, Float)
-      const :unit, T.nilable(String)
-
-      def initialize(props)
-        super(
-          amount: props[:amount],
-          unit: props[:unit],
-        )
-
-        @props = props
-      end
+      include T::Struct::ActsAsComparable
+      const :amount, T.any(T.any(Integer), T.any(Float))
+      const :unit, String
     end
     class RaysData < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :dataType, Baml::Types::DataType
-      const :value, T.any(Baml::Types::Resume, Baml::Types::Event)
-
-      def initialize(props)
-        super(
-          dataType: props[:dataType],
-          value: props[:value],
-        )
-
-        @props = props
-      end
+      const :value, T.any(T.any(Baml::Types::Resume), T.any(Baml::Types::Event))
     end
     class ReceiptInfo < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :items, T::Array[Baml::Types::ReceiptItem]
-      const :total_cost, T.nilable(Float)
-
-      def initialize(props)
-        super(
-          items: props[:items],
-          total_cost: props[:total_cost],
-        )
-
-        @props = props
-      end
+      const :total_cost, Float
     end
     class ReceiptItem < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :name, String
-      const :description, T.nilable(String)
+      const :description, String
       const :quantity, Integer
       const :price, Float
-
-      def initialize(props)
-        super(
-          name: props[:name],
-          description: props[:description],
-          quantity: props[:quantity],
-          price: props[:price],
-        )
-
-        @props = props
-      end
     end
     class Recipe < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :ingredients, T::Hash[String, Baml::Types::Quantity]
-
-      def initialize(props)
-        super(
-          ingredients: props[:ingredients],
-        )
-
-        @props = props
-      end
     end
     class Resume < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :name, String
       const :email, String
       const :phone, String
       const :experience, T::Array[Baml::Types::Education]
       const :education, T::Array[String]
       const :skills, T::Array[String]
-
-      def initialize(props)
-        super(
-          name: props[:name],
-          email: props[:email],
-          phone: props[:phone],
-          experience: props[:experience],
-          education: props[:education],
-          skills: props[:skills],
-        )
-
-        @props = props
-      end
     end
     class SearchParams < T::Struct
-      include Baml::Sorbet::Struct
-      const :dateRange, T.nilable(Integer)
+      include T::Struct::ActsAsComparable
+      const :dateRange, Integer
       const :location, T::Array[String]
       const :jobTitle, T.nilable(Baml::Types::WithReasoning)
       const :company, T.nilable(Baml::Types::WithReasoning)
       const :description, T::Array[Baml::Types::WithReasoning]
-      const :tags, T::Array[T.any(Baml::Types::Tag, String)]
-
-      def initialize(props)
-        super(
-          dateRange: props[:dateRange],
-          location: props[:location],
-          jobTitle: props[:jobTitle],
-          company: props[:company],
-          description: props[:description],
-          tags: props[:tags],
-        )
-
-        @props = props
-      end
+      const :tags, T::Array[T.any(T.any(Baml::Types::Tag), T.any(String))]
     end
     class SomeClassNestedDynamic < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :hi, String
-
-      def initialize(props)
-        super(
-          hi: props[:hi],
-        )
-
-        @props = props
-      end
     end
     class StringToClassEntry < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :word, String
-
-      def initialize(props)
-        super(
-          word: props[:word],
-        )
-
-        @props = props
-      end
     end
     class TestClassAlias < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :key, String
       const :key2, String
       const :key3, String
       const :key4, String
       const :key5, String
-
-      def initialize(props)
-        super(
-          key: props[:key],
-          key2: props[:key2],
-          key3: props[:key3],
-          key4: props[:key4],
-          key5: props[:key5],
-        )
-
-        @props = props
-      end
     end
     class TestClassNested < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :prop1, String
       const :prop2, Baml::Types::InnerClass
-
-      def initialize(props)
-        super(
-          prop1: props[:prop1],
-          prop2: props[:prop2],
-        )
-
-        @props = props
-      end
     end
     class TestClassWithEnum < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :prop1, String
       const :prop2, Baml::Types::EnumInClass
-
-      def initialize(props)
-        super(
-          prop1: props[:prop1],
-          prop2: props[:prop2],
-        )
-
-        @props = props
-      end
     end
     class TestOutputClass < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :prop1, String
       const :prop2, Integer
-
-      def initialize(props)
-        super(
-          prop1: props[:prop1],
-          prop2: props[:prop2],
-        )
-
-        @props = props
-      end
     end
     class UnionTest_ReturnType < T::Struct
-      include Baml::Sorbet::Struct
-      const :prop1, T.any(String, T::Boolean)
-      const :prop2, T::Array[T.any(Float, T::Boolean)]
-      const :prop3, T.any(T::Array[T::Boolean], T::Array[Integer])
-
-      def initialize(props)
-        super(
-          prop1: props[:prop1],
-          prop2: props[:prop2],
-          prop3: props[:prop3],
-        )
-
-        @props = props
-      end
+      include T::Struct::ActsAsComparable
+      const :prop1, T.any(T.any(String), T.any(T::Boolean))
+      const :prop2, T::Array[T.any(T.any(Float), T.any(T::Boolean))]
+      const :prop3, T.any(T.any(T::Array[T::Boolean]), T.any(T::Array[Integer]))
     end
     class WithReasoning < T::Struct
-      include Baml::Sorbet::Struct
+      include T::Struct::ActsAsComparable
       const :value, String
       const :reasoning, String
-
-      def initialize(props)
-        super(
-          value: props[:value],
-          reasoning: props[:reasoning],
-        )
-
-        @props = props
-      end
     end
   end
 end

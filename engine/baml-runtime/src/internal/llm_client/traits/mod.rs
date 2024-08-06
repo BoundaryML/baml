@@ -299,7 +299,7 @@ where
 }
 
 async fn process_media_urls(
-    ifMime: bool,
+    if_mime: bool,
     ctx: &RuntimeContext,
     chat: &Vec<RenderedChatMessage>,
 ) -> Result<Vec<RenderedChatMessage>, anyhow::Error> {
@@ -311,7 +311,7 @@ async fn process_media_urls(
                 match part {
                     ChatMessagePart::Image(BamlMedia::Url(_, media_url))
                     | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
-                        if !ifMime || media_url.media_type.as_deref().unwrap_or("").is_empty() {
+                        if !if_mime || media_url.media_type.as_deref().unwrap_or("").is_empty() {
                             let (base64, mime_type) = if media_url.url.starts_with("data:") {
                                 let parts: Vec<&str> = media_url.url.splitn(2, ',').collect();
 

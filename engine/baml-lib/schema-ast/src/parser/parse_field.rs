@@ -10,7 +10,7 @@ use super::{
 use crate::ast::*;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
-pub(crate) fn parse_expr_as_value(
+pub(crate) fn parse_value_expr(
     model_name: &Option<Identifier>,
     container_type: &'static str,
     pair: Pair<'_>,
@@ -45,7 +45,7 @@ pub(crate) fn parse_expr_as_value(
 
     match (name, field_type) {
         (Some(name), Some(field_type)) => Ok(Field {
-            expr: Some(field_type),
+            expr: field_type,
             name,
             attributes,
             documentation: comment,
@@ -60,7 +60,7 @@ pub(crate) fn parse_expr_as_value(
     }
 }
 
-pub(crate) fn parse_expr_as_type(
+pub(crate) fn parse_type_expr(
     model_name: &Option<Identifier>,
     container_type: &'static str,
     pair: Pair<'_>,

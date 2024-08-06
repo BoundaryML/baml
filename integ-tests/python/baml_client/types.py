@@ -122,7 +122,7 @@ class TestEnum(str, Enum):
 class Blah(BaseModel):
     
     
-    prop4: Optional[str] = None
+    prop4: str
 
 class ClassOptionalOutput(BaseModel):
     
@@ -133,8 +133,8 @@ class ClassOptionalOutput(BaseModel):
 class ClassOptionalOutput2(BaseModel):
     
     
-    prop1: Optional[str] = None
-    prop2: Optional[str] = None
+    prop1: str
+    prop2: str
     prop3: Optional["Blah"] = None
 
 class ClassWithImage(BaseModel):
@@ -182,7 +182,7 @@ class Education(BaseModel):
     location: str
     degree: str
     major: List[str]
-    graduation_date: Optional[str] = None
+    graduation_date: str
 
 class Email(BaseModel):
     
@@ -234,46 +234,46 @@ class OptionalTest_ReturnType(BaseModel):
     
     
     omega_1: Optional["OptionalTest_Prop1"] = None
-    omega_2: Optional[str] = None
+    omega_2: str
     omega_3: List[Optional["OptionalTest_CategoryType"]]
 
 class OrderInfo(BaseModel):
     
     
     order_status: "OrderStatus"
-    tracking_number: Optional[str] = None
-    estimated_arrival_date: Optional[str] = None
+    tracking_number: str
+    estimated_arrival_date: str
 
 class Person(BaseModel):
     
     model_config = ConfigDict(extra='allow')
     
-    name: Optional[str] = None
+    name: str
     hair_color: Optional[Union["Color", str]] = None
 
 class Quantity(BaseModel):
     
     
-    amount: Union[int, float]
-    unit: Optional[str] = None
+    amount: Union[Union[int], Union[float]]
+    unit: str
 
 class RaysData(BaseModel):
     
     
     dataType: "DataType"
-    value: Union["Resume", "Event"]
+    value: Union[Union["Resume"], Union["Event"]]
 
 class ReceiptInfo(BaseModel):
     
     
     items: List["ReceiptItem"]
-    total_cost: Optional[float] = None
+    total_cost: float
 
 class ReceiptItem(BaseModel):
     
     
     name: str
-    description: Optional[str] = None
+    description: str
     quantity: int
     price: float
 
@@ -295,12 +295,12 @@ class Resume(BaseModel):
 class SearchParams(BaseModel):
     
     
-    dateRange: Optional[int] = None
+    dateRange: int
     location: List[str]
     jobTitle: Optional["WithReasoning"] = None
     company: Optional["WithReasoning"] = None
     description: List["WithReasoning"]
-    tags: List[Union["Tag", str]]
+    tags: List[Union[Union["Tag"], Union[str]]]
 
 class SomeClassNestedDynamic(BaseModel):
     
@@ -343,9 +343,9 @@ class TestOutputClass(BaseModel):
 class UnionTest_ReturnType(BaseModel):
     
     
-    prop1: Union[str, bool]
-    prop2: List[Union[float, bool]]
-    prop3: Union[List[bool], List[int]]
+    prop1: Union[Union[str], Union[bool]]
+    prop2: List[Union[Union[float], Union[bool]]]
+    prop3: Union[Union[List[bool]], Union[List[int]]]
 
 class WithReasoning(BaseModel):
     

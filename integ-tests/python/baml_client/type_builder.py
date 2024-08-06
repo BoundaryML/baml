@@ -27,43 +27,36 @@ class TypeBuilder(_TypeBuilder):
 
 
     @property
-    
     def DummyOutput(self) -> "DummyOutputBuilder":
         return DummyOutputBuilder(self)
 
 
     @property
-    
     def DynInputOutput(self) -> "DynInputOutputBuilder":
         return DynInputOutputBuilder(self)
 
 
     @property
-    
     def DynamicClassOne(self) -> "DynamicClassOneBuilder":
         return DynamicClassOneBuilder(self)
 
 
     @property
-    
     def DynamicClassTwo(self) -> "DynamicClassTwoBuilder":
         return DynamicClassTwoBuilder(self)
 
 
     @property
-    
     def DynamicOutput(self) -> "DynamicOutputBuilder":
         return DynamicOutputBuilder(self)
 
 
     @property
-    
     def Person(self) -> "PersonBuilder":
         return PersonBuilder(self)
 
 
     @property
-    
     def SomeClassNestedDynamic(self) -> "SomeClassNestedDynamicBuilder":
         return SomeClassNestedDynamicBuilder(self)
 

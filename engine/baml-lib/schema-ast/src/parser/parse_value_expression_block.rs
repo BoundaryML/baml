@@ -3,7 +3,7 @@ use std::collections::hash_map;
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_comments::*,
-    parse_field::{self, parse_expr_as_value},
+    parse_field::{self, parse_value_expr},
     parse_identifier::parse_identifier,
     parse_named_args_list::{parse_function_arg, parse_named_argument_list},
     Rule,
@@ -58,7 +58,7 @@ pub(crate) fn parse_value_expression_block(
                 for item in current.into_inner() {
                     match item.as_rule() {
                         Rule::value_expression => {
-                            match parse_expr_as_value(
+                            match parse_value_expr(
                                 &name,
                                 sub_type
                                     .clone()

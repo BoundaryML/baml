@@ -27,7 +27,7 @@ DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX.upsertTags.bind(DO_NOT_
 const flush = () => {
   DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX.flush.bind(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)()
 }
-const onLogEvent = (callback: undefined | ((event: BamlLogEvent) => void)) =>
+const onLogEvent = (callback: (event: BamlLogEvent) => void) =>
 DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX.onLogEvent(callback)
 
 export { traceAsync, traceSync, setTags, flush, onLogEvent }
