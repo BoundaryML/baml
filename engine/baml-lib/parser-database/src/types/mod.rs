@@ -308,7 +308,6 @@ fn visit_class<'db>(
 }
 
 fn visit_function<'db>(idx: ValExpId, function: &'db ast::ValueExprBlock, ctx: &mut Context<'db>) {
-    println!("Function: {:?}", function.name());
     let input_deps = function
         .input()
         .map(|input| input.flat_idns())
@@ -347,13 +346,6 @@ fn visit_function<'db>(idx: ValExpId, function: &'db ast::ValueExprBlock, ctx: &
                 field.span().clone(),
             )),
         });
-
-    println!(
-        "Function: {:?}, Prompt: {:?}, Client: {:?}",
-        function.name(),
-        prompt,
-        client
-    );
 
     match (prompt, client) {
         (Some(prompt), Some(client)) => {

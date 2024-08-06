@@ -1,9 +1,7 @@
-use std::collections::hash_map;
-
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_comments::*,
-    parse_field::{self, parse_value_expr},
+    parse_field::parse_value_expr,
     parse_identifier::parse_identifier,
     parse_named_args_list::{parse_function_arg, parse_named_argument_list},
     Rule,
@@ -22,8 +20,6 @@ pub(crate) fn parse_value_expression_block(
     let attributes: Vec<Attribute> = Vec::new();
     let mut input = None;
     let mut output = None;
-    let mut client = false;
-    let mut prompt = false;
     let mut fields: Vec<Field<Expression>> = vec![];
     let mut sub_type: Option<ValueExprBlockType> = None;
     let mut has_arrow = false;

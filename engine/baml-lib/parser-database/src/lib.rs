@@ -103,7 +103,6 @@ impl ParserDatabase {
 
     /// See the docs on [ParserDatabase](/struct.ParserDatabase.html).
     pub fn validate(&mut self, diag: &mut Diagnostics) -> Result<(), Diagnostics> {
-        println!("passed diag to result");
         let mut ctx = Context::new(
             &self.ast,
             &mut self.interner,
@@ -114,13 +113,11 @@ impl ParserDatabase {
 
         // First pass: resolve names.
         names::resolve_names(&mut ctx);
-        println!("passed resolve _names");
+
         // Return early on name resolution errors.
 
-        println!("passed ctx diags");
         // Second pass: resolve top-level items and field types.
         types::resolve_types(&mut ctx);
-        println!("passed resolve _types");
 
         // Return early on type resolution errors.
         ctx.diagnostics.to_result()?;

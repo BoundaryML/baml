@@ -115,7 +115,7 @@ fn parse_map_entry(
     let mut key = None;
     let mut value = None;
     let token_span = token.as_span(); // Store the span before moving token
-    println!("Token span: {:#?}", token_span);
+
     for current in token.into_inner() {
         match current.as_rule() {
             Rule::map_key => key = Some(parse_map_key(current, diagnostics)),
@@ -136,8 +136,7 @@ fn parse_map_entry(
 
     match (key, value) {
         (Some(key), Some(value)) => Some((key, value)),
-        (Some(key), None) => {
-            println!("bad entry!");
+        (Some(_), None) => {
             diagnostics.push_error(
                 internal_baml_diagnostics::DatamodelError::new_validation_error(
                     "This map entry is missing a valid value or has an incorrect syntax.",

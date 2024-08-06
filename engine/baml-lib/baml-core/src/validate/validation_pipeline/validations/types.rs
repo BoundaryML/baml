@@ -44,7 +44,6 @@ fn validate_type_exists(ctx: &mut Context<'_>, field_type: &FieldType) -> bool {
 fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
     match field_type {
         FieldType::Map(kv_types, ..) => {
-            println!("Index of map: {:?}", kv_types.0);
             match &kv_types.0 {
                 FieldType::Primitive(FieldArity::Required, TypeValue::String, ..) => {}
                 key_type => {
