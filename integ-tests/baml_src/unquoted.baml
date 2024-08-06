@@ -1,56 +1,18 @@
-// client<llm> MyClient {
-//   provider baml-openai-chat
-//   // dictionary test
-//   options {
-//     // no commas
-//     max_tokens 100
-//     array_key_with_quoted_unquoted [ "abc", "abc", "ccc" ]
-//     // separate by commas
-//     key2 "some random value", hello "world", thing "hello"
-//      block_string #"hello there my frien
-//                 d"#
-//     inline_raw_string #"inline "raw" string,,"#
-//     keyStringNoSpacesWorksWithoutQuotes NoQuotes!!123
-//     unquoted_string_whitespace hello world
-//     "string key" "value with spaces"
-//     filePathString ../this-is-also-a-string
-//     booleanValue true
-//     stringKey "true"
-//     array1 [
-//       "one"
-//       "two"
-//     ]
-//     // a comment and new empty_lines
-
-//     array2 [ "one", "two" ]
-//     array3Numbers [ 1, 2, 3 ]
-//     nestedKey {
-//       key "value"
-//       key2 "value2"
-//       nestedArray [ "yes", "queen"]
-//       number 10
-//     }
-//     oneMoreValueToTestBrokenness "value"
-//     myInteger 100
-//     block_string #"
-//       hello there my friend
-//       #{//a comment in a prompt}
-//     "#
-//   }
-// }
-
-// function Yeet() -> string {
-// client MyClient
-// prompt #"yeet "#
-// }
-
-client<llm> Hello {
-  provider openai
-  options {
-    thing helloworld
-    banned @helloworld
-    // banned2 #helloworld
-    banned3 hello
-    world
-  }
+// Tests for validating complex types
+class ComplexTypes {
+  a map<string[], (int | bool[]) | apple_pie[][]>
+  b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
+  c apple123_456_pie | (stringer, bool[], (int | char))[]
+  d map<int[][], ((int | float) | char[])>
+  e ((int, string | char) | ((float, double) | long[], bool)[][][])
+  f VeryLongWord_With_123_Numbers[][][][]
+  g (int, (float, char, bool), string[]) | tuple_inside_tuple[]
+  h (((int | string)[]) | map<bool[][], char[]>)
+  i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+  j ((char, int[][], (bool | string[][])) | double[][][][], (float, int)[])
+  k map<string[], (int | long[])> | map<float[][], double[][]>
+  l AlphaNumeric_123_456_789 | (int, bool?) | char[]
+  m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+  n map<complex_key_type[], map<another_key, (int | string[])>>
+  o (((int | string) | bool[]), (float, double) | long_long_identifier_123)
 }
