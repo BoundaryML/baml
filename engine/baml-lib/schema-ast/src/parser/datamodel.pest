@@ -89,14 +89,14 @@ arguments_list = { "(" ~ (NEWLINE?) ~ expression? ~ ("," ~ (NEWLINE?) ~ expressi
 // Expressions & Functions
 // ######################################
 map_key   = { identifier | quoted_string_literal }
-map_entry = { (comment_block | empty_lines)* ~ map_key ~ (expression | field_attribute | BLOCK_LEVEL_CATCH_ALL)? ~ trailing_comment? }
+map_entry = { (comment_block | empty_lines)* ~ map_key ~ (expression | ENTRY_CATCH_ALL)? ~ ENTRY_CATCH_ALL? ~ trailing_comment? }
 
 splitter         = _{ ("," ~ NEWLINE?) | NEWLINE }
 map_expression   =  { "{" ~ empty_lines? ~ (map_entry ~ (splitter ~ map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
 array_expression =  { "[" ~ empty_lines? ~ ((expression | ARRAY_CATCH_ALL) ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ (expression | ARRAY_CATCH_ALL) ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ "]" }
 expression       =  { map_expression | array_expression | numeric_literal | string_literal | identifier }
 ARRAY_CATCH_ALL  =  { !"]" ~ CATCH_ALL }
-
+ENTRY_CATCH_ALL  =  { field_attribute | BLOCK_LEVEL_CATCH_ALL }
 // ######################################
 // Literals / Values
 // ######################################

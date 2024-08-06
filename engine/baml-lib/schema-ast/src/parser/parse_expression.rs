@@ -120,6 +120,15 @@ fn parse_map_entry(
         match current.as_rule() {
             Rule::map_key => key = Some(parse_map_key(current, diagnostics)),
             Rule::expression => value = parse_expression(current, diagnostics),
+            Rule::ENTRY_CATCH_ALL => {
+                diagnostics.push_error(
+                    internal_baml_diagnostics::DatamodelError::new_validation_error(
+                        "This map entry is missing a valid value or has an incorrect syntax.",
+                        diagnostics.span(token_span), // Use the stored span here
+                    ),
+                );
+                return None;
+            }
             Rule::BLOCK_LEVEL_CATCH_ALL => {}
             _ => parsing_catch_all(current, "dict entry"),
         }
@@ -131,7 +140,7 @@ fn parse_map_entry(
             println!("bad entry!");
             diagnostics.push_error(
                 internal_baml_diagnostics::DatamodelError::new_validation_error(
-                    "This map entry is missing a value or has an incorrect syntax.",
+                    "This map entry is missing a valid value or has an incorrect syntax.",
                     diagnostics.span(token_span), // Use the stored span here
                 ),
             );

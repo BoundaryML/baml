@@ -4,6 +4,6 @@ client<llm> Hello {
     thing helloworld
     banned @helloworld
     banned2 helloworld
-    // banned3 hello(world)
+    banned3 hello(world)
   }
 }

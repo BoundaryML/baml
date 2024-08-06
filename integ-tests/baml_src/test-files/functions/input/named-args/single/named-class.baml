@@ -21,8 +21,8 @@ test TestFnNamedArgsSingleClass {
   functions [TestFnNamedArgsSingleClass]
   args {
     myArg {
-      key "example",
-      key_two true,
+      key "example"
+      key_two true
       key_three 42
     }
   }
