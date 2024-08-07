@@ -25,10 +25,10 @@ jobs:
             manylinux: 2_17
             # I'm not sure if this actually works; I can't 'pip install ...' on the built wheel
             # see https://github.com/astral-sh/uv/issues/3439#issuecomment-2110448346
-            # env:
-            #   # Workaround ring 0.17 build issue
-            #   # see https://github.com/briansmith/ring/issues/1728
-            #   CFLAGS_aarch64_unknown_linux_gnu: "-D__ARM_ARCH=8"
+            env:
+              # Workaround ring 0.17 build issue
+              # see https://github.com/briansmith/ring/issues/1728
+              CFLAGS_aarch64_unknown_linux_gnu: "-D__ARM_ARCH=8"
 
           - target: x86_64-unknown-linux-musl
             runs_on: ubuntu-latest
