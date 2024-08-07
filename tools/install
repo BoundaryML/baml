@@ -1,0 +1,63 @@
+#!/usr/bin/env /bin/bash
+
+set -euo pipefail
+
+show_help() {
+  cat <<EOF
+Usage: install [dep ...]
+
+Options:
+    --help      Display this help message and exit.
+EOF
+}
+
+_help_mode=0
+_watch_mode=0
+_test_mode=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --help)
+            _help_mode=1
+            shift
+            ;;
+        poetry)
+            install_poetry=1
+            shift
+            ;;
+        rustup)
+            install_rustup=1
+            shift
+            ;;
+        --) # End of all options
+            shift
+            break
+            ;;
+        *) # No more options
+            break
+            ;;
+    esac
+done
+
+if [ "$_help_mode" -eq 1 ]; then
+    show_help
+    exit 0
+fi
+
+if [ "${install_poetry:-0}" -eq 1 ]; then
+    curl -sSL https://install.python-poetry.org | python3 -
+    echo 'export PATH=$HOME/.local/bin:$PATH'
+    path_add='$HOME/.local/bin:'"${path_add:-}"
+fi
+
+if [ "${install_rustup:-0}" -eq 1 ]; then
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    path_add='$HOME/.cargo/bin:'"${path_add:-}"
+fi
+
+if [ -n "${path_add:-}" ]; then
+    echo
+    echo -e "\033[36mRun the following to add the above installed deps to your PATH:\033[0m"
+    echo
+    echo "export PATH=$path_add:"'$PATH'
+fi
