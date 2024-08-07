@@ -431,10 +431,7 @@ impl DatamodelError {
             )
         };
 
-        Self::new(
-            format!("{type_name} {name} not found.{suggestions} (from error.rs l.422)"),
-            span,
-        )
+        Self::new(format!("{type_name} {name} not found.{suggestions}"), span)
     }
 
     pub fn type_not_used_in_prompt_error(
@@ -485,7 +482,7 @@ impl DatamodelError {
             )
         };
 
-        Self::new(format!("{}{} (l.476 error.rs)", prefix, suggestions), span)
+        Self::new(format!("{}{}", prefix, suggestions), span)
     }
 
     pub fn new_type_not_found_error(
@@ -508,7 +505,7 @@ impl DatamodelError {
             // If there are multiple close names, suggest them all
             let suggestions = close_names.join("`, `");
             format!(
-                "Type `{}` does not exist. Did you mean one of these: `{}`? (error.rs l.499)",
+                "Type `{}` does not exist. Did you mean one of these: `{}`?",
                 type_name, suggestions
             )
         };
