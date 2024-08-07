@@ -1,4 +1,3 @@
 # https://github.com/rust-lang/cargo/issues/8607
 [target.aarch64-unknown-linux-musl]
-linker = "aarch64-linux-musl-gcc"
 rustflags = ["-C", "target-feature=-crt-static"]
