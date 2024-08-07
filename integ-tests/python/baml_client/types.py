@@ -122,7 +122,7 @@ class TestEnum(str, Enum):
 class Blah(BaseModel):
     
     
-    prop4: str
+    prop4: Optional[str] = None
 
 class ClassOptionalOutput(BaseModel):
     
@@ -133,8 +133,8 @@ class ClassOptionalOutput(BaseModel):
 class ClassOptionalOutput2(BaseModel):
     
     
-    prop1: str
-    prop2: str
+    prop1: Optional[str] = None
+    prop2: Optional[str] = None
     prop3: Optional["Blah"] = None
 
 class ClassWithImage(BaseModel):
@@ -182,7 +182,7 @@ class Education(BaseModel):
     location: str
     degree: str
     major: List[str]
-    graduation_date: str
+    graduation_date: Optional[str] = None
 
 class Email(BaseModel):
     
@@ -234,28 +234,28 @@ class OptionalTest_ReturnType(BaseModel):
     
     
     omega_1: Optional["OptionalTest_Prop1"] = None
-    omega_2: str
+    omega_2: Optional[str] = None
     omega_3: List[Optional["OptionalTest_CategoryType"]]
 
 class OrderInfo(BaseModel):
     
     
     order_status: "OrderStatus"
-    tracking_number: str
-    estimated_arrival_date: str
+    tracking_number: Optional[str] = None
+    estimated_arrival_date: Optional[str] = None
 
 class Person(BaseModel):
     
     model_config = ConfigDict(extra='allow')
     
-    name: str
+    name: Optional[str] = None
     hair_color: Optional[Union["Color", str]] = None
 
 class Quantity(BaseModel):
     
     
     amount: Union[Union[int], Union[float]]
-    unit: str
+    unit: Optional[str] = None
 
 class RaysData(BaseModel):
     
@@ -267,13 +267,13 @@ class ReceiptInfo(BaseModel):
     
     
     items: List["ReceiptItem"]
-    total_cost: float
+    total_cost: Optional[float] = None
 
 class ReceiptItem(BaseModel):
     
     
     name: str
-    description: str
+    description: Optional[str] = None
     quantity: int
     price: float
 
@@ -295,7 +295,7 @@ class Resume(BaseModel):
 class SearchParams(BaseModel):
     
     
-    dateRange: int
+    dateRange: Optional[int] = None
     location: List[str]
     jobTitle: Optional["WithReasoning"] = None
     company: Optional["WithReasoning"] = None

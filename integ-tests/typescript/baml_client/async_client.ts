@@ -315,7 +315,7 @@ export class BamlAsyncClient {
   }
   
   async ExtractResume(
-      resume: string,img: Image,
+      resume: string,img: Image | null,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<Resume> {
     const raw = await this.runtime.callFunction(
@@ -411,7 +411,7 @@ export class BamlAsyncClient {
   }
   
   async FnNamedArgsSingleStringOptional(
-      myString: string,
+      myString: string | null,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
@@ -1560,7 +1560,7 @@ class BamlStreamClient {
   }
   
   ExtractResume(
-      resume: string,img: Image,
+      resume: string,img: Image | null,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<Resume>, Resume> {
     const raw = this.runtime.streamFunction(
@@ -1698,7 +1698,7 @@ class BamlStreamClient {
   }
   
   FnNamedArgsSingleStringOptional(
-      myString: string,
+      myString: string | null,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(

@@ -102,19 +102,10 @@ impl FieldType {
     pub fn is_optional(&self) -> bool {
         match self {
             FieldType::Optional(_) => true,
-            FieldType::Primitive(TypeValue::Null) => {
-                println!("found a null in is_optional");
-                true
-            }
+            FieldType::Primitive(TypeValue::Null) => true,
 
-            FieldType::Union(types) => {
-                println!("found a union in is_optional");
-                types.iter().any(FieldType::is_optional)
-            }
-            _ => {
-                // println!("non-optional in is_optional: {:#?}", self);
-                false
-            }
+            FieldType::Union(types) => types.iter().any(FieldType::is_optional),
+            _ => false,
         }
     }
 }

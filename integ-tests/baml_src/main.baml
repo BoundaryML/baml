@@ -8,6 +8,7 @@ generator lang_typescript {
   output_type typescript
   output_dir "../typescript"
   version "0.53.0"
+
 }
 
 generator lang_ruby {
