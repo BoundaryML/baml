@@ -26,7 +26,9 @@ jobs:
             target: aarch64
             manylinux: 'auto'
             env:
-              # Workaround ring 0.17 build issue, see https://github.com/astral-sh/uv/pull/3444
+              # Workaround ring 0.17 build issue
+              # see https://github.com/briansmith/ring/issues/1728#issuecomment-1758180655
+              # see https://github.com/astral-sh/uv/pull/3444
               CFLAGS_aarch64_unknown_linux_gnu: "-D__ARM_ARCH=8"
 
           - name: x86_64-apple-darwin
