@@ -60,6 +60,7 @@ jobs:
             else
                 # If we're running on debian-based system.
                 # sudo apt update -y && apt-get install -y libssl-dev openssl pkg-config
+                :
             fi
 
       - name: Upload wheels
