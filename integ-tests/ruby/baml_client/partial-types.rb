@@ -349,7 +349,7 @@ module Baml
     end
     class Quantity < T::Struct
       include Baml::Sorbet::Struct
-      const :amount, T.nilable(T.any(T.nilable(Integer), T.nilable(Float)))
+      const :amount, T.nilable(T.any(T.nilable(T.any(T.nilable(Integer))), T.nilable(T.any(T.nilable(Float)))))
       const :unit, T.nilable(String)
 
       def initialize(props)
@@ -364,7 +364,7 @@ module Baml
     class RaysData < T::Struct
       include Baml::Sorbet::Struct
       const :dataType, T.nilable(Baml::Types::DataType)
-      const :value, T.nilable(T.any(Baml::PartialTypes::Resume, Baml::PartialTypes::Event))
+      const :value, T.nilable(T.any(T.nilable(T.any(Baml::PartialTypes::Resume)), T.nilable(T.any(Baml::PartialTypes::Event))))
 
       def initialize(props)
         super(
@@ -448,7 +448,7 @@ module Baml
       const :jobTitle, Baml::PartialTypes::WithReasoning
       const :company, Baml::PartialTypes::WithReasoning
       const :description, T::Array[Baml::PartialTypes::WithReasoning]
-      const :tags, T::Array[T.nilable(T.any(T.nilable(Baml::Types::Tag), T.nilable(String)))]
+      const :tags, T::Array[T.nilable(T.any(T.nilable(T.any(T.nilable(Baml::Types::Tag))), T.nilable(T.any(T.nilable(String)))))]
 
       def initialize(props)
         super(
@@ -551,9 +551,9 @@ module Baml
     end
     class UnionTest_ReturnType < T::Struct
       include Baml::Sorbet::Struct
-      const :prop1, T.nilable(T.any(T.nilable(String), T.nilable(T::Boolean)))
-      const :prop2, T::Array[T.nilable(T.any(T.nilable(Float), T.nilable(T::Boolean)))]
-      const :prop3, T.nilable(T.any(T::Array[T.nilable(T::Boolean)], T::Array[T.nilable(Integer)]))
+      const :prop1, T.nilable(T.any(T.nilable(T.any(T.nilable(String))), T.nilable(T.any(T.nilable(T::Boolean)))))
+      const :prop2, T::Array[T.nilable(T.any(T.nilable(T.any(T.nilable(Float))), T.nilable(T.any(T.nilable(T::Boolean)))))]
+      const :prop3, T.nilable(T.any(T.nilable(T.any(T::Array[T.nilable(T::Boolean)])), T.nilable(T.any(T::Array[T.nilable(Integer)]))))
 
       def initialize(props)
         super(

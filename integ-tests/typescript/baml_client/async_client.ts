@@ -315,13 +315,13 @@ export class BamlAsyncClient {
   }
   
   async ExtractResume(
-      resume: string,img?: Image | null,
+      resume: string,img: Image,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<Resume> {
     const raw = await this.runtime.callFunction(
       "ExtractResume",
       {
-        "resume": resume,"img": img?? null
+        "resume": resume,"img": img
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -411,13 +411,13 @@ export class BamlAsyncClient {
   }
   
   async FnNamedArgsSingleStringOptional(
-      myString?: string | null,
+      myString: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "FnNamedArgsSingleStringOptional",
       {
-        "myString": myString?? null
+        "myString": myString
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -1560,13 +1560,13 @@ class BamlStreamClient {
   }
   
   ExtractResume(
-      resume: string,img?: Image | null,
+      resume: string,img: Image,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<Resume>, Resume> {
     const raw = this.runtime.streamFunction(
       "ExtractResume",
       {
-        "resume": resume,"img": img ?? null
+        "resume": resume,"img": img
       },
       undefined,
       this.ctx_manager.cloneContext(),
@@ -1698,13 +1698,13 @@ class BamlStreamClient {
   }
   
   FnNamedArgsSingleStringOptional(
-      myString?: string | null,
+      myString: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "FnNamedArgsSingleStringOptional",
       {
-        "myString": myString ?? null
+        "myString": myString
       },
       undefined,
       this.ctx_manager.cloneContext(),

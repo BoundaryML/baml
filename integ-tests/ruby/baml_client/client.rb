@@ -597,7 +597,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        resume: String,img: T.nilable(Baml::Image),
+        resume: String,img: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Resume)
     }
@@ -789,7 +789,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        myString: T.nilable(String),
+        myString: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
@@ -2261,7 +2261,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        input: T.any(String, T::Boolean),
+        input: T.any(T.any(String), T.any(T::Boolean)),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::UnionTest_ReturnType)
     }
@@ -2901,7 +2901,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        resume: String,img: T.nilable(Baml::Image),
+        resume: String,img: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::Resume])
     }
@@ -3111,7 +3111,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        myString: T.nilable(String),
+        myString: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
@@ -4721,7 +4721,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        input: T.any(String, T::Boolean),
+        input: T.any(T.any(String), T.any(T::Boolean)),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::UnionTest_ReturnType])
     }

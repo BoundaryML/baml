@@ -535,12 +535,7 @@ impl WithRepr<Field> for FieldWalker<'_> {
         Ok(Field {
             name: self.name().to_string(),
             r#type: Node {
-                elem: self
-                    .ast_field()
-                    .expr
-                    .clone()
-                    .ok_or(anyhow!("Field type is None"))?
-                    .repr(db)?,
+                elem: self.ast_field().expr.clone().ok_or(anyhow!(""))?.repr(db)?,
                 attributes: self.attributes(db),
             },
         })
