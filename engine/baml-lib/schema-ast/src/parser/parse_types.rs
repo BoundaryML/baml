@@ -33,14 +33,12 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
         Some(ftype) => {
             if arity.is_optional() {
                 match ftype.to_nullable() {
-                    Ok(ftype) => return Some(ftype),
-                    Err(e) => {
-                        diagnostics.push_error(e);
-                        return None;
-                    }
+                    Ok(ftype) => Some(ftype),
+                    Err(_) => None,
                 }
+            } else {
+                Some(ftype)
             }
-            Some(ftype)
         }
         None => {
             unreachable!("Ftype should always be defined")
@@ -153,6 +151,12 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
                             None,
                         )
                     }
+                    "null" => FieldType::Primitive(
+                        FieldArity::Optional,
+                        TypeValue::Null,
+                        diagnostics.span(current.as_span()),
+                        None,
+                    ),
                     _ => FieldType::Symbol(
                         FieldArity::Required,
                         Identifier::Local(

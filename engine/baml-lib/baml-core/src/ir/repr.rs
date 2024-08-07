@@ -284,10 +284,13 @@ fn type_with_arity(t: FieldType, arity: &FieldArity) -> FieldType {
 impl WithRepr<FieldType> for ast::FieldType {
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
         Ok(match self {
-            ast::FieldType::Primitive(_, typeval, ..) => {
+            ast::FieldType::Primitive(arity, typeval, ..) => {
                 let repr = FieldType::Primitive(typeval.clone());
-
-                repr
+                if arity.is_optional() {
+                    FieldType::Optional(Box::new(repr))
+                } else {
+                    repr
+                }
             }
             ast::FieldType::Symbol(arity, idn, ..) => type_with_arity(
                 match db.find_type(idn) {

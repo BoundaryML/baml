@@ -165,10 +165,7 @@ fn parse_field_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> 
 
             Some(ft) // Return the field type with attributes
         }
-        None => {
-            log::info!("field_type is None");
-            None
-        }
+        None => None,
     }
 }
 fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {

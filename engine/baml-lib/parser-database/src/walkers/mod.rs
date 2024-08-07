@@ -14,6 +14,7 @@ mod field;
 mod function;
 mod template_string;
 
+use baml_types::TypeValue;
 pub use client::*;
 pub use configuration::*;
 use either::Either;
@@ -245,12 +246,19 @@ impl<'db> crate::ParserDatabase {
     /// Convert a field type to a `Type`.
     pub fn to_jinja_type(&self, ft: &FieldType) -> internal_baml_jinja::Type {
         use internal_baml_jinja::Type;
-        match ft {
-            FieldType::Symbol(arity, idn, ..) => match self.find_type(idn) {
-                None => Type::Undefined,
-                Some(Either::Left(_)) => Type::ClassRef(idn.to_string()),
-                Some(Either::Right(_)) => Type::String,
-            },
+
+        let r = match ft {
+            FieldType::Symbol(arity, idn, ..) => {
+                let mut t = match self.find_type(idn) {
+                    None => Type::Undefined,
+                    Some(Either::Left(_)) => Type::ClassRef(idn.to_string()),
+                    Some(Either::Right(_)) => Type::String,
+                };
+                if arity.is_optional() {
+                    t = Type::None | t;
+                }
+                t
+            }
             FieldType::List(inner, dims, ..) => {
                 let mut t = self.to_jinja_type(inner);
                 for _ in 0..*dims {
@@ -277,18 +285,22 @@ impl<'db> crate::ParserDatabase {
                 Box::new(self.to_jinja_type(&kv.1)),
             ),
             FieldType::Primitive(arity, t, ..) => {
-                let mut t = match t.to_string().as_str() {
-                    "string" => Type::String,
-                    "int" => Type::Int,
-                    "float" => Type::Float,
-                    "bool" => Type::Bool,
-                    _ => Type::Unknown,
+                let mut t = match &t {
+                    TypeValue::String => Type::String,
+                    TypeValue::Int => Type::Int,
+                    TypeValue::Float => Type::Float,
+                    TypeValue::Bool => Type::Bool,
+                    TypeValue::Null => Type::None,
+                    TypeValue::Image => Type::Unknown,
+                    TypeValue::Audio => Type::Unknown,
                 };
-                if arity.is_optional() {
+                if arity.is_optional() || matches!(t, Type::None) {
                     t = Type::None | t;
                 }
                 t
             }
-        }
+        };
+
+        r
     }
 }
