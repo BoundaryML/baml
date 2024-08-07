@@ -54,7 +54,7 @@ jobs:
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
-        env: ${{ matrix._.env || {} }}
+        env: ${{ matrix._.env || fromJSON('{}') }}
         with:
           target: ${{ matrix._.target }}
           command: build
