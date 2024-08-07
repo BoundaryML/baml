@@ -98,27 +98,6 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                 ))
             }
         }
-        // for arg in func.walk_output_args() {
-        //     let arg_ast = arg.ast_arg();
-        //     let type_name = arg_ast.1.name().to_string(); // Store the name in a variable
-        //     match arg_ast.1.field_type {
-        //         FieldType::Symbol(..) if ctx.db.find_type_by_str(type_name.as_str()).is_none() => {
-        //             ctx.push_error(DatamodelError::not_found_error(
-        //                 &format!(
-        //                     "Output argument cannot be resolved. Did you mean something else?"
-        //                 ),
-        //                 &arg_ast.1.name(),
-        //                 arg_ast.1.span().clone(),
-        //                 ctx.db
-        //                     .walk_classes()
-        //                     .chain(ctx.db.walk_enums())
-        //                     .map(|c| c.name().to_string())
-        //                     .collect(),
-        //             ));
-        //         }
-        //         _ => {}
-        //     }
-        // }
 
         let prompt = match func.metadata().prompt.as_ref() {
             Some(prompt) => prompt,

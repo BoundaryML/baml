@@ -1,11 +1,9 @@
-use std::{collections::HashSet, default};
+use std::collections::HashSet;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use baml_types::FieldType;
 use either::Either;
 use indexmap::IndexMap;
-
-use internal_baml_diagnostics::DatamodelError;
 
 use internal_baml_parser_database::{
     walkers::{
@@ -503,7 +501,6 @@ impl WithRepr<Enum> for EnumWalker<'_> {
             meta: to_ir_attributes(db, self.get_default_attributes(SubType::Enum)),
             span: Some(self.span().clone()),
         };
-        println!("Enum Attributes: {:?}", attributes);
 
         attributes
     }
@@ -563,13 +560,11 @@ pub struct Class {
 impl WithRepr<Class> for ClassWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
         let default_attributes = self.get_default_attributes(SubType::Class);
-        println!("Default Attributes: {:?}", default_attributes);
         let attributes = NodeAttributes {
             meta: to_ir_attributes(db, default_attributes),
             span: Some(self.span().clone()),
         };
 
-        println!("Class Attributes: {:?}", attributes);
         attributes
     }
 

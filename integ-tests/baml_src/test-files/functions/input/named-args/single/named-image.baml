@@ -19,7 +19,7 @@ test  TestImageInput {
   }
 }
 
-test shrek {
+test  shrek {
   functions [TestImageInput]
   args {
     img {

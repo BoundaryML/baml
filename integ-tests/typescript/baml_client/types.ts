@@ -117,7 +117,7 @@ export enum TestEnum {
 }
 
 export interface Blah {
-  prop4: string
+  prop4?: string | null
   
 }
 
@@ -128,8 +128,8 @@ export interface ClassOptionalOutput {
 }
 
 export interface ClassOptionalOutput2 {
-  prop1: string
-  prop2: string
+  prop1?: string | null
+  prop2?: string | null
   prop3?: Blah | null
   
 }
@@ -177,7 +177,7 @@ export interface Education {
   location: string
   degree: string
   major: string[]
-  graduation_date: string
+  graduation_date?: string | null
   
 }
 
@@ -229,20 +229,20 @@ export interface OptionalTest_Prop1 {
 
 export interface OptionalTest_ReturnType {
   omega_1?: OptionalTest_Prop1 | null
-  omega_2: string
+  omega_2?: string | null
   omega_3: (OptionalTest_CategoryType | null)[]
   
 }
 
 export interface OrderInfo {
   order_status: OrderStatus
-  tracking_number: string
-  estimated_arrival_date: string
+  tracking_number?: string | null
+  estimated_arrival_date?: string | null
   
 }
 
 export interface Person {
-  name: string
+  name?: string | null
   hair_color?: (string | Color) | null
   
   [key: string]: any;
@@ -250,7 +250,7 @@ export interface Person {
 
 export interface Quantity {
   amount: number | number
-  unit: string
+  unit?: string | null
   
 }
 
@@ -262,13 +262,13 @@ export interface RaysData {
 
 export interface ReceiptInfo {
   items: ReceiptItem[]
-  total_cost: number
+  total_cost?: number | null
   
 }
 
 export interface ReceiptItem {
   name: string
-  description: string
+  description?: string | null
   quantity: number
   price: number
   
@@ -290,7 +290,7 @@ export interface Resume {
 }
 
 export interface SearchParams {
-  dateRange: number
+  dateRange?: number | null
   location: string[]
   jobTitle?: WithReasoning | null
   company?: WithReasoning | null
