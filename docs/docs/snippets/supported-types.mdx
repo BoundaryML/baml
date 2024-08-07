@@ -44,9 +44,7 @@ from baml_client import b
 async def test_image_input():
   # from URL
   res = await b.TestImageInput(
-      img=Image.from_url(
-          "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
-      )
+    img=Image.from_url("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png")
   )
 
   # Base64 image
@@ -73,7 +71,23 @@ import { Image } from "@boundaryml/baml"
 ```
 
 ```ruby Ruby
-(we're working on it!)
+require_relative "baml_client/client"
+
+b = Baml.Client
+Image = Baml::Image
+
+def test_image_input
+  # from URL
+  res = b.TestImageInput(
+    img: Image.from_url("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png")
+  )
+
+  # Base64 image
+  image_b64 = "iVBORw0K...."
+  res = b.TestImageInput(
+    img: Image.from_base64("image/png", image_b64)
+  )
+end
 ```
 </CodeBlocks>
 
@@ -131,7 +145,25 @@ import { Audio } from "@boundaryml/baml"
 ```
 
 ```ruby Ruby
-we're working on it!
+require_relative "baml_client/client"
+
+b = Baml.Client
+Audio = Baml::Audio
+
+def test_audio_input
+  # from URL
+  res = b.TestAudioInput(
+      audio: Audio.from_url(
+          "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg"
+      )
+  )
+
+  # Base64 image
+  audio_b64 = "iVBORw0K...."
+  res = b.TestAudioInput(
+    audio: Audio.from_base64("audio/mp3", audio_b64)
+  )
+end
 ```
 </CodeBlocks>
 

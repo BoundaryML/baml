@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use base64::write;
 use colored::*;
 pub mod llm_provider;
 pub mod orchestrator;
@@ -162,10 +163,11 @@ impl std::fmt::Display for LLMCompleteResponse {
             f,
             "{}",
             format!(
-                "Client: {} ({}) - {}ms",
+                "Client: {} ({}) - {}ms. StopReason: {}",
                 self.client,
                 self.model,
-                self.latency.as_millis()
+                self.latency.as_millis(),
+                self.metadata.finish_reason.as_deref().unwrap_or("unknown")
             )
             .yellow()
         )?;

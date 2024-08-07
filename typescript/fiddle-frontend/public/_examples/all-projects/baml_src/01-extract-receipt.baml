@@ -1,7 +1,7 @@
 // This is a BAML file, which extends the Jinja2 templating language to write LLM functions.
 // Run a test to see how it works!
 
-// How to call BAML functions from other languages: https://docs.boundaryml.com
+// https://docs.boundaryml.com
 
 // We want the LLM to extract this info from an image receipt
 class Receipt {

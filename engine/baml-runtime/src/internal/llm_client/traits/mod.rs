@@ -19,12 +19,8 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
 use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
 
-use reqwest::Url;
-
 use shell_escape::escape;
 use std::borrow::Cow;
-
-use std::str::FromStr; // Add this line at the top of your file // Add this line at the top of your file
 
 // #[enum_dispatch]
 

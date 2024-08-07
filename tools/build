@@ -172,7 +172,7 @@ case "$_path" in
     if [ "$_test_mode" -eq 1 ]; then
       #command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run python baml_example_tracing.py"
       #command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run pytest -s tests/test_functions.py"
-      command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run pytest -s tests/test_functions.py::TestAllInputs"
+      command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run pytest"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \

@@ -528,6 +528,41 @@ export function startServer(options?: LSOptions): void {
               })
             }
           }
+
+          const seenTestCases = new Set<string>()
+          for (const testcase of proj.list_testcases()) {
+            console.log(`Testcase: ${testcase.toString()}`)
+            if (seenTestCases.has(testcase.name)) {
+              continue
+            }
+
+            if (URI.file(testcase.span.file_path).toString() === document.uri) {
+              const range = Range.create(
+                document.positionAt(testcase.span.start),
+                document.positionAt(testcase.span.end),
+              )
+              testcase.parent_functions.forEach((parentFunction, index) => {
+                const command: Command = {
+                  title:
+                    testcase.parent_functions.length > 1 ? `▶ Run for ${parentFunction.name} 💥 ` : '▶ Run Test 💥',
+                  command: 'baml.runBamlTest',
+                  arguments: [
+                    {
+                      projectId: proj,
+                      functionName: parentFunction.name,
+                      showTests: true,
+                      testCaseName: testcase.name,
+                    },
+                  ],
+                }
+                codelenses.push({
+                  range,
+                  command,
+                })
+              })
+              seenTestCases.add(testcase.name)
+            }
+          }
         }
       }
       return codelenses

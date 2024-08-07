@@ -11,7 +11,7 @@ import { atomStore, sessionStore, vscodeLocalStorageStore } from './JotaiProvide
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { vscode } from '../utils/vscode'
-
+import { useRunHooks } from './test_uis/testHooks'
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
 const postMessageToExtension = (message: any) => {
@@ -171,10 +171,20 @@ const updateCursorAtom = atom(
 
       cursorIdx += cursor.column
 
-      const selectedFunc = runtime.get_function_at_position(fileName, cursorIdx)
+      var selectedFunc = runtime.get_function_at_position(fileName, get(selectedFunctionAtom)?.name ?? '', cursorIdx)
 
       if (selectedFunc) {
         set(selectedFunctionAtom, selectedFunc.name)
+        const selectedTestcase = runtime.get_testcase_from_position(selectedFunc, cursorIdx)
+
+        if (selectedTestcase) {
+          set(rawSelectedTestCaseAtom, selectedTestcase.name)
+          const nestedFunc = runtime.get_function_of_testcase(fileName, cursorIdx)
+
+          if (nestedFunc) {
+            set(selectedFunctionAtom, nestedFunc.name)
+          }
+        }
       }
     }
   },
@@ -484,6 +494,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom)
   const envVars = useAtomValue(envVarsAtom)
   const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
+  const { isRunning, run } = useRunHooks()
 
   useEffect(() => {
     if (wasm) {
@@ -567,6 +578,10 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             command: 'baml_cli_version'
             content: string
           }
+        | {
+            command: 'run_test'
+            content: { test_name: string }
+          }
       >,
     ) => {
       const { command, content } = event.data
@@ -596,7 +611,6 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           }
           break
         case 'baml_cli_version':
-          console.log('Setting baml cli version', content)
           setBamlCliVersion(content)
           break
 
@@ -605,8 +619,6 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           break
 
         case 'port_number':
-          console.log('Setting port number', content.port)
-
           if (content.port === 0) {
             console.error('Port number is 0, cannot launch BAML extension')
 
@@ -628,6 +640,11 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             }
             return updated
           })
+          break
+
+        case 'run_test':
+          run([content.test_name])
+
           break
       }
     }

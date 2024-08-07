@@ -84,7 +84,7 @@
 
 /* controls dropdown styling on rsjf */
 .form-control {
-@apply bg-vscode-input-background text-vscode-input-foreground rounded-sm;
+  @apply bg-vscode-input-background text-vscode-input-foreground rounded-sm;
 }
 
 .array-item {
@@ -278,4 +278,29 @@
 .ansi-dim-white-bg {
   background-color: var(--vscode-terminal-ansiWhite);
   opacity: 0.3;
+}
+
+#cw-widget-holder {
+  @apply left-0 ml-2;
+}
+
+button.woot-widget-bubble:nth-child(1) {
+  @apply scale-50 origin-bottom-right left-0;
+}
+
+button.woot-elements--right:nth-child(2) {
+  @apply scale-50 origin-bottom-right left-0;
+}
+
+.cm-lintRange-error {
+  @apply decoration-wavy stroke-blue-500 !important;
+}
+
+[class*='cm-lintRange-error'] {
+  background-image: none !important;
+  @apply underline underline-offset-2 decoration-wavy  stroke-2 decoration-red-500 decoration-[1.2px] !important;
+}
+
+.tok-typeName {
+  /* @apply decoration-green-400 bg-purple-500; */
 }

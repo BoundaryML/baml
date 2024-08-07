@@ -20,6 +20,7 @@ console_log = { version = "1", features = ["color"] }
 getrandom = { version = "0.2.15", features = ["js"] }
 indexmap.workspace = true
 internal-baml-codegen.workspace = true
+internal-baml-core.workspace = true
 js-sys = "=0.3.69"
 log.workspace = true
 serde.workspace = true

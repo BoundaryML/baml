@@ -2,13 +2,14 @@
 title: Client Registry
 slug: docs/calling-baml/client-registry
 ---
-
+{/* TODO: use fern Group elements instead of CodeBlock elements for Python/TS/Ruby */}
 
 If you need to modify the model / parameters for an LLM client at runtime, you can modify the `ClientRegistry` for any specified function.
 
 <CodeBlocks>
 
 ```python Python
+import os
 from baml_py import ClientRegistry
 
 async def run():
@@ -17,7 +18,7 @@ async def run():
     cr.add_llm_client(name='MyAmazingClient', provider='openai', options={
         "model": "gpt-4o",
         "temperature": 0.7,
-        "api_key": "sk-..."
+        "api_key": os.environ.get('OPENAI_API_KEY')
     })
     # Sets MyAmazingClient as the primary client
     cr.set_primary('MyAmazingClient')
@@ -35,7 +36,7 @@ async function run() {
     cr.addLlmClient({ name: 'MyAmazingClient', provider: 'openai', options: {
         model: "gpt-4o",
         temperature: 0.7,
-        api_key: "sk-..."
+        api_key: process.env.OPENAI_API_KEY
     }})
     // Sets MyAmazingClient as the primary client
     cr.setPrimary('MyAmazingClient')
@@ -46,7 +47,31 @@ async function run() {
 ```
 
 ```ruby Ruby
-Not available yet
+require_relative "baml_client/client"
+
+def run
+  cr = Baml::ClientRegistry.new
+
+  # Creates a new client
+  cr.add_llm_client(
+    name: 'MyAmazingClient',
+    provider: 'openai',
+    options: {
+      model: 'gpt-4o',
+      temperature: 0.7,
+      api_key: ENV['OPENAI_API_KEY']
+    }
+  )
+
+  # Sets MyAmazingClient as the primary client
+  cr.set_primary('MyAmazingClient')
+
+  # ExtractResume will now use MyAmazingClient as the calling client
+  res = Baml.Client.extract_resume(input: '...', baml_options: { client_registry: cr })
+end
+
+# Call the asynchronous function
+run
 ```
 
 </CodeBlocks>

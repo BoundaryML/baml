@@ -190,10 +190,10 @@ colors:
     light: "#fefefe"
     # dark: "#14191f"
 logo:
-  light: assets/favicon.png
+  light: assets/favicon.ico
   # dark: assets/favicon.png
   height: 40
-favicon: assets/favicon.png
+favicon: assets/favicon.ico
 css: assets/styles.css
 layout:
   page-width: full

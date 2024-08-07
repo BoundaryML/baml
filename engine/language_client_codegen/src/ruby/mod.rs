@@ -45,6 +45,7 @@ pub(crate) fn generate(
     collector
         .add_template::<generate_types::RubyStreamTypes>("partial-types.rb", (ir, generator))?;
     collector.add_template::<generate_types::RubyTypes>("types.rb", (ir, generator))?;
+    collector.add_template::<generate_types::TypeRegistry>("type-registry.rb", (ir, generator))?;
     collector.add_template::<RubyClient>("client.rb", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlined.rb", (ir, generator))?;
 

@@ -1,11 +1,9 @@
 use anyhow::Result;
-use colored::*;
 use indexmap::IndexMap;
 use internal_baml_core::{
     configuration::{GeneratorDefaultClientMode, GeneratorOutputType},
     ir::repr::IntermediateRepr,
 };
-use semver::Version;
 use std::{collections::BTreeMap, path::PathBuf};
 use version_check::{check_version, GeneratorType, VersionCheckMode};
 

@@ -2,6 +2,59 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.53.0](https://github.com/boundaryml/baml/compare/0.52.1..0.53.0) - 2024-08-05
+
+### Bug Fixes
+
+- make image[] render correctly in prompts (#855) - ([4a17dce](https://github.com/boundaryml/baml/commit/4a17dce43c05efd5f4ea304f2609fe140de1dd8c)) - Samuel Lijin
+
+### Features
+
+- **(ruby)** implement dynamic types, dynamic clients, images, and audio (#842) - ([4a21eed](https://github.com/boundaryml/baml/commit/4a21eed668f32b042fba61f24c9efb8b3794a420)) - Samuel Lijin
+- Codelenses for test cases (#812) - ([7cd8794](https://github.com/boundaryml/baml/commit/7cd87942bf50a72de0ad46154f164fb2c174f25b)) - Anish Palakurthi
+
+### Issue
+
+- removed vertex auth token printing (#846) - ([b839316](https://github.com/boundaryml/baml/commit/b83931665a2c3b840eb6c6d31cf3d01c7926e52e)) - Anish Palakurthi
+- Fix google type deserialization issue - ([a55b9a1](https://github.com/boundaryml/baml/commit/a55b9a106176ed1ce34bb63397610c2640b37f16)) - Aaron Villalpando
+
+### Miscellaneous Chores
+
+- clean up release stuff (#836) - ([eed41b7](https://github.com/boundaryml/baml/commit/eed41b7474417d2e65b2c5d742234cc20fc5644e)) - Samuel Lijin
+- Add bfcl results to readme, fix links icons (#856) - ([5ef7f3d](https://github.com/boundaryml/baml/commit/5ef7f3db99d8d23ff97f1e8372ee71ab7aa127aa)) - aaronvg
+- Fix prompt fiddle and playground styles, add more logging, and add stop-reason to playground (#858) - ([38e3153](https://github.com/boundaryml/baml/commit/38e3153843a17ae1e87ae9879ab4374b083d77d0)) - aaronvg
+- Bump version to 0.53.0 - ([fd16839](https://github.com/boundaryml/baml/commit/fd16839a2c0b9d92bd5bdcb57f950e22d0a29959)) - Aaron Villalpando
+
+## [0.52.1](https://github.com/boundaryml/baml/compare/0.52.0..0.52.1) - 2024-07-24
+
+### Bug Fixes
+
+- build python x86_64-linux with an older glibc (#834) - ([db12540](https://github.com/boundaryml/baml/commit/db12540a92abf055e286c60864299f53c246b62a)) - Samuel Lijin
+
+## [0.52.0](https://github.com/boundaryml/baml/compare/0.51.3..0.52.0) - 2024-07-24
+
+### Features
+
+- Add official support for ruby (#823) - ([e81cc79](https://github.com/boundaryml/baml/commit/e81cc79498809a79f427864704b140967a41277a)) - Samuel Lijin
+
+### Bug Fixes
+
+- Fix ClientRegistry for Typescript code-gen (#828) - ([b69921f](https://github.com/boundaryml/baml/commit/b69921f45df0182072b09ab28fe6231ccfaa5767)) - hellovai
+
+## [0.51.2](https://github.com/boundaryml/baml/compare/0.51.1..0.51.2) - 2024-07-24
+
+### Features
+
+- Add support for unions / maps / null in TypeBuilder. (#820) - ([8d9e92d](https://github.com/boundaryml/baml/commit/8d9e92d3050a67edbec5ee6056397becbcdb754b)) - hellovai
+
+### Bug Fixes
+
+- [Playground] Add a feedback button (#818) - ([f749f2b](https://github.com/boundaryml/baml/commit/f749f2b19b247de2f050beccd1fe8e50b7625757)) - Samuel Lijin
+
+### Documentation
+
+- Improvements across docs (#807) - ([bc0c176](https://github.com/boundaryml/baml/commit/bc0c1761699ee2485a0a8ee61cf4fda6b579f974)) - Anish Palakurthi
+
 ## [0.51.1](https://github.com/boundaryml/baml/compare/0.51.0..0.51.1) - 2024-07-21
 
 ### Features
@@ -11,8 +64,6 @@ All notable changes to this project will be documented in this file. See [conven
 ### Bug
 
 - Allow default_client_mode in the generator #813 (#815) - ([6df7fca](https://github.com/boundaryml/baml/commit/6df7fcabc1eb55b08a50741f2346440f631abd63)) - hellovai
-
-### UNMATCHED
 
 ## [0.51.0](https://github.com/boundaryml/baml/compare/0.50.0..0.51.0) - 2024-07-19
 
