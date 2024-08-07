@@ -20,9 +20,8 @@ fn errors_with_names<'a>(ctx: &'a mut Context<'_>, idn: &Identifier) {
 ///   1. Verify that the type is resolveable (for REF types)
 ///   2. Verify that the type is well-formed/allowed in the language
 pub(crate) fn validate_type(ctx: &mut Context<'_>, field_type: &FieldType) {
-    if !validate_type_exists(ctx, field_type) || matches!(field_type, FieldType::Map(..)) {
-        validate_type_allowed(ctx, field_type);
-    }
+    validate_type_exists(ctx, field_type);
+    validate_type_allowed(ctx, field_type);
 }
 
 fn validate_type_exists(ctx: &mut Context<'_>, field_type: &FieldType) -> bool {
@@ -60,31 +59,34 @@ fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
             // TODO:assert key_type is string or int or null
         }
 
-        FieldType::Primitive(_, type_value, span, _) => {
-            let primitives = vec!["int", "float", "bool", "string", "image", "audio", "null"];
-            if !primitives.contains(&type_value.to_string().as_str()) {
-                ctx.push_error(DatamodelError::not_found_error(
-                    "Primitive type",
-                    &type_value.to_string(),
-                    span.clone(),
-                    primitives.iter().map(|&s| s.to_string()).collect(),
-                ));
-            }
-        }
-        FieldType::Symbol(_, idn, _) => {
-            if ctx.db.find_type(idn).is_none() {
-                ctx.push_error(DatamodelError::not_found_error(
-                    "Type",
-                    idn.name(),
-                    idn.span().clone(),
-                    ctx.db
-                        .walk_classes()
-                        .chain(ctx.db.walk_enums())
-                        .map(|c| c.name().to_string())
-                        .collect(),
-                ));
-            }
-        }
+        // FieldType::Primitive(_, type_value, span, _) => {
+        //     let primitives = vec!["int", "float", "bool", "string", "image", "audio", "null"];
+        //     if !primitives.contains(&type_value.to_string().as_str()) {
+        //         ctx.push_error(DatamodelError::not_found_error(
+        //             "Primitive type",
+        //             &type_value.to_string(),
+        //             span.clone(),
+        //             primitives.iter().map(|&s| s.to_string()).collect(),
+        //         ));
+        //     }
+        // }
+        // FieldType::Symbol(_, idn, _) => {
+        //     if ctx.db.find_type(idn).is_none() {
+        //         ctx.push_error(DatamodelError::not_found_error(
+        //             "Type",
+        //             idn.name(),
+        //             idn.span().clone(),
+        //             ctx.db
+        //                 .walk_classes()
+        //                 .chain(ctx.db.walk_enums())
+        //                 .map(|c| c.name().to_string())
+        //                 .collect(),
+        //         ));
+        //     }
+        // }
+        FieldType::Primitive(..) => {}
+        FieldType::Symbol(..) => {}
+
         FieldType::List(field_type, ..) => validate_type_allowed(ctx, field_type),
         FieldType::Tuple(_, field_types, ..) | FieldType::Union(_, field_types, ..) => {
             for field_type in field_types {
