@@ -2,6 +2,8 @@ name: Release language_client_python
 
 on:
   workflow_call: {}
+  push:
+    branches: [sam/glibc-aarch64]
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
