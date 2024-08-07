@@ -54,13 +54,13 @@ jobs:
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
+        env: ${{ matrix._.env }}
         with:
           target: ${{ matrix._.target }}
           command: build
           args: --release --out engine/language_client_python/dist --manifest-path engine/language_client_python/Cargo.toml
           sccache: "true"
           manylinux: ${{ matrix._.manylinux }}
-          env: ${{ matrix._.env }}
           before-script-linux: |
             if command -v yum &> /dev/null; then
                 yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
