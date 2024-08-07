@@ -8,6 +8,7 @@ use crate::{
 
 use super::{ClassWalker, Walker};
 
+use baml_types::TypeValue;
 use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName, WithSpan};
 use serde_json::json;
 
@@ -112,13 +113,15 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                 "inner": (self.0, ft.deref()).serialize_data( db),
             }),
             FieldType::Primitive(arity, t, ..) => json!({
-                "rtype": match t.to_string().as_str() {
-                    "string" => "string",
-                    "int" => "int",
-                    "float" => "float",
-                    "bool" => "bool",
-                    // "null" => "null",
-                    _ => "unknown",
+                "rtype": match t {
+                    TypeValue::String => "string",
+                    TypeValue::Int => "int",
+                    TypeValue::Float => "float",
+                    TypeValue::Bool => "bool",
+                    TypeValue::Image => "image",
+                    TypeValue::Audio => "audio",
+                    TypeValue::Null => "null",
+
                 },
                 "optional": arity.is_optional(),
             }),
