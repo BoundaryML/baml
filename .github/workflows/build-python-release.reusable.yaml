@@ -21,14 +21,15 @@ jobs:
 
           - target: aarch64-unknown-linux-gnu
             runs_on: ubuntu-latest
-            # Can't go down to 2_17/2014, there are build issues that come up. It's a full day to fix.
-            manylinux: 2_17
-            # I'm not sure if this actually works; I can't 'pip install ...' on the built wheel
+            manylinux: 2_24
+            # I'm not sure if this actually works; I can't 'pip install ./local-path.whl'
+            # from inside a container based off quay.io/pypa/manylinux2014_aarch64
             # see https://github.com/astral-sh/uv/issues/3439#issuecomment-2110448346
-            env:
-              # Workaround ring 0.17 build issue
-              # see https://github.com/briansmith/ring/issues/1728
-              CFLAGS_aarch64_unknown_linux_gnu: "-D__ARM_ARCH=8"
+            # manylinux: 2_28
+            # env:
+            #   # Workaround ring 0.17 build issue
+            #   # see https://github.com/briansmith/ring/issues/1728
+            #   CFLAGS_aarch64_unknown_linux_gnu: "-D__ARM_ARCH=8"
 
           - target: x86_64-unknown-linux-musl
             runs_on: ubuntu-latest
