@@ -1171,25 +1171,18 @@ impl WasmRuntime {
                     Ok(p) => (p, None),
                     Err(e) => (Vec::new(), Some(e)),
                 };
-
                 // Any missing params should be set to an error
-                let _ = tc.function().inputs().right().map(|func_params| {
-                    for (param_name, t) in func_params {
-                        if !params.iter().any(|p| p.name.cmp(param_name).is_eq())
-                            && !t.is_optional()
-                        {
-                            params.insert(
-                                0,
-                                WasmParam {
-                                    name: param_name.to_string(),
-                                    value: None,
-                                    error: Some("Missing parameter".to_string()),
-                                },
-                            );
-                        }
+                // Any missing params should be set to an error
+                tc.function().inputs().iter().for_each(|func_params| {
+                    let (param_name, t) = func_params;
+                    if !params.iter().any(|p| p.name == *param_name) && !t.is_optional() {
+                        params.push(WasmParam {
+                            name: param_name.to_string(),
+                            value: None,
+                            error: Some("Missing parameter".to_string()),
+                        });
                     }
                 });
-
                 let wasm_span = match tc.span() {
                     Some(span) => span.into(),
                     None => WasmSpan::default(),

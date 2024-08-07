@@ -864,23 +864,6 @@ impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
         let span = self.0.test_case().functions[self.1].1.clone();
         NodeAttributes {
             meta: IndexMap::new(),
-            overrides: IndexMap::new(),
-            span: Some(span),
-        }
-    }
-
-    fn repr(&self, db: &ParserDatabase) -> Result<TestCaseFunction> {
-        Ok(TestCaseFunction(
-            self.0.test_case().functions[self.1].0.clone(),
-        ))
-    }
-}
-
-impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
-    fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
-        let span = self.0.test_case().functions[self.1].1.clone();
-        NodeAttributes {
-            meta: IndexMap::new(),
 
             span: Some(span),
         }
