@@ -1463,7 +1463,7 @@ impl WasmFunction {
         let client_name = renderer.client_name().to_string();
         log::info!("Client name: {}", client_name);
 
-        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
+        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
         let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
 
         let graph = rt
