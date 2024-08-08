@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use baml_types::FieldType;
 use either::Either;
 use indexmap::IndexMap;
-use internal_baml_diagnostics::Span;
+
 use internal_baml_parser_database::{
     walkers::{
         ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
@@ -484,7 +484,7 @@ pub struct Enum {
 
 impl WithRepr<EnumValue> for EnumValueWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
-        let mut attributes = NodeAttributes {
+        let attributes = NodeAttributes {
             meta: to_ir_attributes(db, self.get_default_attributes()),
             span: Some(self.span().clone()),
         };
@@ -552,6 +552,7 @@ pub struct Class {
     pub name: ClassId,
     pub static_fields: Vec<Node<Field>>,
     pub dynamic_fields: Vec<Node<Field>>,
+    pub inputs: Vec<(String, FieldType)>,
 }
 
 impl WithRepr<Class> for ClassWalker<'_> {
@@ -576,10 +577,26 @@ impl WithRepr<Class> for ClassWalker<'_> {
                 .dynamic_fields()
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
+            inputs: match self.ast_type_block().input() {
+                Some(input) => input
+                    .args
+                    .iter()
+                    .map(|arg| {
+                        let field_type = arg.1.field_type.repr(db)?;
+                        Ok((arg.0.to_string(), field_type))
+                    })
+                    .collect::<Result<Vec<_>>>()?,
+                None => Vec::new(),
+            },
         })
     }
 }
 
+impl Class {
+    pub fn inputs(&self) -> &Vec<(String, FieldType)> {
+        &self.inputs
+    }
+}
 #[derive(serde::Serialize, Debug)]
 pub enum OracleType {
     LLM,
@@ -934,10 +951,3 @@ impl WithRepr<Prompt> for PromptAst<'_> {
         })
     }
 }
-
-// impl ChatBlock {
-//     /// Unique Key
-//     pub fn key(&self) -> String {
-//         format!("{{//BAML_CLIENT_REPLACE_ME_CHAT_MAGIC_{}//}}", self.idx)
-//     }
-// }

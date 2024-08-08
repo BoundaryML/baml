@@ -8,8 +8,8 @@ use std::collections::HashMap;
 
 use super::{
     repr::{self, FunctionConfig},
-    Class, Client, Enum, EnumValue, Expression, Field, Function, FunctionNode, Identifier, Impl,
-    RetryPolicy, TemplateString, TestCase, Walker,
+    Class, Client, Enum, EnumValue, Expression, Field, FunctionNode, Identifier, Impl, RetryPolicy,
+    TemplateString, TestCase, Walker,
 };
 
 impl<'a> Walker<'a, &'a FunctionNode> {
@@ -302,6 +302,10 @@ impl<'a> Walker<'a, &'a Class> {
 
     pub fn span(&self) -> Option<&crate::Span> {
         self.item.attributes.span.as_ref()
+    }
+
+    pub fn inputs(&self) -> &'a Vec<(String, baml_types::FieldType)> {
+        self.elem().inputs()
     }
 }
 

@@ -6,11 +6,10 @@ use crate::types::configurations::visit_test_case;
 use crate::{context::Context, DatamodelError};
 
 use indexmap::IndexMap;
-use internal_baml_diagnostics::{DatamodelWarning, Span};
+use internal_baml_diagnostics::Span;
 use internal_baml_prompt_parser::ast::{ChatBlock, PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
-    self, Expression, FieldId, FieldType, RawString, TypeExpId, ValExpId, ValueExprBlockType,
-    WithIdentifier, WithName, WithSpan,
+    self, Expression, FieldId, RawString, TypeExpId, ValExpId, WithIdentifier, WithName, WithSpan,
 };
 
 mod configurations;
@@ -30,8 +29,8 @@ use self::configurations::visit_retry_policy;
 pub(super) fn resolve_types(ctx: &mut Context<'_>) {
     for (top_id, top) in ctx.ast.iter_tops() {
         match (top_id, top) {
-            (ast::TopId::Enum(idx), ast::Top::Enum(model)) => visit_enum(model, ctx),
-            (_, ast::Top::Enum(enm)) => unreachable!("Enum misconfigured"),
+            (ast::TopId::Enum(idx), ast::Top::Enum(model)) => visit_enum(idx, model, ctx),
+            (_, ast::Top::Enum(_)) => unreachable!("Enum misconfigured"),
 
             (ast::TopId::Class(idx), ast::Top::Class(model)) => {
                 visit_class(idx, model, ctx);
@@ -209,7 +208,6 @@ pub struct ExponentialBackoffStrategy {
 
 #[derive(Debug, Clone)]
 pub struct FunctionType {
-    pub default_impl: Option<(String, Span)>,
     pub dependencies: (HashSet<String>, HashSet<String>),
     pub prompt: Option<RawString>,
     pub client: Option<(String, Span)>,
@@ -229,6 +227,8 @@ pub(super) struct Types {
     pub(super) enum_attributes: HashMap<ast::TypeExpId, EnumAttributes>,
     pub(super) class_attributes: HashMap<ast::TypeExpId, ClassAttributes>,
     pub(super) class_dependencies: HashMap<ast::TypeExpId, HashSet<String>>,
+    pub(super) enum_dependencies: HashMap<ast::TypeExpId, HashSet<String>>,
+
     pub(super) function: HashMap<ast::ValExpId, FunctionType>,
 
     pub(super) client_properties: HashMap<ast::ValExpId, ClientProperties>,
@@ -291,20 +291,34 @@ fn visit_template_string<'db>(
     );
 }
 
-fn visit_enum<'db>(_enm: &'db ast::TypeExpressionBlock, _ctx: &mut Context<'db>) {}
+fn visit_enum<'db>(
+    enm_id: ast::TypeExpId,
+    enm: &'db ast::TypeExpressionBlock,
+    ctx: &mut Context<'db>,
+) {
+    let input_deps = enm.input().map(|f| f.flat_idns()).unwrap_or_default();
+    ctx.types.enum_dependencies.insert(
+        enm_id,
+        input_deps.iter().map(|id| id.name().to_string()).collect(),
+    );
+}
 
 fn visit_class<'db>(
     class_id: ast::TypeExpId,
     class: &'db ast::TypeExpressionBlock,
     ctx: &mut Context<'db>,
 ) {
-    let used_types = class
+    let mut used_types = class
         .iter_fields()
         .flat_map(|(_, f)| f.expr.iter().flat_map(|e| e.flat_idns()))
         .map(|id| id.name().to_string())
         .collect::<HashSet<_>>();
+    let input_deps = class.input().map(|f| f.flat_idns()).unwrap_or_default();
 
-    ctx.types.class_dependencies.insert(class_id, used_types);
+    ctx.types.class_dependencies.insert(class_id, {
+        used_types.extend(input_deps.iter().map(|id| id.name().to_string()));
+        used_types
+    });
 }
 
 fn visit_function<'db>(idx: ValExpId, function: &'db ast::ValueExprBlock, ctx: &mut Context<'db>) {
@@ -352,7 +366,6 @@ fn visit_function<'db>(idx: ValExpId, function: &'db ast::ValueExprBlock, ctx: &
             ctx.types.function.insert(
                 idx,
                 FunctionType {
-                    default_impl: None,
                     dependencies: (input_deps.clone(), output_deps),
                     prompt: Some(prompt.clone()),
                     client: Some(client),

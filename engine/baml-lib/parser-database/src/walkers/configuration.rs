@@ -22,20 +22,6 @@ impl ConfigurationWalker<'_> {
         assert!(self.id.1 == "test");
         &self.db.types.test_cases[&self.id.0]
     }
-
-    /// Get the function that this test case is testing.
-    pub fn walk_functions(&self) -> impl Iterator<Item = super::FunctionWalker<'_>> {
-        assert!(self.id.1 == "test");
-        self.test_case()
-            .functions
-            .iter()
-            .filter_map(|id| self.db.find_function_by_name(id.0.as_str()))
-    }
-
-    /// If adapters are not present we can stream
-    pub fn is_streaming_supported(&self) -> bool {
-        return true;
-    }
 }
 
 impl WithIdentifier for ConfigurationWalker<'_> {

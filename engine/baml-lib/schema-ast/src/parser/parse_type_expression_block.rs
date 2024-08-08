@@ -24,9 +24,9 @@ pub(crate) fn parse_type_expression_block(
     let mut attributes: Vec<Attribute> = Vec::new();
     let mut fields: Vec<Field<FieldType>> = Vec::new();
     let mut sub_type: Option<SubType> = None;
+    let mut input = None;
 
     for current in pair.into_inner() {
-        let mut input: Option<BlockArgs> = None;
         
 
         match current.as_rule() {
@@ -36,8 +36,7 @@ pub(crate) fn parse_type_expression_block(
                     "enum" => sub_type = Some(SubType::Enum.clone()),
                     _ => sub_type = Some(SubType::Other(current.as_str().to_string())),
                 }
-                // Rule::CLASS_KEYWORD => sub_type = Some(SubType::Class.clone());
-                // Rule::ENUM_KEYWORD => sub_type = Some(SubType::Enum.clone());
+
             }
 
             Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
@@ -102,6 +101,7 @@ pub(crate) fn parse_type_expression_block(
         Some(name) => TypeExpressionBlock {
             name,
             fields,
+            input,
             attributes,
             documentation: doc_comment.and_then(parse_comment_block),
             span: diagnostics.span(pair_span),

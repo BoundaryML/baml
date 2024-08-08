@@ -23,11 +23,6 @@ impl<'db> FunctionWalker<'db> {
         self.ast_function().name()
     }
 
-    /// The name of the function.
-    pub fn identifier(self) -> &'db Identifier {
-        self.ast_function().identifier()
-    }
-
     /// The ID of the function in the db
     pub fn function_id(self) -> ast::ValExpId {
         self.id.1
@@ -61,7 +56,10 @@ impl<'db> FunctionWalker<'db> {
 
     /// Arguments of the function.
     pub fn find_input_arg_by_position(self, position: u32) -> Option<ArgWalker<'db>> {
-        None
+        self.walk_input_args().find(|arg| {
+            let span = arg.ast_arg().1.span();
+            span.contains(position as usize)
+        })
     }
 
     /// Iterates over the input arguments of the function.
@@ -130,6 +128,12 @@ impl<'db> FunctionWalker<'db> {
         let client = self.metadata().client.as_ref()?;
 
         self.db.find_client(client.0.as_str())
+    }
+}
+impl<'db> WithIdentifier for FunctionWalker<'db> {
+    /// The name of the function.
+    fn identifier(&self) -> &'db Identifier {
+        self.ast_function().identifier()
     }
 }
 

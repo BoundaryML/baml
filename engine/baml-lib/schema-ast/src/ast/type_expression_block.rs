@@ -1,5 +1,5 @@
 use super::{
-    traits::WithAttributes, Attribute, Comment, Field, FieldType, Identifier, Span,
+    traits::WithAttributes, Attribute, BlockArgs, Comment, Field, FieldType, Identifier, Span,
     WithDocumentation, WithIdentifier, WithSpan,
 };
 
@@ -54,6 +54,8 @@ pub struct TypeExpressionBlock {
     ///   ^^^^^^
     /// }
     /// ```
+    pub(crate) input: Option<BlockArgs>,
+    ///
     pub fields: Vec<Field<FieldType>>, // needs to support field as well
 
     /// The attributes of this enum.
@@ -97,6 +99,13 @@ impl TypeExpressionBlock {
 
     pub fn values(&self) -> &[Field<FieldType>] {
         &self.fields
+    }
+
+    pub fn input(&self) -> Option<&BlockArgs> {
+        match &self.input {
+            Some(input) => Some(input),
+            None => None,
+        }
     }
 }
 

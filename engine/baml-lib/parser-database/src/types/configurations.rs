@@ -1,13 +1,11 @@
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 use internal_baml_schema_ast::ast::{ValExpId, ValueExprBlock, WithIdentifier, WithName, WithSpan};
 use regex::Regex;
+use std::collections::HashSet;
 
 use crate::{coerce, coerce_array, coerce_expression::coerce_map, context::Context};
 
-use super::{
-    ContantDelayStrategy, ExponentialBackoffStrategy, Printer, PrinterType, RetryPolicy,
-    RetryPolicyStrategy,
-};
+use super::{ContantDelayStrategy, ExponentialBackoffStrategy, RetryPolicy, RetryPolicyStrategy};
 
 fn dedent(s: &str) -> String {
     // Find the shortest indentation in the string (that's not an empty line).
