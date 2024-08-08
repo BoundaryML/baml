@@ -270,6 +270,7 @@ export function activate(context: vscode.ExtensionContext) {
           properties: {},
         })
       }
+
       // sends project files as well to webview
       requestDiagnostics()
 

@@ -9,6 +9,7 @@ import { useCallback, useEffect } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
 import { atomStore, sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
+import { showClientGraphAtom, showTestsAtom } from './test_uis/testHooks'
 import type {
   WasmDiagnosticError,
   WasmParam,
@@ -889,7 +890,8 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const envVars = useAtomValue(envVarsAtom)
   const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
   const { isRunning, run } = useRunHooks()
-
+  const setShowTests = useSetAtom(showTestsAtom)
+  const setClientGraph = useSetAtom(showClientGraphAtom)
   useEffect(() => {
     if (wasm) {
       console.log('wasm ready!')
@@ -1038,7 +1040,8 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
         case 'run_test':
           run([content.test_name])
-
+          setShowTests(true)
+          setClientGraph(false)
           break
       }
     }
