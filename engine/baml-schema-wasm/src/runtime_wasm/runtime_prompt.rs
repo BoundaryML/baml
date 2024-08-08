@@ -3,6 +3,7 @@ use baml_runtime::{
     ChatMessagePart, RenderedPrompt,
 };
 
+use crate::runtime_wasm::ToJsValue;
 use baml_types::{BamlMedia, BamlMediaType, MediaBase64};
 use serde_wasm_bindgen::to_value;
 use wasm_bindgen::prelude::*;

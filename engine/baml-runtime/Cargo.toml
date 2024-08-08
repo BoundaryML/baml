@@ -71,8 +71,6 @@ aws-smithy-runtime = "1.6.0"
 enum_dispatch = "0.3.13"
 ambassador = "0.4.0"
 aws-smithy-json = "0.60.7"
-wasm-bindgen = "^0.2.74"
-js-sys = "0.3.69"
 jsonwebtoken = "9.3.0"
 pretty_assertions = "1.4.0"
 

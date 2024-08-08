@@ -1,22 +1,6 @@
 mod call;
 mod stream;
 
-use anyhow::Result;
-use baml_types::BamlValue;
-
-use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_jinja::RenderedChatMessage;
-use internal_baml_jinja::RenderedPrompt;
-use js_sys;
-use serde::Serialize;
-use std::{collections::HashMap, sync::Arc};
-
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        use wasm_bindgen::JsValue;
-    }
-}
-
 use web_time::Duration; // Add this line
 
 use crate::{
@@ -35,6 +19,13 @@ pub use super::primitive::LLMPrimitiveProvider;
 pub use call::orchestrate as orchestrate_call;
 pub use stream::orchestrate_stream;
 
+use anyhow::Result;
+use baml_types::BamlValue;
+use internal_baml_core::ir::repr::IntermediateRepr;
+use internal_baml_jinja::RenderedChatMessage;
+use internal_baml_jinja::RenderedPrompt;
+use serde::Serialize;
+use std::{collections::HashMap, sync::Arc};
 pub struct OrchestratorNode {
     pub scope: OrchestrationScope,
     pub provider: Arc<LLMPrimitiveProvider>,
@@ -137,26 +128,6 @@ impl OrchestrationScope {
                 .collect(),
         }
     }
-
-    #[cfg(target_arch = "wasm32")]
-    pub fn to_js_value(&self) -> JsValue {
-        let array = js_sys::Array::new();
-        for scope in &self.scope {
-            array.push(&scope.to_js_value());
-        }
-        array.into()
-    }
-
-    // pub fn extend_scopes(&self, scope: Vec<ExecutionScope>) -> OrchestrationScope {
-    //     OrchestrationScope {
-    //         scope: self
-    //             .scope
-    //             .clone()
-    //             .into_iter()
-    //             .chain(scope.into_iter())
-    //             .collect(),
-    //     }
-    // }
 }
 
 #[derive(Clone, Serialize)]
@@ -238,43 +209,5 @@ impl WithStreamable for OrchestratorNode {
             .map(|a| a.increment_index())
             .for_each(drop);
         self.provider.stream(ctx, prompt).await
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-impl ExecutionScope {
-    fn to_js_value(&self) -> JsValue {
-        let obj = js_sys::Object::new();
-        let set_property = |obj: &js_sys::Object, key: &str, value: JsValue| {
-            js_sys::Reflect::set(obj, &JsValue::from_str(key), &value).is_ok()
-        };
-
-        match self {
-            ExecutionScope::Direct(name) => {
-                set_property(&obj, "type", JsValue::from_str("Direct"));
-                set_property(&obj, "name", JsValue::from_str(name));
-            }
-            ExecutionScope::Retry(name, count, delay) => {
-                set_property(&obj, "type", JsValue::from_str("Retry"));
-                set_property(&obj, "name", JsValue::from_str(name));
-                set_property(&obj, "count", JsValue::from_f64(*count as f64));
-                set_property(&obj, "delay", JsValue::from_f64(delay.as_millis() as f64));
-            }
-            ExecutionScope::RoundRobin(strategy, index) => {
-                set_property(&obj, "type", JsValue::from_str("RoundRobin"));
-                set_property(
-                    &obj,
-                    "strategy_name",
-                    JsValue::from_str(&format!("{:?}", strategy.name)),
-                );
-                set_property(&obj, "index", JsValue::from_f64(*index as f64));
-            }
-            ExecutionScope::Fallback(name, index) => {
-                set_property(&obj, "type", JsValue::from_str("Fallback"));
-                set_property(&obj, "name", JsValue::from_str(name));
-                set_property(&obj, "index", JsValue::from_f64(*index as f64));
-            }
-        }
-        obj.into()
     }
 }

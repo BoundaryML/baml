@@ -1,10 +1,8 @@
 pub mod generator;
 pub mod runtime_prompt;
-
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
-use baml_runtime::internal::llm_client::orchestrator::{
-    ExecutionScope, OrchestrationScope, OrchestratorNode,
-};
+use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
+use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
 use baml_runtime::internal_core::configuration::GeneratorOutputType;
 use baml_runtime::InternalRuntimeInterface;
@@ -14,13 +12,17 @@ use baml_runtime::{
 use baml_types::{BamlMap, BamlValue};
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
-use internal_baml_core::ir::Expression;
+
+use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use wasm_bindgen::prelude::*;
 
 use self::runtime_prompt::WasmScope;
+use wasm_bindgen::JsValue;
+
+use anyhow::Result;
 
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -28,7 +30,7 @@ use self::runtime_prompt::WasmScope;
 
 #[wasm_bindgen(start)]
 pub fn on_wasm_init() {
-    match console_log::init_with_level(log::Level::Info) {
+    match console_log::init_with_level(log::Level::Warn) {
         Ok(_) => web_sys::console::log_1(&"Initialized BAML runtime logging".into()),
         Err(e) => web_sys::console::log_1(
             &format!("Failed to initialize BAML runtime logging: {:?}", e).into(),
@@ -1435,5 +1437,55 @@ impl WasmFunction {
             scopes.push(WasmScope::from(scope.scope));
         }
         Ok(scopes)
+    }
+}
+trait ToJsValue {
+    fn to_js_value(&self) -> JsValue;
+}
+
+impl ToJsValue for ExecutionScope {
+    fn to_js_value(&self) -> JsValue {
+        let obj = js_sys::Object::new();
+        let set_property = |obj: &js_sys::Object, key: &str, value: JsValue| {
+            js_sys::Reflect::set(obj, &JsValue::from_str(key), &value).is_ok()
+        };
+
+        match self {
+            ExecutionScope::Direct(name) => {
+                set_property(&obj, "type", JsValue::from_str("Direct"));
+                set_property(&obj, "name", JsValue::from_str(name));
+            }
+            ExecutionScope::Retry(name, count, delay) => {
+                set_property(&obj, "type", JsValue::from_str("Retry"));
+                set_property(&obj, "name", JsValue::from_str(name));
+                set_property(&obj, "count", JsValue::from_f64(*count as f64));
+                set_property(&obj, "delay", JsValue::from_f64(delay.as_millis() as f64));
+            }
+            ExecutionScope::RoundRobin(strategy, index) => {
+                set_property(&obj, "type", JsValue::from_str("RoundRobin"));
+                set_property(
+                    &obj,
+                    "strategy_name",
+                    JsValue::from_str(&format!("{:?}", strategy.name)),
+                );
+                set_property(&obj, "index", JsValue::from_f64(*index as f64));
+            }
+            ExecutionScope::Fallback(name, index) => {
+                set_property(&obj, "type", JsValue::from_str("Fallback"));
+                set_property(&obj, "name", JsValue::from_str(name));
+                set_property(&obj, "index", JsValue::from_f64(*index as f64));
+            }
+        }
+        obj.into()
+    }
+}
+
+impl ToJsValue for OrchestrationScope {
+    fn to_js_value(&self) -> JsValue {
+        let array = js_sys::Array::new();
+        for scope in &self.scope {
+            array.push(&scope.to_js_value());
+        }
+        array.into()
     }
 }
