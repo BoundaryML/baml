@@ -459,7 +459,7 @@ module Baml
     end
     class Quantity < T::Struct
       include Baml::Sorbet::Struct
-      const :amount, T.any(T.any(Integer), T.any(Float))
+      const :amount, T.any(Integer, Float)
       const :unit, T.nilable(String)
 
       def initialize(props)
@@ -474,7 +474,7 @@ module Baml
     class RaysData < T::Struct
       include Baml::Sorbet::Struct
       const :dataType, Baml::Types::DataType
-      const :value, T.any(T.any(Baml::Types::Resume), T.any(Baml::Types::Event))
+      const :value, T.any(Baml::Types::Resume, Baml::Types::Event)
 
       def initialize(props)
         super(
@@ -558,7 +558,7 @@ module Baml
       const :jobTitle, T.nilable(Baml::Types::WithReasoning)
       const :company, T.nilable(Baml::Types::WithReasoning)
       const :description, T::Array[Baml::Types::WithReasoning]
-      const :tags, T::Array[T.any(T.any(Baml::Types::Tag), T.any(String))]
+      const :tags, T::Array[T.any(Baml::Types::Tag, String)]
 
       def initialize(props)
         super(
@@ -661,9 +661,9 @@ module Baml
     end
     class UnionTest_ReturnType < T::Struct
       include Baml::Sorbet::Struct
-      const :prop1, T.any(T.any(String), T.any(T::Boolean))
-      const :prop2, T::Array[T.any(T.any(Float), T.any(T::Boolean))]
-      const :prop3, T.any(T.any(T::Array[T::Boolean]), T.any(T::Array[Integer]))
+      const :prop1, T.any(String, T::Boolean)
+      const :prop2, T::Array[T.any(Float, T::Boolean)]
+      const :prop3, T.any(T::Array[T::Boolean], T::Array[Integer])
 
       def initialize(props)
         super(

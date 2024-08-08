@@ -1715,7 +1715,7 @@ class BamlSyncClient:
     
     def UnionTest_Function(
         self,
-        input: Union[Union[str], Union[bool]],
+        input: Union[str, bool],
         baml_options: BamlCallOptions = {},
     ) -> types.UnionTest_ReturnType:
       __tb__ = baml_options.get("tb", None)
@@ -4029,7 +4029,7 @@ class BamlStreamClient:
     
     def UnionTest_Function(
         self,
-        input: Union[Union[str], Union[bool]],
+        input: Union[str, bool],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.UnionTest_ReturnType, types.UnionTest_ReturnType]:
       __tb__ = baml_options.get("tb", None)

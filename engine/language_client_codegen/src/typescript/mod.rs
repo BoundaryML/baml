@@ -51,6 +51,7 @@ impl From<TypescriptClient> for SyncTypescriptClient {
     }
 }
 
+#[derive(Debug)]
 struct TypescriptFunction {
     name: String,
     // partial_return_type: String,
@@ -135,7 +136,11 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
                                 .inputs()
                                 .iter()
                                 .map(|(name, r#type)| {
-                                    (name.to_string(), false, r#type.to_type_ref(ir))
+                                    (
+                                        name.to_string(),
+                                        r#type.is_optional(),
+                                        r#type.to_type_ref(ir),
+                                    )
                                 })
                                 .collect(),
                         })

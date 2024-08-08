@@ -254,14 +254,14 @@ class Person(BaseModel):
 class Quantity(BaseModel):
     
     
-    amount: Union[Union[int], Union[float]]
+    amount: Union[int, float]
     unit: Optional[str] = None
 
 class RaysData(BaseModel):
     
     
     dataType: "DataType"
-    value: Union[Union["Resume"], Union["Event"]]
+    value: Union["Resume", "Event"]
 
 class ReceiptInfo(BaseModel):
     
@@ -300,7 +300,7 @@ class SearchParams(BaseModel):
     jobTitle: Optional["WithReasoning"] = None
     company: Optional["WithReasoning"] = None
     description: List["WithReasoning"]
-    tags: List[Union[Union["Tag"], Union[str]]]
+    tags: List[Union["Tag", str]]
 
 class SomeClassNestedDynamic(BaseModel):
     
@@ -343,9 +343,9 @@ class TestOutputClass(BaseModel):
 class UnionTest_ReturnType(BaseModel):
     
     
-    prop1: Union[Union[str], Union[bool]]
-    prop2: List[Union[Union[float], Union[bool]]]
-    prop3: Union[Union[List[bool]], Union[List[int]]]
+    prop1: Union[str, bool]
+    prop2: List[Union[float, bool]]
+    prop3: Union[List[bool], List[int]]
 
 class WithReasoning(BaseModel):
     

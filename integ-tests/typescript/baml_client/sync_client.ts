@@ -315,13 +315,13 @@ export class BamlSyncClient {
   }
   
   ExtractResume(
-      resume: string,img: Image | null,
+      resume: string,img?: Image | null,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Resume {
     const raw = this.runtime.callFunctionSync(
       "ExtractResume",
       {
-        "resume": resume,"img": img
+        "resume": resume,"img": img?? null
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -411,13 +411,13 @@ export class BamlSyncClient {
   }
   
   FnNamedArgsSingleStringOptional(
-      myString: string | null,
+      myString?: string | null,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     const raw = this.runtime.callFunctionSync(
       "FnNamedArgsSingleStringOptional",
       {
-        "myString": myString
+        "myString": myString?? null
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
