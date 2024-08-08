@@ -1,8 +1,9 @@
 pub mod generator;
 pub mod runtime_prompt;
-
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
+use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
+use baml_runtime::internal::prompt_renderer::PromptRenderer;
 use baml_runtime::internal_core::configuration::GeneratorOutputType;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::{
@@ -11,11 +12,17 @@ use baml_runtime::{
 use baml_types::{BamlMap, BamlValue};
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
-use internal_baml_core::ir::Expression;
+
+use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use wasm_bindgen::prelude::*;
+
+use self::runtime_prompt::WasmScope;
+use wasm_bindgen::JsValue;
+
+use anyhow::Result;
 
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -1120,15 +1127,6 @@ impl WasmRuntime {
             }
         }
 
-        None
-    }
-
-    #[wasm_bindgen]
-    pub fn get_function_of_testcase(
-        &self,
-        file_name: &str,
-        cursor_idx: usize,
-    ) -> Option<WasmParentFunction> {
         let testcases = self.list_testcases();
 
         for tc in testcases {
@@ -1136,15 +1134,18 @@ impl WasmRuntime {
             if span.file_path.as_str().ends_with(file_name)
                 && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
             {
-                let first_function = tc
-                    .parent_functions
-                    .iter()
-                    .find(|f| f.start <= cursor_idx && cursor_idx <= f.end)
-                    .cloned();
-
-                return first_function;
+                if let Some(parent_function) =
+                    tc.parent_functions.iter().find(|f| f.name == selected_func)
+                {
+                    return functions.into_iter().find(|f| f.name == selected_func);
+                } else if let Some(first_function) = tc.parent_functions.get(0) {
+                    return functions
+                        .into_iter()
+                        .find(|f| f.name == first_function.name);
+                }
             }
         }
+
         None
     }
 
@@ -1255,6 +1256,45 @@ impl WasmRuntime {
         }
         None
     }
+
+    #[wasm_bindgen]
+    pub fn get_function_of_testcase(
+        &self,
+        file_name: &str,
+        cursor_idx: usize,
+    ) -> Option<WasmParentFunction> {
+        let testcases = self.list_testcases();
+
+        for tc in testcases {
+            let span = tc.span;
+            if span.file_path.as_str().ends_with(file_name)
+                && ((span.start + 1)..=(span.end + 1)).contains(&cursor_idx)
+            {
+                let first_function = tc
+                    .parent_functions
+                    .iter()
+                    .find(|f| f.start <= cursor_idx && cursor_idx <= f.end)
+                    .cloned();
+
+                return first_function;
+            }
+        }
+        None
+    }
+}
+// Define a new struct to store the important information
+#[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SerializableOrchestratorNode {
+    pub provider: String,
+}
+
+impl From<&OrchestratorNode> for SerializableOrchestratorNode {
+    fn from(node: &OrchestratorNode) -> Self {
+        SerializableOrchestratorNode {
+            provider: node.provider.to_string(),
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -1265,7 +1305,9 @@ impl WasmFunction {
         rt: &WasmRuntime,
         params: JsValue,
     ) -> Result<WasmPrompt, wasm_bindgen::JsError> {
-        let params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
+        let mut params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
+        let node_index = params.shift_remove("node_index");
+
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
         let ctx = rt
             .runtime
@@ -1274,12 +1316,29 @@ impl WasmFunction {
 
         rt.runtime
             .internal()
-            .render_prompt(&self.name, &ctx, &params, None)
+            .render_prompt(
+                &self.name,
+                &ctx,
+                &params,
+                node_index.and_then(|v| v.as_int().map(|i| i as usize)),
+            )
             .as_ref()
             .map(|(p, scope)| (p, scope).into())
             .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
     }
-
+    #[wasm_bindgen]
+    pub fn client_name(&self, rt: &WasmRuntime) -> Result<String, JsValue> {
+        let rt: &BamlRuntime = &rt.runtime;
+        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
+        let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
+        let ir = rt.internal().ir();
+        let walker = ir
+            .find_function(&self.name)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        let renderer = PromptRenderer::from_function(&walker, ir, &ctx)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        Ok(renderer.client_name().to_string())
+    }
     #[wasm_bindgen]
     pub async fn render_raw_curl(
         &self,
@@ -1287,7 +1346,11 @@ impl WasmFunction {
         params: JsValue,
         stream: bool,
     ) -> Result<String, wasm_bindgen::JsError> {
-        let params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
+        let mut params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
+        let node_index = params
+            .shift_remove("node_index")
+            .and_then(|v| v.as_int().map(|i| i as usize));
+
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
 
         let ctx = rt
@@ -1295,10 +1358,10 @@ impl WasmFunction {
             .create_ctx_manager(BamlValue::String("wasm".to_string()))
             .create_ctx_with_default(missing_env_vars.iter());
 
-        let result = rt
-            .runtime
-            .internal()
-            .render_prompt(&self.name, &ctx, &params, None);
+        let result =
+            rt.runtime
+                .internal()
+                .render_prompt(&self.name, &ctx, &params, node_index.clone());
 
         let final_prompt = match result {
             Ok((prompt, _)) => match prompt {
@@ -1310,7 +1373,7 @@ impl WasmFunction {
 
         rt.runtime
             .internal()
-            .render_raw_curl(&self.name, &ctx, &final_prompt, stream, None)
+            .render_raw_curl(&self.name, &ctx, &final_prompt, stream, node_index)
             .await
             .map_err(|e| wasm_bindgen::JsError::new(format!("{e:#?}").as_str()))
     }
@@ -1345,5 +1408,84 @@ impl WasmFunction {
             span,
             tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
         })
+    }
+
+    pub fn orchestration_graph(&self, rt: &WasmRuntime) -> Result<Vec<WasmScope>, JsValue> {
+        let rt: &BamlRuntime = &rt.runtime;
+        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
+        let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
+        let ir = rt.internal().ir();
+        let walker = ir
+            .find_function(&self.name)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        let renderer = PromptRenderer::from_function(&walker, ir, &ctx)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        let client_name = renderer.client_name().to_string();
+        log::info!("Client name: {}", client_name);
+
+        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
+        let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
+
+        let graph = rt
+            .internal()
+            .orchestration_graph(&client_name, &ctx)
+            .map_err(|e| JsValue::from_str(&format!("{:#?}", e)))?;
+
+        // Serialize the scopes to JsValue
+        let mut scopes = Vec::new();
+        for scope in graph {
+            scopes.push(WasmScope::from(scope.scope));
+        }
+        Ok(scopes)
+    }
+}
+trait ToJsValue {
+    fn to_js_value(&self) -> JsValue;
+}
+
+impl ToJsValue for ExecutionScope {
+    fn to_js_value(&self) -> JsValue {
+        let obj = js_sys::Object::new();
+        let set_property = |obj: &js_sys::Object, key: &str, value: JsValue| {
+            js_sys::Reflect::set(obj, &JsValue::from_str(key), &value).is_ok()
+        };
+
+        match self {
+            ExecutionScope::Direct(name) => {
+                set_property(&obj, "type", JsValue::from_str("Direct"));
+                set_property(&obj, "name", JsValue::from_str(name));
+            }
+            ExecutionScope::Retry(name, count, delay) => {
+                set_property(&obj, "type", JsValue::from_str("Retry"));
+                set_property(&obj, "name", JsValue::from_str(name));
+                set_property(&obj, "count", JsValue::from_f64(*count as f64));
+                set_property(&obj, "delay", JsValue::from_f64(delay.as_millis() as f64));
+            }
+            ExecutionScope::RoundRobin(strategy, index) => {
+                set_property(&obj, "type", JsValue::from_str("RoundRobin"));
+                set_property(
+                    &obj,
+                    "strategy_name",
+                    JsValue::from_str(&format!("{:?}", strategy.name)),
+                );
+                set_property(&obj, "index", JsValue::from_f64(*index as f64));
+            }
+            ExecutionScope::Fallback(name, index) => {
+                set_property(&obj, "type", JsValue::from_str("Fallback"));
+                set_property(&obj, "name", JsValue::from_str(name));
+                set_property(&obj, "index", JsValue::from_f64(*index as f64));
+            }
+        }
+        obj.into()
+    }
+}
+
+impl ToJsValue for OrchestrationScope {
+    fn to_js_value(&self) -> JsValue {
+        let array = js_sys::Array::new();
+        for scope in &self.scope {
+            array.push(&scope.to_js_value());
+        }
+        array.into()
     }
 }

@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { VSCodeButton, VSCodeLink, VSCodeProgressRing, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { PropsWithChildren, useEffect, useMemo, useState } from 'react'
+import React, { PropsWithChildren, useEffect, useMemo, useState, useCallback } from 'react'
 import {
   TestState,
   type TestStatusType,
@@ -12,6 +12,7 @@ import {
   DoneTestStatusType,
   useRunHooks,
   showTestsAtom,
+  showClientGraphAtom,
 } from './testHooks'
 import CustomErrorBoundary from '../../utils/ErrorFallback'
 import {
@@ -23,11 +24,23 @@ import {
 import JsonView from 'react18-json-view'
 import clsx from 'clsx'
 import { Check, Copy, FilterIcon, Link2Icon, PlayIcon, PlusIcon } from 'lucide-react'
-import { selectedFunctionAtom, selectedTestCaseAtom } from '../EventListener'
+import { currentClientsAtom, selectedFunctionAtom, selectedTestCaseAtom } from '../EventListener'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import FunctionTestSnippet from '../../shared/TestSnippet'
 import { Tooltip, TooltipContent } from '../../components/ui/tooltip'
 import { TooltipTrigger } from '../../components/ui/tooltip'
+import { orchestration_nodes, orchIndexAtom } from '../../baml_wasm_web/EventListener'
+import {
+  ReactFlow,
+  addEdge,
+  Background,
+  useNodesState,
+  useEdgesState,
+  MiniMap,
+  MarkerType,
+  Connection,
+} from '@xyflow/react'
+import { Sparkles } from 'lucide-react'
 
 const TestStatusMessage: React.FC<{ testStatus: DoneTestStatusType }> = ({ testStatus }) => {
   switch (testStatus) {
@@ -425,9 +438,113 @@ const TestStatusBanner: React.FC = () => {
   )
 }
 
+interface RenderEdge {
+  id: string
+  source: string
+  target: string
+}
+
+interface RenderNode {
+  id: string
+  data: { label: string; orch_index: number }
+  position: { x: number; y: number }
+  style?: { backgroundColor: string; width?: number; height?: number }
+  parentId?: string
+  extent?: 'parent' | undefined // Update extent type
+}
+
+const ClientGraph: React.FC = () => {
+  const graph = useAtomValue(orchestration_nodes)
+  const [orchIndex, setOrchIndex] = useAtom(orchIndexAtom)
+
+  const renderNodes: RenderNode[] = useMemo(
+    () =>
+      graph.nodes.map((node) => ({
+        id: node.gid,
+        data: {
+          label: node.client_name ?? 'no name for this node',
+          orch_index: node.orch_index !== undefined ? node.orch_index : -1,
+        },
+        position: { x: node.Position?.x ?? 0, y: node.Position?.y ?? 0 },
+        style: {
+          backgroundColor: 'rgba(255, 0, 255, 0.2)',
+          width: node.Dimension?.width,
+          height: node.Dimension?.height,
+          outline: orchIndex === node.orch_index ? '1px solid white' : '',
+        },
+        parentId: node.parentGid,
+        extent: 'parent',
+      })),
+    [graph.nodes, orchIndex],
+  )
+
+  const renderEdges: RenderEdge[] = useMemo(
+    () =>
+      graph.edges.map((edge, idx) => ({
+        id: idx.toString(),
+        source: edge.from_node,
+        target: edge.to_node,
+        animated: true,
+        type: 'smoothstep',
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+        },
+        label: edge.weight !== undefined ? `⏰ ${edge.weight} ms ` : '',
+      })),
+    [graph.edges],
+  )
+
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(renderNodes)
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(renderEdges)
+
+  // const onConnect = useCallback((connection: Connection) => {
+  //   setFlowEdges((eds) => addEdge(connection, eds))
+  // }, [])
+
+  // Set default selected node
+
+  // Synchronize flowNodes and flowEdges with nodes and edges
+  useEffect(() => {
+    setFlowNodes(renderNodes)
+    setFlowEdges(renderEdges)
+  }, [renderNodes, renderEdges])
+
+  const onNodeClick = (event: React.MouseEvent, node: any) => {
+    if (node.data.orch_index != -1) {
+      setOrchIndex(node.data.orch_index)
+    }
+  }
+
+  const styles: React.CSSProperties = {
+    whiteSpace: 'normal',
+    wordWrap: 'break-word',
+    overflowWrap: 'break-word',
+  }
+
+  return (
+    <div style={{ height: '100vh', width: '100%' }}>
+      <ReactFlow
+        style={styles}
+        nodes={flowNodes}
+        edges={flowEdges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={onNodeClick}
+        fitView
+        edgesFocusable={false}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        nodesFocusable={false}
+      />
+    </div>
+  )
+}
+
 const TestResults: React.FC = () => {
   const selectedFunction = useAtomValue(selectedFunctionAtom)
   const [showTests, setShowTests] = useAtom(showTestsAtom)
+  const [showClientGraph, setClientGraph] = useAtom(showClientGraphAtom)
+  const currentClients = useAtomValue(currentClientsAtom)
 
   // reset the tab when switching funcs
   useEffect(() => {
@@ -440,28 +557,47 @@ const TestResults: React.FC = () => {
         <Badge
           className={clsx(
             'cursor-pointer hover:bg-vscode-tab-activeBackground',
-            showTests
-              ? 'bg-transparent  text-vscode-foreground'
-              : 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground',
+            showClientGraph
+              ? 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground underline'
+              : 'bg-transparent text-vscode-foreground',
           )}
-          onClick={() => setShowTests(false)}
+          onClick={() => {
+            setClientGraph(true)
+          }}
+        >
+          Client Graph ✨
+        </Badge>
+        <Badge
+          className={clsx(
+            'cursor-pointer hover:bg-vscode-tab-activeBackground',
+            showTests || showClientGraph
+              ? 'bg-transparent text-vscode-foreground'
+              : 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground underline',
+          )}
+          onClick={() => {
+            setShowTests(false)
+            setClientGraph(false)
+          }}
         >
           All Tests
         </Badge>
         <Badge
           className={clsx(
             'cursor-pointer hover:bg-vscode-tab-activeBackground',
-            showTests
-              ? 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground'
+            showTests && !showClientGraph
+              ? 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground underline'
               : 'bg-transparent text-vscode-foreground',
           )}
-          onClick={() => setShowTests(true)}
+          onClick={() => {
+            setShowTests(true)
+            setClientGraph(false)
+          }}
         >
           Test Results
         </Badge>
       </div>
 
-      {showTests ? <TestResultContent /> : <TestCaseList />}
+      {showClientGraph ? <ClientGraph /> : showTests ? <TestResultContent /> : <TestCaseList />}
     </div>
   )
 }

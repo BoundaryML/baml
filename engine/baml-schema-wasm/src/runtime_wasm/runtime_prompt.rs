@@ -1,14 +1,28 @@
 use baml_runtime::{
-    internal::llm_client::orchestrator::OrchestrationScope, ChatMessagePart, RenderedPrompt,
+    internal::llm_client::orchestrator::{ExecutionScope, OrchestrationScope},
+    ChatMessagePart, RenderedPrompt,
 };
 
+use crate::runtime_wasm::ToJsValue;
 use baml_types::{BamlMedia, BamlMediaType, MediaBase64};
+use serde_wasm_bindgen::to_value;
 use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen(getter_with_clone)]
+pub struct WasmScope {
+    scope: OrchestrationScope,
+}
 
 #[wasm_bindgen(getter_with_clone)]
 pub struct WasmPrompt {
     prompt: RenderedPrompt,
     pub client_name: String,
+}
+
+impl From<OrchestrationScope> for WasmScope {
+    fn from(scope: OrchestrationScope) -> Self {
+        WasmScope { scope }
+    }
 }
 
 impl From<(&RenderedPrompt, &OrchestrationScope)> for WasmPrompt {
@@ -91,6 +105,50 @@ impl WasmChatMessagePart {
             })
         } else {
             None
+        }
+    }
+}
+
+#[wasm_bindgen]
+impl WasmScope {
+    #[wasm_bindgen]
+    pub fn name(&self) -> String {
+        self.scope.name()
+    }
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen]
+    pub fn get_orchestration_scope_info(&self) -> JsValue {
+        self.scope.to_js_value()
+    }
+
+    #[wasm_bindgen]
+    pub fn iter_scopes(&self) -> ScopeIterator {
+        ScopeIterator {
+            scopes: self.scope.scope.clone(),
+            index: 0,
+        }
+    }
+}
+
+#[wasm_bindgen]
+pub struct ScopeIterator {
+    scopes: Vec<ExecutionScope>,
+    index: usize,
+}
+
+#[wasm_bindgen]
+impl ScopeIterator {
+    #[wasm_bindgen]
+    pub fn next(&mut self) -> JsValue {
+        if self.index < self.scopes.len() {
+            let scope = &self.scopes[self.index];
+            self.index += 1;
+            match to_value(scope) {
+                Ok(value) => value,
+                Err(_) => JsValue::NULL,
+            }
+        } else {
+            JsValue::NULL
         }
     }
 }

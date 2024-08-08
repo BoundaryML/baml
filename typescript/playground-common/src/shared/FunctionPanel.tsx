@@ -1,7 +1,18 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
-import { useAtomValue, useSetAtom } from 'jotai'
-import { renderPromptAtom, selectedFunctionAtom, curlAtom, streamCurl } from '../baml_wasm_web/EventListener'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import React, { useCallback } from 'react'
+
+import '@xyflow/react/dist/style.css'
+import {
+  renderPromptAtom,
+  selectedFunctionAtom,
+  curlAtom,
+  streamCurl,
+  orchestration_nodes,
+  GroupEntry,
+  Edge,
+} from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
