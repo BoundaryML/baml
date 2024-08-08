@@ -32,8 +32,8 @@ const CurlSnippet: React.FC = () => {
 
   return (
     <div>
-      <div className='flex justify-end items-center space-x-2 p-2  rounded-md shadow-sm'>
-        <label className='flex items-center space-x-1 mr-2'>
+      <div className='flex items-center justify-end p-2 space-x-2 rounded-md shadow-sm'>
+        <label className='flex items-center mr-2 space-x-1'>
           <Switch
             className='data-[state=checked]:bg-vscode-button-background data-[state=unchecked]:bg-vscode-input-background'
             checked={useAtomValue(streamCurl)}
@@ -43,7 +43,7 @@ const CurlSnippet: React.FC = () => {
         </label>
         <Button
           onClick={handleCopy(rawCurl)}
-          className='py-1 px-3 text-xs text-white bg-vscode-button-background hover:bg-vscode-button-hoverBackground'
+          className='px-3 py-1 text-xs text-white bg-vscode-button-background hover:bg-vscode-button-hoverBackground'
         >
           <Copy size={16} />
         </Button>
@@ -196,7 +196,7 @@ enum Topic {
         <ResizablePanelGroup direction='vertical' className='h-full'>
           <ResizablePanel id='top-panel' className='flex w-full px-1' defaultSize={50}>
             <div className='w-full'>
-              <ResizablePanelGroup direction='horizontal' className='h-full'>
+              <ResizablePanelGroup direction='horizontal' className='h-full pb-4'>
                 <div className='w-full h-full'>
                   <CheckboxHeader />
                   <div className='relative w-full overflow-y-auto' style={{ height: 'calc(100% - 32px)' }}>
@@ -213,7 +213,7 @@ enum Topic {
               <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
               <ResizablePanel
                 minSize={10}
-                className='flex h-full px-0 py-2 mb-2 border-t border-vscode-textSeparator-foreground'
+                className='flex h-full px-0 py-2 pb-3 border-t border-vscode-textSeparator-foreground'
               >
                 <TestResults />
               </ResizablePanel>

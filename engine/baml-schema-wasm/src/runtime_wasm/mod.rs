@@ -390,6 +390,7 @@ pub struct WasmLLMResponse {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
+    pub stop_reason: Option<String>,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -609,6 +610,7 @@ impl IntoWasm
                 input_tokens: s.metadata.prompt_tokens,
                 output_tokens: s.metadata.output_tokens,
                 total_tokens: s.metadata.total_tokens,
+                stop_reason: s.metadata.finish_reason.clone(),
             }),
             _ => None,
         }
