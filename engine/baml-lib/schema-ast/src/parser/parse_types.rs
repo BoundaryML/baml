@@ -105,28 +105,13 @@ fn parse_base_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> O
         }
     }
 
-    base_type.map(|f| {
-        let span = f.span().clone();
-        let arity = match f {
-            FieldType::Symbol(arity, ..) => arity,
-            FieldType::Primitive(arity, ..) => arity,
-            FieldType::List(_, _, _, _) => FieldArity::Required,
-            FieldType::Tuple(arity, ..) => arity,
-            FieldType::Union(arity, ..) => arity,
-            FieldType::Map(_, _, _) => FieldArity::Required,
-        };
-
-        FieldType::Union(
-            arity,
-            vec![f],
-            span,
-            if attributes.is_empty() {
-                None
-            } else {
-                Some(attributes)
-            },
-        )
-    })
+    match base_type {
+        Some(mut ft) => {
+            ft.set_attributes(attributes);
+            Some(ft)
+        }
+        None => None,
+    }
 }
 
 fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
