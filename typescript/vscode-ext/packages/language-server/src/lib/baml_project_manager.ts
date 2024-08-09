@@ -428,16 +428,6 @@ class Project {
 
   //runGeneratorsWithDebounce = debounce(this.runGeneratorsWithoutDebounce, 1000)
   runGeneratorsWithDebounce = this.runGeneratorsWithoutDebounce
-
-  // render_prompt(function_name: string, params: Record<string, any>): BamlWasm.WasmPrompt {
-  //   let rt = this.runtime();
-  //   let func = rt.get_function(function_name)
-  //   if (!func) {
-  //     throw new Error(`Function ${function_name} not found`)
-  //   }
-
-  //   return func.render_prompt(rt, this.ctx, params);
-  // }
 }
 
 class BamlProjectManager {
