@@ -36,7 +36,6 @@ pub async fn make_request(
     stream: bool,
 ) -> Result<(Response, web_time::SystemTime, web_time::Instant), LLMResponse> {
     let (system_now, instant_now) = (web_time::SystemTime::now(), web_time::Instant::now());
-    log::debug!("Making request using client {}", client.context().name);
 
     let req = match client
         .build_request(prompt, true, stream)
@@ -52,7 +51,7 @@ pub async fn make_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("{:?}", e),
+                message: format!("{:#?}", e),
                 code: ErrorCode::Other(2),
             }));
         }
@@ -68,13 +67,11 @@ pub async fn make_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("{:?}", e),
+                message: format!("{:#?}", e),
                 code: ErrorCode::Other(2),
             }));
         }
     };
-
-    log::debug!("LLM request: {:?} body: {:?}", req, req.body());
 
     let response = match client.http_client().execute(req).await {
         Ok(response) => response,

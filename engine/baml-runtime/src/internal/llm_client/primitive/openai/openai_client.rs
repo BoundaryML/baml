@@ -202,7 +202,7 @@ use crate::internal::llm_client::{
 };
 
 use super::properties::{
-    self, resolve_azure_properties, resolve_ollama_properties, resolve_openai_properties,
+    resolve_azure_properties, resolve_ollama_properties, resolve_openai_properties,
     PostRequestProperities,
 };
 use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta, FinishReason};
@@ -216,7 +216,6 @@ impl RequestBuilder for OpenAIClient {
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         allow_proxy: bool,
-
         stream: bool,
     ) -> Result<reqwest::RequestBuilder> {
         let destination_url = if allow_proxy {
@@ -227,6 +226,7 @@ impl RequestBuilder for OpenAIClient {
         } else {
             &self.properties.base_url
         };
+
         let mut req = self.client.post(if prompt.is_left() {
             format!("{}/completions", destination_url)
         } else {
@@ -241,7 +241,7 @@ impl RequestBuilder for OpenAIClient {
             req = req.header(key, value);
         }
         if let Some(key) = &self.properties.api_key {
-            req = req.bearer_auth(key)
+            req = req.bearer_auth(key);
         }
 
         if allow_proxy {
@@ -249,6 +249,7 @@ impl RequestBuilder for OpenAIClient {
         }
 
         let mut body = json!(self.properties.properties);
+
         let body_obj = body.as_object_mut().unwrap();
         match prompt {
             either::Either::Left(prompt) => {

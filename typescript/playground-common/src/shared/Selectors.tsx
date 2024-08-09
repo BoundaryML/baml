@@ -2,13 +2,38 @@ import { useAtom, useAtomValue } from 'jotai'
 import { ChevronDown, ChevronRight, Compass } from 'lucide-react'
 import type React from 'react'
 import { useState } from 'react'
-import { availableFunctionsAtom, selectedFunctionAtom, selectedTestCaseAtom } from '../baml_wasm_web/EventListener'
+import {
+  availableFunctionsAtom,
+  orchIndexAtom,
+  selectedFunctionAtom,
+  selectedTestCaseAtom,
+  availableClientsAtom,
+  currentClientsAtom,
+} from '../baml_wasm_web/EventListener'
 import { Button } from '../components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
 import SearchBarWithSelector from '../lib/searchbar'
 import Link from './Link'
 import { Dialog, DialogContent, DialogTrigger } from '../components/ui/dialog'
 import { Snippets } from './Snippets'
+
+const ClientHeader: React.FC = () => {
+  const clients = useAtomValue(availableClientsAtom)
+  const orchIndex = useAtomValue(orchIndexAtom)
+
+  const clientsArray = useAtomValue(currentClientsAtom)
+  const currentClient = clientsArray[orchIndex]
+  return (
+    <div className='flex flex-col-reverse items-start gap-0.5'>
+      <span className='pl-2 text-xs text-muted-foreground flex flex-row flex-wrap items-center gap-0.5'>
+        {clientsArray.length > 1 && `Attempt ${orchIndex} in Client Graph`}
+      </span>
+      <div className='max-w-[300px] justify-start items-center flex hover:bg-vscode-button-hoverBackground h-fit rounded-md text-vscode-foreground cursor-pointer'>
+        <span className='w-full px-2 py-1 text-left truncate'>{currentClient}</span>
+      </div>
+    </div>
+  )
+}
 
 const FunctionDropdown: React.FC = () => {
   const [open, setOpen] = useState(false)
@@ -169,6 +194,8 @@ export const ViewSelector: React.FC = () => {
           <ChevronRight className='w-4 h-4' />
         </div>
         <TestDropdown />
+        <ChevronRight className='w-4, h-4' />
+        <ClientHeader />
       </div>
       <div className='absolute z-10 flex flex-row items-center justify-center gap-1 right-1 top-2 text-end'>
         <Dialog>

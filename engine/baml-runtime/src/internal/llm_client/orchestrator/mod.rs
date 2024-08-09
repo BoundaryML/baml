@@ -1,14 +1,7 @@
 mod call;
 mod stream;
 
-use anyhow::Result;
-use baml_types::BamlValue;
-
-use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_jinja::RenderedChatMessage;
-use internal_baml_jinja::RenderedPrompt;
-use std::{collections::HashMap, sync::Arc};
-use web_time::Duration;
+use web_time::Duration; // Add this line
 
 use crate::{
     internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
@@ -26,6 +19,13 @@ pub use super::primitive::LLMPrimitiveProvider;
 pub use call::orchestrate as orchestrate_call;
 pub use stream::orchestrate_stream;
 
+use anyhow::Result;
+use baml_types::BamlValue;
+use internal_baml_core::ir::repr::IntermediateRepr;
+use internal_baml_jinja::RenderedChatMessage;
+use internal_baml_jinja::RenderedPrompt;
+use serde::Serialize;
+use std::{collections::HashMap, sync::Arc};
 pub struct OrchestratorNode {
     pub scope: OrchestrationScope,
     pub provider: Arc<LLMPrimitiveProvider>,
@@ -82,9 +82,9 @@ impl OrchestratorNode {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize)]
 pub struct OrchestrationScope {
-    scope: Vec<ExecutionScope>,
+    pub scope: Vec<ExecutionScope>,
 }
 
 impl From<ExecutionScope> for OrchestrationScope {
@@ -128,20 +128,9 @@ impl OrchestrationScope {
                 .collect(),
         }
     }
-
-    // pub fn extend_scopes(&self, scope: Vec<ExecutionScope>) -> OrchestrationScope {
-    //     OrchestrationScope {
-    //         scope: self
-    //             .scope
-    //             .clone()
-    //             .into_iter()
-    //             .chain(scope.into_iter())
-    //             .collect(),
-    //     }
-    // }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub enum ExecutionScope {
     Direct(String),
     // PolicyName, RetryCount, RetryDelayMs

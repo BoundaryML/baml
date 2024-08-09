@@ -6,6 +6,7 @@ import type { WasmFunctionResponse, WasmTestResponse } from '@gloo-ai/baml-schem
 
 const isRunningAtom = atom(false)
 export const showTestsAtom = atom(false)
+export const showClientGraphAtom = atom(false)
 
 export type TestStatusType = 'queued' | 'running' | 'done' | 'error'
 export type DoneTestStatusType = 'passed' | 'llm_failed' | 'parse_failed' | 'error'

@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
 use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicUsize, Arc},
+    fmt::Debug,
+    {
+        collections::HashMap,
+        sync::{atomic::AtomicUsize, Arc},
+    },
 };
-
-use internal_baml_core::ir::ClientWalker;
 
 use crate::{
     client_registry::ClientProperty,
@@ -15,13 +16,25 @@ use crate::{
     runtime_interface::InternalClientLookup,
     RuntimeContext,
 };
+use internal_baml_core::ir::ClientWalker;
+use serde::Serialize;
+use serde::Serializer;
 
+#[derive(Serialize, Debug)]
 pub struct RoundRobinStrategy {
     pub name: String,
     pub(super) retry_policy: Option<String>,
     // TODO: We can add conditions to each client
     clients: Vec<String>,
+    #[serde(serialize_with = "serialize_atomic")]
     current_index: AtomicUsize,
+}
+
+fn serialize_atomic<S>(value: &AtomicUsize, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_u64(value.load(std::sync::atomic::Ordering::Relaxed) as u64)
 }
 
 impl RoundRobinStrategy {
