@@ -141,6 +141,15 @@ impl BamlRuntime {
 }
 
 impl BamlRuntime {
+    pub fn get_test_params(
+        &self,
+        function_name: &str,
+        test_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<BamlMap<String, BamlValue>> {
+        self.inner.get_test_params(function_name, test_name, ctx)
+    }
+
     pub async fn run_test<F>(
         &self,
         function_name: &str,
@@ -155,7 +164,7 @@ impl BamlRuntime {
 
         let response = match ctx.create_ctx(None, None) {
             Ok(rctx) => {
-                let params = self.inner.get_test_params(function_name, test_name, &rctx);
+                let params = self.get_test_params(function_name, test_name, &rctx);
                 match params {
                     Ok(params) => match ctx.create_ctx(None, None) {
                         Ok(rctx_stream) => {

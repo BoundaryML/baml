@@ -10,11 +10,12 @@ import CustomErrorBoundary from '../utils/ErrorFallback'
 import { atomStore, sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import { showClientGraphAtom, showTestsAtom } from './test_uis/testHooks'
-import type {
-  WasmDiagnosticError,
-  WasmParam,
-  WasmRuntime,
-  WasmScope,
+import {
+  WasmCallContext,
+  type WasmDiagnosticError,
+  type WasmParam,
+  type WasmRuntime,
+  type WasmScope,
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { vscode } from '../utils/vscode'
 import { EchoRequest, EchoResponse, GetBamlSrcRequest, GetBamlSrcResponse, VscodeToWebviewCommand } from './rpc'
@@ -393,15 +394,12 @@ const asyncCurlAtom = atom(async (get) => {
   if (!runtime || !func || !test_case) {
     return 'Not yet ready'
   }
-  const params = Object.fromEntries(
-    test_case.inputs
-      .filter((i): i is WasmParam & { value: string } => i.value !== undefined)
-      .map((input) => [input.name, JSON.parse(input.value)]),
-  )
-  params['node_index'] = orch_index
+
+  const wasm_call_context = new WasmCallContext()
+  wasm_call_context.node_index = orch_index
 
   try {
-    return await func.render_raw_curl(runtime, params, get(streamCurl))
+    return await func.render_raw_curl_for_test(runtime, test_case.name, wasm_call_context, get(streamCurl))
   } catch (e) {
     console.error(e)
     return `${e}`
@@ -427,15 +425,11 @@ export const renderPromptAtom = atom((get) => {
     return null
   }
 
-  const params = Object.fromEntries(
-    test_case.inputs
-      .filter((i): i is WasmParam & { value: string } => i.value !== undefined)
-      .map((input) => [input.name, JSON.parse(input.value)]),
-  )
-  params['node_index'] = orch_index
+  const wasm_call_context = new WasmCallContext()
+  wasm_call_context.node_index = orch_index
 
   try {
-    return func.render_prompt(runtime, params)
+    return func.render_prompt_for_test(runtime, test_case.name, wasm_call_context)
   } catch (e) {
     if (e instanceof Error) {
       return e.message

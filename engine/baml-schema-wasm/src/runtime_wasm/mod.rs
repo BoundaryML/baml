@@ -28,7 +28,17 @@ use wasm_bindgen_futures::JsFuture;
 use self::runtime_prompt::WasmScope;
 use wasm_bindgen::JsValue;
 
-use anyhow::Result;
+type JsResult<T> = core::result::Result<T, JsError>;
+
+// trait IntoJs<T> {
+//     fn into_js(self) -> JsResult<T>;
+// }
+
+// impl<T, E: Into<anyhow::Error> + Send> IntoJs<T> for core::result::Result<T, E> {
+//     fn into_js(self) -> JsResult<T> {
+//         self.map_err(|e| JsError::new(format!("{:#}", anyhow::Error::from(e)).as_str()))
+//     }
+// }
 
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
 // but for browser we likely need to do
@@ -1334,34 +1344,53 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
 }
 
 #[wasm_bindgen]
+struct WasmCallContext {
+    /// Index of the orchestration graph node to use for the call
+    /// Defaults to 0 when unset
+    node_index: Option<usize>,
+}
+
+#[wasm_bindgen]
+impl WasmCallContext {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self { node_index: None }
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_node_index(&mut self, node_index: Option<usize>) {
+        self.node_index = node_index;
+    }
+}
+
+#[wasm_bindgen]
 impl WasmFunction {
     #[wasm_bindgen]
-    pub fn render_prompt(
+    pub fn render_prompt_for_test(
         &self,
         rt: &WasmRuntime,
-        params: JsValue,
-    ) -> Result<WasmPrompt, wasm_bindgen::JsError> {
-        let mut params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
-        let node_index = params.shift_remove("node_index");
-
+        test_name: String,
+        wasm_call_context: &WasmCallContext,
+    ) -> JsResult<WasmPrompt> {
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
         let ctx = rt
             .runtime
             .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default(missing_env_vars.iter());
 
+        let params = rt
+            .runtime
+            .get_test_params(&self.name, &test_name, &ctx)
+            .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
+
         rt.runtime
             .internal()
-            .render_prompt(
-                &self.name,
-                &ctx,
-                &params,
-                node_index.and_then(|v| v.as_int().map(|i| i as usize)),
-            )
+            .render_prompt(&self.name, &ctx, &params, wasm_call_context.node_index)
             .as_ref()
             .map(|(p, scope)| (p, scope).into())
-            .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
+            .map_err(|e| JsError::new(format!("{e:?}").as_str()))
     }
+
     #[wasm_bindgen]
     pub fn client_name(&self, rt: &WasmRuntime) -> Result<String, JsValue> {
         let rt: &BamlRuntime = &rt.runtime;
@@ -1375,18 +1404,15 @@ impl WasmFunction {
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
         Ok(renderer.client_name().to_string())
     }
+
     #[wasm_bindgen]
-    pub async fn render_raw_curl(
+    pub async fn render_raw_curl_for_test(
         &self,
         rt: &WasmRuntime,
-        params: JsValue,
+        test_name: String,
+        wasm_call_context: &WasmCallContext,
         stream: bool,
     ) -> Result<String, wasm_bindgen::JsError> {
-        let mut params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
-        let node_index = params
-            .shift_remove("node_index")
-            .and_then(|v| v.as_int().map(|i| i as usize));
-
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
 
         let ctx = rt
@@ -1394,10 +1420,17 @@ impl WasmFunction {
             .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default(missing_env_vars.iter());
 
-        let result =
-            rt.runtime
-                .internal()
-                .render_prompt(&self.name, &ctx, &params, node_index.clone());
+        let params = rt
+            .runtime
+            .get_test_params(&self.name, &test_name, &ctx)
+            .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
+
+        let result = rt.runtime.internal().render_prompt(
+            &self.name,
+            &ctx,
+            &params,
+            wasm_call_context.node_index,
+        );
 
         let final_prompt = match result {
             Ok((prompt, _)) => match prompt {
@@ -1409,7 +1442,13 @@ impl WasmFunction {
 
         rt.runtime
             .internal()
-            .render_raw_curl(&self.name, &ctx, &final_prompt, stream, node_index)
+            .render_raw_curl(
+                &self.name,
+                &ctx,
+                &final_prompt,
+                stream,
+                wasm_call_context.node_index,
+            )
             .await
             .map_err(|e| wasm_bindgen::JsError::new(format!("{e:#?}").as_str()))
     }
@@ -1419,7 +1458,7 @@ impl WasmFunction {
         &self,
         rt: &mut WasmRuntime,
         test_name: String,
-        cb: js_sys::Function,
+        on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
         let rt = &rt.runtime;
@@ -1432,7 +1471,7 @@ impl WasmFunction {
                 function_response: r,
             }
             .into();
-            cb.call1(&this, &res).unwrap();
+            on_partial_response.call1(&this, &res).unwrap();
         });
 
         let ctx = rt.create_ctx_manager(
