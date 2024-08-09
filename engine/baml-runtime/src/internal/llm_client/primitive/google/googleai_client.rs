@@ -17,7 +17,7 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
-use baml_types::BamlMedia;
+use baml_types::{BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
@@ -452,15 +452,15 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
             ChatMessagePart::Text(text) => json!({
                 "text": text
             }),
-            ChatMessagePart::Image(image) => convert_media_to_content(image),
-            ChatMessagePart::Audio(audio) => convert_media_to_content(audio),
+            ChatMessagePart::Media(media) => convert_media_to_content(media),
         })
         .collect()
 }
 
 fn convert_media_to_content(media: &BamlMedia) -> serde_json::Value {
-    match media {
-        BamlMedia::Base64(_, data) => json!({
+    // TODO: assert that media.media_type == BamlMediaType::Image
+    match &media.content {
+        BamlMediaContent::Base64(data) => json!({
             "inlineData": {
                 "mimeType": format!("{}", data.media_type),
                 "data": data.base64

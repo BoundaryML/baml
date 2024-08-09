@@ -19,48 +19,51 @@ impl fmt::Display for BamlMediaType {
 
 // We rely on the serialization and deserialization of this struct for:
 // - prompt rendering (going into minijinja rendering and coming out)
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum BamlMedia {
-    File(BamlMediaType, MediaFile),
-    Url(BamlMediaType, MediaUrl),
-    Base64(BamlMediaType, MediaBase64),
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BamlMedia {
+    pub media_type: BamlMediaType,
+    pub content: BamlMediaContent,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum BamlMediaContent {
+    File(MediaFile),
+    Url(MediaUrl),
+    Base64(MediaBase64),
 }
 
 impl BamlMedia {
-    pub fn media_type(&self) -> &BamlMediaType {
-        match self {
-            BamlMedia::File(t, _) => t,
-            BamlMedia::Url(t, _) => t,
-            BamlMedia::Base64(t, _) => t,
+    pub fn file(
+        media_type: BamlMediaType,
+        baml_path: PathBuf,
+        relpath: String,
+        mime_type: Option<String>,
+    ) -> BamlMedia {
+        Self {
+            media_type,
+            content: BamlMediaContent::File(MediaFile {
+                baml_path,
+                relpath,
+                media_type: Some(mime_type.unwrap_or_else(|| "".to_string())),
+            }),
         }
     }
 
-    pub fn file(
-        t: BamlMediaType,
-        baml_path: PathBuf,
-        relpath: String,
-        media_type: Option<String>,
-    ) -> BamlMedia {
-        BamlMedia::File(
-            t,
-            MediaFile {
-                baml_path,
-                relpath,
-                media_type: Some(media_type.unwrap_or_else(|| "".to_string())),
-            },
-        )
+    pub fn url(media_type: BamlMediaType, url: String, mime_type: Option<String>) -> BamlMedia {
+        Self {
+            media_type,
+            content: BamlMediaContent::Url(MediaUrl::new(
+                url,
+                Some(mime_type.unwrap_or_else(|| "".to_string())),
+            )),
+        }
     }
 
-    pub fn url(t: BamlMediaType, url: String, media_type: Option<String>) -> BamlMedia {
-        BamlMedia::Url(
-            t,
-            MediaUrl::new(url, Some(media_type.unwrap_or_else(|| "".to_string()))),
-        )
-    }
-
-    pub fn base64(t: BamlMediaType, base64: String, media_type: String) -> BamlMedia {
-        BamlMedia::Base64(t, MediaBase64::new(base64, media_type))
+    pub fn base64(media_type: BamlMediaType, base64: String, mime_type: String) -> BamlMedia {
+        Self {
+            media_type,
+            content: BamlMediaContent::Base64(MediaBase64::new(base64, mime_type)),
+        }
     }
 }
 

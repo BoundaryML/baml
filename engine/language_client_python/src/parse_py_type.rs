@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use baml_types::{BamlMap, BamlMedia, BamlValue};
+use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlValue};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},
@@ -59,8 +59,8 @@ enum MappedPyType {
     Float(f64),
     Bool(bool),
     None,
-    BamlImage(BamlMedia),
-    BamlAudio(BamlMedia),
+    BamlImage(BamlMediaContent),
+    BamlAudio(BamlMediaContent),
     Unsupported(String),
 }
 
@@ -68,7 +68,10 @@ impl TryFrom<BamlImagePy> for BamlMedia {
     type Error = &'static str;
 
     fn try_from(value: BamlImagePy) -> Result<Self, Self::Error> {
-        Ok(value.inner.clone())
+        Ok(Self {
+            media_type: baml_types::BamlMediaType::Image,
+            content: value.inner.clone(),
+        })
     }
 }
 
@@ -76,7 +79,10 @@ impl TryFrom<BamlAudioPy> for BamlMedia {
     type Error = &'static str;
 
     fn try_from(value: BamlAudioPy) -> Result<Self, Self::Error> {
-        Ok(value.inner.clone())
+        Ok(Self {
+            media_type: baml_types::BamlMediaType::Audio,
+            content: value.inner.clone(),
+        })
     }
 }
 
@@ -189,8 +195,14 @@ where
         MappedPyType::Int(v) => BamlValue::Int(v),
         MappedPyType::Float(v) => BamlValue::Float(v),
         MappedPyType::Bool(v) => BamlValue::Bool(v),
-        MappedPyType::BamlImage(v) => BamlValue::Media(v),
-        MappedPyType::BamlAudio(v) => BamlValue::Media(v),
+        MappedPyType::BamlImage(content) => BamlValue::Media(BamlMedia {
+            media_type: baml_types::BamlMediaType::Image,
+            content,
+        }),
+        MappedPyType::BamlAudio(content) => BamlValue::Media(BamlMedia {
+            media_type: baml_types::BamlMediaType::Audio,
+            content,
+        }),
         MappedPyType::None => BamlValue::Null,
         MappedPyType::Unsupported(r#type) => {
             return if matches!(handle_unknown_types, UnknownTypeHandler::Ignore) {

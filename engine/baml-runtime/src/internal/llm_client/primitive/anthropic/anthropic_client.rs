@@ -2,7 +2,7 @@ use crate::internal::llm_client::ResolveMedia;
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::BamlMedia;
+use baml_types::{BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
@@ -545,9 +545,9 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                 "text": text
             }),
 
-            ChatMessagePart::Image(media) => match media {
-                BamlMedia::Base64(media_type, data) => json!({
-                    "type":  media_type.to_string(),
+            ChatMessagePart::Media(media) => match &media.content {
+                BamlMediaContent::Base64(data) => json!({
+                    "type":  media.media_type.to_string(),
 
                     "source": {
                         "type": "base64",

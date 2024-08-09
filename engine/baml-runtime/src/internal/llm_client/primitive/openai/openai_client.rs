@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::internal::llm_client::ResolveMedia;
 use anyhow::Result;
-use baml_types::{BamlMedia, BamlMediaType};
+use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use serde_json::json;
@@ -531,16 +531,17 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
         .into_iter()
         .map(|part| match part {
             ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
-            ChatMessagePart::Image(image) => match image {
-                BamlMedia::Url(BamlMediaType::Image, image) => {
+            ChatMessagePart::Media(media) => match &media.content {
+                // TODO: handle audio
+                BamlMediaContent::Url(media) => {
                     json!({"type": "image_url", "image_url": json!({
-                        "url": image.url
+                        "url": media.url
                     })})
                 }
-                BamlMedia::Base64(BamlMediaType::Image, image) => {
+                BamlMediaContent::Base64(media) => {
                     // TODO: validate the media_type is present!
                     json!({"type": "image_url", "image_url": json!({
-                       "url" : format!("data:{};base64,{}", image.media_type, image.base64)
+                       "url" : format!("data:{};base64,{}", media.media_type, media.base64)
                     })})
                 }
                 _ => json!({}), // return an empty JSON object or any other default value

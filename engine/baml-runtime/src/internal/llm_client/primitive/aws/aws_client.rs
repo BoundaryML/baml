@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use aws_smithy_json::serialize::JsonObjectWriter;
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types::Blob;
+use baml_types::BamlMediaContent;
 use baml_types::{BamlMedia, BamlMediaType};
 use futures::{stream, SinkExt, StreamExt};
 use internal_baml_core::ir::ClientWalker;
@@ -509,13 +510,14 @@ impl TryInto<bedrock::types::Message> for AwsChatMessage<'_> {
             .iter()
             .map(|part| match part {
                 ChatMessagePart::Text(text) => Ok(bedrock::types::ContentBlock::Text(text.clone())),
-                ChatMessagePart::Image(media) | ChatMessagePart::Audio(media) => match media {
-                    BamlMedia::Url(_, _) => {
+                ChatMessagePart::Media(media) => match &media.content {
+                    // TODO: only render image
+                    BamlMediaContent::Url(_) => {
                         anyhow::bail!(
                             "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
                         )
                     }
-                    BamlMedia::Base64(BamlMediaType::Image, media) => {
+                    BamlMediaContent::Base64(media) => {
                         Ok(bedrock::types::ContentBlock::Image(
                             bedrock::types::ImageBlock::builder()
                                 .set_format(Some(bedrock::types::ImageFormat::from(

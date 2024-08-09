@@ -93,7 +93,7 @@ impl BamlValue {
                     format!("list<{}>", value_type)
                 }
             }
-            BamlValue::Media(m) => match m.media_type() {
+            BamlValue::Media(m) => match m.media_type {
                 BamlMediaType::Image => "image",
                 BamlMediaType::Audio => "audio",
             }

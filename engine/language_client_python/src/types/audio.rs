@@ -1,45 +1,39 @@
-use baml_types::BamlMediaType;
+use baml_types::BamlMediaContent;
 use pyo3::prelude::{pymethods, PyAnyMethods, PyModule, PyResult};
 use pyo3::types::PyType;
 use pyo3::{Bound, Py, PyAny, PyObject, Python, ToPyObject};
-crate::lang_wrapper!(BamlAudioPy, baml_types::BamlMedia);
+crate::lang_wrapper!(BamlAudioPy, BamlMediaContent);
 
 #[pymethods]
 impl BamlAudioPy {
     #[staticmethod]
     fn from_url(url: String) -> Self {
         BamlAudioPy {
-            inner: baml_types::BamlMedia::Url(
-                BamlMediaType::Audio,
-                baml_types::MediaUrl::new(url, None),
-            ),
+            inner: BamlMediaContent::Url(baml_types::MediaUrl::new(url, None)),
         }
     }
 
     #[staticmethod]
     fn from_base64(media_type: String, base64: String) -> Self {
         BamlAudioPy {
-            inner: baml_types::BamlMedia::Base64(
-                BamlMediaType::Audio,
-                baml_types::MediaBase64::new(base64, media_type),
-            ),
+            inner: BamlMediaContent::Base64(baml_types::MediaBase64::new(base64, media_type)),
         }
     }
 
     pub fn is_url(&self) -> bool {
-        matches!(&self.inner, baml_types::BamlMedia::Url(_, _))
+        matches!(&self.inner, BamlMediaContent::Url(_))
     }
 
     pub fn as_url(&self) -> PyResult<String> {
         match &self.inner {
-            baml_types::BamlMedia::Url(BamlMediaType::Audio, url) => Ok(url.url.clone()),
+            BamlMediaContent::Url(url) => Ok(url.url.clone()),
             _ => Err(crate::BamlError::new_err("Audio is not a URL")),
         }
     }
 
     pub fn as_base64(&self) -> PyResult<Vec<String>> {
         match &self.inner {
-            baml_types::BamlMedia::Base64(BamlMediaType::Audio, base64) => {
+            BamlMediaContent::Base64(base64) => {
                 Ok(vec![base64.base64.clone(), base64.media_type.clone()])
             }
             _ => Err(crate::BamlError::new_err("Audio is not base64")),
@@ -48,10 +42,10 @@ impl BamlAudioPy {
 
     pub fn __repr__(&self) -> String {
         match &self.inner {
-            baml_types::BamlMedia::Url(BamlMediaType::Audio, url) => {
+            BamlMediaContent::Url(url) => {
                 format!("BamlAudioPy(url={})", url.url)
             }
-            baml_types::BamlMedia::Base64(BamlMediaType::Audio, base64) => {
+            BamlMediaContent::Base64(base64) => {
                 format!(
                     "BamlAudioPy(base64={}, media_type={})",
                     base64.base64, base64.media_type

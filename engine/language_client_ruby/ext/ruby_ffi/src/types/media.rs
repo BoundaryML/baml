@@ -1,5 +1,5 @@
 use crate::Result;
-use baml_types::BamlValue;
+use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue};
 use magnus::{class, function, Module, Object, RModule};
 
 pub(crate) trait CloneAsBamlValue {
@@ -8,25 +8,19 @@ pub(crate) trait CloneAsBamlValue {
 
 #[magnus::wrap(class = "Baml::Ffi::Image", free_immediately, size)]
 pub(crate) struct Image {
-    pub(crate) inner: baml_types::BamlMedia,
+    pub(crate) inner: BamlMediaContent,
 }
 
 impl Image {
     pub fn from_url(url: String) -> Self {
         Self {
-            inner: baml_types::BamlMedia::Url(
-                baml_types::BamlMediaType::Image,
-                baml_types::MediaUrl::new(url, None),
-            ),
+            inner: BamlMediaContent::Url(baml_types::MediaUrl::new(url, None)),
         }
     }
 
     pub fn from_base64(media_type: String, base64: String) -> Self {
         Self {
-            inner: baml_types::BamlMedia::Base64(
-                baml_types::BamlMediaType::Image,
-                baml_types::MediaBase64::new(base64, media_type),
-            ),
+            inner: BamlMediaContent::Base64(baml_types::MediaBase64::new(base64, media_type)),
         }
     }
 
@@ -41,30 +35,27 @@ impl Image {
 
 impl CloneAsBamlValue for Image {
     fn clone_as_baml_value(&self) -> BamlValue {
-        BamlValue::Media(self.inner.clone())
+        BamlValue::Media(BamlMedia {
+            media_type: BamlMediaType::Image,
+            content: self.inner.clone(),
+        })
     }
 }
 
 #[magnus::wrap(class = "Baml::Ffi::Audio", free_immediately, size)]
 pub(crate) struct Audio {
-    pub(crate) inner: baml_types::BamlMedia,
+    pub(crate) inner: BamlMediaContent,
 }
 
 impl Audio {
     pub fn from_url(url: String) -> Self {
         Self {
-            inner: baml_types::BamlMedia::Url(
-                baml_types::BamlMediaType::Audio,
-                baml_types::MediaUrl::new(url, None),
-            ),
+            inner: BamlMediaContent::Url(baml_types::MediaUrl::new(url, None)),
         }
     }
     pub fn from_base64(media_type: String, base64: String) -> Self {
         Self {
-            inner: baml_types::BamlMedia::Base64(
-                baml_types::BamlMediaType::Audio,
-                baml_types::MediaBase64::new(base64, media_type),
-            ),
+            inner: BamlMediaContent::Base64(baml_types::MediaBase64::new(base64, media_type)),
         }
     }
 
@@ -79,6 +70,9 @@ impl Audio {
 
 impl CloneAsBamlValue for Audio {
     fn clone_as_baml_value(&self) -> BamlValue {
-        BamlValue::Media(self.inner.clone())
+        BamlValue::Media(BamlMedia {
+            media_type: BamlMediaType::Audio,
+            content: self.inner.clone(),
+        })
     }
 }

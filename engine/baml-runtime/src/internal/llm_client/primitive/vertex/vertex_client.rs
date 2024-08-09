@@ -28,7 +28,7 @@ use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::BufReader;
 
-use baml_types::BamlMedia;
+use baml_types::{BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
@@ -655,21 +655,21 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
             ChatMessagePart::Text(text) => json!({
                 "text": text
             }),
-            ChatMessagePart::Image(image) => convert_media_to_content(image),
-            ChatMessagePart::Audio(audio) => convert_media_to_content(audio),
+            ChatMessagePart::Media(media) => convert_media_to_content(media),
         })
         .collect()
 }
 
 fn convert_media_to_content(media: &BamlMedia) -> serde_json::Value {
-    match media {
-        BamlMedia::Base64(_, data) => json!({
+    // TODO: handle audio
+    match &media.content {
+        BamlMediaContent::Base64(data) => json!({
             "inlineData": {
                 "mime_type": format!("{}", data.media_type),
                 "data": data.base64
             }
         }),
-        BamlMedia::Url(_, data) => json!({
+        BamlMediaContent::Url(data) => json!({
             "fileData": {
                 "mime_type": data.media_type,
                 "file_uri": data.url

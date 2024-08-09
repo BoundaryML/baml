@@ -622,34 +622,40 @@ impl From<&RenderedPrompt> for Template {
                                 internal_baml_jinja::ChatMessagePart::Text(t) => {
                                     ContentPart::Text(t.clone())
                                 }
-                                internal_baml_jinja::ChatMessagePart::Image(media)
-                                | internal_baml_jinja::ChatMessagePart::Audio(media) => match media
-                                {
-                                    baml_types::BamlMedia::File(BamlMediaType::Image, data) => {
-                                        ContentPart::FileImage(
+                                internal_baml_jinja::ChatMessagePart::Media(media) => {
+                                    match (media.media_type, &media.content) {
+                                        (
+                                            BamlMediaType::Image,
+                                            baml_types::BamlMediaContent::File(data),
+                                        ) => ContentPart::FileImage(
                                             data.baml_path.clone(),
                                             data.relpath.clone(),
-                                        )
-                                    }
-                                    baml_types::BamlMedia::Base64(BamlMediaType::Image, data) => {
-                                        ContentPart::B64Image(data.base64.clone())
-                                    }
-                                    baml_types::BamlMedia::Url(BamlMediaType::Image, data) => {
-                                        ContentPart::UrlImage(data.url.clone())
-                                    }
-                                    baml_types::BamlMedia::File(BamlMediaType::Audio, data) => {
-                                        ContentPart::FileAudio(
+                                        ),
+                                        (
+                                            BamlMediaType::Audio,
+                                            baml_types::BamlMediaContent::File(data),
+                                        ) => ContentPart::FileAudio(
                                             data.baml_path.clone(),
                                             data.relpath.clone(),
-                                        )
+                                        ),
+                                        (
+                                            BamlMediaType::Image,
+                                            baml_types::BamlMediaContent::Base64(data),
+                                        ) => ContentPart::B64Image(data.base64.clone()),
+                                        (
+                                            BamlMediaType::Audio,
+                                            baml_types::BamlMediaContent::Base64(data),
+                                        ) => ContentPart::B64Audio(data.base64.clone()),
+                                        (
+                                            BamlMediaType::Image,
+                                            baml_types::BamlMediaContent::Url(data),
+                                        ) => ContentPart::UrlImage(data.url.clone()),
+                                        (
+                                            BamlMediaType::Audio,
+                                            baml_types::BamlMediaContent::Url(data),
+                                        ) => ContentPart::UrlAudio(data.url.clone()),
                                     }
-                                    baml_types::BamlMedia::Base64(BamlMediaType::Audio, data) => {
-                                        ContentPart::B64Audio(data.base64.clone())
-                                    }
-                                    baml_types::BamlMedia::Url(BamlMediaType::Audio, data) => {
-                                        ContentPart::UrlAudio(data.url.clone())
-                                    }
-                                },
+                                }
                             })
                             .collect::<Vec<_>>(),
                     })

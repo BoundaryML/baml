@@ -11,7 +11,7 @@ pub use self::{
 use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
 use crate::internal::llm_client::ResolveMedia;
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
-use baml_types::{BamlMedia, BamlMediaType, BamlValue, MediaBase64};
+use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, MediaBase64};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use futures::stream::StreamExt;
 use infer;
@@ -309,10 +309,12 @@ async fn process_media_urls(
         let new_parts = p
             .parts
             .iter()
-            .map(|part| async move {
-                match part {
-                    ChatMessagePart::Image(BamlMedia::File(_, media_file))
-                    | ChatMessagePart::Audio(BamlMedia::File(_, media_file)) => {
+            .map(|any_part| async move {
+                let ChatMessagePart::Media(part) = any_part else {
+                    return Ok(any_part.clone());
+                };
+                match &part.content {
+                    BamlMediaContent::File(media_file) => {
                         let Some(ref baml_src_reader) = *ctx.baml_src else {
                             anyhow::bail!("Internal error: no baml src reader provided");
                         };
@@ -335,32 +337,17 @@ async fn process_media_urls(
                         // } else {
                         //     Ok(part.clone())
                         // }
-                        if matches!(part, ChatMessagePart::Image(_)) {
-                            Ok(ChatMessagePart::Image(BamlMedia::Base64(
-                                BamlMediaType::Image,
-                                MediaBase64 {
-                                    base64: BASE64_STANDARD.encode(&bytes),
-                                    media_type: media_file
-                                        .media_type
-                                        .clone()
-                                        .unwrap_or("image/???".into()),
-                                },
-                            )))
-                        } else {
-                            Ok(ChatMessagePart::Audio(BamlMedia::Base64(
-                                BamlMediaType::Audio,
-                                MediaBase64 {
-                                    base64: BASE64_STANDARD.encode(&bytes),
-                                    media_type: media_file
-                                        .media_type
-                                        .clone()
-                                        .unwrap_or("audio/???".into()),
-                                },
-                            )))
-                        }
+                        Ok(ChatMessagePart::Media(BamlMedia::base64(
+                            part.media_type,
+                            BASE64_STANDARD.encode(&bytes),
+                            media_file
+                                .media_type
+                                .clone()
+                                // TODO: actually infer the media type
+                                .unwrap_or(format!("{}/???", part.media_type)),
+                        )))
                     }
-                    ChatMessagePart::Image(BamlMedia::Url(_, media_url))
-                    | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
+                    BamlMediaContent::Url(media_url) => {
                         if !if_mime || media_url.media_type.as_deref().unwrap_or("").is_empty() {
                             let (base64, mime_type) = if media_url.url.starts_with("data:") {
                                 let parts: Vec<&str> = media_url.url.splitn(2, ',').collect();
@@ -413,29 +400,16 @@ async fn process_media_urls(
                                 (base64, mime_type)
                             };
 
-                            Ok(if matches!(part, ChatMessagePart::Image(_)) {
-                                ChatMessagePart::Image(BamlMedia::Base64(
-                                    BamlMediaType::Image,
-                                    MediaBase64 {
-                                        base64: base64,
-                                        media_type: format!("image/{}", mime_type),
-                                    },
-                                ))
-                            } else {
-                                ChatMessagePart::Audio(BamlMedia::Base64(
-                                    BamlMediaType::Audio,
-                                    MediaBase64 {
-                                        base64: base64,
-                                        media_type: format!("audio/{}", mime_type),
-                                    },
-                                ))
-                            })
+                            Ok(ChatMessagePart::Media(BamlMedia::base64(
+                                part.media_type,
+                                base64,
+                                format!("{}/{}", part.media_type, mime_type),
+                            )))
                         } else {
-                            Ok(part.clone())
+                            Ok(any_part.clone())
                         }
                     }
-                    ChatMessagePart::Image(BamlMedia::Base64(_, media_b64))
-                    | ChatMessagePart::Audio(BamlMedia::Base64(_, media_b64)) => {
+                    BamlMediaContent::Base64(media_b64) => {
                         if media_b64.media_type.is_empty() {
                             let bytes = match BASE64_STANDARD.decode(&media_b64.base64) {
                                 Ok(bytes) => bytes,
@@ -450,28 +424,15 @@ async fn process_media_urls(
                                 .map(|t| t.extension().to_string())
                                 .unwrap_or_else(|| "application/octet-stream".into());
 
-                            if matches!(part, ChatMessagePart::Image(_)) {
-                                Ok(ChatMessagePart::Image(BamlMedia::Base64(
-                                    BamlMediaType::Image,
-                                    MediaBase64 {
-                                        base64: media_b64.base64.clone(),
-                                        media_type: format!("image/{}", mime_type),
-                                    },
-                                )))
-                            } else {
-                                Ok(ChatMessagePart::Audio(BamlMedia::Base64(
-                                    BamlMediaType::Audio,
-                                    MediaBase64 {
-                                        base64: media_b64.base64.clone(),
-                                        media_type: format!("audio/{}", mime_type),
-                                    },
-                                )))
-                            }
+                            Ok(ChatMessagePart::Media(BamlMedia::base64(
+                                part.media_type,
+                                media_b64.base64.clone(),
+                                format!("{}/{}", part.media_type, mime_type),
+                            )))
                         } else {
-                            Ok(part.clone())
+                            Ok(any_part.clone())
                         }
                     }
-                    _ => Ok(part.clone()),
                 }
             })
             .collect::<Vec<_>>();

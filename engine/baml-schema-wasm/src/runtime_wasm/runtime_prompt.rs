@@ -4,7 +4,7 @@ use baml_runtime::{
 };
 
 use crate::runtime_wasm::ToJsValue;
-use baml_types::{BamlMedia, BamlMediaType, MediaBase64};
+use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, MediaBase64};
 use serde_wasm_bindgen::to_value;
 use wasm_bindgen::prelude::*;
 
@@ -63,12 +63,20 @@ impl WasmChatMessagePart {
 
     #[wasm_bindgen]
     pub fn is_image(&self) -> bool {
-        matches!(self.part, ChatMessagePart::Image(_))
+        if let ChatMessagePart::Media(m) = &self.part {
+            m.media_type == BamlMediaType::Image
+        } else {
+            false
+        }
     }
 
     #[wasm_bindgen]
     pub fn is_audio(&self) -> bool {
-        matches!(self.part, ChatMessagePart::Audio(_))
+        if let ChatMessagePart::Media(m) = &self.part {
+            m.media_type == BamlMediaType::Audio
+        } else {
+            false
+        }
     }
 
     #[wasm_bindgen]
@@ -82,34 +90,36 @@ impl WasmChatMessagePart {
 
     #[wasm_bindgen]
     pub fn as_image(&self) -> Option<String> {
-        if let ChatMessagePart::Image(s) = &self.part {
-            Some(match s {
-                BamlMedia::Url(_, u) => u.url.clone(),
-                BamlMedia::Base64(_, b) => b.base64.clone(),
-                BamlMedia::File(_, f) => match f.baml_path.parent() {
-                    // TODO: this doesn't handle non-UTF8 paths
-                    Some(parent) => parent.join(&f.relpath).to_string_lossy().into_owned(),
-                    None => "<error: unresolveable path>".to_string(),
-                },
-            })
-        } else {
-            None
-        }
+        let ChatMessagePart::Media(m) = &self.part else {
+            return None;
+        };
+        Some(match &m.content {
+            BamlMediaContent::Url(u) => u.url.clone(),
+            BamlMediaContent::Base64(b) => b.base64.clone(),
+            BamlMediaContent::File(f) => match f.baml_path.parent() {
+                // TODO: this doesn't handle non-UTF8 paths
+                Some(parent) => parent.join(&f.relpath).to_string_lossy().into_owned(),
+                None => "<error: unresolveable path>".to_string(),
+            },
+        })
     }
 
     #[wasm_bindgen]
     pub fn as_audio(&self) -> Option<String> {
-        if let ChatMessagePart::Audio(s) = &self.part {
-            Some(match s {
-                BamlMedia::Url(BamlMediaType::Audio, u) => u.url.clone(),
-                BamlMedia::Base64(_, MediaBase64 { base64, media_type }) => {
-                    format!("data:{};base64,{}", media_type, base64.clone())
-                }
-                _ => return None, // This will match any other case and return None
-            })
-        } else {
-            None
-        }
+        let ChatMessagePart::Media(m) = &self.part else {
+            return None;
+        };
+        Some(match &m.content {
+            BamlMediaContent::Url(u) => u.url.clone(),
+            BamlMediaContent::Base64(MediaBase64 { base64, media_type }) => {
+                format!("data:{};base64,{}", media_type, base64.clone())
+            }
+            BamlMediaContent::File(f) => match f.baml_path.parent() {
+                // TODO: this doesn't handle non-UTF8 paths
+                Some(parent) => parent.join(&f.relpath).to_string_lossy().into_owned(),
+                None => "<error: unresolveable path>".to_string(),
+            },
+        })
     }
 }
 
