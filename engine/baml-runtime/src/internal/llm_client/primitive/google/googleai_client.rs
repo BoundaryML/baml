@@ -462,7 +462,7 @@ fn convert_media_to_content(media: &BamlMedia) -> serde_json::Value {
     match &media.content {
         BamlMediaContent::Base64(data) => json!({
             "inlineData": {
-                "mimeType": format!("{}", data.media_type),
+                "mimeType": format!("{}", data.mime_type),
                 "data": data.base64
             }
         }),

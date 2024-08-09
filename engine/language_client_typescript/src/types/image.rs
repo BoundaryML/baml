@@ -43,7 +43,7 @@ impl BamlImage {
     pub fn as_base64(&self) -> napi::Result<Vec<String>> {
         match &self.inner {
             baml_types::BamlMediaContent::Base64(base64) => {
-                Ok(vec![base64.base64.clone(), base64.media_type.clone()])
+                Ok(vec![base64.base64.clone(), base64.mime_type.clone()])
             }
             _ => Err(napi::Error::new(
                 napi::Status::GenericFailure,
@@ -60,7 +60,7 @@ impl BamlImage {
             }),
             baml_types::BamlMediaContent::Base64(base64) => json!({
                 "base64": base64.base64,
-                "media_type": base64.media_type
+                "media_type": base64.mime_type
             }),
             _ => format!("Unknown BamlImagePy variant").into(),
         })

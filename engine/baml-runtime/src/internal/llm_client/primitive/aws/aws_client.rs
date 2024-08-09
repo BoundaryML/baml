@@ -522,9 +522,9 @@ impl TryInto<bedrock::types::Message> for AwsChatMessage<'_> {
                             bedrock::types::ImageBlock::builder()
                                 .set_format(Some(bedrock::types::ImageFormat::from(
                                     media
-                                        .media_type
+                                        .mime_type
                                         .strip_prefix("image/")
-                                        .unwrap_or(media.media_type.as_str()),
+                                        .unwrap_or(media.mime_type.as_str()),
                                 )))
                                 .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
                                     aws_smithy_types::base64::decode(media.base64.clone())?,

@@ -341,14 +341,14 @@ async fn process_media_urls(
                             part.media_type,
                             BASE64_STANDARD.encode(&bytes),
                             media_file
-                                .media_type
+                                .mime_type
                                 .clone()
                                 // TODO: actually infer the media type
                                 .unwrap_or(format!("{}/???", part.media_type)),
                         )))
                     }
                     BamlMediaContent::Url(media_url) => {
-                        if !if_mime || media_url.media_type.as_deref().unwrap_or("").is_empty() {
+                        if !if_mime || media_url.mime_type.as_deref().unwrap_or("").is_empty() {
                             let (base64, mime_type) = if media_url.url.starts_with("data:") {
                                 let parts: Vec<&str> = media_url.url.splitn(2, ',').collect();
 
@@ -410,7 +410,7 @@ async fn process_media_urls(
                         }
                     }
                     BamlMediaContent::Base64(media_b64) => {
-                        if media_b64.media_type.is_empty() {
+                        if media_b64.mime_type.is_empty() {
                             let bytes = match BASE64_STANDARD.decode(&media_b64.base64) {
                                 Ok(bytes) => bytes,
                                 Err(e) => {

@@ -541,7 +541,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
                 BamlMediaContent::Base64(media) => {
                     // TODO: validate the media_type is present!
                     json!({"type": "image_url", "image_url": json!({
-                       "url" : format!("data:{};base64,{}", media.media_type, media.base64)
+                       "url" : format!("data:{};base64,{}", media.mime_type, media.base64)
                     })})
                 }
                 _ => json!({}), // return an empty JSON object or any other default value

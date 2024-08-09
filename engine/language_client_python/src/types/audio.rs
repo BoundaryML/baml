@@ -34,7 +34,7 @@ impl BamlAudioPy {
     pub fn as_base64(&self) -> PyResult<Vec<String>> {
         match &self.inner {
             BamlMediaContent::Base64(base64) => {
-                Ok(vec![base64.base64.clone(), base64.media_type.clone()])
+                Ok(vec![base64.base64.clone(), base64.mime_type.clone()])
             }
             _ => Err(crate::BamlError::new_err("Audio is not base64")),
         }
@@ -48,7 +48,7 @@ impl BamlAudioPy {
             BamlMediaContent::Base64(base64) => {
                 format!(
                     "BamlAudioPy(base64={}, media_type={})",
-                    base64.base64, base64.media_type
+                    base64.base64, base64.mime_type
                 )
             }
             _ => format!("Unknown BamlAudioPy variant"),

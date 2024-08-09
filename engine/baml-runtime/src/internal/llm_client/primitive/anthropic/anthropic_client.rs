@@ -551,7 +551,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json:
 
                     "source": {
                         "type": "base64",
-                        "media_type": data.media_type,
+                        "media_type": data.mime_type,
                         "data": data.base64
                     }
                 }),

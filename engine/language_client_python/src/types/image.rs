@@ -35,7 +35,7 @@ impl BamlImagePy {
     pub fn as_base64(&self) -> PyResult<Vec<String>> {
         match &self.inner {
             baml_types::BamlMediaContent::Base64(base64) => {
-                Ok(vec![base64.base64.clone(), base64.media_type.clone()])
+                Ok(vec![base64.base64.clone(), base64.mime_type.clone()])
             }
             _ => Err(crate::BamlError::new_err("Image is not base64")),
         }
@@ -49,7 +49,7 @@ impl BamlImagePy {
             baml_types::BamlMediaContent::Base64(base64) => {
                 format!(
                     "BamlImagePy(base64={}, media_type={})",
-                    base64.base64, base64.media_type
+                    base64.base64, base64.mime_type
                 )
             }
             _ => format!("Unknown BamlImagePy variant"),

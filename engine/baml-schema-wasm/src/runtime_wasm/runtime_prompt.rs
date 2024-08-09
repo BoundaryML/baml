@@ -111,7 +111,7 @@ impl WasmChatMessagePart {
         };
         Some(match &m.content {
             BamlMediaContent::Url(u) => u.url.clone(),
-            BamlMediaContent::Base64(MediaBase64 { base64, media_type }) => {
+            BamlMediaContent::Base64(MediaBase64 { base64, mime_type }) => {
                 format!("data:{};base64,{}", media_type, base64.clone())
             }
             BamlMediaContent::File(f) => match f.baml_path.parent() {
