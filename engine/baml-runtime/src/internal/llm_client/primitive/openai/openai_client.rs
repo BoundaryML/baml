@@ -261,12 +261,12 @@ impl RequestBuilder for OpenAIClient {
                     messages
                         .iter()
                         .map(|m| {
-                            json!({
+                            Ok(json!({
                                 "role": m.role,
-                                "content": convert_message_parts_to_content(&m.parts)
-                            })
+                                "content": convert_message_parts_to_content(&m.parts)?
+                            }))
                         })
-                        .collect::<serde_json::Value>(),
+                        .collect::<Result<serde_json::Value>>()?,
                 );
             }
         }
@@ -519,37 +519,39 @@ impl OpenAIClient {
     }
 }
 
-fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json::Value {
+fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serde_json::Value> {
     if parts.len() == 1 {
         match &parts[0] {
-            ChatMessagePart::Text(text) => return json!(text),
+            ChatMessagePart::Text(text) => return Ok(json!(text)),
             _ => {}
         }
     }
 
     let content: Vec<serde_json::Value> = parts
         .into_iter()
-        .map(|part| match part {
-            ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
-            ChatMessagePart::Media(media) => match &media.content {
-                // TODO: handle audio
-                BamlMediaContent::Url(media) => {
-                    json!({"type": "image_url", "image_url": json!({
-                        "url": media.url
-                    })})
-                }
-                BamlMediaContent::Base64(media) => {
-                    // TODO: validate the media_type is present!
-                    json!({"type": "image_url", "image_url": json!({
-                       "url" : format!("data:{};base64,{}", media.mime_type, media.base64)
-                    })})
-                }
+        .map(|part| {
+            Ok(match part {
+                ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
+                ChatMessagePart::Media(media) => match &media.content {
+                    // TODO: handle audio
+                    BamlMediaContent::Url(media) => {
+                        json!({"type": "image_url", "image_url": json!({
+                            "url": media.url
+                        })})
+                    }
+                    BamlMediaContent::Base64(media) => {
+                        // TODO: validate the media_type is present!
+                        json!({"type": "image_url", "image_url": json!({
+                           "url" : format!("data:{};base64,{}", media.mime_type, media.base64)
+                        })})
+                    }
+                    _ => json!({}), // return an empty JSON object or any other default value
+                },
+                // OpenAI does not yet support audio
                 _ => json!({}), // return an empty JSON object or any other default value
-            },
-            // OpenAI does not yet support audio
-            _ => json!({}), // return an empty JSON object or any other default value
+            })
         })
-        .collect();
+        .collect::<Result<Vec<serde_json::Value>>>()?;
 
-    json!(content)
+    Ok(json!(content))
 }

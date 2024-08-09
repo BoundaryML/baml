@@ -387,7 +387,7 @@ impl RequestBuilder for AnthropicClient {
                 body_obj.extend(convert_completion_prompt_to_body(prompt))
             }
             either::Either::Right(messages) => {
-                body_obj.extend(convert_chat_prompt_to_body(messages));
+                body_obj.extend(convert_chat_prompt_to_body(messages)?);
             }
         }
 
@@ -474,14 +474,14 @@ fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_j
 // converts chat prompt into JSON body for request
 fn convert_chat_prompt_to_body(
     prompt: &Vec<RenderedChatMessage>,
-) -> HashMap<String, serde_json::Value> {
+) -> Result<HashMap<String, serde_json::Value>> {
     let mut map = HashMap::new();
 
     if let Some(first) = prompt.get(0) {
         if first.role == "system" {
             map.insert(
                 "system".into(),
-                convert_message_parts_to_content(&first.parts),
+                convert_message_parts_to_content(&first.parts)?,
             );
             map.insert(
                 "messages".into(),
@@ -489,12 +489,12 @@ fn convert_chat_prompt_to_body(
                     .iter()
                     .skip(1)
                     .map(|m| {
-                        json!({
+                        Ok(json!({
                             "role": m.role,
-                            "content": convert_message_parts_to_content(&m.parts)
-                        })
+                            "content": convert_message_parts_to_content(&m.parts)?
+                        }))
                     })
-                    .collect::<serde_json::Value>(),
+                    .collect::<Result<serde_json::Value>>()?,
             );
         } else {
             map.insert(
@@ -502,12 +502,12 @@ fn convert_chat_prompt_to_body(
                 prompt
                     .iter()
                     .map(|m| {
-                        json!({
+                        Ok(json!({
                             "role": m.role,
-                            "content": convert_message_parts_to_content(&m.parts)
-                        })
+                            "content": convert_message_parts_to_content(&m.parts)?
+                        }))
                     })
-                    .collect::<serde_json::Value>(),
+                    .collect::<Result<serde_json::Value>>()?,
             );
         }
     } else {
@@ -516,57 +516,67 @@ fn convert_chat_prompt_to_body(
             prompt
                 .iter()
                 .map(|m| {
-                    json!({
+                    Ok(json!({
                         "role": m.role,
-                        "content": convert_message_parts_to_content(&m.parts)
-                    })
+                        "content": convert_message_parts_to_content(&m.parts)?
+                    }))
                 })
-                .collect::<serde_json::Value>(),
+                .collect::<Result<serde_json::Value>>()?,
         );
     }
     log::debug!("converted chat prompt to body: {:#?}", map);
 
-    return map;
+    Ok(map)
 }
 
 // converts chat message parts into JSON content
-fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json::Value {
+fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serde_json::Value> {
     if parts.len() == 1 {
         if let ChatMessagePart::Text(text) = &parts[0] {
-            return json!(text);
+            return Ok(json!(text));
         }
     }
 
     parts
         .iter()
-        .map(|part| match part {
-            ChatMessagePart::Text(text) => json!({
-                "type": "text",
-                "text": text
-            }),
-
-            ChatMessagePart::Media(media) => match &media.content {
-                BamlMediaContent::Base64(data) => json!({
-                    "type":  media.media_type.to_string(),
-
-                    "source": {
-                        "type": "base64",
-                        "media_type": data.mime_type,
-                        "data": data.base64
-                    }
+        .map(|part| {
+            Ok(match part {
+                ChatMessagePart::Text(text) => json!({
+                    "type": "text",
+                    "text": text
                 }),
-                _ => panic!("Unsupported media type"),
-                //never executes, keep for future if anthropic supports urls
-                // BamlMedia::Url(media_type, data) => json!({
-                //     "type": "image",
 
-                //     "source": {
-                //         "type": "url",
-                //         "url": data.url
-                //     }
-                // }),
-            },
-            _ => json!({}),
+                ChatMessagePart::Media(media) => match &media.content {
+                    BamlMediaContent::Base64(data) => json!({
+                        "type":  media.media_type.to_string(),
+
+                        "source": {
+                            "type": "base64",
+                            "media_type": data.mime_type,
+                            "data": data.base64
+                        }
+                    }),
+                    BamlMediaContent::File(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (Anthropic): file should have been resolved to base64"
+                        )
+                    }
+                    BamlMediaContent::Url(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (Anthropic): media URL should have been resolved to base64"
+                        )
+                    }
+                    //never executes, keep for future if anthropic supports urls
+                    // BamlMedia::Url(media_type, data) => json!({
+                    //     "type": "image",
+
+                    //     "source": {
+                    //         "type": "url",
+                    //         "url": data.url
+                    //     }
+                    // }),
+                },
+            })
         })
         .collect()
 }

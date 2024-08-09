@@ -510,8 +510,17 @@ impl TryInto<bedrock::types::Message> for AwsChatMessage<'_> {
             .iter()
             .map(|part| match part {
                 ChatMessagePart::Text(text) => Ok(bedrock::types::ContentBlock::Text(text.clone())),
-                ChatMessagePart::Media(media) => match &media.content {
+                ChatMessagePart::Media(media) => {
+                    if media.media_type != BamlMediaType::Image {
+                        anyhow::bail!("AWS supports images, but does not support this media type: {:#?}", media)
+                    }
+                    match &media.content {
                     // TODO: only render image
+                    BamlMediaContent::File(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (AWSBedrock): file should have been resolved to base64"
+                        )
+                    }
                     BamlMediaContent::Url(_) => {
                         anyhow::bail!(
                             "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
@@ -534,7 +543,7 @@ impl TryInto<bedrock::types::Message> for AwsChatMessage<'_> {
                         ))
                     }
                     _ => anyhow::bail!("AWS does not support this media type: {:#?}", media),
-                },
+                }},
                 _ => anyhow::bail!("AWS does not support this message part type: {:#?}", part),
             })
             .collect::<Result<_>>()?;

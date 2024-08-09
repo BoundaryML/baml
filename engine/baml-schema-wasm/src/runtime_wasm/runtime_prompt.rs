@@ -112,7 +112,7 @@ impl WasmChatMessagePart {
         Some(match &m.content {
             BamlMediaContent::Url(u) => u.url.clone(),
             BamlMediaContent::Base64(MediaBase64 { base64, mime_type }) => {
-                format!("data:{};base64,{}", media_type, base64.clone())
+                format!("data:{};base64,{}", mime_type, base64.clone())
             }
             BamlMediaContent::File(f) => match f.baml_path.parent() {
                 // TODO: this doesn't handle non-UTF8 paths
