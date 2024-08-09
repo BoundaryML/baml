@@ -44,7 +44,7 @@ impl TryFrom<(&ClientProperty, &RuntimeContext)> for FallbackStrategy {
 
 fn resolve_properties(
     mut properties: HashMap<String, serde_json::Value>,
-    ctx: &RuntimeContext,
+    _ctx: &RuntimeContext,
 ) -> Result<Vec<String>> {
     let strategy = properties
         .remove("strategy")
@@ -54,11 +54,11 @@ fn resolve_properties(
 
     let strategy = if let Some(strategy) = strategy {
         if strategy.is_empty() {
-            anyhow::bail!("Empty strategy array, at least one client is required");
+            return Ok(vec![]);
         }
         strategy
     } else {
-        anyhow::bail!("Missing a strategy field");
+        return Ok(vec![]);
     };
 
     if !properties.is_empty() {
@@ -80,6 +80,7 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for FallbackStrategy {
     fn try_from((client, ctx): (&ClientWalker, &RuntimeContext)) -> Result<Self> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
         let strategy = resolve_properties(properties, ctx)?;
+
         Ok(Self {
             name: client.item.elem.name.clone(),
             retry_policy: client.retry_policy().as_ref().map(String::from),
@@ -117,6 +118,7 @@ impl IterOrchestrator for FallbackStrategy {
             .flatten()
             .collect::<Vec<_>>();
 
+        log::info!("Items: {:#?}", items.len());
         items
     }
 }

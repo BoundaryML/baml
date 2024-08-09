@@ -85,11 +85,11 @@ fn resolve_properties(
 
     let strategy = if let Some(strategy) = strategy {
         if strategy.is_empty() {
-            anyhow::bail!("Empty strategy array, at least one client is required");
+            return Ok((vec![], 0));
         }
         strategy
     } else {
-        anyhow::bail!("Missing a strategy field");
+        return Ok((vec![], 0));
     };
 
     let start = properties
