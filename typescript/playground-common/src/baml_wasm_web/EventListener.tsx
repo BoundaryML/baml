@@ -390,6 +390,7 @@ const asyncCurlAtom = atom(async (get) => {
   const func = get(selectedFunctionAtom)
   const test_case = get(selectedTestCaseAtom)
   const orch_index = get(orchIndexAtom)
+  const bamlSrcRoot = useAtomValue(selectedBamlSrcAtom)
 
   if (!runtime || !func || !test_case) {
     return 'Not yet ready'
@@ -399,7 +400,40 @@ const asyncCurlAtom = atom(async (get) => {
   wasm_call_context.node_index = orch_index
 
   try {
-    return await func.render_raw_curl_for_test(runtime, test_case.name, wasm_call_context, get(streamCurl))
+    return await func.render_raw_curl_for_test(
+      runtime,
+      test_case.name,
+      wasm_call_context,
+      get(streamCurl),
+      async (path: string): Promise<Uint8Array> => {
+        return new Uint8Array([])
+
+        console.log('get-baml-src ts impl translating path to blob', { path, bamlSrcRoot })
+        if (!bamlSrcRoot) {
+          console.log('get-baml-src early exit because bamlSrcRoot is falsey')
+          return new Uint8Array([])
+        }
+
+        try {
+          const webviewUri = await get(imageUrlAtomFamily([bamlSrcRoot ?? '<nonexistent>', path]))
+          console.log('get-baml-src ts impl being triggered for', { path, webviewUri })
+          const response = await fetch(webviewUri)
+
+          const blob = await response.blob()
+
+          // Read the blob as an ArrayBuffer
+          const arrayBuffer = await blob.arrayBuffer()
+
+          // Create a Uint8Array from the ArrayBuffer
+          const uint8Array = new Uint8Array(arrayBuffer)
+
+          return uint8Array
+        } catch (e) {
+          console.error('get-baml-src ts impl error', e)
+          return new Uint8Array([])
+        }
+      },
+    )
   } catch (e) {
     console.error(e)
     return `${e}`

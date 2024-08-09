@@ -39,11 +39,11 @@ class VSCodeAPIWrapper {
     // context (i.e. VS Code development window or web browser)
     if (typeof acquireVsCodeApi === 'function') {
       this.vsCodeApi = acquireVsCodeApi()
+      window.addEventListener('message', this.listenForRpcResponses.bind(this))
     }
 
     this.rpcTable = new Map()
     this.rpcId = 0
-    window.addEventListener('message', this.listenForRpcResponses.bind(this))
   }
 
   public async asWebviewUri(bamlSrc: string, path: string): Promise<string> {

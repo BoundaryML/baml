@@ -1412,12 +1412,17 @@ impl WasmFunction {
         test_name: String,
         wasm_call_context: &WasmCallContext,
         stream: bool,
+        get_baml_src_cb: js_sys::Function,
     ) -> Result<String, wasm_bindgen::JsError> {
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
 
         let ctx = rt
             .runtime
-            .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
+            .create_ctx_manager(
+                BamlValue::String("wasm".to_string()),
+                None,
+                // js_fn_to_baml_src_reader(get_baml_src_cb),
+            )
             .create_ctx_with_default(missing_env_vars.iter());
 
         let params = rt
