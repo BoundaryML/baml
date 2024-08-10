@@ -531,7 +531,7 @@ export function startServer(options?: LSOptions): void {
 
           const seenTestCases = new Set<string>()
           for (const testcase of proj.list_testcases()) {
-            // console.log(`Testcase: ${testcase.toString()}`)
+            console.log(`Testcase: ${testcase.toString()}`)
             if (seenTestCases.has(testcase.name)) {
               continue
             }

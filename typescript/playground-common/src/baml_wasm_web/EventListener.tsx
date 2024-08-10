@@ -18,7 +18,6 @@ import {
   type WasmScope,
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { vscode } from '../utils/vscode'
-import { EchoRequest, EchoResponse, GetBamlSrcRequest, GetBamlSrcResponse, VscodeToWebviewCommand } from './rpc'
 import { useRunHooks } from './test_uis/testHooks'
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
@@ -318,20 +317,6 @@ export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => 
   }))
 })
 
-export const selectedBamlSrcAtom = atom((get) => {
-  const selectedProject = get(selectedProjectAtom)
-  if (selectedProject === null) {
-    return
-  }
-
-  const project = get(projectFamilyAtom(selectedProject))
-  if (!project) {
-    return null
-  }
-
-  return project.root_dir_name
-})
-
 export const selectedRuntimeAtom = atom((get) => {
   const project = get(selectedProjectAtom)
   if (!project) {
@@ -390,48 +375,22 @@ const asyncCurlAtom = atom(async (get) => {
   const func = get(selectedFunctionAtom)
   const test_case = get(selectedTestCaseAtom)
   const orch_index = get(orchIndexAtom)
-  const bamlSrcRoot = useAtomValue(selectedBamlSrcAtom)
 
   if (!runtime || !func || !test_case) {
     return 'Not yet ready'
   }
 
-  const wasm_call_context = new WasmCallContext()
-  wasm_call_context.node_index = orch_index
+  const wasmCallContext = new WasmCallContext()
+  wasmCallContext.node_index = orch_index
 
   try {
     return await func.render_raw_curl_for_test(
       runtime,
       test_case.name,
-      wasm_call_context,
+      wasmCallContext,
       get(streamCurl),
-      async (path: string): Promise<Uint8Array> => {
-        return new Uint8Array([])
-
-        console.log('get-baml-src ts impl translating path to blob', { path, bamlSrcRoot })
-        if (!bamlSrcRoot) {
-          console.log('get-baml-src early exit because bamlSrcRoot is falsey')
-          return new Uint8Array([])
-        }
-
-        try {
-          const webviewUri = await get(imageUrlAtomFamily([bamlSrcRoot ?? '<nonexistent>', path]))
-          console.log('get-baml-src ts impl being triggered for', { path, webviewUri })
-          const response = await fetch(webviewUri)
-
-          const blob = await response.blob()
-
-          // Read the blob as an ArrayBuffer
-          const arrayBuffer = await blob.arrayBuffer()
-
-          // Create a Uint8Array from the ArrayBuffer
-          const uint8Array = new Uint8Array(arrayBuffer)
-
-          return uint8Array
-        } catch (e) {
-          console.error('get-baml-src ts impl error', e)
-          return new Uint8Array([])
-        }
+      async (path: string) => {
+        return new Uint8Array()
       },
     )
   } catch (e) {
@@ -439,14 +398,6 @@ const asyncCurlAtom = atom(async (get) => {
     return `${e}`
   }
 })
-
-export const imageUrlAtomFamily = atomFamily(
-  ([bamlSrc, imageUrl]: [string, string]) =>
-    atom(async () => {
-      return await vscode.asWebviewUri(bamlSrc, imageUrl)
-    }),
-  (a, b) => a[0] === b[0] && a[1] === b[1],
-)
 
 export const curlAtom = unwrap(asyncCurlAtom)
 
@@ -459,11 +410,11 @@ export const renderPromptAtom = atom((get) => {
     return null
   }
 
-  const wasm_call_context = new WasmCallContext()
-  wasm_call_context.node_index = orch_index
+  const wasmCallContext = new WasmCallContext()
+  wasmCallContext.node_index = orch_index
 
   try {
-    return func.render_prompt_for_test(runtime, test_case.name, wasm_call_context)
+    return func.render_prompt_for_test(runtime, test_case.name, wasmCallContext)
   } catch (e) {
     if (e instanceof Error) {
       return e.message
@@ -979,7 +930,58 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [wasm, envVars])
 
   useEffect(() => {
-    const fn = (event: MessageEvent<VscodeToWebviewCommand>) => {
+    const fn = (
+      event: MessageEvent<
+        | {
+            command: 'modify_file'
+            content: {
+              root_path: string
+              name: string
+              content: string | undefined
+            }
+          }
+        | {
+            command: 'add_project'
+            content: {
+              root_path: string
+              files: Record<string, string>
+            }
+          }
+        | {
+            command: 'remove_project'
+            content: {
+              root_path: string
+            }
+          }
+        | {
+            command: 'select_function'
+            content: {
+              root_path: string
+              function_name: string
+            }
+          }
+        | {
+            command: 'update_cursor'
+            content: {
+              cursor: { fileName: string; fileText: string; line: number; column: number }
+            }
+          }
+        | {
+            command: 'port_number'
+            content: {
+              port: number
+            }
+          }
+        | {
+            command: 'baml_cli_version'
+            content: string
+          }
+        | {
+            command: 'run_test'
+            content: { test_name: string }
+          }
+      >,
+    ) => {
       const { command, content } = event.data
 
       switch (command) {
@@ -1042,28 +1044,6 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           run([content.test_name])
           setShowTests(true)
           setClientGraph(false)
-          ;(async () => {
-            try {
-              const echoResp = await vscode.rpc<EchoRequest, EchoResponse>({
-                vscodeCommand: 'ECHO',
-                message: 'lorem ipsum',
-              })
-              console.log('Echo response', echoResp)
-            } catch (e) {
-              console.error(e)
-            }
-            try {
-              const getBamlSrcResp = await vscode.rpc<GetBamlSrcRequest, GetBamlSrcResponse>({
-                vscodeCommand: 'GET_BAML_SRC',
-                path: 'baml_src://xkcd-grownups.png',
-              })
-              // contents comes back as { data: Uint8Array, type: 'Buffer' }
-              console.log('get-baml-src response', ((getBamlSrcResp.contents as any).data as Uint8Array).length)
-            } catch (e) {
-              console.error(e)
-            }
-          })()
-
           break
       }
     }

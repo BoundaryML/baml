@@ -1,9 +1,8 @@
-import { atom, useAtom, useAtomValue } from 'jotai'
+import { atom, useAtomValue } from 'jotai'
 import { atomFamily, useAtomCallback } from 'jotai/utils'
 import React, { useCallback } from 'react'
-import { imageUrlAtomFamily, selectedBamlSrcAtom, selectedFunctionAtom, selectedRuntimeAtom } from '../EventListener'
+import { selectedFunctionAtom, selectedRuntimeAtom } from '../EventListener'
 import type { WasmFunctionResponse, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
-import { vscode } from '../../utils/vscode'
 
 const isRunningAtom = atom(false)
 export const showTestsAtom = atom(false)
@@ -51,7 +50,6 @@ export const statusCountAtom = atom({
 
 export const useRunHooks = () => {
   const isRunning = useAtomValue(isRunningAtom)
-  const bamlSrcRoot = useAtomValue(selectedBamlSrcAtom)
 
   const runTest = useAtomCallback(
     useCallback(
@@ -120,30 +118,7 @@ export const useRunHooks = () => {
                     })
                   },
                   async (path: string) => {
-                    console.log('get-baml-src ts impl translating path to blob', { path, bamlSrcRoot })
-                    if (!bamlSrcRoot) {
-                      console.log('get-baml-src early exit because bamlSrcRoot is falsey')
-                      return null
-                    }
-
-                    try {
-                      const webviewUri = await get(imageUrlAtomFamily([bamlSrcRoot, path]))
-                      console.log('get-baml-src ts impl being triggered for', { path, webviewUri })
-                      const response = await fetch(webviewUri)
-
-                      const blob = await response.blob()
-
-                      // Read the blob as an ArrayBuffer
-                      const arrayBuffer = await blob.arrayBuffer()
-
-                      // Create a Uint8Array from the ArrayBuffer
-                      const uint8Array = new Uint8Array(arrayBuffer)
-
-                      return uint8Array
-                    } catch (e) {
-                      console.error('get-baml-src ts impl error', e)
-                      return null
-                    }
+                    return new Uint8Array()
                   },
                 )
                 .then((res) => {

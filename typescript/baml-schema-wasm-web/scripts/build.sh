@@ -4,7 +4,8 @@ set -euo pipefail
 
 cd ../../engine/baml-schema-wasm
 # maybe use dev and not --release?
-cargo build --target=wasm32-unknown-unknown --color=always --release
+# add target=wasm32-unknown-unknown here?
+cargo build --color=always --release
 # engines dir
 cd ..
 echo "Path is: $(pwd)"

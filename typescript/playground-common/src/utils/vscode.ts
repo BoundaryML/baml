@@ -1,23 +1,4 @@
-import { GetWebviewUriRequest, GetWebviewUriResponse } from '../baml_wasm_web/rpc'
 import type { WebviewApi } from 'vscode-webview'
-
-const RPC_TIMEOUT_MS = 5000
-
-interface RpcResponse {
-  rpcMethod: string
-  rpcId: number
-  data: unknown
-}
-
-const isRpcResponse = (eventData: unknown): eventData is RpcResponse => {
-  return (
-    typeof eventData === 'object' &&
-    eventData !== null &&
-    'rpcId' in eventData &&
-    typeof (eventData as RpcResponse).rpcMethod === 'string' &&
-    typeof (eventData as RpcResponse).rpcId === 'number'
-  )
-}
 
 /**
  * A utility wrapper around the acquireVsCodeApi() function, which enables
@@ -31,63 +12,11 @@ const isRpcResponse = (eventData: unknown): eventData is RpcResponse => {
 class VSCodeAPIWrapper {
   private readonly vsCodeApi: WebviewApi<unknown> | undefined
 
-  private rpcTable: Map<number, { resolve: (resp: unknown) => void }>
-  private rpcId: number
-
   constructor() {
     // Check if the acquireVsCodeApi function exists in the current development
     // context (i.e. VS Code development window or web browser)
     if (typeof acquireVsCodeApi === 'function') {
       this.vsCodeApi = acquireVsCodeApi()
-      window.addEventListener('message', this.listenForRpcResponses.bind(this))
-    }
-
-    this.rpcTable = new Map()
-    this.rpcId = 0
-  }
-
-  public async asWebviewUri(bamlSrc: string, path: string): Promise<string> {
-    const resp = await this.rpc<GetWebviewUriRequest, GetWebviewUriResponse>({
-      vscodeCommand: 'GET_WEBVIEW_URI',
-      bamlSrc,
-      path,
-    })
-
-    return resp.uri
-  }
-
-  public rpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {
-    return new Promise((resolve, reject) => {
-      const rpcId = this.rpcId++
-      this.rpcTable.set(rpcId, { resolve: resolve as (resp: unknown) => void })
-
-      this.postMessage({
-        rpcMethod: (data as any).vscodeCommand,
-        rpcId,
-        data,
-      })
-
-      // Timeout to prevent hanging requests
-      setTimeout(() => {
-        if (this.rpcTable.has(rpcId)) {
-          this.rpcTable.delete(rpcId)
-          reject(new Error(`VSCode RPC request timed out after ${RPC_TIMEOUT_MS}ms: ${(data as any).vscodeCommand}`))
-        }
-      }, RPC_TIMEOUT_MS)
-    })
-  }
-
-  private listenForRpcResponses(event: any) {
-    // console.log('unfiltered messages to webview', event.data)
-
-    if (isRpcResponse(event.data)) {
-      // console.log('filtered to RPC responses', event.data)
-      const rpcData = event.data as RpcResponse
-      const entry = this.rpcTable.get(rpcData.rpcId)
-      if (entry) {
-        entry.resolve(rpcData.data)
-        this.rpcTable.delete(rpcData.rpcId)
-      }
     }
   }
 
