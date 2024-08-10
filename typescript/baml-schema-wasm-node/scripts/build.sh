@@ -3,7 +3,7 @@
 set -euo pipefail
 
 cd ../../engine/baml-schema-wasm
-cargo build --color=always
+cargo build --target=wasm32-unknown-unknown --color=always --release
 # engines dir
 cd ..
 echo "Path is: $(pwd)"
