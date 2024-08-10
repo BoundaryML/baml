@@ -1,4 +1,4 @@
-use crate::internal::llm_client::ResolveMedia;
+use crate::internal::llm_client::SupportedMediaFormats;
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
@@ -308,7 +308,10 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: true,
-                resolve_media_urls: ResolveMedia::Always,
+                supported_media_formats: SupportedMediaFormats {
+                    url: false,
+                    b64_no_mime: false,
+                },
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,
@@ -331,7 +334,10 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: true,
-                resolve_media_urls: ResolveMedia::Always,
+                supported_media_formats: SupportedMediaFormats {
+                    url: false,
+                    b64_no_mime: false,
+                },
             },
             retry_policy: client
                 .elem()

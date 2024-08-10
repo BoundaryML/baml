@@ -1,7 +1,7 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import React, { useCallback } from 'react'
+import React, { Suspense, useCallback, useState } from 'react'
 
 import '@xyflow/react/dist/style.css'
 import {
@@ -23,6 +23,8 @@ import { Button } from '../components/ui/button'
 import { CheckboxHeader } from './CheckboxHeader'
 import { Switch } from '../components/ui/switch'
 import CustomErrorBoundary from '../utils/ErrorFallback'
+import { vscode } from '../utils/vscode'
+
 const handleCopy = (text: string) => () => {
   navigator.clipboard.writeText(text)
 }
@@ -63,6 +65,22 @@ const CurlSnippet: React.FC = () => {
         showCopy={true}
       />
     </div>
+  )
+}
+
+const WebviewImage = ({ image_path }: { image_path?: string }) => {
+  const [imageUrl, setImageUrl] = useState('')
+  ;(async () => {
+    if (!image_path) return
+
+    const imageUrl = await vscode.asWebviewUri('', image_path)
+    setImageUrl(imageUrl)
+  })()
+
+  return (
+    <a href={imageUrl} target='_blank' rel='noopener noreferrer'>
+      <img src={imageUrl} className='max-w-[400px] object-cover' />
+    </a>
   )
 }
 
@@ -125,12 +143,7 @@ const PromptPreview: React.FC = () => {
                   }}
                 />
               )
-            if (part.is_image())
-              return (
-                <a key={idx} href={part.as_image()} target='_blank'>
-                  <img key={idx} src={part.as_image()} className='max-w-[400px] object-cover' />
-                </a>
-              )
+            if (part.is_image()) return <WebviewImage key={idx} image_path={part.as_image()} />
             if (part.is_audio()) {
               const audioUrl = part.as_audio()
               if (audioUrl) {

@@ -89,6 +89,8 @@ impl WasmChatMessagePart {
     }
 
     #[wasm_bindgen]
+    // TODO: this needs to signal to TS how it should be rendered
+    // currently we're only rendering file paths, but also need to support url & b64
     pub fn as_image(&self) -> Option<String> {
         let ChatMessagePart::Media(m) = &self.part else {
             return None;

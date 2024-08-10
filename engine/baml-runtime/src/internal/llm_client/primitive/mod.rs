@@ -6,7 +6,7 @@ use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 
 use crate::{
     client_registry::ClientProperty, internal::prompt_renderer::PromptRenderer,
-    runtime_interface::InternalClientLookup, RuntimeContext,
+    runtime_interface::InternalClientLookup, RenderCurlSettings, RuntimeContext,
 };
 
 use self::{
@@ -185,9 +185,9 @@ impl WithRenderRawCurl for LLMPrimitiveProvider {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
     ) -> Result<String> {
-        match_llm_provider!(self, render_raw_curl, async, ctx, prompt, stream)
+        match_llm_provider!(self, render_raw_curl, async, ctx, prompt, render_settings)
     }
 }
 

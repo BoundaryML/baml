@@ -15,8 +15,8 @@ use crate::{
     },
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
     tracing::BamlTracer,
-    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RuntimeContext,
-    RuntimeInterface,
+    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RenderCurlSettings,
+    RuntimeContext, RuntimeInterface,
 };
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
@@ -162,7 +162,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         function_name: &str,
         ctx: &RuntimeContext,
         prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
         node_index: Option<usize>,
     ) -> Result<String> {
         let func = self.get_function(function_name, ctx)?;
@@ -186,7 +186,10 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         }
 
         let node = selected.swap_remove(node_index);
-        return node.provider.render_raw_curl(ctx, prompt, stream).await;
+        return node
+            .provider
+            .render_raw_curl(ctx, prompt, render_settings)
+            .await;
     }
 
     fn get_function<'ir>(

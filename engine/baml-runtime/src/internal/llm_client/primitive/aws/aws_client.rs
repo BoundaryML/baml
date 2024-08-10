@@ -23,10 +23,10 @@ use crate::internal::llm_client::{
         WithStreamChat,
     },
     ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-    ModelFeatures, ResolveMedia,
+    ModelFeatures, SupportedMediaFormats,
 };
 
-use crate::RuntimeContext;
+use crate::{RenderCurlSettings, RuntimeContext};
 
 // stores properties required for making a post request to the API
 struct RequestProperties {
@@ -111,7 +111,10 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: true,
-                resolve_media_urls: ResolveMedia::Always,
+                supported_media_formats: SupportedMediaFormats {
+                    url: false,
+                    b64_no_mime: false,
+                },
             },
             retry_policy: client
                 .elem()
@@ -149,7 +152,7 @@ impl AwsClient {
                         }
                     };
 
-                    let mut loader = super::wasm::load_aws_config()
+                    let loader = super::wasm::load_aws_config()
                         .region(Region::new(aws_region.clone()))
                         .credentials_provider(Credentials::new(
                             aws_access_key_id.clone(),
@@ -262,7 +265,7 @@ impl WithRenderRawCurl for AwsClient {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-        _stream: bool,
+        _render_settings: RenderCurlSettings,
     ) -> Result<String> {
         let converse_input = self.build_request(ctx, prompt)?;
 

@@ -8,6 +8,7 @@ use baml_runtime::internal::prompt_renderer::PromptRenderer;
 use baml_runtime::internal_core::configuration::GeneratorOutputType;
 use baml_runtime::BamlSrcReader;
 use baml_runtime::InternalRuntimeInterface;
+use baml_runtime::RenderCurlSettings;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
@@ -1420,8 +1421,7 @@ impl WasmFunction {
             .runtime
             .create_ctx_manager(
                 BamlValue::String("wasm".to_string()),
-                None,
-                // js_fn_to_baml_src_reader(get_baml_src_cb),
+                js_fn_to_baml_src_reader(get_baml_src_cb),
             )
             .create_ctx_with_default(missing_env_vars.iter());
 
@@ -1451,7 +1451,10 @@ impl WasmFunction {
                 &self.name,
                 &ctx,
                 &final_prompt,
-                stream,
+                RenderCurlSettings {
+                    stream,
+                    as_shell_commands: true,
+                },
                 wasm_call_context.node_index,
             )
             .await

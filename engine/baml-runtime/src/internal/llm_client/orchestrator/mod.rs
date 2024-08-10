@@ -3,6 +3,7 @@ mod stream;
 
 use web_time::Duration; // Add this line
 
+use crate::RenderCurlSettings;
 use crate::{
     internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
     RuntimeContext,
@@ -176,9 +177,11 @@ impl WithRenderRawCurl for OrchestratorNode {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
     ) -> Result<String> {
-        self.provider.render_raw_curl(ctx, prompt, stream).await
+        self.provider
+            .render_raw_curl(ctx, prompt, render_settings)
+            .await
     }
 }
 

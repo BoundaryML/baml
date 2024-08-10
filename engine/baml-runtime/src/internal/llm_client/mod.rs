@@ -23,17 +23,16 @@ use reqwest::StatusCode;
 use wasm_bindgen::JsValue;
 
 #[derive(Clone, Copy, PartialEq)]
-pub enum ResolveMedia {
-    Never,
-    MissingMime,
-    Always,
+pub struct SupportedMediaFormats {
+    url: bool,
+    b64_no_mime: bool,
 }
 #[derive(Clone, Copy)]
 pub struct ModelFeatures {
     pub completion: bool,
     pub chat: bool,
     pub anthropic_system_constraints: bool,
-    pub resolve_media_urls: ResolveMedia,
+    pub supported_media_formats: SupportedMediaFormats,
 }
 
 #[derive(Debug)]

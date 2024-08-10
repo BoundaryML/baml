@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::internal::llm_client::ResolveMedia;
+use crate::internal::llm_client::SupportedMediaFormats;
 use anyhow::Result;
 use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
@@ -425,7 +425,10 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: ResolveMedia::Never,
+                supported_media_formats: SupportedMediaFormats {
+                    url: true,
+                    b64_no_mime: true,
+                },
             },
             retry_policy: $client.retry_policy.clone(),
             client: create_client()?,
@@ -445,7 +448,10 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: ResolveMedia::Never,
+                supported_media_formats: SupportedMediaFormats {
+                    url: true,
+                    b64_no_mime: true,
+                },
             },
             retry_policy: $client
                 .elem()

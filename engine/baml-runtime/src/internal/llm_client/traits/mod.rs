@@ -9,9 +9,9 @@ pub use self::{
     completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
 };
 use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
-use crate::internal::llm_client::ResolveMedia;
+use crate::{internal::llm_client::SupportedMediaFormats, RenderCurlSettings};
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
-use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, MediaBase64};
+use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, MediaBase64, MediaUrl};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use futures::stream::StreamExt;
 use infer;
@@ -35,14 +35,6 @@ pub trait WithSingleCallable {
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse;
 }
 
-pub trait WithCurl {
-    #[allow(async_fn_in_trait)]
-    async fn curl_call(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-    ) -> Result<Vec<RenderedChatMessage>, LLMResponse>;
-}
 pub trait WithClient {
     fn context(&self) -> &RenderContext_Client;
 
@@ -67,7 +59,7 @@ pub trait WithRenderRawCurl {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
     ) -> Result<String>;
 }
 
@@ -77,51 +69,23 @@ where
 {
     #[allow(async_fn_in_trait)]
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse {
-        let resolve_media = self.model_features().resolve_media_urls;
-        let if_mime = resolve_media == ResolveMedia::MissingMime;
-        // TODO: this is a workaround
-        //if resolve_media == ResolveMedia::Always || if_mime {
-        if true {
-            if let RenderedPrompt::Chat(chat) = &prompt {
-                match process_media_urls(if_mime, ctx, chat).await {
-                    Ok(messages) => return self.chat(ctx, &messages).await,
-                    Err(e) => return LLMResponse::OtherFailure(format!("Error occurred: {:#}", e)),
-                }
+        if let RenderedPrompt::Chat(chat) = &prompt {
+            match process_media_urls(
+                self.model_features().supported_media_formats,
+                None,
+                ctx,
+                chat,
+            )
+            .await
+            {
+                Ok(messages) => return self.chat(ctx, &messages).await,
+                Err(e) => return LLMResponse::OtherFailure(format!("Error occurred: {:#}", e)),
             }
         }
 
         match prompt {
             RenderedPrompt::Chat(p) => self.chat(ctx, p).await,
             RenderedPrompt::Completion(p) => self.completion(ctx, p).await,
-        }
-    }
-}
-
-impl<T> WithCurl for T
-where
-    T: WithClient + WithChat + WithCompletion,
-{
-    #[allow(async_fn_in_trait)]
-    async fn curl_call(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-    ) -> Result<Vec<RenderedChatMessage>, LLMResponse> {
-        let resolve_media = self.model_features().resolve_media_urls;
-        let if_mime = resolve_media == ResolveMedia::MissingMime;
-        if resolve_media == ResolveMedia::Always || if_mime {
-            if let RenderedPrompt::Chat(ref chat) = prompt {
-                return process_media_urls(if_mime, ctx, chat)
-                    .await
-                    .map_err(|e| LLMResponse::OtherFailure(format!("Error occurred: {:#}", e)));
-            }
-        }
-
-        match prompt {
-            RenderedPrompt::Chat(p) => Ok(p.clone()),
-            RenderedPrompt::Completion(p) => Err(LLMResponse::OtherFailure(
-                "Completion prompts are not supported by this provider".to_string(),
-            )),
         }
     }
 }
@@ -215,13 +179,18 @@ where
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
     ) -> Result<String> {
-        let rendered_prompt = RenderedPrompt::Chat(prompt.clone());
+        let chat_messages = process_media_urls(
+            self.model_features().supported_media_formats,
+            Some(render_settings),
+            ctx,
+            prompt,
+        )
+        .await?;
 
-        let chat_messages = self.curl_call(ctx, &rendered_prompt).await?;
         let request_builder = self
-            .build_request(either::Right(&chat_messages), false, stream)
+            .build_request(either::Right(&chat_messages), false, render_settings.stream)
             .await?;
         let mut request = request_builder.build()?;
         let url_header_value = {
@@ -277,18 +246,20 @@ where
     #[allow(async_fn_in_trait)]
     async fn stream(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> StreamResponse {
         if let RenderedPrompt::Chat(ref chat) = prompt {
-            let resolve_media = self.model_features().resolve_media_urls;
-            // if resolve_media == ResolveMedia::Always || resolve_media == ResolveMedia::MissingMime {
-            if true {
-                let if_mime = resolve_media == ResolveMedia::MissingMime;
-                match process_media_urls(if_mime, ctx, chat).await {
-                    Ok(messages) => return self.stream_chat(ctx, &messages).await,
-                    Err(e) => {
-                        return Err(LLMResponse::OtherFailure(format!(
-                            "Error occurred: {:#}",
-                            e
-                        )))
-                    }
+            match process_media_urls(
+                self.model_features().supported_media_formats,
+                None,
+                ctx,
+                chat,
+            )
+            .await
+            {
+                Ok(messages) => return self.stream_chat(ctx, &messages).await,
+                Err(e) => {
+                    return Err(LLMResponse::OtherFailure(format!(
+                        "Error occurred: {:#}",
+                        e
+                    )))
                 }
             }
         }
@@ -300,11 +271,67 @@ where
     }
 }
 
+/// We assume b64 with mime-type is the universally accepted format in an API request.
+/// Other formats will be converted into that, depending on what formats are allowed according to supported_media_formats.
 async fn process_media_urls(
-    if_mime: bool,
+    supported_media_formats: SupportedMediaFormats,
+    render_settings: Option<RenderCurlSettings>,
     ctx: &RuntimeContext,
     chat: &Vec<RenderedChatMessage>,
 ) -> Result<Vec<RenderedChatMessage>, anyhow::Error> {
+    let render_settings = render_settings.unwrap_or(RenderCurlSettings {
+        stream: false,
+        as_shell_commands: false,
+    });
+    if (render_settings.as_shell_commands) {
+        return Ok(chat
+            .iter()
+            .map(|p| RenderedChatMessage {
+                role: p.role.clone(),
+                parts: p
+                    .parts
+                    .iter()
+                    .map(|p| {
+                        let ChatMessagePart::Media(m) = p else {
+                            return p.clone();
+                        };
+                        let processed = match &m.content {
+                            BamlMediaContent::File(media_file) => {
+                                let ext =
+                                    match std::path::Path::new(&media_file.relpath).extension() {
+                                        Some(ext) => ext.to_string_lossy(),
+                                        None => "".into(),
+                                    };
+                                let media_path = match media_file.baml_path.parent() {
+                                    Some(parent) => parent
+                                        .join(&media_file.relpath)
+                                        .to_string_lossy()
+                                        .into_owned(),
+                                    None => media_file.relpath.clone(),
+                                };
+                                BamlMediaContent::Base64(MediaBase64 {
+                                    base64: format!(
+                                        "$(base64 '{}')",
+                                        media_path
+                                            .strip_prefix("file://")
+                                            .unwrap_or(media_path.as_str())
+                                    ),
+                                    mime_type: format!("image/{ext}"),
+                                })
+                            }
+                            BamlMediaContent::Base64(b64) => BamlMediaContent::Base64(b64.clone()),
+                            BamlMediaContent::Url(url) => BamlMediaContent::Url(url.clone()),
+                        };
+
+                        ChatMessagePart::Media(BamlMedia {
+                            media_type: m.media_type.clone(),
+                            content: processed,
+                        })
+                    })
+                    .collect(),
+            })
+            .collect());
+    }
     let messages_result = futures::stream::iter(chat.iter().map(|p| {
         let new_parts = p
             .parts
@@ -348,7 +375,8 @@ async fn process_media_urls(
                         )))
                     }
                     BamlMediaContent::Url(media_url) => {
-                        if !if_mime || media_url.mime_type.as_deref().unwrap_or("").is_empty() {
+                        // TODO: openai does not need mime type resolution
+                        if media_url.mime_type.as_deref().unwrap_or("").is_empty() {
                             let (base64, mime_type) = if media_url.url.starts_with("data:") {
                                 let parts: Vec<&str> = media_url.url.splitn(2, ',').collect();
 

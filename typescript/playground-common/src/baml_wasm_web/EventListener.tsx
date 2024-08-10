@@ -390,7 +390,7 @@ const asyncCurlAtom = atom(async (get) => {
       wasmCallContext,
       get(streamCurl),
       async (path: string) => {
-        return new Uint8Array()
+        return await vscode.readFile(path)
       },
     )
   } catch (e) {

@@ -3,6 +3,7 @@ import { atomFamily, useAtomCallback } from 'jotai/utils'
 import React, { useCallback } from 'react'
 import { selectedFunctionAtom, selectedRuntimeAtom } from '../EventListener'
 import type { WasmFunctionResponse, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+import { vscode } from '../../utils/vscode'
 
 const isRunningAtom = atom(false)
 export const showTestsAtom = atom(false)
@@ -118,7 +119,7 @@ export const useRunHooks = () => {
                     })
                   },
                   async (path: string) => {
-                    return new Uint8Array()
+                    return await vscode.readFile(path)
                   },
                 )
                 .then((res) => {
