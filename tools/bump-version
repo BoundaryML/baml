@@ -105,6 +105,7 @@ cd "${_repo_root}"
 git pull --tags
 
 
+echo "Checking git diff for code generation changes..."
 # # Ensure clean git status
 if ! git diff --quiet; then
     echo "Error: Git status is not clean. Please commit or stash your changes."
