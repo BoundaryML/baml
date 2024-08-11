@@ -23,16 +23,35 @@ use reqwest::StatusCode;
 use wasm_bindgen::JsValue;
 
 #[derive(Clone, Copy, PartialEq)]
-pub struct SupportedMediaFormats {
-    url: bool,
-    b64_no_mime: bool,
+pub enum ResolveMediaUrls {
+    // there are 5 input formats:
+    // - file
+    // - url_with_mime
+    // - url_no_mime
+    // - b64_with_mime
+    // - b64_no_mime
+
+    // there are 5 possible output formats:
+    // - url_with_mime: vertex
+    // - url_no_mime: openai
+    // - b64_with_mime: everyone (aws, anthropic, google, openai, vertex)
+    // - b64_no_mime: no one
+
+    // aws: supports b64 w mime
+    // anthropic: supports b64 w mime
+    // google: supports b64 w mime
+    // openai: supports URLs w/o mime (b64 data URLs also work here)
+    // vertex: supports URLs w/ mime, b64 w/ mime
+    Always,
+    EnsureMime,
+    Never,
 }
 #[derive(Clone, Copy)]
 pub struct ModelFeatures {
     pub completion: bool,
     pub chat: bool,
     pub anthropic_system_constraints: bool,
-    pub supported_media_formats: SupportedMediaFormats,
+    pub resolve_media_urls: ResolveMediaUrls,
 }
 
 #[derive(Debug)]

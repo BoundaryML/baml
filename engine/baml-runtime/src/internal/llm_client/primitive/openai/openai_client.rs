@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::internal::llm_client::SupportedMediaFormats;
+use crate::internal::llm_client::ResolveMediaUrls;
 use anyhow::Result;
 use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
@@ -425,10 +425,7 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                supported_media_formats: SupportedMediaFormats {
-                    url: true,
-                    b64_no_mime: true,
-                },
+                resolve_media_urls: ResolveMediaUrls::Never,
             },
             retry_policy: $client.retry_policy.clone(),
             client: create_client()?,
@@ -448,10 +445,7 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                supported_media_formats: SupportedMediaFormats {
-                    url: true,
-                    b64_no_mime: true,
-                },
+                resolve_media_urls: ResolveMediaUrls::Never,
             },
             retry_policy: $client
                 .elem()
@@ -538,23 +532,34 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serd
         .map(|part| {
             Ok(match part {
                 ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
-                ChatMessagePart::Media(media) => match &media.content {
-                    // TODO: handle audio
-                    BamlMediaContent::Url(media) => {
-                        json!({"type": "image_url", "image_url": json!({
-                            "url": media.url
-                        })})
+                ChatMessagePart::Media(media) => {
+                    // NB(sam): this works for images, but has no guarantee it will actually work for audio.
+                    // The OpenAI speech-to-text APIs rely on multipart/form-data requests, where the contents
+                    // of the form data are just the binary contents of the file, so how they're going to
+                    // support audio in their multimodal interfaces are very... unclear.
+                    let media_type = format!("{}_url", media.media_type);
+                    match &media.content {
+                        BamlMediaContent::Url(media) => {
+                            json!({
+                                "type": media_type,
+                                media_type: json!({
+                                    "url": media.url
+                                })
+                            })
+                        }
+                        BamlMediaContent::Base64(media) => {
+                            json!({
+                                "type": media_type,
+                                media_type: json!({
+                                    "url" : format!("data:{};base64,{}", media.mime_type, media.base64)
+                                })
+                            })
+                        }
+                        BamlMediaContent::File(_) => {
+                            anyhow::bail!("BAML internal error (OpenAI): file should have been resolved to base64")
+                        }
                     }
-                    BamlMediaContent::Base64(media) => {
-                        // TODO: validate the media_type is present!
-                        json!({"type": "image_url", "image_url": json!({
-                           "url" : format!("data:{};base64,{}", media.mime_type, media.base64)
-                        })})
-                    }
-                    _ => json!({}), // return an empty JSON object or any other default value
-                },
-                // OpenAI does not yet support audio
-                _ => json!({}), // return an empty JSON object or any other default value
+                }
             })
         })
         .collect::<Result<Vec<serde_json::Value>>>()?;

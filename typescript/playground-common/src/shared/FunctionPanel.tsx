@@ -1,7 +1,7 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import React, { Suspense, useCallback, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useState } from 'react'
 
 import '@xyflow/react/dist/style.css'
 import {
@@ -25,6 +25,8 @@ import { CheckboxHeader } from './CheckboxHeader'
 import { Switch } from '../components/ui/switch'
 import CustomErrorBoundary from '../utils/ErrorFallback'
 import { vscode } from '../utils/vscode'
+import { url } from 'inspector'
+import { error } from 'console'
 
 const handleCopy = (text: string) => () => {
   navigator.clipboard.writeText(text)
@@ -77,19 +79,87 @@ const CurlSnippet: React.FC = () => {
   )
 }
 
-const WebviewImage = ({ image_path }: { image_path?: string }) => {
-  const [imageUrl, setImageUrl] = useState('')
-  ;(async () => {
-    if (!image_path) return
+type WasmChatMessagePartMedia =
+  | {
+      type: 'url'
+      url: string
+    }
+  | {
+      type: 'path'
+      path: string
+    }
+  | {
+      type: 'error'
+      error: string
+    }
 
-    const imageUrl = await vscode.asWebviewUri('', image_path)
-    setImageUrl(imageUrl)
-  })()
+const WebviewImage: React.FC<{ image?: WasmChatMessagePartMedia }> = ({ image }) => {
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  console.log('webview image', image)
+
+  if (!image) {
+    return <div>BAML internal error: chat message part is not image</div>
+  }
+
+  if (image.type === 'url') {
+    console.log('image.url', image.url)
+    // setImageUrl(image.url)
+  }
+  // ;(async () => {
+  //   if (image.type !== 'path') {
+  //     return
+  //   }
+  //   const imageUrl = await vscode.asWebviewUri('', image.path)
+  //   console.log('image path', imageUrl)
+  //   setImageUrl(imageUrl)
+  // })()
+
+  if (image.type === 'error') {
+    return <div>Error loading image: {image.error}</div>
+  }
+
+  if (!imageUrl) {
+    return <div>Loading image...</div>
+  }
+
+  return <div>image: {imageUrl}</div>
+  // return (
+  //   <a href={imageUrl} target='_blank' rel='noopener noreferrer'>
+  //     <img src={imageUrl} className='max-w-[400px] object-cover' />
+  //   </a>
+  // )
+}
+
+const WebviewAudio: React.FC<{ audio?: WasmChatMessagePartMedia }> = ({ audio }) => {
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  if (!audio) {
+    return <div>BAML internal error: chat message part is not audio</div>
+  }
+  // ;(async () => {
+  //   if (audio.type !== 'path') {
+  //     return
+  //   }
+  //   const imageUrl = await vscode.asWebviewUri('', audio.path)
+  //   setAudioUrl(imageUrl)
+  // })()
+
+  if (audio.type === 'url') {
+    setAudioUrl(audio.url)
+  }
+
+  if (audio.type === 'error') {
+    return <div>Error loading audio: {audio.error}</div>
+  }
+
+  if (!audioUrl) {
+    return <div>Loading audio...</div>
+  }
 
   return (
-    <a href={imageUrl} target='_blank' rel='noopener noreferrer'>
-      <img src={imageUrl} className='max-w-[400px] object-cover' />
-    </a>
+    <audio controls>
+      <source src={audioUrl} />
+      Your browser does not support the audio element.
+    </audio>
   )
 }
 
@@ -152,18 +222,8 @@ const PromptPreview: React.FC = () => {
                   }}
                 />
               )
-            if (part.is_image()) return <WebviewImage key={idx} image_path={part.as_image()} />
-            if (part.is_audio()) {
-              const audioUrl = part.as_audio()
-              if (audioUrl) {
-                return (
-                  <audio controls key={audioUrl + idx}>
-                    <source src={audioUrl} />
-                    Your browser does not support the audio element.
-                  </audio>
-                )
-              }
-            }
+            if (part.is_image()) return <WebviewImage key={idx} image={part.as_media()} />
+            if (part.is_audio()) return <WebviewAudio key={idx} audio={part.as_media()} />
             return null
           })}
         </div>

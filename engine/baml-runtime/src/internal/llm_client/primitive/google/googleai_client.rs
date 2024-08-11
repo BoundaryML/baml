@@ -1,5 +1,5 @@
 use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::SupportedMediaFormats;
+use crate::internal::llm_client::ResolveMediaUrls;
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
@@ -242,10 +242,7 @@ impl GoogleAIClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                supported_media_formats: SupportedMediaFormats {
-                    url: false,
-                    b64_no_mime: false,
-                },
+                resolve_media_urls: ResolveMediaUrls::Always,
             },
             retry_policy: client
                 .elem()
@@ -279,10 +276,7 @@ impl GoogleAIClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                supported_media_formats: SupportedMediaFormats {
-                    url: false,
-                    b64_no_mime: false,
-                },
+                resolve_media_urls: ResolveMediaUrls::Always,
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,
@@ -466,14 +460,22 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serd
 }
 
 fn convert_media_to_content(media: &BamlMedia) -> Result<serde_json::Value> {
-    // TODO: assert that media.media_type == BamlMediaType::Image
     Ok(match &media.content {
         BamlMediaContent::Base64(data) => json!({
             "inlineData": {
-                "mimeType": format!("{}", data.mime_type),
+                "mimeType": data.mime_type,
                 "data": data.base64
             }
         }),
-        _ => anyhow::bail!("Unsupported media type"),
+        BamlMediaContent::File(_) => {
+            anyhow::bail!(
+                "BAML internal error (google-ai): file should have been resolved to base64"
+            )
+        }
+        BamlMediaContent::Url(_) => {
+            anyhow::bail!(
+                "BAML internal error (google-ai): media URL should have been resolved to base64"
+            )
+        }
     })
 }

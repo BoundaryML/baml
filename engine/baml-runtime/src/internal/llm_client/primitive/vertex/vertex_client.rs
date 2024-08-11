@@ -1,5 +1,5 @@
 use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::SupportedMediaFormats;
+use crate::internal::llm_client::ResolveMediaUrls;
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
@@ -324,10 +324,7 @@ impl VertexClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                supported_media_formats: SupportedMediaFormats {
-                    url: true,
-                    b64_no_mime: false,
-                },
+                resolve_media_urls: ResolveMediaUrls::EnsureMime,
             },
             retry_policy: client
                 .elem()
@@ -361,10 +358,7 @@ impl VertexClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                supported_media_formats: SupportedMediaFormats {
-                    url: true,
-                    b64_no_mime: false,
-                },
+                resolve_media_urls: ResolveMediaUrls::EnsureMime,
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,

@@ -9,7 +9,7 @@ pub use self::{
     completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
 };
 use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
-use crate::{internal::llm_client::SupportedMediaFormats, RenderCurlSettings};
+use crate::{internal::llm_client::ResolveMediaUrls, RenderCurlSettings};
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, MediaBase64, MediaUrl};
 use base64::{prelude::BASE64_STANDARD, Engine};
@@ -70,13 +70,8 @@ where
     #[allow(async_fn_in_trait)]
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse {
         if let RenderedPrompt::Chat(chat) = &prompt {
-            match process_media_urls(
-                self.model_features().supported_media_formats,
-                None,
-                ctx,
-                chat,
-            )
-            .await
+            match process_media_urls(self.model_features().resolve_media_urls, None, ctx, chat)
+                .await
             {
                 Ok(messages) => return self.chat(ctx, &messages).await,
                 Err(e) => return LLMResponse::OtherFailure(format!("Error occurred: {:#}", e)),
@@ -182,7 +177,7 @@ where
         render_settings: RenderCurlSettings,
     ) -> Result<String> {
         let chat_messages = process_media_urls(
-            self.model_features().supported_media_formats,
+            self.model_features().resolve_media_urls,
             Some(render_settings),
             ctx,
             prompt,
@@ -246,13 +241,8 @@ where
     #[allow(async_fn_in_trait)]
     async fn stream(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> StreamResponse {
         if let RenderedPrompt::Chat(ref chat) = prompt {
-            match process_media_urls(
-                self.model_features().supported_media_formats,
-                None,
-                ctx,
-                chat,
-            )
-            .await
+            match process_media_urls(self.model_features().resolve_media_urls, None, ctx, chat)
+                .await
             {
                 Ok(messages) => return self.stream_chat(ctx, &messages).await,
                 Err(e) => {
@@ -274,7 +264,7 @@ where
 /// We assume b64 with mime-type is the universally accepted format in an API request.
 /// Other formats will be converted into that, depending on what formats are allowed according to supported_media_formats.
 async fn process_media_urls(
-    supported_media_formats: SupportedMediaFormats,
+    supported_media_formats: ResolveMediaUrls,
     render_settings: Option<RenderCurlSettings>,
     ctx: &RuntimeContext,
     chat: &Vec<RenderedChatMessage>,
@@ -320,14 +310,15 @@ async fn process_media_urls(
 }
 
 async fn process_media(
-    supported_media_formats: SupportedMediaFormats,
+    resolve_media_urls: ResolveMediaUrls,
     render_settings: RenderCurlSettings,
     ctx: &RuntimeContext,
     part: &BamlMedia,
 ) -> Result<BamlMedia> {
     match &part.content {
-        // Files are always transformed into base64 with mime-type metadata.
         BamlMediaContent::File(media_file) => {
+            // Files are always transformed into base64 with mime-type attached.
+
             let media_path = media_file.path()?.to_string_lossy().into_owned();
 
             if let Some(ext) = media_file.extension() {
@@ -377,36 +368,72 @@ async fn process_media(
                 mime_type,
             ))
         }
-        // URLs can be converted to either a url with mime-type or base64 with mime-type
         BamlMediaContent::Url(media_url) => {
-            // TODO: openai does not need mime type resolution
+            // URLs may have an attached mime-type or not
+            // URLs can be converted to either a url with mime-type or base64 with mime-type
 
-            Ok(if media_url.mime_type.as_deref().unwrap_or("").is_empty() {
-                let (base64, mime_type) = to_base64(&ctx, media_url).await?;
+            // Here is the table that defines the transformation logic:
+            //
+            //                           ResolveMediaUrls
+            //              --------------------------------------------
+            //              | Never      | EnsureMime   | Always       |
+            //              |------------|--------------|--------------|
+            // url w/o mime | unchanged  | url w/ mime  | b64 w/ mime  |
+            // url w/ mime  | unchanged  | unchanged    | b64 w/ mime  |
 
-                if (render_settings.as_shell_commands) {
-                    return Ok(BamlMedia::base64(
-                        part.media_type,
-                        format!("$(curl -L '{}' | base64)", &media_url.url),
-                        format!("{}/{}", part.media_type, mime_type),
-                    ));
+            // Currently:
+            //  - Vertex is ResolveMediaUrls::EnsureMime and is the only one that supports URLs w/ mime-type
+            //  - OpenAI is ResolveMediaUrls::Never and allows passing in URLs with optionally specified mime-type
+
+            // NOTE(sam): if a provider accepts URLs but requires mime-type
+            // (i.e. Vertex), we currently send it to them as b64. This
+            // is how it was implemented originally, and while that could be
+            // problematic in theory, I'm not going to change it until a
+            // customer complains.
+            match (
+                resolve_media_urls,
+                media_url.mime_type.as_ref().map(|s| s.as_str()),
+            ) {
+                (ResolveMediaUrls::Always, _) => {}
+                (ResolveMediaUrls::EnsureMime, Some("")) | (ResolveMediaUrls::EnsureMime, None) => {
                 }
+                (ResolveMediaUrls::Never, _) | (ResolveMediaUrls::EnsureMime, _) => {
+                    return Ok(part.clone());
+                }
+            }
 
-                BamlMedia::base64(part.media_type, base64, mime_type)
-            } else {
-                part.clone()
-            })
+            let (base64, mime_type) = to_base64_with_inferred_mime_type(&ctx, media_url).await?;
+
+            Ok(BamlMedia::base64(
+                part.media_type,
+                if render_settings.as_shell_commands {
+                    format!("$(curl -L '{}' | base64)", &media_url.url)
+                } else {
+                    base64
+                },
+                mime_type,
+            ))
         }
-        // Base64 without mime-type may need mime-type attached.
         BamlMediaContent::Base64(media_b64) => {
+            // Every provider requires mime-type to be attached when passing in b64 data
+            // Our initial implementation does not enforce that mime_type is set, so an unset
+            // mime_type in a BAML file is actually an empty string when it gets to this point.
+
             if !media_b64.mime_type.is_empty() {
                 return Ok(part.clone());
             }
 
-            let bytes = BASE64_STANDARD.decode(&media_b64.base64).context(format!(
-                "Failed to decode '{}...' as base64 (is it a valid base64 string?)",
-                media_b64.base64.chars().take(10).collect::<String>()
-            ))?;
+            let bytes = BASE64_STANDARD.decode(&media_b64.base64).context(
+                format!(
+                    "Failed to decode '{}...' as base64 ({}); see https://docs.boundaryml.com/docs/snippets/test-cases#images",
+                    media_b64.base64.chars().take(10).collect::<String>(),
+                    if media_b64.base64.starts_with("data:") {
+                        "it looks like a data URL, not a base64 string"
+                    } else {
+                        "is it a valid base64 string?"
+                    }
+                )
+            )?;
 
             Ok(BamlMedia::base64(
                 part.media_type,
@@ -421,7 +448,10 @@ async fn process_media(
     }
 }
 
-async fn to_base64(ctx: &RuntimeContext, media_url: &MediaUrl) -> Result<(String, String)> {
+async fn to_base64_with_inferred_mime_type(
+    ctx: &RuntimeContext,
+    media_url: &MediaUrl,
+) -> Result<(String, String)> {
     if let Some(data_url) = media_url.url.strip_prefix("data:") {
         if let Some((mime_type, base64)) = data_url.split_once(";base64,") {
             return Ok((base64.to_string(), mime_type.to_string()));

@@ -23,7 +23,7 @@ use crate::internal::llm_client::{
         WithStreamChat,
     },
     ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-    ModelFeatures, SupportedMediaFormats,
+    ModelFeatures, ResolveMediaUrls,
 };
 
 use crate::{RenderCurlSettings, RuntimeContext};
@@ -111,10 +111,7 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: true,
-                supported_media_formats: SupportedMediaFormats {
-                    url: false,
-                    b64_no_mime: false,
-                },
+                resolve_media_urls: ResolveMediaUrls::Always,
             },
             retry_policy: client
                 .elem()
@@ -518,34 +515,34 @@ impl TryInto<bedrock::types::Message> for AwsChatMessage<'_> {
                         anyhow::bail!("AWS supports images, but does not support this media type: {:#?}", media)
                     }
                     match &media.content {
-                    // TODO: only render image
-                    BamlMediaContent::File(_) => {
-                        anyhow::bail!(
-                            "BAML internal error (AWSBedrock): file should have been resolved to base64"
-                        )
+                        BamlMediaContent::File(_) => {
+                            anyhow::bail!(
+                                "BAML internal error (AWSBedrock): file should have been resolved to base64"
+                            )
+                        }
+                        BamlMediaContent::Url(_) => {
+                            anyhow::bail!(
+                                "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
+                            )
+                        }
+                        BamlMediaContent::Base64(media) => {
+                            Ok(bedrock::types::ContentBlock::Image(
+                                bedrock::types::ImageBlock::builder()
+                                    .set_format(Some(bedrock::types::ImageFormat::from(
+                                        media
+                                            .mime_type
+                                            .strip_prefix("image/")
+                                            .unwrap_or(media.mime_type.as_str()),
+                                    )))
+                                    .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
+                                        aws_smithy_types::base64::decode(media.base64.clone())?,
+                                    ))))
+                                    .build()
+                                    .context("Failed to build image block")?,
+                            ))
+                        }
                     }
-                    BamlMediaContent::Url(_) => {
-                        anyhow::bail!(
-                            "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
-                        )
-                    }
-                    BamlMediaContent::Base64(media) => {
-                        Ok(bedrock::types::ContentBlock::Image(
-                            bedrock::types::ImageBlock::builder()
-                                .set_format(Some(bedrock::types::ImageFormat::from(
-                                    media
-                                        .mime_type
-                                        .strip_prefix("image/")
-                                        .unwrap_or(media.mime_type.as_str()),
-                                )))
-                                .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
-                                    aws_smithy_types::base64::decode(media.base64.clone())?,
-                                ))))
-                                .build()
-                                .context("Failed to build image block")?,
-                        ))
-                    }
-                }},
+                },
             })
             .collect::<Result<_>>()?;
 
