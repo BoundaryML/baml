@@ -94,25 +94,18 @@ type WasmChatMessagePartMedia =
     }
 
 const WebviewImage: React.FC<{ image?: WasmChatMessagePartMedia }> = ({ image }) => {
-  const [imageUrl, setImageUrl] = useState<string | null>(null)
-  console.log('webview image', image)
+  const [imageUrl, setImageUrl] = useState<string | null>(image && image.type === 'url' ? image.url : null)
 
   if (!image) {
     return <div>BAML internal error: chat message part is not image</div>
   }
-
-  if (image.type === 'url') {
-    console.log('image.url', image.url)
-    // setImageUrl(image.url)
+  if (image.type === 'path') {
+    ;(async () => {
+      const imageUrl = await vscode.asWebviewUri('', image.path)
+      console.log('image path', imageUrl)
+      setImageUrl(imageUrl)
+    })()
   }
-  // ;(async () => {
-  //   if (image.type !== 'path') {
-  //     return
-  //   }
-  //   const imageUrl = await vscode.asWebviewUri('', image.path)
-  //   console.log('image path', imageUrl)
-  //   setImageUrl(imageUrl)
-  // })()
 
   if (image.type === 'error') {
     return <div>Error loading image: {image.error}</div>
@@ -122,29 +115,24 @@ const WebviewImage: React.FC<{ image?: WasmChatMessagePartMedia }> = ({ image })
     return <div>Loading image...</div>
   }
 
-  return <div>image: {imageUrl}</div>
-  // return (
-  //   <a href={imageUrl} target='_blank' rel='noopener noreferrer'>
-  //     <img src={imageUrl} className='max-w-[400px] object-cover' />
-  //   </a>
-  // )
+  // return <div>image: {imageUrl}</div>
+  return (
+    <a href={imageUrl} target='_blank' rel='noopener noreferrer'>
+      <img src={imageUrl} className='max-w-[400px] object-cover' />
+    </a>
+  )
 }
 
 const WebviewAudio: React.FC<{ audio?: WasmChatMessagePartMedia }> = ({ audio }) => {
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [audioUrl, setAudioUrl] = useState<string | null>(audio && audio.type === 'url' ? audio.url : null)
   if (!audio) {
     return <div>BAML internal error: chat message part is not audio</div>
   }
-  // ;(async () => {
-  //   if (audio.type !== 'path') {
-  //     return
-  //   }
-  //   const imageUrl = await vscode.asWebviewUri('', audio.path)
-  //   setAudioUrl(imageUrl)
-  // })()
-
-  if (audio.type === 'url') {
-    setAudioUrl(audio.url)
+  if (audio.type === 'path') {
+    ;(async () => {
+      const imageUrl = await vscode.asWebviewUri('', audio.path)
+      setAudioUrl(imageUrl)
+    })()
   }
 
   if (audio.type === 'error') {

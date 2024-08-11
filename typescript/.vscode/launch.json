@@ -8,7 +8,7 @@
       "runtimeExecutable": "${execPath}",
       "sourceMaps": true,
       "args": [
-        "--crash-reporter-directory=${workspaceFolder}/vscode-ext/crash-reporter",
+        "--crash-reporter-directory=/Users/sam/baml/vscode-ext/crash-reporter",
         "--extensionDevelopmentPath=${workspaceFolder}/vscode-ext/packages",
         "--disable-extensions",
       ],
