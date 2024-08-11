@@ -124,25 +124,14 @@ GIT_DIFF_OUTPUT=$(git diff ${PRE_BUMP_VERSION} -- 'engine/language_client_codege
 if [ -z "$GIT_DIFF_OUTPUT" ]; then
     echo "No changes detected."
     CODE_GEN_CHANGES=0
+    GIT_DIFF_OUTPUT=0
 else
     CODE_GEN_CHANGES=$(echo "$GIT_DIFF_OUTPUT" | grep -c '^diff --git')
     echo "Detected changes: $CODE_GEN_CHANGES"
 fi
 
 
-echo "Git diff output:"
-echo "$GIT_DIFF_OUTPUT"
-DIFFS=$(echo "$GIT_DIFF_OUTPUT" | grep '^diff --git')
-if [ $? -ne 0 ]; then
-    echo "No 'diff --git' lines found in git diff output."
-    CODE_GEN_CHANGES=0
-else
-    # Count the number of lines if diffs were found
-    CODE_GEN_CHANGES=$(echo "$DIFFS" | wc -l)
-fi
-
 echo "Number of code generation changes since $PRE_BUMP_VERSION: $CODE_GEN_CHANGES"
-
 
 
 if [ "$CODE_GEN_CHANGES" -gt 0 ]; then
