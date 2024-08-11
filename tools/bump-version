@@ -121,7 +121,8 @@ echo "Checking for code generation changes since ${PRE_BUMP_VERSION}..."
 
 CODE_GEN_CHANGES=$(git diff ${PRE_BUMP_VERSION} -- 'engine/language_client_codegen/src' | grep -c '^diff --git')
 
-echo "Code generation changes: ${CODE_GEN_CHANGES}"
+echo "Code generation changes:"
+echo "$CODE_GEN_CHANGES"
 
 if [ "$CODE_GEN_CHANGES" -gt 0 ]; then
     version_bump="minor"
