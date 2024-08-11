@@ -5,7 +5,8 @@
 # Bumps the version of the project.
 # After you merge that in, manually set the release.
 
-set -euo pipefail
+set -uo pipefail
+set +e
 
 #debug mode
 set -x
