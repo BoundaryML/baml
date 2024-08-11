@@ -5,10 +5,10 @@
 # Bumps the version of the project.
 # After you merge that in, manually set the release.
 
-set -eu
+set -euo pipefail
 
 #debug mode
-set -x
+# set -x
 trap 'echo "Error on line $LINENO"' ERR
 
 show_help() {
