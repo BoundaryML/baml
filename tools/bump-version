@@ -119,21 +119,15 @@ fi
 PRE_BUMP_VERSION=$(grep "current_version =" tools/versions/engine.cfg | awk '{print $3}')
 echo "Checking for code generation changes since ${PRE_BUMP_VERSION}..."
 
-echo "Checking if directory path is correct and contains files..."
-if [ ! -d "engine/language_client_codegen/src" ] || [ -z "$(ls -A engine/language_client_codegen/src)" ]; then
-    echo "Error: Directory path 'engine/language_client_codegen/src' is incorrect or empty."
-    exit 1
+echo "Running git diff to see any changes from $PRE_BUMP_VERSION..."
+GIT_DIFF_OUTPUT=$(git diff $PRE_BUMP_VERSION -- 'engine/language_client_codegen/src')
+if [ -z "$GIT_DIFF_OUTPUT" ]; then
+    echo "No changes detected from version $PRE_BUMP_VERSION in specified path."
 else
-    echo "Directory path is correct and contains files."
+    echo "Changes detected:"
+    echo "$GIT_DIFF_OUTPUT"
 fi
 
-
-echo "Running git diff from version $PRE_BUMP_VERSION..."
-GIT_DIFF_OUTPUT=$(git diff ${PRE_BUMP_VERSION} -- 'engine/language_client_codegen/src')
-if [ $? -ne 0 ]; then
-    echo "Error: git diff command failed."
-    exit 1
-fi
 
 echo "Git diff output:"
 echo "$GIT_DIFF_OUTPUT"
