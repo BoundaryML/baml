@@ -9,7 +9,7 @@ set -eu
 
 #debug mode
 set -x
-# trap 'echo "Error on line $LINENO"' ERR
+trap 'echo "Error on line $LINENO"' ERR
 
 show_help() {
   cat <<EOF
@@ -119,10 +119,19 @@ fi
 PRE_BUMP_VERSION=$(grep "current_version =" tools/versions/engine.cfg | awk '{print $3}')
 echo "Checking for code generation changes since ${PRE_BUMP_VERSION}..."
 
-CODE_GEN_CHANGES=$(git diff ${PRE_BUMP_VERSION} -- 'engine/language_client_codegen/src' | grep -c '^diff --git')
+echo "Running git diff from version $PRE_BUMP_VERSION..."
+GIT_DIFF_OUTPUT=$(git diff ${PRE_BUMP_VERSION} -- 'engine/language_client_codegen/src')
+if [ $? -ne 0 ]; then
+    echo "Error: git diff command failed."
+    exit 1
+fi
 
-echo "Code generation changes:"
-echo "$CODE_GEN_CHANGES"
+echo "Git diff output:"
+echo "$GIT_DIFF_OUTPUT"
+
+CODE_GEN_CHANGES=$(echo "$GIT_DIFF_OUTPUT" | grep -c '^diff --git')
+echo "Number of code generation changes since $PRE_BUMP_VERSION: $CODE_GEN_CHANGES"
+
 
 if [ "$CODE_GEN_CHANGES" -gt 0 ]; then
     version_bump="minor"
