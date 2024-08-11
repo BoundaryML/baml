@@ -9,7 +9,7 @@ set -eu
 
 #debug mode
 set -x
-trap 'echo "Error on line $LINENO"' ERR
+# trap 'echo "Error on line $LINENO"' ERR
 
 show_help() {
   cat <<EOF
