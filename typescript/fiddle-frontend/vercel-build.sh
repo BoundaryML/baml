@@ -2,23 +2,6 @@
 set -x
 set -e
 
-# Install LLVM and Clang
-LLVM_VERSION=12  # Specify the version you need
-CLANG_VERSION=12  # Specify the version you need
-
-echo "Installing LLVM version $LLVM_VERSION and Clang version $CLANG_VERSION"
-
-# Update package list and install LLVM and Clang
-apt-get update
-apt-get install -y llvm-$LLVM_VERSION clang-$CLANG_VERSION
-
-# Optionally, set environment variables or update PATH
-LLVM_PATH=/usr/lib/llvm-$LLVM_VERSION
-export PATH=$LLVM_PATH/bin:$PATH
-
-echo "LLVM and Clang installed successfully"
-
-# Existing script
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y
 export PATH="/vercel/.cargo/bin:$PATH"
 
