@@ -117,15 +117,16 @@ if ! git diff --quiet; then
 fi
 
 PRE_BUMP_VERSION=$(grep "current_version =" tools/versions/engine.cfg | awk '{print $3}')
-echo "Checking for code generation changes since ${PRE_BUMP_VERSION}..."
 
-echo "Running git diff to see any changes from $PRE_BUMP_VERSION..."
-GIT_DIFF_OUTPUT=$(git diff $PRE_BUMP_VERSION -- 'engine/language_client_codegen/src')
+echo "Checking for changes from version $PRE_BUMP_VERSION in 'engine/language_client_codegen/src'..."
+GIT_DIFF_OUTPUT=$(git diff ${PRE_BUMP_VERSION} -- 'engine/language_client_codegen/src')
+
 if [ -z "$GIT_DIFF_OUTPUT" ]; then
-    echo "No changes detected from version $PRE_BUMP_VERSION in specified path."
+    echo "No changes detected."
+    CODE_GEN_CHANGES=0
 else
-    echo "Changes detected:"
-    echo "$GIT_DIFF_OUTPUT"
+    CODE_GEN_CHANGES=$(echo "$GIT_DIFF_OUTPUT" | grep -c '^diff --git')
+    echo "Detected changes: $CODE_GEN_CHANGES"
 fi
 
 
