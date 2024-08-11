@@ -129,6 +129,7 @@ else
     echo "No code generation changes detected since ${PRE_BUMP_VERSION}. Recommending a \033[32mpatch\033[0m version bump."
 fi
 
+echo "Please confirm the version bump type."
 read -p $'Please confirm the version bump type (\033[33mminor\033[0m / \033[32mpatch\033[0m): ' user_confirmation
 if [[ "$user_confirmation" != "$version_bump" ]]; then
     echo "\033[31mWarning: Confirmation does not match the recommended version bump type.\033[0m"
