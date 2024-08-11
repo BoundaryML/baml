@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.53.1](https://github.com/boundaryml/baml/compare/0.53.0..0.53.1) - 2024-08-11
+
+### Bug Fixes
+
+- fix github release not passing params to napi script causing issues in x86_64 (#872)
+
+- ([06b962b](https://github.com/boundaryml/baml/commit/06b962b945f958bf0637d13fec22bd2d59c64c5f)) - aaronvg
+
+### Features
+
+- Add Client orchestration graph in playground (#801) - ([24b5895](https://github.com/boundaryml/baml/commit/24b5895a1f45ac04cba0f19e6da727b5ee766186)) - Anish Palakurthi
+- increase range of python FFI support (#870) - ([ec9b66c](https://github.com/boundaryml/baml/commit/ec9b66c31faf97a58c81c264c7fa1b32e0e9f0ae)) - Samuel Lijin
+
+### Misc
+
+- Bump version to 0.53.1 - ([e4301e3](https://github.com/boundaryml/baml/commit/e4301e37835483f51edf1cad6478e46ff67508fc)) - Aaron Villalpando
+
 ## [0.53.0](https://github.com/boundaryml/baml/compare/0.52.1..0.53.0) - 2024-08-05
 
 ### Bug Fixes
