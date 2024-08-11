@@ -283,55 +283,6 @@ async fn process_media_urls(
         stream: false,
         as_shell_commands: false,
     });
-    if (render_settings.as_shell_commands) {
-        return Ok(chat
-            .iter()
-            .map(|p| RenderedChatMessage {
-                role: p.role.clone(),
-                parts: p
-                    .parts
-                    .iter()
-                    .map(|p| {
-                        let ChatMessagePart::Media(m) = p else {
-                            return p.clone();
-                        };
-                        let processed = match &m.content {
-                            BamlMediaContent::File(media_file) => {
-                                let ext =
-                                    match std::path::Path::new(&media_file.relpath).extension() {
-                                        Some(ext) => ext.to_string_lossy(),
-                                        None => "".into(),
-                                    };
-                                let media_path = match media_file.baml_path.parent() {
-                                    Some(parent) => parent
-                                        .join(&media_file.relpath)
-                                        .to_string_lossy()
-                                        .into_owned(),
-                                    None => media_file.relpath.clone(),
-                                };
-                                BamlMediaContent::Base64(MediaBase64 {
-                                    base64: format!(
-                                        "$(base64 '{}')",
-                                        media_path
-                                            .strip_prefix("file://")
-                                            .unwrap_or(media_path.as_str())
-                                    ),
-                                    mime_type: format!("image/{ext}"),
-                                })
-                            }
-                            BamlMediaContent::Base64(b64) => BamlMediaContent::Base64(b64.clone()),
-                            BamlMediaContent::Url(url) => BamlMediaContent::Url(url.clone()),
-                        };
-
-                        ChatMessagePart::Media(BamlMedia {
-                            media_type: m.media_type.clone(),
-                            content: processed,
-                        })
-                    })
-                    .collect(),
-            })
-            .collect());
-    }
     let messages_result = futures::stream::iter(chat.iter().map(|p| {
         let new_parts = p
             .parts
@@ -340,128 +291,9 @@ async fn process_media_urls(
                 let ChatMessagePart::Media(part) = any_part else {
                     return Ok(any_part.clone());
                 };
-                match &part.content {
-                    BamlMediaContent::File(media_file) => {
-                        let Some(ref baml_src_reader) = *ctx.baml_src else {
-                            anyhow::bail!("Internal error: no baml src reader provided");
-                        };
-
-                        // TODO: ask the proxy in wasm
-                        let media_path = media_file
-                            .baml_path
-                            .parent()
-                            .context("Internal error: no path to resolve against")?
-                            .join(&media_file.relpath);
-                        let bytes = baml_src_reader(media_path.as_os_str())
-                            .await
-                            .context(format!("Failed to read file {:#}", media_path.display()))?;
-
-                        // let inferred_type = infer::get(&bytes);
-                        // if media_file.media_type.is_empty() {
-                        //     let mime_type = inferred_type
-                        //         .map(|t| t.extension().to_string())
-                        //         .unwrap_or_else(|| "application/octet-stream".into());
-                        // } else {
-                        //     Ok(part.clone())
-                        // }
-                        Ok(ChatMessagePart::Media(BamlMedia::base64(
-                            part.media_type,
-                            BASE64_STANDARD.encode(&bytes),
-                            media_file
-                                .mime_type
-                                .clone()
-                                // TODO: actually infer the media type
-                                .unwrap_or(format!("{}/???", part.media_type)),
-                        )))
-                    }
-                    BamlMediaContent::Url(media_url) => {
-                        // TODO: openai does not need mime type resolution
-                        if media_url.mime_type.as_deref().unwrap_or("").is_empty() {
-                            let (base64, mime_type) = if media_url.url.starts_with("data:") {
-                                let parts: Vec<&str> = media_url.url.splitn(2, ',').collect();
-
-                                let base64 = parts.get(1).unwrap().to_string();
-                                let prefix = parts.get(0).unwrap();
-                                let mime_type = prefix
-                                    .splitn(2, ':')
-                                    .nth(1)
-                                    .unwrap()
-                                    .split('/')
-                                    .nth(1)
-                                    .unwrap()
-                                    .split(';')
-                                    .next()
-                                    .unwrap()
-                                    .to_string();
-
-                                (base64, mime_type)
-                            } else {
-                                let response = match fetch_with_proxy(
-                                    &media_url.url,
-                                    ctx.env
-                                        .get("BOUNDARY_PROXY_URL")
-                                        .as_deref()
-                                        .map(|s| s.as_str()),
-                                )
-                                .await
-                                {
-                                    Ok(response) => response,
-                                    Err(e) => {
-                                        return Err(anyhow::anyhow!("Failed to fetch media: {e:?}"))
-                                    }
-                                };
-                                let bytes = match response.bytes().await {
-                                    Ok(bytes) => bytes,
-                                    Err(e) => {
-                                        return Err(anyhow::anyhow!(
-                                            "Failed to fetch media bytes: {e:?}"
-                                        ))
-                                    }
-                                };
-                                let base64 = BASE64_STANDARD.encode(&bytes);
-                                // TODO: infer based on file extension?
-                                let inferred_type = infer::get(&bytes);
-                                let mime_type = inferred_type.map_or_else(
-                                    || "application/octet-stream".into(),
-                                    |t| t.extension().into(),
-                                );
-                                (base64, mime_type)
-                            };
-
-                            Ok(ChatMessagePart::Media(BamlMedia::base64(
-                                part.media_type,
-                                base64,
-                                format!("{}/{}", part.media_type, mime_type),
-                            )))
-                        } else {
-                            Ok(any_part.clone())
-                        }
-                    }
-                    BamlMediaContent::Base64(media_b64) => {
-                        if media_b64.mime_type.is_empty() {
-                            let bytes = match BASE64_STANDARD.decode(&media_b64.base64) {
-                                Ok(bytes) => bytes,
-                                Err(e) => {
-                                    return Err(anyhow::anyhow!(
-                                        "Failed to decode base64 media: {e:?}"
-                                    ))
-                                }
-                            };
-                            let inferred_type = infer::get(&bytes);
-                            let mime_type = inferred_type
-                                .map(|t| t.extension().to_string())
-                                .unwrap_or_else(|| "application/octet-stream".into());
-
-                            Ok(ChatMessagePart::Media(BamlMedia::base64(
-                                part.media_type,
-                                media_b64.base64.clone(),
-                                format!("{}/{}", part.media_type, mime_type),
-                            )))
-                        } else {
-                            Ok(any_part.clone())
-                        }
-                    }
-                }
+                process_media(supported_media_formats, render_settings, ctx, part)
+                    .await
+                    .map(ChatMessagePart::Media)
             })
             .collect::<Vec<_>>();
         async move {
@@ -485,6 +317,140 @@ async fn process_media_urls(
     .collect::<Result<Vec<_>, _>>();
 
     messages_result
+}
+
+async fn process_media(
+    supported_media_formats: SupportedMediaFormats,
+    render_settings: RenderCurlSettings,
+    ctx: &RuntimeContext,
+    part: &BamlMedia,
+) -> Result<BamlMedia> {
+    match &part.content {
+        // Files are always transformed into base64 with mime-type metadata.
+        BamlMediaContent::File(media_file) => {
+            let media_path = media_file.path()?.to_string_lossy().into_owned();
+
+            if let Some(ext) = media_file.extension() {
+                if render_settings.as_shell_commands {
+                    return Ok(BamlMedia::base64(
+                        part.media_type,
+                        format!(
+                            "$(base64 '{}')",
+                            media_path
+                                .strip_prefix("file://")
+                                .unwrap_or(media_path.as_str())
+                        ),
+                        format!("image/{}", ext),
+                    ));
+                }
+            }
+
+            let Some(ref baml_src_reader) = *ctx.baml_src else {
+                anyhow::bail!("Internal error: no baml src reader provided");
+            };
+
+            let bytes = baml_src_reader(media_path.as_str())
+                .await
+                .context(format!("Failed to read file {:#}", media_path))?;
+
+            let mime_type = match media_file.extension() {
+                Some(ext) => format!("image/{}", ext),
+                None => match infer::get(&bytes) {
+                    Some(t) => t.mime_type(),
+                    None => "application/octet-stream",
+                }
+                .to_string(),
+            };
+
+            Ok(BamlMedia::base64(
+                part.media_type,
+                if render_settings.as_shell_commands {
+                    format!(
+                        "$(base64 '{}')",
+                        media_path
+                            .strip_prefix("file://")
+                            .unwrap_or(media_path.as_str())
+                    )
+                } else {
+                    BASE64_STANDARD.encode(&bytes)
+                },
+                mime_type,
+            ))
+        }
+        // URLs can be converted to either a url with mime-type or base64 with mime-type
+        BamlMediaContent::Url(media_url) => {
+            // TODO: openai does not need mime type resolution
+
+            Ok(if media_url.mime_type.as_deref().unwrap_or("").is_empty() {
+                let (base64, mime_type) = to_base64(&ctx, media_url).await?;
+
+                if (render_settings.as_shell_commands) {
+                    return Ok(BamlMedia::base64(
+                        part.media_type,
+                        format!("$(curl -L '{}' | base64)", &media_url.url),
+                        format!("{}/{}", part.media_type, mime_type),
+                    ));
+                }
+
+                BamlMedia::base64(part.media_type, base64, mime_type)
+            } else {
+                part.clone()
+            })
+        }
+        // Base64 without mime-type may need mime-type attached.
+        BamlMediaContent::Base64(media_b64) => {
+            if !media_b64.mime_type.is_empty() {
+                return Ok(part.clone());
+            }
+
+            let bytes = BASE64_STANDARD.decode(&media_b64.base64).context(format!(
+                "Failed to decode '{}...' as base64 (is it a valid base64 string?)",
+                media_b64.base64.chars().take(10).collect::<String>()
+            ))?;
+
+            Ok(BamlMedia::base64(
+                part.media_type,
+                media_b64.base64.clone(),
+                match infer::get(&bytes) {
+                    Some(t) => t.mime_type(),
+                    None => "application/octet-stream",
+                }
+                .to_string(),
+            ))
+        }
+    }
+}
+
+async fn to_base64(ctx: &RuntimeContext, media_url: &MediaUrl) -> Result<(String, String)> {
+    if let Some(data_url) = media_url.url.strip_prefix("data:") {
+        if let Some((mime_type, base64)) = data_url.split_once(";base64,") {
+            return Ok((base64.to_string(), mime_type.to_string()));
+        }
+    }
+    let response = match fetch_with_proxy(
+        &media_url.url,
+        ctx.env
+            .get("BOUNDARY_PROXY_URL")
+            .as_deref()
+            .map(|s| s.as_str()),
+    )
+    .await
+    {
+        Ok(response) => response,
+        Err(e) => return Err(anyhow::anyhow!("Failed to fetch media: {e:?}")),
+    };
+    let bytes = match response.bytes().await {
+        Ok(bytes) => bytes,
+        Err(e) => return Err(anyhow::anyhow!("Failed to fetch media bytes: {e:?}")),
+    };
+    let base64 = BASE64_STANDARD.encode(&bytes);
+    // TODO: infer based on file extension?
+    let mime_type = match infer::get(&bytes) {
+        Some(t) => t.mime_type(),
+        None => "application/octet-stream",
+    }
+    .to_string();
+    Ok((base64, mime_type))
 }
 
 async fn fetch_with_proxy(

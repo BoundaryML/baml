@@ -904,6 +904,7 @@ dependencies = [
 name = "baml-types"
 version = "0.53.1"
 dependencies = [
+ "anyhow",
  "indexmap 2.2.6",
  "minijinja",
  "serde",

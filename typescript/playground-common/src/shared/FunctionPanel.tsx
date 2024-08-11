@@ -12,6 +12,7 @@ import {
   orchestration_nodes,
   GroupEntry,
   Edge,
+  expandImages,
 } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
@@ -42,6 +43,14 @@ const CurlSnippet: React.FC = () => {
             onCheckedChange={useSetAtom(streamCurl)}
           />
           <span>View Stream Request</span>
+        </label>
+        <label className='flex items-center mr-2 space-x-1'>
+          <Switch
+            className='data-[state=checked]:bg-vscode-button-background data-[state=unchecked]:bg-vscode-input-background'
+            checked={useAtomValue(expandImages)}
+            onCheckedChange={useSetAtom(expandImages)}
+          />
+          <span>Expand images as base64</span>
         </label>
         <Button
           onClick={handleCopy(rawCurl)}

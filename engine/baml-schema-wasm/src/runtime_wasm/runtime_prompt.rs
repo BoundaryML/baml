@@ -98,7 +98,7 @@ impl WasmChatMessagePart {
         Some(match &m.content {
             BamlMediaContent::Url(u) => u.url.clone(),
             BamlMediaContent::Base64(b) => b.base64.clone(),
-            BamlMediaContent::File(f) => match f.baml_path.parent() {
+            BamlMediaContent::File(f) => match f.span_path.parent() {
                 // TODO: this doesn't handle non-UTF8 paths
                 Some(parent) => parent.join(&f.relpath).to_string_lossy().into_owned(),
                 None => "<error: unresolveable path>".to_string(),
@@ -116,7 +116,7 @@ impl WasmChatMessagePart {
             BamlMediaContent::Base64(MediaBase64 { base64, mime_type }) => {
                 format!("data:{};base64,{}", mime_type, base64.clone())
             }
-            BamlMediaContent::File(f) => match f.baml_path.parent() {
+            BamlMediaContent::File(f) => match f.span_path.parent() {
                 // TODO: this doesn't handle non-UTF8 paths
                 Some(parent) => parent.join(&f.relpath).to_string_lossy().into_owned(),
                 None => "<error: unresolveable path>".to_string(),

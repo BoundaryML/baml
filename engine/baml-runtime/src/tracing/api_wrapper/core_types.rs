@@ -150,13 +150,13 @@ pub enum ContentPart {
     #[serde(rename = "text")]
     Text(String),
     #[serde(rename = "file_image")]
-    FileImage(PathBuf, String),
+    FileImage(String, String),
     #[serde(rename = "url_image")]
     UrlImage(String),
     #[serde(rename = "b64_image")]
     B64Image(String),
     #[serde(rename = "file_audio")]
-    FileAudio(PathBuf, String),
+    FileAudio(String, String),
     #[serde(rename = "url_audio")]
     UrlAudio(String),
     #[serde(rename = "b64_audio")]

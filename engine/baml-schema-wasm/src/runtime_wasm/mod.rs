@@ -1314,7 +1314,7 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
     Some(Box::new(move |path| {
         Box::pin({
             // TODO: this doesn't handle non-UTF8 paths
-            let path = path.to_string_lossy().into_owned();
+            let path = path.to_string();
             let get_baml_src_cb = get_baml_src_cb.clone();
             async move {
                 let null = JsValue::NULL;
@@ -1413,6 +1413,7 @@ impl WasmFunction {
         test_name: String,
         wasm_call_context: &WasmCallContext,
         stream: bool,
+        expand_images: bool,
         get_baml_src_cb: js_sys::Function,
     ) -> Result<String, wasm_bindgen::JsError> {
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
@@ -1453,7 +1454,7 @@ impl WasmFunction {
                 &final_prompt,
                 RenderCurlSettings {
                     stream,
-                    as_shell_commands: true,
+                    as_shell_commands: !expand_images,
                 },
                 wasm_call_context.node_index,
             )

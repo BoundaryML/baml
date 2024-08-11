@@ -628,15 +628,15 @@ impl From<&RenderedPrompt> for Template {
                                             BamlMediaType::Image,
                                             baml_types::BamlMediaContent::File(data),
                                         ) => ContentPart::FileImage(
-                                            data.baml_path.clone(),
-                                            data.relpath.clone(),
+                                            data.span_path.to_string_lossy().into_owned(),
+                                            data.relpath.to_string_lossy().into_owned(),
                                         ),
                                         (
                                             BamlMediaType::Audio,
                                             baml_types::BamlMediaContent::File(data),
                                         ) => ContentPart::FileAudio(
-                                            data.baml_path.clone(),
-                                            data.relpath.clone(),
+                                            data.span_path.to_string_lossy().into_owned(),
+                                            data.relpath.to_string_lossy().into_owned(),
                                         ),
                                         (
                                             BamlMediaType::Image,

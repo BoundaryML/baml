@@ -545,9 +545,7 @@ impl TryInto<bedrock::types::Message> for AwsChatMessage<'_> {
                                 .context("Failed to build image block")?,
                         ))
                     }
-                    _ => anyhow::bail!("AWS does not support this media type: {:#?}", media),
                 }},
-                _ => anyhow::bail!("AWS does not support this message part type: {:#?}", part),
             })
             .collect::<Result<_>>()?;
 

@@ -369,6 +369,7 @@ export const availableFunctionsAtom = atom((get) => {
 })
 
 export const streamCurl = atom(true)
+export const expandImages = atom(false)
 
 const asyncCurlAtom = atom(async (get) => {
   const runtime = get(selectedRuntimeAtom)
@@ -389,6 +390,7 @@ const asyncCurlAtom = atom(async (get) => {
       test_case.name,
       wasmCallContext,
       get(streamCurl),
+      get(expandImages),
       async (path: string) => {
         return await vscode.readFile(path)
       },

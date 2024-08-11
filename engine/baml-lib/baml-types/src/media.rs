@@ -1,6 +1,7 @@
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use std::{fmt, path::PathBuf};
+use std::{borrow::Cow, fmt, path::PathBuf};
 
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum BamlMediaType {
@@ -42,8 +43,8 @@ impl BamlMedia {
         Self {
             media_type,
             content: BamlMediaContent::File(MediaFile {
-                baml_path,
-                relpath,
+                span_path: baml_path,
+                relpath: relpath.into(),
                 mime_type: Some(mime_type.unwrap_or_else(|| "".to_string())),
             }),
         }
@@ -68,19 +69,36 @@ impl BamlMedia {
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+/// NB: baml_path and relpath are Path objects to simplify path manipulation (joining,
+/// extension parsing), and can both be safely converted to `String` using
+/// `.to_lossy_string()` because file refs can only be instantiated using BAML code,
+/// which must be UTF-8 and cannot reference non-UTF-8 paths
 pub struct MediaFile {
     /// Path of the BAML file containing the media file
-    pub baml_path: PathBuf,
+    pub span_path: PathBuf,
     /// The path provided as the "file" value, e.g. in
     /// "image { file path/to/image.png }", this would be "path/to/image.png"
     /// and should be interpreted relative to the parent dir of baml_path
-    pub relpath: String,
+    pub relpath: PathBuf,
     pub mime_type: Option<String>,
+}
+
+impl MediaFile {
+    pub fn path(&self) -> Result<PathBuf> {
+        Ok(self
+            .span_path
+            .parent()
+            .context("Internal error: no path to resolve against")?
+            .join(&self.relpath))
+    }
+    pub fn extension(&self) -> Option<Cow<str>> {
+        self.relpath.extension().map(|ext| ext.to_string_lossy())
+    }
 }
 
 impl fmt::Display for MediaFile {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.relpath)
+        write!(f, "{}", self.relpath.display())
     }
 }
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

@@ -41,9 +41,9 @@ pub struct RuntimeClassOverride {
 // pub type BamlSrcReader = fn(&str) -> Result<String>;
 cfg_if::cfg_if!(
     if #[cfg(target_arch = "wasm32")] {
-        pub type BamlSrcReader = Option<Box<dyn Fn(&OsStr) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
+        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
     } else {
-        pub type BamlSrcReader = Option<Box<fn(&OsStr) -> BoxFuture<'static, Result<Vec<u8>>>>>;
+        pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, Result<Vec<u8>>>>>;
     }
 );
 
