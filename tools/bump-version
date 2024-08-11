@@ -105,7 +105,7 @@ cd "${_repo_root}"
 git pull --tags
 
 
-echo "Checking git diff for code generation changes..."
+echo "Checking git diff..."
 # # Ensure clean git status
 if ! git diff --quiet; then
     echo "Error: Git status is not clean. Please commit or stash your changes."
@@ -113,6 +113,7 @@ if ! git diff --quiet; then
 fi
 
 PRE_BUMP_VERSION=$(grep "current_version =" tools/versions/engine.cfg | awk '{print $3}')
+echo "Checking for code generation changes since ${PRE_BUMP_VERSION}..."
 
 CODE_GEN_CHANGES=$(git diff ${PRE_BUMP_VERSION} -- 'engine/language_client_codegen/src' | grep -c '^diff --git')
 
