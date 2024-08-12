@@ -116,7 +116,9 @@ const WebviewImage: React.FC<{ image?: WasmChatMessagePartMedia }> = ({ image })
   }
 
   return image.type === 'path' ? (
-    <img src={imageUrl} alt={image.path} className='max-h-[400px] max-w-[400px] object-left-top object-scale-down' />
+    <a href={image.path.replace('file://', 'vscode://file/')} target='_blank' rel='noopener noreferrer'>
+      <img src={imageUrl} alt={image.path} className='max-h-[400px] max-w-[400px] object-left-top object-scale-down' />
+    </a>
   ) : (
     <a href={imageUrl} target='_blank' rel='noopener noreferrer'>
       <img src={imageUrl} className='max-h-[400px] max-w-[400px] object-left-top object-scale-down' />
