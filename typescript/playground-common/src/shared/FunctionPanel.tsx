@@ -1,7 +1,7 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
-import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import React, { Suspense, useCallback, useEffect, useState } from 'react'
+import { useAtomValue, useSetAtom } from 'jotai'
+import React, { useState } from 'react'
 
 import '@xyflow/react/dist/style.css'
 import {
@@ -9,9 +9,6 @@ import {
   selectedFunctionAtom,
   curlAtom,
   streamCurl,
-  orchestration_nodes,
-  GroupEntry,
-  Edge,
   expandImages,
 } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
@@ -23,10 +20,7 @@ import { Copy } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { CheckboxHeader } from './CheckboxHeader'
 import { Switch } from '../components/ui/switch'
-import CustomErrorBoundary from '../utils/ErrorFallback'
 import { vscode } from '../utils/vscode'
-import { url } from 'inspector'
-import { error } from 'console'
 
 const handleCopy = (text: string) => () => {
   navigator.clipboard.writeText(text)
@@ -94,31 +88,38 @@ type WasmChatMessagePartMedia =
     }
 
 const WebviewImage: React.FC<{ image?: WasmChatMessagePartMedia }> = ({ image }) => {
-  const [imageUrl, setImageUrl] = useState<string | null>(image && image.type === 'url' ? image.url : null)
+  const [fileUrl, setFileUrl] = useState<string | null>(null)
 
   if (!image) {
     return <div>BAML internal error: chat message part is not image</div>
   }
-  if (image.type === 'path') {
-    ;(async () => {
-      const imageUrl = await vscode.asWebviewUri('', image.path)
-      console.log('image path', imageUrl)
-      setImageUrl(imageUrl)
-    })()
-  }
 
-  if (image.type === 'error') {
-    return <div>Error loading image: {image.error}</div>
+  let imageUrl = null
+
+  switch (image.type) {
+    case 'url':
+      imageUrl = image.url
+      break
+    case 'path':
+      ;(async () => {
+        const fileUrl = await vscode.asWebviewUri('', image.path)
+        setFileUrl(fileUrl)
+      })()
+      imageUrl = fileUrl
+      break
+    case 'error':
+      return <div>Error loading image: {image.error}</div>
   }
 
   if (!imageUrl) {
     return <div>Loading image...</div>
   }
 
-  // return <div>image: {imageUrl}</div>
-  return (
+  return image.type === 'path' ? (
+    <img src={imageUrl} alt={image.path} className='max-h-[400px] max-w-[400px] object-left-top object-scale-down' />
+  ) : (
     <a href={imageUrl} target='_blank' rel='noopener noreferrer'>
-      <img src={imageUrl} className='max-w-[400px] object-cover' />
+      <img src={imageUrl} className='max-h-[400px] max-w-[400px] object-left-top object-scale-down' />
     </a>
   )
 }
