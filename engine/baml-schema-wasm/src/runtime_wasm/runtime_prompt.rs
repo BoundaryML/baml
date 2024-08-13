@@ -106,9 +106,9 @@ impl WasmChatMessagePart {
                 "url": u.url.clone(),
 
             }),
-            BamlMediaContent::Base64(MediaBase64 { base64, mime_type }) => json!({
+            BamlMediaContent::Base64(MediaBase64 { base64 }) => json!({
                 "type": "url",
-                "url": format!("data:{};base64,{}", mime_type, base64.clone())
+                "url": format!("data:{};base64,{}", m.mime_type.as_deref().unwrap_or(""), base64.clone())
             }),
             BamlMediaContent::File(f) => match f.path() {
                 Ok(path) => json!({
