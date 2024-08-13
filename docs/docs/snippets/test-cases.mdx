@@ -97,19 +97,14 @@ test Test1 {
   functions [MyFunction]
   args {
     myImage {
-      file "baml_src://path/to/image.png"
-      media_type "image/png"
+      file "../path/to/image.png"
     }
   }
 }
 ```
 
 <ParamField path="file" type="string" required="true">
-  The path in `baml_src` to the image file.
-</ParamField>
-
-<ParamField path="media_type" type="string" required="true">
-  The type of image file.
+  The path to the image file, relative to the directory containing the current BAML file.
 </ParamField>
 
 ### Using a URL
@@ -166,19 +161,14 @@ test Test1 {
   functions [MyFunction]
   args {
     myAudio {
-      file "baml_src://path/to/audio.mp3"
-      media_type "audio/mp3"
+      file "../path/to/audio.mp3"
     }
   }
 }
 ```
 
 <ParamField path="file" type="string" required="true">
-  The path in `baml_src` to the audio file.
-</ParamField>
-
-<ParamField path="media_type" type="string" required="true">
-  The type of audio file.
+  The path to the audio file, relative to the directory containing the current BAML file.
 </ParamField>
 
 ### Using a URL
