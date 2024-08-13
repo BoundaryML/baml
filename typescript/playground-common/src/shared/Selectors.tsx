@@ -16,6 +16,8 @@ import SearchBarWithSelector from '../lib/searchbar'
 import Link from './Link'
 import { Dialog, DialogContent, DialogTrigger } from '../components/ui/dialog'
 import { Snippets } from './Snippets'
+import { ErrorBoundary } from 'react-error-boundary'
+import CustomErrorBoundary from '@/utils/ErrorFallback'
 
 const ClientHeader: React.FC = () => {
   const clients = useAtomValue(availableClientsAtom)
@@ -29,7 +31,7 @@ const ClientHeader: React.FC = () => {
         {clientsArray.length > 1 && `Attempt ${orchIndex} in Client Graph`}
       </span>
       <div className='max-w-[300px] justify-start items-center flex hover:bg-vscode-button-hoverBackground h-fit rounded-md text-vscode-foreground cursor-pointer'>
-        <span className='w-full px-2 py-1 text-left truncate'>{currentClient}</span>
+        <span className='px-2 py-1 w-full text-left truncate'>{currentClient}</span>
       </div>
     </div>
   )
@@ -46,21 +48,21 @@ const FunctionDropdown: React.FC = () => {
     return <>Create a function</>
   }
 
-  const isNextJS = (window as any).next?.version!!
+  const isNextJS = (window as any).next?.version!
 
   return (
     <div className='flex flex-col-reverse items-start gap-0.5'>
       {!isNextJS && (
         <span className='pl-2 text-xs text-muted-foreground flex flex-row flex-wrap items-center gap-0.5'>
-          Function
+          {/* Function */}
           {selected && <JumpToFunction />}
         </span>
       )}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <div className='max-w-[300px] justify-start items-center flex hover:bg-vscode-button-hoverBackground h-fit rounded-md text-vscode-foreground cursor-pointer'>
-            <span className='w-full px-2 py-1 text-left truncate'>{functionName ?? 'Select a function...'}</span>
-            <ChevronDown className='w-4 h-4 ml-1 opacity-50 shrink-0' />
+            <span className='px-2 py-1 w-full text-left truncate'>{functionName ?? 'Select a function...'}</span>
+            <ChevronDown className='ml-1 w-4 h-4 opacity-50 shrink-0' />
           </div>
         </PopoverTrigger>
         <PopoverContent className='w-1/3 min-w-[400px] p-0'>
@@ -69,7 +71,7 @@ const FunctionDropdown: React.FC = () => {
               value: func.name,
               label: func.test_cases.length > 0 ? `${func.name} (${func.test_cases.length} tests)` : undefined,
               content: (
-                <div className='flex flex-row items-center gap-1'>
+                <div className='flex flex-row gap-1 items-center'>
                   <span>{func.signature}</span>
                 </div>
               ),
@@ -101,13 +103,13 @@ const TestDropdown: React.FC = () => {
   if (!selected) {
     return <>Select a test...</>
   }
-  const isNextJS = (window as any).next?.version!!
+  const isNextJS = (window as any).next?.version!
 
   return (
     <div className='flex flex-col-reverse items-start gap-0.5'>
       {!isNextJS && (
-        <span className='flex flex-row flex-wrap items-center gap-1 pl-2 text-xs text-muted-foreground'>
-          Test
+        <span className='flex flex-row flex-wrap gap-1 items-center pl-2 text-xs text-muted-foreground'>
+          {/* Test */}
           {selected && <JumpToTestCase />}
         </span>
       )}
@@ -115,8 +117,8 @@ const TestDropdown: React.FC = () => {
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <div className='max-w-[300px] justify-between items-center flex hover:bg-vscode-button-hoverBackground h-fit rounded-md text-vscode-foreground cursor-pointer'>
-            <span className='w-full px-2 py-1 text-left truncate'>{selected.name}</span>
-            <ChevronDown className='w-4 h-4 ml-1 opacity-50 shrink-0' />
+            <span className='px-2 py-1 w-full text-left truncate'>{selected.name}</span>
+            <ChevronDown className='ml-1 w-4 h-4 opacity-50 shrink-0' />
           </div>
         </PopoverTrigger>
         <PopoverContent className='w-1/3 min-w-[400px] p-0'>
@@ -124,7 +126,7 @@ const TestDropdown: React.FC = () => {
             options={tests.map((test) => ({
               value: test.name,
               content: (
-                <div className='flex flex-col items-start justify-start gap-1'>
+                <div className='flex flex-col gap-1 justify-start items-start'>
                   {test.inputs.map((i) => (
                     <div key={i.name} className='flex flex-row gap-1'>
                       <span>{i.name}</span>
@@ -160,6 +162,7 @@ const JumpToFunction: React.FC = () => {
         source_file: selected.span.file_path,
         value: `${selected.span.file_path.split('/').pop() ?? '<file>.baml'}:${selected.span.start_line + 1}`,
       }}
+      display='Jump to'
       className='py-0 text-xs text-muted-foreground decoration-0'
     />
   )
@@ -180,35 +183,42 @@ const JumpToTestCase: React.FC = () => {
         source_file: selected.span.file_path,
         value: `${selected.span.file_path.split('/').pop() ?? '<file>.baml'}:${selected.span.start_line + 1}`,
       }}
+      display='Open test'
       className='text-xs text-muted-foreground decoration-0'
     />
   )
 }
 
 export const ViewSelector: React.FC = () => {
+  const isNextJs = (window as any).next?.version
   return (
-    <div className='flex flex-row justify-between'>
-      <div className='flex flex-row items-center gap-4 px-2 py-1'>
+    <div className='flex overflow-x-auto flex-row justify-between w-full'>
+      <div className='flex overflow-x-auto flex-row gap-4 items-center px-2 py-1'>
         <FunctionDropdown />
         <div>
           <ChevronRight className='w-4 h-4' />
         </div>
         <TestDropdown />
-        <ChevronRight className='w-4, h-4' />
-        <ClientHeader />
+        {!isNextJs && (
+          <ErrorBoundary fallback={<div className='text-xs'>error rendering</div>}>
+            <ChevronRight className='w-4, h-4' />
+
+            <ClientHeader />
+          </ErrorBoundary>
+        )}
       </div>
-      <div className='absolute z-10 flex flex-row items-center justify-center gap-1 right-1 top-2 text-end'>
+      <div className='flex absolute right-1 top-2 z-10 flex-row gap-1 justify-center items-center text-end'>
         <Dialog>
           <DialogTrigger asChild>
             <Button
               variant={'ghost'}
-              className='flex flex-row items-center px-2 py-1 mr-2 text-sm text-white whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit gap-x-2'
+              className='flex flex-row gap-x-2 items-center px-2 py-1 mr-2 text-sm text-white whitespace-pre-wrap bg-indigo-600 hover:bg-indigo-500 h-fit'
             >
               <Compass size={16} strokeWidth={2} />
               <span className='whitespace-nowrap'>Docs</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className='h-full min-w-full fullWidth border-zinc-900 bg-zinc-900'>
+          <DialogContent className='min-w-full h-full fullWidth border-zinc-900 bg-zinc-900'>
             <Snippets />
           </DialogContent>
         </Dialog>
@@ -230,8 +240,8 @@ export const ViewSelector: React.FC = () => {
 
 // export const FunctionSelector: React.FC = () => {
 //   return (
-//     <div className='flex flex-col items-start gap-1'>
-//       <div className='flex flex-row items-center gap-1'>
+//     <div className='flex flex-col gap-1 items-start'>
+//       <div className='flex flex-row gap-1 items-center'>
 //         {/* <ProjectToggle /> */}
 
 //         <FunctionDropdown />
@@ -256,7 +266,7 @@ export const ViewSelector: React.FC = () => {
 //         </VSCodeDropdown> */}
 //       </div>
 //       {/* {func && (
-//         <div className="flex flex-row items-center gap-0 pl-2 text-xs whitespace-nowrap text-vscode-descriptionForeground">
+//         <div className="flex flex-row gap-0 items-center pl-2 text-xs whitespace-nowrap text-vscode-descriptionForeground">
 //           <Link item={func.name} />
 //           {'('}
 //           <FunctionArgs func={func} /> {') → '}{' '}

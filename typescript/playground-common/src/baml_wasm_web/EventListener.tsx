@@ -181,7 +181,7 @@ const updateCursorAtom = atom(
 
       cursorIdx += cursor.column
 
-      var selectedFunc = runtime.get_function_at_position(fileName, get(selectedFunctionAtom)?.name ?? '', cursorIdx)
+      const selectedFunc = runtime.get_function_at_position(fileName, get(selectedFunctionAtom)?.name ?? '', cursorIdx)
 
       if (selectedFunc) {
         set(selectedFunctionAtom, selectedFunc.name)
@@ -779,7 +779,7 @@ function buildUnitNodesAndGroups(nodes: ClientNode[]): {
 
   return { unitNodes, groups }
 }
-var counter = 0
+let counter = 0
 function uuid() {
   return String(counter++)
 }
@@ -837,20 +837,20 @@ const ErrorCount: React.FC = () => {
   const { errors, warnings } = useAtomValue(numErrorsAtom)
   if (errors === 0 && warnings === 0) {
     return (
-      <div className='flex flex-row items-center gap-1 text-green-600'>
+      <div className='flex flex-row gap-1 items-center text-green-600'>
         <CheckCircle size={12} />
       </div>
     )
   }
   if (errors === 0) {
     return (
-      <div className='flex flex-row items-center gap-1 text-yellow-600'>
+      <div className='flex flex-row gap-1 items-center text-yellow-600'>
         {warnings} <AlertTriangle size={12} />
       </div>
     )
   }
   return (
-    <div className='flex flex-row items-center gap-1 text-red-600'>
+    <div className='flex flex-row gap-1 items-center text-red-600'>
       {errors} <XCircle size={12} /> {warnings} <AlertTriangle size={12} />{' '}
     </div>
   )
@@ -1068,7 +1068,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <>
-      <div className='absolute z-50 flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2'>
+      <div className='flex absolute right-2 bottom-2 z-50 flex-row gap-2 text-xs bg-transparent'>
         <div className='pr-4 whitespace-nowrap'>{bamlCliVersion && 'baml-cli ' + bamlCliVersion}</div>
         <ErrorCount /> <span>VSCode Runtime Version: {version}</span>
       </div>
