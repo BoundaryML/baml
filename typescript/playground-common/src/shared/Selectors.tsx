@@ -16,11 +16,8 @@ import SearchBarWithSelector from '../lib/searchbar'
 import Link from './Link'
 import { Dialog, DialogContent, DialogTrigger } from '../components/ui/dialog'
 import { Snippets } from './Snippets'
-import { ErrorBoundary } from 'react-error-boundary'
-import CustomErrorBoundary from '@/utils/ErrorFallback'
 
 const ClientHeader: React.FC = () => {
-  const clients = useAtomValue(availableClientsAtom)
   const orchIndex = useAtomValue(orchIndexAtom)
 
   const clientsArray = useAtomValue(currentClientsAtom)
@@ -162,7 +159,7 @@ const JumpToFunction: React.FC = () => {
         source_file: selected.span.file_path,
         value: `${selected.span.file_path.split('/').pop() ?? '<file>.baml'}:${selected.span.start_line + 1}`,
       }}
-      display='Jump to'
+      display='Open file'
       className='py-0 text-xs text-muted-foreground decoration-0'
     />
   )
@@ -183,14 +180,13 @@ const JumpToTestCase: React.FC = () => {
         source_file: selected.span.file_path,
         value: `${selected.span.file_path.split('/').pop() ?? '<file>.baml'}:${selected.span.start_line + 1}`,
       }}
-      display='Open test'
+      display='Open file'
       className='text-xs text-muted-foreground decoration-0'
     />
   )
 }
 
 export const ViewSelector: React.FC = () => {
-  const isNextJs = (window as any).next?.version
   return (
     <div className='flex overflow-x-auto flex-row justify-between w-full'>
       <div className='flex overflow-x-auto flex-row gap-4 items-center px-2 py-1'>
@@ -199,13 +195,8 @@ export const ViewSelector: React.FC = () => {
           <ChevronRight className='w-4 h-4' />
         </div>
         <TestDropdown />
-        {!isNextJs && (
-          <ErrorBoundary fallback={<div className='text-xs'>error rendering</div>}>
-            <ChevronRight className='w-4, h-4' />
-
-            <ClientHeader />
-          </ErrorBoundary>
-        )}
+        <ChevronRight className='w-4, h-4' />
+        <ClientHeader />
       </div>
       <div className='flex absolute right-1 top-2 z-10 flex-row gap-1 justify-center items-center text-end'>
         <Dialog>

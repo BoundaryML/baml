@@ -2,7 +2,7 @@
   "private": true,
   "scripts": {
     "clean": "turbo clean",
-    "build": "pnpm i && turbo run build --force",
+    "build": "pnpm i && turbo run build",
     "cache": "turbo cache list",
     "dev": "turbo run dev",
     "format": "biome format --write .",
