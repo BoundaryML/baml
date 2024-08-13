@@ -41,6 +41,7 @@ import {
   Connection,
 } from '@xyflow/react'
 import { Sparkles } from 'lucide-react'
+import { ErrorBoundary } from 'react-error-boundary'
 
 const TestStatusMessage: React.FC<{ testStatus: DoneTestStatusType }> = ({ testStatus }) => {
   switch (testStatus) {
@@ -67,13 +68,13 @@ const TestStatusIcon: React.FC<{
           queued: 'Queued',
           running: <VSCodeProgressRing className='h-4' />,
           done: (
-            <div className='flex flex-row items-center gap-1'>
+            <div className='flex flex-row gap-1 items-center'>
               {testStatus && <TestStatusMessage testStatus={testStatus} />}
               {traceUrl && <Link2Icon className='inline w-3 h-3 text-center hover:underline icon-link' />}
             </div>
           ),
           error: (
-            <div className='flex flex-row items-center gap-1'>
+            <div className='flex flex-row gap-1 items-center'>
               <div className='text-vscode-testing-iconFailed'>Unable to run</div>
             </div>
           ),
@@ -152,10 +153,10 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
   const detailsText = details.length > 0 ? `${stopReasonText}  (${details.join(', ')})` : ''
 
   return (
-    <div className='flex flex-col w-full gap-1'>
+    <div className='flex flex-col gap-1 w-full'>
       {failure !== undefined &&
         !(doneStatus === 'parse_failed' || (doneStatus === 'llm_failed' && (llm_response || llm_failure))) && (
-          <div className='text-xs text-vscode-errorForeground whitespace-pre-wrap'>
+          <div className='text-xs whitespace-pre-wrap text-vscode-errorForeground'>
             {failure || '<no failure message>'}
           </div>
         )}
@@ -175,7 +176,7 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
                 {llm_response && (
                   <pre className='px-1 py-2 whitespace-pre-wrap rounded-sm bg-vscode-input-background max-h-[300px] overflow-y-auto relative pr-2'>
                     {llm_response.content}
-                    <div className='absolute flex items-center top-1 right-1'>
+                    <div className='flex absolute top-1 right-1 items-center'>
                       <button
                         className='text-vscode-foreground hover:text-vscode-button-foreground'
                         onClick={() => copyToClipboard(llm_response.content, setCopiedRaw)}
@@ -208,7 +209,7 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
               </div>
             </div>
             {(doneStatus === 'parse_failed' || parsed !== undefined) && (
-              <div className='relative flex flex-col'>
+              <div className='flex relative flex-col'>
                 Parsed LLM Response:
                 <div className='relative px-1 py-2'>
                   {failure && <pre className='text-xs whitespace-pre-wrap text-vscode-errorForeground'>{failure}</pre>}
@@ -222,7 +223,7 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
                         matchesURL
                         src={sorted_parsed}
                       />
-                      <div className='absolute flex items-center top-3 right-2'>
+                      <div className='flex absolute right-2 top-3 items-center'>
                         <button
                           className='text-vscode-descriptionForeground hover:text-vscode-foreground'
                           onClick={() => copyToClipboard(JSON.stringify(sorted_parsed, null, 2), setCopiedParsed)}
@@ -254,7 +255,7 @@ const LLMFunctionResult: React.FC<{ test: WasmFunctionResponse }> = ({ test }) =
   const model = llm_response?.model ?? llm_failure?.model
 
   return (
-    <div className='flex flex-col w-full gap-1'>
+    <div className='flex flex-col gap-1 w-full'>
       {(llm_response || llm_failure) && (
         <div className='w-full text-xs text-vscode-descriptionForeground'>
           <div>
@@ -325,10 +326,10 @@ const TestRow: React.FC<{ name: string }> = ({ name }) => {
   }
 
   return (
-    <div className='flex flex-row items-start gap-2 group'>
+    <div className='flex flex-row gap-2 items-start group'>
       <TestCaseActions testName={name} />
       <div className='flex flex-col'>
-        <div className='flex flex-row items-center gap-2 text-xs'>
+        <div className='flex flex-row gap-2 items-center text-xs'>
           <b>{name}</b>
           <TestStatusIcon
             testRunStatus={test.status}
@@ -391,14 +392,14 @@ const TestStatusBanner: React.FC = () => {
     })
   }
 
-  const isNextJS = (window as any).next?.version!!
+  const isNextJS = (window as any).next?.version!
   if (isNextJS) {
     // simplify UI in promptfiddle
     return null
   }
 
   return (
-    <div className='flex flex-row flex-wrap items-center gap-2'>
+    <div className='flex flex-row flex-wrap gap-2 items-center'>
       <FilterIcon size={16} />
       <FilterButton
         selected={filter.has('queued')}
@@ -546,29 +547,16 @@ const TestResults: React.FC = () => {
   const selectedFunction = useAtomValue(selectedFunctionAtom)
   const [showTests, setShowTests] = useAtom(showTestsAtom)
   const [showClientGraph, setClientGraph] = useAtom(showClientGraphAtom)
-  const currentClients = useAtomValue(currentClientsAtom)
 
   // reset the tab when switching funcs
   useEffect(() => {
     setShowTests(false)
   }, [selectedFunction?.name])
+  const isNextJs = (window as any).next?.version
 
   return (
-    <div className='flex flex-col w-full gap-2 px-1'>
-      <div className='flex flex-row items-center gap-2'>
-        <Badge
-          className={clsx(
-            'cursor-pointer hover:bg-vscode-tab-activeBackground',
-            showClientGraph
-              ? 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground underline'
-              : 'bg-transparent text-vscode-foreground',
-          )}
-          onClick={() => {
-            setClientGraph(true)
-          }}
-        >
-          Client Graph ✨
-        </Badge>
+    <div className='flex flex-col gap-2 px-1 w-full'>
+      <div className='flex flex-row gap-2 items-center'>
         <Badge
           className={clsx(
             'cursor-pointer hover:bg-vscode-tab-activeBackground',
@@ -597,9 +585,26 @@ const TestResults: React.FC = () => {
         >
           Test Results
         </Badge>
+        {!isNextJs && (
+          <Badge
+            className={clsx(
+              'cursor-pointer hover:bg-vscode-tab-activeBackground',
+              showClientGraph
+                ? 'underline bg-vscode-tab-activeBackground text-vscode-tab-activeForeground'
+                : 'bg-transparent text-vscode-foreground',
+            )}
+            onClick={() => {
+              setClientGraph(true)
+            }}
+          >
+            Client Graph ✨
+          </Badge>
+        )}
       </div>
 
-      {showClientGraph ? <ClientGraph /> : showTests ? <TestResultContent /> : <TestCaseList />}
+      <ErrorBoundary fallback={<div>Failed to render</div>}>
+        {showClientGraph ? <ClientGraph /> : showTests ? <TestResultContent /> : <TestCaseList />}
+      </ErrorBoundary>
     </div>
   )
 }
@@ -683,10 +688,10 @@ const TestCaseList: React.FC = () => {
   const { isRunning, run } = useRunHooks()
 
   return (
-    <div className='flex flex-col w-full h-full gap-2 px-2'>
-      <div className='flex flex-wrap items-start items-center gap-2 h-fit'>
+    <div className='flex flex-col gap-2 px-2 w-full h-full'>
+      <div className='flex flex-wrap gap-2 items-start items-center h-fit'>
         <div className='flex flex-col'>
-          <div className='flex flex-wrap items-center gap-2'>
+          <div className='flex flex-wrap gap-2 items-center'>
             <FilterIcon size={16} />
             <VSCodeTextField
               placeholder='Filter test cases'
@@ -709,13 +714,13 @@ const TestCaseList: React.FC = () => {
         ) : (
           <>
             <Button
-              className='px-1 py-1 text-xs bg-red-500 rounded-sm h-fit whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
+              className='px-1 py-1 text-xs whitespace-nowrap bg-red-500 rounded-sm h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
               disabled={testCases.length === 0}
               onClick={() => {
                 run(testCases.map((t) => t.name))
               }}
             >
-              <div className='flex flex-row items-center gap-1'>
+              <div className='flex flex-row gap-1 items-center'>
                 <PlayIcon size={10} />
                 Run {filter ? testCases.length : 'all'} tests
               </div>
@@ -725,9 +730,9 @@ const TestCaseList: React.FC = () => {
         <NewTestCaseDialog />
       </div>
       <hr className='w-full border-muted-foreground' />
-      <div className='flex flex-col h-full gap-1 overflow-y-auto'>
+      <div className='flex overflow-y-auto flex-col gap-1 h-full'>
         {testCases.map((test) => (
-          <div key={test.name} className='flex flex-row items-start gap-2 group'>
+          <div key={test.name} className='flex flex-row gap-2 items-start group'>
             <TestCaseActions testName={test.name} />
             <Tooltip>
               <TooltipTrigger asChild>
@@ -761,8 +766,8 @@ const TestCaseList: React.FC = () => {
 
 const TestCaseCard: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
   return (
-    <div className='flex flex-col max-w-full gap-2 text-xs text-left truncate text-vscode-descriptionForeground '>
-      <div className='break-all whitespace-pre-wrap'>
+    <div className='flex flex-col gap-2 max-w-full text-xs text-left truncate text-vscode-descriptionForeground'>
+      <div className='whitespace-pre-wrap break-all'>
         <div className='flex flex-col'>
           {test_case.inputs.map((input) => (
             <div key={input.name}>
@@ -794,10 +799,10 @@ const TestCaseCard: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
 const TestResultContent: React.FC = () => {
   const testsRunning = useAtomValue(runningTestsAtom)
   return (
-    <div className='flex flex-col w-full h-full gap-2 px-2'>
+    <div className='flex flex-col gap-2 px-2 w-full h-full'>
       <TestStatusBanner />
-      <hr className=' border-muted-foreground' />
-      <div className='flex flex-col w-full h-full gap-1 overflow-y-auto'>
+      <hr className='border-muted-foreground' />
+      <div className='flex overflow-y-auto flex-col gap-1 w-full h-full'>
         {testsRunning.map((testName) => (
           <TestRow key={testName} name={testName} />
         ))}

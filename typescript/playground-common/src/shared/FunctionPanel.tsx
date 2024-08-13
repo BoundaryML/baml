@@ -27,6 +27,7 @@ import { CheckboxHeader } from './CheckboxHeader'
 import { Switch } from '../components/ui/switch'
 import { vscode } from '../utils/vscode'
 import clsx from 'clsx'
+import { ErrorBoundary } from 'react-error-boundary'
 
 const handleCopy = (text: string) => () => {
   navigator.clipboard.writeText(text)
@@ -62,7 +63,7 @@ const CurlSnippet: React.FC = () => {
 
   return (
     <div>
-      <div className='flex items-center justify-end p-2 space-x-2 rounded-md shadow-sm'>
+      <div className='flex justify-end items-center p-2 space-x-2 rounded-md shadow-sm'>
         <label className='flex items-center mr-2 space-x-1'>
           <Switch
             className='data-[state=checked]:bg-vscode-button-background data-[state=unchecked]:bg-vscode-input-background'
@@ -154,7 +155,7 @@ const WebviewMedia: React.FC<{ bamlMediaType: 'image' | 'audio'; media: WasmChat
   if (pathAsUri.error) {
     const error = typeof pathAsUri.error.message == 'string' ? pathAsUri.error.message : JSON.stringify(pathAsUri.error)
     return (
-      <div className='bg-vscode-inputValidation-errorBackground rounded-lg px-2 py-1'>
+      <div className='px-2 py-1 rounded-lg bg-vscode-inputValidation-errorBackground'>
         <div>
           Error loading {bamlMediaType}: {error}
         </div>
@@ -198,7 +199,7 @@ const PromptPreview: React.FC = () => {
 
   if (!promptPreview) {
     return (
-      <div className='flex flex-col items-center justify-center w-full h-full gap-2'>
+      <div className='flex flex-col gap-2 justify-center items-center w-full h-full'>
         <span className='text-center'>No prompt preview available! Add a test to see it!</span>
         <FunctionTestSnippet />
       </div>
@@ -229,7 +230,7 @@ const PromptPreview: React.FC = () => {
   }
 
   return (
-    <div className='flex flex-col w-full h-full gap-4 px-2'>
+    <div className='flex flex-col gap-4 px-2 w-full h-full'>
       {promptPreview.as_chat()?.map((chat, idx) => (
         <div key={idx} className='flex flex-col'>
           <div className='flex flex-row'>{chat.role}</div>
@@ -299,7 +300,7 @@ enum Topic {
 }
   `.trim()
     return (
-      <div className='flex flex-col items-center justify-center w-full h-full gap-2'>
+      <div className='flex flex-col gap-2 justify-center items-center w-full h-full'>
         No functions found! You can create a new function like:
         <pre className='p-2 text-xs rounded-sm bg-vscode-input-background'>{bamlFunctionSnippet}</pre>
       </div>
@@ -308,19 +309,19 @@ enum Topic {
 
   return (
     <div
-      className='flex flex-col w-full overflow-auto'
+      className='flex overflow-auto flex-col w-full'
       style={{
         height: 'calc(100vh - 80px)',
       }}
     >
       <TooltipProvider>
         <ResizablePanelGroup direction='vertical' className='h-full'>
-          <ResizablePanel id='top-panel' className='flex w-full px-1' defaultSize={50}>
+          <ResizablePanel id='top-panel' className='flex px-1 w-full' defaultSize={50}>
             <div className='w-full'>
-              <ResizablePanelGroup direction='horizontal' className='h-full pb-4'>
+              <ResizablePanelGroup direction='horizontal' className='pb-4 h-full'>
                 <div className='w-full h-full'>
                   <CheckboxHeader />
-                  <div className='relative w-full overflow-y-auto' style={{ height: 'calc(100% - 32px)' }}>
+                  <div className='overflow-y-auto relative w-full' style={{ height: 'calc(100% - 32px)' }}>
                     <PromptPreview />
                   </div>
                 </div>
@@ -334,9 +335,11 @@ enum Topic {
               <ResizableHandle withHandle={false} className='bg-vscode-panel-border' />
               <ResizablePanel
                 minSize={10}
-                className='flex h-full px-0 py-2 pb-3 border-t border-vscode-textSeparator-foreground'
+                className='flex px-0 py-2 pb-3 h-full border-t border-vscode-textSeparator-foreground'
               >
-                <TestResults />
+                <ErrorBoundary fallback={<div>Error loading test results</div>}>
+                  <TestResults />
+                </ErrorBoundary>
               </ResizablePanel>
             </>
           )}
