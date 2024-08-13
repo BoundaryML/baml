@@ -1,5 +1,5 @@
 use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::ResolveMedia;
+use crate::internal::llm_client::ResolveMediaUrls;
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
@@ -28,7 +28,7 @@ use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::BufReader;
 
-use baml_types::BamlMedia;
+use baml_types::{BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
@@ -324,7 +324,7 @@ impl VertexClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: ResolveMedia::MissingMime,
+                resolve_media_urls: ResolveMediaUrls::EnsureMime,
             },
             retry_policy: client
                 .elem()
@@ -358,7 +358,7 @@ impl VertexClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: ResolveMedia::MissingMime,
+                resolve_media_urls: ResolveMediaUrls::EnsureMime,
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,
@@ -536,7 +536,7 @@ impl RequestBuilder for VertexClient {
                 body_obj.extend(convert_completion_prompt_to_body(prompt))
             }
             either::Either::Right(messages) => {
-                body_obj.extend(convert_chat_prompt_to_body(messages))
+                body_obj.extend(convert_chat_prompt_to_body(messages)?)
             }
         }
 
@@ -629,7 +629,7 @@ fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_j
 //list of chat messages into JSON body
 fn convert_chat_prompt_to_body(
     prompt: &Vec<RenderedChatMessage>,
-) -> HashMap<String, serde_json::Value> {
+) -> Result<HashMap<String, serde_json::Value>> {
     let mut map = HashMap::new();
 
     map.insert(
@@ -637,44 +637,47 @@ fn convert_chat_prompt_to_body(
         prompt
             .iter()
             .map(|m| {
-                json!({
+                Ok(json!({
                     "role": m.role,
-                    "parts": convert_message_parts_to_content(&m.parts)
-                })
+                    "parts": convert_message_parts_to_content(&m.parts)?
+                }))
             })
-            .collect::<serde_json::Value>(),
+            .collect::<Result<serde_json::Value>>()?,
     );
 
-    return map;
+    Ok(map)
 }
 
-fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json::Value {
+fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serde_json::Value> {
     parts
         .iter()
-        .map(|part| match part {
-            ChatMessagePart::Text(text) => json!({
-                "text": text
-            }),
-            ChatMessagePart::Image(image) => convert_media_to_content(image),
-            ChatMessagePart::Audio(audio) => convert_media_to_content(audio),
+        .map(|part| {
+            Ok(match part {
+                ChatMessagePart::Text(text) => json!({
+                    "text": text
+                }),
+                ChatMessagePart::Media(media) => convert_media_to_content(media)?,
+            })
         })
-        .collect()
+        .collect::<Result<serde_json::Value>>()
 }
 
-fn convert_media_to_content(media: &BamlMedia) -> serde_json::Value {
-    match media {
-        BamlMedia::Base64(_, data) => json!({
+fn convert_media_to_content(media: &BamlMedia) -> Result<serde_json::Value> {
+    Ok(match &media.content {
+        BamlMediaContent::Base64(data) => json!({
             "inlineData": {
-                "mime_type": format!("{}", data.media_type),
+                "mime_type": format!("{}", media.mime_type_as_ok()?),
                 "data": data.base64
             }
         }),
-        BamlMedia::Url(_, data) => json!({
+        BamlMediaContent::Url(data) => json!({
             "fileData": {
-                "mime_type": data.media_type,
+                "mime_type": media.mime_type,
                 "file_uri": data.url
             }
         }),
-        _ => panic!("Unsupported media type"),
-    }
+        BamlMediaContent::File(_) => {
+            anyhow::bail!("BAML internal error (Vertex): file should have been resolved to base64")
+        }
+    })
 }

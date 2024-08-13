@@ -43,7 +43,7 @@ where
 
     //advanced curl viewing, use render_raw_curl on each node. TODO
     for node in iter {
-        let prompt = match node.render_prompt(ir, prompt, ctx, params) {
+        let prompt = match node.render_prompt(ir, prompt, ctx, params).await {
             Ok(p) => p,
             Err(e) => {
                 results.push((node.scope, LLMResponse::OtherFailure(e.to_string()), None));

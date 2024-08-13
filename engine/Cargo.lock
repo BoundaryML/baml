@@ -889,6 +889,7 @@ dependencies = [
  "serde-wasm-bindgen 0.4.5",
  "serde_json",
  "time",
+ "url",
  "uuid",
  "walkdir",
  "wasm-bindgen",
@@ -903,6 +904,7 @@ dependencies = [
 name = "baml-types"
 version = "0.53.1"
 dependencies = [
+ "anyhow",
  "indexmap 2.2.6",
  "minijinja",
  "serde",
@@ -2283,6 +2285,7 @@ version = "0.53.1"
 dependencies = [
  "anyhow",
  "askama",
+ "baml-types",
  "base64 0.22.1",
  "cfg-if",
  "colored",

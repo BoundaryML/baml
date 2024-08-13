@@ -1,6 +1,6 @@
-use std::pin::Pin;
+use std::{path::PathBuf, pin::Pin};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 mod chat;
 mod completion;
@@ -9,9 +9,9 @@ pub use self::{
     completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
 };
 use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
-use crate::internal::llm_client::ResolveMedia;
+use crate::{internal::llm_client::ResolveMediaUrls, RenderCurlSettings};
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
-use baml_types::{BamlMedia, BamlMediaType, BamlValue, MediaBase64};
+use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, MediaBase64, MediaUrl};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use futures::stream::StreamExt;
 use infer;
@@ -35,14 +35,6 @@ pub trait WithSingleCallable {
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse;
 }
 
-pub trait WithCurl {
-    #[allow(async_fn_in_trait)]
-    async fn curl_call(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-    ) -> Result<Vec<RenderedChatMessage>, LLMResponse>;
-}
 pub trait WithClient {
     fn context(&self) -> &RenderContext_Client;
 
@@ -50,7 +42,8 @@ pub trait WithClient {
 }
 
 pub trait WithPrompt<'ir> {
-    fn render_prompt(
+    #[allow(async_fn_in_trait)]
+    async fn render_prompt(
         &'ir self,
         ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
@@ -67,7 +60,7 @@ pub trait WithRenderRawCurl {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
     ) -> Result<String>;
 }
 
@@ -77,49 +70,24 @@ where
 {
     #[allow(async_fn_in_trait)]
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse {
-        let resolve_media = self.model_features().resolve_media_urls;
-        let if_mime = resolve_media == ResolveMedia::MissingMime;
-        if resolve_media == ResolveMedia::Always || if_mime {
-            if let RenderedPrompt::Chat(ref chat) = prompt {
-                match process_media_urls(if_mime, ctx, chat).await {
-                    Ok(messages) => return self.chat(ctx, &messages).await,
-                    Err(e) => return LLMResponse::OtherFailure(format!("Error occurred: {}", e)),
-                }
+        if let RenderedPrompt::Chat(chat) = &prompt {
+            match process_media_urls(
+                self.model_features().resolve_media_urls,
+                true,
+                None,
+                ctx,
+                chat,
+            )
+            .await
+            {
+                Ok(messages) => return self.chat(ctx, &messages).await,
+                Err(e) => return LLMResponse::OtherFailure(format!("Error occurred:\n\n{:?}", e)),
             }
         }
 
         match prompt {
             RenderedPrompt::Chat(p) => self.chat(ctx, p).await,
             RenderedPrompt::Completion(p) => self.completion(ctx, p).await,
-        }
-    }
-}
-
-impl<T> WithCurl for T
-where
-    T: WithClient + WithChat + WithCompletion,
-{
-    #[allow(async_fn_in_trait)]
-    async fn curl_call(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-    ) -> Result<Vec<RenderedChatMessage>, LLMResponse> {
-        let resolve_media = self.model_features().resolve_media_urls;
-        let if_mime = resolve_media == ResolveMedia::MissingMime;
-        if resolve_media == ResolveMedia::Always || if_mime {
-            if let RenderedPrompt::Chat(ref chat) = prompt {
-                return process_media_urls(if_mime, ctx, chat)
-                    .await
-                    .map_err(|e| LLMResponse::OtherFailure(format!("Error occurred: {}", e)));
-            }
-        }
-
-        match prompt {
-            RenderedPrompt::Chat(p) => Ok(p.clone()),
-            RenderedPrompt::Completion(p) => Err(LLMResponse::OtherFailure(
-                "Completion prompts are not supported by this provider".to_string(),
-            )),
         }
     }
 }
@@ -157,7 +125,7 @@ impl<'ir, T> WithPrompt<'ir> for T
 where
     T: WithClient + WithChat + WithCompletion,
 {
-    fn render_prompt(
+    async fn render_prompt(
         &'ir self,
         ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
@@ -167,6 +135,16 @@ where
         let features = self.model_features();
 
         let prompt = renderer.render_prompt(ir, ctx, params, self.context())?;
+
+        let prompt = match prompt {
+            RenderedPrompt::Completion(_) => prompt,
+            RenderedPrompt::Chat(chat) => {
+                // We never need to resolve media URLs here: webview rendering understands how to handle URLs and file refs
+                let chat =
+                    process_media_urls(ResolveMediaUrls::Never, false, None, ctx, &chat).await?;
+                RenderedPrompt::Chat(chat)
+            }
+        };
 
         let mut prompt = match (features.completion, features.chat) {
             (true, false) => {
@@ -213,13 +191,19 @@ where
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
     ) -> Result<String> {
-        let rendered_prompt = RenderedPrompt::Chat(prompt.clone());
+        let chat_messages = process_media_urls(
+            self.model_features().resolve_media_urls,
+            true,
+            Some(render_settings),
+            ctx,
+            prompt,
+        )
+        .await?;
 
-        let chat_messages = self.curl_call(ctx, &rendered_prompt).await?;
         let request_builder = self
-            .build_request(either::Right(&chat_messages), false, stream)
+            .build_request(either::Right(&chat_messages), false, render_settings.stream)
             .await?;
         let mut request = request_builder.build()?;
         let url_header_value = {
@@ -275,14 +259,21 @@ where
     #[allow(async_fn_in_trait)]
     async fn stream(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> StreamResponse {
         if let RenderedPrompt::Chat(ref chat) = prompt {
-            let resolve_media = self.model_features().resolve_media_urls;
-            if resolve_media == ResolveMedia::Always || resolve_media == ResolveMedia::MissingMime {
-                let if_mime = resolve_media == ResolveMedia::MissingMime;
-                match process_media_urls(if_mime, ctx, chat).await {
-                    Ok(messages) => return self.stream_chat(ctx, &messages).await,
-                    Err(e) => {
-                        return Err(LLMResponse::OtherFailure(format!("Error occurred: {}", e)))
-                    }
+            match process_media_urls(
+                self.model_features().resolve_media_urls,
+                true,
+                None,
+                ctx,
+                chat,
+            )
+            .await
+            {
+                Ok(messages) => return self.stream_chat(ctx, &messages).await,
+                Err(e) => {
+                    return Err(LLMResponse::OtherFailure(format!(
+                        "Error occurred:\n\n{:?}",
+                        e
+                    )))
                 }
             }
         }
@@ -294,130 +285,36 @@ where
     }
 }
 
+/// We assume b64 with mime-type is the universally accepted format in an API request.
+/// Other formats will be converted into that, depending on what formats are allowed according to supported_media_formats.
 async fn process_media_urls(
-    if_mime: bool,
+    resolve_media_urls: ResolveMediaUrls,
+    resolve_files: bool,
+    render_settings: Option<RenderCurlSettings>,
     ctx: &RuntimeContext,
     chat: &Vec<RenderedChatMessage>,
 ) -> Result<Vec<RenderedChatMessage>, anyhow::Error> {
+    let render_settings = render_settings.unwrap_or(RenderCurlSettings {
+        stream: false,
+        as_shell_commands: false,
+    });
     let messages_result = futures::stream::iter(chat.iter().map(|p| {
         let new_parts = p
             .parts
             .iter()
-            .map(|part| async move {
-                match part {
-                    ChatMessagePart::Image(BamlMedia::Url(_, media_url))
-                    | ChatMessagePart::Audio(BamlMedia::Url(_, media_url)) => {
-                        if !if_mime || media_url.media_type.as_deref().unwrap_or("").is_empty() {
-                            let (base64, mime_type) = if media_url.url.starts_with("data:") {
-                                let parts: Vec<&str> = media_url.url.splitn(2, ',').collect();
-
-                                let base64 = parts.get(1).unwrap().to_string();
-                                let prefix = parts.get(0).unwrap();
-                                let mime_type = prefix
-                                    .splitn(2, ':')
-                                    .nth(1)
-                                    .unwrap()
-                                    .split('/')
-                                    .nth(1)
-                                    .unwrap()
-                                    .split(';')
-                                    .next()
-                                    .unwrap()
-                                    .to_string();
-
-                                (base64, mime_type)
-                            } else {
-                                let response = match fetch_with_proxy(
-                                    &media_url.url,
-                                    ctx.env
-                                        .get("BOUNDARY_PROXY_URL")
-                                        .as_deref()
-                                        .map(|s| s.as_str()),
-                                )
-                                .await
-                                {
-                                    Ok(response) => response,
-                                    Err(e) => {
-                                        return Err(anyhow::anyhow!("Failed to fetch media: {e:?}"))
-                                    }
-                                };
-                                let bytes = match response.bytes().await {
-                                    Ok(bytes) => bytes,
-                                    Err(e) => {
-                                        return Err(anyhow::anyhow!(
-                                            "Failed to fetch media bytes: {e:?}"
-                                        ))
-                                    }
-                                };
-                                let base64 = BASE64_STANDARD.encode(&bytes);
-                                let inferred_type = infer::get(&bytes);
-                                let mime_type = inferred_type.map_or_else(
-                                    || "application/octet-stream".into(),
-                                    |t| t.extension().into(),
-                                );
-                                (base64, mime_type)
-                            };
-
-                            Ok(if matches!(part, ChatMessagePart::Image(_)) {
-                                ChatMessagePart::Image(BamlMedia::Base64(
-                                    BamlMediaType::Image,
-                                    MediaBase64 {
-                                        base64: base64,
-                                        media_type: format!("image/{}", mime_type),
-                                    },
-                                ))
-                            } else {
-                                ChatMessagePart::Audio(BamlMedia::Base64(
-                                    BamlMediaType::Audio,
-                                    MediaBase64 {
-                                        base64: base64,
-                                        media_type: format!("audio/{}", mime_type),
-                                    },
-                                ))
-                            })
-                        } else {
-                            Ok(part.clone())
-                        }
-                    }
-                    ChatMessagePart::Image(BamlMedia::Base64(_, media_b64))
-                    | ChatMessagePart::Audio(BamlMedia::Base64(_, media_b64)) => {
-                        if media_b64.media_type.is_empty() {
-                            let bytes = match BASE64_STANDARD.decode(&media_b64.base64) {
-                                Ok(bytes) => bytes,
-                                Err(e) => {
-                                    return Err(anyhow::anyhow!(
-                                        "Failed to decode base64 media: {e:?}"
-                                    ))
-                                }
-                            };
-                            let inferred_type = infer::get(&bytes);
-                            let mime_type = inferred_type
-                                .map(|t| t.extension().to_string())
-                                .unwrap_or_else(|| "application/octet-stream".into());
-
-                            if matches!(part, ChatMessagePart::Image(_)) {
-                                Ok(ChatMessagePart::Image(BamlMedia::Base64(
-                                    BamlMediaType::Image,
-                                    MediaBase64 {
-                                        base64: media_b64.base64.clone(),
-                                        media_type: format!("image/{}", mime_type),
-                                    },
-                                )))
-                            } else {
-                                Ok(ChatMessagePart::Audio(BamlMedia::Base64(
-                                    BamlMediaType::Audio,
-                                    MediaBase64 {
-                                        base64: media_b64.base64.clone(),
-                                        media_type: format!("audio/{}", mime_type),
-                                    },
-                                )))
-                            }
-                        } else {
-                            Ok(part.clone())
-                        }
-                    }
-                    _ => Ok(part.clone()),
-                }
+            .map(|any_part| async move {
+                let ChatMessagePart::Media(part) = any_part else {
+                    return Ok(any_part.clone());
+                };
+                process_media(
+                    resolve_media_urls,
+                    resolve_files,
+                    render_settings,
+                    ctx,
+                    part,
+                )
+                .await
+                .map(ChatMessagePart::Media)
             })
             .collect::<Vec<_>>();
         async move {
@@ -441,6 +338,213 @@ async fn process_media_urls(
     .collect::<Result<Vec<_>, _>>();
 
     messages_result
+}
+
+async fn process_media(
+    resolve_media_urls: ResolveMediaUrls,
+    resolve_files: bool,
+    render_settings: RenderCurlSettings,
+    ctx: &RuntimeContext,
+    part: &BamlMedia,
+) -> Result<BamlMedia> {
+    match &part.content {
+        BamlMediaContent::File(media_file) => {
+            // Prompt rendering preserves files, because the vscode webview understands files.
+            // In all other cases, we always convert files to base64.
+            if (!resolve_files) {
+                return Ok(part.clone());
+            }
+
+            let media_path = media_file.path()?.to_string_lossy().into_owned();
+
+            if let Some(ext) = media_file.extension() {
+                if render_settings.as_shell_commands {
+                    return Ok(BamlMedia::base64(
+                        part.media_type,
+                        format!(
+                            "$(base64 '{}')",
+                            media_path
+                                .strip_prefix("file://")
+                                .unwrap_or(media_path.as_str())
+                        ),
+                        Some(format!("{}/{}", part.media_type, ext)),
+                    ));
+                }
+            }
+
+            let Some(ref baml_src_reader) = *ctx.baml_src else {
+                anyhow::bail!("Internal error: no baml src reader provided");
+            };
+
+            let bytes = baml_src_reader(media_path.as_str())
+                .await
+                .context(format!("Failed to read file {:#}", media_path))?;
+
+            let mut mime_type = part.mime_type.clone();
+
+            if mime_type == None {
+                if let Some(ext) = media_file.extension() {
+                    mime_type = Some(format!("{}/{}", part.media_type, ext));
+                }
+            }
+
+            if mime_type == None {
+                if let Some(t) = infer::get(&bytes) {
+                    mime_type = Some(t.mime_type().to_string());
+                }
+            }
+
+            Ok(BamlMedia::base64(
+                part.media_type,
+                if render_settings.as_shell_commands {
+                    format!(
+                        "$(base64 '{}')",
+                        media_path
+                            .strip_prefix("file://")
+                            .unwrap_or(media_path.as_str())
+                    )
+                } else {
+                    BASE64_STANDARD.encode(&bytes)
+                },
+                mime_type,
+            ))
+        }
+        BamlMediaContent::Url(media_url) => {
+            // URLs may have an attached mime-type or not
+            // URLs can be converted to either a url with mime-type or base64 with mime-type
+
+            // Here is the table that defines the transformation logic:
+            //
+            //                           ResolveMediaUrls
+            //              --------------------------------------------
+            //              | Never      | EnsureMime   | Always       |
+            //              |------------|--------------|--------------|
+            // url w/o mime | unchanged  | url w/ mime  | b64 w/ mime  |
+            // url w/ mime  | unchanged  | unchanged    | b64 w/ mime  |
+
+            // Currently:
+            //  - Vertex is ResolveMediaUrls::EnsureMime and is the only one that supports URLs w/ mime-type
+            //  - OpenAI is ResolveMediaUrls::Never and allows passing in URLs with optionally specified mime-type
+
+            // NOTE(sam): if a provider accepts URLs but requires mime-type
+            // (i.e. Vertex), we currently send it to them as b64. This
+            // is how it was implemented originally, and while that could be
+            // problematic in theory, I'm not going to change it until a
+            // customer complains.
+            match (
+                resolve_media_urls,
+                part.mime_type.as_ref().map(|s| s.as_str()),
+            ) {
+                (ResolveMediaUrls::Always, _) => {}
+                (ResolveMediaUrls::EnsureMime, Some("")) | (ResolveMediaUrls::EnsureMime, None) => {
+                }
+                (ResolveMediaUrls::Never, _) | (ResolveMediaUrls::EnsureMime, _) => {
+                    return Ok(part.clone());
+                }
+            }
+
+            let (base64, inferred_mime_type) =
+                to_base64_with_inferred_mime_type(&ctx, media_url).await?;
+
+            Ok(BamlMedia::base64(
+                part.media_type,
+                if render_settings.as_shell_commands {
+                    format!("$(curl -L '{}' | base64)", &media_url.url)
+                } else {
+                    base64
+                },
+                Some(part.mime_type.clone().unwrap_or(inferred_mime_type)),
+            ))
+        }
+        BamlMediaContent::Base64(media_b64) => {
+            // Every provider requires mime-type to be attached when passing in b64 data
+            // Our initial implementation does not enforce that mime_type is set, so an unset
+            // mime_type in a BAML file is actually an empty string when it gets to this point.
+
+            // Ignore 'media_type' even if it is set, if the base64 URL contains a mime-type
+            if let Some((mime_type, base64)) = as_base64(media_b64.base64.as_str()) {
+                return Ok(BamlMedia::base64(
+                    part.media_type,
+                    base64.to_string(),
+                    Some(mime_type.to_string()),
+                ));
+            }
+
+            let bytes = BASE64_STANDARD.decode(&media_b64.base64).context(
+                format!(
+                    "Failed to decode '{}...' as base64 ({}); see https://docs.boundaryml.com/docs/snippets/test-cases#images",
+                    media_b64.base64.chars().take(10).collect::<String>(),
+                    if media_b64.base64.starts_with("data:") {
+                        "it looks like a data URL, not a base64 string"
+                    } else {
+                        "is it a valid base64 string?"
+                    }
+                )
+            )?;
+
+            let mut mime_type = part.mime_type.clone();
+
+            if mime_type == None {
+                if let Some(t) = infer::get(&bytes) {
+                    mime_type = Some(t.mime_type().to_string());
+                }
+            }
+
+            Ok(BamlMedia::base64(
+                part.media_type,
+                media_b64.base64.clone(),
+                mime_type,
+            ))
+        }
+    }
+}
+
+async fn to_base64_with_inferred_mime_type(
+    ctx: &RuntimeContext,
+    media_url: &MediaUrl,
+) -> Result<(String, String)> {
+    if let Some((mime_type, base64)) = as_base64(&media_url.url.as_str()) {
+        return Ok((base64.to_string(), mime_type.to_string()));
+    }
+    let response = match fetch_with_proxy(
+        &media_url.url,
+        ctx.env
+            .get("BOUNDARY_PROXY_URL")
+            .as_deref()
+            .map(|s| s.as_str()),
+    )
+    .await
+    {
+        Ok(response) => response,
+        Err(e) => return Err(anyhow::anyhow!("Failed to fetch media: {e:?}")),
+    };
+    let bytes = match response.bytes().await {
+        Ok(bytes) => bytes,
+        Err(e) => return Err(anyhow::anyhow!("Failed to fetch media bytes: {e:?}")),
+    };
+    let base64 = BASE64_STANDARD.encode(&bytes);
+    // TODO: infer based on file extension?
+    let mime_type = match infer::get(&bytes) {
+        Some(t) => t.mime_type(),
+        None => "application/octet-stream",
+    }
+    .to_string();
+    Ok((base64, mime_type))
+}
+
+/// A naive implementation of the data URL parser, returning the (mime_type, base64)
+/// if parsing succeeds. Specifically, we only support specifying a single mime-type (so
+/// fields like 'charset' will be ignored) and only base64 data URLs.
+///
+/// See: https://fetch.spec.whatwg.org/#data-urls
+fn as_base64<'s>(maybe_base64_url: &'s str) -> Option<(&'s str, &'s str)> {
+    if let Some(data_url) = maybe_base64_url.strip_prefix("data:") {
+        if let Some((mime_type, base64)) = data_url.split_once(";base64,") {
+            return Some((mime_type, base64));
+        }
+    }
+
+    None
 }
 
 async fn fetch_with_proxy(

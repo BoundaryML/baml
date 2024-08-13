@@ -1,4 +1,4 @@
-use baml_types::{BamlMedia, BamlMediaType, BamlValue};
+use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue};
 use colored::*;
 mod evaluate_type;
 mod get_vars;
@@ -218,16 +218,7 @@ fn render_minijinja(
                         .unwrap_or(part);
 
                     match serde_json::from_str::<BamlMedia>(media_data) {
-                        Ok(media) => match media {
-                            BamlMedia::Url(media_type, _) => match media_type {
-                                BamlMediaType::Image => parts.push(ChatMessagePart::Image(media)),
-                                BamlMediaType::Audio => parts.push(ChatMessagePart::Audio(media)),
-                            },
-                            BamlMedia::Base64(media_type, _) => match media_type {
-                                BamlMediaType::Image => parts.push(ChatMessagePart::Image(media)),
-                                BamlMediaType::Audio => parts.push(ChatMessagePart::Audio(media)),
-                            },
-                        },
+                        Ok(m) => parts.push(ChatMessagePart::Media(m)),
                         Err(_) => {
                             Err(minijinja::Error::new(
                                 ErrorKind::CannotUnpack,
@@ -285,8 +276,7 @@ impl ImageBase64 {
 #[derive(Debug, PartialEq, Serialize, Clone)]
 pub enum ChatMessagePart {
     Text(String), // raw user-provided text
-    Image(BamlMedia),
-    Audio(BamlMedia),
+    Media(BamlMedia),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -311,18 +301,11 @@ impl std::fmt::Display for RenderedPrompt {
                             .iter()
                             .map(|p| match p {
                                 ChatMessagePart::Text(t) => t.clone(),
-                                ChatMessagePart::Image(media) => match media {
-                                    BamlMedia::Url(BamlMediaType::Image, url) =>
-                                        format!("<image_placeholder: {}>", url.url),
-                                    BamlMedia::Base64(BamlMediaType::Image, _) =>
-                                        "<image_placeholder base64>".to_string(),
-                                    _ => unreachable!(),
-                                },
-                                ChatMessagePart::Audio(media) => match media {
-                                    BamlMedia::Url(BamlMediaType::Audio, url) =>
-                                        format!("<audio_placeholder: {}>", url.url),
-                                    BamlMedia::Base64(BamlMediaType::Audio, _) =>
-                                        "<audio_placeholder base64>".to_string(),
+                                ChatMessagePart::Media(media) => match &media.content {
+                                    BamlMediaContent::Url(url) =>
+                                        format!("<{}_placeholder: {}>", media.media_type, url.url),
+                                    BamlMediaContent::Base64(_) =>
+                                        format!("<{}_placeholder base64>", media.media_type),
                                     _ => unreachable!(),
                                 },
                             })
@@ -382,8 +365,7 @@ impl RenderedPrompt {
                     .flat_map(|m| {
                         m.parts.into_iter().map(|p| match p {
                             ChatMessagePart::Text(t) => t,
-                            ChatMessagePart::Image(_) | ChatMessagePart::Audio(_) => "".to_string(),
-                            // we are choosing to ignore the image for now
+                            ChatMessagePart::Media(_) => "".to_string(), // we are choosing to ignore the image for now
                         })
                     })
                     .collect::<Vec<String>>()
@@ -508,7 +490,7 @@ mod render_tests {
                 role: "system".to_string(),
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-                    ChatMessagePart::Image(BamlMedia::url(
+                    ChatMessagePart::Media(BamlMedia::url(
                         BamlMediaType::Image,
                         "https://example.com/image.jpg".to_string(),
                         None
@@ -558,7 +540,7 @@ mod render_tests {
                 role: "system".to_string(),
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-                    ChatMessagePart::Image(BamlMedia::url(
+                    ChatMessagePart::Media(BamlMedia::url(
                         BamlMediaType::Image,
                         "https://example.com/image.jpg".to_string(),
                         None
@@ -605,7 +587,7 @@ mod render_tests {
                 role: "system".to_string(),
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-                    ChatMessagePart::Image(BamlMedia::url(
+                    ChatMessagePart::Media(BamlMedia::url(
                         BamlMediaType::Image,
                         "https://example.com/image.jpg".to_string(),
                         None

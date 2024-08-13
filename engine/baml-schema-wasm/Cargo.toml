@@ -27,6 +27,7 @@ serde.workspace = true
 serde_json.workspace = true
 serde-wasm-bindgen = "0.4"
 time.workspace = true
+url.workspace = true
 uuid = { version = "1.8", features = ["v4", "js"] }
 wasm-bindgen = "=0.2.92"
 wasm-bindgen-futures = "0.4.42"

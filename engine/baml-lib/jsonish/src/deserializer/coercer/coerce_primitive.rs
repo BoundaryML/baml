@@ -1,4 +1,5 @@
 use anyhow::Result;
+use baml_types::BamlMediaType;
 use internal_baml_core::ir::{FieldType, TypeValue};
 
 use crate::deserializer::{
@@ -36,8 +37,8 @@ impl TypeCoercer for TypeValue {
             TypeValue::Float => coerce_float(ctx, target, value),
             TypeValue::Bool => coerce_bool(ctx, target, value),
             TypeValue::Null => coerce_null(ctx, target, value),
-            TypeValue::Image => Err(ctx.error_image_not_supported()),
-            TypeValue::Audio => Err(ctx.error_audio_not_supported()),
+            TypeValue::Media(BamlMediaType::Image) => Err(ctx.error_image_not_supported()),
+            TypeValue::Media(BamlMediaType::Audio) => Err(ctx.error_audio_not_supported()),
         }
     }
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use baml_types::{BamlMap, BamlMedia, BamlValue};
+use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlValue};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},
@@ -59,26 +59,28 @@ enum MappedPyType {
     Float(f64),
     Bool(bool),
     None,
-    BamlImage(BamlMedia),
-    BamlAudio(BamlMedia),
+    BamlMedia(baml_types::BamlMedia),
     Unsupported(String),
 }
 
-impl TryFrom<BamlImagePy> for BamlMedia {
-    type Error = &'static str;
+// impl TryFrom<BamlImagePy> for BamlMedia {
+//     type Error = &'static str;
 
-    fn try_from(value: BamlImagePy) -> Result<Self, Self::Error> {
-        Ok(value.inner.clone())
-    }
-}
+//     fn try_from(value: BamlImagePy) -> Result<Self, Self::Error> {
+//         Ok()
+//     }
+// }
 
-impl TryFrom<BamlAudioPy> for BamlMedia {
-    type Error = &'static str;
+// impl TryFrom<BamlAudioPy> for BamlMedia {
+//     type Error = &'static str;
 
-    fn try_from(value: BamlAudioPy) -> Result<Self, Self::Error> {
-        Ok(value.inner.clone())
-    }
-}
+//     fn try_from(value: BamlAudioPy) -> Result<Self, Self::Error> {
+//         Ok(Self {
+//             media_type: baml_types::BamlMediaType::Audio,
+//             content: value.inner.clone(),
+//         })
+//     }
+// }
 
 enum UnknownTypeHandler {
     Ignore,
@@ -189,8 +191,7 @@ where
         MappedPyType::Int(v) => BamlValue::Int(v),
         MappedPyType::Float(v) => BamlValue::Float(v),
         MappedPyType::Bool(v) => BamlValue::Bool(v),
-        MappedPyType::BamlImage(v) => BamlValue::Media(v),
-        MappedPyType::BamlAudio(v) => BamlValue::Media(v),
+        MappedPyType::BamlMedia(media) => BamlValue::Media(media),
         MappedPyType::None => BamlValue::Null,
         MappedPyType::Unsupported(r#type) => {
             return if matches!(handle_unknown_types, UnknownTypeHandler::Ignore) {
@@ -308,10 +309,10 @@ pub fn parse_py_type(
                 Ok(MappedPyType::None)
             } else if let Ok(b) = any.downcast_bound::<BamlImagePy>(py) {
                 let b = b.borrow();
-                Ok(MappedPyType::BamlImage(b.inner.clone()))
+                Ok(MappedPyType::BamlMedia(b.inner.clone()))
             } else if let Ok(b) = any.downcast_bound::<BamlAudioPy>(py) {
                 let b = b.borrow();
-                Ok(MappedPyType::BamlAudio(b.inner.clone()))
+                Ok(MappedPyType::BamlMedia(b.inner.clone()))
             } else {
                 if matches!(unknown_type_handler, UnknownTypeHandler::SerializeAsStr) {
                     // Call the __str__ method on the object

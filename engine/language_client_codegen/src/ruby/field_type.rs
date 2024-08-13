@@ -1,4 +1,4 @@
-use internal_baml_core::ir::{FieldType, TypeValue};
+use baml_types::{BamlMediaType, FieldType, TypeValue};
 
 use super::ruby_language_features::ToRuby;
 
@@ -14,15 +14,16 @@ impl ToRuby for FieldType {
             }
             FieldType::Primitive(r#type) => match r#type {
                 // https://sorbet.org/docs/class-types
-                TypeValue::Bool => "T::Boolean".to_string(),
-                TypeValue::Float => "Float".to_string(),
-                TypeValue::Int => "Integer".to_string(),
-                TypeValue::String => "String".to_string(),
-                TypeValue::Null => "NilClass".to_string(),
+                TypeValue::Bool => "T::Boolean",
+                TypeValue::Float => "Float",
+                TypeValue::Int => "Integer",
+                TypeValue::String => "String",
+                TypeValue::Null => "NilClass",
                 // TODO: Create Baml::Types::Image
-                TypeValue::Image => "Baml::Image".to_string(),
-                TypeValue::Audio => "Baml::Audio".to_string(),
-            },
+                TypeValue::Media(BamlMediaType::Image) => "Baml::Image",
+                TypeValue::Media(BamlMediaType::Audio) => "Baml::Audio",
+            }
+            .to_string(),
             FieldType::Union(inner) => format!(
                 // https://sorbet.org/docs/union-types
                 "T.any({})",

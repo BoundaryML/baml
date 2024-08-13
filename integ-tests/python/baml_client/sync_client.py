@@ -1545,6 +1545,30 @@ class BamlSyncClient:
       mdl = create_model("TestImageInputReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    def TestImageInputAnthropic(
+        self,
+        img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "TestImageInputAnthropic",
+        {
+          "img": img,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("TestImageInputAnthropicReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     def TestImageListInput(
         self,
         imgs: List[baml_py.Image],
@@ -3789,6 +3813,39 @@ class BamlStreamClient:
 
       mdl = create_model("TestImageInputReturnType", inner=(str, ...))
       partial_mdl = create_model("TestImageInputPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlSyncStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestImageInputAnthropic(
+        self,
+        img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "TestImageInputAnthropic",
+        {
+          "img": img,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("TestImageInputAnthropicReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestImageInputAnthropicPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlSyncStream[Optional[str], str](
         raw,

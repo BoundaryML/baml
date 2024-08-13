@@ -31,7 +31,7 @@
   "typings": "dist/src/index",
   "dependencies": {
     "@baml/common": "workspace:*",
-    "@gloo-ai/baml-schema-wasm-node": "*",
+    "@gloo-ai/baml-schema-wasm-node": "workspace:*",
     "@types/js-levenshtein": "1.1.2",
     "js-levenshtein": "1.1.6",
     "klona": "2.0.6",

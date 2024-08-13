@@ -1,3 +1,5 @@
+use crate::BamlMediaType;
+
 mod builder;
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
@@ -8,8 +10,7 @@ pub enum TypeValue {
     Bool,
     // Char,
     Null,
-    Image,
-    Audio,
+    Media(BamlMediaType),
 }
 
 impl std::fmt::Display for TypeValue {
@@ -20,8 +21,8 @@ impl std::fmt::Display for TypeValue {
             TypeValue::Float => write!(f, "float"),
             TypeValue::Bool => write!(f, "bool"),
             TypeValue::Null => write!(f, "null"),
-            TypeValue::Image => write!(f, "image"),
-            TypeValue::Audio => write!(f, "audio"),
+            TypeValue::Media(BamlMediaType::Image) => write!(f, "image"),
+            TypeValue::Media(BamlMediaType::Audio) => write!(f, "audio"),
         }
     }
 }

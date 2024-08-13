@@ -1034,6 +1034,22 @@ export class BamlSyncClient {
     return raw.parsed() as string
   }
   
+  TestImageInputAnthropic(
+      img: Image,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    const raw = this.runtime.callFunctionSync(
+      "TestImageInputAnthropic",
+      {
+        "img": img
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as string
+  }
+  
   TestImageListInput(
       imgs: Image[],
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }

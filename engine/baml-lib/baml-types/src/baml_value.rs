@@ -28,36 +28,29 @@ impl serde::Serialize for BamlValue {
             BamlValue::Bool(b) => serializer.serialize_bool(*b),
             BamlValue::Map(m) => m.serialize(serializer),
             BamlValue::List(l) => l.serialize(serializer),
-            BamlValue::Media(i) => match i {
-                BamlMedia::Url(BamlMediaType::Image, u) => {
-                    let mut s = serializer.serialize_struct("BamlImage", 2)?;
-                    s.serialize_field("url", &u.url)?;
-                    s.serialize_field("media_type", &u.media_type)?;
-                    s.end()
-                }
-                BamlMedia::Base64(BamlMediaType::Image, b) => {
-                    let mut s = serializer.serialize_struct("BamlImage", 2)?;
-                    s.serialize_field("base64", &b.base64)?;
-                    s.serialize_field("media_type", &b.media_type)?;
-                    s.end()
-                }
-                BamlMedia::Url(BamlMediaType::Audio, u) => {
-                    let mut s = serializer.serialize_struct("BamlAudio", 2)?;
-
-                    s.serialize_field("url", &u.url)?;
-                    s.serialize_field("media_type", &u.media_type)?;
-
-                    s.end()
-                }
-                BamlMedia::Base64(BamlMediaType::Audio, b) => {
-                    let mut s = serializer.serialize_struct("BamlAudio", 2)?;
-
-                    s.serialize_field("base64", &b.base64)?;
-                    s.serialize_field("media_type", &b.media_type)?;
-                    s.end()
-                }
-            },
-
+            BamlValue::Media(m) => {
+                m.serialize(serializer)
+                // let struct_name = match m.media_type() {
+                //     BamlMediaType::Image => "BamlImage",
+                //     BamlMediaType::Audio => "BamlAudio",
+                // };
+                // let mut s = serializer.serialize_struct(struct_name, 2)?;
+                // match m {
+                //     BamlMedia::File(_, f) => {
+                //         s.serialize_field("path", &f.path)?;
+                //         s.serialize_field("media_type", &f.media_type)?;
+                //     }
+                //     BamlMedia::Url(_, u) => {
+                //         s.serialize_field("url", &u.url)?;
+                //         s.serialize_field("media_type", &u.media_type)?;
+                //     }
+                //     BamlMedia::Base64(_, b) => {
+                //         s.serialize_field("base64", &b.base64)?;
+                //         s.serialize_field("media_type", &b.media_type)?;
+                //     }
+                // }
+                // s.end()
+            }
             BamlValue::Enum(_, v) => serializer.serialize_str(v),
             BamlValue::Class(_, m) => m.serialize(serializer),
             BamlValue::Null => serializer.serialize_none(),
@@ -100,12 +93,11 @@ impl BamlValue {
                     format!("list<{}>", value_type)
                 }
             }
-            BamlValue::Media(m) => match m {
-                BamlMedia::Url(BamlMediaType::Image, _) => "image".into(),
-                BamlMedia::Base64(BamlMediaType::Image, _) => "image".into(),
-                BamlMedia::Url(BamlMediaType::Audio, _) => "audio".into(),
-                BamlMedia::Base64(BamlMediaType::Audio, _) => "audio".into(),
-            },
+            BamlValue::Media(m) => match m.media_type {
+                BamlMediaType::Image => "image",
+                BamlMediaType::Audio => "audio",
+            }
+            .into(),
             BamlValue::Enum(e, _) => format!("enum {}", e),
             BamlValue::Class(c, _) => format!("class {}", c),
             BamlValue::Null => "null".into(),
@@ -266,7 +258,7 @@ impl<'de> Visitor<'de> for BamlValueVisitor {
         Ok(BamlValue::String(v))
     }
 
-    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+    fn visit_bytes<E>(self, _: &[u8]) -> Result<Self::Value, E>
     where
         E: serde::de::Error,
     {
@@ -280,14 +272,14 @@ impl<'de> Visitor<'de> for BamlValueVisitor {
         Ok(BamlValue::String(v.to_owned()))
     }
 
-    fn visit_i128<E>(self, v: i128) -> Result<Self::Value, E>
+    fn visit_i128<E>(self, _: i128) -> Result<Self::Value, E>
     where
         E: serde::de::Error,
     {
         Err(serde::de::Error::custom("i128 is not supported by BAML"))
     }
 
-    fn visit_u128<E>(self, v: u128) -> Result<Self::Value, E>
+    fn visit_u128<E>(self, _: u128) -> Result<Self::Value, E>
     where
         E: serde::de::Error,
     {

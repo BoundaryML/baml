@@ -3,6 +3,7 @@ mod stream;
 
 use web_time::Duration; // Add this line
 
+use crate::RenderCurlSettings;
 use crate::{
     internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
     RuntimeContext,
@@ -160,14 +161,14 @@ pub trait IterOrchestrator {
 }
 
 impl<'ir> WithPrompt<'ir> for OrchestratorNode {
-    fn render_prompt(
+    async fn render_prompt(
         &'ir self,
         ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<RenderedPrompt> {
-        self.provider.render_prompt(ir, renderer, ctx, params)
+        self.provider.render_prompt(ir, renderer, ctx, params).await
     }
 }
 
@@ -176,9 +177,11 @@ impl WithRenderRawCurl for OrchestratorNode {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
     ) -> Result<String> {
-        self.provider.render_raw_curl(ctx, prompt, stream).await
+        self.provider
+            .render_raw_curl(ctx, prompt, render_settings)
+            .await
     }
 }
 

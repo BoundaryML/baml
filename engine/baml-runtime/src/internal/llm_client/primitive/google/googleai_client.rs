@@ -1,5 +1,5 @@
 use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::ResolveMedia;
+use crate::internal::llm_client::ResolveMediaUrls;
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
@@ -17,7 +17,7 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
-use baml_types::BamlMedia;
+use baml_types::{BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
@@ -242,7 +242,7 @@ impl GoogleAIClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: ResolveMedia::Always,
+                resolve_media_urls: ResolveMediaUrls::Always,
             },
             retry_policy: client
                 .elem()
@@ -276,7 +276,7 @@ impl GoogleAIClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: ResolveMedia::Always,
+                resolve_media_urls: ResolveMediaUrls::Always,
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,
@@ -334,7 +334,7 @@ impl RequestBuilder for GoogleAIClient {
                 body_obj.extend(convert_completion_prompt_to_body(prompt))
             }
             either::Either::Right(messages) => {
-                body_obj.extend(convert_chat_prompt_to_body(messages));
+                body_obj.extend(convert_chat_prompt_to_body(messages)?);
             }
         }
 
@@ -426,7 +426,7 @@ fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_j
 //list of chat messages into JSON body
 fn convert_chat_prompt_to_body(
     prompt: &Vec<RenderedChatMessage>,
-) -> HashMap<String, serde_json::Value> {
+) -> Result<HashMap<String, serde_json::Value>> {
     let mut map = HashMap::new();
 
     map.insert(
@@ -434,38 +434,48 @@ fn convert_chat_prompt_to_body(
         prompt
             .iter()
             .map(|m| {
-                json!({
+                Ok(json!({
                     "role": m.role,
-                    "parts": convert_message_parts_to_content(&m.parts)
-                })
+                    "parts": convert_message_parts_to_content(&m.parts)?
+                }))
             })
-            .collect::<serde_json::Value>(),
+            .collect::<Result<serde_json::Value>>()?,
     );
 
-    return map;
+    Ok(map)
 }
 
-fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json::Value {
+fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serde_json::Value> {
     parts
         .iter()
-        .map(|part| match part {
-            ChatMessagePart::Text(text) => json!({
-                "text": text
-            }),
-            ChatMessagePart::Image(image) => convert_media_to_content(image),
-            ChatMessagePart::Audio(audio) => convert_media_to_content(audio),
+        .map(|part| {
+            Ok(match part {
+                ChatMessagePart::Text(text) => json!({
+                    "text": text
+                }),
+                ChatMessagePart::Media(media) => convert_media_to_content(media)?,
+            })
         })
         .collect()
 }
 
-fn convert_media_to_content(media: &BamlMedia) -> serde_json::Value {
-    match media {
-        BamlMedia::Base64(_, data) => json!({
+fn convert_media_to_content(media: &BamlMedia) -> Result<serde_json::Value> {
+    Ok(match &media.content {
+        BamlMediaContent::Base64(data) => json!({
             "inlineData": {
-                "mimeType": format!("{}", data.media_type),
+                "mimeType": media.mime_type_as_ok()?,
                 "data": data.base64
             }
         }),
-        _ => panic!("Unsupported media type"),
-    }
+        BamlMediaContent::File(_) => {
+            anyhow::bail!(
+                "BAML internal error (google-ai): file should have been resolved to base64"
+            )
+        }
+        BamlMediaContent::Url(_) => {
+            anyhow::bail!(
+                "BAML internal error (google-ai): media URL should have been resolved to base64"
+            )
+        }
+    })
 }

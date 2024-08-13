@@ -1,4 +1,4 @@
-use baml_types::TypeValue;
+use baml_types::{BamlMediaType, TypeValue};
 
 use super::{Span, WithName, WithSpan};
 
@@ -86,8 +86,8 @@ impl WithName for Identifier {
                 TypeValue::Float => "float",
                 TypeValue::Bool => "bool",
                 TypeValue::Null => "null",
-                TypeValue::Image => "image",
-                TypeValue::Audio => "audio",
+                TypeValue::Media(BamlMediaType::Image) => "image",
+                TypeValue::Media(BamlMediaType::Audio) => "audio",
             },
             Identifier::String(s, _) => s,
             Identifier::ENV(name, _) => name,
@@ -115,8 +115,8 @@ impl From<(&str, Span)> for Identifier {
             "float" => Identifier::Primitive(TypeValue::Float, span),
             "bool" => Identifier::Primitive(TypeValue::Bool, span),
             "null" => Identifier::Primitive(TypeValue::Null, span),
-            "image" => Identifier::Primitive(TypeValue::Image, span),
-            "audio" => Identifier::Primitive(TypeValue::Audio, span),
+            "image" => Identifier::Primitive(TypeValue::Media(BamlMediaType::Image), span),
+            "audio" => Identifier::Primitive(TypeValue::Media(BamlMediaType::Audio), span),
             "env" => Identifier::Invalid("env".into(), span),
             other if other.contains('-') => Identifier::String(other.to_string(), span),
             other => Identifier::Local(other.to_string(), span),
