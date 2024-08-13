@@ -367,7 +367,7 @@ async fn process_media(
                                 .strip_prefix("file://")
                                 .unwrap_or(media_path.as_str())
                         ),
-                        format!("image/{}", ext),
+                        Some(format!("{}/{}", part.media_type, ext)),
                     ));
                 }
             }
@@ -380,14 +380,19 @@ async fn process_media(
                 .await
                 .context(format!("Failed to read file {:#}", media_path))?;
 
-            let mime_type = match media_file.extension() {
-                Some(ext) => format!("image/{}", ext),
-                None => match infer::get(&bytes) {
-                    Some(t) => t.mime_type(),
-                    None => "application/octet-stream",
+            let mut mime_type = part.mime_type.clone();
+
+            if mime_type == None {
+                if let Some(ext) = media_file.extension() {
+                    mime_type = Some(format!("{}/{}", part.media_type, ext));
                 }
-                .to_string(),
-            };
+            }
+
+            if mime_type == None {
+                if let Some(t) = infer::get(&bytes) {
+                    mime_type = Some(t.mime_type().to_string());
+                }
+            }
 
             Ok(BamlMedia::base64(
                 part.media_type,
@@ -428,7 +433,7 @@ async fn process_media(
             // customer complains.
             match (
                 resolve_media_urls,
-                media_url.mime_type.as_ref().map(|s| s.as_str()),
+                part.mime_type.as_ref().map(|s| s.as_str()),
             ) {
                 (ResolveMediaUrls::Always, _) => {}
                 (ResolveMediaUrls::EnsureMime, Some("")) | (ResolveMediaUrls::EnsureMime, None) => {
@@ -438,7 +443,8 @@ async fn process_media(
                 }
             }
 
-            let (base64, mime_type) = to_base64_with_inferred_mime_type(&ctx, media_url).await?;
+            let (base64, inferred_mime_type) =
+                to_base64_with_inferred_mime_type(&ctx, media_url).await?;
 
             Ok(BamlMedia::base64(
                 part.media_type,
@@ -447,7 +453,7 @@ async fn process_media(
                 } else {
                     base64
                 },
-                mime_type,
+                Some(part.mime_type.clone().unwrap_or(inferred_mime_type)),
             ))
         }
         BamlMediaContent::Base64(media_b64) => {
@@ -455,15 +461,12 @@ async fn process_media(
             // Our initial implementation does not enforce that mime_type is set, so an unset
             // mime_type in a BAML file is actually an empty string when it gets to this point.
 
-            if !media_b64.mime_type.is_empty() {
-                return Ok(part.clone());
-            }
-
+            // Ignore 'media_type' even if it is set, if the base64 URL contains a mime-type
             if let Some((mime_type, base64)) = as_base64(media_b64.base64.as_str()) {
                 return Ok(BamlMedia::base64(
                     part.media_type,
                     base64.to_string(),
-                    mime_type.to_string(),
+                    Some(mime_type.to_string()),
                 ));
             }
 
@@ -479,14 +482,18 @@ async fn process_media(
                 )
             )?;
 
+            let mut mime_type = part.mime_type.clone();
+
+            if mime_type == None {
+                if let Some(t) = infer::get(&bytes) {
+                    mime_type = Some(t.mime_type().to_string());
+                }
+            }
+
             Ok(BamlMedia::base64(
                 part.media_type,
                 media_b64.base64.clone(),
-                match infer::get(&bytes) {
-                    Some(t) => t.mime_type(),
-                    None => "application/octet-stream",
-                }
-                .to_string(),
+                mime_type,
             ))
         }
     }

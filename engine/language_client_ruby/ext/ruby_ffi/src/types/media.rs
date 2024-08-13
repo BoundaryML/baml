@@ -8,19 +8,19 @@ pub(crate) trait CloneAsBamlValue {
 
 #[magnus::wrap(class = "Baml::Ffi::Image", free_immediately, size)]
 pub(crate) struct Image {
-    pub(crate) inner: BamlMediaContent,
+    pub(crate) inner: baml_types::BamlMedia,
 }
 
 impl Image {
     pub fn from_url(url: String) -> Self {
         Self {
-            inner: BamlMediaContent::Url(baml_types::MediaUrl::new(url, None)),
+            inner: BamlMedia::url(BamlMediaType::Image, url, None),
         }
     }
 
     pub fn from_base64(media_type: String, base64: String) -> Self {
         Self {
-            inner: BamlMediaContent::Base64(baml_types::MediaBase64::new(base64, media_type)),
+            inner: BamlMedia::base64(BamlMediaType::Image, base64, Some(media_type)),
         }
     }
 
@@ -35,27 +35,24 @@ impl Image {
 
 impl CloneAsBamlValue for Image {
     fn clone_as_baml_value(&self) -> BamlValue {
-        BamlValue::Media(BamlMedia {
-            media_type: BamlMediaType::Image,
-            content: self.inner.clone(),
-        })
+        BamlValue::Media(self.inner.clone())
     }
 }
 
 #[magnus::wrap(class = "Baml::Ffi::Audio", free_immediately, size)]
 pub(crate) struct Audio {
-    pub(crate) inner: BamlMediaContent,
+    pub(crate) inner: BamlMedia,
 }
 
 impl Audio {
     pub fn from_url(url: String) -> Self {
         Self {
-            inner: BamlMediaContent::Url(baml_types::MediaUrl::new(url, None)),
+            inner: BamlMedia::url(BamlMediaType::Audio, url, None),
         }
     }
     pub fn from_base64(media_type: String, base64: String) -> Self {
         Self {
-            inner: BamlMediaContent::Base64(baml_types::MediaBase64::new(base64, media_type)),
+            inner: BamlMedia::base64(BamlMediaType::Image, base64, Some(media_type)),
         }
     }
 
@@ -70,9 +67,6 @@ impl Audio {
 
 impl CloneAsBamlValue for Audio {
     fn clone_as_baml_value(&self) -> BamlValue {
-        BamlValue::Media(BamlMedia {
-            media_type: BamlMediaType::Audio,
-            content: self.inner.clone(),
-        })
+        BamlValue::Media(self.inner.clone())
     }
 }

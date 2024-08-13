@@ -1,55 +1,59 @@
 use pyo3::prelude::{pymethods, PyAnyMethods, PyModule, PyResult};
 use pyo3::types::PyType;
 use pyo3::{Bound, Py, PyAny, PyObject, Python, ToPyObject};
-crate::lang_wrapper!(BamlImagePy, baml_types::BamlMediaContent);
+crate::lang_wrapper!(BamlImagePy, baml_types::BamlMedia);
 
 #[pymethods]
 impl BamlImagePy {
     #[staticmethod]
     fn from_url(url: String) -> Self {
         BamlImagePy {
-            inner: baml_types::BamlMediaContent::Url(baml_types::MediaUrl::new(url, None)),
+            inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Image, url, None),
         }
     }
 
     #[staticmethod]
     fn from_base64(media_type: String, base64: String) -> Self {
         BamlImagePy {
-            inner: baml_types::BamlMediaContent::Base64(baml_types::MediaBase64::new(
-                base64, media_type,
-            )),
+            inner: baml_types::BamlMedia::base64(
+                baml_types::BamlMediaType::Image,
+                base64,
+                Some(media_type),
+            ),
         }
     }
 
     pub fn is_url(&self) -> bool {
-        matches!(&self.inner, baml_types::BamlMediaContent::Url(_))
+        matches!(&self.inner.content, baml_types::BamlMediaContent::Url(_))
     }
 
     pub fn as_url(&self) -> PyResult<String> {
-        match &self.inner {
+        match &self.inner.content {
             baml_types::BamlMediaContent::Url(url) => Ok(url.url.clone()),
             _ => Err(crate::BamlError::new_err("Image is not a URL")),
         }
     }
 
     pub fn as_base64(&self) -> PyResult<Vec<String>> {
-        match &self.inner {
-            baml_types::BamlMediaContent::Base64(base64) => {
-                Ok(vec![base64.base64.clone(), base64.mime_type.clone()])
-            }
+        match &self.inner.content {
+            baml_types::BamlMediaContent::Base64(base64) => Ok(vec![
+                base64.base64.clone(),
+                self.inner.mime_type.clone().unwrap_or("".to_string()),
+            ]),
             _ => Err(crate::BamlError::new_err("Image is not base64")),
         }
     }
 
     pub fn __repr__(&self) -> String {
-        match &self.inner {
+        match &self.inner.content {
             baml_types::BamlMediaContent::Url(url) => {
                 format!("BamlImagePy(url={})", url.url)
             }
             baml_types::BamlMediaContent::Base64(base64) => {
                 format!(
                     "BamlImagePy(base64={}, media_type={})",
-                    base64.base64, base64.mime_type
+                    base64.base64,
+                    self.inner.mime_type.clone().unwrap_or("".to_string())
                 )
             }
             _ => format!("Unknown BamlImagePy variant"),

@@ -12,6 +12,9 @@ import {
   selectedRuntimeAtom,
   selectedTestCaseAtom,
   orchIndexAtom,
+  expandImagesAtom,
+  streamCurlAtom,
+  rawCurlLoadable,
 } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
@@ -30,37 +33,32 @@ const handleCopy = (text: string) => () => {
 }
 
 const CurlSnippet: React.FC = () => {
-  const wasm = useAtomValue(wasmAtom)
-  const runtime = useAtomValue(selectedRuntimeAtom)
-  const func = useAtomValue(selectedFunctionAtom)
-  const test_case = useAtomValue(selectedTestCaseAtom)
-  const orch_index = useAtomValue(orchIndexAtom)
+  const rawCurl = useAtomValue(rawCurlLoadable)
+  const [streamCurl, setStreamCurl] = useAtom(streamCurlAtom)
+  const [expandImages, setExpandImages] = useAtom(expandImagesAtom)
 
-  const [streamCurl, setStreamCurl] = useState(true)
-  const [expandImages, setExpandImages] = useState(false)
+  // if (!wasm || !runtime || !func || !test_case) {
+  //   return <div>Not yet ready</div>
+  // }
 
-  if (!wasm || !runtime || !func || !test_case) {
-    return <div>Not yet ready</div>
-  }
+  // const wasmCallContext = new wasm.WasmCallContext()
+  // wasmCallContext.node_index = orch_index
 
-  const wasmCallContext = new wasm.WasmCallContext()
-  wasmCallContext.node_index = orch_index
-
-  const rawCurl = useSWR(
-    { swr: 'CurlSnippet', runtime, func, test_case, orch_index, streamCurl, expandImages },
-    async () => {
-      return await func.render_raw_curl_for_test(
-        runtime,
-        test_case.name,
-        wasmCallContext,
-        streamCurl,
-        expandImages,
-        async (path: string) => {
-          return await vscode.readFile(path)
-        },
-      )
-    },
-  )
+  // const rawCurl = useSWR(
+  //   { swr: 'CurlSnippet', runtime, func, test_case, orch_index, streamCurl, expandImages },
+  //   async () => {
+  //     return await func.render_raw_curl_for_test(
+  //       runtime,
+  //       test_case.name,
+  //       wasmCallContext,
+  //       streamCurl,
+  //       expandImages,
+  //       async (path: string) => {
+  //         return await vscode.readFile(path)
+  //       },
+  //     )
+  //   },
+  // )
 
   return (
     <div>
@@ -82,22 +80,32 @@ const CurlSnippet: React.FC = () => {
           <span>Show fully expanded command</span>
         </label>
         <Button
-          onClick={rawCurl.data ? handleCopy(rawCurl.data) : () => {}}
+          onClick={rawCurl.state === 'hasData' && rawCurl.data ? handleCopy(rawCurl.data) : () => {}}
           className='px-3 py-1 text-xs text-white bg-vscode-button-background hover:bg-vscode-button-hoverBackground'
         >
           <Copy size={16} />
         </Button>
       </div>
-      {rawCurl.isLoading ? (
+      {rawCurl.state === 'loading' ? (
         <div>Loading...</div>
       ) : (
         <PromptChunk
           text={(() => {
-            if (rawCurl.error) return `${rawCurl.error.message}`
-            if (rawCurl.isLoading) return 'Loading...'
-            return rawCurl.data ?? ''
+            switch (rawCurl.state) {
+              case 'hasData':
+                return rawCurl.data ?? ''
+              case 'hasError':
+                return `${rawCurl.error}`
+            }
           })()}
-          type={rawCurl.error ? 'error' : 'preview'}
+          type={(() => {
+            switch (rawCurl.state) {
+              case 'hasData':
+                return 'preview'
+              case 'hasError':
+                return 'error'
+            }
+          })()}
           client={{
             identifier: {
               end: 0,

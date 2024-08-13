@@ -666,13 +666,13 @@ fn convert_media_to_content(media: &BamlMedia) -> Result<serde_json::Value> {
     Ok(match &media.content {
         BamlMediaContent::Base64(data) => json!({
             "inlineData": {
-                "mime_type": format!("{}", data.mime_type),
+                "mime_type": format!("{}", media.mime_type_as_ok()?),
                 "data": data.base64
             }
         }),
         BamlMediaContent::Url(data) => json!({
             "fileData": {
-                "mime_type": data.mime_type,
+                "mime_type": media.mime_type,
                 "file_uri": data.url
             }
         }),

@@ -525,17 +525,20 @@ impl TryInto<bedrock::types::Message> for AwsChatMessage<'_> {
                                 "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
                             )
                         }
-                        BamlMediaContent::Base64(media) => {
+                        BamlMediaContent::Base64(b64_media) => {
                             Ok(bedrock::types::ContentBlock::Image(
                                 bedrock::types::ImageBlock::builder()
                                     .set_format(Some(bedrock::types::ImageFormat::from(
-                                        media
-                                            .mime_type
-                                            .strip_prefix("image/")
-                                            .unwrap_or(media.mime_type.as_str()),
+                                        {
+                                            let mime_type = media.mime_type_as_ok()?;
+                                            match mime_type.strip_prefix("image/") {
+                                                Some(s) => s.to_string(),
+                                                None => mime_type
+                                            }
+                                        }.as_str()
                                     )))
                                     .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
-                                        aws_smithy_types::base64::decode(media.base64.clone())?,
+                                        aws_smithy_types::base64::decode(b64_media.base64.clone())?,
                                     ))))
                                     .build()
                                     .context("Failed to build image block")?,

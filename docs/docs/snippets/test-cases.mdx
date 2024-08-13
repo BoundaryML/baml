@@ -109,6 +109,12 @@ test Test1 {
   Image files must be somewhere in `baml_src/`.
 </ParamField>
 
+<ParamField path="media_type" type="string">
+  The mime-type of the image. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on first, the file extension,
+  and second, the contents of the file.
+</ParamField>
+
 ### Using a URL
 ```baml
 test Test1 {
@@ -121,6 +127,16 @@ test Test1 {
 }
 ```
 
+<ParamField path="url" type="string" required="true">
+  The publicly accessible URL from which the image may be downloaded.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the image. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on first, the file extension,
+  and second, the contents of the file.
+</ParamField>
+
 ### Using a base64 string
 ```baml
 test Test1 {
@@ -132,6 +148,18 @@ test Test1 {
   }
 }
 ```
+
+<ParamField path="base64" type="string" required="true">
+  The base64-encoded image data.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the image. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on first, the file extension,
+  and second, the contents of the file.
+
+  If `base64` is a data URL, this field will be ignored.
+</ParamField>
 
 
 ## Audio
@@ -172,7 +200,13 @@ test Test1 {
 <ParamField path="file" type="string" required="true">
   The path to the audio file, relative to the directory containing the current BAML file.
 
-  Audio files must be somewhere in `baml_src/`.
+  audio files must be somewhere in `baml_src/`.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the audio. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on first, the file extension,
+  and second, the contents of the file.
 </ParamField>
 
 ### Using a URL
@@ -187,6 +221,16 @@ test Test1 {
 }
 ```
 
+<ParamField path="url" type="string" required="true">
+  The publicly accessible URL from which the audio may be downloaded.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the audio. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on first, the file extension,
+  and second, the contents of the file.
+</ParamField>
+
 ### Using a base64 string
 ```baml
 test Test1 {
@@ -198,3 +242,15 @@ test Test1 {
   }
 }
 ```
+
+<ParamField path="base64" type="string" required="true">
+  The base64-encoded audio data.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the audio. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on first, the file extension,
+  and second, the contents of the file.
+
+  If `base64` is a data URL, this field will be ignored.
+</ParamField>

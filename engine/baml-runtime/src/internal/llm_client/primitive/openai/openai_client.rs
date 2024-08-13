@@ -547,11 +547,11 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serd
                                 })
                             })
                         }
-                        BamlMediaContent::Base64(media) => {
+                        BamlMediaContent::Base64(b64_media) => {
                             json!({
                                 "type": media_type,
                                 media_type: json!({
-                                    "url" : format!("data:{};base64,{}", media.mime_type, media.base64)
+                                    "url" : format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
                                 })
                             })
                         }

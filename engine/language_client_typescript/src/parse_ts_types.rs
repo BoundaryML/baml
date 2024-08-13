@@ -194,15 +194,9 @@ pub fn jsunknown_to_baml_value(
         ValueType::External => {
             let external = unsafe { item.cast::<JsExternal>() };
             if let Ok(img) = env.get_value_external::<BamlImage>(&external) {
-                BamlValue::Media(baml_types::BamlMedia {
-                    media_type: baml_types::BamlMediaType::Image,
-                    content: img.inner.clone(),
-                })
+                BamlValue::Media(img.inner.clone())
             } else if let Ok(audio) = env.get_value_external::<BamlAudio>(&external) {
-                BamlValue::Media(baml_types::BamlMedia {
-                    media_type: baml_types::BamlMediaType::Audio,
-                    content: audio.inner.clone(),
-                })
+                BamlValue::Media(audio.inner.clone())
             } else {
                 if skip_unsupported {
                     return Ok(None);

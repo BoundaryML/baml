@@ -3,7 +3,7 @@ import 'react18-json-view/src/style.css'
 
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { atomFamily, atomWithStorage, unwrap, useAtomCallback } from 'jotai/utils'
+import { atomFamily, atomWithStorage, loadable, unwrap, useAtomCallback } from 'jotai/utils'
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
@@ -369,6 +369,39 @@ export const availableFunctionsAtom = atom((get) => {
   return runtime.list_functions()
 })
 
+export const streamCurlAtom = atom(true)
+export const expandImagesAtom = atom(false)
+
+const rawCurlAtomAsync = atom(async (get) => {
+  const wasm = get(wasmAtom)
+  const runtime = get(selectedRuntimeAtom)
+  const func = get(selectedFunctionAtom)
+  const test_case = get(selectedTestCaseAtom)
+  const orch_index = get(orchIndexAtom)
+  if (!wasm || !runtime || !func || !test_case) {
+    return null
+  }
+
+  const streamCurl = get(streamCurlAtom)
+  const expandImages = get(expandImagesAtom)
+
+  const wasmCallContext = new wasm.WasmCallContext()
+  wasmCallContext.node_index = orch_index
+
+  return await func.render_raw_curl_for_test(
+    runtime,
+    test_case.name,
+    wasmCallContext,
+    streamCurl,
+    expandImages,
+    async (path: string) => {
+      return await vscode.readFile(path)
+    },
+  )
+})
+
+export const rawCurlLoadable = loadable(rawCurlAtomAsync)
+
 const renderPromptAtomAsync = atom(async (get) => {
   const wasm = get(wasmAtom)
   const runtime = get(selectedRuntimeAtom)
@@ -462,49 +495,55 @@ export interface Dimension {
 
 export const orchIndexAtom = atom(0)
 export const currentClientsAtom = atom((get) => {
-  const func = get(selectedFunctionAtom)
-  const runtime = get(selectedRuntimeAtom)
-  if (!func || !runtime) {
-    return []
-  }
-
-  const wasmScopes = func.orchestration_graph(runtime)
-  if (wasmScopes === null) {
-    return []
-  }
-
-  const nodes = createClientNodes(wasmScopes)
-  return nodes.map((node) => node.name)
+  return []
 })
-// something about the orchestration graph is broken, comment it out to make it work
 export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
-  const func = get(selectedFunctionAtom)
-  const runtime = get(selectedRuntimeAtom)
-  if (!func || !runtime) {
-    return { nodes: [], edges: [] }
-  }
-
-  const wasmScopes = func.orchestration_graph(runtime)
-  if (wasmScopes === null) {
-    return { nodes: [], edges: [] }
-  }
-
-  const nodes = createClientNodes(wasmScopes)
-  const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
-
-  const edges = createEdges(unitNodes)
-
-  const positionedNodes = getPositions(groups)
-
-  positionedNodes.forEach((posNode) => {
-    const correspondingUnitNode = unitNodes.find((unitNode) => unitNode.gid === posNode.gid)
-    if (correspondingUnitNode) {
-      posNode.orch_index = correspondingUnitNode.node_index
-    }
-  })
-
-  return { nodes: positionedNodes, edges }
+  return { nodes: [], edges: [] }
 })
+// export const currentClientsAtom = atom((get) => {
+//   const func = get(selectedFunctionAtom)
+//   const runtime = get(selectedRuntimeAtom)
+//   if (!func || !runtime) {
+//     return []
+//   }
+
+//   const wasmScopes = func.orchestration_graph(runtime)
+//   if (wasmScopes === null) {
+//     return []
+//   }
+
+//   const nodes = createClientNodes(wasmScopes)
+//   return nodes.map((node) => node.name)
+// })
+// // something about the orchestration graph is broken, comment it out to make it work
+// export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
+//   const func = get(selectedFunctionAtom)
+//   const runtime = get(selectedRuntimeAtom)
+//   if (!func || !runtime) {
+//     return { nodes: [], edges: [] }
+//   }
+
+//   const wasmScopes = func.orchestration_graph(runtime)
+//   if (wasmScopes === null) {
+//     return { nodes: [], edges: [] }
+//   }
+
+//   const nodes = createClientNodes(wasmScopes)
+//   const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
+
+//   const edges = createEdges(unitNodes)
+
+//   const positionedNodes = getPositions(groups)
+
+//   positionedNodes.forEach((posNode) => {
+//     const correspondingUnitNode = unitNodes.find((unitNode) => unitNode.gid === posNode.gid)
+//     if (correspondingUnitNode) {
+//       posNode.orch_index = correspondingUnitNode.node_index
+//     }
+//   })
+
+//   return { nodes: positionedNodes, edges }
+// })
 
 interface Position {
   x: number

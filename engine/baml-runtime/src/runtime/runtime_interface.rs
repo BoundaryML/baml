@@ -128,7 +128,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             &func,
             params,
             ArgCoercer {
-                test_path: None,
+                span_path: None,
                 allow_implicit_cast_to_string: false,
             },
         )?;
@@ -242,7 +242,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
                     &func,
                     &params,
                     ArgCoercer {
-                        test_path: test.span().map(|s| s.file.path_buf().clone()),
+                        span_path: test.span().map(|s| s.file.path_buf().clone()),
                         allow_implicit_cast_to_string: true,
                     },
                 )?;
@@ -355,7 +355,7 @@ impl RuntimeInterface for InternalBamlRuntime {
             &func,
             &params,
             ArgCoercer {
-                test_path: None,
+                span_path: None,
                 allow_implicit_cast_to_string: false,
             },
         )?;
@@ -392,7 +392,7 @@ impl RuntimeInterface for InternalBamlRuntime {
                 &func,
                 &params,
                 ArgCoercer {
-                    test_path: None,
+                    span_path: None,
                     allow_implicit_cast_to_string: false,
                 },
             )?

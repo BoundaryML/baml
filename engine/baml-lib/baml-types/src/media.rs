@@ -23,6 +23,10 @@ impl fmt::Display for BamlMediaType {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BamlMedia {
     pub media_type: BamlMediaType,
+
+    /// Explicitly specified by the 'media_type' field on img and audio structs in BAML files.
+    /// example: "image/png", "image/jpeg", "audio/mp3"
+    pub mime_type: Option<String>,
     pub content: BamlMediaContent,
 }
 
@@ -34,6 +38,12 @@ pub enum BamlMediaContent {
 }
 
 impl BamlMedia {
+    pub fn mime_type_as_ok(&self) -> Result<String> {
+        self.mime_type.clone().context(format!(
+            "Please specify a media type for this {}; we could not infer one",
+            self.media_type
+        ))
+    }
     pub fn file(
         media_type: BamlMediaType,
         baml_path: PathBuf,
@@ -42,10 +52,10 @@ impl BamlMedia {
     ) -> BamlMedia {
         Self {
             media_type,
+            mime_type,
             content: BamlMediaContent::File(MediaFile {
                 span_path: baml_path,
                 relpath: relpath.into(),
-                mime_type: Some(mime_type.unwrap_or_else(|| "".to_string())),
             }),
         }
     }
@@ -53,17 +63,20 @@ impl BamlMedia {
     pub fn url(media_type: BamlMediaType, url: String, mime_type: Option<String>) -> BamlMedia {
         Self {
             media_type,
-            content: BamlMediaContent::Url(MediaUrl::new(
-                url,
-                Some(mime_type.unwrap_or_else(|| "".to_string())),
-            )),
+            mime_type,
+            content: BamlMediaContent::Url(MediaUrl { url }),
         }
     }
 
-    pub fn base64(media_type: BamlMediaType, base64: String, mime_type: String) -> BamlMedia {
+    pub fn base64(
+        media_type: BamlMediaType,
+        base64: String,
+        mime_type: Option<String>,
+    ) -> BamlMedia {
         Self {
             media_type,
-            content: BamlMediaContent::Base64(MediaBase64::new(base64, mime_type)),
+            mime_type,
+            content: BamlMediaContent::Base64(MediaBase64 { base64 }),
         }
     }
 }
@@ -80,7 +93,6 @@ pub struct MediaFile {
     /// "image { file path/to/image.png }", this would be "path/to/image.png"
     /// and should be interpreted relative to the parent dir of baml_path
     pub relpath: PathBuf,
-    pub mime_type: Option<String>,
 }
 
 impl MediaFile {
@@ -104,13 +116,6 @@ impl fmt::Display for MediaFile {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct MediaUrl {
     pub url: String,
-    pub mime_type: Option<String>,
-}
-
-impl MediaUrl {
-    pub fn new(url: String, mime_type: Option<String>) -> Self {
-        Self { url, mime_type }
-    }
 }
 
 impl fmt::Display for MediaUrl {
@@ -122,13 +127,4 @@ impl fmt::Display for MediaUrl {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct MediaBase64 {
     pub base64: String,
-    /// Explicitly specified by the 'type' field on img and audio structs in BAML files.
-    /// example: "image/png", "image/jpeg", "audio/mp3"
-    pub mime_type: String,
-}
-
-impl MediaBase64 {
-    pub fn new(base64: String, mime_type: String) -> Self {
-        Self { base64, mime_type }
-    }
 }

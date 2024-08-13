@@ -552,7 +552,7 @@ fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serd
 
                         "source": {
                             "type": "base64",
-                            "media_type": data.mime_type,
+                            "media_type": media.mime_type_as_ok()?,
                             "data": data.base64
                         }
                     }),
