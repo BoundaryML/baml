@@ -1,17 +1,20 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import React, { useCallback } from 'react'
+import React, { useState } from 'react'
+import useSWR from 'swr'
 
 import '@xyflow/react/dist/style.css'
 import {
+  wasmAtom,
   renderPromptAtom,
   selectedFunctionAtom,
-  curlAtom,
-  streamCurl,
-  orchestration_nodes,
-  GroupEntry,
-  Edge,
+  selectedRuntimeAtom,
+  selectedTestCaseAtom,
+  orchIndexAtom,
+  expandImagesAtom,
+  streamCurlAtom,
+  rawCurlLoadable,
 } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
@@ -22,13 +25,40 @@ import { Copy } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { CheckboxHeader } from './CheckboxHeader'
 import { Switch } from '../components/ui/switch'
-import CustomErrorBoundary from '../utils/ErrorFallback'
+import { vscode } from '../utils/vscode'
+import clsx from 'clsx'
+
 const handleCopy = (text: string) => () => {
   navigator.clipboard.writeText(text)
 }
 
 const CurlSnippet: React.FC = () => {
-  const rawCurl = useAtomValue(curlAtom) ?? 'Loading...'
+  const rawCurl = useAtomValue(rawCurlLoadable)
+  const [streamCurl, setStreamCurl] = useAtom(streamCurlAtom)
+  const [expandImages, setExpandImages] = useAtom(expandImagesAtom)
+
+  // if (!wasm || !runtime || !func || !test_case) {
+  //   return <div>Not yet ready</div>
+  // }
+
+  // const wasmCallContext = new wasm.WasmCallContext()
+  // wasmCallContext.node_index = orch_index
+
+  // const rawCurl = useSWR(
+  //   { swr: 'CurlSnippet', runtime, func, test_case, orch_index, streamCurl, expandImages },
+  //   async () => {
+  //     return await func.render_raw_curl_for_test(
+  //       runtime,
+  //       test_case.name,
+  //       wasmCallContext,
+  //       streamCurl,
+  //       expandImages,
+  //       async (path: string) => {
+  //         return await vscode.readFile(path)
+  //       },
+  //     )
+  //   },
+  // )
 
   return (
     <div>
@@ -36,32 +66,128 @@ const CurlSnippet: React.FC = () => {
         <label className='flex items-center mr-2 space-x-1'>
           <Switch
             className='data-[state=checked]:bg-vscode-button-background data-[state=unchecked]:bg-vscode-input-background'
-            checked={useAtomValue(streamCurl)}
-            onCheckedChange={useSetAtom(streamCurl)}
+            checked={streamCurl}
+            onCheckedChange={setStreamCurl}
           />
-          <span>View Stream Request</span>
+          <span>Show Stream Request</span>
+        </label>
+        <label className='flex items-center mr-2 space-x-1'>
+          <Switch
+            className='data-[state=checked]:bg-vscode-button-background data-[state=unchecked]:bg-vscode-input-background'
+            checked={expandImages}
+            onCheckedChange={setExpandImages}
+          />
+          <span>Show fully expanded command</span>
         </label>
         <Button
-          onClick={handleCopy(rawCurl)}
+          onClick={rawCurl.state === 'hasData' && rawCurl.data ? handleCopy(rawCurl.data) : () => {}}
           className='px-3 py-1 text-xs text-white bg-vscode-button-background hover:bg-vscode-button-hoverBackground'
         >
           <Copy size={16} />
         </Button>
       </div>
-      <PromptChunk
-        text={rawCurl}
-        client={{
-          identifier: {
-            end: 0,
-            source_file: '',
-            start: 0,
-            value: 'Curl Request',
-          },
-          provider: '',
-          model: '',
-        }}
-        showCopy={true}
-      />
+      {rawCurl.state === 'loading' ? (
+        <div>Loading...</div>
+      ) : (
+        <PromptChunk
+          text={(() => {
+            switch (rawCurl.state) {
+              case 'hasData':
+                return rawCurl.data ?? ''
+              case 'hasError':
+                return `${rawCurl.error}`
+            }
+          })()}
+          type={(() => {
+            switch (rawCurl.state) {
+              case 'hasData':
+                return 'preview'
+              case 'hasError':
+                return 'error'
+            }
+          })()}
+          client={{
+            identifier: {
+              end: 0,
+              source_file: '',
+              start: 0,
+              value: 'Curl Request',
+            },
+            provider: '',
+            model: '',
+          }}
+          showCopy={true}
+        />
+      )}
+    </div>
+  )
+}
+
+type WasmChatMessagePartMedia =
+  | {
+      type: 'url'
+      url: string
+    }
+  | {
+      type: 'path'
+      path: string
+    }
+
+const WebviewMedia: React.FC<{ bamlMediaType: 'image' | 'audio'; media: WasmChatMessagePartMedia }> = ({
+  bamlMediaType,
+  media,
+}) => {
+  const pathAsUri = useSWR({ swr: 'WebviewMedia', ...media }, async () => {
+    switch (media.type) {
+      case 'path':
+        const uri = await vscode.asWebviewUri('', media.path)
+        // Do a manual check to assert that the image exists
+        if ((await fetch(uri, { method: 'HEAD' })).status !== 200) {
+          throw new Error('file not found')
+        }
+        return uri
+      case 'url':
+        return media.url
+    }
+  })
+
+  if (pathAsUri.error) {
+    const error = typeof pathAsUri.error.message == 'string' ? pathAsUri.error.message : JSON.stringify(pathAsUri.error)
+    return (
+      <div className='bg-vscode-inputValidation-errorBackground rounded-lg px-2 py-1'>
+        <div>
+          Error loading {bamlMediaType}: {error}
+        </div>
+        <div>{media.type === 'path' ? media.path.replace('file://', '') : media.url}</div>
+      </div>
+    )
+  }
+
+  if (pathAsUri.isLoading) {
+    return <div>Loading {bamlMediaType}...</div>
+  }
+
+  const mediaUrl = pathAsUri.data
+
+  return (
+    <div className='p-1'>
+      {(() => {
+        switch (bamlMediaType) {
+          case 'image':
+            return (
+              <a href={mediaUrl} target='_blank' rel='noopener noreferrer'>
+                <img src={mediaUrl} className='max-h-[400px] max-w-[400px] object-left-top object-scale-down' />
+              </a>
+            )
+          case 'audio':
+            return (
+              <audio controls>
+                <source src={mediaUrl} />
+                Your browser does not support the audio element.
+              </audio>
+            )
+        }
+      })()}
     </div>
   )
 }
@@ -125,22 +251,17 @@ const PromptPreview: React.FC = () => {
                   }}
                 />
               )
-            if (part.is_image())
-              return (
-                <a key={idx} href={part.as_image()} target='_blank'>
-                  <img key={idx} src={part.as_image()} className='max-w-[400px] object-cover' />
-                </a>
-              )
+            if (part.is_image()) {
+              const media = part.as_media()
+              if (!media) return <div>Error loading image: this chat message part is not media</div>
+              if (media.type === 'error') return <div>Error loading image: {media.error}</div>
+              return <WebviewMedia key={idx} bamlMediaType='image' media={part.as_media()} />
+            }
             if (part.is_audio()) {
-              const audioUrl = part.as_audio()
-              if (audioUrl) {
-                return (
-                  <audio controls key={audioUrl + idx}>
-                    <source src={audioUrl} />
-                    Your browser does not support the audio element.
-                  </audio>
-                )
-              }
+              const media = part.as_media()
+              if (!media) return <div>Error loading audio: this chat message part is not media</div>
+              if (media.type === 'error') return <div>Error loading audio: {media.error}</div>
+              return <WebviewMedia key={idx} bamlMediaType='audio' media={part.as_media()} />
             }
             return null
           })}

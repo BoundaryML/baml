@@ -19,6 +19,8 @@ module.exports = {
         project: ['./tsconfig.json', './packages/*/tsconfig.json'],
       },
       extends: [
+        'plugin:react/recommended',
+        'plugin:react-hooks/recommended',
         'plugin:@typescript-eslint/recommended',
         'plugin:@typescript-eslint/eslint-recommended',
         'plugin:@typescript-eslint/recommended-requiring-type-checking',
@@ -44,13 +46,7 @@ module.exports = {
     },
   ],
   rules: {
-    '@typescript-eslint/no-unused-vars': [
-      'off', // or "error"
-      {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-        caughtErrorsIgnorePattern: '^_',
-      },
-    ],
+    '@typescript-eslint/no-unused-vars': 'off',
+    'react/react-in-jsx-scope': 'off',
   },
 }

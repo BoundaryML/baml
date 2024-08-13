@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use aws_smithy_json::serialize::JsonObjectWriter;
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types::Blob;
+use baml_types::BamlMediaContent;
 use baml_types::{BamlMedia, BamlMediaType};
 use futures::{stream, SinkExt, StreamExt};
 use internal_baml_core::ir::ClientWalker;
@@ -22,10 +23,10 @@ use crate::internal::llm_client::{
         WithStreamChat,
     },
     ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-    ModelFeatures, ResolveMedia,
+    ModelFeatures, ResolveMediaUrls,
 };
 
-use crate::RuntimeContext;
+use crate::{RenderCurlSettings, RuntimeContext};
 
 // stores properties required for making a post request to the API
 struct RequestProperties {
@@ -110,7 +111,7 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: true,
-                resolve_media_urls: ResolveMedia::Always,
+                resolve_media_urls: ResolveMediaUrls::Always,
             },
             retry_policy: client
                 .elem()
@@ -148,7 +149,7 @@ impl AwsClient {
                         }
                     };
 
-                    let mut loader = super::wasm::load_aws_config()
+                    let loader = super::wasm::load_aws_config()
                         .region(Region::new(aws_region.clone()))
                         .credentials_provider(Credentials::new(
                             aws_access_key_id.clone(),
@@ -261,7 +262,7 @@ impl WithRenderRawCurl for AwsClient {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-        _stream: bool,
+        _render_settings: RenderCurlSettings,
     ) -> Result<String> {
         let converse_input = self.build_request(ctx, prompt)?;
 
@@ -509,31 +510,42 @@ impl TryInto<bedrock::types::Message> for AwsChatMessage<'_> {
             .iter()
             .map(|part| match part {
                 ChatMessagePart::Text(text) => Ok(bedrock::types::ContentBlock::Text(text.clone())),
-                ChatMessagePart::Image(media) | ChatMessagePart::Audio(media) => match media {
-                    BamlMedia::Url(_, _) => {
-                        anyhow::bail!(
-                            "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
-                        )
+                ChatMessagePart::Media(media) => {
+                    if media.media_type != BamlMediaType::Image {
+                        anyhow::bail!("AWS supports images, but does not support this media type: {:#?}", media)
                     }
-                    BamlMedia::Base64(BamlMediaType::Image, media) => {
-                        Ok(bedrock::types::ContentBlock::Image(
-                            bedrock::types::ImageBlock::builder()
-                                .set_format(Some(bedrock::types::ImageFormat::from(
-                                    media
-                                        .media_type
-                                        .strip_prefix("image/")
-                                        .unwrap_or(media.media_type.as_str()),
-                                )))
-                                .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
-                                    aws_smithy_types::base64::decode(media.base64.clone())?,
-                                ))))
-                                .build()
-                                .context("Failed to build image block")?,
-                        ))
+                    match &media.content {
+                        BamlMediaContent::File(_) => {
+                            anyhow::bail!(
+                                "BAML internal error (AWSBedrock): file should have been resolved to base64"
+                            )
+                        }
+                        BamlMediaContent::Url(_) => {
+                            anyhow::bail!(
+                                "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
+                            )
+                        }
+                        BamlMediaContent::Base64(b64_media) => {
+                            Ok(bedrock::types::ContentBlock::Image(
+                                bedrock::types::ImageBlock::builder()
+                                    .set_format(Some(bedrock::types::ImageFormat::from(
+                                        {
+                                            let mime_type = media.mime_type_as_ok()?;
+                                            match mime_type.strip_prefix("image/") {
+                                                Some(s) => s.to_string(),
+                                                None => mime_type
+                                            }
+                                        }.as_str()
+                                    )))
+                                    .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
+                                        aws_smithy_types::base64::decode(b64_media.base64.clone())?,
+                                    ))))
+                                    .build()
+                                    .context("Failed to build image block")?,
+                            ))
+                        }
                     }
-                    _ => anyhow::bail!("AWS does not support this media type: {:#?}", media),
                 },
-                _ => anyhow::bail!("AWS does not support this message part type: {:#?}", part),
             })
             .collect::<Result<_>>()?;
 

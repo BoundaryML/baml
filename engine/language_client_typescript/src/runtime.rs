@@ -72,7 +72,7 @@ impl BamlRuntime {
     #[napi]
     pub fn create_context_manager(&self) -> RuntimeContextManager {
         self.inner
-            .create_ctx_manager(BamlValue::String("typescript".to_string()))
+            .create_ctx_manager(BamlValue::String("typescript".to_string()), None)
             .into()
     }
 

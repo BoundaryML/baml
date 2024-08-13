@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['jotai-devtools', '@baml/playground-common', '@gloo-ai/baml-schema-wasm-web', '@baml/common'],
+  productionBrowserSourceMaps: true,
   webpack(config, { isServer, dev }) {
     config.experiments = {
       ...config.experiments,
@@ -8,6 +9,10 @@ const nextConfig = {
       syncWebAssembly: true,
       layers: true,
       topLevelAwait: true,
+    }
+
+    if (dev) {
+      config.devtool = 'eval-source-map'
     }
 
     if (!isServer) {

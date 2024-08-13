@@ -3,18 +3,20 @@ import 'react18-json-view/src/style.css'
 
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { atomFamily, atomWithStorage, unwrap, useAtomCallback } from 'jotai/utils'
+import { atomFamily, atomWithStorage, loadable, unwrap, useAtomCallback } from 'jotai/utils'
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
 import { atomStore, sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import { showClientGraphAtom, showTestsAtom } from './test_uis/testHooks'
-import type {
-  WasmDiagnosticError,
-  WasmParam,
-  WasmRuntime,
-  WasmScope,
+import {
+  // We _deliberately_ only import types from wasm, instead of importing the module: wasm load is async,
+  // so we can only load wasm symbols through wasmAtom, not directly by importing wasm-schema-web
+  type WasmDiagnosticError,
+  type WasmParam,
+  type WasmRuntime,
+  type WasmScope,
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { vscode } from '../utils/vscode'
 import { useRunHooks } from './test_uis/testHooks'
@@ -30,7 +32,7 @@ const wasmAtomAsync = atom(async () => {
   return wasm
 })
 
-const wasmAtom = unwrap(wasmAtomAsync)
+export const wasmAtom = unwrap(wasmAtomAsync)
 
 const defaultEnvKeyValues: [string, string][] = (() => {
   if ((window as any).next?.version) {
@@ -367,52 +369,54 @@ export const availableFunctionsAtom = atom((get) => {
   return runtime.list_functions()
 })
 
-export const streamCurl = atom(true)
+export const streamCurlAtom = atom(true)
+export const expandImagesAtom = atom(false)
 
-const asyncCurlAtom = atom(async (get) => {
+const rawCurlAtomAsync = atom(async (get) => {
+  const wasm = get(wasmAtom)
   const runtime = get(selectedRuntimeAtom)
   const func = get(selectedFunctionAtom)
   const test_case = get(selectedTestCaseAtom)
   const orch_index = get(orchIndexAtom)
-
-  if (!runtime || !func || !test_case) {
-    return 'Not yet ready'
-  }
-  const params = Object.fromEntries(
-    test_case.inputs
-      .filter((i): i is WasmParam & { value: string } => i.value !== undefined)
-      .map((input) => [input.name, JSON.parse(input.value)]),
-  )
-  params['node_index'] = orch_index
-
-  try {
-    return await func.render_raw_curl(runtime, params, get(streamCurl))
-  } catch (e) {
-    console.error(e)
-    return `${e}`
-  }
-})
-
-export const curlAtom = unwrap(asyncCurlAtom)
-
-export const renderPromptAtom = atom((get) => {
-  const runtime = get(selectedRuntimeAtom)
-  const func = get(selectedFunctionAtom)
-  const test_case = get(selectedTestCaseAtom)
-  const orch_index = get(orchIndexAtom)
-  if (!runtime || !func || !test_case) {
+  if (!wasm || !runtime || !func || !test_case) {
     return null
   }
 
-  const params = Object.fromEntries(
-    test_case.inputs
-      .filter((i): i is WasmParam & { value: string } => i.value !== undefined)
-      .map((input) => [input.name, JSON.parse(input.value)]),
+  const streamCurl = get(streamCurlAtom)
+  const expandImages = get(expandImagesAtom)
+
+  const wasmCallContext = new wasm.WasmCallContext()
+  wasmCallContext.node_index = orch_index
+
+  return await func.render_raw_curl_for_test(
+    runtime,
+    test_case.name,
+    wasmCallContext,
+    streamCurl,
+    expandImages,
+    async (path: string) => {
+      return await vscode.readFile(path)
+    },
   )
-  params['node_index'] = orch_index
+})
+
+export const rawCurlLoadable = loadable(rawCurlAtomAsync)
+
+const renderPromptAtomAsync = atom(async (get) => {
+  const wasm = get(wasmAtom)
+  const runtime = get(selectedRuntimeAtom)
+  const func = get(selectedFunctionAtom)
+  const test_case = get(selectedTestCaseAtom)
+  const orch_index = get(orchIndexAtom)
+  if (!wasm || !runtime || !func || !test_case) {
+    return null
+  }
+
+  const wasmCallContext = new wasm.WasmCallContext()
+  wasmCallContext.node_index = orch_index
 
   try {
-    return func.render_prompt(runtime, params)
+    return await func.render_prompt_for_test(runtime, test_case.name, wasmCallContext)
   } catch (e) {
     if (e instanceof Error) {
       return e.message
@@ -421,6 +425,8 @@ export const renderPromptAtom = atom((get) => {
     }
   }
 })
+
+export const renderPromptAtom = unwrap(renderPromptAtomAsync)
 
 export interface TypeCount {
   // options are F (Fallback), R (Retry), D (Direct), B (Round Robin)
@@ -489,48 +495,55 @@ export interface Dimension {
 
 export const orchIndexAtom = atom(0)
 export const currentClientsAtom = atom((get) => {
-  const func = get(selectedFunctionAtom)
-  const runtime = get(selectedRuntimeAtom)
-  if (!func || !runtime) {
-    return []
-  }
-
-  const wasmScopes = func.orchestration_graph(runtime)
-  if (wasmScopes === null) {
-    return []
-  }
-
-  const nodes = createClientNodes(wasmScopes)
-  return nodes.map((node) => node.name)
+  return []
 })
 export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
-  const func = get(selectedFunctionAtom)
-  const runtime = get(selectedRuntimeAtom)
-  if (!func || !runtime) {
-    return { nodes: [], edges: [] }
-  }
-
-  const wasmScopes = func.orchestration_graph(runtime)
-  if (wasmScopes === null) {
-    return { nodes: [], edges: [] }
-  }
-
-  const nodes = createClientNodes(wasmScopes)
-  const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
-
-  const edges = createEdges(unitNodes)
-
-  const positionedNodes = getPositions(groups)
-
-  positionedNodes.forEach((posNode) => {
-    const correspondingUnitNode = unitNodes.find((unitNode) => unitNode.gid === posNode.gid)
-    if (correspondingUnitNode) {
-      posNode.orch_index = correspondingUnitNode.node_index
-    }
-  })
-
-  return { nodes: positionedNodes, edges }
+  return { nodes: [], edges: [] }
 })
+// export const currentClientsAtom = atom((get) => {
+//   const func = get(selectedFunctionAtom)
+//   const runtime = get(selectedRuntimeAtom)
+//   if (!func || !runtime) {
+//     return []
+//   }
+
+//   const wasmScopes = func.orchestration_graph(runtime)
+//   if (wasmScopes === null) {
+//     return []
+//   }
+
+//   const nodes = createClientNodes(wasmScopes)
+//   return nodes.map((node) => node.name)
+// })
+// // something about the orchestration graph is broken, comment it out to make it work
+// export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
+//   const func = get(selectedFunctionAtom)
+//   const runtime = get(selectedRuntimeAtom)
+//   if (!func || !runtime) {
+//     return { nodes: [], edges: [] }
+//   }
+
+//   const wasmScopes = func.orchestration_graph(runtime)
+//   if (wasmScopes === null) {
+//     return { nodes: [], edges: [] }
+//   }
+
+//   const nodes = createClientNodes(wasmScopes)
+//   const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
+
+//   const edges = createEdges(unitNodes)
+
+//   const positionedNodes = getPositions(groups)
+
+//   positionedNodes.forEach((posNode) => {
+//     const correspondingUnitNode = unitNodes.find((unitNode) => unitNode.gid === posNode.gid)
+//     if (correspondingUnitNode) {
+//       posNode.orch_index = correspondingUnitNode.node_index
+//     }
+//   })
+
+//   return { nodes: positionedNodes, edges }
+// })
 
 interface Position {
   x: number
@@ -991,12 +1004,14 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           })
           break
         case 'add_project':
-          updateFile({
-            reason: 'add_project',
-            root_path: content.root_path,
-            files: Object.entries(content.files).map(([name, content]) => ({ name, content })),
-            replace_all: true,
-          })
+          if (content && content.root_path) {
+            updateFile({
+              reason: 'add_project',
+              root_path: content.root_path,
+              files: Object.entries(content.files).map(([name, content]) => ({ name, content })),
+              replace_all: true,
+            })
+          }
           break
 
         case 'select_function':

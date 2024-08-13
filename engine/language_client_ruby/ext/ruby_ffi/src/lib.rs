@@ -99,7 +99,7 @@ impl BamlRuntimeFfi {
         RuntimeContextManager {
             inner: self
                 .inner
-                .create_ctx_manager(BamlValue::String("ruby".to_string())),
+                .create_ctx_manager(BamlValue::String("ruby".to_string()), None),
         }
     }
 

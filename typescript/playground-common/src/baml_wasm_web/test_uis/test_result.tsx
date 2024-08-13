@@ -155,7 +155,9 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
     <div className='flex flex-col w-full gap-1'>
       {failure !== undefined &&
         !(doneStatus === 'parse_failed' || (doneStatus === 'llm_failed' && (llm_response || llm_failure))) && (
-          <div className='text-xs text-vscode-errorForeground'>{failure || '<no failure message>'}</div>
+          <div className='text-xs text-vscode-errorForeground whitespace-pre-wrap'>
+            {failure || '<no failure message>'}
+          </div>
         )}
       {(llm_response || llm_failure) && (
         <div className='w-full text-xs text-vscode-descriptionForeground'>

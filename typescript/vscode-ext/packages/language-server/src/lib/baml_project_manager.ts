@@ -313,7 +313,7 @@ class Project {
   }
 
   rootPath(): string {
-    return this.wasmProject.root_dir_name()
+    return this.wasmProject.root_dir_name
   }
 
   verifyCompletionRequest(doc: TextDocument, position: Position): boolean {

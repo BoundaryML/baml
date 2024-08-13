@@ -9,10 +9,14 @@ use std::fmt;
 
 use crate::{client_registry::ClientRegistry, type_builder::TypeBuilder, RuntimeContext, SpanCtx};
 
+use super::runtime_context::BamlSrcReader;
+
 type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct RuntimeContextManager {
+    baml_src_reader: Arc<BamlSrcReader>,
+
     context: Arc<Mutex<Vec<BamlContext>>>,
     env_vars: HashMap<String, String>,
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
@@ -30,14 +34,20 @@ impl fmt::Debug for RuntimeContextManager {
 impl RuntimeContextManager {
     pub fn deep_clone(&self) -> Self {
         Self {
+            baml_src_reader: self.baml_src_reader.clone(),
+
             context: Arc::new(Mutex::new(self.context.lock().unwrap().clone())),
             env_vars: self.env_vars.clone(),
             global_tags: Arc::new(Mutex::new(self.global_tags.lock().unwrap().clone())),
         }
     }
 
-    pub fn new_from_env_vars(env_vars: HashMap<String, String>) -> Self {
+    pub fn new_from_env_vars(
+        env_vars: HashMap<String, String>,
+        baml_src_reader: BamlSrcReader,
+    ) -> Self {
         Self {
+            baml_src_reader: Arc::new(baml_src_reader),
             context: Default::default(),
             env_vars,
             global_tags: Default::default(),
@@ -120,6 +130,7 @@ impl RuntimeContextManager {
         let (cls, enm) = tb.map(|tb| tb.to_overrides()).unwrap_or_default();
 
         let mut ctx = RuntimeContext {
+            baml_src: self.baml_src_reader.clone(),
             env: self.env_vars.clone(),
             tags,
             client_overrides: Default::default(),
@@ -151,6 +162,7 @@ impl RuntimeContextManager {
             .chain(self.env_vars.iter().map(|(k, v)| (k.clone(), v.clone())));
 
         RuntimeContext {
+            baml_src: self.baml_src_reader.clone(),
             env: env_vars.collect(),
             tags: ctx.last().map(|(.., x)| x).cloned().unwrap_or_default(),
             client_overrides: Default::default(),
