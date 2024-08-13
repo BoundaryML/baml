@@ -1,15 +1,18 @@
 /// Content once a function has been selected.
 import { useAppState } from './AppStateContext'
-import { useAtomValue, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import React, { useState } from 'react'
+import useSWR from 'swr'
 
 import '@xyflow/react/dist/style.css'
 import {
   renderPromptAtom,
   selectedFunctionAtom,
-  curlAtom,
-  streamCurl,
-  expandImages,
+  selectedRuntimeAtom,
+  selectedTestCaseAtom,
+  orchIndexAtom,
+  streamCurlAtom,
+  expandImagesAtom,
 } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
@@ -21,13 +24,44 @@ import { Button } from '../components/ui/button'
 import { CheckboxHeader } from './CheckboxHeader'
 import { Switch } from '../components/ui/switch'
 import { vscode } from '../utils/vscode'
+import { WasmCallContext } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+import clsx from 'clsx'
 
 const handleCopy = (text: string) => () => {
   navigator.clipboard.writeText(text)
 }
 
 const CurlSnippet: React.FC = () => {
-  const rawCurl = useAtomValue(curlAtom) ?? 'Loading...'
+  const runtime = useAtomValue(selectedRuntimeAtom)
+  const func = useAtomValue(selectedFunctionAtom)
+  const test_case = useAtomValue(selectedTestCaseAtom)
+  const orch_index = useAtomValue(orchIndexAtom)
+
+  const [streamCurl, setStreamCurl] = useState(true)
+  const [expandImages, setExpandImages] = useState(false)
+
+  if (!runtime || !func || !test_case) {
+    return <div>Not yet ready</div>
+  }
+
+  const wasmCallContext = new WasmCallContext()
+  wasmCallContext.node_index = orch_index
+
+  const rawCurl = useSWR(
+    { swr: 'CurlSnippet', runtime, func, test_case, orch_index, streamCurl, expandImages },
+    async () => {
+      return await func.render_raw_curl_for_test(
+        runtime,
+        test_case.name,
+        wasmCallContext,
+        streamCurl,
+        expandImages,
+        async (path: string) => {
+          return await vscode.readFile(path)
+        },
+      )
+    },
+  )
 
   return (
     <div>
@@ -35,40 +69,49 @@ const CurlSnippet: React.FC = () => {
         <label className='flex items-center mr-2 space-x-1'>
           <Switch
             className='data-[state=checked]:bg-vscode-button-background data-[state=unchecked]:bg-vscode-input-background'
-            checked={useAtomValue(streamCurl)}
-            onCheckedChange={useSetAtom(streamCurl)}
+            checked={streamCurl}
+            onCheckedChange={setStreamCurl}
           />
           <span>View Stream Request</span>
         </label>
         <label className='flex items-center mr-2 space-x-1'>
           <Switch
             className='data-[state=checked]:bg-vscode-button-background data-[state=unchecked]:bg-vscode-input-background'
-            checked={useAtomValue(expandImages)}
-            onCheckedChange={useSetAtom(expandImages)}
+            checked={expandImages}
+            onCheckedChange={setExpandImages}
           />
           <span>Expand images as base64</span>
         </label>
         <Button
-          onClick={handleCopy(rawCurl)}
+          onClick={rawCurl.data ? handleCopy(rawCurl.data) : () => {}}
           className='px-3 py-1 text-xs text-white bg-vscode-button-background hover:bg-vscode-button-hoverBackground'
         >
           <Copy size={16} />
         </Button>
       </div>
-      <PromptChunk
-        text={rawCurl}
-        client={{
-          identifier: {
-            end: 0,
-            source_file: '',
-            start: 0,
-            value: 'Curl Request',
-          },
-          provider: '',
-          model: '',
-        }}
-        showCopy={true}
-      />
+      {rawCurl.isLoading ? (
+        <div>Loading...</div>
+      ) : (
+        <PromptChunk
+          text={(() => {
+            if (rawCurl.error) return `${rawCurl.error.message}`
+            if (rawCurl.isLoading) return 'Loading...'
+            return rawCurl.data ?? ''
+          })()}
+          type={rawCurl.error ? 'error' : 'preview'}
+          client={{
+            identifier: {
+              end: 0,
+              source_file: '',
+              start: 0,
+              value: 'Curl Request',
+            },
+            provider: '',
+            model: '',
+          }}
+          showCopy={true}
+        />
+      )}
     </div>
   )
 }
@@ -82,75 +125,63 @@ type WasmChatMessagePartMedia =
       type: 'path'
       path: string
     }
-  | {
-      type: 'error'
-      error: string
+
+const WebviewMedia: React.FC<{ bamlMediaType: 'image' | 'audio'; media: WasmChatMessagePartMedia }> = ({
+  bamlMediaType,
+  media,
+}) => {
+  const pathAsUri = useSWR({ swr: 'WebviewMedia', ...media }, async () => {
+    switch (media.type) {
+      case 'path':
+        const uri = await vscode.asWebviewUri('', media.path)
+        // Do a manual check to assert that the image exists
+        if ((await fetch(uri, { method: 'HEAD' })).status !== 200) {
+          throw new Error('file not found')
+        }
+        return uri
+      case 'url':
+        return media.url
     }
+  })
 
-const WebviewImage: React.FC<{ image?: WasmChatMessagePartMedia }> = ({ image }) => {
-  const [fileUrl, setFileUrl] = useState<string | null>(null)
-
-  if (!image) {
-    return <div>BAML internal error: chat message part is not image</div>
+  if (pathAsUri.error) {
+    const error = typeof pathAsUri.error.message == 'string' ? pathAsUri.error.message : JSON.stringify(pathAsUri.error)
+    return (
+      <div className='bg-vscode-inputValidation-errorBackground rounded-lg px-2 py-1'>
+        <div>
+          Error loading {bamlMediaType}: {error}
+        </div>
+        <div>{media.type === 'path' ? media.path.replace('file://', '') : media.url}</div>
+      </div>
+    )
   }
 
-  let imageUrl = null
-
-  switch (image.type) {
-    case 'url':
-      imageUrl = image.url
-      break
-    case 'path':
-      ;(async () => {
-        const fileUrl = await vscode.asWebviewUri('', image.path)
-        setFileUrl(fileUrl)
-      })()
-      imageUrl = fileUrl
-      break
-    case 'error':
-      return <div>Error loading image: {image.error}</div>
+  if (pathAsUri.isLoading) {
+    return <div>Loading {bamlMediaType}...</div>
   }
 
-  if (!imageUrl) {
-    return <div>Loading image...</div>
-  }
-
-  return image.type === 'path' ? (
-    <a href={image.path.replace('file://', 'vscode://file/')} target='_blank' rel='noopener noreferrer'>
-      <img src={imageUrl} alt={image.path} className='max-h-[400px] max-w-[400px] object-left-top object-scale-down' />
-    </a>
-  ) : (
-    <a href={imageUrl} target='_blank' rel='noopener noreferrer'>
-      <img src={imageUrl} className='max-h-[400px] max-w-[400px] object-left-top object-scale-down' />
-    </a>
-  )
-}
-
-const WebviewAudio: React.FC<{ audio?: WasmChatMessagePartMedia }> = ({ audio }) => {
-  const [audioUrl, setAudioUrl] = useState<string | null>(audio && audio.type === 'url' ? audio.url : null)
-  if (!audio) {
-    return <div>BAML internal error: chat message part is not audio</div>
-  }
-  if (audio.type === 'path') {
-    ;(async () => {
-      const imageUrl = await vscode.asWebviewUri('', audio.path)
-      setAudioUrl(imageUrl)
-    })()
-  }
-
-  if (audio.type === 'error') {
-    return <div>Error loading audio: {audio.error}</div>
-  }
-
-  if (!audioUrl) {
-    return <div>Loading audio...</div>
-  }
+  const mediaUrl = pathAsUri.data
 
   return (
-    <audio controls>
-      <source src={audioUrl} />
-      Your browser does not support the audio element.
-    </audio>
+    <div className='p-1'>
+      {(() => {
+        switch (bamlMediaType) {
+          case 'image':
+            return (
+              <a href={mediaUrl} target='_blank' rel='noopener noreferrer'>
+                <img src={mediaUrl} className='max-h-[400px] max-w-[400px] object-left-top object-scale-down' />
+              </a>
+            )
+          case 'audio':
+            return (
+              <audio controls>
+                <source src={mediaUrl} />
+                Your browser does not support the audio element.
+              </audio>
+            )
+        }
+      })()}
+    </div>
   )
 }
 
@@ -213,8 +244,18 @@ const PromptPreview: React.FC = () => {
                   }}
                 />
               )
-            if (part.is_image()) return <WebviewImage key={idx} image={part.as_media()} />
-            if (part.is_audio()) return <WebviewAudio key={idx} audio={part.as_media()} />
+            if (part.is_image()) {
+              const media = part.as_media()
+              if (!media) return <div>Error loading image: this chat message part is not media</div>
+              if (media.type === 'error') return <div>Error loading image: {media.error}</div>
+              return <WebviewMedia key={idx} bamlMediaType='image' media={part.as_media()} />
+            }
+            if (part.is_audio()) {
+              const media = part.as_media()
+              if (!media) return <div>Error loading audio: this chat message part is not media</div>
+              if (media.type === 'error') return <div>Error loading audio: {media.error}</div>
+              return <WebviewMedia key={idx} bamlMediaType='audio' media={part.as_media()} />
+            }
             return null
           })}
         </div>

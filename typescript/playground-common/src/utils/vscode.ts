@@ -49,6 +49,14 @@ class VSCodeAPIWrapper {
   public async readFile(path: string): Promise<Uint8Array> {
     const uri = await this.asWebviewUri('', path)
     const resp = await fetch(uri)
+
+    if (!resp.ok) {
+      if (resp.status === 404) {
+        throw new Error(`File does not exist: '${path}'`)
+      }
+      throw new Error(`Fetch via vscode resulted in status=${resp.status} (see network logs for more details)`)
+    }
+
     const blob = await resp.blob()
     const arrayBuffer = await blob.arrayBuffer()
 

@@ -74,7 +74,7 @@ where
                 .await
             {
                 Ok(messages) => return self.chat(ctx, &messages).await,
-                Err(e) => return LLMResponse::OtherFailure(format!("Error occurred: {:#}", e)),
+                Err(e) => return LLMResponse::OtherFailure(format!("Error occurred:\n\n{:?}", e)),
             }
         }
 
@@ -247,7 +247,7 @@ where
                 Ok(messages) => return self.stream_chat(ctx, &messages).await,
                 Err(e) => {
                     return Err(LLMResponse::OtherFailure(format!(
-                        "Error occurred: {:#}",
+                        "Error occurred:\n\n{:?}",
                         e
                     )))
                 }

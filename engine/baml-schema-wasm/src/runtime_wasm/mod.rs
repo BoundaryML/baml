@@ -530,7 +530,7 @@ impl WasmTestResponse {
                 baml_runtime::TestStatus::Pass => None,
                 baml_runtime::TestStatus::Fail(r) => r.render_error(),
             },
-            Err(e) => Some(e.to_string()),
+            Err(e) => Some(format!("{e:#}")),
         }
     }
 
@@ -639,10 +639,10 @@ trait WithRenderError {
 
 impl WithRenderError for baml_runtime::TestFailReason<'_> {
     fn render_error(&self) -> Option<String> {
-        match self {
-            baml_runtime::TestFailReason::TestUnspecified(e) => Some(e.to_string()),
+        match &self {
+            baml_runtime::TestFailReason::TestUnspecified(e) => Some(format!("{e:#}")),
             baml_runtime::TestFailReason::TestLLMFailure(f) => f.render_error(),
-            baml_runtime::TestFailReason::TestParseFailure(e) => Some(e.to_string()),
+            baml_runtime::TestFailReason::TestParseFailure(e) => Some(format!("{e:#}")),
         }
     }
 }
@@ -1313,29 +1313,28 @@ impl From<&OrchestratorNode> for SerializableOrchestratorNode {
 fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader {
     Some(Box::new(move |path| {
         Box::pin({
-            // TODO: this doesn't handle non-UTF8 paths
             let path = path.to_string();
             let get_baml_src_cb = get_baml_src_cb.clone();
             async move {
                 let null = JsValue::NULL;
                 let Ok(read) = get_baml_src_cb.call1(&null, &JsValue::from(path.clone())) else {
-                    anyhow::bail!(
-                        "Failed to read file {} because get-baml-src callback failed",
-                        path
-                    )
+                    anyhow::bail!("readFileRef did not return a promise")
                 };
-                log::info!("get-baml-src rust: got promise back from js for {}", path);
 
                 let read = JsFuture::from(Promise::unchecked_from_js(read)).await;
 
-                let Ok(read) = read else {
-                    anyhow::bail!(
-                        "Failed to read file {} because get-baml-src promise rejected",
-                        path
-                    )
-                };
+                let read = match read {
+                    Ok(read) => read,
+                    Err(err) => {
+                        if let Some(e) = err.dyn_ref::<js_sys::Error>() {
+                            if let Some(e_str) = e.message().as_string() {
+                                anyhow::bail!("{}", e_str)
+                            }
+                        }
 
-                log::info!("get-baml-src rust: future resolved {}", path);
+                        return Err(anyhow::anyhow!("{:?}", err).context("readFileRef rejected"));
+                    }
+                };
 
                 // TODO: how does JsValue -> Uint8Array work without try_from?
                 Ok(Uint8Array::from(read).to_vec())
@@ -1443,7 +1442,7 @@ impl WasmFunction {
                 RenderedPrompt::Chat(chat_messages) => chat_messages,
                 RenderedPrompt::Completion(_) => vec![], // or handle this case differently
             },
-            Err(e) => return Err(wasm_bindgen::JsError::new(format!("{:#?}", e).as_str())),
+            Err(e) => return Err(wasm_bindgen::JsError::new(format!("{:?}", e).as_str())),
         };
 
         rt.runtime
@@ -1459,7 +1458,7 @@ impl WasmFunction {
                 wasm_call_context.node_index,
             )
             .await
-            .map_err(|e| wasm_bindgen::JsError::new(format!("{e:#?}").as_str()))
+            .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
     }
 
     #[wasm_bindgen]
@@ -1517,7 +1516,7 @@ impl WasmFunction {
         let graph = rt
             .internal()
             .orchestration_graph(&client_name, &ctx)
-            .map_err(|e| JsValue::from_str(&format!("{:#?}", e)))?;
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
         // Serialize the scopes to JsValue
         let mut scopes = Vec::new();

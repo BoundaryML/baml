@@ -116,6 +116,7 @@
     "react-slick": "^0.30.2",
     "react-syntax-highlighter": "^15.5.0",
     "react18-json-view": "^0.2.7",
+    "swr": "^2.2.5",
     "tailwind-merge": "^2.0.0",
     "tailwindcss-animate": "^1.0.7",
     "unique-names-generator": "^4.7.1",

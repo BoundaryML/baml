@@ -368,40 +368,8 @@ export const availableFunctionsAtom = atom((get) => {
   return runtime.list_functions()
 })
 
-export const streamCurl = atom(true)
-export const expandImages = atom(false)
-
-const asyncCurlAtom = atom(async (get) => {
-  const runtime = get(selectedRuntimeAtom)
-  const func = get(selectedFunctionAtom)
-  const test_case = get(selectedTestCaseAtom)
-  const orch_index = get(orchIndexAtom)
-
-  if (!runtime || !func || !test_case) {
-    return 'Not yet ready'
-  }
-
-  const wasmCallContext = new WasmCallContext()
-  wasmCallContext.node_index = orch_index
-
-  try {
-    return await func.render_raw_curl_for_test(
-      runtime,
-      test_case.name,
-      wasmCallContext,
-      get(streamCurl),
-      get(expandImages),
-      async (path: string) => {
-        return await vscode.readFile(path)
-      },
-    )
-  } catch (e) {
-    console.error(e)
-    return `${e}`
-  }
-})
-
-export const curlAtom = unwrap(asyncCurlAtom)
+export const streamCurlAtom = atom(true)
+export const expandImagesAtom = atom(false)
 
 export const renderPromptAtom = atom((get) => {
   const runtime = get(selectedRuntimeAtom)

@@ -34,7 +34,7 @@ test  ashrek2 {
     img {
       media_type "image/png"
       // file "baml_src://shrek.png"
-      file "shrek 2.png"
+      file "shrek .png"
       //file "shrek-🐵.png"
     }
   }
