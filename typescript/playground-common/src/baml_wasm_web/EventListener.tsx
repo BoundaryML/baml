@@ -462,13 +462,6 @@ export interface Dimension {
 
 export const orchIndexAtom = atom(0)
 export const currentClientsAtom = atom((get) => {
-  return []
-})
-export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
-  return { nodes: [], edges: [] }
-})
-// something about the orchestration graph is broken, comment it out to make it work
-export const currentClientsAtom_BROKEN = atom((get) => {
   const func = get(selectedFunctionAtom)
   const runtime = get(selectedRuntimeAtom)
   if (!func || !runtime) {
@@ -484,7 +477,7 @@ export const currentClientsAtom_BROKEN = atom((get) => {
   return nodes.map((node) => node.name)
 })
 // something about the orchestration graph is broken, comment it out to make it work
-export const orchestration_nodes_BROKEN = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
+export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
   const func = get(selectedFunctionAtom)
   const runtime = get(selectedRuntimeAtom)
   if (!func || !runtime) {
