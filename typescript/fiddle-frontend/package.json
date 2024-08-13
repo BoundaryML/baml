@@ -56,6 +56,7 @@
     "react-joyride": "^2.8.1",
     "react-resizable-panels": "^2.0.16",
     "sonner": "^1.4.41",
+    "swr": "^2.2.5",
     "tailwind-merge": "^2.2.2",
     "tailwindcss-animate": "^1.0.7",
     "unique-names-generator": "^4.7.1",
