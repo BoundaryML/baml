@@ -6,13 +6,12 @@ import useSWR from 'swr'
 
 import '@xyflow/react/dist/style.css'
 import {
+  wasmAtom,
   renderPromptAtom,
   selectedFunctionAtom,
   selectedRuntimeAtom,
   selectedTestCaseAtom,
   orchIndexAtom,
-  streamCurlAtom,
-  expandImagesAtom,
 } from '../baml_wasm_web/EventListener'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
@@ -24,7 +23,6 @@ import { Button } from '../components/ui/button'
 import { CheckboxHeader } from './CheckboxHeader'
 import { Switch } from '../components/ui/switch'
 import { vscode } from '../utils/vscode'
-import { WasmCallContext } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import clsx from 'clsx'
 
 const handleCopy = (text: string) => () => {
@@ -32,6 +30,7 @@ const handleCopy = (text: string) => () => {
 }
 
 const CurlSnippet: React.FC = () => {
+  const wasm = useAtomValue(wasmAtom)
   const runtime = useAtomValue(selectedRuntimeAtom)
   const func = useAtomValue(selectedFunctionAtom)
   const test_case = useAtomValue(selectedTestCaseAtom)
@@ -40,11 +39,11 @@ const CurlSnippet: React.FC = () => {
   const [streamCurl, setStreamCurl] = useState(true)
   const [expandImages, setExpandImages] = useState(false)
 
-  if (!runtime || !func || !test_case) {
+  if (!wasm || !runtime || !func || !test_case) {
     return <div>Not yet ready</div>
   }
 
-  const wasmCallContext = new WasmCallContext()
+  const wasmCallContext = new wasm.WasmCallContext()
   wasmCallContext.node_index = orch_index
 
   const rawCurl = useSWR(

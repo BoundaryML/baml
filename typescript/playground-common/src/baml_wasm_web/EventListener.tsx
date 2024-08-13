@@ -11,7 +11,8 @@ import { atomStore, sessionStore, vscodeLocalStorageStore } from './JotaiProvide
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
 import { showClientGraphAtom, showTestsAtom } from './test_uis/testHooks'
 import {
-  WasmCallContext,
+  // We _deliberately_ only import types from wasm, instead of importing the module: wasm load is async,
+  // so we can only load wasm symbols through wasmAtom, not directly by importing wasm-schema-web
   type WasmDiagnosticError,
   type WasmParam,
   type WasmRuntime,
@@ -31,7 +32,7 @@ const wasmAtomAsync = atom(async () => {
   return wasm
 })
 
-const wasmAtom = unwrap(wasmAtomAsync)
+export const wasmAtom = unwrap(wasmAtomAsync)
 
 const defaultEnvKeyValues: [string, string][] = (() => {
   if ((window as any).next?.version) {
@@ -368,19 +369,17 @@ export const availableFunctionsAtom = atom((get) => {
   return runtime.list_functions()
 })
 
-export const streamCurlAtom = atom(true)
-export const expandImagesAtom = atom(false)
-
 export const renderPromptAtom = atom((get) => {
+  const wasm = get(wasmAtom)
   const runtime = get(selectedRuntimeAtom)
   const func = get(selectedFunctionAtom)
   const test_case = get(selectedTestCaseAtom)
   const orch_index = get(orchIndexAtom)
-  if (!runtime || !func || !test_case) {
+  if (!wasm || !runtime || !func || !test_case) {
     return null
   }
 
-  const wasmCallContext = new WasmCallContext()
+  const wasmCallContext = new wasm.WasmCallContext()
   wasmCallContext.node_index = orch_index
 
   try {
@@ -461,48 +460,54 @@ export interface Dimension {
 
 export const orchIndexAtom = atom(0)
 export const currentClientsAtom = atom((get) => {
-  const func = get(selectedFunctionAtom)
-  const runtime = get(selectedRuntimeAtom)
-  if (!func || !runtime) {
-    return []
-  }
-
-  const wasmScopes = func.orchestration_graph(runtime)
-  if (wasmScopes === null) {
-    return []
-  }
-
-  const nodes = createClientNodes(wasmScopes)
-  return nodes.map((node) => node.name)
+  return []
 })
 export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
-  const func = get(selectedFunctionAtom)
-  const runtime = get(selectedRuntimeAtom)
-  if (!func || !runtime) {
-    return { nodes: [], edges: [] }
-  }
-
-  const wasmScopes = func.orchestration_graph(runtime)
-  if (wasmScopes === null) {
-    return { nodes: [], edges: [] }
-  }
-
-  const nodes = createClientNodes(wasmScopes)
-  const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
-
-  const edges = createEdges(unitNodes)
-
-  const positionedNodes = getPositions(groups)
-
-  positionedNodes.forEach((posNode) => {
-    const correspondingUnitNode = unitNodes.find((unitNode) => unitNode.gid === posNode.gid)
-    if (correspondingUnitNode) {
-      posNode.orch_index = correspondingUnitNode.node_index
-    }
-  })
-
-  return { nodes: positionedNodes, edges }
+  return { nodes: [], edges: [] }
 })
+// export const currentClientsAtom = atom((get) => {
+//   const func = get(selectedFunctionAtom)
+//   const runtime = get(selectedRuntimeAtom)
+//   if (!func || !runtime) {
+//     return []
+//   }
+
+//   const wasmScopes = func.orchestration_graph(runtime)
+//   if (wasmScopes === null) {
+//     return []
+//   }
+
+//   const nodes = createClientNodes(wasmScopes)
+//   return nodes.map((node) => node.name)
+// })
+// export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
+//   const func = get(selectedFunctionAtom)
+//   const runtime = get(selectedRuntimeAtom)
+//   if (!func || !runtime) {
+//     return { nodes: [], edges: [] }
+//   }
+
+//   const wasmScopes = func.orchestration_graph(runtime)
+//   if (wasmScopes === null) {
+//     return { nodes: [], edges: [] }
+//   }
+
+//   const nodes = createClientNodes(wasmScopes)
+//   const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
+
+//   const edges = createEdges(unitNodes)
+
+//   const positionedNodes = getPositions(groups)
+
+//   positionedNodes.forEach((posNode) => {
+//     const correspondingUnitNode = unitNodes.find((unitNode) => unitNode.gid === posNode.gid)
+//     if (correspondingUnitNode) {
+//       posNode.orch_index = correspondingUnitNode.node_index
+//     }
+//   })
+
+//   return { nodes: positionedNodes, edges }
+// })
 
 interface Position {
   x: number
@@ -963,12 +968,14 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           })
           break
         case 'add_project':
-          updateFile({
-            reason: 'add_project',
-            root_path: content.root_path,
-            files: Object.entries(content.files).map(([name, content]) => ({ name, content })),
-            replace_all: true,
-          })
+          if (content && content.root_path) {
+            updateFile({
+              reason: 'add_project',
+              root_path: content.root_path,
+              files: Object.entries(content.files).map(([name, content]) => ({ name, content })),
+              replace_all: true,
+            })
+          }
           break
 
         case 'select_function':
