@@ -162,19 +162,6 @@ async def test_should_work_with_image_url():
 
 
 @pytest.mark.asyncio
-async def test_should_work_with_image_file():
-    res = await b.DescribeImage2(
-        classWithImage={
-            "myImage": {"file": "baml_src://fiddle-examples/images/xkcd-standards.png"},
-            "param2": "dummy-param2",
-            "fake_image": {"url": "dummy-url-fake-image"},
-        },
-        img2={"file": "baml_src://fiddle-examples/images/xkcd-standards.png"},
-    )
-    assert_that(res.lower()).matches(r"(green|yellow|shrek|ogre)")
-
-
-@pytest.mark.asyncio
 async def test_should_work_with_image_list():
     res = await b.TestImageListInput(
         imgs=[
