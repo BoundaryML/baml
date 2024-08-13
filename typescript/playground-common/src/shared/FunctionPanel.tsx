@@ -71,7 +71,7 @@ const CurlSnippet: React.FC = () => {
             checked={streamCurl}
             onCheckedChange={setStreamCurl}
           />
-          <span>View Stream Request</span>
+          <span>Show Stream Request</span>
         </label>
         <label className='flex items-center mr-2 space-x-1'>
           <Switch
@@ -79,7 +79,7 @@ const CurlSnippet: React.FC = () => {
             checked={expandImages}
             onCheckedChange={setExpandImages}
           />
-          <span>Expand images as base64</span>
+          <span>Show fully expanded command</span>
         </label>
         <Button
           onClick={rawCurl.data ? handleCopy(rawCurl.data) : () => {}}

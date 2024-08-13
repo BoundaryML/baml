@@ -169,14 +169,14 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
 }
 
 impl<'ir> WithPrompt<'ir> for LLMPrimitiveProvider {
-    fn render_prompt(
+    async fn render_prompt(
         &'ir self,
         ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<internal_baml_jinja::RenderedPrompt> {
-        match_llm_provider!(self, render_prompt, ir, renderer, ctx, params)
+        match_llm_provider!(self, render_prompt, async, ir, renderer, ctx, params)
     }
 }
 

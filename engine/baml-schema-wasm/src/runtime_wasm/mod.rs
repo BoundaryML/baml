@@ -1366,7 +1366,7 @@ impl WasmCallContext {
 #[wasm_bindgen]
 impl WasmFunction {
     #[wasm_bindgen]
-    pub fn render_prompt_for_test(
+    pub async fn render_prompt_for_test(
         &self,
         rt: &WasmRuntime,
         test_name: String,
@@ -1386,6 +1386,7 @@ impl WasmFunction {
         rt.runtime
             .internal()
             .render_prompt(&self.name, &ctx, &params, wasm_call_context.node_index)
+            .await
             .as_ref()
             .map(|(p, scope)| (p, scope).into())
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))
@@ -1430,12 +1431,11 @@ impl WasmFunction {
             .get_test_params(&self.name, &test_name, &ctx)
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
-        let result = rt.runtime.internal().render_prompt(
-            &self.name,
-            &ctx,
-            &params,
-            wasm_call_context.node_index,
-        );
+        let result = rt
+            .runtime
+            .internal()
+            .render_prompt(&self.name, &ctx, &params, wasm_call_context.node_index)
+            .await;
 
         let final_prompt = match result {
             Ok((prompt, _)) => match prompt {

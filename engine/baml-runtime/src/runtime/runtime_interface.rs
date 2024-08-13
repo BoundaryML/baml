@@ -116,7 +116,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         WithInternal::features(self)
     }
 
-    fn render_prompt(
+    async fn render_prompt(
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
@@ -154,6 +154,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         return node
             .provider
             .render_prompt(self.ir(), &renderer, ctx, &baml_args)
+            .await
             .map(|prompt| (prompt, node.scope));
     }
 

@@ -42,7 +42,8 @@ pub trait WithClient {
 }
 
 pub trait WithPrompt<'ir> {
-    fn render_prompt(
+    #[allow(async_fn_in_trait)]
+    async fn render_prompt(
         &'ir self,
         ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
@@ -70,8 +71,14 @@ where
     #[allow(async_fn_in_trait)]
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse {
         if let RenderedPrompt::Chat(chat) = &prompt {
-            match process_media_urls(self.model_features().resolve_media_urls, None, ctx, chat)
-                .await
+            match process_media_urls(
+                self.model_features().resolve_media_urls,
+                true,
+                None,
+                ctx,
+                chat,
+            )
+            .await
             {
                 Ok(messages) => return self.chat(ctx, &messages).await,
                 Err(e) => return LLMResponse::OtherFailure(format!("Error occurred:\n\n{:?}", e)),
@@ -118,7 +125,7 @@ impl<'ir, T> WithPrompt<'ir> for T
 where
     T: WithClient + WithChat + WithCompletion,
 {
-    fn render_prompt(
+    async fn render_prompt(
         &'ir self,
         ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
@@ -128,6 +135,16 @@ where
         let features = self.model_features();
 
         let prompt = renderer.render_prompt(ir, ctx, params, self.context())?;
+
+        let prompt = match prompt {
+            RenderedPrompt::Completion(_) => prompt,
+            RenderedPrompt::Chat(chat) => {
+                // We never need to resolve media URLs here: webview rendering understands how to handle URLs and file refs
+                let chat =
+                    process_media_urls(ResolveMediaUrls::Never, false, None, ctx, &chat).await?;
+                RenderedPrompt::Chat(chat)
+            }
+        };
 
         let mut prompt = match (features.completion, features.chat) {
             (true, false) => {
@@ -178,6 +195,7 @@ where
     ) -> Result<String> {
         let chat_messages = process_media_urls(
             self.model_features().resolve_media_urls,
+            true,
             Some(render_settings),
             ctx,
             prompt,
@@ -241,8 +259,14 @@ where
     #[allow(async_fn_in_trait)]
     async fn stream(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> StreamResponse {
         if let RenderedPrompt::Chat(ref chat) = prompt {
-            match process_media_urls(self.model_features().resolve_media_urls, None, ctx, chat)
-                .await
+            match process_media_urls(
+                self.model_features().resolve_media_urls,
+                true,
+                None,
+                ctx,
+                chat,
+            )
+            .await
             {
                 Ok(messages) => return self.stream_chat(ctx, &messages).await,
                 Err(e) => {
@@ -264,7 +288,8 @@ where
 /// We assume b64 with mime-type is the universally accepted format in an API request.
 /// Other formats will be converted into that, depending on what formats are allowed according to supported_media_formats.
 async fn process_media_urls(
-    supported_media_formats: ResolveMediaUrls,
+    resolve_media_urls: ResolveMediaUrls,
+    resolve_files: bool,
     render_settings: Option<RenderCurlSettings>,
     ctx: &RuntimeContext,
     chat: &Vec<RenderedChatMessage>,
@@ -281,9 +306,15 @@ async fn process_media_urls(
                 let ChatMessagePart::Media(part) = any_part else {
                     return Ok(any_part.clone());
                 };
-                process_media(supported_media_formats, render_settings, ctx, part)
-                    .await
-                    .map(ChatMessagePart::Media)
+                process_media(
+                    resolve_media_urls,
+                    resolve_files,
+                    render_settings,
+                    ctx,
+                    part,
+                )
+                .await
+                .map(ChatMessagePart::Media)
             })
             .collect::<Vec<_>>();
         async move {
@@ -311,13 +342,18 @@ async fn process_media_urls(
 
 async fn process_media(
     resolve_media_urls: ResolveMediaUrls,
+    resolve_files: bool,
     render_settings: RenderCurlSettings,
     ctx: &RuntimeContext,
     part: &BamlMedia,
 ) -> Result<BamlMedia> {
     match &part.content {
         BamlMediaContent::File(media_file) => {
-            // Files are always transformed into base64 with mime-type attached.
+            // Prompt rendering preserves files, because the vscode webview understands files.
+            // In all other cases, we always convert files to base64.
+            if (!resolve_files) {
+                return Ok(part.clone());
+            }
 
             let media_path = media_file.path()?.to_string_lossy().into_owned();
 
@@ -423,6 +459,14 @@ async fn process_media(
                 return Ok(part.clone());
             }
 
+            if let Some((mime_type, base64)) = as_base64(media_b64.base64.as_str()) {
+                return Ok(BamlMedia::base64(
+                    part.media_type,
+                    base64.to_string(),
+                    mime_type.to_string(),
+                ));
+            }
+
             let bytes = BASE64_STANDARD.decode(&media_b64.base64).context(
                 format!(
                     "Failed to decode '{}...' as base64 ({}); see https://docs.boundaryml.com/docs/snippets/test-cases#images",
@@ -452,10 +496,8 @@ async fn to_base64_with_inferred_mime_type(
     ctx: &RuntimeContext,
     media_url: &MediaUrl,
 ) -> Result<(String, String)> {
-    if let Some(data_url) = media_url.url.strip_prefix("data:") {
-        if let Some((mime_type, base64)) = data_url.split_once(";base64,") {
-            return Ok((base64.to_string(), mime_type.to_string()));
-        }
+    if let Some((mime_type, base64)) = as_base64(&media_url.url.as_str()) {
+        return Ok((base64.to_string(), mime_type.to_string()));
     }
     let response = match fetch_with_proxy(
         &media_url.url,
@@ -481,6 +523,21 @@ async fn to_base64_with_inferred_mime_type(
     }
     .to_string();
     Ok((base64, mime_type))
+}
+
+/// A naive implementation of the data URL parser, returning the (mime_type, base64)
+/// if parsing succeeds. Specifically, we only support specifying a single mime-type (so
+/// fields like 'charset' will be ignored) and only base64 data URLs.
+///
+/// See: https://fetch.spec.whatwg.org/#data-urls
+fn as_base64<'s>(maybe_base64_url: &'s str) -> Option<(&'s str, &'s str)> {
+    if let Some(data_url) = maybe_base64_url.strip_prefix("data:") {
+        if let Some((mime_type, base64)) = data_url.split_once(";base64,") {
+            return Some((mime_type, base64));
+        }
+    }
+
+    None
 }
 
 async fn fetch_with_proxy(

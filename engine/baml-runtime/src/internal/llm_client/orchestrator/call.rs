@@ -1,8 +1,8 @@
 use anyhow::Result;
 use baml_types::BamlValue;
-use web_time::Duration;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
+use web_time::Duration;
 
 use crate::{
     internal::{
@@ -36,7 +36,7 @@ pub async fn orchestrate(
     let mut total_sleep_duration = std::time::Duration::from_secs(0);
 
     for node in iter {
-        let prompt = match node.render_prompt(ir, prompt, ctx, params) {
+        let prompt = match node.render_prompt(ir, prompt, ctx, params).await {
             Ok(p) => p,
             Err(e) => {
                 results.push((node.scope, LLMResponse::OtherFailure(e.to_string()), None));

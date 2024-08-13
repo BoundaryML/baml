@@ -161,14 +161,14 @@ pub trait IterOrchestrator {
 }
 
 impl<'ir> WithPrompt<'ir> for OrchestratorNode {
-    fn render_prompt(
+    async fn render_prompt(
         &'ir self,
         ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<RenderedPrompt> {
-        self.provider.render_prompt(ir, renderer, ctx, params)
+        self.provider.render_prompt(ir, renderer, ctx, params).await
     }
 }
 

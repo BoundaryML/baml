@@ -369,7 +369,7 @@ export const availableFunctionsAtom = atom((get) => {
   return runtime.list_functions()
 })
 
-export const renderPromptAtom = atom((get) => {
+const renderPromptAtomAsync = atom(async (get) => {
   const wasm = get(wasmAtom)
   const runtime = get(selectedRuntimeAtom)
   const func = get(selectedFunctionAtom)
@@ -383,7 +383,7 @@ export const renderPromptAtom = atom((get) => {
   wasmCallContext.node_index = orch_index
 
   try {
-    return func.render_prompt_for_test(runtime, test_case.name, wasmCallContext)
+    return await func.render_prompt_for_test(runtime, test_case.name, wasmCallContext)
   } catch (e) {
     if (e instanceof Error) {
       return e.message
@@ -392,6 +392,8 @@ export const renderPromptAtom = atom((get) => {
     }
   }
 })
+
+export const renderPromptAtom = unwrap(renderPromptAtomAsync)
 
 export interface TypeCount {
   // options are F (Fallback), R (Retry), D (Direct), B (Round Robin)
@@ -465,49 +467,51 @@ export const currentClientsAtom = atom((get) => {
 export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
   return { nodes: [], edges: [] }
 })
-// export const currentClientsAtom = atom((get) => {
-//   const func = get(selectedFunctionAtom)
-//   const runtime = get(selectedRuntimeAtom)
-//   if (!func || !runtime) {
-//     return []
-//   }
+// something about the orchestration graph is broken, comment it out to make it work
+export const currentClientsAtom_BROKEN = atom((get) => {
+  const func = get(selectedFunctionAtom)
+  const runtime = get(selectedRuntimeAtom)
+  if (!func || !runtime) {
+    return []
+  }
 
-//   const wasmScopes = func.orchestration_graph(runtime)
-//   if (wasmScopes === null) {
-//     return []
-//   }
+  const wasmScopes = func.orchestration_graph(runtime)
+  if (wasmScopes === null) {
+    return []
+  }
 
-//   const nodes = createClientNodes(wasmScopes)
-//   return nodes.map((node) => node.name)
-// })
-// export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
-//   const func = get(selectedFunctionAtom)
-//   const runtime = get(selectedRuntimeAtom)
-//   if (!func || !runtime) {
-//     return { nodes: [], edges: [] }
-//   }
+  const nodes = createClientNodes(wasmScopes)
+  return nodes.map((node) => node.name)
+})
+// something about the orchestration graph is broken, comment it out to make it work
+export const orchestration_nodes_BROKEN = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
+  const func = get(selectedFunctionAtom)
+  const runtime = get(selectedRuntimeAtom)
+  if (!func || !runtime) {
+    return { nodes: [], edges: [] }
+  }
 
-//   const wasmScopes = func.orchestration_graph(runtime)
-//   if (wasmScopes === null) {
-//     return { nodes: [], edges: [] }
-//   }
+  const wasmScopes = func.orchestration_graph(runtime)
+  if (wasmScopes === null) {
+    return { nodes: [], edges: [] }
+  }
 
-//   const nodes = createClientNodes(wasmScopes)
-//   const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
+  const nodes = createClientNodes(wasmScopes)
+  const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
 
-//   const edges = createEdges(unitNodes)
+  const edges = createEdges(unitNodes)
 
-//   const positionedNodes = getPositions(groups)
+  const positionedNodes = getPositions(groups)
 
-//   positionedNodes.forEach((posNode) => {
-//     const correspondingUnitNode = unitNodes.find((unitNode) => unitNode.gid === posNode.gid)
-//     if (correspondingUnitNode) {
-//       posNode.orch_index = correspondingUnitNode.node_index
-//     }
-//   })
+  positionedNodes.forEach((posNode) => {
+    const correspondingUnitNode = unitNodes.find((unitNode) => unitNode.gid === posNode.gid)
+    if (correspondingUnitNode) {
+      posNode.orch_index = correspondingUnitNode.node_index
+    }
+  })
 
-//   return { nodes: positionedNodes, edges }
-// })
+  return { nodes: positionedNodes, edges }
+})
 
 interface Position {
   x: number

@@ -130,7 +130,8 @@ pub trait InternalRuntimeInterface {
         ctx: &RuntimeContext,
     ) -> Result<FunctionWalker<'ir>>;
 
-    fn render_prompt(
+    #[allow(async_fn_in_trait)]
+    async fn render_prompt(
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
