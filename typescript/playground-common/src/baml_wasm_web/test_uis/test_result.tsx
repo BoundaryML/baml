@@ -585,26 +585,24 @@ const TestResults: React.FC = () => {
         >
           Test Results
         </Badge>
-        {!isNextJs && (
-          <Badge
-            className={clsx(
-              'cursor-pointer hover:bg-vscode-tab-activeBackground',
-              showClientGraph
-                ? 'underline bg-vscode-tab-activeBackground text-vscode-tab-activeForeground'
-                : 'bg-transparent text-vscode-foreground',
-            )}
-            onClick={() => {
-              setClientGraph(true)
-            }}
-          >
-            Client Graph ✨
-          </Badge>
-        )}
+        <Badge
+          className={clsx(
+            'cursor-pointer hover:bg-vscode-tab-activeBackground',
+            showClientGraph
+              ? 'underline bg-vscode-tab-activeBackground text-vscode-tab-activeForeground'
+              : 'bg-transparent text-vscode-foreground',
+          )}
+          onClick={() => {
+            setClientGraph(true)
+          }}
+        >
+          Client Graph ✨
+        </Badge>
       </div>
 
-      <ErrorBoundary fallback={<div>Failed to render</div>}>
+      <CustomErrorBoundary>
         {showClientGraph ? <ClientGraph /> : showTests ? <TestResultContent /> : <TestCaseList />}
-      </ErrorBoundary>
+      </CustomErrorBoundary>
     </div>
   )
 }

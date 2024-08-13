@@ -1499,8 +1499,12 @@ impl WasmFunction {
 
     pub fn orchestration_graph(&self, rt: &WasmRuntime) -> Result<Vec<WasmScope>, JsValue> {
         let rt: &BamlRuntime = &rt.runtime;
-        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
-        let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
+
+        let missing_env_vars = rt.internal().ir().required_env_vars();
+        let ctx = rt
+            .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
+            .create_ctx_with_default(missing_env_vars.iter());
+
         let ir = rt.internal().ir();
         let walker = ir
             .find_function(&self.name)
@@ -1508,10 +1512,6 @@ impl WasmFunction {
         let renderer = PromptRenderer::from_function(&walker, ir, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
         let client_name = renderer.client_name().to_string();
-        log::info!("Client name: {}", client_name);
-
-        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
-        let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
 
         let graph = rt
             .internal()
