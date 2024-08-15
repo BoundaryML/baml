@@ -59,6 +59,20 @@ impl From<ChatMessagePart> for WasmChatMessagePart {
 }
 
 #[wasm_bindgen]
+#[derive(Clone, Copy)]
+pub enum WasmChatMessagePartMediaType {
+    Url,
+    File,
+    Error,
+}
+
+#[wasm_bindgen(getter_with_clone)]
+pub struct WasmChatMessagePartMedia {
+    pub r#type: WasmChatMessagePartMediaType,
+    pub content: String,
+}
+
+#[wasm_bindgen]
 impl WasmChatMessagePart {
     #[wasm_bindgen]
     pub fn is_text(&self) -> bool {
@@ -94,35 +108,34 @@ impl WasmChatMessagePart {
     }
 
     #[wasm_bindgen]
-    // TODO: this needs to signal to TS how it should be rendered
-    // currently we're only rendering file paths, but also need to support url & b64
-    pub fn as_media(&self) -> JsValue {
+    pub fn as_media(&self) -> Option<WasmChatMessagePartMedia> {
         let ChatMessagePart::Media(m) = &self.part else {
-            return JsValue::NULL;
+            return None;
         };
-        match &m.content {
-            BamlMediaContent::Url(u) => json!({
-                "type": "url",
-                "url": u.url.clone(),
-
-            }),
-            BamlMediaContent::Base64(MediaBase64 { base64 }) => json!({
-                "type": "url",
-                "url": format!("data:{};base64,{}", m.mime_type.as_deref().unwrap_or(""), base64.clone())
-            }),
-            BamlMediaContent::File(f) => match f.path() {
-                Ok(path) => json!({
-                    "type": "path",
-                    "path": path.to_string_lossy().into_owned(),
-                }),
-                Err(e) => json!({
-                    "type": "error",
-                    "error": format!("Error resolving file '{}': {:#}", f.relpath.display(), e),
-                }),
+        Some(match &m.content {
+            BamlMediaContent::Url(u) => WasmChatMessagePartMedia {
+                r#type: WasmChatMessagePartMediaType::Url,
+                content: u.url.clone(),
             },
-        }
-        .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
-        .unwrap_or(JsValue::NULL)
+            BamlMediaContent::Base64(MediaBase64 { base64 }) => WasmChatMessagePartMedia {
+                r#type: WasmChatMessagePartMediaType::Url,
+                content: format!(
+                    "data:{};base64,{}",
+                    m.mime_type.as_deref().unwrap_or("type/unknown"),
+                    base64.clone()
+                ),
+            },
+            BamlMediaContent::File(f) => match f.path() {
+                Ok(path) => WasmChatMessagePartMedia {
+                    r#type: WasmChatMessagePartMediaType::File,
+                    content: path.to_string_lossy().into_owned(),
+                },
+                Err(e) => WasmChatMessagePartMedia {
+                    r#type: WasmChatMessagePartMediaType::Error,
+                    content: format!("Error resolving file '{}': {:#}", f.relpath.display(), e),
+                },
+            },
+        })
     }
 }
 

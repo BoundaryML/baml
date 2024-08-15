@@ -141,7 +141,7 @@ where
             RenderedPrompt::Chat(chat) => {
                 // We never need to resolve media URLs here: webview rendering understands how to handle URLs and file refs
                 let chat =
-                    process_media_urls(ResolveMediaUrls::Never, false, None, ctx, &chat).await?;
+                    process_media_urls(ResolveMediaUrls::Never, true, None, ctx, &chat).await?;
                 RenderedPrompt::Chat(chat)
             }
         };
