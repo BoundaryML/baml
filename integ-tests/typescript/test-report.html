@@ -257,75 +257,42 @@ header {
   font-size: 1rem;
   padding: 0 0.5rem;
 }
-</style></head><body><div class="jesthtml-content"><header><h1 id="title">Test Report</h1></header><div id="metadata-container"><div id="timestamp">Started: 2024-08-08 17:11:42</div><div id="summary"><div id="suite-summary"><div class="summary-total">Suites (1)</div><div class="summary-passed  summary-empty">0 passed</div><div class="summary-failed ">1 failed</div><div class="summary-pending  summary-empty">0 pending</div></div><div id="test-summary"><div class="summary-total">Tests (39)</div><div class="summary-passed ">3 passed</div><div class="summary-failed ">36 failed</div><div class="summary-pending  summary-empty">0 pending</div></div></div></div><div id="suite-1" class="suite-container"><input id="collapsible-0" type="checkbox" class="toggle" checked="checked"/><label for="collapsible-0"><div class="suite-info"><div class="suite-path">/Users/anishpalakurthi/baml/integ-tests/typescript/tests/integ-tests.test.ts</div><div class="suite-time warn">5.024s</div></div></label><div class="suite-tests"><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single bool</div><div class="test-status">failed</div><div class="test-duration">0.011s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: LLM call failed: LLMErrorResponse { client: "Vertex", model: None, prompt: Chat([RenderedChatMessage { role: "user", parts: [Text("Return this value back to me: true")] }]), request_options: {}, start_time: SystemTime { tv_sec: 1723162303, tv_nsec: 29449000 }, latency: 889.5µs, message: "Failed to build request\n\nCaused by:\n    Service account not found", code: Other(2) }
+</style></head><body><div class="jesthtml-content"><header><h1 id="title">Test Report</h1></header><div id="metadata-container"><div id="timestamp">Started: 2024-08-11 14:40:04</div><div id="summary"><div id="suite-summary"><div class="summary-total">Suites (1)</div><div class="summary-passed  summary-empty">0 passed</div><div class="summary-failed ">1 failed</div><div class="summary-pending  summary-empty">0 pending</div></div><div id="test-summary"><div class="summary-total">Tests (39)</div><div class="summary-passed ">35 passed</div><div class="summary-failed ">4 failed</div><div class="summary-pending  summary-empty">0 pending</div></div></div></div><div id="suite-1" class="suite-container"><input id="collapsible-0" type="checkbox" class="toggle" checked="checked"/><label for="collapsible-0"><div class="suite-info"><div class="suite-path">/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts</div><div class="suite-time warn">55.876s</div></div></label><div class="suite-tests"><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single bool</div><div class="test-status">failed</div><div class="test-duration">0.005s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: LLM call failed: LLMErrorResponse { client: "Vertex", model: None, prompt: Chat([RenderedChatMessage { role: "user", parts: [Text("Return this value back to me: true")] }]), request_options: {}, start_time: SystemTime { tv_sec: 1723412405, tv_nsec: 525666000 }, latency: 172.5µs, message: "Error {\n    context: \"Failed to build request\",\n    source: \"Service account not found\",\n}", code: Other(2) }
 
-    at BamlAsyncClient.parsed [as TestFnNamedArgsSingleBool] (/Users/anishpalakurthi/baml/integ-tests/typescript/baml_client/async_client.ts:842:16)
-    at Object.&lt;anonymous&gt; (/Users/anishpalakurthi/baml/integ-tests/typescript/tests/integ-tests.test.ts:28:19)</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single string list</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single class</div><div class="test-status">failed</div><div class="test-duration">0.009s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">multiple classes</div><div class="test-status">failed</div><div class="test-duration">0s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single enum list</div><div class="test-status">failed</div><div class="test-duration">0s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single float</div><div class="test-status">failed</div><div class="test-duration">0s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single int</div><div class="test-status">failed</div><div class="test-duration">0s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single optional string</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to string</div><div class="test-status">failed</div><div class="test-duration">0s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to class</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to map</div><div class="test-status">failed</div><div class="test-duration">0s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work for all outputs</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with retries1</div><div class="test-status">passed</div><div class="test-duration">0.778s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with retries2</div><div class="test-status">passed</div><div class="test-duration">1.843s</div></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with fallbacks</div><div class="test-status">failed</div><div class="test-duration">0.007s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: Panic in async function</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with image from url</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client Gemini could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with image from base 64</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client Gemini could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with audio base 64</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client Gemini could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with audio from url</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client Gemini could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in OpenAI</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key
-    at BamlStreamClient.streamFunction [as PromptTestStreaming] (/Users/anishpalakurthi/baml/integ-tests/typescript/baml_client/async_client.ts:2187:30)
-    at Object.PromptTestStreaming (/Users/anishpalakurthi/baml/integ-tests/typescript/tests/integ-tests.test.ts:176:29)
-    at Promise.then.completed (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in Gemini</div><div class="test-status">failed</div><div class="test-duration">0s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client Gemini could not resolve options.api_key
-    at BamlStreamClient.streamFunction [as TestGemini] (/Users/anishpalakurthi/baml/integ-tests/typescript/baml_client/async_client.ts:2555:30)
-    at Object.TestGemini (/Users/anishpalakurthi/baml/integ-tests/typescript/tests/integ-tests.test.ts:204:29)
-    at Promise.then.completed (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support AWS</div><div class="test-status">failed</div><div class="test-duration">1.175s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: LLM call failed: LLMErrorResponse { client: "AwsBedrock", model: Some("anthropic.claude-3-haiku-20240307-v1:0"), prompt: Chat([RenderedChatMessage { role: "user", parts: [Text("Write a nice short story about Dr. Pepper")] }]), request_options: {"api_key": String("")}, start_time: SystemTime { tv_sec: 1723162306, tv_nsec: 869776000 }, latency: 232.75µs, message: "DispatchFailure(\n    DispatchFailure {\n        source: ConnectorError {\n            kind: Other(\n                None,\n            ),\n            source: ResolveEndpointError {\n                message: \"Invalid Configuration: Missing Region\",\n                source: None,\n            },\n            connection: Unknown,\n        },\n    },\n)", code: Other(2) }
+    at BamlAsyncClient.parsed [as TestFnNamedArgsSingleBool] (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/baml_client/async_client.ts:842:16)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:28:19)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single string list</div><div class="test-status">passed</div><div class="test-duration">0.504s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single class</div><div class="test-status">passed</div><div class="test-duration">0.459s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">multiple classes</div><div class="test-status">passed</div><div class="test-duration">0.419s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single enum list</div><div class="test-status">passed</div><div class="test-duration">0.493s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single float</div><div class="test-status">passed</div><div class="test-duration">0.516s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single int</div><div class="test-status">passed</div><div class="test-duration">0.342s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single optional string</div><div class="test-status">passed</div><div class="test-duration">0.482s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to string</div><div class="test-status">passed</div><div class="test-duration">0.485s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to class</div><div class="test-status">passed</div><div class="test-duration">0.495s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to map</div><div class="test-status">passed</div><div class="test-duration">0.652s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work for all outputs</div><div class="test-status">passed</div><div class="test-duration">3.329s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with retries1</div><div class="test-status">passed</div><div class="test-duration">0.637s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with retries2</div><div class="test-status">passed</div><div class="test-duration">1.809s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with fallbacks</div><div class="test-status">passed</div><div class="test-duration">1.269s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with image from url</div><div class="test-status">passed</div><div class="test-duration">1.708s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with image from base 64</div><div class="test-status">passed</div><div class="test-duration">0.844s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with audio base 64</div><div class="test-status">passed</div><div class="test-duration">0.904s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with audio from url</div><div class="test-status">passed</div><div class="test-duration">0.986s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in OpenAI</div><div class="test-status">passed</div><div class="test-duration">2.657s</div></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in Gemini</div><div class="test-status">failed</div><div class="test-duration">1.731s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: LLM call failed: LLMErrorResponse { client: "Gemini", model: Some("gemini-1.5-pro-001"), prompt: Chat([RenderedChatMessage { role: "user", parts: [Text("Write a nice short story about Dr. Pepper")] }]), request_options: {"safetySettings": Object {"threshold": String("BLOCK_LOW_AND_ABOVE"), "category": String("HARM_CATEGORY_HATE_SPEECH")}}, start_time: SystemTime { tv_sec: 1723412424, tv_nsec: 550819000 }, latency: 1.697906292s, message: "Failed to parse event: Error(\"missing field `content`\", line: 1, column: 359)", code: Other(2) }
 
-    at BamlAsyncClient.parsed [as TestAws] (/Users/anishpalakurthi/baml/integ-tests/typescript/baml_client/async_client.ts:794:16)
-    at Object.&lt;anonymous&gt; (/Users/anishpalakurthi/baml/integ-tests/typescript/tests/integ-tests.test.ts:220:17)</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in AWS</div><div class="test-status">failed</div><div class="test-duration">0.103s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: LLM call failed: LLMErrorResponse { client: "AwsBedrock", model: Some("anthropic.claude-3-haiku-20240307-v1:0"), prompt: Chat([RenderedChatMessage { role: "user", parts: [Text("Write a nice short story about Dr. Pepper")] }]), request_options: {"api_key": String("")}, start_time: SystemTime { tv_sec: 1723162306, tv_nsec: 874213000 }, latency: 61.083µs, message: "DispatchFailure(\n    DispatchFailure {\n        source: ConnectorError {\n            kind: Other(\n                None,\n            ),\n            source: ResolveEndpointError {\n                message: \"Invalid Configuration: Missing Region\",\n                source: None,\n            },\n            connection: Unknown,\n        },\n    },\n)", code: Other(2) }
+    at BamlStream.parsed [as getFinalResponse] (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/stream.js:58:39)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:209:19)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support AWS</div><div class="test-status">passed</div><div class="test-duration">2.234s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in AWS</div><div class="test-status">passed</div><div class="test-duration">1.736s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming without iterating</div><div class="test-status">passed</div><div class="test-duration">2.136s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in Claude</div><div class="test-status">passed</div><div class="test-duration">0.812s</div></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support vertex</div><div class="test-status">failed</div><div class="test-duration">0s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: LLM call failed: LLMErrorResponse { client: "Vertex", model: None, prompt: Chat([RenderedChatMessage { role: "user", parts: [Text("Write a nice short story about Donkey Kong")] }]), request_options: {}, start_time: SystemTime { tv_sec: 1723412433, tv_nsec: 207522000 }, latency: 18.625µs, message: "Error {\n    context: \"Failed to build request\",\n    source: \"Service account not found\",\n}", code: Other(2) }
 
-    at BamlStream.parsed [as getFinalResponse] (/Users/anishpalakurthi/baml/engine/language_client_typescript/stream.js:58:39)
-    at Object.&lt;anonymous&gt; (/Users/anishpalakurthi/baml/integ-tests/typescript/tests/integ-tests.test.ts:230:19)</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming without iterating</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key
-    at BamlStreamClient.streamFunction [as PromptTestStreaming] (/Users/anishpalakurthi/baml/integ-tests/typescript/baml_client/async_client.ts:2187:30)
-    at Object.PromptTestStreaming (/Users/anishpalakurthi/baml/integ-tests/typescript/tests/integ-tests.test.ts:241:34)
-    at Promise.then.completed (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in Claude</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client Claude could not resolve options.api_key
-    at BamlStreamClient.streamFunction [as PromptTestClaude] (/Users/anishpalakurthi/baml/integ-tests/typescript/baml_client/async_client.ts:2049:30)
-    at Object.PromptTestClaude (/Users/anishpalakurthi/baml/integ-tests/typescript/tests/integ-tests.test.ts:246:29)
-    at Promise.then.completed (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support vertex</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: LLM call failed: LLMErrorResponse { client: "Vertex", model: None, prompt: Chat([RenderedChatMessage { role: "user", parts: [Text("Write a nice short story about Donkey Kong")] }]), request_options: {}, start_time: SystemTime { tv_sec: 1723162306, tv_nsec: 983529000 }, latency: 32.667µs, message: "Failed to build request\n\nCaused by:\n    Service account not found", code: Other(2) }
+    at BamlAsyncClient.parsed [as TestVertex] (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/baml_client/async_client.ts:1146:16)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:262:17)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">supports tracing sync</div><div class="test-status">passed</div><div class="test-duration">0.004s</div></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">supports tracing async</div><div class="test-status">failed</div><div class="test-duration">2.488s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: expect(received).toEqual(expected) // deep equality
 
-    at BamlAsyncClient.parsed [as TestVertex] (/Users/anishpalakurthi/baml/integ-tests/typescript/baml_client/async_client.ts:1146:16)
-    at Object.&lt;anonymous&gt; (/Users/anishpalakurthi/baml/integ-tests/typescript/tests/integ-tests.test.ts:262:17)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">supports tracing sync</div><div class="test-status">passed</div><div class="test-duration">0.017s</div></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">supports tracing async</div><div class="test-status">failed</div><div class="test-duration">0.434s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types single</div><div class="test-status">failed</div><div class="test-duration">0.002s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT4 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types enum</div><div class="test-status">failed</div><div class="test-duration">0s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT4 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types class</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT4 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic inputs class</div><div class="test-status">failed</div><div class="test-duration">0s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic inputs list</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic output map</div><div class="test-status">failed</div><div class="test-duration">0.003s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic output union</div><div class="test-status">failed</div><div class="test-duration">0.004s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: client GPT35 could not resolve options.api_key</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with nested classes</div><div class="test-status">failed</div><div class="test-duration">0.102s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: LLM call failed: LLMErrorResponse { client: "Ollama", model: None, prompt: Chat([RenderedChatMessage { role: "system", parts: [Text("Return a made up json blob that matches this schema:\nAnswer in JSON using this schema:\n{\n  prop1: string,\n  prop2: {\n    prop1: string,\n    prop2: string,\n    inner: {\n      prop2: int,\n      prop3: float,\n    },\n  },\n}\n---\n\nJSON:")] }]), request_options: {"model": String("llama2")}, start_time: SystemTime { tv_sec: 1723162307, tv_nsec: 449481000 }, latency: 1.0605ms, message: "reqwest::Error { kind: Request, url: Url { scheme: \"http\", cannot_be_a_base: false, username: \"\", password: None, host: Some(Domain(\"localhost\")), port: Some(11434), path: \"/v1/chat/completions\", query: None, fragment: None }, source: hyper_util::client::legacy::Error(Connect, ConnectError(\"tcp connect error\", Os { code: 61, kind: ConnectionRefused, message: \"Connection refused\" })) }", code: Other(2) }
+Expected: 30
+Received: 0
+    at Object.toEqual (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:354:24)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types single</div><div class="test-status">passed</div><div class="test-duration">2.019s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types enum</div><div class="test-status">passed</div><div class="test-duration">1.02s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types class</div><div class="test-status">passed</div><div class="test-duration">0.686s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic inputs class</div><div class="test-status">passed</div><div class="test-duration">0.603s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic inputs list</div><div class="test-status">passed</div><div class="test-duration">0.903s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic output map</div><div class="test-status">passed</div><div class="test-duration">0.783s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic output union</div><div class="test-status">passed</div><div class="test-duration">4.841s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with nested classes</div><div class="test-status">passed</div><div class="test-duration">12.461s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic client</div><div class="test-status">passed</div><div class="test-duration">0.569s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with 'onLogEvent'</div><div class="test-status">passed</div><div class="test-duration">1.034s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with a sync client</div><div class="test-status">passed</div><div class="test-duration">0.391s</div></div></div></div><div class="suite-consolelog"><div class="suite-consolelog-header">Console Log</div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:40:15)
+    at Promise.then.completed (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">calling with class</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:46:15)</pre><pre class="suite-consolelog-item-message">got response key
+true
+52</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:132:15)</pre><pre class="suite-consolelog-item-message">Expected error Error: (3 other previous tries)
+LLM call failed: LLMErrorResponse { client: "RetryClientConstant", model: None, prompt: Chat([RenderedChatMessage { role: "system", parts: [Text("Say a haiku")] }]), request_options: {"model": String("gpt-3.5-turbo")}, start_time: SystemTime { tv_sec: 1723412414, tv_nsec: 288894000 }, latency: 72.203542ms, message: "Request failed: {\n    \"error\": {\n        \"message\": \"Incorrect API key provided: blah. You can find your API key at https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": \"invalid_api_key\"\n    }\n}\n", code: InvalidAuthentication }
+
+    at BamlAsyncClient.parsed [as TestRetryConstant] (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/baml_client/async_client.ts:1114:16)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:129:7) {
+  code: 'GenericFailure'
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:141:15)</pre><pre class="suite-consolelog-item-message">Expected error Error: (3 other previous tries)
+LLM call failed: LLMErrorResponse { client: "RetryClientExponential", model: None, prompt: Chat([RenderedChatMessage { role: "system", parts: [Text("Say a haiku")] }]), request_options: {"model": String("gpt-3.5-turbo")}, start_time: SystemTime { tv_sec: 1723412416, tv_nsec: 77630000 }, latency: 91.056458ms, message: "Request failed: {\n    \"error\": {\n        \"message\": \"Incorrect API key provided: blahh. You can find your API key at https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": \"invalid_api_key\"\n    }\n}\n", code: InvalidAuthentication }
 
     at BamlStream.parsed [as getFinalResponse] (/Users/anishpalakurthi/baml/engine/language_client_typescript/stream.js:58:39)
     at Object.&lt;anonymous&gt; (/Users/anishpalakurthi/baml/integ-tests/typescript/tests/integ-tests.test.ts:502:19)</pre></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic client</div><div class="test-status">failed</div><div class="test-duration">0.157s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: LLM call failed: LLMErrorResponse { client: "myClient", model: None, prompt: Chat([RenderedChatMessage { role: "system", parts: [Text("What is the capital of England?")] }]), request_options: {"model": String("gpt-3.5-turbo")}, start_time: SystemTime { tv_sec: 1723162307, tv_nsec: 552302000 }, latency: 156.020667ms, message: "Request failed: {\n    \"error\": {\n        \"message\": \"You didn't provide an API key. You need to provide your API key in an Authorization header using Bearer auth (i.e. Authorization: Bearer YOUR_KEY), or as the password field (with blank username) if you're accessing the API from your browser and are prompted for a username and password. You can obtain an API key from https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": null\n    }\n}\n", code: InvalidAuthentication }
@@ -336,13 +303,1809 @@ header {
     at Object.TestFnNamedArgsSingleStringList (/Users/anishpalakurthi/baml/integ-tests/typescript/tests/integ-tests.test.ts:534:24)
     at Promise.then.completed (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/anishpalakurthi/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre></div></div></div></div></div></body></html>
+    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">hello world</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:277:15)
+    at func (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:69:38)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at run (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:67:22)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:283:5)
+    at Promise.then.completed (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">dummyFunc returned</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:280:15)
+    at func (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:69:38)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at run (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:67:22)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:283:5)
+    at Promise.then.completed (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">dummyFunc2 returned</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 0)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 0)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:313:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 1)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 0)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:313:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 2)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 0)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:313:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:306:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 0)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:313:5)</pre><pre class="suite-consolelog-item-message">dummy hi1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 0)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 1)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:313:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 1)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 1)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:313:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 2)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 1)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:313:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:306:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 1)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:313:5)</pre><pre class="suite-consolelog-item-message">dummy hi2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 0)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 2)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:313:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 1)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 2)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:313:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 2)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 2)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:313:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:306:15)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 2)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:313:5)</pre><pre class="suite-consolelog-item-message">dummy hi3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:320:15)
+    at func (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:44)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at run (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:28)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:336:5)</pre><pre class="suite-consolelog-item-message">hello world</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 0)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 1)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 2)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:306:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)</pre><pre class="suite-consolelog-item-message">dummy firstDummyFuncArg</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 0)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:325:20
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:319:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 1)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:325:20
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:319:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 2)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:325:20
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:319:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:306:15)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:325:20
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:319:17)</pre><pre class="suite-consolelog-item-message">dummy secondDummyFuncArg</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 0)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:20
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:319:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 1)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:20
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:319:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:295:15)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at async Promise.all (index 2)
+    at dummyFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:301:22)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:20
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:319:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:306:15)
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:20
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:319:17)</pre><pre class="suite-consolelog-item-message">dummy thirdDummyFuncArg</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:339:15)
+    at func (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:90:44)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at run (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:88:28)
+    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:345:5)</pre><pre class="suite-consolelog-item-message">hello world</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:349:13)</pre><pre class="suite-consolelog-item-message">stats {"failed":30,"started":30,"finalized":30,"submitted":30,"sent":30,"done":0}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:373:13)</pre><pre class="suite-consolelog-item-message">[
+  {
+    name: 'Harrison',
+    hair_color: 'BLACK',
+    last_name: null,
+    height: 1.83,
+    hobbies: [ 'SPORTS' ]
+  }
+]</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:430:13)
+    at Promise.then.completed (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">[
+  [
+    'hair_color',
+    ClassPropertyBuilder { bldr: ClassPropertyBuilder {} }
+  ],
+  [
+    'attributes',
+    ClassPropertyBuilder { bldr: ClassPropertyBuilder {} }
+  ]
+]</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:432:15)
+    at Promise.then.completed (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: hair_color</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:432:15)
+    at Promise.then.completed (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: attributes</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:440:13)</pre><pre class="suite-consolelog-item-message">final  {
+  hair_color: 'black',
+  attributes: { height: '6 feet', eye_color: 'blue', facial_hair: 'beard' }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:464:13)
+    at Promise.then.completed (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">[
+  [
+    'hair_color',
+    ClassPropertyBuilder { bldr: ClassPropertyBuilder {} }
+  ],
+  [
+    'attributes',
+    ClassPropertyBuilder { bldr: ClassPropertyBuilder {} }
+  ],
+  [ 'height', ClassPropertyBuilder { bldr: ClassPropertyBuilder {} } ]
+]</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:466:15)
+    at Promise.then.completed (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: hair_color</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:466:15)
+    at Promise.then.completed (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: attributes</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:466:15)
+    at Promise.then.completed (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: height</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:474:13)</pre><pre class="suite-consolelog-item-message">final  {
+  hair_color: 'black',
+  attributes: { eye_color: 'blue', facial_hair: 'beard', age: '30 years old' },
+  height: { feet: 6, inches: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:485:13)</pre><pre class="suite-consolelog-item-message">final  {
+  hair_color: 'black',
+  attributes: { eye_color: 'blue', facial_hair: 'beard' },
+  height: { meters: 1.8 }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: '', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'example', prop2: { prop1: '', prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value', prop2: null, inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: null, inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: null, inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: null, inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: null, inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: null, inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: null, inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: null, inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: null, inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: '', inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: 'value', inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: 'value2', inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: 'value2', inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: 'value2', inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: 'value2', inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: 'value2', inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: 'value2', inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: 'value2', inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: null, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: null, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: null, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: null, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: null, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: null, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: null, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: null, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 4, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: null }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: 'value2', inner: { prop2: 42, prop3: 3 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: { prop1: 'value1', prop2: 'value2', inner: { prop2: 42, prop3: 3 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.1 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:498:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'example',
+  prop2: {
+    prop1: 'value1',
+    prop2: 'value2',
+    inner: { prop2: 42, prop3: 3.14 }
+  }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:523:15)
+    at callback (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:56:17)</pre><pre class="suite-consolelog-item-message">onLogEvent {
+  metadata: {
+    eventId: '12b76822-58a7-4102-8148-abd1b8592039',
+    rootEventId: '12b76822-58a7-4102-8148-abd1b8592039'
+  },
+  prompt: '[\n' +
+    '  {\n' +
+    '    "role": "system",\n' +
+    '    "content": [\n' +
+    '      {\n' +
+    '        "text": "Return this value back to me: [\\"a\\", \\"b\\", \\"c\\"]"\n' +
+    '      }\n' +
+    '    ]\n' +
+    '  }\n' +
+    ']',
+  rawOutput: '["a", "b", "c"]',
+  parsedOutput: '["a", "b", "c"]',
+  startTime: '2024-08-11T21:40:59.722Z'
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/integ-tests.test.ts:523:15)
+    at callback (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/async_context_vars.js:56:17)</pre><pre class="suite-consolelog-item-message">onLogEvent {
+  metadata: {
+    eventId: '0f52989f-98bc-43f4-876c-e611090a13f0',
+    rootEventId: '0f52989f-98bc-43f4-876c-e611090a13f0'
+  },
+  prompt: '[\n' +
+    '  {\n' +
+    '    "role": "system",\n' +
+    '    "content": [\n' +
+    '      {\n' +
+    '        "text": "Return this value back to me: [\\"d\\", \\"e\\", \\"f\\"]"\n' +
+    '      }\n' +
+    '    ]\n' +
+    '  }\n' +
+    ']',
+  rawOutput: '["d", "e", "f"]',
+  parsedOutput: '["d", "e", "f"]',
+  startTime: '2024-08-11T21:41:00.146Z'
+}</pre></div></div></div></div></body></html>

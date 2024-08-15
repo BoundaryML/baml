@@ -10,7 +10,6 @@ on:
     tags:
       - "test-release/*.*"
       - "*.*"
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -108,7 +107,7 @@ jobs:
         _:
           - target: aarch64-apple-darwin
             host: macos-14
-            node_build: pnpm build --target aarch64-apple-darwin
+            node_build: pnpm build:napi-release --target aarch64-apple-darwin
             baml_build_help: "off"
             # mise: true
 
@@ -122,19 +121,19 @@ jobs:
             # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
             # need a new version of manylinux to build crates on arm64-linux
             container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
-            node_build: pnpm build --target aarch64-unknown-linux-gnu --use-napi-cross
+            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
             baml_build_help: "off"
 
           - target: x86_64-apple-darwin
             host: macos-latest
-            node_build: pnpm build --target x86_64-apple-darwin
+            node_build: pnpm build:napi-release --target x86_64-apple-darwin
             baml_build_help: "off"
             # mise: true
 
           - target: x86_64-pc-windows-msvc
             host: windows-latest
-            node_build: pnpm build --target x86_64-pc-windows-msvc
+            node_build: pnpm build:napi-release --target x86_64-pc-windows-msvc
             setup-python-architecture: x64
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
             baml_build_help: "off"
@@ -143,7 +142,7 @@ jobs:
             host: ubuntu-latest
             # Using any of the manylinux containers breaks a bunch of stuff: actions/checkout here, pnpm build there - not worth it.
             container: null
-            node_build: pnpm build --target x86_64-unknown-linux-gnu --use-napi-cross
+            node_build: pnpm build:napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
             mise: true
 
     name: Build ${{ matrix._.target }}
@@ -190,12 +189,18 @@ jobs:
       - name: Build Rust
         run: cargo build --release --target ${{ matrix._.target }} ${{ matrix._.cargo_args }}
         working-directory: engine
-        
-      # Build Node
+
+      # Build NAPI release
       - name: PNPM Build
         run: ${{ matrix._.node_build }}
         working-directory: engine/language_client_typescript
-        
+      
+      # Build TS wrapper code and helpers as well
+      - name: Build TS
+        run: pnpm build:ts_build
+        working-directory: engine/language_client_typescript
+      
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

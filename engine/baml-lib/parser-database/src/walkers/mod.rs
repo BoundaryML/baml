@@ -291,8 +291,7 @@ impl<'db> crate::ParserDatabase {
                     TypeValue::Float => Type::Float,
                     TypeValue::Bool => Type::Bool,
                     TypeValue::Null => Type::None,
-                    TypeValue::Image => Type::Unknown,
-                    TypeValue::Audio => Type::Unknown,
+                    TypeValue::Media(_) => Type::Unknown,
                 };
                 if arity.is_optional() || matches!(t, Type::None) {
                     t = Type::None | t;

@@ -11,3 +11,9 @@ pub use response::{FunctionResult, TestFailReason, TestResponse, TestStatus};
 pub use runtime_context::{RuntimeContext, SpanCtx};
 pub use stream::FunctionResultStream;
 pub use trace_stats::{InnerTraceStats, TraceStats};
+
+#[derive(Debug, Clone, Copy)]
+pub struct RenderCurlSettings {
+    pub stream: bool,
+    pub as_shell_commands: bool,
+}

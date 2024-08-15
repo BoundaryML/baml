@@ -1,5 +1,5 @@
 use crate::Result;
-use baml_types::BamlValue;
+use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue};
 use magnus::{class, function, Module, Object, RModule};
 
 pub(crate) trait CloneAsBamlValue {
@@ -14,19 +14,13 @@ pub(crate) struct Image {
 impl Image {
     pub fn from_url(url: String) -> Self {
         Self {
-            inner: baml_types::BamlMedia::Url(
-                baml_types::BamlMediaType::Image,
-                baml_types::MediaUrl::new(url, None),
-            ),
+            inner: BamlMedia::url(BamlMediaType::Image, url, None),
         }
     }
 
     pub fn from_base64(media_type: String, base64: String) -> Self {
         Self {
-            inner: baml_types::BamlMedia::Base64(
-                baml_types::BamlMediaType::Image,
-                baml_types::MediaBase64::new(base64, media_type),
-            ),
+            inner: BamlMedia::base64(BamlMediaType::Image, base64, Some(media_type)),
         }
     }
 
@@ -47,24 +41,18 @@ impl CloneAsBamlValue for Image {
 
 #[magnus::wrap(class = "Baml::Ffi::Audio", free_immediately, size)]
 pub(crate) struct Audio {
-    pub(crate) inner: baml_types::BamlMedia,
+    pub(crate) inner: BamlMedia,
 }
 
 impl Audio {
     pub fn from_url(url: String) -> Self {
         Self {
-            inner: baml_types::BamlMedia::Url(
-                baml_types::BamlMediaType::Audio,
-                baml_types::MediaUrl::new(url, None),
-            ),
+            inner: BamlMedia::url(BamlMediaType::Audio, url, None),
         }
     }
     pub fn from_base64(media_type: String, base64: String) -> Self {
         Self {
-            inner: baml_types::BamlMedia::Base64(
-                baml_types::BamlMediaType::Audio,
-                baml_types::MediaBase64::new(base64, media_type),
-            ),
+            inner: BamlMedia::base64(BamlMediaType::Image, base64, Some(media_type)),
         }
     }
 

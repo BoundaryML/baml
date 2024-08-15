@@ -171,7 +171,7 @@ case "$_path" in
     command="${command} && poetry run baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
       #command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run python baml_example_tracing.py"
-      #command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run pytest -s tests/test_functions.py"
+      #command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run pytest -s tests/test_functions.py::test_should_work_with_image_file"
       command="${command} && BAML_LOG=trace infisical run --env=test -- poetry run pytest"
     fi
     if [ "$_watch_mode" -eq 1 ]; then

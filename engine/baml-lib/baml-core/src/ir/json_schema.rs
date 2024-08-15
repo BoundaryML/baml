@@ -175,25 +175,12 @@ impl<'db> WithJsonSchema for FieldType {
                 TypeValue::Null => json!({
                     "type": "null",
                 }),
-                TypeValue::Image => json!({
+                TypeValue::Media(_) => json!({
                     // anyOf either an object that has a uri, or it has a base64 string
                     "type": "object",
                     "properties": {
                         "url": {
                             "type": "string",
-                            // "format": "uri",
-                        }
-                    },
-                    "required": ["url"],
-
-                }),
-                TypeValue::Audio => json!({
-                    // anyOf either an object that has a uri, or it has a base64 string
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            // "format": "uri",
                         }
                     },
                     "required": ["url"],

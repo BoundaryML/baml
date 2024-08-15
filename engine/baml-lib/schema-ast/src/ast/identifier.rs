@@ -1,3 +1,5 @@
+use baml_types::{BamlMediaType, TypeValue};
+
 use super::{Span, WithName, WithSpan};
 use std::fmt::Display;
 
@@ -85,7 +87,6 @@ impl WithName for Identifier {
         match self {
             Identifier::Ref(ref_identifier, _) => &ref_identifier.full_name,
             Identifier::Local(name, _) => name,
-
             Identifier::String(s, _) => s,
             Identifier::ENV(name, _) => name,
             Identifier::Invalid(name, _) => name,
@@ -107,7 +108,6 @@ impl From<(&str, Span)> for Identifier {
                 },
                 span,
             ),
-
             "env" => Identifier::Invalid("env".into(), span),
             other if other.contains('-') => Identifier::String(other.to_string(), span),
             other => Identifier::Local(other.to_string(), span),

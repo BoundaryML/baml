@@ -3,6 +3,7 @@ import { type Disposable, Uri, ViewColumn, type Webview, type WebviewPanel, wind
 import * as vscode from 'vscode'
 import { getNonce } from '../utils/getNonce'
 import { getUri } from '../utils/getUri'
+import { EchoResponse, GetBamlSrcResponse, GetWebviewUriResponse, WebviewToVscodeRpc, encodeBuffer } from '../rpc'
 
 import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { URI } from 'vscode-uri'
@@ -82,7 +83,11 @@ export class WebPanelView {
           enableScripts: true,
 
           // Restrict the webview to only load resources from the `out` and `web-panel/dist` directories
-          localResourceRoots: [Uri.joinPath(extensionUri, 'out'), Uri.joinPath(extensionUri, 'web-panel/dist')],
+          localResourceRoots: [
+            ...(vscode.workspace.workspaceFolders ?? []).map((f) => f.uri),
+            Uri.joinPath(extensionUri, 'out'),
+            Uri.joinPath(extensionUri, 'web-panel/dist'),
+          ],
           retainContextWhenHidden: true,
           enableCommandUris: true,
         },
@@ -227,6 +232,50 @@ export class WebPanelView {
             }
             return
           }
+        }
+
+        // console.log('message from webview, after above handlers:', message)
+        const vscodeMessage = message.data as WebviewToVscodeRpc
+        const vscodeCommand = vscodeMessage.vscodeCommand
+
+        // TODO: implement error handling in our RPC framework
+        switch (vscodeCommand) {
+          case 'ECHO':
+            const echoresp: EchoResponse = { message: vscodeMessage.message }
+            // also respond with rpc id
+            this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: echoresp })
+            return
+          case 'GET_WEBVIEW_URI':
+            // This is 1:1 with the contents of `image.file` in a test file, e.g. given `image { file baml_src://path/to-image.png }`,
+            // relpath will be 'baml_src://path/to-image.png'
+            const relpath = vscodeMessage.path
+
+            // NB(san): this is a violation of the "never URI.parse rule"
+            // (see https://www.notion.so/gloochat/windows-uri-treatment-fe87b22abebb4089945eb8cd1ad050ef)
+            // but this relpath is already a file URI, it seems...
+            const uriPath = Uri.parse(relpath)
+            const uri = this._panel.webview.asWebviewUri(uriPath).toString()
+
+            console.log('GET_WEBVIEW_URI', { vscodeMessage, uri, parsed: uriPath })
+            let webviewUriResp: GetWebviewUriResponse = {
+              uri,
+            }
+            if (vscodeMessage.contents) {
+              try {
+                const contents = await workspace.fs.readFile(uriPath)
+                webviewUriResp = {
+                  ...webviewUriResp,
+                  contents: encodeBuffer(contents),
+                }
+              } catch (e) {
+                webviewUriResp = {
+                  ...webviewUriResp,
+                  readError: `${e}`,
+                }
+              }
+            }
+            this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: webviewUriResp })
+            return
         }
       },
       undefined,

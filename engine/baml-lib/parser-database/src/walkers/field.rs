@@ -8,7 +8,7 @@ use crate::{
 
 use super::{ClassWalker, Walker};
 
-use baml_types::TypeValue;
+use baml_types::{BamlMediaType, TypeValue};
 use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName, WithSpan};
 use serde_json::json;
 
@@ -118,8 +118,8 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                     TypeValue::Int => "int",
                     TypeValue::Float => "float",
                     TypeValue::Bool => "bool",
-                    TypeValue::Image => "image",
-                    TypeValue::Audio => "audio",
+                    TypeValue::Media(BamlMediaType::Image) => "image",
+                    TypeValue::Media(BamlMediaType::Audio) => "audio",
                     TypeValue::Null => "null",
 
                 },

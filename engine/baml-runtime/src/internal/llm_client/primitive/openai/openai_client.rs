@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::internal::llm_client::ResolveMedia;
+use crate::internal::llm_client::ResolveMediaUrls;
 use anyhow::Result;
-use baml_types::{BamlMedia, BamlMediaType};
+use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use serde_json::json;
@@ -261,12 +261,12 @@ impl RequestBuilder for OpenAIClient {
                     messages
                         .iter()
                         .map(|m| {
-                            json!({
+                            Ok(json!({
                                 "role": m.role,
-                                "content": convert_message_parts_to_content(&m.parts)
-                            })
+                                "content": convert_message_parts_to_content(&m.parts)?
+                            }))
                         })
-                        .collect::<serde_json::Value>(),
+                        .collect::<Result<serde_json::Value>>()?,
                 );
             }
         }
@@ -421,7 +421,7 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: ResolveMedia::Never,
+                resolve_media_urls: ResolveMediaUrls::Never,
             },
             retry_policy: $client.retry_policy.clone(),
             client: create_client()?,
@@ -441,7 +441,7 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: ResolveMedia::Never,
+                resolve_media_urls: ResolveMediaUrls::Never,
             },
             retry_policy: $client
                 .elem()
@@ -515,36 +515,50 @@ impl OpenAIClient {
     }
 }
 
-fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json::Value {
+fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serde_json::Value> {
     if parts.len() == 1 {
         match &parts[0] {
-            ChatMessagePart::Text(text) => return json!(text),
+            ChatMessagePart::Text(text) => return Ok(json!(text)),
             _ => {}
         }
     }
 
     let content: Vec<serde_json::Value> = parts
         .into_iter()
-        .map(|part| match part {
-            ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
-            ChatMessagePart::Image(image) => match image {
-                BamlMedia::Url(BamlMediaType::Image, image) => {
-                    json!({"type": "image_url", "image_url": json!({
-                        "url": image.url
-                    })})
+        .map(|part| {
+            Ok(match part {
+                ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
+                ChatMessagePart::Media(media) => {
+                    // NB(sam): this works for images, but has no guarantee it will actually work for audio.
+                    // The OpenAI speech-to-text APIs rely on multipart/form-data requests, where the contents
+                    // of the form data are just the binary contents of the file, so how they're going to
+                    // support audio in their multimodal interfaces are very... unclear.
+                    let media_type = format!("{}_url", media.media_type);
+                    match &media.content {
+                        BamlMediaContent::Url(media) => {
+                            json!({
+                                "type": media_type,
+                                media_type: json!({
+                                    "url": media.url
+                                })
+                            })
+                        }
+                        BamlMediaContent::Base64(b64_media) => {
+                            json!({
+                                "type": media_type,
+                                media_type: json!({
+                                    "url" : format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
+                                })
+                            })
+                        }
+                        BamlMediaContent::File(_) => {
+                            anyhow::bail!("BAML internal error (OpenAI): file should have been resolved to base64")
+                        }
+                    }
                 }
-                BamlMedia::Base64(BamlMediaType::Image, image) => {
-                    // TODO: validate the media_type is present!
-                    json!({"type": "image_url", "image_url": json!({
-                       "url" : format!("data:{};base64,{}", image.media_type, image.base64)
-                    })})
-                }
-                _ => json!({}), // return an empty JSON object or any other default value
-            },
-            // OpenAI does not yet support audio
-            _ => json!({}), // return an empty JSON object or any other default value
+            })
         })
-        .collect();
+        .collect::<Result<Vec<serde_json::Value>>>()?;
 
-    json!(content)
+    Ok(json!(content))
 }

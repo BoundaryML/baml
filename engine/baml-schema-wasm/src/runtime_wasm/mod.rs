@@ -1,31 +1,49 @@
 pub mod generator;
 pub mod runtime_prompt;
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
+use anyhow::Context;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
 use baml_runtime::internal_core::configuration::GeneratorOutputType;
+use baml_runtime::BamlSrcReader;
 use baml_runtime::InternalRuntimeInterface;
+use baml_runtime::RenderCurlSettings;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
-use baml_types::{BamlMap, BamlValue};
+use baml_types::{BamlMap, BamlMediaType, BamlValue, TypeValue};
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
 
 use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
+use internal_baml_core::ir::Expression;
+use js_sys::Promise;
+use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
 
 use self::runtime_prompt::WasmScope;
 use wasm_bindgen::JsValue;
 
-use anyhow::Result;
+type JsResult<T> = core::result::Result<T, JsError>;
+
+// trait IntoJs<T> {
+//     fn into_js(self) -> JsResult<T>;
+// }
+
+// impl<T, E: Into<anyhow::Error> + Send> IntoJs<T> for core::result::Result<T, E> {
+//     fn into_js(self) -> JsResult<T> {
+//         self.map_err(|e| JsError::new(format!("{:#}", anyhow::Error::from(e)).as_str()))
+//     }
+// }
 
 //Run: wasm-pack test --firefox --headless  --features internal,wasm
-// but for browser we likely need to do         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+// but for browser we likely need to do
+//         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 // Node is run using: wasm-pack test --node --features internal,wasm
 
 #[wasm_bindgen(start)]
@@ -40,11 +58,12 @@ pub fn on_wasm_init() {
     console_error_panic_hook::set_once();
 }
 
-#[wasm_bindgen(inspectable)]
+#[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Serialize, Deserialize)]
 
 pub struct WasmProject {
-    root_dir_name: String,
+    #[wasm_bindgen(readonly)]
+    pub root_dir_name: String,
     // This is the version of the file on disk
     files: HashMap<String, String>,
     // This is the version of the file that is currently being edited
@@ -145,11 +164,6 @@ impl WasmProject {
             files,
             unsaved_files: HashMap::new(),
         })
-    }
-
-    #[wasm_bindgen]
-    pub fn root_dir_name(&self) -> String {
-        self.root_dir_name.clone()
     }
 
     #[wasm_bindgen]
@@ -516,7 +530,7 @@ impl WasmTestResponse {
                 baml_runtime::TestStatus::Pass => None,
                 baml_runtime::TestStatus::Fail(r) => r.render_error(),
             },
-            Err(e) => Some(e.to_string()),
+            Err(e) => Some(format!("{e:#}")),
         }
     }
 
@@ -625,10 +639,10 @@ trait WithRenderError {
 
 impl WithRenderError for baml_runtime::TestFailReason<'_> {
     fn render_error(&self) -> Option<String> {
-        match self {
-            baml_runtime::TestFailReason::TestUnspecified(e) => Some(e.to_string()),
+        match &self {
+            baml_runtime::TestFailReason::TestUnspecified(e) => Some(format!("{e:#}")),
             baml_runtime::TestFailReason::TestLLMFailure(f) => f.render_error(),
-            baml_runtime::TestFailReason::TestParseFailure(e) => Some(e.to_string()),
+            baml_runtime::TestFailReason::TestParseFailure(e) => Some(format!("{e:#}")),
         }
     }
 }
@@ -656,7 +670,7 @@ fn get_dummy_value(
     match t {
         baml_runtime::FieldType::Primitive(t) => {
             let dummy = match t {
-                baml_runtime::TypeValue::String => {
+                TypeValue::String => {
                     if allow_multiline {
                         format!(
                             "#\"\n{indent1}hello world\n{indent_str}\"#",
@@ -666,14 +680,14 @@ fn get_dummy_value(
                         "\"a_string\"".to_string()
                     }
                 }
-                baml_runtime::TypeValue::Int => "123".to_string(),
-                baml_runtime::TypeValue::Float => "0.5".to_string(),
-                baml_runtime::TypeValue::Bool => "true".to_string(),
-                baml_runtime::TypeValue::Null => "null".to_string(),
-                baml_runtime::TypeValue::Image => {
+                TypeValue::Int => "123".to_string(),
+                TypeValue::Float => "0.5".to_string(),
+                TypeValue::Bool => "true".to_string(),
+                TypeValue::Null => "null".to_string(),
+                TypeValue::Media(BamlMediaType::Image) => {
                     "{ url \"https://imgs.xkcd.com/comics/standards.png\"}".to_string()
                 }
-                baml_runtime::TypeValue::Audio => {
+                TypeValue::Media(BamlMediaType::Audio) => {
                     "{ url \"https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg\"}".to_string()
                 }
             };
@@ -771,7 +785,6 @@ impl WasmRuntime {
 #[wasm_bindgen]
 impl WasmRuntime {
     #[wasm_bindgen]
-
     pub fn check_if_in_prompt(&self, cursor_idx: usize) -> bool {
         self.runtime.internal().ir().walk_functions().any(|f| {
             f.elem().configs().expect("configs").iter().any(|config| {
@@ -1275,39 +1288,96 @@ impl From<&OrchestratorNode> for SerializableOrchestratorNode {
     }
 }
 
+fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader {
+    Some(Box::new(move |path| {
+        Box::pin({
+            let path = path.to_string();
+            let get_baml_src_cb = get_baml_src_cb.clone();
+            async move {
+                let null = JsValue::NULL;
+                let Ok(read) = get_baml_src_cb.call1(&null, &JsValue::from(path.clone())) else {
+                    anyhow::bail!("readFileRef did not return a promise")
+                };
+
+                let read = JsFuture::from(Promise::unchecked_from_js(read)).await;
+
+                let read = match read {
+                    Ok(read) => read,
+                    Err(err) => {
+                        if let Some(e) = err.dyn_ref::<js_sys::Error>() {
+                            if let Some(e_str) = e.message().as_string() {
+                                anyhow::bail!("{}", e_str)
+                            }
+                        }
+
+                        return Err(anyhow::anyhow!("{:?}", err).context("readFileRef rejected"));
+                    }
+                };
+
+                // TODO: how does JsValue -> Uint8Array work without try_from?
+                Ok(Uint8Array::from(read).to_vec())
+            }
+        })
+    }))
+}
+
+#[wasm_bindgen]
+struct WasmCallContext {
+    /// Index of the orchestration graph node to use for the call
+    /// Defaults to 0 when unset
+    node_index: Option<usize>,
+}
+
+#[wasm_bindgen]
+impl WasmCallContext {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self { node_index: None }
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_node_index(&mut self, node_index: Option<usize>) {
+        self.node_index = node_index;
+    }
+}
+
 #[wasm_bindgen]
 impl WasmFunction {
     #[wasm_bindgen]
-    pub fn render_prompt(
+    pub async fn render_prompt_for_test(
         &self,
         rt: &WasmRuntime,
-        params: JsValue,
-    ) -> Result<WasmPrompt, wasm_bindgen::JsError> {
-        let mut params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
-        let node_index = params.shift_remove("node_index");
-
+        test_name: String,
+        wasm_call_context: &WasmCallContext,
+        get_baml_src_cb: js_sys::Function,
+    ) -> JsResult<WasmPrompt> {
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
         let ctx = rt
             .runtime
-            .create_ctx_manager(BamlValue::String("wasm".to_string()))
+            .create_ctx_manager(
+                BamlValue::String("wasm".to_string()),
+                js_fn_to_baml_src_reader(get_baml_src_cb),
+            )
             .create_ctx_with_default(missing_env_vars.iter());
+
+        let params = rt
+            .runtime
+            .get_test_params(&self.name, &test_name, &ctx)
+            .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         rt.runtime
             .internal()
-            .render_prompt(
-                &self.name,
-                &ctx,
-                &params,
-                node_index.and_then(|v| v.as_int().map(|i| i as usize)),
-            )
+            .render_prompt(&self.name, &ctx, &params, wasm_call_context.node_index)
+            .await
             .as_ref()
             .map(|(p, scope)| (p, scope).into())
-            .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
+            .map_err(|e| JsError::new(format!("{e:?}").as_str()))
     }
+
     #[wasm_bindgen]
     pub fn client_name(&self, rt: &WasmRuntime) -> Result<String, JsValue> {
         let rt: &BamlRuntime = &rt.runtime;
-        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
+        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
         let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
         let ir = rt.internal().ir();
         let walker = ir
@@ -1317,43 +1387,60 @@ impl WasmFunction {
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
         Ok(renderer.client_name().to_string())
     }
+
     #[wasm_bindgen]
-    pub async fn render_raw_curl(
+    pub async fn render_raw_curl_for_test(
         &self,
         rt: &WasmRuntime,
-        params: JsValue,
+        test_name: String,
+        wasm_call_context: &WasmCallContext,
         stream: bool,
+        expand_images: bool,
+        get_baml_src_cb: js_sys::Function,
     ) -> Result<String, wasm_bindgen::JsError> {
-        let mut params = serde_wasm_bindgen::from_value::<BamlMap<String, BamlValue>>(params)?;
-        let node_index = params
-            .shift_remove("node_index")
-            .and_then(|v| v.as_int().map(|i| i as usize));
-
         let missing_env_vars = rt.runtime.internal().ir().required_env_vars();
 
         let ctx = rt
             .runtime
-            .create_ctx_manager(BamlValue::String("wasm".to_string()))
+            .create_ctx_manager(
+                BamlValue::String("wasm".to_string()),
+                js_fn_to_baml_src_reader(get_baml_src_cb),
+            )
             .create_ctx_with_default(missing_env_vars.iter());
 
-        let result =
-            rt.runtime
-                .internal()
-                .render_prompt(&self.name, &ctx, &params, node_index.clone());
+        let params = rt
+            .runtime
+            .get_test_params(&self.name, &test_name, &ctx)
+            .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
+
+        let result = rt
+            .runtime
+            .internal()
+            .render_prompt(&self.name, &ctx, &params, wasm_call_context.node_index)
+            .await;
 
         let final_prompt = match result {
             Ok((prompt, _)) => match prompt {
                 RenderedPrompt::Chat(chat_messages) => chat_messages,
                 RenderedPrompt::Completion(_) => vec![], // or handle this case differently
             },
-            Err(e) => return Err(wasm_bindgen::JsError::new(format!("{:#?}", e).as_str())),
+            Err(e) => return Err(wasm_bindgen::JsError::new(format!("{:?}", e).as_str())),
         };
 
         rt.runtime
             .internal()
-            .render_raw_curl(&self.name, &ctx, &final_prompt, stream, node_index)
+            .render_raw_curl(
+                &self.name,
+                &ctx,
+                &final_prompt,
+                RenderCurlSettings {
+                    stream,
+                    as_shell_commands: !expand_images,
+                },
+                wasm_call_context.node_index,
+            )
             .await
-            .map_err(|e| wasm_bindgen::JsError::new(format!("{e:#?}").as_str()))
+            .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
     }
 
     #[wasm_bindgen]
@@ -1361,7 +1448,8 @@ impl WasmFunction {
         &self,
         rt: &mut WasmRuntime,
         test_name: String,
-        cb: js_sys::Function,
+        on_partial_response: js_sys::Function,
+        get_baml_src_cb: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
         let rt = &rt.runtime;
 
@@ -1373,10 +1461,13 @@ impl WasmFunction {
                 function_response: r,
             }
             .into();
-            cb.call1(&this, &res).unwrap();
+            on_partial_response.call1(&this, &res).unwrap();
         });
 
-        let ctx = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
+        let ctx = rt.create_ctx_manager(
+            BamlValue::String("wasm".to_string()),
+            js_fn_to_baml_src_reader(get_baml_src_cb),
+        );
         let (test_response, span) = rt
             .run_test(&function_name, &test_name, &ctx, Some(cb))
             .await;
@@ -1390,8 +1481,12 @@ impl WasmFunction {
 
     pub fn orchestration_graph(&self, rt: &WasmRuntime) -> Result<Vec<WasmScope>, JsValue> {
         let rt: &BamlRuntime = &rt.runtime;
-        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
-        let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
+
+        let missing_env_vars = rt.internal().ir().required_env_vars();
+        let ctx = rt
+            .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
+            .create_ctx_with_default(missing_env_vars.iter());
+
         let ir = rt.internal().ir();
         let walker = ir
             .find_function(&self.name)
@@ -1399,15 +1494,11 @@ impl WasmFunction {
         let renderer = PromptRenderer::from_function(&walker, ir, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
         let client_name = renderer.client_name().to_string();
-        log::info!("Client name: {}", client_name);
-
-        let ctx_manager = rt.create_ctx_manager(BamlValue::String("wasm".to_string()));
-        let ctx = ctx_manager.create_ctx_with_default(rt.env_vars().keys().map(|k| k.as_str()));
 
         let graph = rt
             .internal()
             .orchestration_graph(&client_name, &ctx)
-            .map_err(|e| JsValue::from_str(&format!("{:#?}", e)))?;
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
         // Serialize the scopes to JsValue
         let mut scopes = Vec::new();

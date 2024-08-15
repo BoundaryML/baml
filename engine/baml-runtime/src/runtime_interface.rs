@@ -9,13 +9,13 @@ use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
 use crate::tracing::{BamlTracer, TracingSpan};
 use crate::types::on_log_event::LogEventCallbackSync;
-use crate::RuntimeContextManager;
 use crate::{
     internal::{ir_features::IrFeatures, llm_client::retry_policy::CallablePolicy},
     runtime::InternalBamlRuntime,
     types::FunctionResultStream,
     FunctionResult, RuntimeContext,
 };
+use crate::{RenderCurlSettings, RuntimeContextManager};
 
 pub(crate) trait RuntimeConstructor {
     #[cfg(not(target_arch = "wasm32"))]
@@ -130,7 +130,8 @@ pub trait InternalRuntimeInterface {
         ctx: &RuntimeContext,
     ) -> Result<FunctionWalker<'ir>>;
 
-    fn render_prompt(
+    #[allow(async_fn_in_trait)]
+    async fn render_prompt(
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
@@ -144,7 +145,7 @@ pub trait InternalRuntimeInterface {
         function_name: &str,
         ctx: &RuntimeContext,
         prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
         node_index: Option<usize>,
     ) -> Result<String>;
 

@@ -189,24 +189,6 @@ impl<'rb> RubyToJson<'rb> {
             return self.to_type::<Image>(any, field_pos);
         }
 
-        if any
-            .class()
-            .eql(Image::class(&Ruby::get_with(any)))
-            .is_ok_and(|is_eql| is_eql)
-        {
-            match Obj::<Image>::try_convert(any) {
-                Ok(o) => {
-                    return Ok(BamlValue::Media(o.inner.clone()));
-                }
-                Err(e) => {
-                    return Err(vec![SerializationError {
-                        position: field_pos,
-                        message: format!("failed to convert Image: {:#?}", e),
-                    }]);
-                }
-            }
-        }
-
         Err(vec![SerializationError {
             position: field_pos,
             message: format!(

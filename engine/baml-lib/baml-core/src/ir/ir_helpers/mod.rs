@@ -12,6 +12,7 @@ use crate::{
 };
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
+pub use to_baml_arg::ArgCoercer;
 
 use super::repr;
 
@@ -41,7 +42,7 @@ pub trait IRHelper {
         &'a self,
         function: &'a FunctionWalker<'a>,
         params: &BamlMap<String, BamlValue>,
-        allow_implicit_cast_to_string: bool,
+        coerce_settings: ArgCoercer,
     ) -> Result<BamlValue>;
 }
 
@@ -153,7 +154,7 @@ impl IRHelper for IntermediateRepr {
         &'a self,
         function: &'a FunctionWalker<'a>,
         params: &BamlMap<String, BamlValue>,
-        allow_implicit_cast_to_string: bool,
+        coerce_settings: ArgCoercer,
     ) -> Result<BamlValue> {
         let function_params = function.inputs();
 
@@ -163,13 +164,9 @@ impl IRHelper for IntermediateRepr {
         for (param_name, param_type) in function_params {
             scope.push(param_name.to_string());
             if let Some(param_value) = params.get(param_name.as_str()) {
-                if let Ok(baml_arg) = to_baml_arg::validate_arg(
-                    self,
-                    param_type,
-                    param_value,
-                    &mut scope,
-                    allow_implicit_cast_to_string,
-                ) {
+                if let Ok(baml_arg) =
+                    coerce_settings.coerce_arg(self, param_type, param_value, &mut scope)
+                {
                     baml_arg_map.insert(param_name.to_string(), baml_arg);
                 }
             } else {
