@@ -28,7 +28,8 @@
     "lib": [
       "dom",
       "dom.iterable",
-      "esnext"
+      "esnext",
+      "ES2015"
     ],
     "useDefineForClassFields": true,
     "allowJs": true,

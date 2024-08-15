@@ -416,7 +416,9 @@ const renderPromptAtomAsync = atom(async (get) => {
   wasmCallContext.node_index = orch_index
 
   try {
-    return await func.render_prompt_for_test(runtime, test_case.name, wasmCallContext)
+    return await func.render_prompt_for_test(runtime, test_case.name, wasmCallContext, async (path: string) => {
+      return await vscode.readFile(path)
+    })
   } catch (e) {
     if (e instanceof Error) {
       return e.message

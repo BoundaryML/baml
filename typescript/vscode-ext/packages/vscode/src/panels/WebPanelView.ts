@@ -3,7 +3,7 @@ import { type Disposable, Uri, ViewColumn, type Webview, type WebviewPanel, wind
 import * as vscode from 'vscode'
 import { getNonce } from '../utils/getNonce'
 import { getUri } from '../utils/getUri'
-import { EchoResponse, GetBamlSrcResponse, GetWebviewUriResponse, WebviewToVscodeRpc } from '../rpc'
+import { EchoResponse, GetBamlSrcResponse, GetWebviewUriResponse, WebviewToVscodeRpc, encodeBuffer } from '../rpc'
 
 import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { URI } from 'vscode-uri'
@@ -249,37 +249,32 @@ export class WebPanelView {
             // This is 1:1 with the contents of `image.file` in a test file, e.g. given `image { file baml_src://path/to-image.png }`,
             // relpath will be 'baml_src://path/to-image.png'
             const relpath = vscodeMessage.path
-            if (relpath.startsWith('baml_src://')) {
-              const uri = this._panel.webview
-                .asWebviewUri(
-                  Uri.joinPath(
-                    // NB(san): this is a violation of the "never URI.parse rule"
-                    // (see https://www.notion.so/gloochat/windows-uri-treatment-fe87b22abebb4089945eb8cd1ad050ef)
-                    // but this bamlSrc is already a file URI, it seems...
-                    Uri.parse(vscodeMessage.bamlSrc),
-                    // .replace() only replaces the first occurrence, which we've already verified is that relpath starts with
-                    relpath.replace('baml_src://', ''),
-                  ),
-                )
-                .toString()
 
-              console.log('GET_WEBVIEW_URI', { vscodeMessage, uri })
-              const webviewUriResp: GetWebviewUriResponse = {
-                uri,
-              }
-              this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: webviewUriResp })
-            } else {
-              // NB(san): this is a violation of the "never URI.parse rule"
-              // (see https://www.notion.so/gloochat/windows-uri-treatment-fe87b22abebb4089945eb8cd1ad050ef)
-              // but this relpath is already a file URI, it seems...
-              const uri = this._panel.webview.asWebviewUri(Uri.parse(relpath)).toString()
+            // NB(san): this is a violation of the "never URI.parse rule"
+            // (see https://www.notion.so/gloochat/windows-uri-treatment-fe87b22abebb4089945eb8cd1ad050ef)
+            // but this relpath is already a file URI, it seems...
+            const uriPath = Uri.parse(relpath)
+            const uri = this._panel.webview.asWebviewUri(uriPath).toString()
 
-              console.log('GET_WEBVIEW_URI', { vscodeMessage, uri, parsed: Uri.parse(relpath) })
-              const webviewUriResp: GetWebviewUriResponse = {
-                uri,
-              }
-              this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: webviewUriResp })
+            console.log('GET_WEBVIEW_URI', { vscodeMessage, uri, parsed: uriPath })
+            let webviewUriResp: GetWebviewUriResponse = {
+              uri,
             }
+            if (vscodeMessage.contents) {
+              try {
+                const contents = await workspace.fs.readFile(uriPath)
+                webviewUriResp = {
+                  ...webviewUriResp,
+                  contents: encodeBuffer(contents),
+                }
+              } catch (e) {
+                webviewUriResp = {
+                  ...webviewUriResp,
+                  readError: `${e}`,
+                }
+              }
+            }
+            this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: webviewUriResp })
             return
         }
       },

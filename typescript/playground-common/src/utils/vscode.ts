@@ -1,4 +1,4 @@
-import { GetWebviewUriRequest, GetWebviewUriResponse } from '../baml_wasm_web/rpc'
+import { decodeBuffer, GetWebviewUriRequest, GetWebviewUriResponse } from '../baml_wasm_web/rpc'
 import type { WebviewApi } from 'vscode-webview'
 
 const RPC_TIMEOUT_MS = 5000
@@ -47,20 +47,30 @@ class VSCodeAPIWrapper {
   }
 
   public async readFile(path: string): Promise<Uint8Array> {
-    const uri = await this.asWebviewUri('', path)
-    const resp = await fetch(uri)
+    const uri = await this.readLocalFile('', path)
+    console.log('read file', uri)
 
-    if (!resp.ok) {
-      if (resp.status === 404) {
-        throw new Error(`File does not exist: '${path}'`)
-      }
-      throw new Error(`Fetch via vscode resulted in status=${resp.status} (see network logs for more details)`)
+    if (uri.readError) {
+      throw new Error(`Failed to read file: ${path}\n${uri.readError}`)
+    }
+    if (uri.contents) {
+      const contents = uri.contents
+      // throw new Error(`not implemented: ${Array.isArray(contents)}: \n ${JSON.stringify(contents)}`)
+      return decodeBuffer(contents)
     }
 
-    const blob = await resp.blob()
-    const arrayBuffer = await blob.arrayBuffer()
+    throw new Error(`Unknown error: '${path}'`)
+  }
 
-    return new Uint8Array(arrayBuffer)
+  async readLocalFile(bamlSrc: string, path: string): Promise<GetWebviewUriResponse> {
+    const resp = await this.rpc<GetWebviewUriRequest, GetWebviewUriResponse>({
+      vscodeCommand: 'GET_WEBVIEW_URI',
+      bamlSrc,
+      path,
+      contents: true,
+    })
+
+    return resp
   }
 
   public async asWebviewUri(bamlSrc: string, path: string): Promise<string> {
@@ -79,7 +89,7 @@ class VSCodeAPIWrapper {
       this.rpcTable.set(rpcId, { resolve: resolve as (resp: unknown) => void })
 
       this.postMessage({
-        rpcMethod: (data as any).vscodeCommand,
+        rpcMethod: (data as unknown as { vscodeCommand: string }).vscodeCommand,
         rpcId,
         data,
       })

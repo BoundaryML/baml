@@ -85,10 +85,13 @@ export interface GetWebviewUriRequest {
   vscodeCommand: 'GET_WEBVIEW_URI'
   bamlSrc: string
   path: string
+  contents?: true
 }
 
 export interface GetWebviewUriResponse {
   uri: string
+  contents?: string
+  readError?: string
 }
 
 type ApiPairs = [
@@ -97,5 +100,59 @@ type ApiPairs = [
   [GetBamlSrcRequest, GetBamlSrcResponse],
   [GetWebviewUriRequest, GetWebviewUriResponse],
 ]
+
+// Serialization for binary data (like images)
+function serializeBinaryData(uint8Array: Uint8Array): string {
+  return uint8Array.reduce((data, byte) => data + String.fromCharCode(byte), '')
+}
+
+// Deserialization for binary data
+function deserializeBinaryData(serialized: string): Uint8Array {
+  return new Uint8Array(serialized.split('').map((char) => char.charCodeAt(0)))
+}
+
+// Base64 encoding
+function base64Encode(str: string): string {
+  const base64chars: string = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let result: string = ''
+  let i: number
+  for (i = 0; i < str.length; i += 3) {
+    const chunk: number = (str.charCodeAt(i) << 16) | (str.charCodeAt(i + 1) << 8) | str.charCodeAt(i + 2)
+    result +=
+      base64chars.charAt((chunk & 16515072) >> 18) +
+      base64chars.charAt((chunk & 258048) >> 12) +
+      base64chars.charAt((chunk & 4032) >> 6) +
+      base64chars.charAt(chunk & 63)
+  }
+  if (str.length % 3 === 1) result = result.slice(0, -2) + '=='
+  if (str.length % 3 === 2) result = result.slice(0, -1) + '='
+  return result
+}
+
+// Base64 decoding
+function base64Decode(str: string): string {
+  const base64chars: string = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  while (str[str.length - 1] === '=') {
+    str = str.slice(0, -1)
+  }
+  let result: string = ''
+  for (let i = 0; i < str.length; i += 4) {
+    const chunk: number =
+      (base64chars.indexOf(str[i]) << 18) |
+      (base64chars.indexOf(str[i + 1]) << 12) |
+      (base64chars.indexOf(str[i + 2]) << 6) |
+      base64chars.indexOf(str[i + 3])
+    result += String.fromCharCode((chunk & 16711680) >> 16, (chunk & 65280) >> 8, chunk & 255)
+  }
+  return result.slice(0, result.length - (str.length % 4 ? 4 - (str.length % 4) : 0))
+}
+
+export function encodeBuffer(arr: Uint8Array): string {
+  return serializeBinaryData(arr)
+}
+
+export function decodeBuffer(str: string): Uint8Array {
+  return deserializeBinaryData(str)
+}
 
 export type WebviewToVscodeRpc = RequestUnion<ApiPairs>
