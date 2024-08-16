@@ -20,7 +20,7 @@ import {
   // We _deliberately_ only import types from wasm, instead of importing the module: wasm load is async,
   // so we can only load wasm symbols through wasmAtom, not directly by importing wasm-schema-web
   type WasmChatMessagePartMedia,
-  WasmChatMessagePartMediaType,
+  type WasmChatMessagePartMediaType,
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
@@ -134,18 +134,23 @@ const WebviewMedia: React.FC<{ bamlMediaType: 'image' | 'audio'; media: WasmChat
   bamlMediaType,
   media,
 }) => {
+  const wasm = useAtomValue(wasmAtom)
   const pathAsUri = useSWR({ swr: 'WebviewMedia', type: media.type, content: media.content }, async () => {
+    if (!wasm) {
+      return { error: 'wasm not loaded' }
+    }
+
     switch (media.type) {
-      case WasmChatMessagePartMediaType.File:
+      case wasm.WasmChatMessagePartMediaType.File:
         // const uri = await vscode.readFile('', media.content)
         // // Do a manual check to assert that the image exists
         // if ((await fetch(uri, { method: 'HEAD' })).status !== 200) {
         //   throw new Error('file not found')
         // }
         return `file://${media.content}`
-      case WasmChatMessagePartMediaType.Url:
+      case wasm.WasmChatMessagePartMediaType.Url:
         return media.content
-      case WasmChatMessagePartMediaType.Error:
+      case wasm.WasmChatMessagePartMediaType.Error:
         return { error: media.content }
       default:
         return { error: 'unknown media type' }
@@ -194,6 +199,7 @@ const WebviewMedia: React.FC<{ bamlMediaType: 'image' | 'audio'; media: WasmChat
 
 const PromptPreview: React.FC = () => {
   const promptPreview = useAtomValue(renderPromptAtom)
+  const wasm = useAtomValue(wasmAtom)
   const { showCurlRequest } = useAppState()
 
   if (!promptPreview) {
@@ -254,14 +260,14 @@ const PromptPreview: React.FC = () => {
             if (part.is_image()) {
               const media = part.as_media()
               if (!media) return <div key={idx}>Error loading image: this chat message part is not media</div>
-              if (media.type === WasmChatMessagePartMediaType.Error)
+              if (media.type === wasm?.WasmChatMessagePartMediaType.Error)
                 return <div key={idx}>Error loading image 1: {media.content}</div>
               return <WebviewMedia key={idx} bamlMediaType='image' media={media} />
             }
             if (part.is_audio()) {
               const media = part.as_media()
               if (!media) return <div key={idx}>Error loading audio: this chat message part is not media</div>
-              if (media.type === WasmChatMessagePartMediaType.Error)
+              if (media.type === wasm?.WasmChatMessagePartMediaType.Error)
                 return <div key={idx}>Error loading audio 1: {media.content}</div>
               return <WebviewMedia key={idx} bamlMediaType='audio' media={media} />
             }
