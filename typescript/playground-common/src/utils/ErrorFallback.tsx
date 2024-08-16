@@ -7,6 +7,7 @@ const ErrorFallback: React.FC<FallbackProps> = ({ error, resetErrorBoundary }) =
       </p>
       <pre className='whitespace-pre-wrap'>{error.message}</pre>
       <pre className='whitespace-pre-wrap'>{error.stack}</pre>
+      <pre className='whitespace-pre-wrap'>{JSON.stringify(error, null, 2)}</pre>
     </div>
   )
 }

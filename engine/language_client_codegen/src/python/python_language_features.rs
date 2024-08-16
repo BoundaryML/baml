@@ -1,5 +1,5 @@
 use crate::dir_writer::LanguageFeatures;
-use internal_baml_core::ir::TypeValue;
+use baml_types::{BamlMediaType, TypeValue};
 
 #[derive(Default)]
 pub(super) struct PythonLanguageFeatures {}
@@ -31,13 +31,14 @@ pub(super) trait ToPython {
 impl ToPython for TypeValue {
     fn to_python(&self) -> String {
         match self {
-            TypeValue::Bool => "bool".to_string(),
-            TypeValue::Float => "float".to_string(),
-            TypeValue::Int => "int".to_string(),
-            TypeValue::String => "str".to_string(),
-            TypeValue::Null => "None".to_string(),
-            TypeValue::Image => "baml_py.Image".to_string(),
-            TypeValue::Audio => "baml_py.Audio".to_string(),
+            TypeValue::Bool => "bool",
+            TypeValue::Float => "float",
+            TypeValue::Int => "int",
+            TypeValue::String => "str",
+            TypeValue::Null => "None",
+            TypeValue::Media(BamlMediaType::Image) => "baml_py.Image",
+            TypeValue::Media(BamlMediaType::Audio) => "baml_py.Audio",
         }
+        .to_string()
     }
 }
