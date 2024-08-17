@@ -218,6 +218,11 @@ impl RequestBuilder for OpenAIClient {
         allow_proxy: bool,
         stream: bool,
     ) -> Result<reqwest::RequestBuilder> {
+        // Never proxy requests to Ollama
+        let allow_proxy = allow_proxy
+            && self.properties.proxy_url.is_some()
+            && !self.properties.base_url.starts_with("http://localhost");
+
         let destination_url = if allow_proxy {
             self.properties
                 .proxy_url
@@ -245,10 +250,7 @@ impl RequestBuilder for OpenAIClient {
         }
 
         // Don't attach BAML creds to localhost requests, i.e. ollama
-        if allow_proxy
-            && self.properties.proxy_url.is_some()
-            && !self.properties.base_url.contains("localhost")
-        {
+        if allow_proxy {
             req = req.header("baml-original-url", self.properties.base_url.as_str());
         }
 
