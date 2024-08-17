@@ -244,7 +244,11 @@ impl RequestBuilder for OpenAIClient {
             req = req.bearer_auth(key);
         }
 
-        if allow_proxy {
+        // Don't attach BAML creds to localhost requests, i.e. ollama
+        if allow_proxy
+            && self.properties.proxy_url.is_some()
+            && !self.properties.base_url.contains("localhost")
+        {
             req = req.header("baml-original-url", self.properties.base_url.as_str());
         }
 
