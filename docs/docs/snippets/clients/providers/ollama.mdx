@@ -6,14 +6,14 @@ slug: docs/snippets/clients/providers/ollama
 
 For `ollama`, we provide a client that can be used to interact with [ollama](https://ollama.com/) `/chat/completions` endpoint.
 
-<Info>What is ollama? Ollama is an easy way to run LLMs locally!</Info>
+<Tip>You can try out BAML with Ollama at promptfiddle.com, by running `OLLAMA_ORIGINS='*' ollama serve`. Learn more in [here](https://www.boundaryml.com/blog/ollama-structured-output)</Tip>
 
 Example:
 ```baml BAML
 client<llm> MyClient {
   provider ollama
   options {
-    model llama2
+    model "llama3"
   }
 }
 ```
@@ -46,7 +46,7 @@ Example:
 client<llm> MyClient {
   provider ollama
   options {
-    model llama2
+    model "llama3"
     headers {
       "X-My-Header" "my-value"
     }
