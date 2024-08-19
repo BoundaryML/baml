@@ -157,9 +157,7 @@ pub enum Expression {
 impl Expression {
     pub fn from_json(value: serde_json::Value, span: Span, empty_span: Span) -> Expression {
         match value {
-            serde_json::Value::Null => {
-                Expression::Identifier(Identifier::Primitive(TypeValue::Null, span))
-            }
+            serde_json::Value::Null => Expression::StringValue("Null".to_string(), empty_span),
             serde_json::Value::Bool(b) => Expression::BoolValue(b, span),
             serde_json::Value::Number(n) => Expression::NumericValue(n.to_string(), span),
             serde_json::Value::String(s) => Expression::StringValue(s, span),
@@ -312,7 +310,6 @@ impl Expression {
                 Identifier::Local(_, _) => "local_type",
                 Identifier::Ref(_, _) => "ref_type",
                 Identifier::ENV(_, _) => "env_type",
-                Identifier::Primitive(_, _) => "primitive_type",
                 Identifier::Invalid(_, _) => "invalid_type",
             },
             Expression::Map(_, _) => "map",

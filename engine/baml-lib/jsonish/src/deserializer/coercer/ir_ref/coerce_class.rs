@@ -29,6 +29,7 @@ impl TypeCoercer for Class {
         );
         let (optional, required): (Vec<_>, Vec<_>) =
             self.fields.iter().partition(|f| f.1.is_optional());
+
         let mut optional_values = optional
             .iter()
             .map(|(f, ..)| (f.real_name().to_string(), None))

@@ -10,7 +10,6 @@ class InterfaceThree {
   interface InterfaceThree
 }
 
-
 // error: Error validating: These classes form a dependency cycle: InterfaceTwo
 //   -->  class/dependency_cycle.baml:1
 //    | 

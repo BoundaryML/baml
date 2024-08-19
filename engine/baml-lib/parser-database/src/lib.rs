@@ -42,7 +42,6 @@ pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 use either::Either;
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::{SchemaAst, WithIdentifier, WithName, WithSpan};
-pub use printer::WithStaticRenames;
 pub use types::{
     ContantDelayStrategy, DynamicStringAttributes, ExponentialBackoffStrategy, PrinterType,
     PromptAst, PromptVariable, RetryPolicy, RetryPolicyStrategy, StaticStringAttributes,
@@ -104,8 +103,6 @@ impl ParserDatabase {
 
     /// See the docs on [ParserDatabase](/struct.ParserDatabase.html).
     pub fn validate(&mut self, diag: &mut Diagnostics) -> Result<(), Diagnostics> {
-        diag.to_result()?;
-
         let mut ctx = Context::new(
             &self.ast,
             &mut self.interner,
@@ -118,7 +115,6 @@ impl ParserDatabase {
         names::resolve_names(&mut ctx);
 
         // Return early on name resolution errors.
-        ctx.diagnostics.to_result()?;
 
         // Second pass: resolve top-level items and field types.
         types::resolve_types(&mut ctx);
@@ -132,28 +128,7 @@ impl ParserDatabase {
 
     /// Updates the prompt
     pub fn finalize(&mut self, diag: &mut Diagnostics) {
-        self.link_functions(diag);
         self.finalize_dependencies(diag);
-        self.finalize_prompt_validation(diag);
-    }
-
-    fn link_functions(&mut self, _diag: &mut Diagnostics) {
-        let default_impl = self
-            .walk_old_functions()
-            .filter_map(|f| {
-                if f.metadata().default_impl.is_none() {
-                    return f.walk_variants().find_map(|v| {
-                        Some((f.id, v.name().to_string(), f.identifier().span().clone()))
-                    });
-                }
-                None
-            })
-            .collect::<Vec<_>>();
-
-        default_impl.iter().for_each(|((_, fid), impl_name, span)| {
-            self.types.function.get_mut(fid).unwrap().default_impl =
-                Some((impl_name.clone(), span.clone()))
-        });
     }
 
     fn finalize_dependencies(&mut self, diag: &mut Diagnostics) {
@@ -273,108 +248,6 @@ impl ParserDatabase {
             let val = self.types.function.get_mut(&id).unwrap();
             val.dependencies.0.extend(input);
             val.dependencies.1.extend(output);
-        }
-    }
-
-    fn finalize_prompt_validation(&mut self, diag: &mut Diagnostics) {
-        let mut vars: HashMap<_, _> = Default::default();
-
-        self.walk_variants().for_each(|variant| {
-            let mut input_replacers = HashMap::new();
-            let mut output_replacers = HashMap::new();
-            let mut chat_replacers = vec![];
-            if let Some(fn_walker) = variant.walk_function() {
-                // Now lets validate the prompt is what we expect.
-                let prompt_variables = &variant.properties().prompt_replacements;
-
-                let num_errors = prompt_variables.iter().fold(0, |count, f| match f {
-                    PromptVariable::Input(variable) => {
-                        // Ensure the prompt has an input path that works.
-                        match types::post_prompt::process_input(self, fn_walker, variable) {
-                            Ok(replacer) => {
-                                input_replacers.insert(variable.to_owned(), replacer);
-                                count
-                            }
-                            Err(e) => {
-                                diag.push_error(e);
-                                count + 1
-                            }
-                        }
-                    }
-                    PromptVariable::Enum(blk) => {
-                        // Ensure the prompt has an enum path that works.
-                        match types::post_prompt::process_print_enum(
-                            self, variant, fn_walker, blk, diag,
-                        ) {
-                            Ok(result) => {
-                                output_replacers.insert(blk.to_owned(), result);
-                                count
-                            }
-                            Err(e) => {
-                                diag.push_error(e);
-                                count + 1
-                            }
-                        }
-                    }
-                    PromptVariable::Type(blk) => {
-                        // Ensure the prompt has an enum path that works.
-                        match types::post_prompt::process_print_type(self, variant, fn_walker, blk)
-                        {
-                            Ok(result) => {
-                                output_replacers.insert(blk.to_owned(), result);
-                                count
-                            }
-                            Err(e) => {
-                                diag.push_error(e);
-                                count + 1
-                            }
-                        }
-                    }
-                    PromptVariable::Chat(c) => {
-                        chat_replacers.push(c.clone());
-                        count
-                    }
-                });
-
-                if num_errors == 0 {
-                    // Some simple error checking.
-                    let span = &variant.properties().prompt.key_span;
-                    // Validation already done that the prompt is valid.
-                    // We should just ensure that atleast one of the input or output replacers is used.
-                    if input_replacers.is_empty() {
-                        diag.push_warning(DatamodelWarning::prompt_variable_unused(
-                            "Expected prompt to use {#input}",
-                            span.clone(),
-                        ));
-                    }
-
-                    // TODO: We should ensure every enum the class uses is used here.
-                    if output_replacers.is_empty() {
-                        diag.push_warning(DatamodelWarning::prompt_variable_unused(
-                            "Expected prompt to use {#print_type(..)} or {#print_enum(..)} but none was found",
-                            span.clone(),
-                        ));
-                    }
-
-                    // Only in this case update the prompt.
-                    vars.insert(
-                        variant.id,
-                        (input_replacers, output_replacers, chat_replacers),
-                    );
-                }
-            } else {
-                diag.push_error(DatamodelError::new_type_not_found_error(
-                    variant.function_identifier().name(),
-                    self.valid_function_names(),
-                    variant.function_identifier().span().clone(),
-                ));
-            }
-        });
-
-        if !diag.has_errors() {
-            vars.into_iter().for_each(|(k, v)| {
-                self.types.variant_properties.get_mut(&k).unwrap().replacers = v;
-            });
         }
     }
 

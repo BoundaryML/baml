@@ -2413,6 +2413,7 @@ dependencies = [
  "pest_derive",
  "serde",
  "serde_json",
+ "test-log",
 ]
 
 [[package]]

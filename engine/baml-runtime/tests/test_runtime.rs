@@ -110,7 +110,6 @@ mod internal_tests {
             .await;
 
         assert!(res.is_ok(), "Result: {:#?}", res.err());
-        log::info!("Result: {}", res.ok().unwrap());
 
         Ok(())
     }

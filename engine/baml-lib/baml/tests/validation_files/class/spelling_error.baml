@@ -6,11 +6,6 @@ class InterfaceOne {
   uses InterfaceT
 }
 
-
-
-
-
-
 // error: Type `strin` does not exist. Did you mean one of these: `string`, `int`, `float`, `bool`, `InterfaceOne`, `InterfaceTwo`?
 //   -->  class/spelling_error.baml:2
 //    | 

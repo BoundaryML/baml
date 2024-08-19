@@ -9,14 +9,30 @@ use internal_baml_diagnostics::Diagnostics;
 pub(crate) fn parse_expression(
     token: Pair<'_>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
-) -> Expression {
+) -> Option<Expression> {
     let first_child = token.into_inner().next().unwrap();
     let span = diagnostics.span(first_child.as_span());
     match first_child.as_rule() {
-        Rule::numeric_literal => Expression::NumericValue(first_child.as_str().into(), span),
-        Rule::string_literal => parse_string_literal(first_child, diagnostics),
-        Rule::map_expression => parse_map(first_child, diagnostics),
-        Rule::array_expression => parse_array(first_child, diagnostics),
+        Rule::numeric_literal => Some(Expression::NumericValue(first_child.as_str().into(), span)),
+        Rule::string_literal => Some(parse_string_literal(first_child, diagnostics)),
+        Rule::map_expression => Some(parse_map(first_child, diagnostics)),
+        Rule::array_expression => Some(parse_array(first_child, diagnostics)),
+
+        Rule::identifier => Some(Expression::Identifier(parse_identifier(
+            first_child,
+            diagnostics,
+        ))),
+
+        Rule::BLOCK_LEVEL_CATCH_ALL => {
+            diagnostics.push_error(
+                internal_baml_diagnostics::DatamodelError::new_validation_error(
+                    "This is not a valid expression.",
+                    span,
+                ),
+            );
+            None
+        }
+
         _ => unreachable_rule!(first_child, Rule::expression),
     }
 }
@@ -27,8 +43,12 @@ fn parse_array(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
 
     for current in token.into_inner() {
         match current.as_rule() {
-            Rule::expression => elements.push(parse_expression(current, diagnostics)),
-            _ => parsing_catch_all(&current, "array"),
+            Rule::expression => {
+                if let Some(expr) = parse_expression(current, diagnostics) {
+                    elements.push(expr);
+                }
+            }
+            _ => parsing_catch_all(current, "array"),
         }
     }
 
@@ -51,13 +71,6 @@ fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expre
             let raw_content = contents.as_str();
             // If the content starts or ends with a space, trim it
             let content = raw_content.trim().to_string();
-            // // If its trimmed put a warning
-            // if content.len() != raw_content.len() {
-            //     diagnostics.push_warning(DatamodelWarning::new(
-            //         "Trailing or leading whitespace trimmed. If you meant to include it, please wrap the string with \"...\"".into(),
-            //         span.clone(),
-            //     ))
-            // }
 
             if content.contains(' ') {
                 Expression::StringValue(content, span)
@@ -85,7 +98,8 @@ fn parse_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
                     entries.push(f)
                 }
             }
-            _ => parsing_catch_all(&current, "map key value"),
+            Rule::BLOCK_LEVEL_CATCH_ALL => {}
+            _ => parsing_catch_all(current, "map key value"),
         }
     }
 
@@ -100,17 +114,37 @@ fn parse_map_entry(
 
     let mut key = None;
     let mut value = None;
+    let token_span = token.as_span(); // Store the span before moving token
 
     for current in token.into_inner() {
         match current.as_rule() {
             Rule::map_key => key = Some(parse_map_key(current, diagnostics)),
-            Rule::expression => value = Some(parse_expression(current, diagnostics)),
-            _ => parsing_catch_all(&current, "dict entry"),
+            Rule::expression => value = parse_expression(current, diagnostics),
+            Rule::ENTRY_CATCH_ALL => {
+                diagnostics.push_error(
+                    internal_baml_diagnostics::DatamodelError::new_validation_error(
+                        "This map entry is missing a valid value or has an incorrect syntax.",
+                        diagnostics.span(token_span), // Use the stored span here
+                    ),
+                );
+                return None;
+            }
+            Rule::BLOCK_LEVEL_CATCH_ALL => {}
+            _ => parsing_catch_all(current, "dict entry"),
         }
     }
 
     match (key, value) {
         (Some(key), Some(value)) => Some((key, value)),
+        (Some(_), None) => {
+            diagnostics.push_error(
+                internal_baml_diagnostics::DatamodelError::new_validation_error(
+                    "This map entry is missing a valid value or has an incorrect syntax.",
+                    diagnostics.span(token_span), // Use the stored span here
+                ),
+            );
+            None
+        }
         _ => None,
     }
 }
@@ -123,6 +157,10 @@ fn parse_map_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
         return match current.as_rule() {
             Rule::identifier => Expression::Identifier(parse_identifier(current, diagnostics)),
             Rule::quoted_string_literal => Expression::StringValue(
+                current.into_inner().next().unwrap().as_str().to_string(),
+                span,
+            ),
+            Rule::unquoted_string_literal => Expression::StringValue(
                 current.into_inner().next().unwrap().as_str().to_string(),
                 span,
             ),

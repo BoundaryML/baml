@@ -66,14 +66,6 @@ pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema 
         });
     }
 
-    if diagnostics.has_errors() {
-        return ValidatedSchema {
-            db,
-            diagnostics,
-            configuration: Configuration::new(),
-        };
-    }
-
     if let Err(d) = db.validate(&mut diagnostics) {
         return ValidatedSchema {
             db,

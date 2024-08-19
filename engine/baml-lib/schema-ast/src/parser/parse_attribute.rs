@@ -21,7 +21,7 @@ pub(crate) fn parse_attribute(
             Rule::arguments_list => {
                 parse_arguments_list(current, &mut arguments, &name, diagnostics)
             }
-            _ => parsing_catch_all(&current, "attribute"),
+            _ => parsing_catch_all(current, "attribute"),
         }
     }
 

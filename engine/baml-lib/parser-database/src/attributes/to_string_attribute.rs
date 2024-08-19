@@ -23,17 +23,17 @@ pub(super) fn visit(ctx: &mut Context<'_>, as_block: bool) -> Option<ToStringAtt
             ctx.validate_visited_arguments();
         }
 
+        if ctx.visit_optional_single_attr("description") {
+            visit_description_attribute(&mut attributes, ctx);
+            modified = true;
+            ctx.validate_visited_arguments();
+        }
+
         // Only inner blocks can have meta/skip attributes.
         if !as_block {
             // @meta
             while ctx.visit_repeated_attr("meta") {
                 visit_meta_attribute(&mut attributes, ctx, as_block);
-                modified = true;
-                ctx.validate_visited_arguments();
-            }
-
-            if ctx.visit_optional_single_attr("description") {
-                visit_description_attribute(&mut attributes, ctx);
                 modified = true;
                 ctx.validate_visited_arguments();
             }

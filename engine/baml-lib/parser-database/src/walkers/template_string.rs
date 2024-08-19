@@ -1,6 +1,6 @@
 use either::Either;
 use internal_baml_jinja::{PredefinedTypes, Type};
-use internal_baml_schema_ast::ast::{self, FunctionArgs, Span, WithIdentifier, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{self, BlockArgs, Span, WithIdentifier, WithName, WithSpan};
 
 use crate::types::TemplateStringProperties;
 
@@ -35,7 +35,7 @@ impl<'db> TemplateStringWalker<'db> {
         let ret_type = Type::String;
         let mut params = vec![];
 
-        if let Some(FunctionArgs::Named(p)) = self.ast_node().input() {
+        if let Some(p) = self.ast_node().input() {
             p.args.iter().for_each(|(name, t)| {
                 params.push((
                     name.name().to_string(),

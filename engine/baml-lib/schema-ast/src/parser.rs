@@ -1,24 +1,16 @@
 mod helpers;
-mod parse_adapter;
 mod parse_arguments;
 mod parse_attribute;
-mod parse_class;
 mod parse_comments;
-mod parse_config;
-mod parse_enum;
 mod parse_expression;
 mod parse_field;
-mod parse_function;
 mod parse_identifier;
-mod parse_old_function;
+mod parse_named_args_list;
 mod parse_schema;
-mod parse_serializer;
-mod parse_template_args;
 mod parse_template_string;
-mod parse_test;
+mod parse_type_expression_block;
 mod parse_types;
-mod parse_variant;
-
+mod parse_value_expression_block;
 pub use parse_schema::parse_schema;
 
 // The derive is placed here because it generates the `Rule` enum which is used in all parsing functions.

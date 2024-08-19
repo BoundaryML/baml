@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use super::{
-    parse_class::parse_class, parse_config, parse_enum::parse_enum, parse_function::parse_function,
-    parse_old_function::parse_old_function, parse_template_string::parse_template_string,
-    parse_test::parse_test_from_json, BAMLParser, Rule,
+    parse_template_string::parse_template_string,
+    parse_type_expression_block::parse_type_expression_block,
+    parse_value_expression_block::parse_value_expression_block, BAMLParser, Rule,
 };
-use crate::{ast::*, parser::parse_variant};
+use crate::ast::*;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
 use pest::Parser;
 
@@ -32,16 +32,12 @@ pub fn parse_schema(
     let mut diagnostics = Diagnostics::new(root_path.clone());
     diagnostics.set_source(source);
 
-    if !source.path().ends_with(".json") && !source.path().ends_with(".baml") {
+    if !source.path().ends_with(".baml") {
         diagnostics.push_error(DatamodelError::new_validation_error(
-            "A BAML file must have the file extension `.baml` or `.json`.",
+            "A BAML file must have the file extension `.baml`",
             Span::empty(source.clone()),
         ));
         return Err(diagnostics);
-    }
-
-    if source.path().ends_with(".json") {
-        return parse_test_from_json(source, &mut diagnostics).map(|ast| (ast, diagnostics));
     }
 
     let datamodel_result = BAMLParser::parse(Rule::schema, source.as_str());
@@ -61,76 +57,75 @@ pub fn parse_schema(
 
             while let Some(current) = pairs.next() {
                 match current.as_rule() {
-                    Rule::enum_declaration => top_level_definitions.push(Top::Enum(parse_enum(current,pending_block_comment.take(),  &mut diagnostics))),
-                    Rule::interface_declaration => {
-                        let keyword = current.clone().into_inner().find(|pair| matches!(pair.as_rule(), Rule::CLASS_KEYWORD | Rule::FUNCTION_KEYWORD) ).expect("Expected class keyword");
-                        match keyword.as_rule() {
-                            Rule::CLASS_KEYWORD => {
-                                top_level_definitions.push(Top::Class(parse_class(current, pending_block_comment.take(), &mut diagnostics)));
-                            },
-                            _ => unreachable!("Expected class keyword"),
-                        };
-                    }
-                    Rule::function_declaration => {
-                        match parse_function(current, pending_block_comment.take(), &mut diagnostics) {
-                            Ok(function) => top_level_definitions.push(Top::Function(function)),
-                            Err(e) => diagnostics.push_error(e),
-                        }
-                    },
-                    Rule::old_function_declaration => {
-                        match parse_old_function(current, pending_block_comment.take(), &mut diagnostics) {
-                            Ok(function) => top_level_definitions.push(Top::FunctionOld(function)),
-                            Err(e) => diagnostics.push_error(e),
-                        }
-                    },
-                    Rule::config_block => {
-                        match parse_config::parse_config_block(
+                    Rule::type_expression_block => {
+                        let type_expr = parse_type_expression_block(
                             current,
                             pending_block_comment.take(),
                             &mut diagnostics,
-                        ) {
-                            Ok(config) => top_level_definitions.push(config),
-                            Err(e) => diagnostics.push_error(e),
+                        );
+
+                        match type_expr.sub_type {
+                            SubType::Class => top_level_definitions.push(Top::Class(type_expr)),
+                            SubType::Enum => top_level_definitions.push(Top::Enum(type_expr)),
+                            _ => (), // may need to save other somehow for error propagation
                         }
                     }
-                    Rule::variant_block => {
-                        match parse_variant::parse_variant_block(
+                    Rule::value_expression_block => {
+                        let val_expr = parse_value_expression_block(
                             current,
                             pending_block_comment.take(),
                             &mut diagnostics,
-                        ) {
-                            Ok(config) => top_level_definitions.push(Top::Variant(config)),
+                        );
+                        match val_expr {
+                            Ok(val) => {
+                                if let Some(top) = match val.block_type {
+                                    ValueExprBlockType::Function => Some(Top::Function(val)),
+                                    ValueExprBlockType::Test => Some(Top::TestCase(val)),
+                                    ValueExprBlockType::Client => Some(Top::Client(val)),
+                                    ValueExprBlockType::RetryPolicy => Some(Top::RetryPolicy(val)),
+                                    ValueExprBlockType::Generator => Some(Top::Generator(val)),
+                                } {
+                                    top_level_definitions.push(top);
+                                }
+                            }
                             Err(e) => diagnostics.push_error(e),
                         }
                     }
+
                     Rule::template_declaration => {
-                        match parse_template_string(current, pending_block_comment.take(), &mut diagnostics) {
-                            Ok(template) => top_level_definitions.push(Top::TemplateString(template)),
+                        match parse_template_string(
+                            current,
+                            pending_block_comment.take(),
+                            &mut diagnostics,
+                        ) {
+                            Ok(template) => {
+                                top_level_definitions.push(Top::TemplateString(template))
+                            }
                             Err(e) => diagnostics.push_error(e),
                         }
                     }
+
                     Rule::EOI => {}
-                    Rule::CATCH_ALL => diagnostics.push_error(DatamodelError::new_validation_error(
+                    Rule::CATCH_ALL => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
                         "This line is invalid. It does not start with any known Baml schema keyword.",
                         diagnostics.span(current.as_span()),
-                    )),
+                    ));
+                        break;
+                    }
                     Rule::comment_block => {
                         match pairs.peek().map(|b| b.as_rule()) {
                             Some(Rule::empty_lines) => {
                                 // free floating
                             }
-                            Some(Rule::enum_declaration) => {
-                                pending_block_comment = Some(current);
-                            }
+                            // Some(Rule::enum_declaration) => {
+                            //     pending_block_comment = Some(current);
+                            // }
                             _ => (),
                         }
-                    },
+                    }
                     // We do nothing here.
                     Rule::raw_string_literal => (),
-                    Rule::arbitrary_block => diagnostics.push_error(DatamodelError::new_validation_error(
-                        "This block is invalid. It does not start with any known BAML keyword. Common keywords include 'enum', 'class', 'function', and 'impl'.",
-                        diagnostics.span(current.as_span()),
-                    )),
                     Rule::empty_lines => (),
                     _ => unreachable!("Encountered an unknown rule: {:?}", current.as_rule()),
                 }
@@ -166,6 +161,44 @@ pub fn parse_schema(
 
             diagnostics.push_error(DatamodelError::new_parser_error(expected, location));
             Err(diagnostics)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::parse_schema;
+    use crate::ast::*; // Add this line to import the ast module
+    use internal_baml_diagnostics::SourceFile;
+
+    #[test]
+    // #[test_log::test]
+    fn test_parse_schema() {
+        let input = r#"
+            class MyClass {
+                myProperty string[] @description("This is a description") @alias("MP")
+            }
+        "#;
+
+        let root_path = "test_file.baml";
+        let source = SourceFile::new_static(root_path.into(), input);
+
+        let result = parse_schema(&root_path.into(), &source);
+
+        assert!(result.is_ok());
+        let (schema_ast, _) = result.unwrap();
+
+        assert_eq!(schema_ast.tops.len(), 1);
+
+        match &schema_ast.tops[0] {
+            Top::Class(model) => {
+                assert_eq!(model.name.name(), "MyClass");
+                assert_eq!(model.fields.len(), 1);
+                assert_eq!(model.fields[0].name.name(), "myProperty");
+                assert_eq!(model.fields[0].attributes.len(), 2)
+            }
+            _ => panic!("Expected a model declaration"),
         }
     }
 }

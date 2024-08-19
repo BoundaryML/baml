@@ -29,6 +29,30 @@ function Foo6(arg: int) -> float {
   prompt
 }
 
+// error: Error validating Function "Foo4": This field declaration is invalid. It is either missing a name or a type.
+//   -->  functions_v2/invalid2.baml:17
+//    | 
+// 16 |   client bar
+// 17 |   prompt
+//    | 
+// error: Error validating Function "Foo5": This field declaration is invalid. It is either missing a name or a type.
+//   -->  functions_v2/invalid2.baml:22
+//    | 
+// 21 | function Foo5(arg: int) -> float {
+// 22 |   client
+//    | 
+// error: Error validating Function "Foo6": This field declaration is invalid. It is either missing a name or a type.
+//   -->  functions_v2/invalid2.baml:28
+//    | 
+// 27 | function Foo6(arg: int) -> float {
+// 28 |   client
+//    | 
+// error: Error validating Function "Foo6": This field declaration is invalid. It is either missing a name or a type.
+//   -->  functions_v2/invalid2.baml:29
+//    | 
+// 28 |   client
+// 29 |   prompt
+//    | 
 // error: Error validating: Missing `prompt` field in function. Add to the block:
 // ```
 // prompt #"..."#

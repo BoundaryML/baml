@@ -51,6 +51,7 @@ impl From<TypescriptClient> for SyncTypescriptClient {
     }
 }
 
+#[derive(Debug)]
 struct TypescriptFunction {
     name: String,
     // partial_return_type: String,
@@ -122,9 +123,8 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
         let functions = ir
             .walk_functions()
             .map(|f| {
-                let Either::Right(configs) = f.walk_impls() else {
-                    return Ok(vec![]);
-                };
+                let configs = f.walk_impls();
+
                 let funcs = configs
                     .map(|c| {
                         let (_function, _impl_) = c.item;
@@ -132,15 +132,17 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
                             name: f.name().to_string(),
                             return_type: f.elem().output().to_type_ref(ir),
                             // partial_return_type: f.elem().output().to_partial_type_ref(ir),
-                            args: match f.inputs() {
-                                either::Either::Left(_args) => anyhow::bail!("Typescript codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
-                                either::Either::Right(args) => args
-                                    .iter()
-                                    .map(|(name, r#type)| (name.to_string(),
+                            args: f
+                                .inputs()
+                                .iter()
+                                .map(|(name, r#type)| {
+                                    (
+                                        name.to_string(),
                                         r#type.is_optional(),
-                                     r#type.to_type_ref(ir)))
-                                    .collect(),
-                            },
+                                        r#type.to_type_ref(ir),
+                                    )
+                                })
+                                .collect(),
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -148,7 +150,8 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
             })
             .collect::<Result<Vec<Vec<TypescriptFunction>>>>()?
             .into_iter()
-            .flatten().collect();
+            .flatten()
+            .collect();
 
         let types = ir
             .walk_classes()
