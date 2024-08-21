@@ -25,6 +25,15 @@ module.exports = {
         'plugin:@typescript-eslint/eslint-recommended',
         'plugin:@typescript-eslint/recommended-requiring-type-checking',
       ],
+      rules: {
+        '@typescript-eslint/no-floating-promises': 'off',
+        '@typescript-eslint/no-misused-promises': 'warn',
+        // no unused vars
+        '@typescript-eslint/no-unused-vars': 'warn',
+        // no require imports
+        '@typescript-eslint/no-var-requires': 'warn',
+        '@typescript-eslint/no-require-imports': 'warn',
+      },
     },
     {
       files: ['./app/[project_id]/_playground_controller/TestState.ts'],

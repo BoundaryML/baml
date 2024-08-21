@@ -53,9 +53,9 @@ export const requestDiagnostics = async () => {
 
 export const requestBamlCLIVersion = async () => {
   try {
-    const version = (await client.sendRequest('bamlCliVersion')) as string
+    const version = await client.sendRequest('bamlCliVersion')
     console.log('Got BAML CLI version', version)
-    bamlConfig.cliVersion = version
+    bamlConfig.cliVersion = version as string
   } catch (e) {
     console.error('Failed to get BAML CLI version', e)
   }
@@ -90,8 +90,6 @@ const LatestVersions = z.object({
   }),
 })
 type LatestVersions = z.infer<typeof LatestVersions>
-
-const bamlCliPath = () => config?.path || 'baml'
 
 const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }) => {
   try {
@@ -225,6 +223,15 @@ const activateClient = (
       }
     })
 
+    client.onRequest('executeCommand', async (command: string) => {
+      try {
+        console.log('Executing command', command)
+        await vscode.commands.executeCommand(command)
+      } catch (e) {
+        console.error('Error executing command', e)
+      }
+    })
+
     client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
       WebPanelView.currentPanel?.postMessage('add_project', {
         ...params,
@@ -239,7 +246,7 @@ const activateClient = (
     intervalTimers.push(
       setInterval(
         async () => {
-          console.log(`checking for updates ${new Date()}`)
+          console.log(`checking for updates ${new Date().toString()}`)
           await checkForUpdates({ showIfNoUpdates: false })
         },
         60 * 60 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */,
