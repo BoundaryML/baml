@@ -167,7 +167,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const app: Express = require('express')()
   app.use(cors())
-  var port: number
+  let port: number
   const server = app.listen(0, () => {
     console.log('Server started on port ' + getPort())
     WebPanelView.currentPanel?.postMessage('port_number', {
@@ -176,7 +176,7 @@ export function activate(context: vscode.ExtensionContext) {
   })
 
   const getPort = () => {
-    let addr = server.address()
+    const addr = server.address()
     if (addr === null) {
       vscode.window.showErrorMessage(
         'Failed to start BAML extension server. Please try reloading the window, or restarting VSCode.',

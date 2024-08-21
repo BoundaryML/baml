@@ -9,8 +9,7 @@
       "sourceMaps": true,
       "args": [
         "--crash-reporter-directory=/Users/sam/baml/vscode-ext/crash-reporter",
-        "--extensionDevelopmentPath=${workspaceFolder}/vscode-ext/packages",
-        "--disable-extensions",
+        "--extensionDevelopmentPath=${workspaceFolder}/vscode-ext/packages"
       ],
       "outFiles": [
         "${workspaceFolder}/vscode-ext/packages/vscode/out/**",
