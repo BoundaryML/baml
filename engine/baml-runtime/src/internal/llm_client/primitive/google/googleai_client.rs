@@ -65,7 +65,7 @@ fn resolve_properties(
     let base_url = properties
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "https://generativelanguage.googleapis.com/v1".to_string());
+        .unwrap_or_else(|| "https://generativelanguage.googleapis.com/v1beta".to_string());
 
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
