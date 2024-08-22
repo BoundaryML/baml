@@ -19,9 +19,9 @@ pub(super) fn visit_meta_attribute(
 
     let value = match ctx
         .visit_default_arg_with_idx("value")
-        .map(|(_, value)| coerce::string(value, ctx.diagnostics))
+        .map(|(_, value)| value.as_string_value_lazy())
     {
-        Ok(Some(name)) => ctx.interner.intern(name),
+        Ok(Some(name)) => name,
         Ok(None) => {
             ctx.push_attribute_validation_error("Missing value for meta attribute.", as_block);
             return;
@@ -32,7 +32,7 @@ pub(super) fn visit_meta_attribute(
         } // not flattened for error handing legacy reasons
     };
 
-    if !attributes.add_meta(name, value) {
+    if !attributes.add_meta(name, value.0) {
         ctx.push_attribute_validation_error("Duplicate meta attribute.", as_block);
     }
 }

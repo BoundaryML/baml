@@ -2,6 +2,7 @@ use baml_types::TypeValue;
 
 use crate::ast::Span;
 use std::fmt;
+use internal_baml_jinja::LazyExpression;
 
 use super::{Identifier, WithName, WithSpan};
 
@@ -152,6 +153,8 @@ pub enum Expression {
     Array(Vec<Expression>, Span),
     /// A mapping function.
     Map(Vec<(Expression, Expression)>, Span),
+    /// A string containing a jinja expression.
+    JinjaExpression(String, Span),
 }
 
 impl Expression {
@@ -210,6 +213,7 @@ impl fmt::Display for Expression {
                     .join(",");
                 write!(f, "{{{vals}}}")
             }
+            Expression::JinjaExpression(val, _) => write!(f, "{{{{ {} }}}}", val),
         }
     }
 }
@@ -241,6 +245,21 @@ impl Expression {
             Expression::Identifier(Identifier::String(id, span)) => Some((id, span)),
             Expression::Identifier(Identifier::Invalid(id, span)) => Some((id, span)),
             Expression::Identifier(Identifier::Local(id, span)) => Some((id, span)),
+            _ => None,
+        }
+    }
+
+    pub fn as_string_value_lazy(&self) -> Option<(LazyExpression<String>, &Span)> {
+        // Shortcut to an evaluaded lazy string if the value is already a string.
+        if let Some((s, span)) = self.as_string_value() {
+            return Some((LazyExpression::Ready(s.to_string()), span))
+        }
+
+        // Otherwise, if we have a jinja expression, return it as a lazy expression.
+        match self {
+            Expression::JinjaExpression(expr, span) => {
+                Some((LazyExpression::Unevaluated(expr.to_string()), span))
+            }
             _ => None,
         }
     }
@@ -291,6 +310,7 @@ impl Expression {
             Self::Identifier(id) => id.span(),
             Self::Map(_, span) => span,
             Self::Array(_, span) => span,
+            Self::JinjaExpression(_, span) => span,
         }
     }
 
@@ -314,6 +334,7 @@ impl Expression {
             },
             Expression::Map(_, _) => "map",
             Expression::Array(_, _) => "array",
+            Expression::JinjaExpression(_, _) => "jinja_expression", // TODO: typecheck the expression?
         }
     }
 

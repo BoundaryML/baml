@@ -8,6 +8,7 @@ license-file.workspace = true
 
 [dependencies]
 internal-baml-diagnostics = { path = "../diagnostics" }
+internal-baml-jinja = { path = "../jinja" }
 baml-types = { path = "../baml-types" }
 log = "0.4.20"
 serde_json.workspace = true

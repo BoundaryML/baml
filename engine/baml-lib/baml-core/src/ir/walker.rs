@@ -2,6 +2,7 @@ use anyhow::Result;
 use baml_types::BamlValue;
 use indexmap::IndexMap;
 
+use internal_baml_jinja::render_expression;
 use internal_baml_parser_database::RetryPolicyStrategy;
 
 use std::collections::HashMap;
@@ -166,7 +167,14 @@ impl Expression {
         }
     }
 
-    pub fn resolve(&self, env_values: &HashMap<String, String>) -> Result<BamlValue> {
+    /// Normalize a `Expression` into a `BamlValue` in a given context.
+    ///
+    /// TODO: Modify the context, rename it to `env` and make it a map
+    /// from `String` to `BamlValue`. This generalizes the context from
+    /// known environment variables to variables set by other means. For
+    /// example, we will eventually want to normalize `JinjaExpressions` found
+    /// inside an `assert` by augmenting the context with the LLM response.
+    pub fn normalize(&self, env_values: &HashMap<String, String>) -> Result<BamlValue> {
         match self {
             Expression::Identifier(idn) => match idn {
                 repr::Identifier::ENV(s) => match env_values.get(s) {
@@ -186,19 +194,19 @@ impl Expression {
             Expression::Map(m) => {
                 let mut map = baml_types::BamlMap::new();
                 for (k, v) in m {
-                    map.insert(k.as_string_value(env_values)?, v.resolve(env_values)?);
+                    map.insert(k.as_string_value(env_values)?, v.normalize(env_values)?);
                 }
                 Ok(BamlValue::Map(map))
             }
             Expression::List(l) => {
                 let mut list = Vec::new();
                 for v in l {
-                    list.push(v.resolve(env_values)?);
+                    list.push(v.normalize(env_values)?);
                 }
                 Ok(BamlValue::List(list))
             }
             Expression::RawString(s) | Expression::String(s) => Ok(BamlValue::String(s.clone())),
-            repr::Expression::Numeric(n) => {
+            Expression::Numeric(n) => {
                 if let Ok(n) = n.parse::<i64>() {
                     Ok(BamlValue::Int(n))
                 } else if let Ok(n) = n.parse::<f64>() {
@@ -206,7 +214,16 @@ impl Expression {
                 } else {
                     anyhow::bail!("Invalid numeric value: {}", n)
                 }
-            }
+            },
+            Expression::JinjaExpression(expr) => {
+                let jinja_context: HashMap<String, BamlValue> = env_values
+                    .iter()
+                    .map(|(k, v)| (k.clone(), BamlValue::String(v.clone())))
+                    .collect()
+                    ;
+                let res_string = render_expression(&expr, &jinja_context)?;
+                Ok(BamlValue::String(res_string))
+            },
         }
     }
 }
@@ -252,7 +269,7 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
     ) -> Result<IndexMap<String, Result<BamlValue>>> {
         self.args()
             .iter()
-            .map(|(k, v)| Ok((k.clone(), v.resolve(env_values))))
+            .map(|(k, v)| Ok((k.clone(), v.normalize(env_values))))
             .collect()
     }
 
@@ -400,7 +417,13 @@ impl<'a> Walker<'a, &'a Field> {
         self.item
             .attributes
             .get("description")
-            .map(|v| v.as_string_value(env_values))
+            .map(|v| {
+                let normalized = v.normalize(env_values)?;
+                let baml_value = normalized
+                    .as_str()
+                    .ok_or(anyhow::anyhow!("Evaluated to non-string value"))?;
+                Ok(String::from(baml_value))
+            })
             .transpose()
     }
 

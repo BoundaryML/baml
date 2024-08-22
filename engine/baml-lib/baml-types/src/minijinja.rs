@@ -1,5 +1,6 @@
 use crate::{BamlMedia, BamlValue};
 
+// NOTE: (Greg) Is this an orphan instance?
 impl From<BamlValue> for minijinja::Value {
     fn from(arg: BamlValue) -> minijinja::Value {
         match arg {

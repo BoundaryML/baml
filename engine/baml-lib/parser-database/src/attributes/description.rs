@@ -6,12 +6,12 @@ pub(super) fn visit_description_attribute(
 ) {
     match ctx
         .visit_default_arg_with_idx("description")
-        .map(|(_, value)| coerce::string(value, ctx.diagnostics))
+        .map(|(_, value)| value.as_string_value_lazy())
     {
         Ok(Some(description)) => {
             if !attributes.add_meta(
                 ctx.interner.intern("description"),
-                ctx.interner.intern(description),
+                description.0,
             ) {
                 ctx.push_attribute_validation_error("Duplicate meta attribute.", true);
             }

@@ -17,6 +17,7 @@ pub(crate) fn parse_expression(
         Rule::string_literal => Some(parse_string_literal(first_child, diagnostics)),
         Rule::map_expression => Some(parse_map(first_child, diagnostics)),
         Rule::array_expression => Some(parse_array(first_child, diagnostics)),
+        Rule::jinja_expression => Some(parse_jinja_expression(first_child, diagnostics)),
 
         Rule::identifier => Some(Expression::Identifier(parse_identifier(
             first_child,
@@ -233,4 +234,40 @@ fn unescape_string(val: &str) -> String {
     }
 
     result
+}
+
+pub fn parse_jinja_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
+    dbg!(&token);
+    assert_correct_parser!(token, Rule::jinja_expression);
+    let inner_text = token.as_str()[2..token.as_str().len() - 2].to_string();
+    dbg!("inner_text: {:?}", &inner_text);
+    Expression::JinjaExpression(
+        inner_text,
+        diagnostics.span(token.as_span()),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use internal_baml_diagnostics::{Diagnostics, SourceFile};
+    use pest::Parser;
+    use crate::parser::{BAMLParser, Rule};
+
+    #[test]
+    fn test_parse_jinja_expression() {
+        let input = "{{ 1 + 1 }}";
+        let root_path = "test_file.baml";
+        let source = SourceFile::new_static(root_path.into(), input);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+
+        let pair = BAMLParser::parse(Rule::jinja_expression, input).unwrap().next().unwrap();
+        let expr = parse_jinja_expression(pair, &mut diagnostics);
+        match expr {
+            Expression::JinjaExpression(s, _) => assert_eq!(s, " 1 + 1 "),
+            _ => panic!("Expected JinjaExpression, got {:?}", expr),
+        }
+    }
+
 }

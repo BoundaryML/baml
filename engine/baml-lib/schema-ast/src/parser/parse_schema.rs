@@ -178,6 +178,7 @@ mod tests {
         let input = r#"
             class MyClass {
                 myProperty string[] @description("This is a description") @alias("MP")
+                prop2 string @description({{ "a " + "b" }})
             }
         "#;
 
@@ -194,7 +195,7 @@ mod tests {
         match &schema_ast.tops[0] {
             Top::Class(model) => {
                 assert_eq!(model.name.name(), "MyClass");
-                assert_eq!(model.fields.len(), 1);
+                assert_eq!(model.fields.len(), 2);
                 assert_eq!(model.fields[0].name.name(), "myProperty");
                 assert_eq!(model.fields[0].attributes.len(), 2)
             }

@@ -52,5 +52,6 @@ pub fn to_value(ctx: &RuntimeContext, expr: &Expression) -> Result<serde_json::V
                 .collect::<Result<HashMap<_, _>>>()?;
             json!(res)
         }
+        Expression::JinjaExpression(_expr) => panic!("TODO"),
     })
 }

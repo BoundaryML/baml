@@ -5,6 +5,7 @@ mod evaluate_type;
 mod get_vars;
 mod output_format;
 pub use output_format::types;
+pub use lazy_expression::LazyExpression;
 
 use evaluate_type::get_variable_types;
 pub use evaluate_type::{PredefinedTypes, Type, TypeError};
@@ -12,6 +13,7 @@ pub use evaluate_type::{PredefinedTypes, Type, TypeError};
 use minijinja::{self, value::Kwargs};
 use minijinja::{context, ErrorKind, Value};
 use output_format::types::OutputFormatContent;
+mod lazy_expression;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -485,6 +487,18 @@ pub fn render_prompt(
             anyhow::bail!("Error occurred while rendering prompt: {minijinja_err}");
         }
     }
+}
+
+/// Render a bare minijinaja expression with the given context.
+/// E.g. `"a|length > 2"` with context `{"a": [1, 2, 3]}` will return `"true"`.
+pub fn render_expression(
+    expression: &str,
+    ctx: &HashMap<String, BamlValue>,
+) -> anyhow::Result<String> {
+    let env = get_env();
+    let template = format!(r#"{{{{ {} }}}}"#, expression);
+    let args_dict = minijinja::Value::from_serialize(ctx);
+    Ok(env.render_str(&template, &args_dict)?)
 }
 
 #[cfg(test)]
@@ -1106,5 +1120,25 @@ mod render_tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn test_render_expressions() {
+        let ctx = vec![("a".to_string(), BamlValue::List(vec![BamlValue::Int(1), BamlValue::Int(2), BamlValue::Int(3)].into()))]
+            .into_iter()
+            .collect();
+
+        assert_eq!(
+            render_expression("1", &ctx).unwrap(),
+            "1"
+        );
+        assert_eq!(
+            render_expression("1 + 1", &ctx).unwrap(),
+            "2"
+        );
+        assert_eq!(
+            render_expression("a|length > 2", &ctx).unwrap(),
+            "true"
+        );
     }
 }

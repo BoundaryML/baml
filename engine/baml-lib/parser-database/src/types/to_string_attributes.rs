@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::interner::StringId;
+use internal_baml_jinja::LazyExpression;
 
 ///
 #[derive(Debug)]
@@ -11,6 +12,7 @@ pub enum ToStringAttributes {
     Dynamic(DynamicStringAttributes),
 }
 
+// TODO: This type should be removed (deleted).
 ///
 #[derive(Debug, Default)]
 pub struct DynamicStringAttributes {
@@ -32,10 +34,10 @@ impl DynamicStringAttributes {
 ///
 #[derive(Debug, Default)]
 pub struct StaticStringAttributes {
-    dynamic_type: Option<bool>,
-    skip: Option<bool>,
-    alias: Option<StringId>,
-    meta: HashMap<StringId, StringId>,
+    dynamic_type: Option<bool>, // TODO: This should be a LazyExpression?
+    skip: Option<bool>, // TODO: This should be a LazyExpression.
+    alias: Option<StringId>, // TODO: This should be a LazyExpression.
+    meta: HashMap<StringId, LazyExpression<String>>,
 }
 
 impl StaticStringAttributes {
@@ -60,7 +62,7 @@ impl StaticStringAttributes {
     }
 
     ///
-    pub fn add_meta(&mut self, meta_name: StringId, value: StringId) -> bool {
+    pub fn add_meta(&mut self, meta_name: StringId, value: LazyExpression<String>) -> bool {
         if self.meta.contains_key(&meta_name) {
             return false;
         }
@@ -69,7 +71,7 @@ impl StaticStringAttributes {
     }
 
     ///
-    pub fn meta(&self) -> &HashMap<StringId, StringId> {
+    pub fn meta(&self) -> &HashMap<StringId, LazyExpression<String>> {
         &self.meta
     }
 

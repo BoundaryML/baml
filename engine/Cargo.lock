@@ -2430,6 +2430,7 @@ dependencies = [
  "baml-types",
  "either",
  "internal-baml-diagnostics",
+ "internal-baml-jinja",
  "log",
  "pest",
  "pest_derive",

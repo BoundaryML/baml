@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Context, Result};
 use baml_types::FieldType;
@@ -228,8 +228,12 @@ fn to_ir_attributes(
                 if let Some(v) = s.alias() {
                     attributes.insert("alias".to_string(), Expression::String(db[*v].to_string()));
                 }
-                for (&k, &v) in s.meta().into_iter() {
-                    attributes.insert(db[k].to_string(), Expression::String(db[v].to_string()));
+                for (&k, v) in s.meta().into_iter() {
+                    let expr = match v {
+                        LazyExpression::Ready(s) => Expression::String(s.clone()),
+                        LazyExpression::Unevaluated(e) => Expression::JinjaExpression(e.clone()),
+                    };
+                    attributes.insert(db[k].to_string(), expr);
                 }
             }
             ToStringAttributes::Dynamic(d) => {
@@ -368,6 +372,7 @@ pub enum Expression {
     RawString(String),
     List(Vec<Expression>),
     Map(Vec<(Expression, Expression)>),
+    JinjaExpression(String),
 }
 
 impl Expression {
@@ -426,6 +431,7 @@ impl WithRepr<Expression> for ast::Expression {
                     .map(|(k, v)| Ok((k.repr(db)?, v.repr(db)?)))
                     .collect::<Result<Vec<_>>>()?,
             ),
+            ast::Expression::JinjaExpression(expr, _) => Expression::JinjaExpression(expr.clone()),
         })
     }
 }
@@ -731,6 +737,7 @@ impl std::fmt::Display for ClientSpec {
         write!(f, "{}", self.as_str())
     }
 }
+
 
 fn process_field(
     overrides: &IndexMap<(String, String), IndexMap<String, Expression>>, // Adjust the type according to your actual field type
