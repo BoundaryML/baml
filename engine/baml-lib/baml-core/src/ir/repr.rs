@@ -130,6 +130,7 @@ impl IntermediateRepr {
         db: &ParserDatabase,
         configuration: Configuration,
     ) -> Result<IntermediateRepr> {
+        log::debug!("Parser db {:#?}", db.ast());
         let mut repr = IntermediateRepr {
             enums: db
                 .walk_enums()

@@ -158,10 +158,26 @@ fn parse_field_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> 
             }
         }
     }
+    log::debug!("-----field_type_with_attr----");
+    log::debug!("field_type: {:#?}", field_type);
+    log::debug!("field_attributes: {:#?}", field_attributes);
+    // i think this is clearing the attributes to null
 
     match field_type {
         Some(mut ft) => {
-            ft.set_attributes(field_attributes);
+            // ft.set_attributes(field_attributes);
+            match ft {
+                FieldType::Union(union, ref mut types, ref span, ref attributes) => {
+                    if let Some(last_type) = types.last_mut() {
+                        last_type.reset_attributes();
+                    }
+
+                    if let Some(attributes) = attributes.as_ref() {
+                        ft.set_attributes(attributes.clone()); // Clone the borrowed `Vec<Attribute>`
+                    }
+                }
+                _ => {}
+            }
 
             Some(ft) // Return the field type with attributes
         }

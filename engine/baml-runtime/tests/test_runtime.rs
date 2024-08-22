@@ -1,16 +1,21 @@
-#[cfg(feature = "internal")]
+// #[cfg(feature = "internal")]
 mod internal_tests {
     use std::collections::HashMap;
 
     use baml_runtime::BamlRuntime;
 
+    use baml_runtime::InternalRuntimeInterface;
     use baml_types::BamlValue;
+
+    use baml_runtime::{
+        internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
+    };
 
     use wasm_bindgen_test::*;
     use wasm_logger;
 
-    // #[tokio::test]
-    #[wasm_bindgen_test]
+    #[tokio::test]
+    // #[wasm_bindgen_test]
     async fn test_call_function_wasm() -> Result<(), Box<dyn std::error::Error>> {
         wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
 
@@ -108,6 +113,10 @@ mod internal_tests {
         let (res, _) = runtime
             .call_function("GetOrderInfo".to_string(), &params, &ctx, None, None)
             .await;
+
+        // runtime.get_test_params(function_name, test_name, ctx);
+
+        // runtime.internal().render_prompt(function_name, ctx, params, node_index)
 
         assert!(res.is_ok(), "Result: {:#?}", res.err());
 

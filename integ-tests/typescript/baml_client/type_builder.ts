@@ -21,84 +21,18 @@ import { TypeBuilder as _TypeBuilder, EnumBuilder, ClassBuilder } from '@boundar
 export default class TypeBuilder {
     private tb: _TypeBuilder;
     
-    DummyOutput: ClassBuilder<'DummyOutput', "nonce" | "nonce2">;
-    
-    DynInputOutput: ClassBuilder<'DynInputOutput', "testKey">;
-    
-    DynamicClassOne: ClassBuilder<'DynamicClassOne'>;
-    
-    DynamicClassTwo: ClassBuilder<'DynamicClassTwo', "hi" | "some_class" | "status">;
-    
-    DynamicOutput: ClassBuilder<'DynamicOutput'>;
-    
-    Person: ClassBuilder<'Person', "name" | "hair_color">;
-    
-    SomeClassNestedDynamic: ClassBuilder<'SomeClassNestedDynamic', "hi">;
-    
-    
-    Color: EnumBuilder<'Color', "RED" | "BLUE" | "GREEN" | "YELLOW" | "BLACK" | "WHITE">;
-    
-    DynEnumOne: EnumBuilder<'DynEnumOne'>;
-    
-    DynEnumTwo: EnumBuilder<'DynEnumTwo'>;
-    
-    Hobby: EnumBuilder<'Hobby', "SPORTS" | "MUSIC" | "READING">;
     
 
     constructor() {
         this.tb = new _TypeBuilder({
           classes: new Set([
-            "Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","Education","Email","Event","FakeImage","InnerClass","InnerClass2","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","Quantity","RaysData","ReceiptInfo","ReceiptItem","Recipe","Resume","SearchParams","SomeClassNestedDynamic","StringToClassEntry","TestClassAlias","TestClassNested","TestClassWithEnum","TestOutputClass","UnionTest_ReturnType","WithReasoning",
+            "Education",
           ]),
           enums: new Set([
-            "Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumTwo","EnumInClass","EnumOutput","Hobby","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",
+            
           ])
         });
         
-        this.DummyOutput = this.tb.classBuilder("DummyOutput", [
-          "nonce","nonce2",
-        ]);
-        
-        this.DynInputOutput = this.tb.classBuilder("DynInputOutput", [
-          "testKey",
-        ]);
-        
-        this.DynamicClassOne = this.tb.classBuilder("DynamicClassOne", [
-          
-        ]);
-        
-        this.DynamicClassTwo = this.tb.classBuilder("DynamicClassTwo", [
-          "hi","some_class","status",
-        ]);
-        
-        this.DynamicOutput = this.tb.classBuilder("DynamicOutput", [
-          
-        ]);
-        
-        this.Person = this.tb.classBuilder("Person", [
-          "name","hair_color",
-        ]);
-        
-        this.SomeClassNestedDynamic = this.tb.classBuilder("SomeClassNestedDynamic", [
-          "hi",
-        ]);
-        
-        
-        this.Color = this.tb.enumBuilder("Color", [
-          "RED","BLUE","GREEN","YELLOW","BLACK","WHITE",
-        ]);
-        
-        this.DynEnumOne = this.tb.enumBuilder("DynEnumOne", [
-          
-        ]);
-        
-        this.DynEnumTwo = this.tb.enumBuilder("DynEnumTwo", [
-          
-        ]);
-        
-        this.Hobby = this.tb.enumBuilder("Hobby", [
-          "SPORTS","MUSIC","READING",
-        ]);
         
     }
 
