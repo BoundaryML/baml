@@ -4,7 +4,7 @@ slug: docs/snippets/clients/providers/gemini
 ---
 
 
-The `google-ai` provider supports the `https://generativelanguage.googleapis.com/v1beta/models/{model_id}/generateContent` and `https://generativelanguage.googleapis.com/v1beta/models/{model_id}/streamGenerateContent` endpoints.
+The `google-ai` provider supports the `https://generativelanguage.googleapis.com/v1beta/models/{model_id}/generateContent` and `https://generativelanguage.googleapis.com/v1beta/models/{model_id}/streamGenerateContent` endpoints. The use of `v1beta` rather than `v1` aligns with the endpoint conventions established in [Google's SDKs](https://github.com/google-gemini/generative-ai-python/blob/8a29017e9120f0552ee3ad6092e8545d1aa6f803/google/generativeai/client.py#L60) and offers access to both the existing `v1` models and additional models exclusive to `v1beta`.
 
 <Tip>
 BAML will automatically pick `streamGenerateContent` if you call the streaming interface.
