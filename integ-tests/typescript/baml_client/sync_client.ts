@@ -810,6 +810,22 @@ export class BamlSyncClient {
     return raw.parsed() as string
   }
   
+  TestCaching(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    const raw = this.runtime.callFunctionSync(
+      "TestCaching",
+      {
+        "input": input
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as string
+  }
+  
   TestFallbackClient(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
