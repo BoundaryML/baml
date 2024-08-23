@@ -10,11 +10,24 @@
 
   Then in your prompt you can use something like:
   ```baml
+  client<llm> Foo {
+    provider anthropic
+    options {
+      allowed_role_metadata: ["cache_control"]
+    }
+  }
+
+  client<llm> FooWithout {
+    provider anthropic
+    options {
+    }
+  }
+
   template_string Foo() #"
     {{ _.role('user', cache_control={"type": "ephemeral"}) }}
-    This will be cached!
+    This will be cached for Foo, but not for FooWithout!
     {{ _.role('user') }}
-    This will not be cached!
+    This will not be cached for Foo or FooWithout!
   "#
   ```
 

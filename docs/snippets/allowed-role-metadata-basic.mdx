@@ -10,11 +10,23 @@
 
   Then in your prompt you can use something like:
   ```baml
+  client<llm> Foo {
+    provider openai
+    options {
+      allowed_role_metadata: ["foo", "bar"]
+    }
+  }
+
+  client<llm> FooWithout {
+    provider openai
+    options {
+    }
+  }
   template_string Foo() #"
     {{ _.role('user', foo={"type": "ephemeral"}, bar="1", cat=True) }}
-    This will be have foo and bar, but not cat!
+    This will be have foo and bar, but not cat metadata. But only for Foo, not FooWithout.
     {{ _.role('user') }}
-    This will have none of the role metadata.
+    This will have none of the role metadata for Foo or FooWithout.
   "#
   ```
 
