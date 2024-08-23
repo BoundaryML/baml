@@ -544,11 +544,12 @@ impl ToProviderMessage for OpenAIClient {
             BamlMediaType::Image => "image",
             BamlMediaType::Audio => "audio",
         };
+        let media_type = format!("{}_url", media_type);
         match &media.content {
             BamlMediaContent::Url(media) => {
                 content.insert("type".into(), json!(media_type));
                 content.insert(
-                    format!("{}_url", media_type),
+                    media_type,
                     json!({
                         "url": media.url
                     }),
