@@ -177,7 +177,7 @@ fn render_minijinja(
                 }
             };
 
-            let allow_duplicate_role = match kwargs.get::<bool>("baml_allow_dup") {
+            let allow_duplicate_role = match kwargs.get::<bool>("__baml_allow_dupe_role__") {
                 Ok(allow_duplicate_role) => allow_duplicate_role,
                 Err(e) => match e.kind() {
                     ErrorKind::MissingArgument => false,
@@ -199,6 +199,7 @@ fn render_minijinja(
                     .collect::<Result<HashMap<&str, serde_json::Value>, minijinja::Error>>()?;
 
                 props.insert("role", role.clone().into());
+                props.insert("__baml_allow_dupe_role__", allow_duplicate_role.into());
 
                 props
             };
@@ -242,9 +243,11 @@ fn render_minijinja(
                 if let Some(role_val) = parsed.remove("role") {
                     role = Some(role_val.as_str().unwrap().to_string());
                 }
-                if let Some(allow_duplicate_role_val) = parsed.remove("baml_allow_dup") {
-                    allow_duplicate_role = allow_duplicate_role_val.as_bool().unwrap();
-                }
+
+                allow_duplicate_role = parsed
+                    .remove("__baml_allow_dupe_role__")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
 
                 if parsed.is_empty() {
                     meta = None;
