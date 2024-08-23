@@ -121,6 +121,19 @@ client<llm> Claude {
   }
 }
 
+client<llm> ClaudeWithCaching {
+  provider anthropic
+  options {
+    model claude-3-haiku-20240307
+    api_key env.ANTHROPIC_API_KEY
+    max_tokens 1000
+    allowed_role_metadata ["cache_control"]
+    headers {
+      "anthropic-beta" "prompt-caching-2024-07-31"
+    }
+  }
+}
+
 client<llm> Resilient_SimpleSyntax {
   retry_policy Foo
   provider baml-fallback
