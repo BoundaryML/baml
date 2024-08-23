@@ -810,6 +810,22 @@ export class BamlAsyncClient {
     return raw.parsed() as string
   }
   
+  async TestCaching(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestCaching",
+      {
+        "input": input
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as string
+  }
+  
   async TestFallbackClient(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -2271,6 +2287,29 @@ class BamlStreamClient {
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestAzure",
+      {
+        "input": input
+      },
+      undefined,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return new BamlStream<RecursivePartialNull<string>, string>(
+      raw,
+      (a): a is RecursivePartialNull<string> => a,
+      (a): a is string => a,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  TestCaching(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): BamlStream<RecursivePartialNull<string>, string> {
+    const raw = this.runtime.streamFunction(
+      "TestCaching",
       {
         "input": input
       },

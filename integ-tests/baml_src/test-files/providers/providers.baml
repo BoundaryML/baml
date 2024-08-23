@@ -64,4 +64,10 @@ test TestProvider {
 }
 
 
-
+function TestCaching(input: string) -> string {
+  client ClaudeWithCaching
+  prompt #"
+    {{ _.role('user', cache_control={"type": "ephemeral"}) }}
+    Describe this in 5 words: {{ input }}
+  "#
+}
