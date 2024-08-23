@@ -1,0 +1,22 @@
+<ParamField
+  path="allowed_role_metadata"
+  type="string[]"
+>
+  Which role metadata should we forward to the API? **Default: `[]`**
+
+  For example you can set this to `["cache_control"]` to forward the cache policy to the API.
+
+  If you do not set `allowed_role_metadata`, we will not forward any role metadata to the API even if it is set in the prompt.
+
+  Then in your prompt you can use something like:
+  ```baml
+  template_string Foo() #"
+    {{ _.role('user', cache_control={"type": "ephemeral"}) }}
+    This will be cached!
+    {{ _.role('user') }}
+    This will not be cached!
+  "#
+  ```
+
+  You can use the playground to see the raw curl request to see what is being sent to the API.
+</ParamField>
