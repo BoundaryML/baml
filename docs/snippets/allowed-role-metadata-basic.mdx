@@ -1,0 +1,34 @@
+<ParamField
+  path="allowed_role_metadata"
+  type="string[]"
+>
+  Which role metadata should we forward to the API? **Default: `[]`**
+
+  For example you can set this to `["foo", "bar"]` to forward the cache policy to the API.
+
+  If you do not set `allowed_role_metadata`, we will not forward any role metadata to the API even if it is set in the prompt.
+
+  Then in your prompt you can use something like:
+  ```baml
+  client<llm> Foo {
+    provider openai
+    options {
+      allowed_role_metadata: ["foo", "bar"]
+    }
+  }
+
+  client<llm> FooWithout {
+    provider openai
+    options {
+    }
+  }
+  template_string Foo() #"
+    {{ _.role('user', foo={"type": "ephemeral"}, bar="1", cat=True) }}
+    This will be have foo and bar, but not cat metadata. But only for Foo, not FooWithout.
+    {{ _.role('user') }}
+    This will have none of the role metadata for Foo or FooWithout.
+  "#
+  ```
+
+  You can use the playground to see the raw curl request to see what is being sent to the API.
+</ParamField>

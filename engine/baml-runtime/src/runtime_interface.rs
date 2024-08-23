@@ -7,6 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
+use crate::internal::llm_client::AllowedMetadata;
 use crate::tracing::{BamlTracer, TracingSpan};
 use crate::types::on_log_event::LogEventCallbackSync;
 use crate::{
@@ -137,7 +138,7 @@ pub trait InternalRuntimeInterface {
         ctx: &RuntimeContext,
         params: &BamlMap<String, BamlValue>,
         node_index: Option<usize>,
-    ) -> Result<(RenderedPrompt, OrchestrationScope)>;
+    ) -> Result<(RenderedPrompt, OrchestrationScope, AllowedMetadata)>;
 
     #[allow(async_fn_in_trait)]
     async fn render_raw_curl(
