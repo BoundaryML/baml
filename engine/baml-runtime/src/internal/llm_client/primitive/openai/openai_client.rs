@@ -11,7 +11,10 @@ use crate::client_registry::ClientProperty;
 use crate::internal::llm_client::primitive::request::{
     make_parsed_request, make_request, RequestBuilder,
 };
-use crate::internal::llm_client::traits::{SseResponseTrait, StreamResponse, WithStreamChat};
+use crate::internal::llm_client::traits::{
+    SseResponseTrait, StreamResponse, ToProviderMessage, ToProviderMessageExt,
+    WithClientProperties, WithStreamChat,
+};
 use crate::internal::llm_client::{
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
     LLMResponse, ModelFeatures,
@@ -37,6 +40,15 @@ pub struct OpenAIClient {
 impl WithRetryPolicy for OpenAIClient {
     fn retry_policy_name(&self) -> Option<&str> {
         self.retry_policy.as_deref()
+    }
+}
+
+impl WithClientProperties for OpenAIClient {
+    fn client_properties(&self) -> &HashMap<String, serde_json::Value> {
+        &self.properties.properties
+    }
+    fn allowed_metadata(&self) -> &crate::internal::llm_client::AllowedMetadata {
+        &self.properties.allowed_metadata
     }
 }
 
@@ -262,18 +274,7 @@ impl RequestBuilder for OpenAIClient {
                 body_obj.insert("prompt".into(), json!(prompt));
             }
             either::Either::Right(messages) => {
-                body_obj.insert(
-                    "messages".into(),
-                    messages
-                        .iter()
-                        .map(|m| {
-                            Ok(json!({
-                                "role": m.role,
-                                "content": convert_message_parts_to_content(&m.parts)?
-                            }))
-                        })
-                        .collect::<Result<serde_json::Value>>()?,
-                );
+                body_obj.extend(self.chat_to_message(messages)?);
             }
         }
 
@@ -422,13 +423,14 @@ macro_rules! make_openai_client {
                 provider: $client.provider.clone(),
                 default_role: $properties.default_role.clone(),
             },
-            properties: $properties,
             features: ModelFeatures {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
                 resolve_media_urls: ResolveMediaUrls::Never,
+                allowed_metadata: $properties.allowed_metadata.clone(),
             },
+            properties: $properties,
             retry_policy: $client.retry_policy.clone(),
             client: create_client()?,
         })
@@ -442,13 +444,14 @@ macro_rules! make_openai_client {
                 provider: $client.elem().provider.clone(),
                 default_role: $properties.default_role.clone(),
             },
-            properties: $properties,
             features: ModelFeatures {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
                 resolve_media_urls: ResolveMediaUrls::Never,
+                allowed_metadata: $properties.allowed_metadata.clone(),
             },
+            properties: $properties,
             retry_policy: $client
                 .elem()
                 .retry_policy_id
@@ -521,50 +524,84 @@ impl OpenAIClient {
     }
 }
 
-fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serde_json::Value> {
-    if parts.len() == 1 {
-        match &parts[0] {
-            ChatMessagePart::Text(text) => return Ok(json!(text)),
-            _ => {}
-        }
+impl ToProviderMessage for OpenAIClient {
+    fn to_chat_message(
+        &self,
+        mut content: serde_json::Map<String, serde_json::Value>,
+        text: &str,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        content.insert("type".into(), json!("text"));
+        content.insert("text".into(), json!(text));
+        Ok(content)
     }
 
-    let content: Vec<serde_json::Value> = parts
-        .into_iter()
-        .map(|part| {
-            Ok(match part {
-                ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
-                ChatMessagePart::Media(media) => {
-                    // NB(sam): this works for images, but has no guarantee it will actually work for audio.
-                    // The OpenAI speech-to-text APIs rely on multipart/form-data requests, where the contents
-                    // of the form data are just the binary contents of the file, so how they're going to
-                    // support audio in their multimodal interfaces are very... unclear.
-                    let media_type = format!("{}_url", media.media_type);
-                    match &media.content {
-                        BamlMediaContent::Url(media) => {
-                            json!({
-                                "type": media_type,
-                                media_type: json!({
-                                    "url": media.url
-                                })
-                            })
-                        }
-                        BamlMediaContent::Base64(b64_media) => {
-                            json!({
-                                "type": media_type,
-                                media_type: json!({
-                                    "url" : format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
-                                })
-                            })
-                        }
-                        BamlMediaContent::File(_) => {
-                            anyhow::bail!("BAML internal error (OpenAI): file should have been resolved to base64")
-                        }
-                    }
-                }
-            })
-        })
-        .collect::<Result<Vec<serde_json::Value>>>()?;
+    fn to_media_message(
+        &self,
+        mut content: serde_json::Map<String, serde_json::Value>,
+        media: &baml_types::BamlMedia,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let media_type = match media.media_type {
+            BamlMediaType::Image => "image",
+            BamlMediaType::Audio => "audio",
+        };
+        match &media.content {
+            BamlMediaContent::Url(media) => {
+                content.insert("type".into(), json!(media_type));
+                content.insert(
+                    format!("{}_url", media_type),
+                    json!({
+                        "url": media.url
+                    }),
+                );
+            }
+            BamlMediaContent::Base64(b64_media) => {
+                content.insert("type".into(), json!(media_type));
+                content.insert(
+                    format!("{}_url", media_type),
+                    json!({
+                        "url": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
+                    }),
+                );
+            }
+            BamlMediaContent::File(_) => {
+                anyhow::bail!(
+                    "BAML internal error (openai): file should have been resolved to base64"
+                )
+            }
+        }
+        Ok(content)
+    }
 
-    Ok(json!(content))
+    fn role_to_message(
+        &self,
+        content: &RenderedChatMessage,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let mut message = serde_json::Map::new();
+        message.insert("role".into(), json!(content.role));
+        message.insert(
+            "content".into(),
+            json!(self.parts_to_message(&content.parts)?),
+        );
+        Ok(message)
+    }
+}
+
+impl ToProviderMessageExt for OpenAIClient {
+    fn chat_to_message(
+        &self,
+        chat: &Vec<RenderedChatMessage>,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        // merge all adjacent roles of the same type
+        let mut res = serde_json::Map::new();
+
+        res.insert(
+            "messages".into(),
+            chat.iter()
+                .map(|c| self.role_to_message(c))
+                .collect::<Result<Vec<_>>>()?
+                .into(),
+        );
+
+        Ok(res)
+    }
 }

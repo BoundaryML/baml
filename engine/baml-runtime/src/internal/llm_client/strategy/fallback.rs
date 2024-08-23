@@ -96,29 +96,31 @@ impl IterOrchestrator for FallbackStrategy {
         _previous: OrchestrationScope,
         ctx: &RuntimeContext,
         client_lookup: &'a dyn InternalClientLookup<'a>,
-    ) -> crate::internal::llm_client::orchestrator::OrchestratorNodeIterator {
+    ) -> Result<crate::internal::llm_client::orchestrator::OrchestratorNodeIterator> {
         let items = self
             .clients
             .iter()
             .enumerate()
-            .filter_map(
+            .map(
                 |(idx, client)| match client_lookup.get_llm_provider(client, ctx) {
                     Ok(client) => {
                         let client = client.clone();
-                        Some(client.iter_orchestrator(
+                        Ok(client.iter_orchestrator(
                             state,
                             ExecutionScope::Fallback(self.name.clone(), idx).into(),
                             ctx,
                             client_lookup,
                         ))
                     }
-                    Err(_) => None,
+                    Err(e) => Err(e),
                 },
             )
             .flatten()
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
 
-        log::info!("Items: {:#?}", items.len());
-        items
+        Ok(items)
     }
 }

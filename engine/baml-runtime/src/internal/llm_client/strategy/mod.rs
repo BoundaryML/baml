@@ -99,7 +99,7 @@ impl IterOrchestrator for LLMStrategyProvider {
         previous: OrchestrationScope,
         ctx: &RuntimeContext,
         client_lookup: &'a dyn InternalClientLookup<'a>,
-    ) -> OrchestratorNodeIterator {
+    ) -> Result<OrchestratorNodeIterator> {
         match self {
             LLMStrategyProvider::Fallback(f) => {
                 f.iter_orchestrator(state, previous, ctx, client_lookup)

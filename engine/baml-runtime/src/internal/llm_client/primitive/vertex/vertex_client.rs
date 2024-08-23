@@ -1,5 +1,8 @@
 use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::ResolveMediaUrls;
+use crate::internal::llm_client::traits::{
+    ToProviderMessage, ToProviderMessageExt, WithClientProperties,
+};
+use crate::internal::llm_client::{AllowedMetadata, ResolveMediaUrls};
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
@@ -16,7 +19,7 @@ use crate::{
     },
     request::create_client,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{Duration, Utc};
 use futures::stream::TryStreamExt;
 use futures::StreamExt;
@@ -45,6 +48,7 @@ struct PostRequestProperities {
     project_id: Option<String>,
     model_id: Option<String>,
     location: Option<String>,
+    allowed_metadata: AllowedMetadata,
 }
 
 pub struct VertexClient {
@@ -84,7 +88,11 @@ fn resolve_properties(
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or("".to_string());
-
+    let allowed_metadata = match properties.remove("allowed_role_metadata") {
+        Some(allowed_metadata) => serde_json::from_value(allowed_metadata)
+            .context("allowed_role_metadata must be 'all', 'none', or ['key1', 'key2']")?,
+        None => AllowedMetadata::None,
+    };
     let mut service_key: Option<(String, String)> = None;
 
     service_key = properties
@@ -180,12 +188,22 @@ fn resolve_properties(
         model_id: Some(model_id),
         location: Some(location),
         proxy_url: ctx.env.get("BOUNDARY_PROXY_URL").map(|s| s.to_string()),
+        allowed_metadata,
     })
 }
 
 impl WithRetryPolicy for VertexClient {
     fn retry_policy_name(&self) -> Option<&str> {
         self.retry_policy.as_deref()
+    }
+}
+
+impl WithClientProperties for VertexClient {
+    fn client_properties(&self) -> &HashMap<String, serde_json::Value> {
+        &self.properties.properties
+    }
+    fn allowed_metadata(&self) -> &crate::internal::llm_client::AllowedMetadata {
+        &self.properties.allowed_metadata
     }
 }
 
@@ -314,7 +332,6 @@ impl VertexClient {
         let default_role = properties.default_role.clone();
         Ok(Self {
             name: client.name().into(),
-            properties,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
@@ -325,6 +342,7 @@ impl VertexClient {
                 completion: false,
                 anthropic_system_constraints: false,
                 resolve_media_urls: ResolveMediaUrls::EnsureMime,
+                allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client
                 .elem()
@@ -332,6 +350,7 @@ impl VertexClient {
                 .as_ref()
                 .map(|s| s.to_string()),
             client: create_client()?,
+            properties,
         })
     }
 
@@ -348,7 +367,6 @@ impl VertexClient {
 
         Ok(Self {
             name: client.name.clone(),
-            properties,
             context: RenderContext_Client {
                 name: client.name.clone(),
                 provider: client.provider.clone(),
@@ -359,9 +377,11 @@ impl VertexClient {
                 completion: false,
                 anthropic_system_constraints: false,
                 resolve_media_urls: ResolveMediaUrls::EnsureMime,
+                allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,
+            properties,
         })
     }
 }
@@ -535,9 +555,7 @@ impl RequestBuilder for VertexClient {
             either::Either::Left(prompt) => {
                 body_obj.extend(convert_completion_prompt_to_body(prompt))
             }
-            either::Either::Right(messages) => {
-                body_obj.extend(convert_chat_prompt_to_body(messages)?)
-            }
+            either::Either::Right(messages) => body_obj.extend(self.chat_to_message(messages)?),
         }
 
         Ok(req.json(&body))
@@ -626,58 +644,75 @@ fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_j
     map
 }
 
-//list of chat messages into JSON body
-fn convert_chat_prompt_to_body(
-    prompt: &Vec<RenderedChatMessage>,
-) -> Result<HashMap<String, serde_json::Value>> {
-    let mut map = HashMap::new();
+impl ToProviderMessage for VertexClient {
+    fn to_chat_message(
+        &self,
+        mut content: serde_json::Map<String, serde_json::Value>,
+        text: &str,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        content.insert("text".into(), json!(text));
+        Ok(content)
+    }
 
-    map.insert(
-        "contents".into(),
-        prompt
-            .iter()
-            .map(|m| {
-                Ok(json!({
-                    "role": m.role,
-                    "parts": convert_message_parts_to_content(&m.parts)?
-                }))
-            })
-            .collect::<Result<serde_json::Value>>()?,
-    );
-
-    Ok(map)
-}
-
-fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serde_json::Value> {
-    parts
-        .iter()
-        .map(|part| {
-            Ok(match part {
-                ChatMessagePart::Text(text) => json!({
-                    "text": text
-                }),
-                ChatMessagePart::Media(media) => convert_media_to_content(media)?,
-            })
-        })
-        .collect::<Result<serde_json::Value>>()
-}
-
-fn convert_media_to_content(media: &BamlMedia) -> Result<serde_json::Value> {
-    Ok(match &media.content {
-        BamlMediaContent::Base64(data) => json!({
-            "inlineData": {
-                "mime_type": format!("{}", media.mime_type_as_ok()?),
-                "data": data.base64
+    fn to_media_message(
+        &self,
+        mut content: serde_json::Map<String, serde_json::Value>,
+        media: &baml_types::BamlMedia,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        match &media.content {
+            BamlMediaContent::File(_) => anyhow::bail!(
+                "BAML internal error (Vertex): file should have been resolved to base64"
+            ),
+            BamlMediaContent::Url(data) => {
+                content.insert(
+                    "fileData".into(),
+                    json!({"file_uri": data.url, "mime_type": media.mime_type}),
+                );
+                Ok(content)
             }
-        }),
-        BamlMediaContent::Url(data) => json!({
-            "fileData": {
-                "mime_type": media.mime_type,
-                "file_uri": data.url
+            BamlMediaContent::Base64(data) => {
+                content.insert(
+                    "inlineData".into(),
+                    json!({
+                        "data": data.base64,
+                        "mime_type": media.mime_type_as_ok()?
+                    }),
+                );
+                Ok(content)
             }
-        }),
-        BamlMediaContent::File(_) => {
-            anyhow::bail!("BAML internal error (Vertex): file should have been resolved to base64")
         }
-    })
+    }
+
+    fn role_to_message(
+        &self,
+        content: &RenderedChatMessage,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let mut map = serde_json::Map::new();
+        map.insert("role".into(), json!(content.role));
+        map.insert(
+            "parts".into(),
+            json!(self.parts_to_message(&content.parts)?),
+        );
+        Ok(map)
+    }
+}
+
+impl ToProviderMessageExt for VertexClient {
+    fn chat_to_message(
+        &self,
+        chat: &Vec<RenderedChatMessage>,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        // merge all adjacent roles of the same type
+        let mut res = serde_json::Map::new();
+
+        res.insert(
+            "contents".into(),
+            chat.iter()
+                .map(|c| self.role_to_message(c))
+                .collect::<Result<Vec<_>>>()?
+                .into(),
+        );
+
+        Ok(res)
+    }
 }

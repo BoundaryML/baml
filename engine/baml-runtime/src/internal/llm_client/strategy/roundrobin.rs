@@ -150,7 +150,7 @@ impl IterOrchestrator for Arc<RoundRobinStrategy> {
         _previous: OrchestrationScope,
         ctx: &RuntimeContext,
         client_lookup: &'a dyn InternalClientLookup<'a>,
-    ) -> OrchestratorNodeIterator {
+    ) -> Result<OrchestratorNodeIterator> {
         let offset = state.client_to_usage.entry(self.name.clone()).or_insert(0);
         let next = (self.current_index() + *offset) % self.clients.len();
 
@@ -158,7 +158,7 @@ impl IterOrchestrator for Arc<RoundRobinStrategy> {
         *offset += 1;
 
         let client = &self.clients[next];
-        let client = client_lookup.get_llm_provider(client, ctx).unwrap();
+        let client = client_lookup.get_llm_provider(client, ctx)?;
         let client = client.clone();
         client.iter_orchestrator(
             state,

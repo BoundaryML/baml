@@ -129,6 +129,13 @@ impl OrchestrationScope {
                 .collect(),
         }
     }
+
+    pub fn direct_client_name(&self) -> Option<&String> {
+        match self.scope.last() {
+            Some(ExecutionScope::Direct(d)) => Some(d),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -157,7 +164,7 @@ pub trait IterOrchestrator {
         previous: OrchestrationScope,
         ctx: &RuntimeContext,
         client_lookup: &'a dyn InternalClientLookup<'a>,
-    ) -> OrchestratorNodeIterator;
+    ) -> Result<OrchestratorNodeIterator>;
 }
 
 impl<'ir> WithPrompt<'ir> for OrchestratorNode {
