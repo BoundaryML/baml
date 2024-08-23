@@ -1,5 +1,10 @@
+use std::collections::HashMap;
+
 use baml_runtime::{
-    internal::llm_client::orchestrator::{ExecutionScope, OrchestrationScope},
+    internal::llm_client::{
+        orchestrator::{ExecutionScope, OrchestrationScope},
+        AllowedMetadata,
+    },
     ChatMessagePart, RenderedPrompt,
 };
 use serde::Serialize;
@@ -21,6 +26,7 @@ pub struct WasmScope {
 pub struct WasmPrompt {
     prompt: RenderedPrompt,
     pub client_name: String,
+    allowed: AllowedMetadata,
 }
 
 impl From<OrchestrationScope> for WasmScope {
@@ -29,11 +35,14 @@ impl From<OrchestrationScope> for WasmScope {
     }
 }
 
-impl From<(&RenderedPrompt, &OrchestrationScope)> for WasmPrompt {
-    fn from((prompt, client_name): (&RenderedPrompt, &OrchestrationScope)) -> Self {
+impl From<(&RenderedPrompt, &OrchestrationScope, &AllowedMetadata)> for WasmPrompt {
+    fn from(
+        (prompt, client_name, allowed): (&RenderedPrompt, &OrchestrationScope, &AllowedMetadata),
+    ) -> Self {
         WasmPrompt {
             prompt: prompt.clone(),
             client_name: client_name.name(),
+            allowed: allowed.clone(),
         }
     }
 }
@@ -76,40 +85,56 @@ pub struct WasmChatMessagePartMedia {
 impl WasmChatMessagePart {
     #[wasm_bindgen]
     pub fn is_text(&self) -> bool {
-        matches!(self.part, ChatMessagePart::Text(_))
+        self.part.as_text().is_some()
     }
 
     #[wasm_bindgen]
     pub fn is_image(&self) -> bool {
-        log::info!("Checking if self is image {:?}", self.part);
-        if let ChatMessagePart::Media(m) = &self.part {
-            m.media_type == BamlMediaType::Image
-        } else {
-            false
+        matches!(
+            self.part.as_media().map(|s| s.media_type),
+            Some(BamlMediaType::Image)
+        )
+    }
+
+    #[wasm_bindgen]
+    pub fn json_meta(&self, prompt: &WasmPrompt) -> Option<String> {
+        match self.part.meta() {
+            Some(meta) => {
+                let (allowed, skipped): (Vec<_>, Vec<_>) = meta
+                    .into_iter()
+                    .partition(|(k, _)| prompt.allowed.is_allowed(k));
+
+                let allowed: HashMap<_, _> = allowed.into_iter().collect();
+                let skipped: HashMap<_, _> = skipped.into_iter().collect();
+
+                Some(
+                    json!({
+                        "allowed": allowed,
+                        "skipped": skipped,
+                    })
+                    .to_string(),
+                )
+            }
+            None => None,
         }
     }
 
     #[wasm_bindgen]
     pub fn is_audio(&self) -> bool {
-        if let ChatMessagePart::Media(m) = &self.part {
-            m.media_type == BamlMediaType::Audio
-        } else {
-            false
-        }
+        matches!(
+            self.part.as_media().map(|s| s.media_type),
+            Some(BamlMediaType::Audio)
+        )
     }
 
     #[wasm_bindgen]
     pub fn as_text(&self) -> Option<String> {
-        if let ChatMessagePart::Text(s) = &self.part {
-            Some(s.clone())
-        } else {
-            None
-        }
+        self.part.as_text().map(|s| s.clone())
     }
 
     #[wasm_bindgen]
     pub fn as_media(&self) -> Option<WasmChatMessagePartMedia> {
-        let ChatMessagePart::Media(m) = &self.part else {
+        let Some(m) = self.part.as_media() else {
             return None;
         };
         Some(match &m.content {

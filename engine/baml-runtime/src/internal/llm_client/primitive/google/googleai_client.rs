@@ -1,5 +1,8 @@
 use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::ResolveMediaUrls;
+use crate::internal::llm_client::traits::{
+    ToProviderMessage, ToProviderMessageExt, WithClientProperties,
+};
+use crate::internal::llm_client::{AllowedMetadata, ResolveMediaUrls};
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
@@ -32,6 +35,7 @@ struct PostRequestProperities {
     proxy_url: Option<String>,
     model_id: Option<String>,
     properties: HashMap<String, serde_json::Value>,
+    allowed_metadata: AllowedMetadata,
 }
 
 pub struct GoogleAIClient {
@@ -66,6 +70,11 @@ fn resolve_properties(
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "https://generativelanguage.googleapis.com/v1".to_string());
+    let allowed_metadata = match properties.remove("allowed_role_metadata") {
+        Some(allowed_metadata) => serde_json::from_value(allowed_metadata)
+            .context("allowed_role_metadata must be 'all', 'none', or ['key1', 'key2']")?,
+        None => AllowedMetadata::None,
+    };
 
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
@@ -98,12 +107,22 @@ fn resolve_properties(
         base_url,
         model_id,
         proxy_url: ctx.env.get("BOUNDARY_PROXY_URL").map(|s| s.to_string()),
+        allowed_metadata,
     })
 }
 
 impl WithRetryPolicy for GoogleAIClient {
     fn retry_policy_name(&self) -> Option<&str> {
         self.retry_policy.as_deref()
+    }
+}
+
+impl WithClientProperties for GoogleAIClient {
+    fn client_properties(&self) -> &HashMap<String, serde_json::Value> {
+        &self.properties.properties
+    }
+    fn allowed_metadata(&self) -> &crate::internal::llm_client::AllowedMetadata {
+        &self.properties.allowed_metadata
     }
 }
 
@@ -232,7 +251,6 @@ impl GoogleAIClient {
         let default_role = properties.default_role.clone();
         Ok(Self {
             name: client.name().into(),
-            properties,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
@@ -243,6 +261,7 @@ impl GoogleAIClient {
                 completion: false,
                 anthropic_system_constraints: false,
                 resolve_media_urls: ResolveMediaUrls::Always,
+                allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client
                 .elem()
@@ -250,6 +269,7 @@ impl GoogleAIClient {
                 .as_ref()
                 .map(|s| s.to_string()),
             client: create_client()?,
+            properties,
         })
     }
 
@@ -266,7 +286,6 @@ impl GoogleAIClient {
 
         Ok(Self {
             name: client.name.clone(),
-            properties,
             context: RenderContext_Client {
                 name: client.name.clone(),
                 provider: client.provider.clone(),
@@ -277,9 +296,11 @@ impl GoogleAIClient {
                 completion: false,
                 anthropic_system_constraints: false,
                 resolve_media_urls: ResolveMediaUrls::Always,
+                allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,
+            properties,
         })
     }
 }
@@ -334,7 +355,7 @@ impl RequestBuilder for GoogleAIClient {
                 body_obj.extend(convert_completion_prompt_to_body(prompt))
             }
             either::Either::Right(messages) => {
-                body_obj.extend(convert_chat_prompt_to_body(messages)?);
+                body_obj.extend(self.chat_to_message(messages)?);
             }
         }
 
@@ -410,6 +431,7 @@ impl WithChat for GoogleAIClient {
         })
     }
 }
+
 //simple, Map with key "prompt" and value of the prompt string
 fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
@@ -423,59 +445,68 @@ fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_j
     map
 }
 
-//list of chat messages into JSON body
-fn convert_chat_prompt_to_body(
-    prompt: &Vec<RenderedChatMessage>,
-) -> Result<HashMap<String, serde_json::Value>> {
-    let mut map = HashMap::new();
-
-    map.insert(
-        "contents".into(),
-        prompt
-            .iter()
-            .map(|m| {
-                Ok(json!({
-                    "role": m.role,
-                    "parts": convert_message_parts_to_content(&m.parts)?
-                }))
-            })
-            .collect::<Result<serde_json::Value>>()?,
-    );
-
-    Ok(map)
+impl ToProviderMessageExt for GoogleAIClient {
+    fn chat_to_message(
+        &self,
+        chat: &Vec<RenderedChatMessage>,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let mut res = serde_json::Map::new();
+        res.insert(
+            "contents".into(),
+            chat.iter()
+                .map(|c| self.role_to_message(c))
+                .collect::<Result<Vec<_>>>()?
+                .into(),
+        );
+        Ok(res)
+    }
 }
 
-fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serde_json::Value> {
-    parts
-        .iter()
-        .map(|part| {
-            Ok(match part {
-                ChatMessagePart::Text(text) => json!({
-                    "text": text
-                }),
-                ChatMessagePart::Media(media) => convert_media_to_content(media)?,
-            })
-        })
-        .collect()
-}
+impl ToProviderMessage for GoogleAIClient {
+    fn to_chat_message(
+        &self,
+        mut content: serde_json::Map<String, serde_json::Value>,
+        text: &str,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        content.insert("text".into(), json!(text));
+        Ok(content)
+    }
 
-fn convert_media_to_content(media: &BamlMedia) -> Result<serde_json::Value> {
-    Ok(match &media.content {
-        BamlMediaContent::Base64(data) => json!({
-            "inlineData": {
-                "mimeType": media.mime_type_as_ok()?,
-                "data": data.base64
+    fn to_media_message(
+        &self,
+        mut content: serde_json::Map<String, serde_json::Value>,
+        media: &baml_types::BamlMedia,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        match &media.content {
+            BamlMediaContent::Base64(data) => {
+                content.insert(
+                    "inlineData".into(),
+                    json!({
+                        "mimeType": media.mime_type_as_ok()?,
+                        "data": data.base64
+                    }),
+                );
+                Ok(content)
             }
-        }),
-        BamlMediaContent::File(_) => {
-            anyhow::bail!(
+            BamlMediaContent::File(_) => anyhow::bail!(
                 "BAML internal error (google-ai): file should have been resolved to base64"
-            )
-        }
-        BamlMediaContent::Url(_) => {
-            anyhow::bail!(
+            ),
+            BamlMediaContent::Url(_) => anyhow::bail!(
                 "BAML internal error (google-ai): media URL should have been resolved to base64"
-            )
+            ),
         }
-    })
+    }
+
+    fn role_to_message(
+        &self,
+        content: &RenderedChatMessage,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let mut message = serde_json::Map::new();
+        message.insert("role".into(), json!(content.role));
+        message.insert(
+            "parts".into(),
+            json!(self.parts_to_message(&content.parts)?),
+        );
+        Ok(message)
+    }
 }

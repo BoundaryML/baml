@@ -4,6 +4,7 @@ use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use anyhow::Context;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
+use baml_runtime::internal::llm_client::AllowedMetadata;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
 use baml_runtime::internal_core::configuration::GeneratorOutputType;
 use baml_runtime::BamlSrcReader;
@@ -427,7 +428,9 @@ impl WasmLLMFailure {
         self.scope.name()
     }
     pub fn prompt(&self) -> WasmPrompt {
-        (&self.prompt, &self.scope).into()
+        // TODO: This is a hack. We shouldn't hardcode AllowedMetadata::All
+        // here, but instead plumb it through the LLMErrors
+        (&self.prompt, &self.scope, &AllowedMetadata::All).into()
     }
 }
 
@@ -439,7 +442,9 @@ impl WasmLLMResponse {
     }
 
     pub fn prompt(&self) -> WasmPrompt {
-        (&self.prompt, &self.scope).into()
+        // TODO: This is a hack. We shouldn't hardcode AllowedMetadata::All
+        // here, but instead plumb it through the LLMErrors
+        (&self.prompt, &self.scope, &AllowedMetadata::All).into()
     }
 }
 
@@ -1370,7 +1375,7 @@ impl WasmFunction {
             .render_prompt(&self.name, &ctx, &params, wasm_call_context.node_index)
             .await
             .as_ref()
-            .map(|(p, scope)| (p, scope).into())
+            .map(|(p, scope, allowed)| (p, scope, allowed).into())
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))
     }
 
@@ -1420,7 +1425,7 @@ impl WasmFunction {
             .await;
 
         let final_prompt = match result {
-            Ok((prompt, _)) => match prompt {
+            Ok((prompt, _, _)) => match prompt {
                 RenderedPrompt::Chat(chat_messages) => chat_messages,
                 RenderedPrompt::Completion(_) => vec![], // or handle this case differently
             },

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use base64::write;
 use colored::*;
@@ -13,8 +13,9 @@ pub mod traits;
 use anyhow::Result;
 
 use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::RenderedPrompt;
-use serde::Serialize;
+use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage, RenderedPrompt};
+use serde::{Deserialize, Serialize};
+use serde_json::Map;
 use std::error::Error;
 
 use reqwest::StatusCode;
@@ -46,12 +47,34 @@ pub enum ResolveMediaUrls {
     EnsureMime,
     Never,
 }
-#[derive(Clone, Copy)]
+
+#[derive(Clone)]
 pub struct ModelFeatures {
     pub completion: bool,
     pub chat: bool,
     pub anthropic_system_constraints: bool,
     pub resolve_media_urls: ResolveMediaUrls,
+    pub allowed_metadata: AllowedMetadata,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AllowedMetadata {
+    #[serde(rename = "all")]
+    All,
+    #[serde(rename = "none")]
+    None,
+    Only(HashSet<String>),
+}
+
+impl AllowedMetadata {
+    pub fn is_allowed(&self, key: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::None => false,
+            Self::Only(allowed) => allowed.contains(&key.to_string()),
+        }
+    }
 }
 
 #[derive(Debug)]
