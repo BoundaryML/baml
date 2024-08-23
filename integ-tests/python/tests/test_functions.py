@@ -911,3 +911,27 @@ def test_stream2_serialization_exception():
         assert "Failed to coerce" in str(excinfo)
 
     asyncio.run(stream_func())
+
+
+@pytest.mark.asyncio
+async def test_descriptions():
+    res = await b.SchemaDescriptions(
+        "donkey kong"
+    )  # Assuming this returns a Pydantic model
+
+    # Check Nested2 values
+    assert res.prop2.prop20.prop11 == "three"
+    assert res.prop2.prop20.prop12 == "four"
+
+    # Check Nested values
+    assert res.prop2.prop3 == "three"
+    assert res.prop2.prop4 == "four"
+
+    # Check Schema values
+    assert res.prop1 == "one"
+    assert res.prop2 == "two"
+    assert res.prop5 == ["hi"]  # Assuming it's a list with one item
+    assert res.prop6 == "blah"
+    assert res.nested_attrs == ["nested"]  # Assuming it's a list with one item
+    assert res.parens == "parens1"
+    assert res.other_group == "other"

@@ -18,8 +18,8 @@ module Baml
     class TypeBuilder
         def initialize
             @registry = Baml::Ffi::TypeBuilder.new
-            @classes = Set[ "Education", ]
-            @enums = Set[]
+            @classes = Set[ "Blah",  "ClassOptionalOutput",  "ClassOptionalOutput2",  "ClassWithImage",  "DummyOutput",  "DynInputOutput",  "DynamicClassOne",  "DynamicClassTwo",  "DynamicOutput",  "Education",  "Email",  "Event",  "FakeImage",  "InnerClass",  "InnerClass2",  "NamedArgsSingleClass",  "Nested",  "Nested2",  "OptionalTest_Prop1",  "OptionalTest_ReturnType",  "OrderInfo",  "Person",  "Quantity",  "RaysData",  "ReceiptInfo",  "ReceiptItem",  "Recipe",  "Resume",  "Schema",  "SearchParams",  "SomeClassNestedDynamic",  "StringToClassEntry",  "TestClassAlias",  "TestClassNested",  "TestClassWithEnum",  "TestOutputClass",  "UnionTest_ReturnType",  "WithReasoning", ]
+            @enums = Set[ "Category",  "Category2",  "Category3",  "Color",  "DataType",  "DynEnumOne",  "DynEnumTwo",  "EnumInClass",  "EnumOutput",  "Hobby",  "NamedArgsSingleEnum",  "NamedArgsSingleEnumList",  "OptionalTest_CategoryType",  "OrderStatus",  "Tag",  "TestEnum", ]
         end
 
         def string
@@ -115,7 +115,51 @@ module Baml
         end
 
         
+        def DummyOutput
+            ClassBuilder.new(@registry, "DummyOutput", Set[ "nonce",  "nonce2", ])
+        end
+        
+        def DynInputOutput
+            ClassBuilder.new(@registry, "DynInputOutput", Set[ "testKey", ])
+        end
+        
+        def DynamicClassOne
+            ClassBuilder.new(@registry, "DynamicClassOne", Set[])
+        end
+        
+        def DynamicClassTwo
+            ClassBuilder.new(@registry, "DynamicClassTwo", Set[ "hi",  "some_class",  "status", ])
+        end
+        
+        def DynamicOutput
+            ClassBuilder.new(@registry, "DynamicOutput", Set[])
+        end
+        
+        def Person
+            ClassBuilder.new(@registry, "Person", Set[ "name",  "hair_color", ])
+        end
+        
+        def SomeClassNestedDynamic
+            ClassBuilder.new(@registry, "SomeClassNestedDynamic", Set[ "hi", ])
+        end
+        
 
+        
+        def Color
+            EnumBuilder.new(@registry, "Color", Set[ "RED",  "BLUE",  "GREEN",  "YELLOW",  "BLACK",  "WHITE", ])
+        end
+        
+        def DynEnumOne
+            EnumBuilder.new(@registry, "DynEnumOne", Set[])
+        end
+        
+        def DynEnumTwo
+            EnumBuilder.new(@registry, "DynEnumTwo", Set[])
+        end
+        
+        def Hobby
+            EnumBuilder.new(@registry, "Hobby", Set[ "SPORTS",  "MUSIC",  "READING", ])
+        end
         
     end
 end

@@ -74,30 +74,25 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         }
     }
 
-    log::debug!("types {:#?}", types);
+    // log::debug!("types {:#?}", types);
 
-    log::debug!("lastmut {:#?}", types.last_mut());
+    // log::debug!("lastmut {:#?}", types.last_mut());
 
-    let attributes = types
-        .last_mut()
-        .and_then(|t| t.attributes().to_owned().into())
-        .clone();
-    log::debug!("attributes {:#?}", attributes);
-    if let Some(last_type) = types.last_mut() {
-        last_type.reset_attributes();
-    }
-    log::debug!("attributes2 {:#?}", attributes);
-    log::debug!("types len {:#?}", types.len());
+    // let attributes = types
+    //     .last_mut()
+    //     .and_then(|t| t.attributes().to_owned().into())
+    //     .clone();
+    // log::debug!("attributes {:#?}", attributes);
+    // if let Some(last_type) = types.last_mut() {
+    //     last_type.reset_attributes();
+    // }
+    // log::info!("attributes2 {:#?}", attributes);
+    // log::info!("types len {:#?}", types.len());
 
     match types.len() {
         0 => unreachable!("A union must have atleast 1 type"),
         1 => Some(types[0].to_owned()),
-        _ => Some(FieldType::Union(
-            FieldArity::Required,
-            types,
-            span,
-            attributes,
-        )),
+        _ => Some(FieldType::Union(FieldArity::Required, types, span, None)),
     }
 }
 

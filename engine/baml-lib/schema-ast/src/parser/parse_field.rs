@@ -158,25 +158,35 @@ fn parse_field_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> 
             }
         }
     }
-    log::debug!("-----field_type_with_attr----");
-    log::debug!("field_type: {:#?}", field_type);
-    log::debug!("field_attributes: {:#?}", field_attributes);
+    log::info!("-----field_type_with_attr----");
+    log::info!("field_type: {:#?}", field_type);
+    log::info!("field_attributes: {:#?}", field_attributes);
     // i think this is clearing the attributes to null
 
     match field_type {
         Some(mut ft) => {
             // ft.set_attributes(field_attributes);
-            match ft {
+            match &mut ft {
                 FieldType::Union(union, ref mut types, ref span, ref attributes) => {
+                    log::info!("last_type: {:#?}", types.last());
+
                     if let Some(last_type) = types.last_mut() {
-                        last_type.reset_attributes();
+                        // last_type.reset_attributes();
+                        // log::info!("last_type: {:#?}", last_type);
+                        let last_type_attributes = last_type.attributes().to_owned();
+                        log::info!("last_type_attributes: {:#?}", last_type_attributes);
+                        let mut new_attributes = last_type_attributes.clone();
+                        new_attributes.extend(field_attributes);
+                        ft.set_attributes(new_attributes);
                     }
 
-                    if let Some(attributes) = attributes.as_ref() {
-                        ft.set_attributes(attributes.clone()); // Clone the borrowed `Vec<Attribute>`
-                    }
+                    // if let Some(attributes) = attributes.as_ref() {
+                    //     ft.set_attributes(attributes.clone()); // Clone the borrowed `Vec<Attribute>`
+                    // }
                 }
-                _ => {}
+                _ => {
+                    ft.set_attributes(field_attributes);
+                }
             }
 
             Some(ft) // Return the field type with attributes
