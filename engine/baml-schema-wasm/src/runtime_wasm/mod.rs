@@ -396,6 +396,14 @@ pub struct WasmTestResponse {
     tracing_project_id: Option<String>,
 }
 
+#[wasm_bindgen(getter_with_clone, inspectable)]
+pub struct WasmParsedTestResponse {
+    #[wasm_bindgen(readonly)]
+    pub value: String,
+    #[wasm_bindgen(readonly)]
+    pub explanation: String,
+}
+
 #[wasm_bindgen]
 pub enum TestStatus {
     Passed,
@@ -500,19 +508,23 @@ impl WasmTestResponse {
         }
     }
 
-    #[wasm_bindgen]
-    pub fn parsed_response(&self) -> Option<String> {
-        self.test_response.as_ref().ok().and_then(|r| {
-            r.function_response
-                .parsed()
-                .as_ref()
-                .map(|p| {
-                    p.as_ref()
-                        .map(|p| serde_json::to_string(&BamlValue::from(p)))
-                        .map_or_else(|_| None, |s| s.ok())
-                })
-                .flatten()
+    fn parsed_response_impl(&self) -> anyhow::Result<WasmParsedTestResponse> {
+        let parsed_response = self
+            .test_response
+            .as_ref()
+            .ok()
+            .context("No test response")?
+            .function_response
+            .parsed_content()?;
+        Ok(WasmParsedTestResponse {
+            value: serde_json::to_string(&BamlValue::from(parsed_response))?,
+            explanation: format!("{}", parsed_response.explanation(),),
         })
+    }
+
+    #[wasm_bindgen]
+    pub fn parsed_response(&self) -> Option<WasmParsedTestResponse> {
+        self.parsed_response_impl().ok()
     }
 
     #[wasm_bindgen]
@@ -1487,6 +1499,15 @@ impl WasmFunction {
         let (test_response, span) = rt
             .run_test(&function_name, &test_name, &ctx, Some(cb))
             .await;
+
+        log::debug!(
+            "Test response contains: {:?}",
+            test_response
+                .as_ref()
+                .unwrap()
+                .function_response
+                .parsed_content()
+        );
 
         Ok(WasmTestResponse {
             test_response,

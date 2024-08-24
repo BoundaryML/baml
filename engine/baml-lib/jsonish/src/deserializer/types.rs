@@ -26,7 +26,7 @@ pub enum BamlValueWithFlags {
         BamlMap<String, BamlValueWithFlags>,
     ),
     Null(DeserializerConditions),
-    Image(ValueWithFlags<BamlMedia>),
+    Media(ValueWithFlags<BamlMedia>),
 }
 
 impl BamlValueWithFlags {
@@ -50,7 +50,7 @@ impl BamlValueWithFlags {
                 f.score() + items.iter().map(|(_, v)| v.score()).sum::<i32>()
             }
             BamlValueWithFlags::Null(f) => f.score(),
-            BamlValueWithFlags::Image(f) => f.score(),
+            BamlValueWithFlags::Media(f) => f.score(),
         }
     }
 
@@ -65,7 +65,151 @@ impl BamlValueWithFlags {
             BamlValueWithFlags::Enum(_, v) => &v.flags,
             BamlValueWithFlags::Class(_, v, _) => &v,
             BamlValueWithFlags::Null(v) => &v,
-            BamlValueWithFlags::Image(v) => &v.flags,
+            BamlValueWithFlags::Media(v) => &v.flags,
+        }
+    }
+
+    pub fn explanation(&self) -> String {
+        let mut expl = vec![];
+        self.explanation_impl(vec!["".to_string()], &mut expl);
+        match expl.len() {
+            0 => "".to_string(),
+            1 => format!("Error while parsing:\n\n{}", expl[0]),
+            _ => format!("Errors while parsing:\n\n{}", expl.join("\n")),
+        }
+    }
+
+    pub fn explanation_impl(&self, scope: Vec<String>, expls: &mut Vec<String>) {
+        // String(ValueWithFlags<String>),
+        // Int(ValueWithFlags<i64>),
+        // Float(ValueWithFlags<f64>),
+        // Bool(ValueWithFlags<bool>),
+        // List(DeserializerConditions, Vec<BamlValueWithFlags>),
+        // Map(
+        //     DeserializerConditions,
+        //     BamlMap<String, (DeserializerConditions, BamlValueWithFlags)>,
+        // ),
+        // Enum(String, ValueWithFlags<String>),
+        // Class(
+        //     String,
+        //     DeserializerConditions,
+        //     BamlMap<String, BamlValueWithFlags>,
+        // ),
+        // Null(DeserializerConditions),
+        // Image(ValueWithFlags<BamlMedia>),
+        match self {
+            BamlValueWithFlags::String(v) => match v.flags.explanation() {
+                Some(expl) => expls.push(format!(
+                    "{} - error while parsing string: {}",
+                    scope.join("."),
+                    expl
+                )),
+                None => {}
+            },
+            BamlValueWithFlags::Int(v) => match v.flags.explanation() {
+                Some(expl) => expls.push(format!(
+                    "{} - error while parsing int: {}",
+                    scope.join("."),
+                    expl
+                )),
+                None => {}
+            },
+            BamlValueWithFlags::Float(v) => match v.flags.explanation() {
+                Some(expl) => expls.push(format!(
+                    "{} - error while parsing float: {}",
+                    scope.join("."),
+                    expl
+                )),
+                None => {}
+            },
+            BamlValueWithFlags::Bool(v) => match v.flags.explanation() {
+                Some(expl) => expls.push(format!(
+                    "{} - error while parsing bool: {}",
+                    scope.join("."),
+                    expl
+                )),
+                None => {}
+            },
+
+            BamlValueWithFlags::List(flags, values) => {
+                match flags.explanation() {
+                    Some(expl) => expls.push(format!(
+                        "{} - error while parsing list: {}",
+                        scope.join("."),
+                        expl
+                    )),
+                    None => {}
+                }
+                for (i, value) in values.iter().enumerate() {
+                    let mut scope = scope.clone();
+                    scope.push(format!("{}", i));
+                    value.explanation_impl(scope, expls);
+                }
+            }
+            BamlValueWithFlags::Map(flags, kv) => {
+                match flags.explanation() {
+                    Some(expl) => expls.push(format!(
+                        "{} - error while parsing map: {}",
+                        scope.join("."),
+                        expl
+                    )),
+                    None => {}
+                }
+                for (k, (v_flags, v)) in kv.iter() {
+                    let mut scope = scope.clone();
+                    scope.push(format!("{}", k));
+                    match v_flags.explanation() {
+                        Some(expl) => expls.push(format!(
+                            "{} - error while parsing map: {}",
+                            scope.join("."),
+                            expl
+                        )),
+                        None => {}
+                    }
+                    v.explanation_impl(scope, expls);
+                }
+            }
+            BamlValueWithFlags::Enum(_, v) => match v.flags.explanation() {
+                Some(expl) => expls.push(format!(
+                    "{} - error while parsing enum: {}",
+                    scope.join("."),
+                    expl
+                )),
+                None => {}
+            },
+            BamlValueWithFlags::Class(class_name, v, fields) => {
+                match v.explanation() {
+                    Some(expl) => expls.push(format!(
+                        "{} - error while parsing class {}: {}",
+                        scope.join("."),
+                        class_name,
+                        expl
+                    )),
+                    None => {}
+                }
+                for (k, v) in fields.iter() {
+                    let mut scope = scope.clone();
+                    scope.push(format!("{}", k));
+                    v.explanation_impl(scope, expls);
+                }
+            }
+
+            BamlValueWithFlags::Null(v) => match v.explanation() {
+                Some(expl) => expls.push(format!(
+                    "{} - error while parsing null: {}",
+                    scope.join("."),
+                    expl
+                )),
+                None => {}
+            },
+            BamlValueWithFlags::Media(v) => match v.flags.explanation() {
+                Some(expl) => expls.push(format!(
+                    "{} - error while parsing media: {}",
+                    scope.join("."),
+                    expl
+                )),
+                None => {}
+            },
         }
     }
 }
@@ -129,7 +273,7 @@ impl From<BamlValueWithFlags> for BamlValue {
                 BamlValue::Class(s, m.into_iter().map(|(k, v)| (k, v.into())).collect())
             }
             BamlValueWithFlags::Null(_) => BamlValue::Null,
-            BamlValueWithFlags::Image(i) => BamlValue::Media(i.value),
+            BamlValueWithFlags::Media(i) => BamlValue::Media(i.value),
         }
     }
 }
@@ -155,7 +299,7 @@ impl From<&BamlValueWithFlags> for BamlValue {
                 m.into_iter().map(|(k, v)| (k.clone(), v.into())).collect(),
             ),
             BamlValueWithFlags::Null(_) => BamlValue::Null,
-            BamlValueWithFlags::Image(i) => BamlValue::Media(i.value.clone()),
+            BamlValueWithFlags::Media(i) => BamlValue::Media(i.value.clone()),
         }
     }
 }
@@ -172,7 +316,7 @@ impl BamlValueWithFlags {
             BamlValueWithFlags::Enum(_, v) => v.flags.add_flag(flag),
             BamlValueWithFlags::Class(_, v, _) => v.add_flag(flag),
             BamlValueWithFlags::Null(v) => v.add_flag(flag),
-            BamlValueWithFlags::Image(v) => v.flags.add_flag(flag),
+            BamlValueWithFlags::Media(v) => v.flags.add_flag(flag),
         }
     }
 
@@ -196,7 +340,7 @@ impl BamlValueWithFlags {
             BamlValueWithFlags::Enum(n, _) => format!("Enum {n}"),
             BamlValueWithFlags::Class(c, _, _) => format!("Class {c}"),
             BamlValueWithFlags::Null(_) => "Null".to_string(),
-            BamlValueWithFlags::Image(_) => "Image".to_string(),
+            BamlValueWithFlags::Media(_) => "Image".to_string(),
         }
     }
 }
@@ -266,7 +410,7 @@ impl std::fmt::Display for BamlValueWithFlags {
                     write!(f, "\n  {}", flags.to_string().replace("\n", "\n  "))?;
                 }
             }
-            BamlValueWithFlags::Image(v) => {
+            BamlValueWithFlags::Media(v) => {
                 write!(f, "{:#?}", v.value)?;
                 if !v.flags.flags.is_empty() {
                     write!(f, "\n  {}", v.flags.to_string().replace("\n", "\n  "))?;

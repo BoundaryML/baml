@@ -24,7 +24,7 @@ impl WithScore for BamlValueWithFlags {
                 s.score() + 10 * kv.iter().map(|(_, v)| v.score()).sum::<i32>()
             }
             BamlValueWithFlags::Null(s) => s.score(),
-            BamlValueWithFlags::Image(s) => s.score(),
+            BamlValueWithFlags::Media(s) => s.score(),
         }
     }
 }

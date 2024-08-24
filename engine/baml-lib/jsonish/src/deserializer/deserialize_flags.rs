@@ -49,6 +49,95 @@ pub struct DeserializerConditions {
     pub(super) flags: Vec<Flag>,
 }
 
+impl DeserializerConditions {
+    pub fn explanation(&self) -> Option<String> {
+        let flags = self
+            .flags
+            .iter()
+            .filter_map(|c| match c {
+                // Flag::ObjectFromMarkdown(_) => None,
+                // Flag::ObjectFromFixedJson(_) => Some(format!("Object from fixed JSON")),
+                // Flag::ArrayItemParseError(idx, e) => {
+                //     Some(format!("Error parsing item {} in array: {}", idx, e))
+                // }
+                // Flag::DefaultButHadUnparseableValue(e) => {
+                //     Some(format!("Default but had unparseable value {e}"))
+                // }
+                // Flag::ObjectToString(_) => Some(format!("Object to string")),
+                // Flag::ObjectToPrimitive(_) => Some(format!("Object to primitive")),
+                // Flag::ObjectToMap(_) => Some(format!("Object to map")),
+                // Flag::ExtraKey(_, _) => None,
+                // Flag::StrippedNonAlphaNumeric(_) => Some(format!("Stripped non-alphanumeric")),
+                // Flag::SubstringMatch(_) => Some(format!("Substring match")),
+                // Flag::SingleToArray => Some(format!("Single to array")),
+                // Flag::MapKeyParseError(idx, e) => {
+                //     Some(format!("Error parsing key {} in map: {}", idx, e))
+                // }
+                // Flag::MapValueParseError(key, e) => Some(format!(
+                //     "Error parsing value for key '{}' in map: {}",
+                //     key, e
+                // )),
+                // Flag::JsonToString(_) => Some(format!("JSON to string")),
+                // Flag::ImpliedKey(_) => Some(format!("Implied key")),
+                // Flag::InferedObject(_) => Some(format!("Inferred object")),
+                // Flag::FirstMatch(idx, _) => Some(format!("First match at index {}", idx)),
+                // Flag::EnumOneFromMany(matches) => {
+                //     Some(format!("Enum one from many with {} matches", matches.len()))
+                // }
+                // Flag::DefaultFromNoValue => Some(format!("Default from no value")),
+                // Flag::DefaultButHadValue(_) => Some(format!("Default but had value")),
+                // Flag::OptionalDefaultFromNoValue => Some(format!("Optional default from no value")),
+                // Flag::StringToBool(_) => Some(format!("String to bool")),
+                // Flag::StringToNull(_) => Some(format!("String to null")),
+                // Flag::StringToChar(_) => Some(format!("String to char")),
+                // Flag::FloatToInt(_) => Some(format!("Float to int")),
+                // Flag::NoFields(_) => Some(format!("No fields")),
+                Flag::ObjectFromMarkdown(_) => None,
+                Flag::ObjectFromFixedJson(_) => None,
+                Flag::ArrayItemParseError(idx, e) => {
+                    Some(format!("Error parsing item {} in array: {}", idx, e))
+                }
+                Flag::DefaultButHadUnparseableValue(e) => {
+                    Some(format!("Default but had unparseable value {e}"))
+                }
+                Flag::ObjectToString(_) => None,
+                Flag::ObjectToPrimitive(_) => None,
+                Flag::ObjectToMap(_) => None,
+                Flag::ExtraKey(_, _) => None,
+                Flag::StrippedNonAlphaNumeric(_) => None,
+                Flag::SubstringMatch(_) => None,
+                Flag::SingleToArray => None,
+                Flag::MapKeyParseError(idx, e) => {
+                    Some(format!("Error parsing key {} in map: {}", idx, e))
+                }
+                Flag::MapValueParseError(key, e) => Some(format!(
+                    "Error parsing value for key '{}' in map: {}",
+                    key, e
+                )),
+                Flag::JsonToString(_) => None,
+                Flag::ImpliedKey(_) => None,
+                Flag::InferedObject(_) => None,
+                Flag::FirstMatch(_idx, _) => None,
+                Flag::EnumOneFromMany(_matches) => None,
+                Flag::DefaultFromNoValue => None,
+                Flag::DefaultButHadValue(_) => None,
+                Flag::OptionalDefaultFromNoValue => None,
+                Flag::StringToBool(_) => None,
+                Flag::StringToNull(_) => None,
+                Flag::StringToChar(_) => None,
+                Flag::FloatToInt(_) => None,
+                Flag::NoFields(_) => None,
+            })
+            .map(|s| format!("<flag>{}</flag>", s))
+            .collect::<Vec<_>>();
+
+        match flags.len() {
+            0 => None,
+            _ => Some(flags.join("; ")),
+        }
+    }
+}
+
 impl std::fmt::Debug for DeserializerConditions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
