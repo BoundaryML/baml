@@ -69,7 +69,7 @@ fn resolve_properties(
     let base_url = properties
         .remove("base_url")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "https://generativelanguage.googleapis.com/v1".to_string());
+        .unwrap_or_else(|| "https://generativelanguage.googleapis.com/v1beta".to_string());
     let allowed_metadata = match properties.remove("allowed_role_metadata") {
         Some(allowed_metadata) => serde_json::from_value(allowed_metadata)
             .context("allowed_role_metadata must be 'all', 'none', or ['key1', 'key2']")?,
