@@ -1233,6 +1233,30 @@ class BamlSyncClient:
       mdl = create_model("TestAzureReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    def TestCaching(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "TestCaching",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("TestCachingReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     def TestFallbackClient(
         self,
         
@@ -3457,6 +3481,39 @@ class BamlStreamClient:
 
       mdl = create_model("TestAzureReturnType", inner=(str, ...))
       partial_mdl = create_model("TestAzurePartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlSyncStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestCaching(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "TestCaching",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("TestCachingReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestCachingPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlSyncStream[Optional[str], str](
         raw,

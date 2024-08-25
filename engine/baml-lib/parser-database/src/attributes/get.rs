@@ -19,11 +19,6 @@ pub(super) fn visit_get_attribute(attributes: &mut DynamicStringAttributes, ctx:
                         }
                     }
                     None => {
-                        log::info!(
-                            "Missing language for getter. Skipping. {:?} {}",
-                            code.language,
-                            code.value()
-                        );
                         ctx.push_error(DatamodelError::new_validation_error(
                             "All getters args must specify a language. Example: python#\"...\"#. instead of #\"...\"#",
                             expr.span().clone(),

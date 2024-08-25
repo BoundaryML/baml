@@ -13,17 +13,70 @@ overridden `base_url`.
   `/v1` endpoint. See [Ollama's OpenAI compatibility
   documentation](https://ollama.com/blog/openai-compatibility).
 </Tip>
+<Tip>You can try out BAML with Ollama at promptfiddle.com, by running `OLLAMA_ORIGINS='*' ollama serve`. Learn more in [here](https://www.boundaryml.com/blog/ollama-structured-output)</Tip>
 
 ```baml BAML
 client<llm> MyClient {
   provider "openai-generic"
   options {
     base_url "http://localhost:11434/v1"
-    model llama2
+    model llama3
   }
 }
 ```
 
+The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
+
+## Non-forwarded options
+<ParamField
+  path="base_url"
+  type="string"
+>
+  The base URL for the API. **Default: `http://localhost:11434/v1`**
+  <Tip>Note the `/v1` at the end of the URL. See [Ollama's OpenAI compatability](https://ollama.com/blog/openai-compatibility)</Tip>
+</ParamField>
+
+<ParamField
+  path="default_role"
+  type="string"
+>
+  The default role for any prompts that don't specify a role. **Default: `system`**
+  
+  We don't have any checks for this field, you can pass any string you wish.
+</ParamField>
+
+<ParamField path="headers" type="object">
+  Additional headers to send with the request.
+
+Example:
+```baml BAML
+client<llm> MyClient {
+  provider ollama
+  options {
+    model "llama3"
+    headers {
+      "X-My-Header" "my-value"
+    }
+  }
+}
+```
+</ParamField>
+
+<Markdown src="../../../../snippets/allowed-role-metadata-basic.mdx" />
+
+## Forwarded options
+<ParamField
+   path="messages"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you from the prompt
+</ParamField>
+<ParamField
+   path="stream"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you based on how you call the client in your code
+</ParamField>
 <ParamField
   path="model"
   type="string"

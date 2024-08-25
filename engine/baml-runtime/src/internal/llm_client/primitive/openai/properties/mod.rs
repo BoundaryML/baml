@@ -5,6 +5,8 @@ pub(crate) mod openai;
 
 use std::collections::HashMap;
 
+use crate::internal::llm_client::AllowedMetadata;
+
 pub struct PostRequestProperties {
     pub default_role: String,
     pub base_url: String,
@@ -14,4 +16,5 @@ pub struct PostRequestProperties {
     pub proxy_url: Option<String>,
     // These are passed directly to the OpenAI API.
     pub properties: HashMap<String, serde_json::Value>,
+    pub allowed_metadata: AllowedMetadata,
 }

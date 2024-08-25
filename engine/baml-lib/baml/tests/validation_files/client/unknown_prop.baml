@@ -6,7 +6,6 @@ client<llm> MyClient {
   }
 }
 
-
 // error: Error validating: Unknown field `myExtraProp` in client
 //   -->  client/unknown_prop.baml:3
 //    | 

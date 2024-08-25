@@ -55,7 +55,7 @@ impl DatamodelWarning {
             // If there are multiple close names, suggest them all
             let suggestions = close_names.join("`, `");
             format!(
-                "Type `{}` does not exist. Did you mean one of these: `{}`?",
+                "Type `{}` does not exist. Did you mean one of these: `{}`? ",
                 type_name, suggestions
             )
         };

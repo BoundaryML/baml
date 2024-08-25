@@ -150,23 +150,21 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
         let functions = ir
             .walk_functions()
             .map(|f| {
-                let Either::Right(configs) = f.walk_impls() else {
-                    return Ok(vec![]);
-                };
+                let configs = f.walk_impls();
+
                 let funcs = configs
+                    .into_iter()
                     .map(|c| {
                         let (_function, _impl_) = c.item;
                         Ok(PythonFunction {
                             name: f.name().to_string(),
                             partial_return_type: f.elem().output().to_partial_type_ref(ir),
                             return_type: f.elem().output().to_type_ref(ir),
-                            args: match f.inputs() {
-                                either::Either::Left(_args) => anyhow::bail!("Python codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
-                                either::Either::Right(args) => args
-                                    .iter()
-                                    .map(|(name, r#type)| (name.to_string(), r#type.to_type_ref(ir)))
-                                    .collect(),
-                            },
+                            args: f
+                                .inputs()
+                                .iter()
+                                .map(|(name, r#type)| (name.to_string(), r#type.to_type_ref(ir)))
+                                .collect(),
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -174,7 +172,8 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
             })
             .collect::<Result<Vec<Vec<PythonFunction>>>>()?
             .into_iter()
-            .flatten().collect();
+            .flatten()
+            .collect();
         Ok(PythonClient { funcs: functions })
     }
 }

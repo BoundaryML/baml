@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
-use crate::RuntimeContext;
+use crate::{internal::llm_client::AllowedMetadata, RuntimeContext};
 
 use super::PostRequestProperties;
 
@@ -23,6 +23,12 @@ pub fn resolve_properties(
         .remove("api_key")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .or_else(|| ctx.env.get("OPENAI_API_KEY").map(|s| s.to_string()));
+
+    let allowed_metadata = match properties.remove("allowed_role_metadata") {
+        Some(allowed_metadata) => serde_json::from_value(allowed_metadata)
+            .context("allowed_role_metadata must be 'all', 'none', or ['key1', 'key2']")?,
+        None => AllowedMetadata::None,
+    };
 
     let headers = properties.remove("headers").map(|v| {
         if let Some(v) = v.as_object() {
@@ -52,6 +58,7 @@ pub fn resolve_properties(
         api_key,
         headers,
         properties,
+        allowed_metadata,
         // Replace proxy_url with code below to disable proxying
         // proxy_url: None,
         proxy_url: ctx

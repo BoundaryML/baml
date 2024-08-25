@@ -2391,6 +2391,7 @@ dependencies = [
 name = "internal-baml-parser-database"
 version = "0.53.1"
 dependencies = [
+ "anyhow",
  "baml-types",
  "colored",
  "either",
@@ -2433,6 +2434,7 @@ dependencies = [
  "pest_derive",
  "serde",
  "serde_json",
+ "test-log",
 ]
 
 [[package]]

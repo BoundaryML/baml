@@ -24,27 +24,30 @@ pub(crate) fn validate_type(ctx: &mut Context<'_>, field_type: &FieldType) {
     validate_type_allowed(ctx, field_type);
 }
 
-fn validate_type_exists(ctx: &mut Context<'_>, field_type: &FieldType) {
+fn validate_type_exists(ctx: &mut Context<'_>, field_type: &FieldType) -> bool {
+    let mut errors = false;
     field_type
         .flat_idns()
         .iter()
         .for_each(|f| match ctx.db.find_type(f) {
             Some(_) => {}
-            None => match f {
-                Identifier::Primitive(..) => {}
-                _ => errors_with_names(ctx, f),
+
+            None => match field_type {
+                FieldType::Primitive(..) => {}
+                _ => {
+                    errors_with_names(ctx, f);
+                    errors = true
+                }
             },
         });
+    errors
 }
 
 fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
     match field_type {
-        FieldType::Map(kv_types, _) => {
+        FieldType::Map(kv_types, ..) => {
             match &kv_types.0 {
-                FieldType::Identifier(
-                    FieldArity::Required,
-                    Identifier::Primitive(TypeValue::String, _),
-                ) => {}
+                FieldType::Primitive(FieldArity::Required, TypeValue::String, ..) => {}
                 key_type => {
                     ctx.push_error(DatamodelError::new_validation_error(
                         "Maps may only have strings as keys",
@@ -55,9 +58,12 @@ fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
             validate_type_allowed(ctx, &kv_types.1);
             // TODO:assert key_type is string or int or null
         }
-        FieldType::Identifier(_, _) => {}
-        FieldType::List(field_type, _, _) => validate_type_allowed(ctx, field_type),
-        FieldType::Tuple(_, field_types, _) | FieldType::Union(_, field_types, _) => {
+
+        FieldType::Primitive(..) => {}
+        FieldType::Symbol(..) => {}
+
+        FieldType::List(field_type, ..) => validate_type_allowed(ctx, field_type),
+        FieldType::Tuple(_, field_types, ..) | FieldType::Union(_, field_types, ..) => {
             for field_type in field_types {
                 validate_type_allowed(ctx, field_type);
             }

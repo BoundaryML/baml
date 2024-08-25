@@ -1,51 +1,12 @@
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
-use internal_baml_schema_ast::ast::{WithIdentifier, WithName, WithSpan};
-
 use crate::validate::validation_pipeline::context::Context;
+
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
+
+use internal_baml_schema_ast::ast::{WithIdentifier, WithName, WithSpan};
 
 use super::types::validate_type;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
-    for func in ctx.db.walk_old_functions() {
-        for args in func.walk_input_args().chain(func.walk_output_args()) {
-            let arg = args.ast_arg();
-            validate_type(ctx, &arg.1.field_type)
-        }
-
-        // Check if the function has multiple impls, if it does,
-        // we require an impl.
-        match &func.metadata().default_impl {
-            Some((default_impl, span)) => {
-                if !func
-                    .walk_variants()
-                    .find(|v| v.name() == default_impl)
-                    .is_some()
-                {
-                    ctx.push_error(DatamodelError::new_impl_not_found_error(
-                        &default_impl,
-                        func.walk_variants()
-                            .map(|v| v.name().to_string())
-                            .collect::<Vec<_>>(),
-                        span.clone(),
-                    ))
-                }
-            }
-            None => {
-                let num_impls = func.walk_variants().len();
-                if num_impls >= 2 {
-                    ctx.push_error(DatamodelError::new_validation_error(
-                        &format!(
-                            "{} has multiple impls({}). Add a `default_impl your_impl` field to the function",
-                            func.name(),
-                            num_impls
-                        ),
-                        func.identifier().span().clone(),
-                    ))
-                }
-            }
-        }
-    }
-
     let clients = ctx
         .db
         .walk_clients()
@@ -74,9 +35,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         };
 
         defined_types.start_scope();
-        if let Some(internal_baml_schema_ast::ast::FunctionArgs::Named(p)) =
-            template.ast_node().input()
-        {
+        if let Some(p) = template.ast_node().input() {
             p.args.iter().for_each(|(name, t)| {
                 defined_types.add_variable(name.name(), ctx.db.to_jinja_type(&t.field_type))
             });
@@ -111,7 +70,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         defined_types.errors_mut().clear();
     }
 
-    for func in ctx.db.walk_new_functions() {
+    for func in ctx.db.walk_functions() {
         for args in func.walk_input_args().chain(func.walk_output_args()) {
             let arg = args.ast_arg();
             validate_type(ctx, &arg.1.field_type)
@@ -120,9 +79,18 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         // Ensure the client is correct.
         // TODO: message to the user that it should be either a client ref OR an inline client
         match func.client_spec() {
-            Some(_) => {}
-            None => {
-                let client = func.metadata().client.as_ref().unwrap();
+            Ok(_) => {}
+            Err(e) => {
+                let client = match func.metadata().client.as_ref() {
+                    Some(client) => client,
+                    None => {
+                        ctx.push_error(DatamodelError::new_validation_error(
+                            "Client metadata is missing.",
+                            func.span().clone(),
+                        ));
+                        continue;
+                    }
+                };
                 ctx.push_error(DatamodelError::not_found_error(
                     "Client",
                     &client.0,
@@ -132,12 +100,33 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             }
         }
 
-        let prompt = func.metadata().prompt.as_ref().unwrap();
+        let prompt = match func.metadata().prompt.as_ref() {
+            Some(prompt) => prompt,
+            None => {
+                ctx.push_error(DatamodelError::new_validation_error(
+                    "Prompt metadata is missing.",
+                    func.span().clone(),
+                ));
+                continue;
+            }
+        };
         defined_types.start_scope();
+
         func.walk_input_args().for_each(|arg| {
-            let name = arg.name();
-            let field_type = ctx.db.to_jinja_type(arg.field_type());
-            defined_types.add_variable(name, field_type);
+            let name = match arg.ast_arg().0 {
+                Some(arg) => arg.name().to_string(),
+                None => {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Argument name is missing.",
+                        arg.ast_arg().1.span().clone(),
+                    ));
+                    return;
+                }
+            };
+
+            let field_type = ctx.db.to_jinja_type(&arg.ast_arg().1.field_type);
+
+            defined_types.add_variable(&name, field_type);
         });
         match internal_baml_jinja::validate_template(
             func.name(),
@@ -147,10 +136,10 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             Ok(_) => {}
             Err(e) => {
                 let pspan = prompt.span();
-                if let Some(_e) = e.parsing_errors {
+                if let Some(e) = e.parsing_errors {
                     // ctx.push_error(DatamodelError::new_validation_error(
                     //     &format!("Error parsing jinja template: {}", e),
-                    //     e.line(),
+                    //     // e.,
                     // ))
                 } else {
                     e.errors.iter().for_each(|t| {

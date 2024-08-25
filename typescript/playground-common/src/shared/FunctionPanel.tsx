@@ -17,23 +17,25 @@ import {
   rawCurlLoadable,
 } from '../baml_wasm_web/EventListener'
 import {
+  type WasmChatMessagePart,
   // We _deliberately_ only import types from wasm, instead of importing the module: wasm load is async,
   // so we can only load wasm symbols through wasmAtom, not directly by importing wasm-schema-web
   type WasmChatMessagePartMedia,
-  WasmChatMessagePartMediaType,
+  type WasmChatMessagePartMediaType,
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import TestResults from '../baml_wasm_web/test_uis/test_result'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable'
 import { TooltipProvider } from '../components/ui/tooltip'
 import { PromptChunk } from './ImplPanel'
 import FunctionTestSnippet from './TestSnippet'
-import { Copy } from 'lucide-react'
+import { CircleSlash, CircleSlashIcon, Copy } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { CheckboxHeader } from './CheckboxHeader'
 import { Switch } from '../components/ui/switch'
 import { vscode } from '../utils/vscode'
 import clsx from 'clsx'
 import { ErrorBoundary } from 'react-error-boundary'
+import { Badge } from '@/components/ui/badge'
 
 const handleCopy = (text: string) => () => {
   navigator.clipboard.writeText(text)
@@ -134,18 +136,23 @@ const WebviewMedia: React.FC<{ bamlMediaType: 'image' | 'audio'; media: WasmChat
   bamlMediaType,
   media,
 }) => {
+  const wasm = useAtomValue(wasmAtom)
   const pathAsUri = useSWR({ swr: 'WebviewMedia', type: media.type, content: media.content }, async () => {
+    if (!wasm) {
+      return { error: 'wasm not loaded' }
+    }
+
     switch (media.type) {
-      case WasmChatMessagePartMediaType.File:
+      case wasm.WasmChatMessagePartMediaType.File:
         // const uri = await vscode.readFile('', media.content)
         // // Do a manual check to assert that the image exists
         // if ((await fetch(uri, { method: 'HEAD' })).status !== 200) {
         //   throw new Error('file not found')
         // }
         return `file://${media.content}`
-      case WasmChatMessagePartMediaType.Url:
+      case wasm.WasmChatMessagePartMediaType.Url:
         return media.content
-      case WasmChatMessagePartMediaType.Error:
+      case wasm.WasmChatMessagePartMediaType.Error:
         return { error: media.content }
       default:
         return { error: 'unknown media type' }
@@ -194,6 +201,7 @@ const WebviewMedia: React.FC<{ bamlMediaType: 'image' | 'audio'; media: WasmChat
 
 const PromptPreview: React.FC = () => {
   const promptPreview = useAtomValue(renderPromptAtom)
+  const wasm = useAtomValue(wasmAtom)
   const { showCurlRequest } = useAppState()
 
   if (!promptPreview) {
@@ -232,40 +240,74 @@ const PromptPreview: React.FC = () => {
     <div className='flex flex-col gap-4 px-2 w-full h-full'>
       {promptPreview.as_chat()?.map((chat, idx) => (
         <div key={idx} className='flex flex-col'>
-          <div className='flex flex-row'>{chat.role}</div>
+          <div className='flex flex-row gap-2'>{chat.role}</div>
           {chat.parts.map((part, idx) => {
-            if (part.is_text())
-              return (
-                <PromptChunk
-                  key={idx}
-                  text={part.as_text()!}
-                  client={{
-                    identifier: {
-                      end: 0,
-                      source_file: '',
-                      start: 0,
-                      value: promptPreview.client_name,
-                    },
-                    provider: 'baml-openai-chat',
-                    model: 'gpt-4',
-                  }}
-                />
-              )
-            if (part.is_image()) {
-              const media = part.as_media()
-              if (!media) return <div key={idx}>Error loading image: this chat message part is not media</div>
-              if (media.type === WasmChatMessagePartMediaType.Error)
-                return <div key={idx}>Error loading image 1: {media.content}</div>
-              return <WebviewMedia key={idx} bamlMediaType='image' media={media} />
+            function renderPart(part: WasmChatMessagePart, client: string) {
+              if (part.is_text())
+                return (
+                  <PromptChunk
+                    key={idx}
+                    text={part.as_text() ?? ''}
+                    client={{
+                      identifier: {
+                        end: 0,
+                        source_file: '',
+                        start: 0,
+                        value: client,
+                      },
+                      provider: 'baml-openai-chat',
+                      model: 'gpt-4',
+                    }}
+                  />
+                )
+              if (part.is_image()) {
+                const media = part.as_media()
+                if (!media) return <div key={idx}>Error loading image: this chat message part is not media</div>
+                if (media.type === wasm?.WasmChatMessagePartMediaType.Error)
+                  return <div key={idx}>Error loading image: {media.content}</div>
+                return <WebviewMedia key={idx} bamlMediaType='image' media={media} />
+              }
+              if (part.is_audio()) {
+                const media = part.as_media()
+                if (!media) return <div key={idx}>Error loading audio: this chat message part is not media</div>
+                if (media.type === wasm?.WasmChatMessagePartMediaType.Error)
+                  return <div key={idx}>Error loading audio: {media.content}</div>
+                return <WebviewMedia key={idx} bamlMediaType='audio' media={media} />
+              }
+              return null
             }
-            if (part.is_audio()) {
-              const media = part.as_media()
-              if (!media) return <div key={idx}>Error loading audio: this chat message part is not media</div>
-              if (media.type === WasmChatMessagePartMediaType.Error)
-                return <div key={idx}>Error loading audio 1: {media.content}</div>
-              return <WebviewMedia key={idx} bamlMediaType='audio' media={media} />
-            }
-            return null
+
+            const meta = part.json_meta(promptPreview)
+            const meta_entries = meta
+              ? (JSON.parse(meta) as { allowed: Record<string, any>; skipped: Record<string, any> })
+              : { allowed: {}, skipped: {} }
+            return (
+              <div key={idx} className='flex flex-col gap-1'>
+                <div className='flex flex-row gap-2'>
+                  {Object.entries(meta_entries.allowed).map(([k, v]) => {
+                    return (
+                      <pre key={k} className='text-xs outline-muted px-2 py-1 rounded-md'>
+                        {k}={JSON.stringify(v)}
+                      </pre>
+                    )
+                  })}
+
+                  {Object.keys(meta_entries.skipped).length > 0 && (
+                    <div className='flex flex-row gap-2'>
+                      {Object.keys(meta_entries.skipped).map((k) => (
+                        <div
+                          key={k}
+                          className='flex flex-row gap-0.5 items-center text-xs outline-muted px-2 py-1 rounded-md text-muted-foreground'
+                        >
+                          <CircleSlashIcon className='w-4 h-4' /> {k}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {renderPart(part, promptPreview.client_name)}
+              </div>
+            )
           })}
         </div>
       ))}

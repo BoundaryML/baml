@@ -59,9 +59,8 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir crate::GeneratorArgs)> for RubyCl
         let functions = ir
             .walk_functions()
             .map(|f| {
-                let Either::Right(configs) = f.walk_impls() else {
-                    return Ok(vec![]);
-                };
+                let configs = f.walk_impls();
+
                 let funcs = configs
                     .map(|c| {
                         let (_function, _impl_) = c.item;
@@ -69,13 +68,11 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir crate::GeneratorArgs)> for RubyCl
                             name: f.name().to_string(),
                             partial_return_type: f.elem().output().to_partial_type_ref(),
                             return_type: f.elem().output().to_ruby(),
-                            args: match f.inputs() {
-                                either::Either::Left(_args) => anyhow::bail!("Ruby codegen does not support unnamed args: please add names to all arguments of BAML function '{}'", f.name().to_string()),
-                                either::Either::Right(args) => args
-                                    .iter()
-                                    .map(|(name, r#type)| (name.to_string(), r#type.to_ruby()))
-                                    .collect(),
-                            },
+                            args: f
+                                .inputs()
+                                .iter()
+                                .map(|(name, r#type)| (name.to_string(), r#type.to_type_ref()))
+                                .collect(),
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -83,7 +80,8 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir crate::GeneratorArgs)> for RubyCl
             })
             .collect::<Result<Vec<Vec<RubyFunction>>>>()?
             .into_iter()
-            .flatten().collect();
+            .flatten()
+            .collect();
         Ok(RubyClient { funcs: functions })
     }
 }

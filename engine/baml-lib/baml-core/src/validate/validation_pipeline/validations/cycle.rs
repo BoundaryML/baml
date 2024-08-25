@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_schema_ast::ast::{ClassId, WithIdentifier, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{TypeExpId, WithIdentifier, WithName, WithSpan};
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -19,7 +19,9 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                         Some(either::Either::Left(_cls)) => true,
                         // Don't worry about enum dependencies, they can't form cycles.
                         Some(either::Either::Right(_enm)) => false,
-                        None => panic!("Unknown class `{}`", f),
+                        None => {
+                            panic!("Unknown class `{}`", f);
+                        }
                     })
                     .collect::<HashSet<_>>(),
             )
@@ -27,7 +29,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         .collect::<Vec<_>>();
 
     // Now we can check for cycles using topological sort.
-    let mut stack: Vec<(ClassId, Vec<ClassId>)> = Vec::new(); // This stack now also keeps track of the path
+    let mut stack: Vec<(TypeExpId, Vec<TypeExpId>)> = Vec::new(); // This stack now also keeps track of the path
     let mut visited = HashSet::new();
     let mut in_stack = HashSet::new();
 
@@ -43,8 +45,16 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         let span = ctx.db.ast()[current].span();
 
         if in_stack.contains(&current) {
-            // If current is in in_stack, then we're revisiting a node, which means there's a cycle
-            let cycle_start_index = path.iter().position(|&x| x == current).unwrap();
+            let cycle_start_index = match path.iter().position(|&x| x == current) {
+                Some(index) => index,
+                None => {
+                    ctx.push_error(DatamodelError::new_validation_error(
+                        "Cycle start index not found in the path.",
+                        span.clone(),
+                    ));
+                    return;
+                }
+            };
             let cycle = path[cycle_start_index..]
                 .iter()
                 .map(|&x| ctx.db.ast()[x].name())

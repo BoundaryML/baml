@@ -5,5 +5,3 @@ client<llm> MyClient {
     max_tokens 100
   }
 }
-
-

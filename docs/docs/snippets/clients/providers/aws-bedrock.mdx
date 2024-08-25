@@ -32,6 +32,19 @@ limited to:
   - loading the specified `AWS_PROFILE` from `~/.aws/config`
   - built-in authn for services running in EC2, ECS, Lambda, etc.
 
+## Non-forwarded options
+
+<ParamField
+  path="default_role"
+  type="string"
+>
+  The default role for any prompts that don't specify a role. **Default: `system`**
+
+  We don't have any checks for this field, you can pass any string you wish.
+</ParamField>
+
+<Markdown src="../../../../snippets/allowed-role-metadata-basic.mdx" />
+
 ## Forwarded options
 
 <ParamField

@@ -1,5 +1,8 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
+use super::InternalBamlRuntime;
+use crate::internal::llm_client::traits::WithClientProperties;
+use crate::internal::llm_client::AllowedMetadata;
 use crate::{
     client_registry::ClientProperty,
     internal::{
@@ -31,8 +34,6 @@ use internal_baml_core::{
     validate,
 };
 use internal_baml_jinja::RenderedPrompt;
-
-use super::InternalBamlRuntime;
 
 impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
     // Gets a top-level client/strategy by name
@@ -141,7 +142,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         ctx: &RuntimeContext,
     ) -> Result<Vec<OrchestratorNode>> {
         let client = self.get_llm_provider(client_spec, ctx)?;
-        Ok(client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self))
+        client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self)
     }
 
     fn features(&self) -> IrFeatures {
@@ -154,7 +155,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         ctx: &RuntimeContext,
         params: &BamlMap<String, BamlValue>,
         node_index: Option<usize>,
-    ) -> Result<(RenderedPrompt, OrchestrationScope)> {
+    ) -> Result<(RenderedPrompt, OrchestrationScope, AllowedMetadata)> {
         let func = self.get_function(function_name, ctx)?;
         let baml_args = self.ir().check_function_params(
             &func,
@@ -170,7 +171,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let client_spec = renderer.client_spec();
         let client = self.get_llm_provider(client_spec, ctx)?;
         let mut selected =
-            client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self);
+            client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self)?;
         let node_index = node_index.unwrap_or(0);
 
         if node_index >= selected.len() {
@@ -187,7 +188,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             .provider
             .render_prompt(self.ir(), &renderer, ctx, &baml_args)
             .await
-            .map(|prompt| (prompt, node.scope));
+            .map(|prompt| (prompt, node.scope, node.provider.allowed_metadata().clone()));
     }
 
     async fn render_raw_curl(
@@ -205,7 +206,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let client_spec = renderer.client_spec();
         let client = self.get_llm_provider(client_spec, ctx)?;
         let mut selected =
-            client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self);
+            client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self)?;
 
         let node_index = node_index.unwrap_or(0);
 

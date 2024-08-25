@@ -1,4 +1,7 @@
-use crate::internal::llm_client::ResolveMediaUrls;
+use crate::internal::llm_client::{
+    traits::{ToProviderMessage, ToProviderMessageExt, WithClientProperties},
+    AllowedMetadata, ResolveMediaUrls,
+};
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
@@ -39,6 +42,7 @@ struct PostRequestProperities {
     api_key: Option<String>,
     headers: HashMap<String, String>,
     proxy_url: Option<String>,
+    allowed_metadata: AllowedMetadata,
     // These are passed directly to the Anthropic API.
     properties: HashMap<String, serde_json::Value>,
 }
@@ -81,6 +85,12 @@ fn resolve_properties(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .or_else(|| ctx.env.get("ANTHROPIC_API_KEY").map(|s| s.to_string()));
 
+    let allowed_metadata = match properties.remove("allowed_role_metadata") {
+        Some(allowed_metadata) => serde_json::from_value(allowed_metadata)
+            .context("allowed_role_metadata must be 'all', 'none', or ['key1', 'key2']")?,
+        None => AllowedMetadata::None,
+    };
+
     let mut headers = match properties.remove("headers") {
         Some(headers) => headers
             .as_object()
@@ -107,6 +117,7 @@ fn resolve_properties(
         base_url,
         api_key,
         headers,
+        allowed_metadata,
         properties,
         proxy_url: ctx.env.get("BOUNDARY_PROXY_URL").map(|s| s.to_string()),
     })
@@ -116,6 +127,15 @@ fn resolve_properties(
 impl WithRetryPolicy for AnthropicClient {
     fn retry_policy_name(&self) -> Option<&str> {
         self.retry_policy.as_deref()
+    }
+}
+
+impl WithClientProperties for AnthropicClient {
+    fn allowed_metadata(&self) -> &AllowedMetadata {
+        &self.properties.allowed_metadata
+    }
+    fn client_properties(&self) -> &HashMap<String, serde_json::Value> {
+        &self.properties.properties
     }
 }
 
@@ -298,7 +318,6 @@ impl AnthropicClient {
         let default_role = properties.default_role.clone();
         Ok(Self {
             name: client.name.clone(),
-            properties,
             context: RenderContext_Client {
                 name: client.name.clone(),
                 provider: client.provider.clone(),
@@ -309,9 +328,11 @@ impl AnthropicClient {
                 completion: false,
                 anthropic_system_constraints: true,
                 resolve_media_urls: ResolveMediaUrls::Always,
+                allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
             client: create_client()?,
+            properties,
         })
     }
 
@@ -321,7 +342,6 @@ impl AnthropicClient {
         let default_role = properties.default_role.clone();
         Ok(Self {
             name: client.name().into(),
-            properties,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
@@ -332,6 +352,7 @@ impl AnthropicClient {
                 completion: false,
                 anthropic_system_constraints: true,
                 resolve_media_urls: ResolveMediaUrls::Always,
+                allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client
                 .elem()
@@ -339,6 +360,7 @@ impl AnthropicClient {
                 .as_ref()
                 .map(|s| s.to_string()),
             client: create_client()?,
+            properties,
         })
     }
 }
@@ -387,7 +409,7 @@ impl RequestBuilder for AnthropicClient {
                 body_obj.extend(convert_completion_prompt_to_body(prompt))
             }
             either::Either::Right(messages) => {
-                body_obj.extend(convert_chat_prompt_to_body(messages)?);
+                body_obj.extend(self.chat_to_message(messages)?);
             }
         }
 
@@ -464,119 +486,100 @@ impl WithChat for AnthropicClient {
     }
 }
 
+impl ToProviderMessage for AnthropicClient {
+    fn to_chat_message(
+        &self,
+        mut content: serde_json::Map<String, serde_json::Value>,
+        text: &str,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        content.insert("type".into(), "text".into());
+        content.insert("text".into(), text.into());
+        Ok(content)
+    }
+
+    fn to_media_message(
+        &self,
+        mut content: serde_json::Map<String, serde_json::Value>,
+        media: &baml_types::BamlMedia,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        match &media.content {
+            BamlMediaContent::Base64(data) => {
+                content.insert("type".into(), media.media_type.to_string().into());
+                let mut source = serde_json::Map::new();
+                source.insert("type".into(), "base64".into());
+                source.insert("media_type".into(), media.mime_type_as_ok()?.into());
+                source.insert("data".into(), data.base64.clone().into());
+                content.insert("source".into(), source.into());
+            }
+            BamlMediaContent::File(_) => {
+                anyhow::bail!(
+                    "BAML internal error (Anthropic): file should have been resolved to base64"
+                )
+            }
+            BamlMediaContent::Url(_) => {
+                anyhow::bail!(
+                    "BAML internal error (Anthropic): media URL should have been resolved to base64"
+                )
+            }
+        }
+        Ok(content)
+    }
+
+    fn role_to_message(
+        &self,
+        content: &RenderedChatMessage,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let mut map = serde_json::Map::new();
+        map.insert("role".into(), content.role.clone().into());
+        map.insert(
+            "content".into(),
+            json!(self.parts_to_message(&content.parts)?),
+        );
+        Ok(map)
+    }
+}
+
+impl ToProviderMessageExt for AnthropicClient {
+    fn chat_to_message(
+        &self,
+        chat: &Vec<RenderedChatMessage>,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        // merge all adjacent roles of the same type
+        let mut res = serde_json::Map::new();
+        let (first, others) = chat.split_at(1);
+        if let Some(content) = first.first() {
+            if content.role == "system" {
+                res.insert(
+                    "system".into(),
+                    json!(self.parts_to_message(&content.parts)?),
+                );
+                res.insert(
+                    "messages".into(),
+                    others
+                        .iter()
+                        .map(|c| self.role_to_message(c))
+                        .collect::<Result<Vec<_>>>()?
+                        .into(),
+                );
+                return Ok(res);
+            }
+        }
+
+        res.insert(
+            "messages".into(),
+            chat.iter()
+                .map(|c| self.role_to_message(c))
+                .collect::<Result<Vec<_>>>()?
+                .into(),
+        );
+
+        Ok(res)
+    }
+}
+
 // converts completion prompt into JSON body for request
 fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
     map.insert("prompt".into(), json!(prompt));
     map
-}
-
-// converts chat prompt into JSON body for request
-fn convert_chat_prompt_to_body(
-    prompt: &Vec<RenderedChatMessage>,
-) -> Result<HashMap<String, serde_json::Value>> {
-    let mut map = HashMap::new();
-
-    if let Some(first) = prompt.get(0) {
-        if first.role == "system" {
-            map.insert(
-                "system".into(),
-                convert_message_parts_to_content(&first.parts)?,
-            );
-            map.insert(
-                "messages".into(),
-                prompt
-                    .iter()
-                    .skip(1)
-                    .map(|m| {
-                        Ok(json!({
-                            "role": m.role,
-                            "content": convert_message_parts_to_content(&m.parts)?
-                        }))
-                    })
-                    .collect::<Result<serde_json::Value>>()?,
-            );
-        } else {
-            map.insert(
-                "messages".into(),
-                prompt
-                    .iter()
-                    .map(|m| {
-                        Ok(json!({
-                            "role": m.role,
-                            "content": convert_message_parts_to_content(&m.parts)?
-                        }))
-                    })
-                    .collect::<Result<serde_json::Value>>()?,
-            );
-        }
-    } else {
-        map.insert(
-            "messages".into(),
-            prompt
-                .iter()
-                .map(|m| {
-                    Ok(json!({
-                        "role": m.role,
-                        "content": convert_message_parts_to_content(&m.parts)?
-                    }))
-                })
-                .collect::<Result<serde_json::Value>>()?,
-        );
-    }
-    log::debug!("converted chat prompt to body: {:#?}", map);
-
-    Ok(map)
-}
-
-// converts chat message parts into JSON content
-fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> Result<serde_json::Value> {
-    if parts.len() == 1 {
-        if let ChatMessagePart::Text(text) = &parts[0] {
-            return Ok(json!(text));
-        }
-    }
-
-    parts
-        .iter()
-        .map(|part| {
-            Ok(match part {
-                ChatMessagePart::Text(text) => json!({
-                    "type": "text",
-                    "text": text
-                }),
-
-                ChatMessagePart::Media(media) => match &media.content {
-                    BamlMediaContent::Base64(data) => json!({
-                        "type":  media.media_type.to_string(),
-
-                        "source": {
-                            "type": "base64",
-                            "media_type": media.mime_type_as_ok()?,
-                            "data": data.base64
-                        }
-                    }),
-                    BamlMediaContent::File(_) => {
-                        anyhow::bail!(
-                            "BAML internal error (Anthropic): file should have been resolved to base64"
-                        )
-                    }
-                    BamlMediaContent::Url(_) => {
-                        anyhow::bail!(
-                            "BAML internal error (Anthropic): media URL should have been resolved to base64"
-                        )
-                    }
-                    //never executes, keep for future if anthropic supports urls
-                    // BamlMedia::Url(media_type, data) => json!({
-                    //     "type": "image",
-
-                    //     "source": {
-                    //         "type": "url",
-                    //         "url": data.url
-                    //     }
-                    // }),
-                },
-            })
-        })
-        .collect()
 }

@@ -161,6 +161,8 @@ pub enum ContentPart {
     UrlAudio(String),
     #[serde(rename = "b64_audio")]
     B64Audio(String),
+    #[serde(rename = "with_meta")]
+    WithMeta(Box<ContentPart>, HashMap<String, Value>),
 }
 
 #[derive(Serialize, Debug, Deserialize, Clone)]

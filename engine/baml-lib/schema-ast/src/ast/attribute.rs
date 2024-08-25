@@ -45,82 +45,21 @@ impl WithSpan for Attribute {
 /// A node containing attributes.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum AttributeContainer {
-    Class(super::ClassId),
-    ClassField(super::ClassId, super::FieldId),
-    Enum(super::EnumId),
-    EnumValue(super::EnumId, super::EnumValueId),
-    Variant(super::VariantConfigId),
-    VariantField(super::VariantConfigId, super::VariantFieldId),
-    VariantSerializer(super::VariantConfigId, super::VariantSerializerId),
-    VariantSerializerField(
-        super::VariantConfigId,
-        super::VariantSerializerId,
-        super::SerializerFieldId,
-    ),
+    Class(super::TypeExpId),
+    ClassField(super::TypeExpId, super::FieldId),
+    Enum(super::TypeExpId),
+    EnumValue(super::TypeExpId, super::FieldId),
 }
 
-impl From<(super::VariantConfigId, super::VariantFieldId)> for AttributeContainer {
-    fn from((enm, val): (super::VariantConfigId, super::VariantFieldId)) -> Self {
-        Self::VariantField(enm, val)
-    }
-}
-
-impl From<super::EnumId> for AttributeContainer {
-    fn from(v: super::EnumId) -> Self {
+impl From<super::TypeExpId> for AttributeContainer {
+    fn from(v: super::TypeExpId) -> Self {
         Self::Enum(v)
     }
 }
 
-impl From<(super::EnumId, super::EnumValueId)> for AttributeContainer {
-    fn from((enm, val): (super::EnumId, super::EnumValueId)) -> Self {
+impl From<(super::TypeExpId, super::FieldId)> for AttributeContainer {
+    fn from((enm, val): (super::TypeExpId, super::FieldId)) -> Self {
         Self::EnumValue(enm, val)
-    }
-}
-
-// For Class variant
-impl From<super::ClassId> for AttributeContainer {
-    fn from(v: super::ClassId) -> Self {
-        Self::Class(v)
-    }
-}
-
-// For ClassField variant
-impl From<(super::ClassId, super::FieldId)> for AttributeContainer {
-    fn from((cls, fld): (super::ClassId, super::FieldId)) -> Self {
-        Self::ClassField(cls, fld)
-    }
-}
-
-// For Variant variant
-impl From<super::VariantConfigId> for AttributeContainer {
-    fn from(v: super::VariantConfigId) -> Self {
-        Self::Variant(v)
-    }
-}
-
-// For VariantSerializer variant
-impl From<(super::VariantConfigId, super::VariantSerializerId)> for AttributeContainer {
-    fn from((var, ser): (super::VariantConfigId, super::VariantSerializerId)) -> Self {
-        Self::VariantSerializer(var, ser)
-    }
-}
-
-// For VariantSerializerField variant
-impl
-    From<(
-        super::VariantConfigId,
-        super::VariantSerializerId,
-        super::SerializerFieldId,
-    )> for AttributeContainer
-{
-    fn from(
-        (var, ser, fld): (
-            super::VariantConfigId,
-            super::VariantSerializerId,
-            super::SerializerFieldId,
-        ),
-    ) -> Self {
-        Self::VariantSerializerField(var, ser, fld)
     }
 }
 
@@ -146,16 +85,6 @@ impl Index<AttributeContainer> for super::SchemaAst {
             AttributeContainer::Enum(enum_id) => &self[enum_id].attributes,
             AttributeContainer::EnumValue(enum_id, value_idx) => {
                 &self[enum_id][value_idx].attributes
-            }
-            AttributeContainer::Variant(variant_id) => &self[variant_id].attributes,
-            AttributeContainer::VariantField(variant_id, field_id) => {
-                &self[variant_id][field_id].attributes
-            }
-            AttributeContainer::VariantSerializer(variant_id, serializer_idx) => {
-                &self[variant_id][serializer_idx].attributes
-            }
-            AttributeContainer::VariantSerializerField(variant_id, serializer_idx, field_idx) => {
-                &self[variant_id][serializer_idx][field_idx].attributes
             }
         }
     }

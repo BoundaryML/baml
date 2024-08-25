@@ -20,8 +20,8 @@ use super::{
         OrchestratorNodeIterator,
     },
     traits::{
-        WithClient, WithPrompt, WithRenderRawCurl, WithRetryPolicy, WithSingleCallable,
-        WithStreamable,
+        WithClient, WithClientProperties, WithPrompt, WithRenderRawCurl, WithRetryPolicy,
+        WithSingleCallable, WithStreamable,
     },
     LLMResponse,
 };
@@ -83,6 +83,15 @@ macro_rules! match_llm_provider {
 impl WithRetryPolicy for LLMPrimitiveProvider {
     fn retry_policy_name(&self) -> Option<&str> {
         match_llm_provider!(self, retry_policy_name)
+    }
+}
+
+impl WithClientProperties for LLMPrimitiveProvider {
+    fn client_properties(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        match_llm_provider!(self, client_properties)
+    }
+    fn allowed_metadata(&self) -> &super::AllowedMetadata {
+        match_llm_provider!(self, allowed_metadata)
     }
 }
 
@@ -210,11 +219,11 @@ impl IterOrchestrator for Arc<LLMPrimitiveProvider> {
         _previous: OrchestrationScope,
         _ctx: &RuntimeContext,
         _client_lookup: &'a dyn InternalClientLookup,
-    ) -> OrchestratorNodeIterator {
-        vec![OrchestratorNode::new(
+    ) -> Result<OrchestratorNodeIterator> {
+        Ok(vec![OrchestratorNode::new(
             ExecutionScope::Direct(self.name().to_string()),
             self.clone(),
-        )]
+        )])
     }
 }
 

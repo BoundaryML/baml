@@ -12,10 +12,7 @@ impl WithInternal for InternalBamlRuntime {
         let ir = self.ir();
 
         IrFeatures::from(
-            ir.walk_functions()
-                .filter(|f| f.is_v1())
-                .map(|f| f.name().to_string())
-                .collect(),
+            vec![],
             ir.walk_functions().any(|f| f.is_v2()),
             ir.walk_classes()
                 .filter(|c| !c.elem().dynamic_fields.is_empty())
