@@ -9,7 +9,7 @@ use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types::Blob;
 use baml_types::BamlMediaContent;
 use baml_types::{BamlMedia, BamlMediaType};
-use futures::{stream, SinkExt, StreamExt};
+use futures::stream;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use serde::Deserialize;

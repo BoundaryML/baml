@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlValue};
+use baml_types::{BamlMap, BamlValue};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},

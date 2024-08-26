@@ -121,13 +121,49 @@ impl<'db> FunctionWalker<'db> {
             .template
             .as_str()
     }
+}
 
-    /// The client for the function
-    pub fn client(self) -> Option<ClientWalker<'db>> {
+/// Reference to a client
+pub enum ClientSpec {
+    /// References a client by name
+    Named(String),
+
+    /// Defined inline using shorthand "<provider>/<model>" syntax
+    Shorthand(String),
+}
+
+impl<'db> FunctionWalker<'db> {
+    /// Returns the client spec for the function, if it is well-formed
+    pub fn client_spec(self) -> Result<ClientSpec, DatamodelError> {
         assert!(self.id.0, "Only new functions have clients");
-        let client = self.metadata().client.as_ref()?;
+        let Some(client) = self.metadata().client.as_ref() else {
+            return Err(DatamodelError::new_validation_error(
+                "Client metadata is missing.",
+                self.span().clone(),
+            ));
+        };
 
-        self.db.find_client(client.0.as_str())
+        match client.0.split_once("/") {
+            // TODO: do this in a more robust way
+            // actually validate which clients are and aren't allowed
+            Some((provider, model)) => Ok(ClientSpec::Shorthand(format!("{}/{}", provider, model))),
+            None => match self.db.find_client(client.0.as_str()) {
+                Some(client) => Ok(ClientSpec::Named(client.name().to_string())),
+                None => {
+                    let clients = self
+                        .db
+                        .walk_clients()
+                        .map(|c| c.name().to_string())
+                        .collect::<Vec<_>>();
+                    Err(DatamodelError::not_found_error(
+                        "Client",
+                        &client.0,
+                        client.1.clone(),
+                        clients.clone(),
+                    ))
+                }
+            },
+        }
     }
 }
 impl<'db> WithIdentifier for FunctionWalker<'db> {

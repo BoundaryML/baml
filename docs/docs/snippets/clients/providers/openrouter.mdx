@@ -1,12 +1,17 @@
+---
+title: openrouter
+slug: docs/snippets/clients/providers/openrouter
+---
 
-https://openrouter.ai - A unified interface for LLMs
+[OpenRouter](https://openrouter.ai) supports the OpenAI client, allowing you to use the
+[`openai-generic`](/docs/snippets/clients/providers/openai) provider with an
+overridden `base_url`.
 
-OpenRouter supports the OpenAI client, allowing you to use the [openai](/docs/snippets/clients/providers/openai) provider with an overridedn`base_url`
 
 
 ```baml BAML
 client<llm> MyClient {
-  provider openai
+  provider "openai-generic"
   options {
     base_url "https://openrouter.ai/api/v1"
     api_key env.OPENROUTER_API_KEY

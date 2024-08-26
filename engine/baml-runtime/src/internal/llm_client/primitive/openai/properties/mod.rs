@@ -1,16 +1,13 @@
-mod azure;
-mod ollama;
-mod openai;
+pub(crate) mod azure;
+pub(crate) mod generic;
+pub(crate) mod ollama;
+pub(crate) mod openai;
 
 use std::collections::HashMap;
 
-pub use azure::resolve_properties as resolve_azure_properties;
-pub use ollama::resolve_properties as resolve_ollama_properties;
-pub use openai::resolve_properties as resolve_openai_properties;
-
 use crate::internal::llm_client::AllowedMetadata;
 
-pub struct PostRequestProperities {
+pub struct PostRequestProperties {
     pub default_role: String,
     pub base_url: String,
     pub api_key: Option<String>,

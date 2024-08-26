@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fmt};
 
-use serde::{de::Visitor, ser::SerializeStruct, Deserialize, Deserializer};
+use serde::{de::Visitor, Deserialize, Deserializer};
 
 use crate::media::BamlMediaType;
 use crate::{BamlMap, BamlMedia};

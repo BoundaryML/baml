@@ -778,6 +778,22 @@ export class BamlSyncClient {
     return raw.parsed() as string
   }
   
+  TestAnthropicShorthand(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    const raw = this.runtime.callFunctionSync(
+      "TestAnthropicShorthand",
+      {
+        "input": input
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as string
+  }
+  
   TestAws(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -834,6 +850,22 @@ export class BamlSyncClient {
       "TestFallbackClient",
       {
         
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as string
+  }
+  
+  TestFallbackToShorthand(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    const raw = this.runtime.callFunctionSync(
+      "TestFallbackToShorthand",
+      {
+        "input": input
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -1120,6 +1152,22 @@ export class BamlSyncClient {
   ): string {
     const raw = this.runtime.callFunctionSync(
       "TestOpenAILegacyProvider",
+      {
+        "input": input
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as string
+  }
+  
+  TestOpenAIShorthand(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    const raw = this.runtime.callFunctionSync(
+      "TestOpenAIShorthand",
       {
         "input": input
       },

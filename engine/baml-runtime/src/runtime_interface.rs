@@ -1,6 +1,7 @@
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
 use internal_baml_core::internal_baml_diagnostics::Diagnostics;
+use internal_baml_core::ir::repr::ClientSpec;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, sync::Arc};
@@ -105,7 +106,7 @@ pub trait InternalClientLookup<'a> {
     // Gets a top-level client/strategy by name
     fn get_llm_provider(
         &'a self,
-        client_name: &str,
+        client_spec: &ClientSpec,
         ctx: &RuntimeContext,
     ) -> Result<Arc<LLMProvider>>;
 
@@ -121,7 +122,7 @@ pub trait InternalRuntimeInterface {
 
     fn orchestration_graph(
         &self,
-        client_name: &str,
+        client_name: &ClientSpec,
         ctx: &RuntimeContext,
     ) -> Result<Vec<OrchestratorNode>>;
 

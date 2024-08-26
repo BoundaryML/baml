@@ -1161,6 +1161,30 @@ class BamlSyncClient:
       mdl = create_model("TestAnthropicReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    def TestAnthropicShorthand(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "TestAnthropicShorthand",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("TestAnthropicShorthandReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     def TestAws(
         self,
         input: str,
@@ -1255,6 +1279,30 @@ class BamlSyncClient:
         __cr__,
       )
       mdl = create_model("TestFallbackClientReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    def TestFallbackToShorthand(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "TestFallbackToShorthand",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("TestFallbackToShorthandReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
     def TestFnNamedArgsSingleBool(
@@ -1687,6 +1735,30 @@ class BamlSyncClient:
         __cr__,
       )
       mdl = create_model("TestOpenAILegacyProviderReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    def TestOpenAIShorthand(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "TestOpenAIShorthand",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("TestOpenAIShorthandReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
     def TestRetryConstant(
@@ -3318,6 +3390,39 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def TestAnthropicShorthand(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "TestAnthropicShorthand",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("TestAnthropicShorthandReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestAnthropicShorthandPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlSyncStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
     def TestAws(
         self,
         input: str,
@@ -3441,6 +3546,39 @@ class BamlStreamClient:
 
       mdl = create_model("TestFallbackClientReturnType", inner=(str, ...))
       partial_mdl = create_model("TestFallbackClientPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlSyncStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestFallbackToShorthand(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "TestFallbackToShorthand",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("TestFallbackToShorthandReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestFallbackToShorthandPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlSyncStream[Optional[str], str](
         raw,
@@ -4036,6 +4174,39 @@ class BamlStreamClient:
 
       mdl = create_model("TestOpenAILegacyProviderReturnType", inner=(str, ...))
       partial_mdl = create_model("TestOpenAILegacyProviderPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlSyncStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestOpenAIShorthand(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "TestOpenAIShorthand",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("TestOpenAIShorthandReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestOpenAIShorthandPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlSyncStream[Optional[str], str](
         raw,

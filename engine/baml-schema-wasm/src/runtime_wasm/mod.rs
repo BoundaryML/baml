@@ -49,8 +49,17 @@ type JsResult<T> = core::result::Result<T, JsError>;
 
 #[wasm_bindgen(start)]
 pub fn on_wasm_init() {
-    match console_log::init_with_level(log::Level::Warn) {
-        Ok(_) => web_sys::console::log_1(&"Initialized BAML runtime logging".into()),
+    cfg_if::cfg_if! {
+        if #[cfg(debug_assertions)] {
+            const LOG_LEVEL: log::Level = log::Level::Debug;
+        } else {
+            const LOG_LEVEL: log::Level = log::Level::Warn;
+        }
+    };
+    match console_log::init_with_level(LOG_LEVEL) {
+        Ok(_) => web_sys::console::log_1(
+            &format!("Initialized BAML runtime logging as log::{}", LOG_LEVEL).into(),
+        ),
         Err(e) => web_sys::console::log_1(
             &format!("Failed to initialize BAML runtime logging: {:?}", e).into(),
         ),
@@ -1390,7 +1399,7 @@ impl WasmFunction {
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
         let renderer = PromptRenderer::from_function(&walker, ir, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
-        Ok(renderer.client_name().to_string())
+        Ok(renderer.client_spec().to_string())
     }
 
     #[wasm_bindgen]
@@ -1498,11 +1507,11 @@ impl WasmFunction {
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
         let renderer = PromptRenderer::from_function(&walker, ir, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
-        let client_name = renderer.client_name().to_string();
+        let client_spec = renderer.client_spec();
 
         let graph = rt
             .internal()
-            .orchestration_graph(&client_name, &ctx)
+            .orchestration_graph(&client_spec, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
         // Serialize the scopes to JsValue

@@ -778,6 +778,22 @@ export class BamlAsyncClient {
     return raw.parsed() as string
   }
   
+  async TestAnthropicShorthand(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestAnthropicShorthand",
+      {
+        "input": input
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as string
+  }
+  
   async TestAws(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -834,6 +850,22 @@ export class BamlAsyncClient {
       "TestFallbackClient",
       {
         
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as string
+  }
+  
+  async TestFallbackToShorthand(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestFallbackToShorthand",
+      {
+        "input": input
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
@@ -1120,6 +1152,22 @@ export class BamlAsyncClient {
   ): Promise<string> {
     const raw = await this.runtime.callFunction(
       "TestOpenAILegacyProvider",
+      {
+        "input": input
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as string
+  }
+  
+  async TestOpenAIShorthand(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Promise<string> {
+    const raw = await this.runtime.callFunction(
+      "TestOpenAIShorthand",
       {
         "input": input
       },
@@ -2258,6 +2306,29 @@ class BamlStreamClient {
     )
   }
   
+  TestAnthropicShorthand(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): BamlStream<RecursivePartialNull<string>, string> {
+    const raw = this.runtime.streamFunction(
+      "TestAnthropicShorthand",
+      {
+        "input": input
+      },
+      undefined,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return new BamlStream<RecursivePartialNull<string>, string>(
+      raw,
+      (a): a is RecursivePartialNull<string> => a,
+      (a): a is string => a,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
   TestAws(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -2335,6 +2406,29 @@ class BamlStreamClient {
       "TestFallbackClient",
       {
         
+      },
+      undefined,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return new BamlStream<RecursivePartialNull<string>, string>(
+      raw,
+      (a): a is RecursivePartialNull<string> => a,
+      (a): a is string => a,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  TestFallbackToShorthand(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): BamlStream<RecursivePartialNull<string>, string> {
+    const raw = this.runtime.streamFunction(
+      "TestFallbackToShorthand",
+      {
+        "input": input
       },
       undefined,
       this.ctx_manager.cloneContext(),
@@ -2747,6 +2841,29 @@ class BamlStreamClient {
   ): BamlStream<RecursivePartialNull<string>, string> {
     const raw = this.runtime.streamFunction(
       "TestOpenAILegacyProvider",
+      {
+        "input": input
+      },
+      undefined,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return new BamlStream<RecursivePartialNull<string>, string>(
+      raw,
+      (a): a is RecursivePartialNull<string> => a,
+      (a): a is string => a,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  TestOpenAIShorthand(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): BamlStream<RecursivePartialNull<string>, string> {
+    const raw = this.runtime.streamFunction(
+      "TestOpenAIShorthand",
       {
         "input": input
       },

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 
-use internal_baml_core::ir::ClientWalker;
+use internal_baml_core::ir::{repr::ClientSpec, ClientWalker};
 
 use crate::{
     client_registry::ClientProperty,
@@ -17,35 +17,13 @@ pub struct FallbackStrategy {
     pub name: String,
     pub(super) retry_policy: Option<String>,
     // TODO: We can add conditions to each client
-    clients: Vec<String>,
+    client_specs: Vec<ClientSpec>,
 }
 
-impl TryFrom<(&ClientProperty, &RuntimeContext)> for FallbackStrategy {
-    type Error = anyhow::Error;
-
-    fn try_from(
-        (client, ctx): (&ClientProperty, &RuntimeContext),
-    ) -> std::result::Result<Self, Self::Error> {
-        let strategy = resolve_properties(
-            client
-                .options
-                .iter()
-                .map(|(k, v)| Ok((k.clone(), serde_json::json!(v))))
-                .collect::<Result<HashMap<_, _>>>()?,
-            ctx,
-        )?;
-        Ok(Self {
-            name: client.name.clone(),
-            retry_policy: client.retry_policy.clone(),
-            clients: strategy,
-        })
-    }
-}
-
-fn resolve_properties(
+fn resolve_strategy(
     mut properties: HashMap<String, serde_json::Value>,
     _ctx: &RuntimeContext,
-) -> Result<Vec<String>> {
+) -> Result<Vec<ClientSpec>> {
     let strategy = properties
         .remove("strategy")
         .map(|v| serde_json::from_value::<Vec<String>>(v))
@@ -71,7 +49,29 @@ fn resolve_properties(
         );
     }
 
-    Ok(strategy)
+    Ok(strategy.into_iter().map(ClientSpec::new_from_id).collect())
+}
+
+impl TryFrom<(&ClientProperty, &RuntimeContext)> for FallbackStrategy {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        (client, ctx): (&ClientProperty, &RuntimeContext),
+    ) -> std::result::Result<Self, Self::Error> {
+        let strategy = resolve_strategy(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), serde_json::json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            ctx,
+        )?;
+        Ok(Self {
+            name: client.name.clone(),
+            retry_policy: client.retry_policy.clone(),
+            client_specs: strategy,
+        })
+    }
 }
 
 impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for FallbackStrategy {
@@ -79,12 +79,11 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for FallbackStrategy {
 
     fn try_from((client, ctx): (&ClientWalker, &RuntimeContext)) -> Result<Self> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
-        let strategy = resolve_properties(properties, ctx)?;
-
+        let strategy = resolve_strategy(properties, ctx)?;
         Ok(Self {
             name: client.item.elem.name.clone(),
             retry_policy: client.retry_policy().as_ref().map(String::from),
-            clients: strategy,
+            client_specs: strategy,
         })
     }
 }
@@ -98,7 +97,7 @@ impl IterOrchestrator for FallbackStrategy {
         client_lookup: &'a dyn InternalClientLookup<'a>,
     ) -> Result<crate::internal::llm_client::orchestrator::OrchestratorNodeIterator> {
         let items = self
-            .clients
+            .client_specs
             .iter()
             .enumerate()
             .map(

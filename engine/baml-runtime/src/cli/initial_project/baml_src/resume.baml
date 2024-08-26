@@ -8,7 +8,7 @@ class Resume {
 
 // Creating a function to extract the resume from a string.
 function ExtractResume(resume: string) -> Resume {
-  client GPT4
+  client "openai/gpt-4o" // Set OPENAI_API_KEY to use this client.
   prompt #"
     Extract from this content:
     {{ resume }}

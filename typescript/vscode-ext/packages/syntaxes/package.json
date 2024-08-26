@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "vscode-tmgrammar-snap --config ../package.json all.test.baml",
-    "update-test": "pnpm test --updateSnapshot"
+    "update-test": "pnpm test -- --updateSnapshot"
   },
   "keywords": [],
   "author": "",

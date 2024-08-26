@@ -124,7 +124,28 @@ impl fmt::Display for MediaUrl {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Clone, Serialize, Deserialize)]
 pub struct MediaBase64 {
     pub base64: String,
+}
+
+impl fmt::Debug for MediaBase64 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.base64.len() > 40 {
+            f.debug_struct("MediaBase64")
+                .field(
+                    "base64",
+                    &format!(
+                        "{}...{}",
+                        &self.base64[..15],
+                        &self.base64[self.base64.len() - 15..]
+                    ),
+                )
+                .finish()
+        } else {
+            f.debug_struct("MediaBase64")
+                .field("base64", &self.base64)
+                .finish()
+        }
+    }
 }
