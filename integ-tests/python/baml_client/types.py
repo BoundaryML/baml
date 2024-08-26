@@ -227,15 +227,15 @@ class NamedArgsSingleClass(BaseModel):
 class Nested(BaseModel):
     
     
-    prop3: Union[str, None]
-    prop4: Union[str, None]
+    prop3: Union[str, Optional[None]]
+    prop4: Union[str, Optional[None]]
     prop20: "Nested2"
 
 class Nested2(BaseModel):
     
     
-    prop11: Union[str, None]
-    prop12: Union[str, None]
+    prop11: Union[str, Optional[None]]
+    prop12: Union[str, Optional[None]]
 
 class OptionalTest_Prop1(BaseModel):
     
@@ -308,12 +308,12 @@ class Resume(BaseModel):
 class Schema(BaseModel):
     
     
-    prop1: Union[str, None]
+    prop1: Union[str, Optional[None]]
     prop2: Union["Nested", str]
-    prop5: List[Union[str, None]]
+    prop5: List[Union[str, Optional[None]]]
     prop6: Union[str, List["Nested"]]
-    nested_attrs: List[Union[str, None, "Nested"]]
-    parens: Union[str, None]
+    nested_attrs: List[Union[str, Optional[None], "Nested"]]
+    parens: Union[str, Optional[None]]
     other_group: Union[str, Union[int, str]]
 
 class SearchParams(BaseModel):

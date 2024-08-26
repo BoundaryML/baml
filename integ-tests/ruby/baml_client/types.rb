@@ -402,8 +402,8 @@ module Baml
     end
     class Nested < T::Struct
       include Baml::Sorbet::Struct
-      const :prop3, T.any(String, NilClass)
-      const :prop4, T.any(String, NilClass)
+      const :prop3, T.any(String, T.nilable(NilClass))
+      const :prop4, T.any(String, T.nilable(NilClass))
       const :prop20, Baml::Types::Nested2
 
       def initialize(props)
@@ -418,8 +418,8 @@ module Baml
     end
     class Nested2 < T::Struct
       include Baml::Sorbet::Struct
-      const :prop11, T.any(String, NilClass)
-      const :prop12, T.any(String, NilClass)
+      const :prop11, T.any(String, T.nilable(NilClass))
+      const :prop12, T.any(String, T.nilable(NilClass))
 
       def initialize(props)
         super(
@@ -586,12 +586,12 @@ module Baml
     end
     class Schema < T::Struct
       include Baml::Sorbet::Struct
-      const :prop1, T.any(String, NilClass)
+      const :prop1, T.any(String, T.nilable(NilClass))
       const :prop2, T.any(Baml::Types::Nested, String)
-      const :prop5, T::Array[T.any(String, NilClass)]
+      const :prop5, T::Array[T.any(String, T.nilable(NilClass))]
       const :prop6, T.any(String, T::Array[Baml::Types::Nested])
-      const :nested_attrs, T::Array[T.any(String, NilClass, Baml::Types::Nested)]
-      const :parens, T.any(String, NilClass)
+      const :nested_attrs, T::Array[T.any(String, T.nilable(NilClass), Baml::Types::Nested)]
+      const :parens, T.any(String, T.nilable(NilClass))
       const :other_group, T.any(String, T.any(Integer, String))
 
       def initialize(props)

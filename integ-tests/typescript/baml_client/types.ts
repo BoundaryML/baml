@@ -222,15 +222,15 @@ export interface NamedArgsSingleClass {
 }
 
 export interface Nested {
-  prop3?: string | null
-  prop4?: string | null
+  prop3?: string | null | null
+  prop4?: string | null | null
   prop20: Nested2
   
 }
 
 export interface Nested2 {
-  prop11?: string | null
-  prop12?: string | null
+  prop11?: string | null | null
+  prop12?: string | null | null
   
 }
 
@@ -303,12 +303,12 @@ export interface Resume {
 }
 
 export interface Schema {
-  prop1?: string | null
+  prop1?: string | null | null
   prop2: Nested | string
-  prop5: (string | null)[]
+  prop5: (string | null | null)[]
   prop6: string | Nested[]
-  nested_attrs: (string | null | Nested)[]
-  parens?: string | null
+  nested_attrs: (string | null | null | Nested)[]
+  parens?: string | null | null
   other_group: string | number | string
   
 }
