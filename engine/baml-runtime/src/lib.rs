@@ -70,7 +70,7 @@ pub struct BamlRuntime {
     tracer: Arc<BamlTracer>,
     env_vars: HashMap<String, String>,
     #[cfg(not(target_arch = "wasm32"))]
-    async_runtime: Arc<tokio::runtime::Runtime>,
+    pub async_runtime: Arc<tokio::runtime::Runtime>,
 }
 
 impl BamlRuntime {

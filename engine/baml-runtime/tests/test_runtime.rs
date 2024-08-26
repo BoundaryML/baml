@@ -119,8 +119,8 @@ mod internal_tests {
     //     Ok(())
     // }
 
-    #[tokio::test]
-    async fn test_call_function2() -> Result<(), Box<dyn std::error::Error>> {
+    #[test]
+    fn test_call_function2() -> Result<(), Box<dyn std::error::Error>> {
         INIT.call_once(|| {
             env_logger::init();
         });
@@ -189,15 +189,15 @@ mod internal_tests {
                 .internal()
                 .render_prompt(&function_name, &ctx, &params, Some(0));
 
-        let (prompt, scope) = render_prompt_future.await?;
+        let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         log::info!("Prompt: {:#?}", prompt);
 
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_call_function_unions1() -> Result<(), Box<dyn std::error::Error>> {
+    #[test]
+    fn test_call_function_unions1() -> Result<(), Box<dyn std::error::Error>> {
         INIT.call_once(|| {
             env_logger::init();
         });
@@ -269,7 +269,7 @@ mod internal_tests {
                 .internal()
                 .render_prompt(&function_name, &ctx, &params, Some(0));
 
-        let (prompt, scope) = render_prompt_future.await?;
+        let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         // let prompt = render_prompt_future
         //     .await

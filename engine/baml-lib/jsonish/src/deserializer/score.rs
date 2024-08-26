@@ -54,6 +54,8 @@ impl WithScore for Flag {
             Flag::MapValueParseError(x, _) => 1,
             // Harmless to drop additional matches
             Flag::FirstMatch(_, _) => 1,
+            // No penalty for picking an option from a union
+            Flag::UnionMatch(_, _) => 0,
             Flag::EnumOneFromMany(i) => i.into_iter().map(|(i, _)| *i as i32).sum::<i32>(),
             Flag::StringToBool(_) => 1,
             Flag::StringToNull(_) => 1,
