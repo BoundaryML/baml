@@ -3,9 +3,10 @@ use super::{
     parse_comments::*,
     parse_expression::parse_raw_string,
     parse_identifier::parse_identifier,
+    parse_named_args_list::parse_named_argument_list,
     Rule,
 };
-use crate::{assert_correct_parser, ast::*, parser::parse_types::parse_field_type};
+use crate::ast::*;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub(crate) fn parse_template_string(
@@ -23,20 +24,18 @@ pub(crate) fn parse_template_string(
         match current.as_rule() {
             Rule::TEMPLATE_KEYWORD => {}
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
-            Rule::named_argument_list => match parse_named_arguement_list(current, diagnostics) {
-                Ok(FunctionArgs::Named(arg)) => input = Some(FunctionArgs::Named(arg)),
-                Ok(FunctionArgs::Unnamed(arg)) => {
-                    diagnostics.push_error(DatamodelError::new_validation_error(
-                        "Unnamed arguments are not supported for function input. Define a new class instead.",
-                        arg.span,
-                    ))
-                }
+            Rule::assignment => {}
+            Rule::named_argument_list => match parse_named_argument_list(current, diagnostics) {
+                Ok(arg) => input = Some(arg),
                 Err(err) => diagnostics.push_error(err),
             },
             Rule::raw_string_literal => {
-                value = Some(Expression::RawStringValue(parse_raw_string(current, diagnostics)))
+                value = Some(Expression::RawStringValue(parse_raw_string(
+                    current,
+                    diagnostics,
+                )))
             }
-            _ => parsing_catch_all(&current, "function"),
+            _ => parsing_catch_all(current, "function"),
         }
     }
 
@@ -76,81 +75,4 @@ template_string {}(param1: String, param2: String) #"
         response.1.as_deref().unwrap_or("<unknown>"),
         diagnostics.span(pair_span),
     ))
-}
-
-fn parse_named_arguement_list(
-    pair: Pair<'_>,
-    diagnostics: &mut Diagnostics,
-) -> Result<FunctionArgs, DatamodelError> {
-    assert!(
-        pair.as_rule() == Rule::named_argument_list,
-        "parse_named_arguement_list called on the wrong rule: {:?}",
-        pair.as_rule()
-    );
-    let span = diagnostics.span(pair.as_span());
-    let mut args: Vec<(Identifier, FunctionArg)> = Vec::new();
-    for named_arg in pair.into_inner() {
-        if matches!(named_arg.as_rule(), Rule::SPACER_TEXT) {
-            continue;
-        }
-        assert_correct_parser!(named_arg, Rule::named_argument);
-
-        let mut name = None;
-        let mut r#type = None;
-        for arg in named_arg.into_inner() {
-            match arg.as_rule() {
-                Rule::identifier => {
-                    name = Some(parse_identifier(arg, diagnostics));
-                }
-                Rule::colon => {}
-                Rule::field_type => {
-                    r#type = Some(parse_function_arg(arg, diagnostics)?);
-                }
-                _ => parsing_catch_all(&arg, "named_argument_list"),
-            }
-        }
-
-        match (name, r#type) {
-            (Some(name), Some(r#type)) => args.push((name, r#type)),
-            (Some(name), None) => diagnostics.push_error(DatamodelError::new_validation_error(
-                &format!(
-                    "No type specified for argument: {name}. Expected: `{name}: type`",
-                    name = name.name()
-                ),
-                name.span().clone(),
-            )),
-            (None, _) => {
-                unreachable!("parse_function_field_type: unexpected rule:")
-            }
-        }
-    }
-
-    Ok(FunctionArgs::Named(NamedFunctionArgList {
-        documentation: None,
-        args,
-        span,
-    }))
-}
-
-fn parse_function_arg(
-    pair: Pair<'_>,
-    diagnostics: &mut Diagnostics,
-) -> Result<FunctionArg, DatamodelError> {
-    assert!(
-        pair.as_rule() == Rule::field_type,
-        "parse_function_arg called on the wrong rule: {:?}",
-        pair.as_rule()
-    );
-    let span = diagnostics.span(pair.as_span());
-
-    match parse_field_type(pair, diagnostics) {
-        Some(ftype) => Ok(FunctionArg {
-            span,
-            field_type: ftype,
-        }),
-        None => Err(DatamodelError::new_validation_error(
-            "Failed to find type",
-            span,
-        )),
-    }
 }

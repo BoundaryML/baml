@@ -1,6 +1,10 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
+use super::InternalBamlRuntime;
+use crate::internal::llm_client::traits::WithClientProperties;
+use crate::internal::llm_client::AllowedMetadata;
 use crate::{
+    client_registry::ClientProperty,
     internal::{
         ir_features::{IrFeatures, WithInternal},
         llm_client::{
@@ -8,6 +12,7 @@ use crate::{
             orchestrator::{
                 orchestrate_call, IterOrchestrator, OrchestrationScope, OrchestratorNode,
             },
+            primitive::LLMPrimitiveProvider,
             retry_policy::CallablePolicy,
             traits::{WithPrompt, WithRenderRawCurl},
         },
@@ -15,50 +20,78 @@ use crate::{
     },
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
     tracing::BamlTracer,
-    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RuntimeContext,
-    RuntimeInterface,
+    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RenderCurlSettings,
+    RuntimeContext, RuntimeInterface,
 };
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue};
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
-    ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
+    ir::{
+        repr::{ClientSpec, IntermediateRepr},
+        ArgCoercer, FunctionWalker, IRHelper,
+    },
     validate,
 };
 use internal_baml_jinja::RenderedPrompt;
-
-use super::InternalBamlRuntime;
 
 impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
     // Gets a top-level client/strategy by name
     fn get_llm_provider(
         &'a self,
-        client_name: &str,
+        client_spec: &ClientSpec,
         ctx: &RuntimeContext,
     ) -> Result<Arc<LLMProvider>> {
-        if let Some(client) = ctx
-            .client_overrides
-            .as_ref()
-            .and_then(|(_, c)| c.get(client_name))
-        {
-            return Ok(client.clone());
-        }
+        match client_spec {
+            ClientSpec::Shorthand(shorthand) => {
+                let (provider, model) = shorthand.split_once("/").context(format!(
+                    "Invalid client shorthand: {} (expected format: provider/model)",
+                    shorthand
+                ))?;
 
-        #[cfg(target_arch = "wasm32")]
-        let mut clients = self.clients.lock().unwrap();
-        #[cfg(not(target_arch = "wasm32"))]
-        let clients = &self.clients;
+                let client_property = ClientProperty {
+                    name: shorthand.clone(),
+                    provider: provider.into(),
+                    retry_policy: None,
+                    options: vec![("model".to_string(), BamlValue::String(model.to_string()))]
+                        .into_iter()
+                        .collect(),
+                };
+                // TODO: allow other providers
+                let llm_primitive_provider =
+                    LLMPrimitiveProvider::try_from((&client_property, ctx))
+                        .context(format!("Failed to parse client: {}", shorthand))?;
 
-        if let Some(client) = clients.get(client_name) {
-            return Ok(client.clone());
-        } else {
-            let walker = self
-                .ir()
-                .find_client(client_name)
-                .context(format!("Could not find client with name: {}", client_name))?;
-            let client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
-            clients.insert(client_name.into(), client.clone());
-            Ok(client)
+                Ok(Arc::new(LLMProvider::Primitive(Arc::new(
+                    llm_primitive_provider,
+                ))))
+            }
+            ClientSpec::Named(client_name) => {
+                if let Some(client) = ctx
+                    .client_overrides
+                    .as_ref()
+                    .and_then(|(_, c)| c.get(client_name))
+                {
+                    return Ok(client.clone());
+                }
+
+                #[cfg(target_arch = "wasm32")]
+                let mut clients = self.clients.lock().unwrap();
+                #[cfg(not(target_arch = "wasm32"))]
+                let clients = &self.clients;
+
+                if let Some(client) = clients.get(client_name) {
+                    return Ok(client.clone());
+                } else {
+                    let walker = self
+                        .ir()
+                        .find_client(client_name)
+                        .context(format!("Could not find client with name: {}", client_name))?;
+                    let client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
+                    clients.insert(client_name.into(), client.clone());
+                    Ok(client)
+                }
+            }
         }
     }
 
@@ -105,41 +138,48 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
 
     fn orchestration_graph(
         &self,
-        client_name: &str,
+        client_spec: &ClientSpec,
         ctx: &RuntimeContext,
     ) -> Result<Vec<OrchestratorNode>> {
-        let client = self.get_llm_provider(client_name, ctx)?;
-        Ok(client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self))
+        let client = self.get_llm_provider(client_spec, ctx)?;
+        client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self)
     }
 
     fn features(&self) -> IrFeatures {
         WithInternal::features(self)
     }
 
-    fn render_prompt(
+    async fn render_prompt(
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
         params: &BamlMap<String, BamlValue>,
         node_index: Option<usize>,
-    ) -> Result<(RenderedPrompt, OrchestrationScope)> {
+    ) -> Result<(RenderedPrompt, OrchestrationScope, AllowedMetadata)> {
         let func = self.get_function(function_name, ctx)?;
-        let baml_args = self.ir().check_function_params(&func, params, false)?;
+        let baml_args = self.ir().check_function_params(
+            &func,
+            params,
+            ArgCoercer {
+                span_path: None,
+                allow_implicit_cast_to_string: false,
+            },
+        )?;
 
         let renderer = PromptRenderer::from_function(&func, &self.ir(), ctx)?;
-        let client_name = renderer.client_name().to_string();
 
-        let client = self.get_llm_provider(&client_name, ctx)?;
+        let client_spec = renderer.client_spec();
+        let client = self.get_llm_provider(client_spec, ctx)?;
         let mut selected =
-            client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self);
+            client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self)?;
         let node_index = node_index.unwrap_or(0);
 
         if node_index >= selected.len() {
             return Err(anyhow::anyhow!(
-                "Execution Node out of bounds: {} >= {} for client {}",
+                "Execution Node out of bounds (render prompt): {} >= {} for client {}",
                 node_index,
                 selected.len(),
-                client_name
+                client_spec,
             ));
         }
 
@@ -147,7 +187,8 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         return node
             .provider
             .render_prompt(self.ir(), &renderer, ctx, &baml_args)
-            .map(|prompt| (prompt, node.scope));
+            .await
+            .map(|prompt| (prompt, node.scope, node.provider.allowed_metadata().clone()));
     }
 
     async fn render_raw_curl(
@@ -155,31 +196,34 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         function_name: &str,
         ctx: &RuntimeContext,
         prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
         node_index: Option<usize>,
     ) -> Result<String> {
         let func = self.get_function(function_name, ctx)?;
 
         let renderer = PromptRenderer::from_function(&func, &self.ir(), ctx)?;
-        let client_name = renderer.client_name().to_string();
 
-        let client = self.get_llm_provider(&client_name, ctx)?;
+        let client_spec = renderer.client_spec();
+        let client = self.get_llm_provider(client_spec, ctx)?;
         let mut selected =
-            client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self);
+            client.iter_orchestrator(&mut Default::default(), Default::default(), ctx, self)?;
 
         let node_index = node_index.unwrap_or(0);
 
         if node_index >= selected.len() {
             return Err(anyhow::anyhow!(
-                "Execution Node out of bounds: {} >= {} for client {}",
+                "Execution Node out of bounds (raw curl): {} >= {} for client {}",
                 node_index,
                 selected.len(),
-                client_name
+                client_spec,
             ));
         }
 
         let node = selected.swap_remove(node_index);
-        return node.provider.render_raw_curl(ctx, prompt, stream).await;
+        return node
+            .provider
+            .render_raw_curl(ctx, prompt, render_settings)
+            .await;
     }
 
     fn get_function<'ir>(
@@ -227,8 +271,17 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
                     ));
                 }
 
-                let baml_args = self.ir().check_function_params(&func, &params, true)?;
-                Ok(baml_args.as_map_owned().unwrap())
+                let baml_args = self.ir().check_function_params(
+                    &func,
+                    &params,
+                    ArgCoercer {
+                        span_path: test.span().map(|s| s.file.path_buf().clone()),
+                        allow_implicit_cast_to_string: true,
+                    },
+                )?;
+                baml_args
+                    .as_map_owned()
+                    .context("Test params must be a map")
             }
             Err(e) => return Err(anyhow::anyhow!("Unable to resolve test params: {:?}", e)),
         }
@@ -331,11 +384,17 @@ impl RuntimeInterface for InternalBamlRuntime {
         ctx: RuntimeContext,
     ) -> Result<crate::FunctionResult> {
         let func = self.get_function(&function_name, &ctx)?;
-        let baml_args = self.ir().check_function_params(&func, &params, false)?;
+        let baml_args = self.ir().check_function_params(
+            &func,
+            &params,
+            ArgCoercer {
+                span_path: None,
+                allow_implicit_cast_to_string: false,
+            },
+        )?;
 
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
-        let client_name = renderer.client_name().to_string();
-        let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
+        let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
 
         // Now actually execute the code.
         let (history, _) =
@@ -353,14 +412,21 @@ impl RuntimeInterface for InternalBamlRuntime {
         params: &BamlMap<String, BamlValue>,
         tracer: Arc<BamlTracer>,
         ctx: RuntimeContext,
+        #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
     ) -> Result<FunctionResultStream> {
         let func = self.get_function(&function_name, &ctx)?;
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
-        let client_name = renderer.client_name().to_string();
-        let orchestrator = self.orchestration_graph(&client_name, &ctx)?;
+        let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
         let Some(baml_args) = self
             .ir
-            .check_function_params(&func, &params, false)?
+            .check_function_params(
+                &func,
+                &params,
+                ArgCoercer {
+                    span_path: None,
+                    allow_implicit_cast_to_string: false,
+                },
+            )?
             .as_map_owned()
         else {
             anyhow::bail!("Expected parameters to be a map for: {}", function_name);
@@ -372,6 +438,8 @@ impl RuntimeInterface for InternalBamlRuntime {
             orchestrator,
             tracer,
             renderer,
+            #[cfg(not(target_arch = "wasm32"))]
+            tokio_runtime,
         })
     }
 }

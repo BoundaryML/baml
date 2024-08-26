@@ -1,0 +1,41 @@
+<ParamField
+  path="allowed_role_metadata"
+  type="string[]"
+>
+  Which role metadata should we forward to the API? **Default: `[]`**
+
+  For example you can set this to `["cache_control"]` to forward the cache policy to the API.
+
+  If you do not set `allowed_role_metadata`, we will not forward any role metadata to the API even if it is set in the prompt.
+
+  Then in your prompt you can use something like:
+  ```baml
+  client<llm> ClaudeWithCaching {
+    provider anthropic
+    options {
+      model claude-3-haiku-20240307
+      api_key env.ANTHROPIC_API_KEY
+      max_tokens 1000
+      allowed_role_metadata ["cache_control"]
+      headers {
+        "anthropic-beta" "prompt-caching-2024-07-31"
+      }
+    }
+  }
+
+  client<llm> FooWithout {
+    provider anthropic
+    options {
+    }
+  }
+
+  template_string Foo() #"
+    {{ _.role('user', cache_control={"type": "ephemeral"}) }}
+    This will be cached for ClaudeWithCaching, but not for FooWithout!
+    {{ _.role('user') }}
+    This will not be cached for Foo or FooWithout!
+  "#
+  ```
+
+  You can use the playground to see the raw curl request to see what is being sent to the API.
+</ParamField>

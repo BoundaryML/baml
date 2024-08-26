@@ -1,21 +1,23 @@
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
 use internal_baml_core::internal_baml_diagnostics::Diagnostics;
+use internal_baml_core::ir::repr::ClientSpec;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
+use crate::internal::llm_client::AllowedMetadata;
 use crate::tracing::{BamlTracer, TracingSpan};
 use crate::types::on_log_event::LogEventCallbackSync;
-use crate::RuntimeContextManager;
 use crate::{
     internal::{ir_features::IrFeatures, llm_client::retry_policy::CallablePolicy},
     runtime::InternalBamlRuntime,
     types::FunctionResultStream,
     FunctionResult, RuntimeContext,
 };
+use crate::{RenderCurlSettings, RuntimeContextManager};
 
 pub(crate) trait RuntimeConstructor {
     #[cfg(not(target_arch = "wasm32"))]
@@ -43,6 +45,7 @@ pub trait RuntimeInterface {
         params: &BamlMap<String, BamlValue>,
         tracer: Arc<BamlTracer>,
         ctx: RuntimeContext,
+        #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
     ) -> Result<FunctionResultStream>;
 }
 
@@ -96,14 +99,14 @@ pub trait ExperimentalTracingInterface {
     fn drain_stats(&self) -> crate::InnerTraceStats;
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn set_log_event_callback(&self, callback: LogEventCallbackSync) -> Result<()>;
+    fn set_log_event_callback(&self, callback: Option<LogEventCallbackSync>) -> Result<()>;
 }
 
 pub trait InternalClientLookup<'a> {
     // Gets a top-level client/strategy by name
     fn get_llm_provider(
         &'a self,
-        client_name: &str,
+        client_spec: &ClientSpec,
         ctx: &RuntimeContext,
     ) -> Result<Arc<LLMProvider>>;
 
@@ -119,7 +122,7 @@ pub trait InternalRuntimeInterface {
 
     fn orchestration_graph(
         &self,
-        client_name: &str,
+        client_name: &ClientSpec,
         ctx: &RuntimeContext,
     ) -> Result<Vec<OrchestratorNode>>;
 
@@ -129,21 +132,22 @@ pub trait InternalRuntimeInterface {
         ctx: &RuntimeContext,
     ) -> Result<FunctionWalker<'ir>>;
 
-    fn render_prompt(
+    #[allow(async_fn_in_trait)]
+    async fn render_prompt(
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
         params: &BamlMap<String, BamlValue>,
         node_index: Option<usize>,
-    ) -> Result<(RenderedPrompt, OrchestrationScope)>;
+    ) -> Result<(RenderedPrompt, OrchestrationScope, AllowedMetadata)>;
 
-    #[warn(async_fn_in_trait)]
+    #[allow(async_fn_in_trait)]
     async fn render_raw_curl(
         &self,
         function_name: &str,
         ctx: &RuntimeContext,
         prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
         node_index: Option<usize>,
     ) -> Result<String>;
 

@@ -3,7 +3,7 @@ import axios from 'axios'
 import glooLens from './LanguageToBamlCodeLensProvider'
 import { WebPanelView, openPlaygroundConfig } from './panels/WebPanelView'
 import plugins from './plugins'
-import { requestDiagnostics } from './plugins/language-server'
+import { requestBamlCLIVersion, requestDiagnostics } from './plugins/language-server'
 import { telemetry } from './plugins/language-server'
 import cors from 'cors'
 import { createProxyMiddleware } from 'http-proxy-middleware'
@@ -243,10 +243,45 @@ export function activate(context: vscode.ExtensionContext) {
       }
       // sends project files as well to webview
       requestDiagnostics()
+
       openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
       WebPanelView.currentPanel?.postMessage('select_function', {
         root_path: 'default',
         function_name: args?.functionName ?? 'default',
+      })
+
+      console.info('Opening BAML panel')
+    },
+  )
+
+  const bamlTestcaseCommand = vscode.commands.registerCommand(
+    'baml.runBamlTest',
+    (args?: {
+      projectId?: string
+      functionName?: string
+      implName?: string
+      showTests?: boolean
+      testCaseName?: string
+    }) => {
+      WebPanelView.render(context.extensionUri, getPort)
+      if (telemetry) {
+        telemetry.sendTelemetryEvent({
+          event: 'baml.runBamlTest',
+          properties: {},
+        })
+      }
+
+      // sends project files as well to webview
+      requestDiagnostics()
+
+      openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
+      WebPanelView.currentPanel?.postMessage('select_function', {
+        root_path: 'default',
+        function_name: args?.functionName ?? 'default',
+      })
+
+      WebPanelView.currentPanel?.postMessage('run_test', {
+        test_name: args?.testCaseName ?? 'default',
       })
 
       console.info('Opening BAML panel')
@@ -305,6 +340,10 @@ export function activate(context: vscode.ExtensionContext) {
     console.log(`vscode env: ${JSON.stringify(process.env, null, 2)}`)
     vscode.commands.executeCommand('baml.openBamlPanel')
   }
+
+  setInterval(() => {
+    requestBamlCLIVersion()
+  }, 30000)
 
   // TODO: Reactivate linter.
   // runDiagnostics();

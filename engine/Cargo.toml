@@ -6,7 +6,7 @@ members = [
   "baml-fmt",
   "baml-runtime",
   "baml-schema-wasm",
-  "language-client-codegen",
+  "language_client_codegen",
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
@@ -21,10 +21,9 @@ default-members = [
   # and it's OK to not build this by default because we have to build ts separately (this may
   # also have something to do with resolver=2 and how duplicate dep builds are handled)
   # "baml-schema-wasm",
-  "language-client-codegen",
+  "language_client_codegen",
   "language_client_python",
-  # requires ruby to be installed, does not build for <3.1
-  # "language_client_ruby/ext/ruby_ffi",
+  "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
 ]
 
@@ -36,6 +35,7 @@ bytes = "1.6.0"
 cfg-if = "1.0.0"
 dashmap = "5.5.3"
 derive_builder = "0.20.0"
+derive_more = "0.99.18"
 either = "1.8.1"
 env_logger = "0.11.3"
 futures = { version = "0.3.30", features = ["executor"] }
@@ -45,22 +45,24 @@ indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.1"
 regex = "1.10.4"
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 static_assertions = "1.1.0"
 strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = "0.26.2"
 time = { version = "0.3.36", features = ["formatting"] }
 pin-project-lite = "0.2.14"
+url = "2.5.2"
 walkdir = "2.5.0"
 web-time = "1.1.0"
 
 baml-types = { path = "baml-lib/baml-types" }
-internal-baml-codegen = { path = "language-client-codegen" }
+internal-baml-codegen = { path = "language_client_codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja" }
+internal-baml-schema-ast = { path = "baml-lib/schema-ast" }
 
 [workspace.package]
-version = "0.49.0"
+version = "0.53.1"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

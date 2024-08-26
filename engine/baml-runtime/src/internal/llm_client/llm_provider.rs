@@ -77,10 +77,10 @@ impl IterOrchestrator for Arc<LLMProvider> {
         previous: OrchestrationScope,
         ctx: &RuntimeContext,
         client_lookup: &'a dyn InternalClientLookup<'a>,
-    ) -> OrchestratorNodeIterator {
+    ) -> Result<OrchestratorNodeIterator> {
         if let Some(retry_policy) = self.retry_policy_name() {
-            let policy = client_lookup.get_retry_policy(retry_policy, ctx).unwrap();
-            policy
+            let policy = client_lookup.get_retry_policy(retry_policy, ctx)?;
+            Ok(policy
                 .into_iter()
                 .enumerate()
                 .map(move |(idx, node)| {
@@ -88,7 +88,7 @@ impl IterOrchestrator for Arc<LLMProvider> {
                         .clone()
                         .extend(ExecutionScope::Retry(retry_policy.into(), idx, node))
                 })
-                .flat_map(|scope| {
+                .map(|scope| {
                     // repeat the same provider for each retry policy
 
                     // We can pass in empty previous.
@@ -106,23 +106,29 @@ impl IterOrchestrator for Arc<LLMProvider> {
                             client_lookup,
                         ),
                     }
-                    .iter()
-                    .map(move |node| node.prefix(scope.clone()))
-                    .collect::<Vec<_>>()
+                    .map(|nodes| {
+                        nodes
+                            .into_iter()
+                            .map(move |node| node.prefix(scope.clone()))
+                            .collect::<Vec<_>>()
+                    })
                 })
-                .collect::<Vec<_>>()
+                .collect::<Result<Vec<_>>>()?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>())
         } else {
-            match self.as_ref() {
+            Ok(match self.as_ref() {
                 LLMProvider::Primitive(provider) => {
                     provider.iter_orchestrator(state, Default::default(), ctx, client_lookup)
                 }
                 LLMProvider::Strategy(provider) => {
                     provider.iter_orchestrator(state, Default::default(), ctx, client_lookup)
                 }
-            }
-            .iter()
+            }?
+            .into_iter()
             .map(|node| node.prefix(previous.clone()))
-            .collect()
+            .collect())
         }
     }
 }

@@ -47,6 +47,10 @@ class BamlCtxManager {
         this.rt.flush();
     }
     onLogEvent(callback) {
+        if (!callback) {
+            this.rt.setLogEventCallback(undefined);
+            return;
+        }
         this.rt.setLogEventCallback((error, param) => {
             if (!error) {
                 callback(param);

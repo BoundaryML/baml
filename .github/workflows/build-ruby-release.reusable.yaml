@@ -1,0 +1,125 @@
+name: Release engine/language_client_ruby
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-ruby
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        _:
+          - platform: x86_64-linux
+            # This is necessary because rb-sys-dock depends on manylinux2014,
+            # which is based on CentOS 7 which is EOL as of July 2024 Once
+            # rake-compiler-dock switches to manylinux_2_28 and rb-sys-dock
+            # picks that up, we can pick their updates up and then drop this.
+            # See https://github.com/oxidize-rb/rb-sys/issues/402 and
+            # https://github.com/rake-compiler/rake-compiler-dock/issues/122
+            # for more details.
+            rb-sys-dock-setup: ./x86-64_linux-setup.sh
+          - platform: aarch64-linux
+          - platform: x86_64-darwin
+          - platform: arm64-darwin
+          #- x64-mingw-ucrt
+
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine/language_client_ruby
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@main
+        with:
+          rubygems: latest
+          ruby-version: "3.3"
+          bundler-cache: false
+          cargo-cache: false
+          cargo-vendor: false
+
+      #################################################################################################################
+      #
+      #  BEGIN: these steps are copied from https://github.com/oxidize-rb/actions/blob/main/cross-gem/action.yml
+      #
+      #  We can't use oxidize-rb/actions/cross-gem@main directly, unfortunately, because our Ruby FFI lib is a member
+      #  of the top-level workspace, and we need to do stuff to make rb-sys-dock play nice with it
+      #
+      #################################################################################################################
+
+      - name: Configure environment
+        shell: bash
+        id: configure
+        run: |
+          : Configure environment
+          echo "RB_SYS_DOCK_UID=$(id -u)" >> $GITHUB_ENV
+          echo "RB_SYS_DOCK_GID=$(id -g)" >> $GITHUB_ENV
+          rb_sys_version="$((grep rb_sys Gemfile.lock | head -n 1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+') || (gem info rb_sys --remote | grep -oE '[0-9]+\.[0-9]+\.[0-9]+') || echo "latest")"
+          rb_sys_dock_cache_dir="$HOME/.cache/rb-sys-$rb_sys_version"
+          mkdir -p "$rb_sys_dock_cache_dir"
+          echo "RB_SYS_DOCK_CACHE_DIR=$rb_sys_dock_cache_dir" >> $GITHUB_ENV
+          echo "rb_sys_version=$rb_sys_version" >> $GITHUB_OUTPUT
+
+      - name: Setup rb-sys
+        shell: bash
+        run: |
+          version="${{ steps.configure.outputs.rb_sys_version }}"
+          echo "Installing rb_sys@$version"
+
+          if [ "$version" = "latest" ]; then
+            gem install rb_sys
+          else
+            gem install rb_sys -v $version
+          fi
+
+      - name: Build gem
+        shell: bash
+        working-directory: engine
+        run: |
+          : Compile gem
+          echo "Docker Working Directory: $(pwd)"
+          set -x
+
+          # Unfortunately we can't actually parallelize the Ruby versions
+          # because they get bundled into the same gem
+          rb-sys-dock \
+            --platform ${{ matrix._.platform }} \
+            --mount-toolchains \
+            --directory language_client_ruby \
+            --ruby-versions 3.3,3.2,3.1 \
+            --build \
+            -- ${{ matrix._.rb-sys-dock-setup }}
+          
+      - name: Show built gem
+        shell: bash
+        run: find pkg -name '*.gem'
+
+      #################################################################################################################
+      #
+      #  END: these steps are copied from https://github.com/oxidize-rb/actions/blob/main/cross-gem/action.yml
+      #
+      #  We can't use oxidize-rb/actions/cross-gem@main directly, unfortunately, because our Ruby FFI lib is a member
+      #  of the top-level workspace, and we need to do stuff to make rb-sys-dock play nice with it
+      #
+      #################################################################################################################
+
+      - name: Upload Ruby artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-${{ matrix._.platform }}
+          path: engine/language_client_ruby/pkg/*.gem
+          if-no-files-found: error
+
+      # - run: |
+      #     for i in $(ls pkg/*.gem); do
+      #       gem push $i
+      #     done

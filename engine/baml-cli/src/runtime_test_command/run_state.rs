@@ -10,9 +10,7 @@ use tokio::{
     task,
 };
 
-use baml_runtime::{
-    BamlRuntime, InternalRuntimeInterface, RuntimeContextManager, TestResponse,
-};
+use baml_runtime::{BamlRuntime, InternalRuntimeInterface, RuntimeContextManager, TestResponse};
 
 use super::filter::FilterArgs;
 
@@ -328,7 +326,13 @@ impl TestCommand {
             let sem_clone = semaphore.clone();
 
             let state_clone = locked_state.clone();
-            let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()));
+            let ctx = runtime.create_ctx_manager(
+                BamlValue::String("test".to_string()),
+                Some(Box::new(|path| {
+                    let path = path.to_string();
+                    Box::pin(async move { Ok(std::fs::read(path)?) })
+                })),
+            );
             let handle = self.test_handler(sem_clone, &test, state_clone, &ctx, bars.clone());
 
             handles.push(handle);

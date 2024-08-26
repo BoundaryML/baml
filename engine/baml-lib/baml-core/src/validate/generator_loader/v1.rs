@@ -58,7 +58,7 @@ fn parse_optional_key<'a>(
 }
 
 pub(crate) fn parse_generator(
-    ast_generator: &ast::GeneratorConfig,
+    ast_generator: &ast::ValueExprBlock,
     baml_src: &PathBuf,
 ) -> Result<Generator, Vec<DatamodelError>> {
     let generator_name = ast_generator.name();
@@ -73,14 +73,14 @@ pub(crate) fn parse_generator(
     let args = ast_generator
         .fields()
         .iter()
-        .map(|arg| match &arg.value {
+        .map(|arg| match &arg.expr {
             Some(expr) => {
                 if FIRST_CLASS_PROPERTIES.iter().any(|k| *k == arg.name()) {
                     Ok((arg.name(), expr))
                 } else {
                     Err(DatamodelError::new_property_not_known_error(
                         arg.name(),
-                        arg.span.clone(),
+                        arg.span().clone(),
                         FIRST_CLASS_PROPERTIES.to_vec(),
                     ))
                 }
@@ -163,8 +163,9 @@ pub(crate) fn parse_generator(
     }
 
     builder.build().map_err(|e| {
-        vec![DatamodelError::new_internal_error(
-            anyhow::Error::from(e).context("Internal error while parsing generator (v1 syntax)"),
+        vec![DatamodelError::new_anyhow_error(
+            anyhow::Error::from(e)
+                .context("Internal error while parsing generator (legacy v1 syntax)"),
             ast_generator.span().clone(),
         )]
     })

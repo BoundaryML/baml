@@ -67,11 +67,21 @@ impl<T> Default for RenderSetting<T> {
     }
 }
 
-pub struct RenderOptions {
+#[derive(strum::EnumString, strum::VariantNames)]
+pub(crate) enum MapStyle {
+    #[strum(serialize = "angle")]
+    TypeParameters,
+
+    #[strum(serialize = "object")]
+    ObjectLiteral,
+}
+
+pub(crate) struct RenderOptions {
     prefix: RenderSetting<String>,
-    pub or_splitter: String,
+    pub(crate) or_splitter: String,
     enum_value_prefix: RenderSetting<String>,
     always_hoist_enums: RenderSetting<bool>,
+    map_style: MapStyle,
 }
 
 impl Default for RenderOptions {
@@ -81,16 +91,18 @@ impl Default for RenderOptions {
             or_splitter: " or ".to_string(),
             enum_value_prefix: RenderSetting::Auto,
             always_hoist_enums: RenderSetting::Auto,
+            map_style: MapStyle::TypeParameters,
         }
     }
 }
 
 impl RenderOptions {
-    pub fn new(
+    pub(crate) fn new(
         prefix: Option<Option<String>>,
         or_splitter: Option<String>,
         enum_value_prefix: Option<Option<String>>,
         always_hoist_enums: Option<bool>,
+        map_style: Option<MapStyle>,
     ) -> Self {
         Self {
             prefix: prefix.map_or(RenderSetting::Auto, |p| {
@@ -102,6 +114,7 @@ impl RenderOptions {
             }),
             always_hoist_enums: always_hoist_enums
                 .map_or(RenderSetting::Auto, RenderSetting::Always),
+            map_style: map_style.unwrap_or(MapStyle::TypeParameters),
         }
     }
 }
@@ -172,6 +185,21 @@ impl std::fmt::Display for ClassRender {
             )?;
         }
         write!(f, "}}")
+    }
+}
+
+struct MapRender<'s> {
+    style: &'s MapStyle,
+    key_type: String,
+    value_type: String,
+}
+
+impl<'s> std::fmt::Display for MapRender<'s> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.style {
+            MapStyle::TypeParameters => write!(f, "map<{}, {}>", self.key_type, self.value_type),
+            MapStyle::ObjectLiteral => write!(f, "{{{}: {}}}", self.key_type, self.value_type),
+        }
     }
 }
 
@@ -246,16 +274,10 @@ impl OutputFormatContent {
                 TypeValue::Float => "float".to_string(),
                 TypeValue::Bool => "bool".to_string(),
                 TypeValue::Null => "null".to_string(),
-                TypeValue::Image => {
+                TypeValue::Media(media_type) => {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
-                        "Image type is not supported in outputs",
-                    ))
-                }
-                TypeValue::Audio => {
-                    return Err(minijinja::Error::new(
-                        minijinja::ErrorKind::BadSerialization,
-                        "Audio type is not supported in outputs",
+                        format!("type '{media_type}' is not supported in outputs"),
                     ))
                 }
             },
@@ -346,16 +368,19 @@ impl OutputFormatContent {
                     "Tuple type is not supported in outputs",
                 ))
             }
-            FieldType::Map(_, _) => {
-                return Err(minijinja::Error::new(
-                    minijinja::ErrorKind::BadSerialization,
-                    "Map type is not supported in outputs",
-                ))
+            FieldType::Map(key_type, value_type) => MapRender {
+                style: &options.map_style,
+                key_type: self.inner_type_render(options, key_type, render_state, false)?,
+                value_type: self.inner_type_render(options, value_type, render_state, false)?,
             }
+            .to_string(),
         })
     }
 
-    pub fn render(&self, options: RenderOptions) -> Result<Option<String>, minijinja::Error> {
+    pub(crate) fn render(
+        &self,
+        options: RenderOptions,
+    ) -> Result<Option<String>, minijinja::Error> {
         let prefix = self.prefix(&options);
 
         let mut render_state = RenderState {

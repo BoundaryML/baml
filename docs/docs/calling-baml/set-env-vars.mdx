@@ -1,6 +1,8 @@
 ---
-title: "Set Environment Variables"
+title: Set Environment Variables
+slug: docs/calling-baml/set-env-vars
 ---
+
 
 
 The generated BAML client will capture all environment variables when you import it,
@@ -15,6 +17,7 @@ Any of the following strategies are compatible with BAML:
   - load environment variables from secrets-store.csi.k8s.io
   - load environment variables from a secrets provider such as [Infisical](https://infisical.com/) / [Doppler](https://www.doppler.com/)
   - dotenv (`.env` file) cli (e.g. `dotenv -e .env python myscript.py`)
+  - using account credentials for ephemeral token generation (e.g. Vertex AI Auth Tokens)
 
 <Tip>If BAML doesn't work for your use case, please [contact us]!</Tip>
 
@@ -24,7 +27,7 @@ Any of the following strategies are compatible with BAML:
 If you do anything to load environment variables in-process - e.g. using a
 `.env` file - make sure to do it before importing the BAML client.
 
-<CodeGroup>
+<CodeBlocks>
 
 ```python Python
 import dotenv
@@ -50,7 +53,7 @@ require 'baml_client'
 ```
 
 
-</CodeGroup>
+</CodeBlocks>
 
 
 ## Environment Variables in BAML
@@ -58,7 +61,7 @@ require 'baml_client'
 Environment variables are primarily used in clients to propagate authorization
 credentials, such as API keys, like so:
 
-```rust
+```baml
 
 client<llm> GPT4o {
   provider baml-openai-chat
@@ -72,7 +75,6 @@ client<llm> GPT4o {
 We do not currently support any other mechanisms for providing authorization
 credentials, including but not limited to:
 
-  - exchanging refresh tokens for ephemeral authorization tokens
   - fetching credentials from a secret storage service, such as AWS Secrets
     Manager or HashiCorp Vault
 

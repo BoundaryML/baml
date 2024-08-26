@@ -1,0 +1,81 @@
+---
+title: SSRF Issue in fiddle-proxy (July 2024)
+image: https://mintlify.s3-us-west-1.amazonaws.com/gloo/images/v3/AITeam.png
+slug: docs/incidents/2024-07-10-ssrf-issue-in-fiddle-proxy
+---
+
+
+# Overview
+
+For 26 days, attackers could exfiltrate BoundaryML’s API keys for OpenAI ChatGPT, Anthropic, and Google Gemini from the promptfiddle.com backends.
+
+## Impact
+
+None: there was no customer impact.
+
+### Severity
+
+Low: the API keys in question are purpose-specific, spend-capped, and not used for any customer operations.
+
+## What Happened
+
+[promptfiddle.com](https://promptfiddle.com) is a BAML playground which we operate to give new users the ability to try out BAML with zero friction. To enable this, all BAML requests from promptfiddle.com are proxied through [https://fiddle-proxy.fly.dev](https://fiddle-proxy.fly.dev/), which will attach BoundaryML-owned API keys to requests to OpenAI, Anthropic, and Google Gemini so that new users are not required to provide their own API keys.
+
+Unfortunately, the check that `fiddle-proxy` used to determine whether a request was bound for OpenAI, Anthropic, or Google Gemini, was insufficiently specific; the logic looked something like this:
+
+```jsx
+if (req.headers['baml-original-url'].includes('openai.com')) {
+  req.setHeader('Authorization', `Bearer ${process.env.OPENAI_API_KEY}`)
+}
+```
+
+This meant that `fiddle-proxy` would inject BoundaryML’s API key not only into proxied requests for `https://api.openai.com/`, but also into proxied requests for, say `https://attacker.domain/openai.com` .
+
+Since BAML allows users to override the `base_url` of any client, this meant that attackers could point `base_url` at an attacker-controlled server, and by including `openai.com` in the `base_url`, could exfiltrate the OpenAI keys used for promptfiddle.com.
+
+## Contributing Factors
+
+The API keys backing promptfiddle.com are not sensitive:
+
+- there is no sensitive data on promptfiddle.com, nor are there authentication or authorization controls for anything hosted on promptfiddle.com;
+- the OpenAI, Anthropic, and Google Gemini API keys used in `fiddle-proxy` are purpose-specific, provisioned solely for the use of promptfiddle.com, and spend-capped at a low threshold.
+
+When promptfiddle.com was originally designed, the risk of key exfiltration was explicitly discussed, and we identified a number of mitigation strategies and threat models:
+
+- running static analysis of the BAML files submitted by the user to the backend (at the time, BAML files were compiled and executed in the backend, not the frontend) to reject requests referencing non-default `client` definitions
+- promptfiddle.com explicitly does *not* allow users to run arbitrary Python or TypeScript code, because this would create a much larger threat surface
+- the impact of having these API keys be compromised is low: at worst, BoundaryML spends $budget_cap and promptfiddle.com would be in a degraded state- users would have to provide their own API keys to execute BAML code
+
+## Resolution
+
+`fiddle-proxy` has been updated (see [BoundaryML/baml#773](https://github.com/BoundaryML/baml/pull/773)) to attach API keys only to proxied requests where `URL().origin` must exactly match one of the following
+
+- `https://api.openai.com`
+- `https://api.anthropic.com`
+- `https://generativelanguage.googleapis.com`
+
+(We do not do a strict `href` match, because some providers - e.g. Gemini - rely on encoding request parameters in the URL; and checking against the proxied `origin` is sufficient to defend against, say, `base_url=https://api.openai.com.attacker.domain` .)
+
+API keys have also been rotated.
+
+## Lessons Learned
+
+### What went well?
+
+Our threat model held up: these API keys are not considered to be high risk, and the mitigations we have in place (purpose-specific API keys ensure that `fiddle-proxy` abides by principle of lease privilege; spend caps guarantee that even if an attacker spammed `fiddle-proxy` with their own traffic, impact to BoundaryML operations would be negligible).
+
+We also were able to verify our detection capabilities: traffic logs for `fiddle-proxy` show that beyond the user who identified this SSRF, no other user has identified this issue.
+
+### What could we have done better?
+
+Only one engineer had previously deployed `fiddle-proxy` and was unavailable when the notification came in; it took some time for the rest of us to get up to speed and deploy the changes once we had reproduced and implemented a mitigation.
+
+## Timeline
+
+Jun 14 11:16am PDT (18:16 UTC) - vulnerable `fiddle-proxy` deployed
+
+Jul 10 5:52pm PDT (00:52 UTC) - user notified BoundaryML of the SSRF vulnerability, with repro included
+
+Jul 10 5:56pm PDT (00:56 UTC) - work starts on reproduction and mitigation
+
+Jul 10 7:17pm PDT (02:17 UTC) - mitigation deployed and verified

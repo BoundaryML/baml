@@ -1,13 +1,13 @@
 ---
 title: anthropic
+slug: docs/snippets/clients/providers/anthropic
 ---
+
 
 The `anthropic` provider supports all APIs that use the same interface for the `/v1/messages` endpoint.
 
-<Tip>For `ollama` ([Docs](ollama)) or `azure` ([Docs](azure)) we recommend using the respective provider instead as there are more checks.</Tip>
-
 Example:
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider anthropic
   options {
@@ -54,7 +54,7 @@ The options are passed through directly to the API, barring a few. Here's a shor
   ```
 
 Example:
-```rust
+```baml
 client<llm> MyClient {
   provider anthropic
   options {
@@ -67,6 +67,8 @@ client<llm> MyClient {
 }
 ```
 </ParamField>
+
+<Markdown src="../../../../snippets/allowed-role-metadata.mdx" />
 
 ## Forwarded options
 <ParamField
@@ -97,12 +99,12 @@ client<llm> MyClient {
 >
   The model to use.
 
-| Model | Description |
-| --- | --- |
-| `claude-3-5-sonnet-20240620` |  |
-| `claude-3-opus-20240229` |  |
-| `claude-3-sonnet-20240229` |  |
-| `claude-3-haiku-20240307` |  |
+| Model |
+| --- |
+| `claude-3-5-sonnet-20240620` |  
+| `claude-3-opus-20240229` |  
+| `claude-3-sonnet-20240229` |  
+| `claude-3-haiku-20240307` |  
 
 <img src="https://mintlify.s3-us-west-1.amazonaws.com/anthropic/images/3-5-sonnet-curve.png" />
 

@@ -18,11 +18,15 @@ pub(crate) fn parse_arguments_list(
         match current.as_rule() {
             // At the top level only unnamed args are supported.
             // For multiple args, pass in a dictionary.
-            Rule::expression => arguments.arguments.push(ast::Argument {
-                value: parse_expression(current, diagnostics),
-                span: diagnostics.span(current_span),
-            }),
-            _ => parsing_catch_all(&current, "attribute arguments"),
+            Rule::expression => {
+                if let Some(parsed_value) = parse_expression(current, diagnostics) {
+                    arguments.arguments.push(ast::Argument {
+                        value: parsed_value,
+                        span: diagnostics.span(current_span),
+                    });
+                }
+            }
+            _ => parsing_catch_all(current, "attribute arguments"),
         }
     }
 }

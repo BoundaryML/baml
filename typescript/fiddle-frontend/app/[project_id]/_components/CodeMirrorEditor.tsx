@@ -121,6 +121,7 @@ function makeLinter() {
               message: err.message,
               severity: err.type === 'warning' ? 'warning' : 'error',
               source: 'baml',
+              markClass: err.type === 'error' ? 'decoration-wavy decoration-red-500 text-red-450 stroke-blue-500' : '',
             }
           }) ?? []
       )
@@ -166,7 +167,6 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
   useEffect(() => {
     const func = availableFunctions.find((f) => f.span.file_path === activeFile)
     if (func) {
-      console.log('setting selected function', func.name)
       setSelectedFunction(func.name)
     }
   }, [JSON.stringify(editorFiles.map((f) => f.path)), activeFile, availableFunctions])
@@ -236,9 +236,9 @@ export const CodeMirrorEditor = ({ project }: { project: BAMLProject }) => {
             setUnsavedChanges(true)
           }}
         />
-        <div className='absolute bottom-4 right-2 h-[20px] p-2'>
+        <div className='absolute bottom-3 pl-8  inset-x-0 right-[10px] h-[20px] p-2'>
           {numErrors.errors > 0 && (
-            <div className='p-1 text-xs text-white bg-red-500 rounded-md'>
+            <div className='w-full p-1 px-5 text-xs text-white bg-red-500 rounded-md'>
               {numErrors.errors} {numErrors.errors === 1 ? 'error' : 'errors'}
             </div>
           )}

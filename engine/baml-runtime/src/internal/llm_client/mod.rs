@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+use base64::write;
 use colored::*;
 pub mod llm_provider;
 pub mod orchestrator;
@@ -12,8 +13,9 @@ pub mod traits;
 use anyhow::Result;
 
 use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::RenderedPrompt;
-use serde::Serialize;
+use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage, RenderedPrompt};
+use serde::{Deserialize, Serialize};
+use serde_json::Map;
 use std::error::Error;
 
 use reqwest::StatusCode;
@@ -21,12 +23,58 @@ use reqwest::StatusCode;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
+pub enum ResolveMediaUrls {
+    // there are 5 input formats:
+    // - file
+    // - url_with_mime
+    // - url_no_mime
+    // - b64_with_mime
+    // - b64_no_mime
+
+    // there are 5 possible output formats:
+    // - url_with_mime: vertex
+    // - url_no_mime: openai
+    // - b64_with_mime: everyone (aws, anthropic, google, openai, vertex)
+    // - b64_no_mime: no one
+
+    // aws: supports b64 w mime
+    // anthropic: supports b64 w mime
+    // google: supports b64 w mime
+    // openai: supports URLs w/o mime (b64 data URLs also work here)
+    // vertex: supports URLs w/ mime, b64 w/ mime
+    Always,
+    EnsureMime,
+    Never,
+}
+
+#[derive(Clone)]
 pub struct ModelFeatures {
     pub completion: bool,
     pub chat: bool,
     pub anthropic_system_constraints: bool,
-    pub resolve_media_urls: bool,
+    pub resolve_media_urls: ResolveMediaUrls,
+    pub allowed_metadata: AllowedMetadata,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AllowedMetadata {
+    #[serde(rename = "all")]
+    All,
+    #[serde(rename = "none")]
+    None,
+    Only(HashSet<String>),
+}
+
+impl AllowedMetadata {
+    pub fn is_allowed(&self, key: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::None => false,
+            Self::Only(allowed) => allowed.contains(&key.to_string()),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -157,10 +205,11 @@ impl std::fmt::Display for LLMCompleteResponse {
             f,
             "{}",
             format!(
-                "Client: {} ({}) - {}ms",
+                "Client: {} ({}) - {}ms. StopReason: {}",
                 self.client,
                 self.model,
-                self.latency.as_millis()
+                self.latency.as_millis(),
+                self.metadata.finish_reason.as_deref().unwrap_or("unknown")
             )
             .yellow()
         )?;

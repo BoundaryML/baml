@@ -1,9 +1,15 @@
+---
+slug: docs/calling-baml/multi-modal
+---
+
 
 ## Multi-modal input
 
 ### Images 
-Calling a BAML function with an `image` input argument type (see [image types](/docs/snippets/supported-types))
-<CodeGroup>
+Calling a BAML function with an `image` input argument type (see [image types](../snippets/supported-types.mdx)).
+
+The `from_url` and `from_base64` methods create an `Image` object based on input type.
+<CodeBlocks>
 ```python Python
 from baml_py import Image
 from baml_client import b
@@ -45,12 +51,12 @@ import { Image } from "@boundaryml/baml"
 we're working on it!
 ```
 
-</CodeGroup>
+</CodeBlocks>
  
 ### Audio
-Calling functions that have `audio` types. See [audio types](/docs/snippets/supported-types)
+Calling functions that have `audio` types. See [audio types](../snippets/supported-types.mdx)
 
-<CodeGroup>
+<CodeBlocks>
 ```python Python
 from baml_py import Audio
 from baml_client import b
@@ -91,4 +97,4 @@ import { Audio } from "@boundaryml/baml"
 ```ruby Ruby (beta)
 we're working on it!
 ```
-</CodeGroup>
+</CodeBlocks>

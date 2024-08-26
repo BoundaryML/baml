@@ -1,11 +1,19 @@
+#!/bin/bash
 set -x
 set -e
+
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y
 export PATH="/vercel/.cargo/bin:$PATH"
 
 source $HOME/.cargo/env
 
 which cargo
+# clang --version
+#llvm-config --version
+# g++ --version
+
+dnf install -y llvm
+dnf install -y clang
 
 cd ../../engine/baml-schema-wasm
 export OPENSSL_NO_VENDOR=1

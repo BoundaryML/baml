@@ -10,16 +10,16 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-baml-runtime = { path = "../../../baml-runtime", features = [] }
+baml-runtime = { path = "../../../baml-runtime", features = ["internal"] }
 baml-types.workspace = true
 base64.workspace = true
 env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 log.workspace = true
-magnus = { version = "0.6.4", default = false, features = ["rb-sys"] }
+magnus = { version = "0.7.1", features = ["rb-sys"] }
 # Must be kept in sync with ../../Gemfile
-rb-sys = { version = "0.9.97", features = [
+rb-sys = { version = "0.9.99", features = [
   "global-allocator",
   "bindgen-rbimpls",
   "bindgen-deprecated-types",
@@ -28,8 +28,12 @@ rb-sys = { version = "0.9.97", features = [
 ] }
 serde.workspace = true
 serde_json.workspace = true
-serde_magnus = "0.8.1"
+serde_magnus = { git = "https://github.com/BoundaryML/serde-magnus.git", branch = "sam/magnus-0.7.1" }
 tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies.magnus]
+version = "0.7.1"
+features = ["rb-sys", "embed"]
 
 [build-dependencies]
 rb-sys-env = { version = "0.1" }

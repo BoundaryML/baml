@@ -46,10 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.0.6
-          run_install: false
+      - uses: jdx/mise-action@v2
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -81,6 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable

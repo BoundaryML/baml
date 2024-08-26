@@ -25,14 +25,22 @@ const activeFileNameAtomRaw = atomWithStorage<string | null>('active_file', null
 export const activeFileNameAtom = atom(
   (get) => {
     const files = get(currentEditorFilesAtom)
-    // hack to get default file selection for now..
-    const activeFileName = get(activeFileNameAtomRaw) ?? 'baml_src/01-extract-receipt.baml'
-    const selectedFile = files.find((f) => f.path === activeFileName) ?? files[0]
+    let activeFileName = get(activeFileNameAtomRaw)
+    // Validate the current active file or determine a new one
+    if (!activeFileName || !files.some((f) => f.path === activeFileName)) {
+      const defaultFile = 'baml_src/01-extract-receipt.baml'
+      const excludeFile = 'baml_src/clients.baml'
+      const alternativeFiles = files.filter((f) => f.path !== excludeFile).sort((a, b) => a.path.localeCompare(b.path))
 
-    if (selectedFile) {
-      return selectedFile.path
+      // 1. Default file if available
+      // 2. First non-excluded file, sorted alphabetically
+      // 3. First file in the list as a last resort
+      activeFileName = files.find((f) => f.path === defaultFile)?.path || alternativeFiles[0]?.path || files[0]?.path
     }
-    return null
+
+    // Find and return the selected file path or null if none are valid
+    const selectedFile = files.find((f) => f.path === activeFileName)
+    return selectedFile ? selectedFile.path : null
   },
   (get, set, path: string) => {
     const files = get(currentEditorFilesAtom)

@@ -1,3 +1,5 @@
+use internal_baml_schema_ast::ast::{FieldType, ValueExprBlockType};
+
 use crate::{
     ast::{self, WithIdentifier, WithName},
     DatamodelError, Diagnostics,
@@ -8,46 +10,42 @@ pub(crate) fn validate_attribute_name(ast_attr: &ast::Attribute, diagnostics: &m
 }
 
 pub(crate) fn validate_generator_name(
-    ast_gen: &ast::GeneratorConfig,
+    ast_gen: &ast::ValueExprBlock,
     diagnostics: &mut Diagnostics,
 ) {
     validate_name("generator", ast_gen.identifier(), diagnostics, false);
 }
 
-pub(crate) fn validate_client_name(ast_client: &ast::Client, diagnostics: &mut Diagnostics) {
+pub(crate) fn validate_client_name(
+    ast_client: &ast::ValueExprBlock,
+    diagnostics: &mut Diagnostics,
+) {
     validate_name("client", ast_client.identifier(), diagnostics, true);
 }
 
-pub(crate) fn validate_config_name(ast_config: &ast::Configuration, diagnostics: &mut Diagnostics) {
-    match ast_config {
-        ast::Configuration::TestCase(_) => {
-            validate_name(
-                ast_config.get_type(),
-                ast_config.identifier(),
-                diagnostics,
-                false,
-            );
-        }
-        _ => validate_name(
-            ast_config.get_type(),
-            ast_config.identifier(),
-            diagnostics,
-            // Test cases don't need to be upper case.
-            true,
-        ),
-    }
+pub(crate) fn validate_test(ast_config: &ast::ValueExprBlock, diagnostics: &mut Diagnostics) {
+    validate_name("test", ast_config.identifier(), diagnostics, false);
 }
 
-pub(crate) fn validate_variant_name(ast_variant: &ast::Variant, diagnostics: &mut Diagnostics) {
-    validate_name("impl", ast_variant.identifier(), diagnostics, false);
+pub(crate) fn validate_retry(ast_config: &ast::ValueExprBlock, diagnostics: &mut Diagnostics) {
+    validate_name(
+        "retry",
+        ast_config.identifier(),
+        diagnostics,
+        // Test cases don't need to be upper case.
+        true,
+    )
 }
 
-pub(crate) fn validate_class_name(ast_class: &ast::Class, diagnostics: &mut Diagnostics) {
+pub(crate) fn validate_class_name(
+    ast_class: &ast::TypeExpressionBlock,
+    diagnostics: &mut Diagnostics,
+) {
     validate_name("class", ast_class.identifier(), diagnostics, true);
 }
 
-pub(crate) fn validate_class_fiel_name(
-    ast_class_field: &ast::Field,
+pub(crate) fn validate_class_field_name<T>(
+    ast_class_field: &ast::Field<T>,
     diagnostics: &mut Diagnostics,
 ) {
     validate_name(
@@ -70,19 +68,25 @@ pub(crate) fn validate_template_string_name(
     );
 }
 
-pub(crate) fn validate_function_name(ast_func: &ast::Function, diagnostics: &mut Diagnostics) {
+pub(crate) fn validate_function_name(
+    ast_func: &ast::ValueExprBlock,
+    diagnostics: &mut Diagnostics,
+) {
     validate_name("function", ast_func.identifier(), diagnostics, true);
 }
 
-pub(crate) fn validate_enum_name(ast_enum: &ast::Enum, diagnostics: &mut Diagnostics) {
+pub(crate) fn validate_enum_name(
+    ast_enum: &ast::TypeExpressionBlock,
+    diagnostics: &mut Diagnostics,
+) {
     validate_name("enum", ast_enum.identifier(), diagnostics, true);
-    ast_enum.iter_values().for_each(|(_, val)| {
+    ast_enum.iter_fields().for_each(|(_, val)| {
         validate_name("enum value", val.identifier(), diagnostics, true);
     })
 }
 
 pub(crate) fn validate_enum_value_name(
-    ast_enum_value: &ast::EnumValue,
+    ast_enum_value: &ast::Field<FieldType>,
     diagnostics: &mut Diagnostics,
 ) {
     validate_name("enum value", ast_enum_value.identifier(), diagnostics, true);
@@ -105,11 +109,7 @@ fn validate_name(
             "Namespace imports (using '.') are not yet supported.",
             span.clone(),
         )),
-        ast::Identifier::Primitive(_t, span) => Err(DatamodelError::new_name_error(
-            _type,
-            &format!("{} is a primitive type.", idn.name()),
-            span.clone(),
-        )),
+
         ast::Identifier::Invalid(_, span) | ast::Identifier::String(_, span) => {
             Err(DatamodelError::new_name_error(
                 _type,

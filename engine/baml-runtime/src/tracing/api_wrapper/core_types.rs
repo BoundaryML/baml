@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -149,14 +149,20 @@ pub(crate) struct LLMChat {
 pub enum ContentPart {
     #[serde(rename = "text")]
     Text(String),
+    #[serde(rename = "file_image")]
+    FileImage(String, String),
     #[serde(rename = "url_image")]
     UrlImage(String),
     #[serde(rename = "b64_image")]
     B64Image(String),
+    #[serde(rename = "file_audio")]
+    FileAudio(String, String),
     #[serde(rename = "url_audio")]
     UrlAudio(String),
     #[serde(rename = "b64_audio")]
     B64Audio(String),
+    #[serde(rename = "with_meta")]
+    WithMeta(Box<ContentPart>, HashMap<String, Value>),
 }
 
 #[derive(Serialize, Debug, Deserialize, Clone)]

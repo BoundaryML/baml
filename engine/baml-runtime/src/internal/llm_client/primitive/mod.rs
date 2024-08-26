@@ -6,12 +6,12 @@ use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 
 use crate::{
     client_registry::ClientProperty, internal::prompt_renderer::PromptRenderer,
-    runtime_interface::InternalClientLookup, RuntimeContext,
+    runtime_interface::InternalClientLookup, RenderCurlSettings, RuntimeContext,
 };
 
 use self::{
-    anthropic::AnthropicClient, aws::AwsClient, google::GoogleClient, openai::OpenAIClient,
-    request::RequestBuilder,
+    anthropic::AnthropicClient, aws::AwsClient, google::GoogleAIClient, openai::OpenAIClient,
+    request::RequestBuilder, vertex::VertexClient,
 };
 
 use super::{
@@ -20,8 +20,8 @@ use super::{
         OrchestratorNodeIterator,
     },
     traits::{
-        WithClient, WithPrompt, WithRenderRawCurl, WithRetryPolicy, WithSingleCallable,
-        WithStreamable,
+        WithClient, WithClientProperties, WithPrompt, WithRenderRawCurl, WithRetryPolicy,
+        WithSingleCallable, WithStreamable,
     },
     LLMResponse,
 };
@@ -31,6 +31,7 @@ mod aws;
 mod google;
 mod openai;
 pub(super) mod request;
+mod vertex;
 
 // use crate::internal::llm_client::traits::ambassador_impl_WithRenderRawCurl;
 // use crate::internal::llm_client::traits::ambassador_impl_WithRetryPolicy;
@@ -40,16 +41,19 @@ use enum_dispatch::enum_dispatch;
 pub enum LLMPrimitive2 {
     OpenAIClient,
     AnthropicClient,
-    GoogleClient,
+    GoogleAIClient,
+    VertexClient,
     AwsClient,
 }
 
 // #[derive(Delegate)]
 // #[delegate(WithRetryPolicy, WithRenderRawCurl)]
+#[derive(derive_more::From)]
 pub enum LLMPrimitiveProvider {
     OpenAI(OpenAIClient),
     Anthropic(AnthropicClient),
-    Google(GoogleClient),
+    Google(GoogleAIClient),
+    Vertex(VertexClient),
     Aws(aws::AwsClient),
 }
 
@@ -61,6 +65,7 @@ macro_rules! match_llm_provider {
             LLMPrimitiveProvider::Anthropic(client) => client.$method($($args),*).await,
             LLMPrimitiveProvider::Google(client) => client.$method($($args),*).await,
             LLMPrimitiveProvider::Aws(client) => client.$method($($args),*).await,
+            LLMPrimitiveProvider::Vertex(client) => client.$method($($args),*).await,
         }
     };
 
@@ -70,6 +75,7 @@ macro_rules! match_llm_provider {
             LLMPrimitiveProvider::Anthropic(client) => client.$method($($args),*),
             LLMPrimitiveProvider::Google(client) => client.$method($($args),*),
             LLMPrimitiveProvider::Aws(client) => client.$method($($args),*),
+            LLMPrimitiveProvider::Vertex(client) => client.$method($($args),*),
         }
     };
 }
@@ -80,29 +86,36 @@ impl WithRetryPolicy for LLMPrimitiveProvider {
     }
 }
 
+impl WithClientProperties for LLMPrimitiveProvider {
+    fn client_properties(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        match_llm_provider!(self, client_properties)
+    }
+    fn allowed_metadata(&self) -> &super::AllowedMetadata {
+        match_llm_provider!(self, allowed_metadata)
+    }
+}
+
 impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
     type Error = anyhow::Error;
 
     fn try_from((value, ctx): (&ClientProperty, &RuntimeContext)) -> Result<Self> {
         match value.provider.as_str() {
-            "openai" => OpenAIClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::OpenAI),
-            "azure-openai" => {
-                OpenAIClient::dynamic_new_azure(value, ctx).map(LLMPrimitiveProvider::OpenAI)
-            }
-            "ollama" => {
-                OpenAIClient::dynamic_new_ollama(value, ctx).map(LLMPrimitiveProvider::OpenAI)
-            }
-            "anthropic" => {
-                AnthropicClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Anthropic)
-            }
-            "google-ai" => GoogleClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Google),
+            "openai" => OpenAIClient::dynamic_new(value, ctx).map(Into::into),
+            "openai-generic" => OpenAIClient::dynamic_new_generic(value, ctx).map(Into::into),
+            "azure-openai" => OpenAIClient::dynamic_new_azure(value, ctx).map(Into::into),
+            "ollama" => OpenAIClient::dynamic_new_ollama(value, ctx).map(Into::into),
+            "anthropic" => AnthropicClient::dynamic_new(value, ctx).map(Into::into),
+            "google-ai" => GoogleAIClient::dynamic_new(value, ctx).map(Into::into),
+            "vertex-ai" => VertexClient::dynamic_new(value, ctx).map(Into::into),
+            // dynamic_new is not implemented for aws::AwsClient
             other => {
                 let options = [
-                    "openai",
                     "anthropic",
-                    "ollama",
-                    "google-ai",
                     "azure-openai",
+                    "google-ai",
+                    "openai",
+                    "openai-generic",
+                    "vertex-ai",
                     "fallback",
                     "round-robin",
                 ];
@@ -121,30 +134,29 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
 
     fn try_from((client, ctx): (&ClientWalker, &RuntimeContext)) -> Result<Self> {
         match client.elem().provider.as_str() {
-            "baml-openai-chat" | "openai" => {
-                OpenAIClient::new(client, ctx).map(LLMPrimitiveProvider::OpenAI)
-            }
+            "baml-openai-chat" | "openai" => OpenAIClient::new(client, ctx).map(Into::into),
+            "openai-generic" => OpenAIClient::new_generic(client, ctx).map(Into::into),
             "baml-azure-chat" | "azure-openai" => {
-                OpenAIClient::new_azure(client, ctx).map(LLMPrimitiveProvider::OpenAI)
+                OpenAIClient::new_azure(client, ctx).map(Into::into)
             }
             "baml-anthropic-chat" | "anthropic" => {
-                AnthropicClient::new(client, ctx).map(LLMPrimitiveProvider::Anthropic)
+                AnthropicClient::new(client, ctx).map(Into::into)
             }
-            "baml-ollama-chat" | "ollama" => {
-                OpenAIClient::new_ollama(client, ctx).map(LLMPrimitiveProvider::OpenAI)
-            }
-            "google-ai" => GoogleClient::new(client, ctx).map(LLMPrimitiveProvider::Google),
-            "aws-bedrock" => aws::AwsClient::new(client, ctx).map(LLMPrimitiveProvider::Aws),
+            "baml-ollama-chat" | "ollama" => OpenAIClient::new_ollama(client, ctx).map(Into::into),
+            "google-ai" => GoogleAIClient::new(client, ctx).map(Into::into),
+            "aws-bedrock" => aws::AwsClient::new(client, ctx).map(Into::into),
+            "vertex-ai" => VertexClient::new(client, ctx).map(Into::into),
             other => {
                 let options = [
-                    "openai",
                     "anthropic",
-                    "ollama",
-                    "google-ai",
+                    "aws-bedrock",
                     "azure-openai",
+                    "google-ai",
+                    "openai",
+                    "openai-generic",
+                    "vertex-ai",
                     "fallback",
                     "round-robin",
-                    "aws-bedrock",
                 ];
                 anyhow::bail!(
                     "Unsupported provider: {}. Available ones are: {}",
@@ -153,18 +165,19 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                 )
             }
         }
+        .into()
     }
 }
 
 impl<'ir> WithPrompt<'ir> for LLMPrimitiveProvider {
-    fn render_prompt(
+    async fn render_prompt(
         &'ir self,
         ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<internal_baml_jinja::RenderedPrompt> {
-        match_llm_provider!(self, render_prompt, ir, renderer, ctx, params)
+        match_llm_provider!(self, render_prompt, async, ir, renderer, ctx, params)
     }
 }
 
@@ -173,9 +186,9 @@ impl WithRenderRawCurl for LLMPrimitiveProvider {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
     ) -> Result<String> {
-        match_llm_provider!(self, render_raw_curl, async, ctx, prompt, stream)
+        match_llm_provider!(self, render_raw_curl, async, ctx, prompt, render_settings)
     }
 }
 
@@ -206,11 +219,11 @@ impl IterOrchestrator for Arc<LLMPrimitiveProvider> {
         _previous: OrchestrationScope,
         _ctx: &RuntimeContext,
         _client_lookup: &'a dyn InternalClientLookup,
-    ) -> OrchestratorNodeIterator {
-        vec![OrchestratorNode::new(
+    ) -> Result<OrchestratorNodeIterator> {
+        Ok(vec![OrchestratorNode::new(
             ExecutionScope::Direct(self.name().to_string()),
             self.clone(),
-        )]
+        )])
     }
 }
 
@@ -221,6 +234,7 @@ impl std::fmt::Display for LLMPrimitiveProvider {
             LLMPrimitiveProvider::Anthropic(_) => write!(f, "Anthropic"),
             LLMPrimitiveProvider::Google(_) => write!(f, "Google"),
             LLMPrimitiveProvider::Aws(_) => write!(f, "AWS"),
+            LLMPrimitiveProvider::Vertex(_) => write!(f, "Vertex"),
         }
     }
 }

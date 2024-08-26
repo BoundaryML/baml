@@ -9,8 +9,9 @@ use crate::deserializer::{
 };
 
 use super::{
-    array_helper, coerce_array::coerce_array, coerce_optional::coerce_optional,
-    coerce_union::coerce_union, ir_ref::IrRef, ParsingContext, ParsingError,
+    array_helper, coerce_array::coerce_array, coerce_map::coerce_map,
+    coerce_optional::coerce_optional, coerce_union::coerce_union, ir_ref::IrRef, ParsingContext,
+    ParsingError,
 };
 
 impl TypeCoercer for FieldType {
@@ -80,7 +81,7 @@ impl TypeCoercer for FieldType {
                 FieldType::List(_) => coerce_array(ctx, self, value),
                 FieldType::Union(_) => coerce_union(ctx, self, value),
                 FieldType::Optional(_) => coerce_optional(ctx, self, value),
-                FieldType::Map(_, _) => Err(ctx.error_internal("Map not supported")),
+                FieldType::Map(_, _) => coerce_map(ctx, self, value),
                 FieldType::Tuple(_) => Err(ctx.error_internal("Tuple not supported")),
             },
         }

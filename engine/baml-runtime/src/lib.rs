@@ -33,11 +33,13 @@ use baml_types::BamlValue;
 use client_registry::ClientRegistry;
 use indexmap::IndexMap;
 use internal_baml_core::configuration::GeneratorOutputType;
+use internal_core::configuration::Generator;
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::CallerType;
+pub use runtime_context::BamlSrcReader;
 use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
 use runtime_interface::RuntimeInterface;
@@ -67,6 +69,8 @@ pub struct BamlRuntime {
     inner: InternalBamlRuntime,
     tracer: Arc<BamlTracer>,
     env_vars: HashMap<String, String>,
+    #[cfg(not(target_arch = "wasm32"))]
+    async_runtime: Arc<tokio::runtime::Runtime>,
 }
 
 impl BamlRuntime {
@@ -88,6 +92,8 @@ impl BamlRuntime {
             inner: InternalBamlRuntime::from_directory(path)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
+            #[cfg(not(target_arch = "wasm32"))]
+            async_runtime: tokio::runtime::Runtime::new()?.into(),
         })
     }
 
@@ -104,6 +110,8 @@ impl BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
+            #[cfg(not(target_arch = "wasm32"))]
+            async_runtime: tokio::runtime::Runtime::new()?.into(),
         })
     }
 
@@ -117,8 +125,12 @@ impl BamlRuntime {
         cli::RuntimeCli::parse_from(argv.into_iter()).run(caller_type)
     }
 
-    pub fn create_ctx_manager(&self, language: BamlValue) -> RuntimeContextManager {
-        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone());
+    pub fn create_ctx_manager(
+        &self,
+        language: BamlValue,
+        baml_src_reader: BamlSrcReader,
+    ) -> RuntimeContextManager {
+        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader);
         let tags: HashMap<String, BamlValue> = [("baml.language", language)]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
@@ -129,6 +141,15 @@ impl BamlRuntime {
 }
 
 impl BamlRuntime {
+    pub fn get_test_params(
+        &self,
+        function_name: &str,
+        test_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<BamlMap<String, BamlValue>> {
+        self.inner.get_test_params(function_name, test_name, ctx)
+    }
+
     pub async fn run_test<F>(
         &self,
         function_name: &str,
@@ -143,22 +164,32 @@ impl BamlRuntime {
 
         let response = match ctx.create_ctx(None, None) {
             Ok(rctx) => {
-                let params = self.inner.get_test_params(function_name, test_name, &rctx);
+                let params = self.get_test_params(function_name, test_name, &rctx);
                 match params {
-                    Ok(params) => {
-                        match self.stream_function(function_name.into(), &params, ctx, None, None) {
-                            Ok(mut stream) => {
-                                let (response, span) = stream.run(on_event, ctx, None, None).await;
-                                let response = response.map(|res| TestResponse {
-                                    function_response: res,
-                                    function_span: span,
-                                });
-
-                                response
+                    Ok(params) => match ctx.create_ctx(None, None) {
+                        Ok(rctx_stream) => {
+                            let stream = self.inner.stream_function_impl(
+                                function_name.into(),
+                                &params,
+                                self.tracer.clone(),
+                                rctx_stream,
+                                #[cfg(not(target_arch = "wasm32"))]
+                                self.async_runtime.clone(),
+                            );
+                            match stream {
+                                Ok(mut stream) => {
+                                    let (response, span) =
+                                        stream.run(on_event, ctx, None, None).await;
+                                    response.map(|res| TestResponse {
+                                        function_response: res,
+                                        function_span: span,
+                                    })
+                                }
+                                Err(e) => Err(e),
                             }
-                            Err(e) => Err(e),
                         }
-                    }
+                        Err(e) => Err(e),
+                    },
                     Err(e) => Err(e),
                 }
             }
@@ -180,6 +211,19 @@ impl BamlRuntime {
         }
 
         (response, target_id)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn call_function_sync(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
+        let fut = self.call_function(function_name, params, ctx, tb, cb);
+        self.async_runtime.block_on(fut)
     }
 
     pub async fn call_function(
@@ -231,6 +275,8 @@ impl BamlRuntime {
             params,
             self.tracer.clone(),
             ctx.create_ctx(tb, cb)?,
+            #[cfg(not(target_arch = "wasm32"))]
+            self.async_runtime.clone(),
         )
     }
 
@@ -248,10 +294,11 @@ impl BamlRuntime {
     pub fn run_generators(
         &self,
         input_files: &IndexMap<PathBuf, String>,
+        no_version_check: bool,
     ) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
         use internal_baml_codegen::GenerateClient;
 
-        let client_types: Vec<(GeneratorOutputType, internal_baml_codegen::GeneratorArgs)> = self
+        let client_types: Vec<(&Generator, internal_baml_codegen::GeneratorArgs)> = self
             .inner
             .ir()
             .configuration()
@@ -259,11 +306,14 @@ impl BamlRuntime {
             .iter()
             .map(|(generator, _)| {
                 Ok((
-                    generator.output_type.clone(),
+                    generator,
                     internal_baml_codegen::GeneratorArgs::new(
                         generator.output_dir(),
                         generator.baml_src.clone(),
                         input_files.iter(),
+                        generator.version.clone(),
+                        no_version_check,
+                        generator.default_client_mode(),
                     )?,
                 ))
             })
@@ -271,7 +321,18 @@ impl BamlRuntime {
 
         client_types
             .iter()
-            .map(|(client_type, args)| client_type.generate_client(self.inner.ir(), args))
+            .map(|(generator, args)| {
+                generator
+                    .output_type
+                    .generate_client(self.inner.ir(), args)
+                    .map_err(|e| {
+                        let ((line, col), _) = generator.span.line_and_column();
+                        anyhow::anyhow!(
+                            "Error in file {}:{line}:{col} {e}",
+                            generator.span.file.path()
+                        )
+                    })
+            })
             .collect()
     }
 }
@@ -351,7 +412,10 @@ impl ExperimentalTracingInterface for BamlRuntime {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) -> Result<()> {
+    fn set_log_event_callback(
+        &self,
+        log_event_callback: Option<LogEventCallbackSync>,
+    ) -> Result<()> {
         self.tracer.set_log_event_callback(log_event_callback);
         Ok(())
     }

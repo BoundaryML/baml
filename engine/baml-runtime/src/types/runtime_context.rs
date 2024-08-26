@@ -34,8 +34,25 @@ pub struct RuntimeClassOverride {
     pub(crate) update_fields: IndexMap<String, PropertyAttributes>,
 }
 
-#[derive(Debug)]
+// #[cfg(target_arch = "wasm32")]
+// pub type BamlSrcReader = Box<dyn Fn(&str) -> Result<String>>;
+// #[cfg(not(target_arch = "wasm32"))]
+// pub type BamlSrcReader = fn(&str) -> Result<String>;
+cfg_if::cfg_if!(
+    if #[cfg(target_arch = "wasm32")] {
+        use core::pin::Pin;
+        use core::future::Future;
+        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
+    } else {
+        use futures::future::BoxFuture;
+        pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, Result<Vec<u8>>>>>;
+    }
+);
+
+// #[derive(Debug)]
 pub struct RuntimeContext {
+    // path to baml_src in the local filesystem
+    pub baml_src: Arc<BamlSrcReader>,
     pub env: HashMap<String, String>,
     pub tags: HashMap<String, BamlValue>,
     pub client_overrides: Option<(Option<String>, HashMap<String, Arc<LLMProvider>>)>,

@@ -13,8 +13,8 @@ mod r#enum;
 mod field;
 mod function;
 mod template_string;
-mod variants;
 
+use baml_types::TypeValue;
 pub use client::*;
 pub use configuration::*;
 use either::Either;
@@ -23,7 +23,6 @@ pub use function::*;
 use internal_baml_schema_ast::ast::{self, FieldType, Identifier, TopId, WithName};
 pub use r#class::*;
 pub use r#enum::*;
-pub use variants::*;
 
 pub use self::template_string::TemplateStringWalker;
 
@@ -112,13 +111,13 @@ impl<'db> crate::ParserDatabase {
 
     /// Find a function by name.
     pub fn find_function_by_name(&'db self, name: &str) -> Option<FunctionWalker<'db>> {
-        self.find_top_by_str(name).and_then(|top_id| {
-            match (top_id.as_old_function_id(), top_id.as_new_function_id()) {
-                (Some(model_id), _) => Some(self.walk((false, model_id))),
-                (_, Some(model_id)) => Some(self.walk((true, model_id))),
-                _ => None,
-            }
-        })
+        self.find_top_by_str(name)
+            .and_then(|top_id| {
+                top_id
+                    .as_function_id()
+                    .map(|function_id| (true, function_id))
+            })
+            .map(|function_id| self.walk(function_id))
     }
 
     /// Find a function by name.
@@ -128,15 +127,6 @@ impl<'db> crate::ParserDatabase {
             .and_then(|name_id| self.names.tops.get(&name_id))
             .and_then(|top_id| top_id.as_retry_policy_id())
             .map(|model_id| self.walk((model_id, "retry_policy")))
-    }
-
-    /// Find printer by name.
-    pub fn find_printer(&'db self, name: &str) -> Option<ConfigurationWalker<'db>> {
-        self.interner
-            .lookup(name)
-            .and_then(|name_id| self.names.tops.get(&name_id))
-            .and_then(|top_id| top_id.as_printer_id())
-            .map(|model_id| self.walk((model_id, "printer")))
     }
 
     /// Traverse a schema element by id.
@@ -159,11 +149,9 @@ impl<'db> crate::ParserDatabase {
 
     /// Get all the types that are valid in the schema. (including primitives)
     pub fn valid_function_names(&self) -> Vec<String> {
-        let oldfns = self.walk_old_functions().map(|c| c.name().to_string());
-
-        let newfns = self.walk_new_functions().map(|c| c.name().to_string());
-
-        oldfns.chain(newfns).collect()
+        self.walk_functions()
+            .map(|c| c.name().to_string())
+            .collect::<Vec<String>>()
     }
 
     /// Get all the types that are valid in the schema. (including primitives)
@@ -171,11 +159,6 @@ impl<'db> crate::ParserDatabase {
         self.walk_retry_policies()
             .map(|c| c.name().to_string())
             .collect()
-    }
-
-    /// Get all the types that are valid in the schema. (including primitives)
-    pub fn valid_printer_names(&self) -> Vec<String> {
-        self.walk_printers().map(|c| c.name().to_string()).collect()
     }
 
     /// Get all the types that are valid in the schema. (including primitives)
@@ -217,25 +200,10 @@ impl<'db> crate::ParserDatabase {
     }
 
     /// Walk all classes in the schema.
-    pub fn walk_old_functions(&self) -> impl Iterator<Item = FunctionWalker<'_>> {
+    pub fn walk_functions(&self) -> impl Iterator<Item = FunctionWalker<'_>> {
         self.ast()
             .iter_tops()
-            .filter_map(|(top_id, _)| {
-                top_id
-                    .as_old_function_id()
-                    .map(|model_id| (false, model_id))
-            })
-            .map(move |top_id| Walker {
-                db: self,
-                id: top_id,
-            })
-    }
-
-    /// Walk all classes in the schema.
-    pub fn walk_new_functions(&self) -> impl Iterator<Item = FunctionWalker<'_>> {
-        self.ast()
-            .iter_tops()
-            .filter_map(|(top_id, _)| top_id.as_new_function_id().map(|model_id| (true, model_id)))
+            .filter_map(|(top_id, _)| top_id.as_function_id().map(|model_id| (true, model_id)))
             .map(move |top_id| Walker {
                 db: self,
                 id: top_id,
@@ -247,17 +215,6 @@ impl<'db> crate::ParserDatabase {
         self.ast()
             .iter_tops()
             .filter_map(|(top_id, _)| top_id.as_client_id())
-            .map(move |top_id| Walker {
-                db: self,
-                id: top_id,
-            })
-    }
-
-    /// Walk all variants in the schema.
-    pub fn walk_variants(&self) -> impl Iterator<Item = VariantWalker<'_>> {
-        self.ast()
-            .iter_tops()
-            .filter_map(|(top_id, _)| top_id.as_variant_id())
             .map(move |top_id| Walker {
                 db: self,
                 id: top_id,
@@ -276,17 +233,6 @@ impl<'db> crate::ParserDatabase {
     }
 
     /// Walk all classes in the schema.
-    pub fn walk_printers(&self) -> impl Iterator<Item = ConfigurationWalker<'_>> {
-        self.ast()
-            .iter_tops()
-            .filter_map(|(top_id, _)| top_id.as_printer_id())
-            .map(move |top_id| Walker {
-                db: self,
-                id: (top_id, "printer"),
-            })
-    }
-
-    /// Walk all classes in the schema.
     pub fn walk_test_cases(&self) -> impl Iterator<Item = ConfigurationWalker<'_>> {
         self.ast()
             .iter_tops()
@@ -300,63 +246,60 @@ impl<'db> crate::ParserDatabase {
     /// Convert a field type to a `Type`.
     pub fn to_jinja_type(&self, ft: &FieldType) -> internal_baml_jinja::Type {
         use internal_baml_jinja::Type;
-        match ft {
-            FieldType::Identifier(arity, idn) => {
-                let t = match idn {
-                    ast::Identifier::ENV(_, _) => Type::String,
-                    ast::Identifier::Ref(x, _) => match self.find_type(idn) {
-                        None => Type::Undefined,
-                        Some(Either::Left(_)) => Type::ClassRef(x.full_name.clone()),
-                        Some(Either::Right(_)) => Type::String,
-                    },
-                    ast::Identifier::Local(x, _) => match self.find_type(idn) {
-                        None => Type::Undefined,
-                        Some(Either::Left(_)) => Type::ClassRef(x.clone()),
-                        Some(Either::Right(_)) => Type::String,
-                    },
-                    ast::Identifier::Primitive(idx, _) => match idx {
-                        baml_types::TypeValue::String => Type::String,
-                        baml_types::TypeValue::Int => Type::Int,
-                        baml_types::TypeValue::Float => Type::Float,
-                        baml_types::TypeValue::Bool => Type::Bool,
-                        baml_types::TypeValue::Null => Type::None,
-                        baml_types::TypeValue::Image => Type::Image,
-                        baml_types::TypeValue::Audio => Type::Audio,
-                    },
-                    ast::Identifier::String(_, _) => Type::String,
-                    ast::Identifier::Invalid(_, _) => Type::Unknown,
+
+        let r = match ft {
+            FieldType::Symbol(arity, idn, ..) => {
+                let mut t = match self.find_type(idn) {
+                    None => Type::Undefined,
+                    Some(Either::Left(_)) => Type::ClassRef(idn.to_string()),
+                    Some(Either::Right(_)) => Type::String,
                 };
                 if arity.is_optional() {
-                    Type::None | t
-                } else {
-                    t
+                    t = Type::None | t;
                 }
+                t
             }
-            FieldType::List(inner, dims, _) => {
+            FieldType::List(inner, dims, ..) => {
                 let mut t = self.to_jinja_type(inner);
                 for _ in 0..*dims {
                     t = Type::List(Box::new(t));
                 }
                 t
             }
-            FieldType::Tuple(arity, c, _) => {
+            FieldType::Tuple(arity, c, ..) => {
                 let mut t = Type::Tuple(c.iter().map(|e| self.to_jinja_type(e)).collect());
                 if arity.is_optional() {
                     t = Type::None | t;
                 }
                 t
             }
-            FieldType::Union(arity, options, _) => {
+            FieldType::Union(arity, options, ..) => {
                 let mut t = Type::Union(options.iter().map(|e| self.to_jinja_type(e)).collect());
                 if arity.is_optional() {
                     t = Type::None | t;
                 }
                 t
             }
-            FieldType::Dictionary(kv, _) => Type::Map(
+            FieldType::Map(kv, ..) => Type::Map(
                 Box::new(self.to_jinja_type(&kv.0)),
                 Box::new(self.to_jinja_type(&kv.1)),
             ),
-        }
+            FieldType::Primitive(arity, t, ..) => {
+                let mut t = match &t {
+                    TypeValue::String => Type::String,
+                    TypeValue::Int => Type::Int,
+                    TypeValue::Float => Type::Float,
+                    TypeValue::Bool => Type::Bool,
+                    TypeValue::Null => Type::None,
+                    TypeValue::Media(_) => Type::Unknown,
+                };
+                if arity.is_optional() || matches!(t, Type::None) {
+                    t = Type::None | t;
+                }
+                t
+            }
+        };
+
+        r
     }
 }

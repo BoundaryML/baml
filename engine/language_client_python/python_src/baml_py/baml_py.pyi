@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 class FunctionResult:
     """The result of a BAML function call.
@@ -16,6 +16,8 @@ class FunctionResult:
 
     def __str__(self) -> str: ...
     def parsed(self) -> Any: ...
+    # Returns True if the function call was successful, False otherwise
+    def is_ok(self) -> bool: ...
 
 class FunctionResultStream:
     """The result of a BAML function stream.
@@ -30,6 +32,20 @@ class FunctionResultStream:
         self, on_event: Callable[[FunctionResult], None]
     ) -> FunctionResultStream: ...
     async def done(self, ctx: RuntimeContextManager) -> FunctionResult: ...
+
+class SyncFunctionResultStream:
+    """The result of a BAML function stream.
+
+    Provides a callback interface to receive events from a BAML result stream.
+
+    Use `on_event` to set the callback, and `done` to drive the stream to completion.
+    """
+
+    def __str__(self) -> str: ...
+    def on_event(
+        self, on_event: Callable[[FunctionResult], None]
+    ) -> SyncFunctionResultStream: ...
+    def done(self, ctx: RuntimeContextManager) -> FunctionResult: ...
 
 class BamlImagePy:
     @staticmethod
@@ -79,11 +95,20 @@ class BamlRuntime:
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
     ) -> FunctionResultStream: ...
+    def stream_function_sync(
+        self,
+        function_name: str,
+        args: Dict[str, Any],
+        on_event: Optional[Callable[[FunctionResult], None]],
+        ctx: RuntimeContextManager,
+        tb: Optional[TypeBuilder],
+        cr: Optional[ClientRegistry],
+    ) -> SyncFunctionResultStream: ...
     def create_context_manager(self) -> RuntimeContextManager: ...
     def flush(self) -> None: ...
     def drain_stats(self) -> TraceStats: ...
     def set_log_event_callback(
-        self, handler: Callable[[BamlLogEvent], None]
+        self, handler: Optional[Callable[[BamlLogEvent], None]]
     ) -> None: ...
 
 class LogEventMetadata:
@@ -146,6 +171,8 @@ class TypeBuilder:
     def list(self, element_type: FieldType) -> FieldType: ...
     def null(self) -> FieldType: ...
     def optional(self, inner_type: FieldType) -> FieldType: ...
+    def map(self, key_type: FieldType, value_type: FieldType) -> FieldType: ...
+    def union(self, *types: FieldType) -> FieldType: ...
 
 class ClientRegistry:
     def __init__(self) -> None: ...

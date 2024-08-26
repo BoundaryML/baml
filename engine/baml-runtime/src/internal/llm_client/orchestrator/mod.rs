@@ -1,15 +1,9 @@
 mod call;
 mod stream;
 
-use anyhow::Result;
-use baml_types::BamlValue;
+use web_time::Duration; // Add this line
 
-use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_jinja::RenderedChatMessage;
-use internal_baml_jinja::RenderedPrompt;
-use std::{collections::HashMap, sync::Arc};
-use web_time::Duration;
-
+use crate::RenderCurlSettings;
 use crate::{
     internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
     RuntimeContext,
@@ -26,6 +20,13 @@ pub use super::primitive::LLMPrimitiveProvider;
 pub use call::orchestrate as orchestrate_call;
 pub use stream::orchestrate_stream;
 
+use anyhow::Result;
+use baml_types::BamlValue;
+use internal_baml_core::ir::repr::IntermediateRepr;
+use internal_baml_jinja::RenderedChatMessage;
+use internal_baml_jinja::RenderedPrompt;
+use serde::Serialize;
+use std::{collections::HashMap, sync::Arc};
 pub struct OrchestratorNode {
     pub scope: OrchestrationScope,
     pub provider: Arc<LLMPrimitiveProvider>,
@@ -82,9 +83,9 @@ impl OrchestratorNode {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize)]
 pub struct OrchestrationScope {
-    scope: Vec<ExecutionScope>,
+    pub scope: Vec<ExecutionScope>,
 }
 
 impl From<ExecutionScope> for OrchestrationScope {
@@ -129,19 +130,15 @@ impl OrchestrationScope {
         }
     }
 
-    // pub fn extend_scopes(&self, scope: Vec<ExecutionScope>) -> OrchestrationScope {
-    //     OrchestrationScope {
-    //         scope: self
-    //             .scope
-    //             .clone()
-    //             .into_iter()
-    //             .chain(scope.into_iter())
-    //             .collect(),
-    //     }
-    // }
+    pub fn direct_client_name(&self) -> Option<&String> {
+        match self.scope.last() {
+            Some(ExecutionScope::Direct(d)) => Some(d),
+            _ => None,
+        }
+    }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub enum ExecutionScope {
     Direct(String),
     // PolicyName, RetryCount, RetryDelayMs
@@ -167,18 +164,18 @@ pub trait IterOrchestrator {
         previous: OrchestrationScope,
         ctx: &RuntimeContext,
         client_lookup: &'a dyn InternalClientLookup<'a>,
-    ) -> OrchestratorNodeIterator;
+    ) -> Result<OrchestratorNodeIterator>;
 }
 
 impl<'ir> WithPrompt<'ir> for OrchestratorNode {
-    fn render_prompt(
+    async fn render_prompt(
         &'ir self,
         ir: &'ir IntermediateRepr,
         renderer: &PromptRenderer,
         ctx: &RuntimeContext,
         params: &BamlValue,
     ) -> Result<RenderedPrompt> {
-        self.provider.render_prompt(ir, renderer, ctx, params)
+        self.provider.render_prompt(ir, renderer, ctx, params).await
     }
 }
 
@@ -187,9 +184,11 @@ impl WithRenderRawCurl for OrchestratorNode {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<RenderedChatMessage>,
-        stream: bool,
+        render_settings: RenderCurlSettings,
     ) -> Result<String> {
-        self.provider.render_raw_curl(ctx, prompt, stream).await
+        self.provider
+            .render_raw_curl(ctx, prompt, render_settings)
+            .await
     }
 }
 

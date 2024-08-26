@@ -1,10 +1,13 @@
 use anyhow::{Context, Result};
 use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicUsize, Arc},
+    fmt::Debug,
+    {
+        collections::HashMap,
+        sync::{atomic::AtomicUsize, Arc},
+    },
 };
 
-use internal_baml_core::ir::ClientWalker;
+use internal_baml_core::ir::{repr::ClientSpec, ClientWalker};
 
 use crate::{
     client_registry::ClientProperty,
@@ -15,13 +18,24 @@ use crate::{
     runtime_interface::InternalClientLookup,
     RuntimeContext,
 };
+use serde::Serialize;
+use serde::Serializer;
 
+#[derive(Serialize, Debug)]
 pub struct RoundRobinStrategy {
     pub name: String,
     pub(super) retry_policy: Option<String>,
     // TODO: We can add conditions to each client
-    clients: Vec<String>,
+    client_specs: Vec<ClientSpec>,
+    #[serde(serialize_with = "serialize_atomic")]
     current_index: AtomicUsize,
+}
+
+fn serialize_atomic<S>(value: &AtomicUsize, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_u64(value.load(std::sync::atomic::Ordering::Relaxed) as u64)
 }
 
 impl RoundRobinStrategy {
@@ -36,34 +50,10 @@ impl RoundRobinStrategy {
     }
 }
 
-impl TryFrom<(&ClientProperty, &RuntimeContext)> for RoundRobinStrategy {
-    type Error = anyhow::Error;
-
-    fn try_from(
-        (client, ctx): (&ClientProperty, &RuntimeContext),
-    ) -> std::result::Result<Self, Self::Error> {
-        let (strategy, start) = resolve_properties(
-            client
-                .options
-                .iter()
-                .map(|(k, v)| Ok((k.clone(), serde_json::json!(v))))
-                .collect::<Result<HashMap<_, _>>>()?,
-            ctx,
-        )?;
-
-        Ok(RoundRobinStrategy {
-            name: client.name.clone(),
-            retry_policy: client.retry_policy.clone(),
-            clients: strategy,
-            current_index: AtomicUsize::new(start),
-        })
-    }
-}
-
-fn resolve_properties(
+fn resolve_strategy(
     mut properties: HashMap<String, serde_json::Value>,
     _ctx: &RuntimeContext,
-) -> Result<(Vec<String>, usize)> {
+) -> Result<(Vec<ClientSpec>, usize)> {
     let strategy = properties
         .remove("strategy")
         .map(|v| serde_json::from_value::<Vec<String>>(v))
@@ -112,7 +102,34 @@ fn resolve_properties(
         }
     };
 
-    Ok((strategy, start))
+    Ok((
+        strategy.into_iter().map(ClientSpec::new_from_id).collect(),
+        start,
+    ))
+}
+
+impl TryFrom<(&ClientProperty, &RuntimeContext)> for RoundRobinStrategy {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        (client, ctx): (&ClientProperty, &RuntimeContext),
+    ) -> std::result::Result<Self, Self::Error> {
+        let (strategy, start) = resolve_strategy(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), serde_json::json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            ctx,
+        )?;
+
+        Ok(RoundRobinStrategy {
+            name: client.name.clone(),
+            retry_policy: client.retry_policy.clone(),
+            client_specs: strategy,
+            current_index: AtomicUsize::new(start),
+        })
+    }
 }
 
 impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for RoundRobinStrategy {
@@ -120,11 +137,11 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for RoundRobinStrategy {
 
     fn try_from((client, ctx): (&ClientWalker, &RuntimeContext)) -> Result<Self> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
-        let (strategy, start) = resolve_properties(properties, ctx)?;
+        let (strategy, start) = resolve_strategy(properties, ctx)?;
         Ok(Self {
             name: client.item.elem.name.clone(),
             retry_policy: client.retry_policy().as_ref().map(String::from),
-            clients: strategy,
+            client_specs: strategy,
             current_index: AtomicUsize::new(start),
         })
     }
@@ -137,15 +154,15 @@ impl IterOrchestrator for Arc<RoundRobinStrategy> {
         _previous: OrchestrationScope,
         ctx: &RuntimeContext,
         client_lookup: &'a dyn InternalClientLookup<'a>,
-    ) -> OrchestratorNodeIterator {
+    ) -> Result<OrchestratorNodeIterator> {
         let offset = state.client_to_usage.entry(self.name.clone()).or_insert(0);
-        let next = (self.current_index() + *offset) % self.clients.len();
+        let next = (self.current_index() + *offset) % self.client_specs.len();
 
         // Update the usage count
         *offset += 1;
 
-        let client = &self.clients[next];
-        let client = client_lookup.get_llm_provider(client, ctx).unwrap();
+        let client_spec = &self.client_specs[next];
+        let client = client_lookup.get_llm_provider(client_spec, ctx).unwrap();
         let client = client.clone();
         client.iter_orchestrator(
             state,

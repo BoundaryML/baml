@@ -1,4 +1,5 @@
 use anyhow::Result;
+use baml_types::BamlMediaType;
 use internal_baml_core::ir::{FieldType, TypeValue};
 
 use crate::deserializer::{
@@ -36,8 +37,8 @@ impl TypeCoercer for TypeValue {
             TypeValue::Float => coerce_float(ctx, target, value),
             TypeValue::Bool => coerce_bool(ctx, target, value),
             TypeValue::Null => coerce_null(ctx, target, value),
-            TypeValue::Image => Err(ctx.error_image_not_supported()),
-            TypeValue::Audio => Err(ctx.error_audio_not_supported()),
+            TypeValue::Media(BamlMediaType::Image) => Err(ctx.error_image_not_supported()),
+            TypeValue::Media(BamlMediaType::Audio) => Err(ctx.error_audio_not_supported()),
         }
     }
 }
@@ -98,6 +99,9 @@ fn coerce_int(
                 }
             }
             crate::jsonish::Value::String(s) => {
+                let s = s.trim();
+                // Trim trailing commas
+                let s = s.trim_end_matches(',');
                 if let Ok(n) = s.parse::<i64>() {
                     Ok(BamlValueWithFlags::Int(n.into()))
                 } else if let Ok(n) = s.parse::<u64>() {
@@ -105,6 +109,10 @@ fn coerce_int(
                 } else if let Ok(n) = s.parse::<f64>() {
                     Ok(BamlValueWithFlags::Int(
                         ((n.round() as i64), Flag::FloatToInt(n)).into(),
+                    ))
+                } else if let Some(frac) = float_from_maybe_fraction(s) {
+                    Ok(BamlValueWithFlags::Int(
+                        ((frac.round() as i64), Flag::FloatToInt(frac)).into(),
                     ))
                 } else {
                     Err(ctx.error_unexpected_type(target, value))
@@ -119,6 +127,20 @@ fn coerce_int(
         }
     } else {
         Err(ctx.error_unexpected_null(target))
+    }
+}
+
+fn float_from_maybe_fraction(value: &str) -> Option<f64> {
+    if let Some((numerator, denominator)) = value.split_once('/') {
+        match (
+            numerator.trim().parse::<f64>(),
+            denominator.trim().parse::<f64>(),
+        ) {
+            (Ok(num), Ok(denom)) if denom != 0.0 => Some(num / denom),
+            _ => None,
+        }
+    } else {
+        None
     }
 }
 
@@ -141,12 +163,17 @@ fn coerce_float(
                 }
             }
             crate::jsonish::Value::String(s) => {
+                let s = s.trim();
+                // Trim trailing commas
+                let s = s.trim_end_matches(',');
                 if let Ok(n) = s.parse::<f64>() {
                     Ok(BamlValueWithFlags::Float(n.into()))
                 } else if let Ok(n) = s.parse::<i64>() {
                     Ok(BamlValueWithFlags::Float((n as f64).into()))
                 } else if let Ok(n) = s.parse::<u64>() {
                     Ok(BamlValueWithFlags::Float((n as f64).into()))
+                } else if let Some(frac) = float_from_maybe_fraction(s) {
+                    Ok(BamlValueWithFlags::Float(frac.into()))
                 } else {
                     Err(ctx.error_unexpected_type(target, value))
                 }

@@ -6,16 +6,16 @@ use crate::{
 };
 
 /// A `function` declaration in the Prisma schema.
-pub type ClientWalker<'db> = super::Walker<'db, ast::ClientId>;
+pub type ClientWalker<'db> = super::Walker<'db, ast::ValExpId>;
 
 impl<'db> ClientWalker<'db> {
     /// The ID of the function in the db
-    pub fn client_id(self) -> ast::ClientId {
+    pub fn client_id(self) -> ast::ValExpId {
         self.id
     }
 
     /// The AST node.
-    pub fn ast_client(self) -> &'db ast::Client {
+    pub fn ast_client(self) -> &'db ast::ValueExprBlock {
         &self.db.ast[self.id]
     }
 

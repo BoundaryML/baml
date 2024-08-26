@@ -2,11 +2,19 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_schema_ast::ast::{self, WithName, WithSpan};
-use strum::{VariantArray, VariantNames};
+use semver::Version;
+use strum::VariantNames;
 
-use crate::configuration::{Generator, GeneratorBuilder, GeneratorOutputType};
+use crate::configuration::{
+    Generator, GeneratorBuilder, GeneratorDefaultClientMode, GeneratorOutputType,
+};
 
-const FIRST_CLASS_PROPERTIES: &[&str] = &["output_type", "output_dir"];
+const FIRST_CLASS_PROPERTIES: &[&str] = &[
+    "output_type",
+    "output_dir",
+    "version",
+    "default_client_mode",
+];
 
 fn parse_required_key<'a>(
     map: &'a HashMap<&str, &ast::Expression>,
@@ -53,7 +61,7 @@ fn parse_optional_key<'a>(
 }
 
 pub(crate) fn parse_generator(
-    ast_generator: &ast::GeneratorConfig,
+    ast_generator: &ast::ValueExprBlock,
     baml_src: &PathBuf,
 ) -> Result<Generator, Vec<DatamodelError>> {
     let generator_name = ast_generator.name();
@@ -69,14 +77,14 @@ pub(crate) fn parse_generator(
     let args = ast_generator
         .fields()
         .iter()
-        .map(|arg| match &arg.value {
+        .map(|arg| match &arg.expr {
             Some(expr) => {
                 if FIRST_CLASS_PROPERTIES.iter().any(|k| *k == arg.name()) {
                     Ok((arg.name(), expr))
                 } else {
                     Err(DatamodelError::new_property_not_known_error(
                         arg.name(),
-                        arg.span.clone(),
+                        arg.span().clone(),
                         FIRST_CLASS_PROPERTIES.to_vec(),
                     ))
                 }
@@ -135,13 +143,59 @@ pub(crate) fn parse_generator(
         }
     };
 
+    match parse_optional_key(&args, "version") {
+        Ok(Some(version_str)) => match Version::parse(version_str) {
+            Ok(version) => {
+                builder.version(version.to_string());
+            }
+            Err(_) => {
+                errors.push(DatamodelError::new_validation_error(
+                    &format!("Invalid semver version string: '{}'", version_str),
+                    args.get("version")
+                        .map(|arg| arg.span().clone())
+                        .unwrap_or_else(|| ast_generator.span().clone()),
+                ));
+            }
+        },
+        Ok(None) => {
+            builder.version("0.0.0".to_string());
+        }
+        Err(err) => {
+            errors.push(err);
+        }
+    }
+
+    match parse_optional_key(&args, "default_client_mode") {
+        Ok(Some("sync")) => {
+            builder.default_client_mode(Some(GeneratorDefaultClientMode::Sync));
+        }
+        Ok(Some("async")) => {
+            builder.default_client_mode(Some(GeneratorDefaultClientMode::Async));
+        }
+        Ok(Some(name)) => {
+            errors.push(DatamodelError::new_validation_error(
+                &format!("'{}' is not supported. Use one of: 'async' or 'sync'", name),
+                args.get("default_client_mode")
+                    .map(|arg| arg.span())
+                    .unwrap_or_else(|| ast_generator.span())
+                    .clone(),
+            ));
+        }
+        Ok(None) => {
+            builder.default_client_mode(None);
+        }
+        Err(err) => {
+            errors.push(err);
+        }
+    }
+
     if !errors.is_empty() {
         return Err(errors);
     }
 
     builder.build().map_err(|e| {
-        vec![DatamodelError::new_internal_error(
-            anyhow::Error::from(e).context("Internal error while parsing generator (v1 syntax)"),
+        vec![DatamodelError::new_anyhow_error(
+            anyhow::Error::from(e).context("Error parsing generator"),
             ast_generator.span().clone(),
         )]
     })

@@ -1,0 +1,35 @@
+# typed: false
+require "sorbet-runtime"
+
+require_relative "types"
+
+module Baml
+  {# Baml::PartialTypes is reserved for generated types. #}
+  module PartialTypes
+    {#- Forward declarations for types #}
+    {%- for cls in partial_classes %}
+    class {{cls.name}} < T::Struct; end
+    {%- endfor %}
+
+    {#- https://sorbet.org/docs/tstruct #}
+    {%- for cls in partial_classes %}
+    class {{cls.name}} < T::Struct
+      include Baml::Sorbet::Struct
+
+      {%- for (name, type) in cls.fields %}
+      const :{{name}}, {{type}}
+      {%- endfor %}
+
+      def initialize(props)
+        super(
+          {%- for (name, _) in cls.fields %}
+          {{name}}: props[:{{name}}],
+          {%- endfor %}
+        )
+
+        @props = props
+      end
+    end
+    {%- endfor %}
+  end
+end

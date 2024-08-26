@@ -14,7 +14,8 @@ import {
   TestClassNested,
   onLogEvent,
 } from '../baml_client'
-import { RecursivePartialNull } from '../baml_client/client'
+import { RecursivePartialNull } from '../baml_client/async_client'
+import { b as b_sync } from '../baml_client/sync_client'
 import { config } from 'dotenv'
 import { BamlLogEvent, BamlRuntime } from '@boundaryml/baml/native'
 import { AsyncLocalStorage } from 'async_hooks'
@@ -22,50 +23,81 @@ import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from '..
 config()
 
 describe('Integ tests', () => {
-  it('should work for all inputs', async () => {
-    let res = await b.TestFnNamedArgsSingleBool(true)
-    expect(res).toEqual('true')
-
-    res = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
-    expect(res).toContain('a')
-    expect(res).toContain('b')
-    expect(res).toContain('c')
-
-    console.log('calling with class')
-    res = await b.TestFnNamedArgsSingleClass({
-      key: 'key',
-      key_two: true,
-      key_three: 52,
+  describe('should work for all inputs', () => {
+    it('single bool', async () => {
+      const res = await b.TestFnNamedArgsSingleBool(true)
+      expect(res).toEqual('true')
     })
-    console.log('got response', res)
-    expect(res).toContain('52')
 
-    res = await b.TestMulticlassNamedArgs(
-      {
+    it('single string list', async () => {
+      const res = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
+      expect(res).toContain('a')
+      expect(res).toContain('b')
+      expect(res).toContain('c')
+    })
+
+    it('single class', async () => {
+      console.log('calling with class')
+      const res = await b.TestFnNamedArgsSingleClass({
         key: 'key',
         key_two: true,
         key_three: 52,
-      },
-      {
-        key: 'key',
-        key_two: true,
-        key_three: 64,
-      },
-    )
-    expect(res).toContain('52')
-    expect(res).toContain('64')
+      })
+      console.log('got response', res)
+      expect(res).toContain('52')
+    })
 
-    res = await b.TestFnNamedArgsSingleEnumList([NamedArgsSingleEnumList.TWO])
-    expect(res).toContain('TWO')
+    it('multiple classes', async () => {
+      const res = await b.TestMulticlassNamedArgs(
+        {
+          key: 'key',
+          key_two: true,
+          key_three: 52,
+        },
+        {
+          key: 'key',
+          key_two: true,
+          key_three: 64,
+        },
+      )
+      expect(res).toContain('52')
+      expect(res).toContain('64')
+    })
 
-    res = await b.TestFnNamedArgsSingleFloat(3.12)
-    expect(res).toContain('3.12')
+    it('single enum list', async () => {
+      const res = await b.TestFnNamedArgsSingleEnumList([NamedArgsSingleEnumList.TWO])
+      expect(res).toContain('TWO')
+    })
 
-    res = await b.TestFnNamedArgsSingleInt(3566)
-    expect(res).toContain('3566')
+    it('single float', async () => {
+      const res = await b.TestFnNamedArgsSingleFloat(3.12)
+      expect(res).toContain('3.12')
+    })
 
-    // TODO fix the fact it's required.
-    res = await b.FnNamedArgsSingleStringOptional()
+    it('single int', async () => {
+      const res = await b.TestFnNamedArgsSingleInt(3566)
+      expect(res).toContain('3566')
+    })
+
+    it('single optional string', async () => {
+      // TODO fix the fact it's required.
+      const res = await b.FnNamedArgsSingleStringOptional()
+    })
+
+    it('single map string to string', async () => {
+      const res = await b.TestFnNamedArgsSingleMapStringToString({ lorem: 'ipsum', dolor: 'sit' })
+      expect(res).toHaveProperty('lorem', 'ipsum')
+    })
+
+    it('single map string to class', async () => {
+      const res = await b.TestFnNamedArgsSingleMapStringToClass({ lorem: { word: 'ipsum' }, dolor: { word: 'sit' } })
+      expect(res).toHaveProperty('lorem', { word: 'ipsum' })
+    })
+
+    it('single map string to map', async () => {
+      const res = await b.TestFnNamedArgsSingleMapStringToMap({ lorem: { word: 'ipsum' }, dolor: { word: 'sit' } })
+      expect(res).toHaveProperty('lorem', { word: 'ipsum' })
+    })
   })
 
   it('should work for all outputs', async () => {
@@ -205,6 +237,26 @@ describe('Integ tests', () => {
     expect(msgs.at(-1)).toEqual(final)
   })
 
+  it('should support OpenAI shorthand', async () => {
+    const res = await b.TestOpenAIShorthand('Dr. Pepper')
+    expect(res.length).toBeGreaterThan(0)
+  })
+
+  it('should support OpenAI shorthand streaming', async () => {
+    const res = await b.stream.TestOpenAIShorthand('Dr. Pepper').getFinalResponse()
+    expect(res.length).toBeGreaterThan(0)
+  })
+
+  it('should support anthropic shorthand', async () => {
+    const res = await b.TestAnthropicShorthand('Dr. Pepper')
+    expect(res.length).toBeGreaterThan(0)
+  })
+
+  it('should support anthropic shorthand streaming', async () => {
+    const res = await b.stream.TestAnthropicShorthand('Dr. Pepper').getFinalResponse()
+    expect(res.length).toBeGreaterThan(0)
+  })
+
   it('should support streaming without iterating', async () => {
     const final = await b.stream.PromptTestStreaming('Mt Rainier is tall').getFinalResponse()
     expect(final.length).toBeGreaterThan(0)
@@ -224,6 +276,11 @@ describe('Integ tests', () => {
       expect(msgs[i + 1].startsWith(msgs[i])).toBeTruthy()
     }
     expect(msgs.at(-1)).toEqual(final)
+  })
+
+  it('should support vertex', async () => {
+    const res = await b.TestVertex('Donkey Kong')
+    expect(res.toLowerCase()).toContain('donkey')
   })
 
   it('supports tracing sync', async () => {
@@ -384,6 +441,74 @@ describe('Integ tests', () => {
     expect(res[0]['testKey']).toEqual('myTest')
   })
 
+  it('should work with dynamic output map', async () => {
+    let tb = new TypeBuilder()
+    tb.DynamicOutput.addProperty('hair_color', tb.string())
+    tb.DynamicOutput.addProperty('attributes', tb.map(tb.string(), tb.string())).description(
+      "Things like 'eye_color' or 'facial_hair'",
+    )
+    console.log(tb.DynamicOutput.listProperties())
+    for (const [prop, _] of tb.DynamicOutput.listProperties()) {
+      console.log(`Property: ${prop}`)
+    }
+
+    const res = await b.MyFunc(
+      "My name is Harrison. My hair is black and I'm 6 feet tall. I have blue eyes and a beard.",
+      { tb },
+    )
+
+    console.log('final ', res)
+
+    expect(res.hair_color).toEqual('black')
+    expect(res.attributes['eye_color']).toEqual('blue')
+    expect(res.attributes['facial_hair']).toEqual('beard')
+  })
+
+  it('should work with dynamic output union', async () => {
+    let tb = new TypeBuilder()
+    tb.DynamicOutput.addProperty('hair_color', tb.string())
+    tb.DynamicOutput.addProperty('attributes', tb.map(tb.string(), tb.string())).description(
+      "Things like 'eye_color' or 'facial_hair'",
+    )
+
+    // Define two classes
+    const class1 = tb.addClass('Class1')
+    class1.addProperty('meters', tb.float())
+
+    const class2 = tb.addClass('Class2')
+    class2.addProperty('feet', tb.float())
+    class2.addProperty('inches', tb.float().optional())
+
+    // Use the classes in a union property
+    tb.DynamicOutput.addProperty('height', tb.union([class1.type(), class2.type()]))
+    console.log(tb.DynamicOutput.listProperties())
+    for (const [prop, _] of tb.DynamicOutput.listProperties()) {
+      console.log(`Property: ${prop}`)
+    }
+
+    let res = await b.MyFunc(
+      "My name is Harrison. My hair is black and I'm 6 feet tall. I have blue eyes and a beard. I am 30 years old.",
+      { tb },
+    )
+
+    console.log('final ', res)
+    expect(res.hair_color).toEqual('black')
+    expect(res.attributes['eye_color']).toEqual('blue')
+    expect(res.attributes['facial_hair']).toEqual('beard')
+    expect(res.height['feet']).toEqual(6)
+
+    res = await b.MyFunc(
+      "My name is Harrison. My hair is black and I'm 1.8 meters tall. I have blue eyes and a beard. I am 30 years old.",
+      { tb },
+    )
+
+    console.log('final ', res)
+    expect(res.hair_color).toEqual('black')
+    expect(res.attributes['eye_color']).toEqual('blue')
+    expect(res.attributes['facial_hair']).toEqual('beard')
+    expect(res.height['meters']).toEqual(1.8)
+  })
+
   // test with extra list, boolean in the input as well.
 
   it('should work with nested classes', async () => {
@@ -406,12 +531,14 @@ describe('Integ tests', () => {
     })
     clientRegistry.setPrimary('myClient')
 
-    await b.TestOllama('hi', {
+    const capitol = await b.ExpectFailure({
       clientRegistry,
     })
+    expect(capitol.toLowerCase()).toContain('london')
   })
 
   it("should work with 'onLogEvent'", async () => {
+    flush() // Wait for all logs to be sent so no calls to onLogEvent are missed.
     onLogEvent((param2) => {
       console.log('onLogEvent', param2)
     })
@@ -419,6 +546,13 @@ describe('Integ tests', () => {
     expect(res).toContain('a')
     const res2 = await b.TestFnNamedArgsSingleStringList(['d', 'e', 'f'])
     expect(res2).toContain('d')
+    flush() // Wait for all logs to be sent so no calls to onLogEvent are missed.
+    onLogEvent(undefined)
+  })
+
+  it('should work with a sync client', () => {
+    const res = b_sync.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
+    expect(res).toContain('a')
   })
 })
 

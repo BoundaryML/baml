@@ -1,3 +1,5 @@
+use crate::BamlMediaType;
+
 mod builder;
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
@@ -8,10 +10,22 @@ pub enum TypeValue {
     Bool,
     // Char,
     Null,
-    Image,
-    Audio,
+    Media(BamlMediaType),
 }
-
+impl TypeValue {
+    pub fn from_str(s: &str) -> Option<TypeValue> {
+        match s {
+            "string" => Some(TypeValue::String),
+            "int" => Some(TypeValue::Int),
+            "float" => Some(TypeValue::Float),
+            "bool" => Some(TypeValue::Bool),
+            "null" => Some(TypeValue::Null),
+            "image" => Some(TypeValue::Media(BamlMediaType::Image)),
+            "audio" => Some(TypeValue::Media(BamlMediaType::Audio)),
+            _ => None,
+        }
+    }
+}
 impl std::fmt::Display for TypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -20,8 +34,8 @@ impl std::fmt::Display for TypeValue {
             TypeValue::Float => write!(f, "float"),
             TypeValue::Bool => write!(f, "bool"),
             TypeValue::Null => write!(f, "null"),
-            TypeValue::Image => write!(f, "image"),
-            TypeValue::Audio => write!(f, "audio"),
+            TypeValue::Media(BamlMediaType::Image) => write!(f, "image"),
+            TypeValue::Media(BamlMediaType::Audio) => write!(f, "audio"),
         }
     }
 }
@@ -90,6 +104,7 @@ impl FieldType {
         match self {
             FieldType::Optional(_) => true,
             FieldType::Primitive(TypeValue::Null) => true,
+
             FieldType::Union(types) => types.iter().any(FieldType::is_optional),
             _ => false,
         }

@@ -1,45 +1,49 @@
+---
+slug: docs/get-started/quickstart/ruby
+---
+
 Here's a sample repository: https://github.com/BoundaryML/baml-examples/tree/main/ruby-example
 
 To set up BAML in ruby do the following:
 
 <Steps>
-  <Step title="Install BAML VSCode Extension">
+  ### Install BAML VSCode Extension
       https://marketplace.visualstudio.com/items?itemName=boundary.BAML
 
       - syntax highlighting
       - testing playground
       - prompt previews
 
-  </Step>
-  <Step title="Install baml">
+  
+  ### Install baml
         ```bash
         bundle init
-        bundle add baml sorbet-runtime sorbet-struct-comparable
+        bundle add baml sorbet-runtime
         ```
-  </Step>
-  <Step title="Add some starter code">
+  
+  ### Add some starter code
       This will give you some starter BAML code in a `baml_src` directory.
 
       ```bash
       bundle exec baml-cli init
       ```
 
-  </Step>
-  <Step title="Generate python code from .baml files">
+  
+  ### Generate python code from .baml files
 
     This command will help you convert `.baml` files to `.rb` files. Everytime you modify your `.baml` files,
     you must re-run this command, and regenerate the `baml_client` folder.
 
     <Tip>
-      If you download our [VSCode extension](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension), it will automatically generate `baml_client` on save!
+      Our [VSCode extension](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension) automatically runs this command when you save a BAML file.
     </Tip>
 
     ```bash
     bundle exec baml-cli generate
     ```
 
-  </Step>
-  <Step title="Use a baml function in Ruby!">
+  
+  ### Use a baml function in Ruby!
     <Tip>If `baml_client` doesn't exist, make sure to run the previous step!</Tip>
 
     ```ruby main.rb
@@ -69,5 +73,5 @@ To set up BAML in ruby do the following:
     example_stream 'Grace Hopper created COBOL'
     ```
 
-  </Step>
+  
 </Steps>

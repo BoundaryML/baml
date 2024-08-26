@@ -1,10 +1,14 @@
+---
+slug: docs/get-started/quickstart/python
+---
+
 Here's a sample repository: 
 https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter
 
 To set up BAML in python do the following:
 
 <Steps>
-  <Step title="Install BAML VSCode Extension">
+  ### Install BAML VSCode Extension
       https://marketplace.visualstudio.com/items?itemName=boundary.BAML
 
       - syntax highlighting
@@ -20,37 +24,59 @@ To set up BAML in python do the following:
       }
       ```
       </Tip>
-  </Step>
-  <Step title="Install baml">
+  
+  ### Install baml
         ```bash
         pip install baml-py
         ```
-  </Step>
-  <Step title="Add some starter code">
+  
+  ### Add some starter code
       This will give you some starter BAML code in a `baml_src` directory.
 
       ```bash
       baml-cli init
       ```
-  </Step>
-  <Step title="Generate python code from .baml files">
+  
+  ### Generate python code from .baml files
 
     This command will help you convert `.baml` files to `.py` files. Everytime you modify your `.baml` files,
     you must re-run this command, and regenerate the `baml_client` folder.
 
     <Tip>
-      If you download our [VSCode extension](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension), it will automatically generate `baml_client` on save!
+      Our [VSCode extension](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension) automatically runs this command when you save a BAML file.
     </Tip>
 
     ```bash
     baml-cli generate
     ```
-  </Step>
-  <Step title="Use a baml function in python!">
+  
+  ### Use a baml function in python!
     <Tip>If `baml_client` doesn't exist, make sure to run the previous step!</Tip>
 
+    <CodeBlocks>
     ```python main.py
-    from baml_client import b
+    from baml_client.sync_client import b
+    from baml_client.types import Resume
+
+    def example(raw_resume: str) -> Resume: 
+      # BAML's internal parser guarantees ExtractResume
+      # to be always return a Resume type
+      response = b.ExtractResume(raw_resume)
+      return response
+
+    def example_stream(raw_resume: str) -> Resume:
+      stream = b.stream.ExtractResume(raw_resume)
+      for msg in stream:
+        print(msg) # This will be a PartialResume type
+      
+      # This will be a Resume type
+      final = stream.get_final_response()
+
+      return final
+    ```
+
+    ```python async_main.py
+    from baml_client.async_client import b
     from baml_client.types import Resume
 
     async def example(raw_resume: str) -> Resume: 
@@ -69,5 +95,6 @@ To set up BAML in python do the following:
 
       return final
     ```
-  </Step>
+    </CodeBlocks>
+  
 </Steps>

@@ -3,9 +3,11 @@ import { atomFamily, useAtomCallback } from 'jotai/utils'
 import React, { useCallback } from 'react'
 import { selectedFunctionAtom, selectedRuntimeAtom } from '../EventListener'
 import type { WasmFunctionResponse, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+import { vscode } from '../../utils/vscode'
 
 const isRunningAtom = atom(false)
 export const showTestsAtom = atom(false)
+export const showClientGraphAtom = atom(false)
 
 export type TestStatusType = 'queued' | 'running' | 'done' | 'error'
 export type DoneTestStatusType = 'passed' | 'llm_failed' | 'parse_failed' | 'error'
@@ -67,7 +69,6 @@ export const useRunHooks = () => {
         set(isRunningAtom, true)
         set(showTestsAtom, true)
 
-        console.log('test baml getting runtime context')
         // First clear any previous test results
         testStatusAtom.setShouldRemove(() => true)
         // Remove the shouldRemove function so we don't remove future test results
@@ -108,12 +109,19 @@ export const useRunHooks = () => {
               }
               let now = new Date().getTime()
               return func
-                .run_test(runtime, testName, (intermediate: WasmFunctionResponse) => {
-                  set(testStatusAtom(testName), {
-                    status: 'running',
-                    response: intermediate,
-                  })
-                })
+                .run_test(
+                  runtime,
+                  testName,
+                  (intermediate: WasmFunctionResponse) => {
+                    set(testStatusAtom(testName), {
+                      status: 'running',
+                      response: intermediate,
+                    })
+                  },
+                  async (path: string) => {
+                    return await vscode.readFile(path)
+                  },
+                )
                 .then((res) => {
                   let elapsed = new Date().getTime() - now
                   return { res, elapsed }

@@ -1,9 +1,6 @@
-
 use anyhow::Result;
 use baml_types::BamlMap;
-use internal_baml_core::{
-    ir::{FieldType},
-};
+use internal_baml_core::ir::FieldType;
 use internal_baml_jinja::types::{Class, Name};
 
 use crate::deserializer::{
@@ -32,6 +29,7 @@ impl TypeCoercer for Class {
         );
         let (optional, required): (Vec<_>, Vec<_>) =
             self.fields.iter().partition(|f| f.1.is_optional());
+
         let mut optional_values = optional
             .iter()
             .map(|(f, ..)| (f.real_name().to_string(), None))
@@ -51,6 +49,8 @@ impl TypeCoercer for Class {
             }
             Some(crate::jsonish::Value::Object(obj)) => {
                 // match keys, if that fails, then do something fancy later.
+                let mut extra_keys = vec![];
+                let mut found_keys = false;
                 obj.iter().for_each(|(key, v)| {
                     if let Some(field) = self
                         .fields
@@ -60,10 +60,45 @@ impl TypeCoercer for Class {
                         let scope = ctx.enter_scope(field.0.real_name());
                         let parsed = field.1.coerce(&scope, &field.1, Some(v));
                         update_map(&mut required_values, &mut optional_values, field, parsed);
+                        found_keys = true;
                     } else {
-                        flags.add_flag(Flag::ExtraKey(key.clone(), v.clone()));
+                        extra_keys.push((key, v));
                     }
                 });
+
+                if !found_keys && !extra_keys.is_empty() && self.fields.len() == 1 {
+                    // Try to coerce the object into the single field
+                    let field = &self.fields[0];
+                    let scope = ctx.enter_scope(&format!("<implied:{}>", field.0.real_name()));
+                    let parsed = field
+                        .1
+                        .coerce(
+                            &scope,
+                            &field.1,
+                            Some(&crate::jsonish::Value::Object(obj.clone())),
+                        )
+                        .map(|mut v| {
+                            v.add_flag(Flag::ImpliedKey(field.0.real_name().into()));
+                            v
+                        });
+
+                    if let Ok(parsed_value) = parsed {
+                        update_map(
+                            &mut required_values,
+                            &mut optional_values,
+                            field,
+                            Ok(parsed_value),
+                        );
+                    } else {
+                        extra_keys.into_iter().for_each(|(key, v)| {
+                            flags.add_flag(Flag::ExtraKey(key.to_string(), v.clone()));
+                        });
+                    }
+                } else {
+                    extra_keys.into_iter().for_each(|(key, v)| {
+                        flags.add_flag(Flag::ExtraKey(key.to_string(), v.clone()));
+                    });
+                }
             }
             Some(crate::jsonish::Value::Array(items)) => {
                 if self.fields.len() == 1 {
@@ -97,6 +132,7 @@ impl TypeCoercer for Class {
                     let parsed = match field.1.coerce(&scope, &field.1, Some(x)) {
                         Ok(mut v) => {
                             v.add_flag(Flag::ImpliedKey(field.0.real_name().into()));
+                            flags.add_flag(Flag::InferedObject(x.clone()));
                             Ok(v)
                         }
                         Err(e) => Err(e),

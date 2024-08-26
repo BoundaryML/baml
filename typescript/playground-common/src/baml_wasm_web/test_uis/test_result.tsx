@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { VSCodeButton, VSCodeLink, VSCodeProgressRing, VSCodeTextField } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { PropsWithChildren, useEffect, useMemo, useState } from 'react'
+import React, { PropsWithChildren, useEffect, useMemo, useState, useCallback } from 'react'
 import {
   TestState,
   type TestStatusType,
@@ -12,6 +12,7 @@ import {
   DoneTestStatusType,
   useRunHooks,
   showTestsAtom,
+  showClientGraphAtom,
 } from './testHooks'
 import CustomErrorBoundary from '../../utils/ErrorFallback'
 import {
@@ -22,12 +23,25 @@ import {
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import JsonView from 'react18-json-view'
 import clsx from 'clsx'
-import { FilterIcon, Link2Icon, PlayIcon, PlusIcon } from 'lucide-react'
-import { selectedFunctionAtom, selectedTestCaseAtom } from '../EventListener'
+import { Check, Copy, FilterIcon, Link2Icon, PlayIcon, PlusIcon } from 'lucide-react'
+import { currentClientsAtom, selectedFunctionAtom, selectedTestCaseAtom } from '../EventListener'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import FunctionTestSnippet from '../../shared/TestSnippet'
 import { Tooltip, TooltipContent } from '../../components/ui/tooltip'
 import { TooltipTrigger } from '../../components/ui/tooltip'
+import { orchestration_nodes, orchIndexAtom } from '../../baml_wasm_web/EventListener'
+import {
+  ReactFlow,
+  addEdge,
+  Background,
+  useNodesState,
+  useEdgesState,
+  MiniMap,
+  MarkerType,
+  Connection,
+} from '@xyflow/react'
+import { Sparkles } from 'lucide-react'
+import { ErrorBoundary } from 'react-error-boundary'
 
 const TestStatusMessage: React.FC<{ testStatus: DoneTestStatusType }> = ({ testStatus }) => {
   switch (testStatus) {
@@ -54,13 +68,13 @@ const TestStatusIcon: React.FC<{
           queued: 'Queued',
           running: <VSCodeProgressRing className='h-4' />,
           done: (
-            <div className='flex flex-row items-center gap-1'>
+            <div className='flex flex-row gap-1 items-center'>
               {testStatus && <TestStatusMessage testStatus={testStatus} />}
-              {traceUrl && <Link2Icon className='hover:underline icon-link w-3 h-3 inline text-center' />}
+              {traceUrl && <Link2Icon className='inline w-3 h-3 text-center hover:underline icon-link' />}
             </div>
           ),
           error: (
-            <div className='flex flex-row items-center gap-1'>
+            <div className='flex flex-row gap-1 items-center'>
               <div className='text-vscode-testing-iconFailed'>Unable to run</div>
             </div>
           ),
@@ -101,6 +115,13 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
   doneStatus,
   testLatency,
 }) => {
+  const [copiedRaw, setCopiedRaw] = useState(false)
+  const [copiedParsed, setCopiedParsed] = useState(false)
+  const copyToClipboard = (text: string, setCopied: React.Dispatch<React.SetStateAction<boolean>>) => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
   const failure = test.failure_message()
   const llm_response = test.llm_response()
   const llm_failure = test.llm_failure()
@@ -115,6 +136,7 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
     latency_ms: llm_response?.latency_ms,
     output_tokens: llm_response?.output_tokens,
     model: llm_response?.model,
+    stop_reason: llm_response?.stop_reason,
   })
 
   const details = [
@@ -127,13 +149,16 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
     .filter((x) => x[0] !== undefined)
     .map((x) => x[1])
 
-  const detailsText = details.length > 0 ? ` (${details.join(', ')})` : ''
+  const stopReasonText = llm_response?.stop_reason ? ` |  StopReason: ${llm_response?.stop_reason} | ` : ''
+  const detailsText = details.length > 0 ? `${stopReasonText}  (${details.join(', ')})` : ''
 
   return (
-    <div className='flex flex-col w-full gap-1'>
+    <div className='flex flex-col gap-1 w-full'>
       {failure !== undefined &&
         !(doneStatus === 'parse_failed' || (doneStatus === 'llm_failed' && (llm_response || llm_failure))) && (
-          <div className='text-xs text-vscode-errorForeground'>{failure || '<no failure message>'}</div>
+          <div className='text-xs whitespace-pre-wrap text-vscode-errorForeground'>
+            {failure || '<no failure message>'}
+          </div>
         )}
       {(llm_response || llm_failure) && (
         <div className='w-full text-xs text-vscode-descriptionForeground'>
@@ -149,8 +174,17 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
                 : `Raw LLM Response (${llm_response?.output_tokens} tokens):`}
               <div className='px-1 py-2'>
                 {llm_response && (
-                  <pre className='px-1 py-2 whitespace-pre-wrap rounded-sm bg-vscode-input-background max-h-[200px] overflow-y-auto'>
+                  <pre className='px-1 py-2 whitespace-pre-wrap rounded-sm bg-vscode-input-background max-h-[300px] overflow-y-auto relative pr-2'>
                     {llm_response.content}
+                    <div className='flex absolute top-1 right-1 items-center'>
+                      <button
+                        className='text-vscode-foreground hover:text-vscode-button-foreground'
+                        onClick={() => copyToClipboard(llm_response.content, setCopiedRaw)}
+                      >
+                        {copiedRaw ? <Check size={16} /> : <Copy size={16} />}
+                      </button>
+                      {copiedRaw && <span className='ml-1 text-xs text-vscode-foreground'>Copied</span>}
+                    </div>
                   </pre>
                 )}
                 {llm_failure && (
@@ -175,19 +209,30 @@ const LLMTestResult: React.FC<{ test: WasmTestResponse; doneStatus: DoneTestStat
               </div>
             </div>
             {(doneStatus === 'parse_failed' || parsed !== undefined) && (
-              <div className='flex flex-col'>
+              <div className='flex relative flex-col'>
                 Parsed LLM Response:
-                <div className='px-1 py-2'>
+                <div className='relative px-1 py-2'>
                   {failure && <pre className='text-xs whitespace-pre-wrap text-vscode-errorForeground'>{failure}</pre>}
                   {parsed !== undefined && (
-                    <JsonView
-                      enableClipboard={false}
-                      className='bg-[#1E1E1E] px-1 py-1 rounded-sm'
-                      theme='a11y'
-                      collapseStringsAfterLength={200}
-                      matchesURL
-                      src={sorted_parsed}
-                    />
+                    <>
+                      <JsonView
+                        enableClipboard={false}
+                        className='bg-[#1E1E1E] px-1 py-1 rounded-sm'
+                        theme='a11y'
+                        collapseStringsAfterLength={200}
+                        matchesURL
+                        src={sorted_parsed}
+                      />
+                      <div className='flex absolute right-2 top-3 items-center'>
+                        <button
+                          className='text-vscode-descriptionForeground hover:text-vscode-foreground'
+                          onClick={() => copyToClipboard(JSON.stringify(sorted_parsed, null, 2), setCopiedParsed)}
+                        >
+                          {copiedParsed ? <Check size={16} /> : <Copy size={16} />}
+                        </button>
+                        {copiedParsed && <span className='ml-1 text-xs text-vscode-foreground'>Copied</span>}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -210,7 +255,7 @@ const LLMFunctionResult: React.FC<{ test: WasmFunctionResponse }> = ({ test }) =
   const model = llm_response?.model ?? llm_failure?.model
 
   return (
-    <div className='flex flex-col w-full gap-1'>
+    <div className='flex flex-col gap-1 w-full'>
       {(llm_response || llm_failure) && (
         <div className='w-full text-xs text-vscode-descriptionForeground'>
           <div>
@@ -281,10 +326,10 @@ const TestRow: React.FC<{ name: string }> = ({ name }) => {
   }
 
   return (
-    <div className='flex flex-row items-start gap-2 group'>
+    <div className='flex flex-row gap-2 items-start group'>
       <TestCaseActions testName={name} />
       <div className='flex flex-col'>
-        <div className='flex flex-row items-center gap-2 text-xs'>
+        <div className='flex flex-row gap-2 items-center text-xs'>
           <b>{name}</b>
           <TestStatusIcon
             testRunStatus={test.status}
@@ -347,8 +392,14 @@ const TestStatusBanner: React.FC = () => {
     })
   }
 
+  const isNextJS = (window as any).next?.version!
+  if (isNextJS) {
+    // simplify UI in promptfiddle
+    return null
+  }
+
   return (
-    <div className='flex flex-row flex-wrap items-center gap-2'>
+    <div className='flex flex-row flex-wrap gap-2 items-center'>
       <FilterIcon size={16} />
       <FilterButton
         selected={filter.has('queued')}
@@ -390,43 +441,168 @@ const TestStatusBanner: React.FC = () => {
   )
 }
 
+interface RenderEdge {
+  id: string
+  source: string
+  target: string
+}
+
+interface RenderNode {
+  id: string
+  data: { label: string; orch_index: number }
+  position: { x: number; y: number }
+  style?: { backgroundColor: string; width?: number; height?: number }
+  parentId?: string
+  extent?: 'parent' | undefined // Update extent type
+}
+
+const ClientGraph: React.FC = () => {
+  const graph = useAtomValue(orchestration_nodes)
+  const [orchIndex, setOrchIndex] = useAtom(orchIndexAtom)
+
+  const renderNodes: RenderNode[] = useMemo(
+    () =>
+      graph.nodes.map((node) => ({
+        id: node.gid,
+        data: {
+          label: node.client_name ?? 'no name for this node',
+          orch_index: node.orch_index !== undefined ? node.orch_index : -1,
+        },
+        position: { x: node.Position?.x ?? 0, y: node.Position?.y ?? 0 },
+        style: {
+          backgroundColor: 'rgba(255, 0, 255, 0.2)',
+          width: node.Dimension?.width,
+          height: node.Dimension?.height,
+          outline: orchIndex === node.orch_index ? '1px solid white' : '',
+        },
+        parentId: node.parentGid,
+        extent: 'parent',
+      })),
+    [graph.nodes, orchIndex],
+  )
+
+  const renderEdges: RenderEdge[] = useMemo(
+    () =>
+      graph.edges.map((edge, idx) => ({
+        id: idx.toString(),
+        source: edge.from_node,
+        target: edge.to_node,
+        animated: true,
+        type: 'smoothstep',
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+        },
+        label: edge.weight !== undefined ? `⏰ ${edge.weight} ms ` : '',
+      })),
+    [graph.edges],
+  )
+
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(renderNodes)
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(renderEdges)
+
+  // const onConnect = useCallback((connection: Connection) => {
+  //   setFlowEdges((eds) => addEdge(connection, eds))
+  // }, [])
+
+  // Set default selected node
+
+  // Synchronize flowNodes and flowEdges with nodes and edges
+  useEffect(() => {
+    setFlowNodes(renderNodes)
+    setFlowEdges(renderEdges)
+  }, [renderNodes, renderEdges])
+
+  const onNodeClick = (event: React.MouseEvent, node: any) => {
+    if (node.data.orch_index != -1) {
+      setOrchIndex(node.data.orch_index)
+    }
+  }
+
+  const styles: React.CSSProperties = {
+    whiteSpace: 'normal',
+    wordWrap: 'break-word',
+    overflowWrap: 'break-word',
+  }
+
+  return (
+    <div style={{ height: '100vh', width: '100%' }}>
+      <ReactFlow
+        style={styles}
+        nodes={flowNodes}
+        edges={flowEdges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={onNodeClick}
+        fitView
+        edgesFocusable={false}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        nodesFocusable={false}
+      />
+    </div>
+  )
+}
+
 const TestResults: React.FC = () => {
   const selectedFunction = useAtomValue(selectedFunctionAtom)
   const [showTests, setShowTests] = useAtom(showTestsAtom)
+  const [showClientGraph, setClientGraph] = useAtom(showClientGraphAtom)
 
   // reset the tab when switching funcs
   useEffect(() => {
     setShowTests(false)
   }, [selectedFunction?.name])
+  const isNextJs = (window as any).next?.version
 
   return (
-    <div className='flex flex-col w-full gap-2 px-1'>
-      <div className='flex flex-row items-center gap-2'>
+    <div className='flex flex-col gap-2 px-1 w-full'>
+      <div className='flex flex-row gap-2 items-center'>
         <Badge
           className={clsx(
             'cursor-pointer hover:bg-vscode-tab-activeBackground',
-            showTests
-              ? 'bg-transparent  text-vscode-foreground'
-              : 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground',
+            showTests || showClientGraph
+              ? 'bg-transparent text-vscode-foreground'
+              : 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground underline',
           )}
-          onClick={() => setShowTests(false)}
+          onClick={() => {
+            setShowTests(false)
+            setClientGraph(false)
+          }}
         >
           All Tests
         </Badge>
         <Badge
           className={clsx(
             'cursor-pointer hover:bg-vscode-tab-activeBackground',
-            showTests
-              ? 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground'
+            showTests && !showClientGraph
+              ? 'bg-vscode-tab-activeBackground text-vscode-tab-activeForeground underline'
               : 'bg-transparent text-vscode-foreground',
           )}
-          onClick={() => setShowTests(true)}
+          onClick={() => {
+            setShowTests(true)
+            setClientGraph(false)
+          }}
         >
           Test Results
         </Badge>
+        <Badge
+          className={clsx(
+            'cursor-pointer hover:bg-vscode-tab-activeBackground',
+            showClientGraph
+              ? 'underline bg-vscode-tab-activeBackground text-vscode-tab-activeForeground'
+              : 'bg-transparent text-vscode-foreground',
+          )}
+          onClick={() => {
+            setClientGraph(true)
+          }}
+        >
+          Client Graph ✨
+        </Badge>
       </div>
 
-      {showTests ? <TestResultContent /> : <TestCaseList />}
+      <CustomErrorBoundary>
+        {showClientGraph ? <ClientGraph /> : showTests ? <TestResultContent /> : <TestCaseList />}
+      </CustomErrorBoundary>
     </div>
   )
 }
@@ -510,10 +686,10 @@ const TestCaseList: React.FC = () => {
   const { isRunning, run } = useRunHooks()
 
   return (
-    <div className='flex flex-col w-full h-full gap-2 px-2'>
-      <div className='flex flex-wrap items-start items-center gap-2 h-fit'>
+    <div className='flex flex-col gap-2 px-2 w-full h-full'>
+      <div className='flex flex-wrap gap-2 items-start items-center h-fit'>
         <div className='flex flex-col'>
-          <div className='flex flex-wrap items-center gap-2'>
+          <div className='flex flex-wrap gap-2 items-center'>
             <FilterIcon size={16} />
             <VSCodeTextField
               placeholder='Filter test cases'
@@ -536,13 +712,13 @@ const TestCaseList: React.FC = () => {
         ) : (
           <>
             <Button
-              className='px-1 py-1 text-xs bg-red-500 rounded-sm h-fit whitespace-nowrap bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
+              className='px-1 py-1 text-xs whitespace-nowrap bg-red-500 rounded-sm h-fit bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
               disabled={testCases.length === 0}
               onClick={() => {
                 run(testCases.map((t) => t.name))
               }}
             >
-              <div className='flex flex-row items-center gap-1'>
+              <div className='flex flex-row gap-1 items-center'>
                 <PlayIcon size={10} />
                 Run {filter ? testCases.length : 'all'} tests
               </div>
@@ -552,9 +728,9 @@ const TestCaseList: React.FC = () => {
         <NewTestCaseDialog />
       </div>
       <hr className='w-full border-muted-foreground' />
-      <div className='flex flex-col h-full gap-1 overflow-y-auto'>
+      <div className='flex overflow-y-auto flex-col gap-1 h-full'>
         {testCases.map((test) => (
-          <div key={test.name} className='flex flex-row items-start gap-2 group'>
+          <div key={test.name} className='flex flex-row gap-2 items-start group'>
             <TestCaseActions testName={test.name} />
             <Tooltip>
               <TooltipTrigger asChild>
@@ -588,8 +764,8 @@ const TestCaseList: React.FC = () => {
 
 const TestCaseCard: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
   return (
-    <div className='flex flex-col max-w-full gap-2 text-xs text-left truncate text-vscode-descriptionForeground '>
-      <div className='break-all whitespace-pre-wrap'>
+    <div className='flex flex-col gap-2 max-w-full text-xs text-left truncate text-vscode-descriptionForeground'>
+      <div className='whitespace-pre-wrap break-all'>
         <div className='flex flex-col'>
           {test_case.inputs.map((input) => (
             <div key={input.name}>
@@ -621,10 +797,10 @@ const TestCaseCard: React.FC<{ test_case: WasmTestCase }> = ({ test_case }) => {
 const TestResultContent: React.FC = () => {
   const testsRunning = useAtomValue(runningTestsAtom)
   return (
-    <div className='flex flex-col w-full h-full gap-2 px-2'>
+    <div className='flex flex-col gap-2 px-2 w-full h-full'>
       <TestStatusBanner />
-      <hr className=' border-muted-foreground' />
-      <div className='flex flex-col w-full h-full gap-1 overflow-y-auto'>
+      <hr className='border-muted-foreground' />
+      <div className='flex overflow-y-auto flex-col gap-1 w-full h-full'>
         {testsRunning.map((testName) => (
           <TestRow key={testName} name={testName} />
         ))}

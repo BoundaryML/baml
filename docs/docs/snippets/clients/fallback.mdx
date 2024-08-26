@@ -1,6 +1,8 @@
 ---
 title: fallback
+slug: docs/snippets/clients/fallback
 ---
+
 
 You can use the `fallback` provider to add more resilliancy to your application.
 
@@ -8,7 +10,7 @@ A fallback will attempt to use the first client, and if it fails, it will try th
 
 <Tip>You can nest fallbacks inside of other fallbacks.</Tip>
 
-```rust BAML
+```baml BAML
 client<llm> SuperDuperClient {
   provider fallback
   options {
@@ -33,7 +35,7 @@ Like any other client, you can specify a retry policy for the fallback client. S
 
 The retry policy will test the fallback itself, after the entire strategy has failed.
 
-```rust BAML
+```baml BAML
 client<llm> SuperDuperClient {
   provider fallback
   retry_policy MyRetryPolicy
@@ -51,7 +53,7 @@ client<llm> SuperDuperClient {
 
 You can nest multiple fallbacks inside of each other. The fallbacks will just chain as you would expect.
 
-```rust BAML
+```baml BAML
 client<llm> SuperDuperClient {
   provider fallback
   options {

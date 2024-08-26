@@ -13,11 +13,14 @@ export declare class TypeBuilder {
         enums: Set<string>;
     });
     _tb(): _TypeBuilder;
+    null(): FieldType;
     string(): FieldType;
     int(): FieldType;
     float(): FieldType;
     bool(): FieldType;
     list(type: FieldType): FieldType;
+    map(keyType: FieldType, valueType: FieldType): FieldType;
+    union(types: FieldType[]): FieldType;
     classBuilder<Name extends string, Properties extends string>(name: Name, properties: Properties[]): ClassBuilder<Name, Properties>;
     enumBuilder<Name extends string, T extends string>(name: Name, values: T[]): EnumBuilder<Name, T>;
     addClass<Name extends string>(name: Name): ClassBuilder<Name>;

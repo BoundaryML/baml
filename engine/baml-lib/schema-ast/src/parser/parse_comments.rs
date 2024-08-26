@@ -11,7 +11,7 @@ pub(crate) fn parse_comment_block(token: Pair<'_>) -> Option<Comment> {
         match comment.as_rule() {
             Rule::doc_comment => lines.push(parse_doc_comment(comment)),
             Rule::comment | Rule::NEWLINE | Rule::WHITESPACE => {}
-            _ => parsing_catch_all(&comment, "comment block"),
+            _ => parsing_catch_all(comment, "comment block"),
         }
     }
 
@@ -31,7 +31,7 @@ pub(crate) fn parse_trailing_comment(pair: Pair<'_>) -> Option<Comment> {
         match current.as_rule() {
             Rule::doc_comment => lines.push(parse_doc_comment(current)),
             Rule::comment | Rule::NEWLINE | Rule::WHITESPACE => {}
-            _ => parsing_catch_all(&current, "trailing comment"),
+            _ => parsing_catch_all(current, "trailing comment"),
         }
     }
 

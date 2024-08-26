@@ -1,6 +1,7 @@
-use baml_types::TypeValue;
+use baml_types::{BamlMediaType, TypeValue};
 
 use super::{Span, WithName, WithSpan};
+use std::fmt::Display;
 
 /// An identifier the refers to a field or type in a different location.
 #[derive(Debug, Clone, PartialEq)]
@@ -19,8 +20,6 @@ pub enum Identifier {
     Ref(RefIdentifier, Span),
     /// A string without spaces or '.' Always starts with a letter. May contain numbers
     Local(String, Span),
-    /// Special types (always lowercase).
-    Primitive(TypeValue, Span),
     /// A string without spaces, but contains '-'
     String(String, Span),
     /// Something that cannot be used for anything.
@@ -28,12 +27,20 @@ pub enum Identifier {
 }
 
 impl Identifier {
+    pub fn to_string(&self) -> String {
+        match self {
+            Identifier::ENV(s, _) => format!("env.{}", s),
+            Identifier::Ref(ref_identifier, _) => ref_identifier.full_name.clone(),
+            Identifier::Local(s, _) => s.clone(),
+            Identifier::String(s, _) => s.clone(),
+            Identifier::Invalid(s, _) => s.clone(),
+        }
+    }
     pub fn is_valid_type(&self) -> bool {
         match self {
             Identifier::ENV(_, _) => false,
             Identifier::Ref(_, _) => true,
             Identifier::Local(_, _) => true,
-            Identifier::Primitive(_, _) => true,
             Identifier::String(_, _) => false,
             Identifier::Invalid(_, _) => false,
         }
@@ -44,7 +51,7 @@ impl Identifier {
             Identifier::ENV(_, _) => false,
             Identifier::Ref(_, _) => true,
             Identifier::Local(_, _) => true,
-            Identifier::Primitive(_, _) => true,
+
             Identifier::String(_, _) => false,
             Identifier::Invalid(_, _) => false,
         }
@@ -56,7 +63,7 @@ impl Identifier {
             Identifier::Local(_, _) => true,
             Identifier::String(_, _) => true,
             Identifier::Ref(_, _) => false,
-            Identifier::Primitive(_, _) => false,
+
             Identifier::Invalid(_, _) => false,
         }
     }
@@ -68,7 +75,7 @@ impl WithSpan for Identifier {
             Identifier::ENV(_, span) => span,
             Identifier::Ref(_, span) => span,
             Identifier::Local(_, span) => span,
-            Identifier::Primitive(_, span) => span,
+
             Identifier::String(_, span) => span,
             Identifier::Invalid(_, span) => span,
         }
@@ -80,15 +87,6 @@ impl WithName for Identifier {
         match self {
             Identifier::Ref(ref_identifier, _) => &ref_identifier.full_name,
             Identifier::Local(name, _) => name,
-            Identifier::Primitive(t, _) => match t {
-                TypeValue::String => "string",
-                TypeValue::Int => "int",
-                TypeValue::Float => "float",
-                TypeValue::Bool => "bool",
-                TypeValue::Null => "null",
-                TypeValue::Image => "image",
-                TypeValue::Audio => "audio",
-            },
             Identifier::String(s, _) => s,
             Identifier::ENV(name, _) => name,
             Identifier::Invalid(name, _) => name,
@@ -110,16 +108,15 @@ impl From<(&str, Span)> for Identifier {
                 },
                 span,
             ),
-            "string" => Identifier::Primitive(TypeValue::String, span),
-            "int" => Identifier::Primitive(TypeValue::Int, span),
-            "float" => Identifier::Primitive(TypeValue::Float, span),
-            "bool" => Identifier::Primitive(TypeValue::Bool, span),
-            "null" => Identifier::Primitive(TypeValue::Null, span),
-            "image" => Identifier::Primitive(TypeValue::Image, span),
-            "audio" => Identifier::Primitive(TypeValue::Audio, span),
             "env" => Identifier::Invalid("env".into(), span),
             other if other.contains('-') => Identifier::String(other.to_string(), span),
             other => Identifier::Local(other.to_string(), span),
         }
+    }
+}
+
+impl Display for Identifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
     }
 }

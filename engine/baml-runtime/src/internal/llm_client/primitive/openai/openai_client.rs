@@ -1,17 +1,27 @@
 use std::collections::HashMap;
 
+use crate::internal::llm_client::ResolveMediaUrls;
 use anyhow::Result;
-use baml_types::{BamlMedia, BamlMediaType};
+use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-
 use serde_json::json;
+
+use crate::internal::llm_client::{
+    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse,
+};
+
+use super::properties::{self, PostRequestProperties};
+use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta, FinishReason};
 
 use crate::client_registry::ClientProperty;
 use crate::internal::llm_client::primitive::request::{
     make_parsed_request, make_request, RequestBuilder,
 };
-use crate::internal::llm_client::traits::{SseResponseTrait, StreamResponse, WithStreamChat};
+use crate::internal::llm_client::traits::{
+    SseResponseTrait, StreamResponse, ToProviderMessage, ToProviderMessageExt,
+    WithClientProperties, WithStreamChat,
+};
 use crate::internal::llm_client::{
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
     LLMResponse, ModelFeatures,
@@ -29,7 +39,7 @@ pub struct OpenAIClient {
     retry_policy: Option<String>,
     context: RenderContext_Client,
     features: ModelFeatures,
-    properties: PostRequestProperities,
+    properties: PostRequestProperties,
     // clients
     client: reqwest::Client,
 }
@@ -37,6 +47,15 @@ pub struct OpenAIClient {
 impl WithRetryPolicy for OpenAIClient {
     fn retry_policy_name(&self) -> Option<&str> {
         self.retry_policy.as_deref()
+    }
+}
+
+impl WithClientProperties for OpenAIClient {
+    fn client_properties(&self) -> &HashMap<String, serde_json::Value> {
+        &self.properties.properties
+    }
+    fn allowed_metadata(&self) -> &crate::internal::llm_client::AllowedMetadata {
+        &self.properties.allowed_metadata
     }
 }
 
@@ -197,16 +216,6 @@ impl WithChat for OpenAIClient {
     }
 }
 
-use crate::internal::llm_client::{
-    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse,
-};
-
-use super::properties::{
-    self, resolve_azure_properties, resolve_ollama_properties, resolve_openai_properties,
-    PostRequestProperities,
-};
-use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta, FinishReason};
-
 impl RequestBuilder for OpenAIClient {
     fn http_client(&self) -> &reqwest::Client {
         &self.client
@@ -216,9 +225,13 @@ impl RequestBuilder for OpenAIClient {
         &self,
         prompt: either::Either<&String, &Vec<RenderedChatMessage>>,
         allow_proxy: bool,
-
         stream: bool,
     ) -> Result<reqwest::RequestBuilder> {
+        // Never proxy requests to Ollama
+        let allow_proxy = allow_proxy
+            && self.properties.proxy_url.is_some()
+            && !self.properties.base_url.starts_with("http://localhost");
+
         let destination_url = if allow_proxy {
             self.properties
                 .proxy_url
@@ -227,6 +240,7 @@ impl RequestBuilder for OpenAIClient {
         } else {
             &self.properties.base_url
         };
+
         let mut req = self.client.post(if prompt.is_left() {
             format!("{}/completions", destination_url)
         } else {
@@ -241,32 +255,23 @@ impl RequestBuilder for OpenAIClient {
             req = req.header(key, value);
         }
         if let Some(key) = &self.properties.api_key {
-            req = req.bearer_auth(key)
+            req = req.bearer_auth(key);
         }
 
+        // Don't attach BAML creds to localhost requests, i.e. ollama
         if allow_proxy {
             req = req.header("baml-original-url", self.properties.base_url.as_str());
         }
 
         let mut body = json!(self.properties.properties);
+
         let body_obj = body.as_object_mut().unwrap();
         match prompt {
             either::Either::Left(prompt) => {
                 body_obj.insert("prompt".into(), json!(prompt));
             }
             either::Either::Right(messages) => {
-                body_obj.insert(
-                    "messages".into(),
-                    messages
-                        .iter()
-                        .map(|m| {
-                            json!({
-                                "role": m.role,
-                                "content": convert_message_parts_to_content(&m.parts)
-                            })
-                        })
-                        .collect::<serde_json::Value>(),
-                );
+                body_obj.extend(self.chat_to_message(messages)?);
             }
         }
 
@@ -369,7 +374,11 @@ impl SseResponseTrait for OpenAIClient {
                                     inner.metadata.finish_reason =
                                         Some(FinishReason::Stop.to_string());
                                 }
-                                _ => (),
+                                finish_reason => {
+                                    inner.metadata.baml_is_complete = false;
+                                    inner.metadata.finish_reason =
+                                        finish_reason.as_ref().map(|r| r.to_string());
+                                }
                             }
                         }
                         inner.latency = instant_start.elapsed();
@@ -411,13 +420,14 @@ macro_rules! make_openai_client {
                 provider: $client.provider.clone(),
                 default_role: $properties.default_role.clone(),
             },
-            properties: $properties,
             features: ModelFeatures {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: false,
+                resolve_media_urls: ResolveMediaUrls::Never,
+                allowed_metadata: $properties.allowed_metadata.clone(),
             },
+            properties: $properties,
             retry_policy: $client.retry_policy.clone(),
             client: create_client()?,
         })
@@ -431,13 +441,14 @@ macro_rules! make_openai_client {
                 provider: $client.elem().provider.clone(),
                 default_role: $properties.default_role.clone(),
             },
-            properties: $properties,
             features: ModelFeatures {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: false,
-                resolve_media_urls: false,
+                resolve_media_urls: ResolveMediaUrls::Never,
+                allowed_metadata: $properties.allowed_metadata.clone(),
             },
+            properties: $properties,
             retry_policy: $client
                 .elem()
                 .retry_policy_id
@@ -451,24 +462,30 @@ macro_rules! make_openai_client {
 impl OpenAIClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
-        let properties = resolve_openai_properties(properties, ctx)?;
+        let properties = properties::openai::resolve_properties(properties, ctx)?;
         make_openai_client!(client, properties, "openai")
+    }
+
+    pub fn new_generic(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+        let properties = super::super::resolve_properties_walker(client, ctx)?;
+        let properties = properties::generic::resolve_properties(properties, ctx)?;
+        make_openai_client!(client, properties, "openai-generic")
     }
 
     pub fn new_ollama(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
-        let properties = resolve_ollama_properties(properties, ctx)?;
+        let properties = properties::ollama::resolve_properties(properties, ctx)?;
         make_openai_client!(client, properties, "ollama")
     }
 
     pub fn new_azure(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties = super::super::resolve_properties_walker(client, ctx)?;
-        let properties = resolve_azure_properties(properties, ctx)?;
+        let properties = properties::azure::resolve_properties(properties, ctx)?;
         make_openai_client!(client, properties, "azure")
     }
 
     pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<OpenAIClient> {
-        let properties = resolve_openai_properties(
+        let properties = properties::openai::resolve_properties(
             client
                 .options
                 .iter()
@@ -479,11 +496,26 @@ impl OpenAIClient {
         make_openai_client!(client, properties, "openai", dynamic)
     }
 
+    pub fn dynamic_new_generic(
+        client: &ClientProperty,
+        ctx: &RuntimeContext,
+    ) -> Result<OpenAIClient> {
+        let properties = properties::generic::resolve_properties(
+            client
+                .options
+                .iter()
+                .map(|(k, v)| Ok((k.clone(), json!(v))))
+                .collect::<Result<HashMap<_, _>>>()?,
+            ctx,
+        )?;
+        make_openai_client!(client, properties, "openai-generic", dynamic)
+    }
+
     pub fn dynamic_new_ollama(
         client: &ClientProperty,
         ctx: &RuntimeContext,
     ) -> Result<OpenAIClient> {
-        let properties = resolve_ollama_properties(
+        let properties = properties::ollama::resolve_properties(
             client
                 .options
                 .iter()
@@ -498,7 +530,7 @@ impl OpenAIClient {
         client: &ClientProperty,
         ctx: &RuntimeContext,
     ) -> Result<OpenAIClient> {
-        let properties = resolve_azure_properties(
+        let properties = properties::azure::resolve_properties(
             client
                 .options
                 .iter()
@@ -510,35 +542,85 @@ impl OpenAIClient {
     }
 }
 
-fn convert_message_parts_to_content(parts: &Vec<ChatMessagePart>) -> serde_json::Value {
-    if parts.len() == 1 {
-        match &parts[0] {
-            ChatMessagePart::Text(text) => return json!(text),
-            _ => {}
-        }
+impl ToProviderMessage for OpenAIClient {
+    fn to_chat_message(
+        &self,
+        mut content: serde_json::Map<String, serde_json::Value>,
+        text: &str,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        content.insert("type".into(), json!("text"));
+        content.insert("text".into(), json!(text));
+        Ok(content)
     }
 
-    let content: Vec<serde_json::Value> = parts
-        .into_iter()
-        .map(|part| match part {
-            ChatMessagePart::Text(text) => json!({"type": "text", "text": text}),
-            ChatMessagePart::Image(image) => match image {
-                BamlMedia::Url(BamlMediaType::Image, image) => {
-                    json!({"type": "image_url", "image_url": json!({
-                        "url": image.url
-                    })})
-                }
-                BamlMedia::Base64(BamlMediaType::Image, image) => {
-                    json!({"type": "image_url", "image_url": json!({
-                       "url" : format!("data:{};base64,{}", image.media_type, image.base64)
-                    })})
-                }
-                _ => json!({}), // return an empty JSON object or any other default value
-            },
-            // OpenAI does not yet support audio
-            _ => json!({}), // return an empty JSON object or any other default value
-        })
-        .collect();
+    fn to_media_message(
+        &self,
+        mut content: serde_json::Map<String, serde_json::Value>,
+        media: &baml_types::BamlMedia,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let media_type = match media.media_type {
+            BamlMediaType::Image => "image",
+            BamlMediaType::Audio => "audio",
+        };
+        let media_type = format!("{}_url", media_type);
+        match &media.content {
+            BamlMediaContent::Url(media) => {
+                content.insert("type".into(), json!(media_type));
+                content.insert(
+                    media_type,
+                    json!({
+                        "url": media.url
+                    }),
+                );
+            }
+            BamlMediaContent::Base64(b64_media) => {
+                content.insert("type".into(), json!(media_type));
+                content.insert(
+                    media_type,
+                    json!({
+                        "url": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
+                    }),
+                );
+            }
+            BamlMediaContent::File(_) => {
+                anyhow::bail!(
+                    "BAML internal error (openai): file should have been resolved to base64"
+                )
+            }
+        }
+        Ok(content)
+    }
 
-    json!(content)
+    fn role_to_message(
+        &self,
+        content: &RenderedChatMessage,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let mut message = serde_json::Map::new();
+        message.insert("role".into(), json!(content.role));
+        message.insert(
+            "content".into(),
+            json!(self.parts_to_message(&content.parts)?),
+        );
+        Ok(message)
+    }
+}
+
+impl ToProviderMessageExt for OpenAIClient {
+    fn chat_to_message(
+        &self,
+        chat: &Vec<RenderedChatMessage>,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        // merge all adjacent roles of the same type
+        let mut res = serde_json::Map::new();
+
+        res.insert(
+            "messages".into(),
+            chat.iter()
+                .map(|c| self.role_to_message(c))
+                .collect::<Result<Vec<_>>>()?
+                .into(),
+        );
+
+        Ok(res)
+    }
 }

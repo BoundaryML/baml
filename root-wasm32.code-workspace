@@ -1,0 +1,99 @@
+{
+  "folders": [
+    {
+      "path": ".github"
+    },
+    {
+      "path": "docs"
+    },
+    {
+      "path": "engine"
+    },
+    {
+      "path": "integ-tests"
+    },
+    {
+      "path": "release"
+    },
+    {
+      "path": "tools"
+    },
+    {
+      "path": "typescript"
+    }
+  ],
+  "settings": {
+    "[rust]": {
+      "editor.defaultFormatter": "rust-lang.rust-analyzer",
+      "editor.formatOnSave": true
+    },
+    "[python]": {
+      "editor.defaultFormatter": "charliermarsh.ruff"
+    },
+    "[javascript]": {
+      "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[typescript]": {
+      "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[typescriptreact]": {
+      "editor.defaultFormatter": "biomejs.biome"
+    },
+    "files.associations": {
+      "*.baml.j2": "jinja",
+      "*.js.j2": "jinja-js",
+      "*.ts.j2": "jinja-js"
+    },
+    "editor.colorDecoratorsLimit": 2000,
+    "editor.formatOnSaveMode": "file",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "mypy.enabled": false,
+    "git.openDiffOnClick": true,
+    "python.analysis.typeCheckingMode": "strict",
+    "rust-analyzer.cargo.target": "wasm32-unknown-unknown",
+    "rust-analyzer.procMacro.ignored": {
+      "napi-derive": ["napi"]
+    },
+    "sorbet.enabled": true,
+    "sorbet.lspConfigs": [
+      {
+        "id": "stable",
+        "name": "Sorbet",
+        "description": "Stable Sorbet Ruby IDE features",
+        "cwd": "${workspaceFolder}",
+        "command": [
+          "bundle",
+          "exec",
+          "srb",
+          "typecheck",
+          "--lsp",
+          "--disable-watchman"
+        ]
+      }
+    ],
+    "workbench.colorCustomizations": {
+      "activityBar.background": "#630001",
+      "titleBar.activeBackground": "#8B0002",
+      "titleBar.activeForeground": "#FFFBFB"
+    },
+    "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome"
+    
+  },
+  "extensions": {
+    "recommendations": [
+      "mhutchie.git-graph",
+      "github.copilot",
+      "pest.pest-ide-tools",
+      "ms-python.python",
+      "rust-lang.rust-analyzer",
+      "unifiedjs.vscode-mdx",
+      "tamasfe.even-better-toml",
+      "charliermarsh.ruff",
+      "matangover.mypy",
+      "samuelcolvin.jinjahtml",
+      "biomejs.biome",
+      "boundary.baml-extension"
+    ]
+  }
+}

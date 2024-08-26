@@ -1,0 +1,135 @@
+# typed: false
+require "baml"
+require "sorbet-runtime"
+
+require_relative "inlined"
+require_relative "partial-types"
+require_relative "types"
+require_relative "type-registry"
+
+module Baml
+  @instance = nil
+
+  def self.Client
+    if @instance.nil?
+      @instance = BamlClient.new(runtime: Baml::Ffi::BamlRuntime.from_files("baml_src", Baml::Inlined::FILE_MAP, ENV))
+    end
+  
+    @instance
+  end
+
+  class BamlClient
+    extend T::Sig
+
+    sig { returns(BamlStreamClient) }
+    attr_reader :stream
+
+    sig {params(runtime: Baml::Ffi::BamlRuntime).void}
+    def initialize(runtime:)
+      @runtime = runtime
+      @ctx_manager = runtime.create_context_manager()
+      @stream = BamlStreamClient.new(runtime: @runtime, ctx_manager: @ctx_manager)
+    end
+
+    sig {params(path: String).returns(BamlClient)}
+    def self.from_directory(path)
+      BamlClient.new(runtime: Baml::Ffi::BamlRuntime.from_directory(path, ENV))
+    end
+
+    {% for fn in funcs -%}
+    sig {
+      params(
+        varargs: T.untyped,
+        {% for (name, type) in fn.args -%}
+        {{name}}: {{type}},
+        {%- endfor %}
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns({{ fn.return_type }})
+    }
+    def {{fn.name}}(
+        *varargs,
+        {% for (name, _) in fn.args -%}
+        {{name}}:,
+        {%- endfor %}
+        baml_options: {}
+    )
+      if varargs.any?
+        {# We rely on sorbet-runtime to give errors about the list of allowed kwargs #}
+        raise ArgumentError.new("{{fn.name}} may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "{{fn.name}}",
+        {
+          {% for (name, _) in fn.args -%}
+          {{name}}: {{name}},
+          {%- endfor %}
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    {% endfor %}
+
+  end
+
+  class BamlStreamClient
+    extend T::Sig
+
+    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager).void}
+    def initialize(runtime:, ctx_manager:)
+      @runtime = runtime
+      @ctx_manager = ctx_manager
+    end
+
+    {% for fn in funcs -%}
+    sig {
+      params(
+        varargs: T.untyped,
+        {% for (name, type) in fn.args -%}
+        {{name}}: {{type}},
+        {%- endfor %}
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[{{ fn.return_type }}])
+    }
+    def {{fn.name}}(
+        *varargs,
+        {% for (name, _) in fn.args -%}
+        {{name}}:,
+        {%- endfor %}
+        baml_options: {}
+    )
+      if varargs.any?
+        {# We rely on sorbet-runtime to give errors about the list of allowed kwargs #}
+        raise ArgumentError.new("{{fn.name}} may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "{{fn.name}}",
+        {
+          {% for (name, _) in fn.args -%}
+          {{name}}: {{name}},
+          {%- endfor %}
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[{{fn.partial_return_type}}, {{fn.return_type}}].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    {% endfor %}
+  end
+end

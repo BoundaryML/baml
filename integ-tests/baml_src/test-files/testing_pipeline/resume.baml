@@ -22,8 +22,29 @@ template_string AddRole(foo: string) #"
     {{ _.role('user') }}
 "#
 
+client<llm> TestClient {
+    provider fallback
+    retry_policy Constant
+    options {
+        strategy [
+            Claude
+            GPT35
+            AwsBedrock
+        ]
+    }
+}
+
+client<llm> Claude2 {
+  provider anthropic
+  options {
+    model claude-3-haiku-20240307
+    api_key env.FOOBAR3
+    max_tokens 1000
+  }
+}
+
 function ExtractResume(resume: string, img: image?) -> Resume {
-    client GPT35
+    client Claude2
     prompt #"
         {{ AddRole("Software Engineer") }}
 

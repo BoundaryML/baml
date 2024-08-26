@@ -4,8 +4,8 @@ pub mod repr;
 mod walker;
 
 pub use ir_helpers::{
-    ClassFieldWalker, ClassWalker, ClientWalker, EnumValueWalker, EnumWalker, FunctionWalker,
-    IRHelper, RetryPolicyWalker, TemplateStringWalker, TestCaseWalker,
+    ArgCoercer, ClassFieldWalker, ClassWalker, ClientWalker, EnumValueWalker, EnumWalker,
+    FunctionWalker, IRHelper, RetryPolicyWalker, TemplateStringWalker, TestCaseWalker,
 };
 
 pub(super) use repr::IntermediateRepr;
@@ -19,11 +19,9 @@ pub type FieldType = baml_types::FieldType;
 pub type Expression = repr::Expression;
 pub type Identifier = repr::Identifier;
 pub type TypeValue = baml_types::TypeValue;
-pub type Function = repr::Node<repr::Function>;
+pub type FunctionNode = repr::Node<repr::Function>;
 #[allow(dead_code)]
-pub(super) type FunctionV1 = repr::FunctionV1;
-#[allow(dead_code)]
-pub(super) type FunctionV2 = repr::FunctionV2;
+pub(super) type Function = repr::Function;
 pub(super) type FunctionArgs = repr::FunctionArgs;
 pub(super) type Impl = repr::Node<repr::Implementation>;
 pub type Client = repr::Node<repr::Client>;

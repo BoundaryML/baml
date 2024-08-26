@@ -80,7 +80,7 @@ impl BamlTracer {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn set_log_event_callback(&self, log_event_callback: LogEventCallbackSync) {
+    pub(crate) fn set_log_event_callback(&self, log_event_callback: Option<LogEventCallbackSync>) {
         if let Some(tracer) = &self.tracer {
             tracer.set_log_event_callback(log_event_callback);
         }
@@ -601,6 +601,48 @@ impl From<&LLMResponse> for LLMEventSchema {
     }
 }
 
+impl From<&internal_baml_jinja::ChatMessagePart> for ContentPart {
+    fn from(value: &internal_baml_jinja::ChatMessagePart) -> Self {
+        match value {
+            internal_baml_jinja::ChatMessagePart::Text(t) => ContentPart::Text(t.clone()),
+            internal_baml_jinja::ChatMessagePart::Media(media) => {
+                match (media.media_type, &media.content) {
+                    (BamlMediaType::Image, baml_types::BamlMediaContent::File(data)) => {
+                        ContentPart::FileImage(
+                            data.span_path.to_string_lossy().into_owned(),
+                            data.relpath.to_string_lossy().into_owned(),
+                        )
+                    }
+                    (BamlMediaType::Audio, baml_types::BamlMediaContent::File(data)) => {
+                        ContentPart::FileAudio(
+                            data.span_path.to_string_lossy().into_owned(),
+                            data.relpath.to_string_lossy().into_owned(),
+                        )
+                    }
+                    (BamlMediaType::Image, baml_types::BamlMediaContent::Base64(data)) => {
+                        ContentPart::B64Image(data.base64.clone())
+                    }
+                    (BamlMediaType::Audio, baml_types::BamlMediaContent::Base64(data)) => {
+                        ContentPart::B64Audio(data.base64.clone())
+                    }
+                    (BamlMediaType::Image, baml_types::BamlMediaContent::Url(data)) => {
+                        ContentPart::UrlImage(data.url.clone())
+                    }
+                    (BamlMediaType::Audio, baml_types::BamlMediaContent::Url(data)) => {
+                        ContentPart::UrlAudio(data.url.clone())
+                    }
+                }
+            }
+            internal_baml_jinja::ChatMessagePart::WithMeta(inner, meta) => ContentPart::WithMeta(
+                Box::new(inner.as_ref().into()),
+                meta.iter()
+                    .map(|(k, v)| (k.clone(), v.clone().into()))
+                    .collect(),
+            ),
+        }
+    }
+}
+
 impl From<&RenderedPrompt> for Template {
     fn from(value: &RenderedPrompt) -> Self {
         match value {
@@ -615,39 +657,7 @@ impl From<&RenderedPrompt> for Template {
                                 Role::Other(c.role.clone())
                             }
                         },
-                        content: c
-                            .parts
-                            .iter()
-                            .map(|p| match p {
-                                internal_baml_jinja::ChatMessagePart::Text(t) => {
-                                    ContentPart::Text(t.clone())
-                                }
-                                internal_baml_jinja::ChatMessagePart::Image(media)
-                                | internal_baml_jinja::ChatMessagePart::Audio(media) => match media
-                                {
-                                    baml_types::BamlMedia::Base64(media_type, data) => {
-                                        match media_type {
-                                            BamlMediaType::Image => {
-                                                ContentPart::B64Image(data.base64.clone())
-                                            }
-                                            BamlMediaType::Audio => {
-                                                ContentPart::B64Audio(data.base64.clone())
-                                            }
-                                        }
-                                    }
-                                    baml_types::BamlMedia::Url(media_type, data) => {
-                                        match media_type {
-                                            BamlMediaType::Image => {
-                                                ContentPart::UrlImage(data.url.clone())
-                                            }
-                                            BamlMediaType::Audio => {
-                                                ContentPart::UrlAudio(data.url.clone())
-                                            }
-                                        }
-                                    }
-                                },
-                            })
-                            .collect::<Vec<_>>(),
+                        content: c.parts.iter().map(|p| p.into()).collect::<Vec<_>>(),
                     })
                     .collect::<Vec<_>>(),
             ),

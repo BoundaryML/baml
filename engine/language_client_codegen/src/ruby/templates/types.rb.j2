@@ -1,0 +1,46 @@
+# typed: false
+require "sorbet-runtime"
+
+module Baml
+  {# Baml::Types is reserved for generated types. #}
+  module Types
+    {#- https://sorbet.org/docs/tenum #}
+    {%- for enum in enums %}
+    class {{ enum.name }} < T::Enum
+      {%- if enum.values.len() > 0 %}
+      enums do
+        {%- for value in enum.values %}
+        {{ value }} = new("{{ value }}")
+        {%- endfor %}
+      end
+      {%- endif %}
+    end
+    {%- endfor %}
+
+    {#- Forward declarations for types #}
+    {%- for cls in classes %}
+    class {{cls.name}} < T::Struct; end
+    {%- endfor %}
+
+    {#- https://sorbet.org/docs/tstruct #}
+    {%- for cls in classes %}
+    class {{cls.name}} < T::Struct
+      include Baml::Sorbet::Struct
+
+      {%- for (name, type) in cls.fields %}
+      const :{{name}}, {{type}}
+      {%- endfor %}
+
+      def initialize(props)
+        super(
+          {%- for (name, _) in cls.fields %}
+          {{name}}: props[:{{name}}],
+          {%- endfor %}
+        )
+
+        @props = props
+      end
+    end
+    {%- endfor %}
+  end
+end

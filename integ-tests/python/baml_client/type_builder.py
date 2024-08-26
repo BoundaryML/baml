@@ -19,7 +19,7 @@ from baml_py.type_builder import FieldType, TypeBuilder as _TypeBuilder, ClassPr
 class TypeBuilder(_TypeBuilder):
     def __init__(self):
         super().__init__(classes=set(
-          ["Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","Education","Email","Event","FakeImage","InnerClass","InnerClass2","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","RaysData","ReceiptInfo","ReceiptItem","Resume","SearchParams","SomeClassNestedDynamic","TestClassAlias","TestClassNested","TestClassWithEnum","TestOutputClass","UnionTest_ReturnType","WithReasoning",]
+          ["Blah","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","Education","Email","Event","FakeImage","InnerClass","InnerClass2","NamedArgsSingleClass","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","Quantity","RaysData","ReceiptInfo","ReceiptItem","Recipe","Resume","SearchParams","SomeClassNestedDynamic","StringToClassEntry","TestClassAlias","TestClassNested","TestClassWithEnum","TestOutputClass","UnionTest_ReturnType","WithReasoning",]
         ), enums=set(
           ["Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumTwo","EnumInClass","EnumOutput","Hobby","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",]
         ))
@@ -27,36 +27,43 @@ class TypeBuilder(_TypeBuilder):
 
 
     @property
+    
     def DummyOutput(self) -> "DummyOutputBuilder":
         return DummyOutputBuilder(self)
 
 
     @property
+    
     def DynInputOutput(self) -> "DynInputOutputBuilder":
         return DynInputOutputBuilder(self)
 
 
     @property
+    
     def DynamicClassOne(self) -> "DynamicClassOneBuilder":
         return DynamicClassOneBuilder(self)
 
 
     @property
+    
     def DynamicClassTwo(self) -> "DynamicClassTwoBuilder":
         return DynamicClassTwoBuilder(self)
 
 
     @property
+    
     def DynamicOutput(self) -> "DynamicOutputBuilder":
         return DynamicOutputBuilder(self)
 
 
     @property
+    
     def Person(self) -> "PersonBuilder":
         return PersonBuilder(self)
 
 
     @property
+    
     def SomeClassNestedDynamic(self) -> "SomeClassNestedDynamicBuilder":
         return SomeClassNestedDynamicBuilder(self)
 

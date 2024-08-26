@@ -7,6 +7,9 @@ description.workspace = true
 
 license-file.workspace = true
 
+[build-dependencies]
+anyhow.workspace = true
+
 [dependencies]
 anyhow.workspace = true
 base64.workspace = true
@@ -15,6 +18,7 @@ cfg-if.workspace = true
 clap = { version = "4.4.6", features = ["cargo", "derive"] }
 colored = "2.1.0"
 dashmap.workspace = true
+derive_more.workspace = true
 dunce = "1.0.4"
 either.workspace = true
 env_logger.workspace = true
@@ -68,6 +72,9 @@ aws-smithy-runtime = "1.6.0"
 enum_dispatch = "0.3.13"
 ambassador = "0.4.0"
 aws-smithy-json = "0.60.7"
+jsonwebtoken = "9.3.0"
+pretty_assertions = "1.4.0"
+
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 aws-config = { version = "1.5.3", default-features = false, features = [] }
@@ -93,6 +100,7 @@ web-sys = { version = "0.3.69", features = [
   "RequestMode",
   "Window",
 ] }
+ring = { version = "0.17.4", features = ["std", "wasm32_unknown_unknown_js"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 aws-config = "1.5.3"
@@ -105,7 +113,6 @@ reqwest = { version = "0.12.5", features = [
   "stream",
 ] }
 walkdir = "2.5.0"
-
 
 [features]
 defaults = []

@@ -103,7 +103,6 @@ pub struct VertexAiSearch {
 pub struct SafetySetting {
     pub category: HarmCategory,
     pub threshold: HarmBlockThreshold,
-    pub method: HarmBlockMethod,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -118,16 +117,6 @@ pub enum HarmBlockThreshold {
     BlockOnlyHigh,
     #[serde(rename = "BLOCK_NONE")]
     BlockNone,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum HarmBlockMethod {
-    #[serde(rename = "harm_block_method_unspecified")]
-    HarmBlockMethodUnspecified,
-    #[serde(rename = "severity")]
-    Severity,
-    #[serde(rename = "probability")]
-    Probability,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -235,7 +224,7 @@ pub struct Candidate {
     pub content: Content,
     pub finish_reason: Option<FinishReason>,
     pub safety_ratings: Option<Vec<SafetyRating>>,
-    pub citation_metadata: Option<CitationMetadata>,
+    // pub citation_metadata: Option<CitationMetadata>,
     pub grounding_metadata: Option<GroundingMetadata>,
     pub finish_message: Option<String>,
 }
@@ -326,7 +315,8 @@ pub enum FinishReason {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CitationMetadata {
-    pub citations: Vec<Citation>,
+    // docs are wrong, this seems to be citationSources
+    pub citations: Option<Vec<Citation>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

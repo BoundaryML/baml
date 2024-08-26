@@ -7,14 +7,18 @@ use anyhow::{Context, Result};
 use aws_smithy_json::serialize::JsonObjectWriter;
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types::Blob;
+use baml_types::BamlMediaContent;
 use baml_types::{BamlMedia, BamlMediaType};
-use futures::{stream, SinkExt, StreamExt};
+use futures::stream;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use serde::Deserialize;
+use serde_json::Map;
 use web_time::Instant;
 use web_time::SystemTime;
 
+use crate::internal::llm_client::traits::{ToProviderMessageExt, WithClientProperties};
+use crate::internal::llm_client::AllowedMetadata;
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder,
     traits::{
@@ -22,10 +26,10 @@ use crate::internal::llm_client::{
         WithStreamChat,
     },
     ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-    ModelFeatures,
+    ModelFeatures, ResolveMediaUrls,
 };
 
-use crate::RuntimeContext;
+use crate::{RenderCurlSettings, RuntimeContext};
 
 // stores properties required for making a post request to the API
 struct RequestProperties {
@@ -33,6 +37,7 @@ struct RequestProperties {
 
     default_role: String,
     inference_config: Option<bedrock::types::InferenceConfiguration>,
+    allowed_metadata: AllowedMetadata,
 
     request_options: HashMap<String, serde_json::Value>,
     ctx_env: HashMap<String, String>,
@@ -74,7 +79,11 @@ fn resolve_properties(client: &ClientWalker, ctx: &RuntimeContext) -> Result<Req
         .remove("default_role")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "user".to_string());
-
+    let allowed_metadata = match properties.remove("allowed_role_metadata") {
+        Some(allowed_metadata) => serde_json::from_value(allowed_metadata)
+            .context("allowed_role_metadata must be 'all', 'none', or ['key1', 'key2']")?,
+        None => AllowedMetadata::None,
+    };
     let inference_config = match properties.remove("inference_configuration") {
         Some(v) => Some(
             super::types::InferenceConfiguration::deserialize(v)
@@ -88,6 +97,7 @@ fn resolve_properties(client: &ClientWalker, ctx: &RuntimeContext) -> Result<Req
         model_id,
         default_role,
         inference_config,
+        allowed_metadata,
         request_options: properties,
         ctx_env: ctx.env.clone(),
     })
@@ -100,7 +110,6 @@ impl AwsClient {
 
         Ok(Self {
             name: client.name().into(),
-            properties: post_properties,
             context: RenderContext_Client {
                 name: client.name().into(),
                 provider: client.elem().provider.clone(),
@@ -110,13 +119,15 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 anthropic_system_constraints: true,
-                resolve_media_urls: true,
+                resolve_media_urls: ResolveMediaUrls::Always,
+                allowed_metadata: post_properties.allowed_metadata.clone(),
             },
             retry_policy: client
                 .elem()
                 .retry_policy_id
                 .as_ref()
                 .map(|s| s.to_string()),
+            properties: post_properties,
         })
     }
 
@@ -148,7 +159,7 @@ impl AwsClient {
                         }
                     };
 
-                    let mut loader = super::wasm::load_aws_config()
+                    let loader = super::wasm::load_aws_config()
                         .region(Region::new(aws_region.clone()))
                         .credentials_provider(Credentials::new(
                             aws_access_key_id.clone(),
@@ -205,7 +216,6 @@ impl AwsClient {
     fn build_request(
         &self,
         ctx: &RuntimeContext,
-
         chat_messages: &Vec<RenderedChatMessage>,
     ) -> Result<bedrock::operation::converse::ConverseInput> {
         let mut system_message = None;
@@ -213,19 +223,20 @@ impl AwsClient {
 
         if let Some((first, remainder_slice)) = chat_slice.split_first() {
             if first.role == "system" {
-                system_message = Some(first.parts.iter()
-                .map(|part| match part {
-                    ChatMessagePart::Text(text) => Ok(bedrock::types::SystemContentBlock::Text(text.clone())),
-                    _ => anyhow::bail!("AWS Bedrock only supports text blocks for system messages, but got {:#?}", part),
-                })
-                .collect::<Result<_>>()?);
+                system_message = Some(
+                    first
+                        .parts
+                        .iter()
+                        .map(|part| self.part_to_system_message(part))
+                        .collect::<Result<_>>()?,
+                );
                 chat_slice = remainder_slice;
             }
         }
 
         let converse_messages = chat_slice
             .iter()
-            .map(|m| AwsChatMessage(m).try_into())
+            .map(|m| self.role_to_message(m))
             .collect::<Result<Vec<_>>>()?;
 
         bedrock::operation::converse::ConverseInput::builder()
@@ -261,7 +272,7 @@ impl WithRenderRawCurl for AwsClient {
         &self,
         ctx: &RuntimeContext,
         prompt: &Vec<internal_baml_jinja::RenderedChatMessage>,
-        _stream: bool,
+        _render_settings: RenderCurlSettings,
     ) -> Result<String> {
         let converse_input = self.build_request(ctx, prompt)?;
 
@@ -280,6 +291,15 @@ impl WithRenderRawCurl for AwsClient {
 impl WithRetryPolicy for AwsClient {
     fn retry_policy_name(&self) -> Option<&str> {
         self.retry_policy.as_deref()
+    }
+}
+
+impl WithClientProperties for AwsClient {
+    fn client_properties(&self) -> &HashMap<String, serde_json::Value> {
+        &self.properties.request_options
+    }
+    fn allowed_metadata(&self) -> &crate::internal::llm_client::AllowedMetadata {
+        &self.properties.allowed_metadata
     }
 }
 
@@ -490,58 +510,101 @@ impl WithStreamChat for AwsClient {
     }
 }
 
-struct AwsChatMessage<'m>(&'m RenderedChatMessage);
+impl AwsClient {
+    fn to_chat_message(&self, text: &str) -> Result<bedrock::types::ContentBlock> {
+        Ok(bedrock::types::ContentBlock::Text(text.to_string()))
+    }
 
-impl TryInto<bedrock::types::Message> for AwsChatMessage<'_> {
-    type Error = anyhow::Error;
+    fn to_media_message(
+        &self,
+        media: &baml_types::BamlMedia,
+    ) -> Result<bedrock::types::ContentBlock> {
+        if media.media_type != BamlMediaType::Image {
+            anyhow::bail!(
+                "AWS supports images, but does not support this media type: {:#?}",
+                media
+            )
+        }
+        match &media.content {
+            BamlMediaContent::File(_) => {
+                anyhow::bail!(
+                    "BAML internal error (AWSBedrock): file should have been resolved to base64"
+                )
+            }
+            BamlMediaContent::Url(_) => {
+                anyhow::bail!(
+                    "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
+                )
+            }
+            BamlMediaContent::Base64(b64_media) => Ok(bedrock::types::ContentBlock::Image(
+                bedrock::types::ImageBlock::builder()
+                    .set_format(Some(bedrock::types::ImageFormat::from(
+                        {
+                            let mime_type = media.mime_type_as_ok()?;
+                            match mime_type.strip_prefix("image/") {
+                                Some(s) => s.to_string(),
+                                None => mime_type,
+                            }
+                        }
+                        .as_str(),
+                    )))
+                    .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
+                        aws_smithy_types::base64::decode(b64_media.base64.clone())?,
+                    ))))
+                    .build()
+                    .context("Failed to build image block")?,
+            )),
+        }
+    }
 
-    fn try_into(self) -> Result<bedrock::types::Message> {
-        let message = self.0;
-
-        let role = match message.role.as_str() {
-            "user" => bedrock::types::ConversationRole::User,
-            "assistant" => bedrock::types::ConversationRole::Assistant,
-            _ => bedrock::types::ConversationRole::User,
-        };
-
-        let content = message
+    fn role_to_message(&self, msg: &RenderedChatMessage) -> Result<bedrock::types::Message> {
+        let content = msg
             .parts
             .iter()
-            .map(|part| match part {
-                ChatMessagePart::Text(text) => Ok(bedrock::types::ContentBlock::Text(text.clone())),
-                ChatMessagePart::Image(media) | ChatMessagePart::Audio(media) => match media {
-                    BamlMedia::Url(_, _) => {
-                        anyhow::bail!(
-                            "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
-                        )
-                    }
-                    BamlMedia::Base64(BamlMediaType::Image, media) => {
-                        Ok(bedrock::types::ContentBlock::Image(
-                            bedrock::types::ImageBlock::builder()
-                                .set_format(Some(bedrock::types::ImageFormat::from(
-                                    media
-                                        .media_type
-                                        .strip_prefix("image/")
-                                        .unwrap_or(media.media_type.as_str()),
-                                )))
-                                .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
-                                    aws_smithy_types::base64::decode(media.base64.clone())?,
-                                ))))
-                                .build()
-                                .context("Failed to build image block")?,
-                        ))
-                    }
-                    _ => anyhow::bail!("AWS does not support this media type: {:#?}", media),
-                },
-                _ => anyhow::bail!("AWS does not support this message part type: {:#?}", part),
-            })
-            .collect::<Result<_>>()?;
+            .map(|part| self.part_to_message(part))
+            .collect::<Result<Vec<_>>>()?;
 
         bedrock::types::Message::builder()
-            .set_role(Some(role))
+            .set_role(Some(msg.role.as_str().into()))
             .set_content(Some(content))
             .build()
-            .map_err(|e| e.into())
+            .map_err(|e: bedrock::error::BuildError| e.into())
+    }
+
+    fn part_to_system_message(
+        &self,
+        part: &ChatMessagePart,
+    ) -> Result<bedrock::types::SystemContentBlock> {
+        match part {
+            ChatMessagePart::Text(t) => Ok(bedrock::types::SystemContentBlock::Text(t.clone())),
+            ChatMessagePart::Media(_) => anyhow::bail!(
+                "AWS Bedrock only supports text blocks for system messages, but got {:#?}",
+                part
+            ),
+            ChatMessagePart::WithMeta(p, _) => self.part_to_system_message(p),
+        }
+    }
+
+    fn part_to_message(&self, part: &ChatMessagePart) -> Result<bedrock::types::ContentBlock> {
+        match part {
+            ChatMessagePart::Text(t) => self.to_chat_message(t),
+            ChatMessagePart::Media(m) => self.to_media_message(m),
+            ChatMessagePart::WithMeta(p, _) => {
+                // All metadata is dropped as AWS does not support it
+                // this means caching, etc.
+                self.part_to_message(&p)
+            }
+        }
+    }
+
+    fn parts_to_message(
+        &self,
+        parts: &Vec<ChatMessagePart>,
+    ) -> Result<Vec<bedrock::types::ContentBlock>> {
+        Ok(parts
+            .iter()
+            .map(|p| self.part_to_message(p))
+            .collect::<Result<Vec<_>>>()?)
     }
 }
 

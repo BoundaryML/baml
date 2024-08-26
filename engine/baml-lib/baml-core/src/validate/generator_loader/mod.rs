@@ -23,7 +23,7 @@ pub(crate) fn load_generators_from_ast<'i>(
 }
 
 fn parse_generator(
-    ast_generator: &ast::GeneratorConfig,
+    ast_generator: &ast::ValueExprBlock,
     diagnostics: &mut Diagnostics,
 ) -> Option<Generator> {
     let errors = match v2::parse_generator(ast_generator, &diagnostics.root_path) {

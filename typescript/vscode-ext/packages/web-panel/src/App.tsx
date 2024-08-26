@@ -14,15 +14,17 @@ import 'jotai-devtools/styles.css'
 import { Snippets } from './shared/Snippets'
 import { Dialog, DialogTrigger, DialogContent } from './components/ui/dialog'
 import { AppStateProvider } from './shared/AppStateContext' // Import the AppStateProvider
+import { useFeedbackWidget } from './lib/feedback_widget'
 
 function App() {
+  useFeedbackWidget()
   return (
     <CustomErrorBoundary>
       <DevTools />
       <Suspense fallback={<div>Loading...</div>}>
         <EventListener>
           <AppStateProvider>
-            <div className='flex flex-col w-full gap-2 px-2 pb-4'>
+            <div className='flex flex-col w-full gap-2 px-2 pb-1 h-[100vh] overflow-y-clip'>
               <div className='flex flex-row items-center justify-start gap-1'>
                 <ViewSelector />
               </div>

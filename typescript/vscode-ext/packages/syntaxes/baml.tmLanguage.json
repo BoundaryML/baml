@@ -138,7 +138,18 @@
       "patterns": [
         {
           "match": "\\b(bool|int|float|string|null|image|audio)\\b",
-          "name": "storage.type.declaration.native"
+          "name": "storage.type.baml"
+        },
+        {
+          "begin": "(map)\\s*<",
+          "beginCaptures": {
+            "1": { "name": "storage.type.baml" }
+          },
+          "patterns": [
+            { "include": "#type_definition" },
+            { "include": "#type_definition" }
+          ],
+          "end": ">"
         },
         {
           "match": "\\w+",
@@ -146,16 +157,16 @@
         },
         {
           "match": "\\[\\]",
-          "name": "keyword.control"
+          "name": "keyword.control.baml"
         },
         {
           "match": "\\?",
-          "name": "keyword.control"
+          "name": "keyword.control.baml"
         },
         {
           "comment": "union a | b | c",
           "match": "\\|",
-          "name": "keyword.control"
+          "name": "keyword.control.baml"
         },
         {
           "comment": "Groups",
@@ -198,10 +209,18 @@
           "comment": "Function client properties",
           "patterns": [
             {
-              "match": "(client)\\s+(\\w+)",
+              "match": "(client)\\s+(\\w+|\"[^\"]*\")",
               "captures": {
                 "1": { "name": "variable.other.readwrite.client" },
-                "2": { "name": "entity.name.other.client" }
+                "2": {
+                  "patterns": [
+                    {
+                      "match": "\\w+",
+                      "name": "entity.name.other.client" 
+                    },
+                    { "include": "#string_literal" }
+                  ]
+                }
               },
               "name": "meta.client.declaration"
             },
@@ -244,10 +263,18 @@
       "patterns": [
         { "include": "#comment" },
         {
-          "match": "(client)\\s+(\\w+)",
+          "match": "(client)\\s+(\\w+|\"[^\"]*\")",
           "captures": {
             "1": { "name": "variable.other.readwrite.client" },
-            "2": { "name": "entity.name.other.client" }
+            "2": {
+              "patterns": [
+                {
+                  "match": "\\w+",
+                  "name": "entity.name.other.client" 
+                },
+                { "include": "#string_literal" }
+              ]
+            }
           },
           "name": "meta.client.declaration"
         },

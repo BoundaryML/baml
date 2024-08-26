@@ -3,15 +3,23 @@ import 'react18-json-view/src/style.css'
 
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { atomFamily, atomWithStorage, unwrap, useAtomCallback } from 'jotai/utils'
+import { atomFamily, atomWithStorage, loadable, unwrap, useAtomCallback } from 'jotai/utils'
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
 import { atomStore, sessionStore, vscodeLocalStorageStore } from './JotaiProvider'
 import { availableProjectsAtom, projectFamilyAtom, projectFilesAtom, runtimeFamilyAtom } from './baseAtoms'
-import type { WasmDiagnosticError, WasmParam, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
+import { showClientGraphAtom, showTestsAtom } from './test_uis/testHooks'
+import {
+  // We _deliberately_ only import types from wasm, instead of importing the module: wasm load is async,
+  // so we can only load wasm symbols through wasmAtom, not directly by importing wasm-schema-web
+  type WasmDiagnosticError,
+  type WasmParam,
+  type WasmRuntime,
+  type WasmScope,
+} from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { vscode } from '../utils/vscode'
-
+import { useRunHooks } from './test_uis/testHooks'
 // const wasm = await import("@gloo-ai/baml-schema-wasm-web/baml_schema_build");
 // const { WasmProject, WasmRuntime, WasmRuntimeContext, version: RuntimeVersion } = wasm;
 const postMessageToExtension = (message: any) => {
@@ -24,7 +32,7 @@ const wasmAtomAsync = atom(async () => {
   return wasm
 })
 
-const wasmAtom = unwrap(wasmAtomAsync)
+export const wasmAtom = unwrap(wasmAtomAsync)
 
 const defaultEnvKeyValues: [string, string][] = (() => {
   if ((window as any).next?.version) {
@@ -50,6 +58,7 @@ const envKeyValueStorage = atomWithStorage<[string, string][]>(
   defaultEnvKeyValues,
   vscodeLocalStorageStore,
 )
+export const bamlCliVersionAtom = atom<string | null>(null)
 
 export const resetEnvKeyValuesAtom = atom(null, (get, set) => {
   set(envKeyValueStorage, [])
@@ -128,6 +137,7 @@ export const selectedFunctionAtom = atom(
       const functions = get(availableFunctionsAtom)
       if (functions.find((f) => f.name === func)) {
         set(selectedFunctionStorageAtom, func)
+        set(orchIndexAtom, 0)
       }
     }
   },
@@ -144,6 +154,7 @@ export const selectedTestCaseAtom = atom(
   },
   (get, set, testCase: string) => {
     set(rawSelectedTestCaseAtom, testCase)
+    set(orchIndexAtom, 0)
   },
 )
 
@@ -170,10 +181,20 @@ const updateCursorAtom = atom(
 
       cursorIdx += cursor.column
 
-      const selectedFunc = runtime.get_function_at_position(fileName, cursorIdx)
-      console.log('Selected function', selectedFunc)
+      const selectedFunc = runtime.get_function_at_position(fileName, get(selectedFunctionAtom)?.name ?? '', cursorIdx)
+
       if (selectedFunc) {
         set(selectedFunctionAtom, selectedFunc.name)
+        const selectedTestcase = runtime.get_testcase_from_position(selectedFunc, cursorIdx)
+
+        if (selectedTestcase) {
+          set(rawSelectedTestCaseAtom, selectedTestcase.name)
+          const nestedFunc = runtime.get_function_of_testcase(fileName, cursorIdx)
+
+          if (nestedFunc) {
+            set(selectedFunctionAtom, nestedFunc.name)
+          }
+        }
       }
     }
   },
@@ -338,6 +359,8 @@ export const versionAtom = atom((get) => {
   return wasm.version()
 })
 
+export const availableClientsAtom = atom<string[]>([])
+
 export const availableFunctionsAtom = atom((get) => {
   const runtime = get(selectedRuntimeAtom)
   if (!runtime) {
@@ -346,48 +369,56 @@ export const availableFunctionsAtom = atom((get) => {
   return runtime.list_functions()
 })
 
-export const streamCurl = atom(true)
+export const streamCurlAtom = atom(true)
+export const expandImagesAtom = atom(false)
 
-const asyncCurlAtom = atom(async (get) => {
+const rawCurlAtomAsync = atom(async (get) => {
+  const wasm = get(wasmAtom)
   const runtime = get(selectedRuntimeAtom)
   const func = get(selectedFunctionAtom)
   const test_case = get(selectedTestCaseAtom)
-
-  if (!runtime || !func || !test_case) {
-    return 'Not yet ready'
-  }
-  const params = Object.fromEntries(
-    test_case.inputs
-      .filter((i): i is WasmParam & { value: string } => i.value !== undefined)
-      .map((input) => [input.name, JSON.parse(input.value)]),
-  )
-  try {
-    return await func.render_raw_curl(runtime, params, get(streamCurl))
-  } catch (e) {
-    console.error(e)
-    return `${e}`
-  }
-})
-
-export const curlAtom = unwrap(asyncCurlAtom)
-
-export const renderPromptAtom = atom((get) => {
-  const runtime = get(selectedRuntimeAtom)
-  const func = get(selectedFunctionAtom)
-  const test_case = get(selectedTestCaseAtom)
-
-  if (!runtime || !func || !test_case) {
+  const orch_index = get(orchIndexAtom)
+  if (!wasm || !runtime || !func || !test_case) {
     return null
   }
 
-  const params = Object.fromEntries(
-    test_case.inputs
-      .filter((i): i is WasmParam & { value: string } => i.value !== undefined)
-      .map((input) => [input.name, JSON.parse(input.value)]),
+  const streamCurl = get(streamCurlAtom)
+  const expandImages = get(expandImagesAtom)
+
+  const wasmCallContext = new wasm.WasmCallContext()
+  wasmCallContext.node_index = orch_index
+
+  return await func.render_raw_curl_for_test(
+    runtime,
+    test_case.name,
+    wasmCallContext,
+    streamCurl,
+    expandImages,
+    async (path: string) => {
+      return await vscode.readFile(path)
+    },
   )
+})
+
+export const rawCurlLoadable = loadable(rawCurlAtomAsync)
+
+const renderPromptAtomAsync = atom(async (get) => {
+  const wasm = get(wasmAtom)
+  const runtime = get(selectedRuntimeAtom)
+  const func = get(selectedFunctionAtom)
+  const test_case = get(selectedTestCaseAtom)
+  const orch_index = get(orchIndexAtom)
+  if (!wasm || !runtime || !func || !test_case) {
+    return null
+  }
+
+  const wasmCallContext = new wasm.WasmCallContext()
+  wasmCallContext.node_index = orch_index
 
   try {
-    return func.render_prompt(runtime, params)
+    return await func.render_prompt_for_test(runtime, test_case.name, wasmCallContext, async (path: string) => {
+      return await vscode.readFile(path)
+    })
   } catch (e) {
     if (e instanceof Error) {
       return e.message
@@ -396,6 +427,391 @@ export const renderPromptAtom = atom((get) => {
     }
   }
 })
+
+export const renderPromptAtom = unwrap(renderPromptAtomAsync)
+
+export interface TypeCount {
+  // options are F (Fallback), R (Retry), D (Direct), B (Round Robin)
+  type: string
+
+  // range from 0 to n
+  index: number
+  scope_name: string
+
+  //only for retry
+  retry_delay?: number
+}
+
+const getTypeLetter = (type: string): string => {
+  switch (type) {
+    case 'Fallback':
+      return 'F'
+    case 'Retry':
+      return 'R'
+    case 'Direct':
+      return 'D'
+    case 'RoundRobin':
+      return 'B'
+    default:
+      return 'U'
+  }
+}
+
+export interface ClientNode {
+  name: string
+  node_index: number
+  type: string
+  identifier: TypeCount[]
+  retry_delay?: number
+
+  //necessary for identifying unique round robins, as index matching is not enough
+  round_robin_name?: string
+}
+
+export interface Edge {
+  from_node: string
+  to_node: string
+  weight?: number
+}
+
+export interface NodeEntry {
+  gid: ReturnType<typeof uuid>
+  weight?: number
+  node_index?: number
+}
+export interface GroupEntry {
+  letter: string
+  index: number
+  orch_index?: number
+  client_name?: string
+  gid: ReturnType<typeof uuid>
+  parentGid?: ReturnType<typeof uuid>
+  Position?: Position
+  Dimension?: Dimension
+}
+
+export interface Dimension {
+  width: number
+  height: number
+}
+
+export const orchIndexAtom = atom(0)
+export const currentClientsAtom = atom((get) => {
+  const func = get(selectedFunctionAtom)
+  const runtime = get(selectedRuntimeAtom)
+  if (!func || !runtime) {
+    return []
+  }
+
+  const wasmScopes = func.orchestration_graph(runtime)
+  if (wasmScopes === null) {
+    return []
+  }
+
+  const nodes = createClientNodes(wasmScopes)
+  return nodes.map((node) => node.name)
+})
+
+// something about the orchestration graph is broken, comment it out to make it work
+export const orchestration_nodes = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
+  const func = get(selectedFunctionAtom)
+  const runtime = get(selectedRuntimeAtom)
+  if (!func || !runtime) {
+    return { nodes: [], edges: [] }
+  }
+
+  const wasmScopes = func.orchestration_graph(runtime)
+  if (wasmScopes === null) {
+    return { nodes: [], edges: [] }
+  }
+
+  const nodes = createClientNodes(wasmScopes)
+  const { unitNodes, groups } = buildUnitNodesAndGroups(nodes)
+
+  const edges = createEdges(unitNodes)
+
+  const positionedNodes = getPositions(groups)
+
+  positionedNodes.forEach((posNode) => {
+    const correspondingUnitNode = unitNodes.find((unitNode) => unitNode.gid === posNode.gid)
+    if (correspondingUnitNode) {
+      posNode.orch_index = correspondingUnitNode.node_index
+    }
+  })
+
+  return { nodes: positionedNodes, edges }
+})
+
+interface Position {
+  x: number
+  y: number
+}
+
+function getPositions(nodes: { [key: string]: GroupEntry }): GroupEntry[] {
+  const nodeEntries = Object.values(nodes)
+  if (nodeEntries.length === 0) {
+    return []
+  }
+
+  const adjacencyList: { [key: string]: string[] } = {}
+
+  nodeEntries.forEach((node) => {
+    if (node.parentGid) {
+      if (!adjacencyList[node.parentGid]) {
+        adjacencyList[node.parentGid] = []
+      }
+      adjacencyList[node.parentGid].push(node.gid)
+    }
+    if (!adjacencyList[node.gid]) {
+      adjacencyList[node.gid] = []
+    }
+  })
+
+  const rootNode = nodeEntries.find((node) => !node.parentGid)
+  if (!rootNode) {
+    console.error('No root node found')
+    return []
+  }
+
+  const sizes = getSizes(adjacencyList, rootNode.gid)
+
+  const positionsMap = getCoordinates(adjacencyList, rootNode.gid, sizes)
+  const positionedNodes = nodeEntries.map((node) => ({
+    ...node,
+    Position: positionsMap[node.gid] || { x: 0, y: 0 },
+    Dimension: sizes[node.gid] || { width: 0, height: 0 },
+  }))
+
+  return positionedNodes
+}
+
+function getCoordinates(
+  adjacencyList: { [key: string]: string[] },
+  rootNode: string,
+  sizes: { [key: string]: { width: number; height: number } },
+): { [key: string]: Position } {
+  if (Object.keys(adjacencyList).length === 0 || Object.keys(sizes).length === 0) {
+    return {}
+  }
+
+  const coordinates: { [key: string]: Position } = {}
+
+  const PADDING = 60 // Define a constant padding value
+
+  function recurse(node: string, horizontal: boolean, x: number, y: number): { x: number; y: number } {
+    const children = adjacencyList[node]
+    if (children.length === 0) {
+      coordinates[node] = { x, y }
+      return coordinates[node]
+    }
+
+    let childX = PADDING
+    let childY = PADDING
+    for (const child of children) {
+      const childSize = recurse(child, !horizontal, childX, childY)
+
+      if (!horizontal) {
+        childY = childSize.y + PADDING + sizes[child].height
+      } else {
+        childX = childSize.x + PADDING + sizes[child].width
+      }
+    }
+
+    coordinates[node] = { x, y }
+    return coordinates[node]
+  }
+
+  recurse(rootNode, true, 0, 0)
+  return coordinates
+}
+
+function getSizes(
+  adjacencyList: { [key: string]: string[] },
+  rootNode: string,
+): { [key: string]: { width: number; height: number } } {
+  if (Object.keys(adjacencyList).length === 0) {
+    return {}
+  }
+
+  const sizes: { [key: string]: { width: number; height: number } } = {}
+
+  const PADDING = 60 // Define a constant padding value
+
+  function recurse(node: string, horizontal: boolean): { width: number; height: number } {
+    const children = adjacencyList[node]
+    if (children.length === 0) {
+      sizes[node] = { width: 100, height: 50 }
+      return sizes[node]
+    }
+
+    let width = horizontal ? PADDING : 0
+    let height = horizontal ? 0 : PADDING
+    for (const child of children) {
+      const childSize = recurse(child, !horizontal)
+
+      if (!horizontal) {
+        width = Math.max(width, childSize.width)
+        height += childSize.height + PADDING
+      } else {
+        width += childSize.width + PADDING
+        height = Math.max(height, childSize.height)
+      }
+    }
+
+    if (!horizontal) {
+      width += 2 * PADDING // Add padding to the final width
+    } else {
+      height += 2 * PADDING // Add padding to the final height
+    }
+
+    sizes[node] = { width, height }
+    return sizes[node]
+  }
+
+  recurse(rootNode, true)
+
+  return sizes
+}
+
+function createClientNodes(wasmScopes: any[]): ClientNode[] {
+  let indexOuter = 0
+  const nodes: ClientNode[] = []
+
+  for (const scope of wasmScopes) {
+    const scopeInfo = scope.get_orchestration_scope_info()
+    const scopePath = scopeInfo as any[]
+
+    const stackGroup = createStackGroup(scopePath)
+
+    // Always a direct node
+    const lastScope = scopePath[scopePath.length - 1]
+
+    const clientNode: ClientNode = {
+      name: lastScope.name,
+      node_index: indexOuter,
+      type: lastScope.type,
+      identifier: stackGroup,
+    }
+
+    nodes.push(clientNode)
+    indexOuter++
+  }
+
+  return nodes
+}
+
+function createStackGroup(scopePath: any[]): TypeCount[] {
+  const stackGroup: TypeCount[] = []
+
+  for (let i = 0; i < scopePath.length; i++) {
+    const scope = scopePath[i]
+    const indexVal = scope.type === 'Retry' ? scope.count : scope.type === 'Direct' ? 0 : scope.index
+
+    stackGroup.push({
+      type: getTypeLetter(scope.type),
+      index: indexVal,
+      scope_name: scope.type === 'RoundRobin' ? scope.strategy_name : scope.name ?? 'SOME_NAME',
+    })
+
+    if (scope.type === 'Retry') {
+      stackGroup[stackGroup.length - 1].retry_delay = scope.delay
+    }
+  }
+
+  return stackGroup
+}
+
+function buildUnitNodesAndGroups(nodes: ClientNode[]): {
+  unitNodes: NodeEntry[]
+  groups: { [gid: string]: GroupEntry }
+} {
+  const unitNodes: NodeEntry[] = []
+  const groups: { [gid: string]: GroupEntry } = {}
+  const prevNodeIndexGroups: GroupEntry[] = []
+
+  for (let index = 0; index < nodes.length; index++) {
+    const node = nodes[index]
+    const stackGroup = node.identifier
+    let parentGid = ''
+    let retry_cost = -1
+    for (let stackIndex = 0; stackIndex < stackGroup.length; stackIndex++) {
+      const scopeLayer = stackGroup[stackIndex]
+      const prevScopeIdx = stackIndex > 0 ? stackGroup[stackIndex - 1].index : 0
+      const prevNodeScope = prevNodeIndexGroups.at(stackIndex)
+      const curGid = getScopeDetails(scopeLayer, prevScopeIdx, prevNodeScope)
+
+      if (!(curGid in groups)) {
+        groups[curGid] = {
+          letter: scopeLayer.type,
+          index: prevScopeIdx,
+          client_name: scopeLayer.scope_name,
+          gid: curGid,
+          ...(parentGid && { parentGid }),
+        }
+        // Also clean indexGroups up to the current stackIndex
+        prevNodeIndexGroups.length = stackIndex
+      }
+
+      prevNodeIndexGroups[stackIndex] = {
+        letter: scopeLayer.type,
+        index: prevScopeIdx,
+        client_name: scopeLayer.scope_name,
+        gid: curGid,
+        ...(parentGid && { parentGid }),
+      }
+
+      parentGid = curGid
+
+      if (scopeLayer.type === 'R' && scopeLayer.retry_delay !== 0) {
+        retry_cost = scopeLayer.retry_delay ?? -1
+      }
+    }
+
+    unitNodes.push({
+      gid: parentGid,
+      node_index: index,
+      ...(retry_cost !== -1 && { weight: retry_cost }),
+    })
+  }
+
+  return { unitNodes, groups }
+}
+let counter = 0
+function uuid() {
+  return String(counter++)
+}
+function getScopeDetails(scopeLayer: TypeCount, prevIdx: number, prevIndexGroupEntry: GroupEntry | undefined) {
+  if (prevIndexGroupEntry === undefined) {
+    return uuid()
+  } else {
+    const indexEntryGid = prevIndexGroupEntry.gid
+    const indexEntryIdx = prevIndexGroupEntry.index
+    const indexEntryScopeName = prevIndexGroupEntry.client_name
+
+    switch (scopeLayer.type) {
+      case 'B':
+        if (scopeLayer.scope_name === indexEntryScopeName) {
+          return indexEntryGid
+        } else {
+          return uuid()
+        }
+      default:
+        if (prevIdx === indexEntryIdx) {
+          return indexEntryGid
+        } else {
+          return uuid()
+        }
+    }
+  }
+}
+
+function createEdges(unitNodes: NodeEntry[]): Edge[] {
+  return unitNodes.slice(0, -1).map((fromNode, index) => ({
+    from_node: fromNode.gid,
+    to_node: unitNodes[index + 1].gid,
+    ...(fromNode.weight !== null && { weight: fromNode.weight }),
+  }))
+}
 
 export const diagnositicsAtom = atom((get) => {
   const diagnostics = get(selectedDiagnosticsAtom)
@@ -418,20 +834,20 @@ const ErrorCount: React.FC = () => {
   const { errors, warnings } = useAtomValue(numErrorsAtom)
   if (errors === 0 && warnings === 0) {
     return (
-      <div className='flex flex-row items-center gap-1 text-green-600'>
+      <div className='flex flex-row gap-1 items-center text-green-600'>
         <CheckCircle size={12} />
       </div>
     )
   }
   if (errors === 0) {
     return (
-      <div className='flex flex-row items-center gap-1 text-yellow-600'>
+      <div className='flex flex-row gap-1 items-center text-yellow-600'>
         {warnings} <AlertTriangle size={12} />
       </div>
     )
   }
   return (
-    <div className='flex flex-row items-center gap-1 text-red-600'>
+    <div className='flex flex-row gap-1 items-center text-red-600'>
       {errors} <XCircle size={12} /> {warnings} <AlertTriangle size={12} />{' '}
     </div>
   )
@@ -482,7 +898,10 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const wasm = useAtomValue(wasmAtom)
   const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom)
   const envVars = useAtomValue(envVarsAtom)
-
+  const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
+  const { isRunning, run } = useRunHooks()
+  const setShowTests = useSetAtom(showTestsAtom)
+  const setClientGraph = useSetAtom(showClientGraphAtom)
   useEffect(() => {
     if (wasm) {
       console.log('wasm ready!')
@@ -561,6 +980,14 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
               port: number
             }
           }
+        | {
+            command: 'baml_cli_version'
+            content: string
+          }
+        | {
+            command: 'run_test'
+            content: { test_name: string }
+          }
       >,
     ) => {
       const { command, content } = event.data
@@ -574,12 +1001,14 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           })
           break
         case 'add_project':
-          updateFile({
-            reason: 'add_project',
-            root_path: content.root_path,
-            files: Object.entries(content.files).map(([name, content]) => ({ name, content })),
-            replace_all: true,
-          })
+          if (content && content.root_path) {
+            updateFile({
+              reason: 'add_project',
+              root_path: content.root_path,
+              files: Object.entries(content.files).map(([name, content]) => ({ name, content })),
+              replace_all: true,
+            })
+          }
           break
 
         case 'select_function':
@@ -589,16 +1018,17 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             updateCursor(content.cursor)
           }
           break
+        case 'baml_cli_version':
+          setBamlCliVersion(content)
+          break
 
         case 'remove_project':
           removeProject((content as { root_path: string }).root_path)
           break
 
         case 'port_number':
-          console.log('Setting port number', content.port)
-
           if (content.port === 0) {
-            console.error('Port number is 0, cannot launch BAML extension')
+            console.error('No ports available, cannot launch BAML extension')
 
             return
           }
@@ -619,6 +1049,12 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             return updated
           })
           break
+
+        case 'run_test':
+          run([content.test_name])
+          setShowTests(true)
+          setClientGraph(false)
+          break
       }
     }
 
@@ -629,8 +1065,9 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <>
-      <div className='absolute z-50 flex flex-row gap-2 text-xs bg-transparent right-2 bottom-2'>
-        <ErrorCount /> <span>Runtime Version: {version}</span>
+      <div className='flex absolute right-2 bottom-2 z-50 flex-row gap-2 text-xs bg-transparent'>
+        <div className='pr-4 whitespace-nowrap'>{bamlCliVersion && 'baml-cli ' + bamlCliVersion}</div>
+        <ErrorCount /> <span>VSCode Runtime Version: {version}</span>
       </div>
       {selectedProject === null ? (
         availableProjects.length === 0 ? (

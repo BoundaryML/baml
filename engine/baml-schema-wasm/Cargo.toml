@@ -15,17 +15,20 @@ baml-runtime = { path = "../baml-runtime", features = [
   "internal",
 ], default-features = false }
 baml-types = { path = "../baml-lib/baml-types" }
+cfg-if.workspace = true
 console_error_panic_hook = "0.1.7"
 console_log = { version = "1", features = ["color"] }
 getrandom = { version = "0.2.15", features = ["js"] }
 indexmap.workspace = true
 internal-baml-codegen.workspace = true
+internal-baml-core.workspace = true
 js-sys = "=0.3.69"
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde-wasm-bindgen = "0.4"
 time.workspace = true
+url.workspace = true
 uuid = { version = "1.8", features = ["v4", "js"] }
 wasm-bindgen = "=0.2.92"
 wasm-bindgen-futures = "0.4.42"

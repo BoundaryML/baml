@@ -1,6 +1,10 @@
+---
+slug: docs/snippets/syntax/dictionaries
+---
+
 Dictionaries in BAML have this syntax. You'll see them mainly in `tests` declared in BAML, and `clients`.
 
-```baml BAML
+```nginx BAML
 {
   key1 value1
   key2 {
@@ -12,7 +16,7 @@ Note they do not use `:`
 
 You can use unquoted or quoted strings, booleans, numbers and nested dictionaries as values.
 
-```rust BAML
+```nginx BAML
 {
   key1 "value1"
   key2 {
@@ -24,7 +28,7 @@ You can use unquoted or quoted strings, booleans, numbers and nested dictionarie
 
 **Dictionary with multiline string as a value**:
 
-```rust BAML
+```baml BAML
 {
   key1 #"
     This is a 

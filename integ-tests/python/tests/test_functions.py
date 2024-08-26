@@ -1,4 +1,5 @@
 import time
+from typing import List
 import pytest
 from assertpy import assert_that
 from dotenv import load_dotenv
@@ -7,25 +8,27 @@ from .base64_test_data import image_b64, audio_b64
 load_dotenv()
 import baml_py
 from ..baml_client import b
+from ..baml_client.sync_client import b as sync_b
 from ..baml_client.globals import (
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME,
 )
-from ..baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
+from ..baml_client import partial_types
+from ..baml_client.types import (
+    DynInputOutput,
+    NamedArgsSingleEnumList,
+    NamedArgsSingleClass,
+    StringToClassEntry,
+)
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
 import datetime
+import concurrent.futures
+import asyncio
+import random
 
 
-@pytest.mark.asyncio
-async def test_should_work_for_all_inputs():
-    res = await b.TestFnNamedArgsSingleBool(True)
-    assert res
-
-    res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
-    assert "a" in res and "b" in res and "c" in res
-
-    print("calling with class")
-    res = await b.TestFnNamedArgsSingleClass(
+def test_sync():
+    res = sync_b.TestFnNamedArgsSingleClass(
         myArg=NamedArgsSingleClass(
             key="key",
             key_two=True,
@@ -35,28 +38,78 @@ async def test_should_work_for_all_inputs():
     print("got response", res)
     assert "52" in res
 
-    res = await b.TestMulticlassNamedArgs(
-        myArg=NamedArgsSingleClass(
-            key="key",
-            key_two=True,
-            key_three=52,
-        ),
-        myArg2=NamedArgsSingleClass(
-            key="key",
-            key_two=True,
-            key_three=64,
-        ),
-    )
-    assert "52" in res and "64" in res
 
-    res = await b.TestFnNamedArgsSingleEnumList([NamedArgsSingleEnumList.TWO])
-    assert "TWO" in res
+class TestAllInputs:
+    @pytest.mark.asyncio
+    async def test_single_bool(self):
+        res = await b.TestFnNamedArgsSingleBool(True)
+        assert res
 
-    res = await b.TestFnNamedArgsSingleFloat(3.12)
-    assert "3.12" in res
+    @pytest.mark.asyncio
+    async def test_single_string_list(self):
+        res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
+        assert "a" in res and "b" in res and "c" in res
 
-    res = await b.TestFnNamedArgsSingleInt(3566)
-    assert "3566" in res
+    @pytest.mark.asyncio
+    async def test_single_class(self):
+        res = await b.TestFnNamedArgsSingleClass(
+            myArg=NamedArgsSingleClass(
+                key="key",
+                key_two=True,
+                key_three=52,
+            )
+        )
+        assert "52" in res
+
+    @pytest.mark.asyncio
+    async def test_multiple_args(self):
+        res = await b.TestMulticlassNamedArgs(
+            myArg=NamedArgsSingleClass(
+                key="key",
+                key_two=True,
+                key_three=52,
+            ),
+            myArg2=NamedArgsSingleClass(
+                key="key",
+                key_two=True,
+                key_three=64,
+            ),
+        )
+        assert "52" in res and "64" in res
+
+    @pytest.mark.asyncio
+    async def test_single_enum_list(self):
+        res = await b.TestFnNamedArgsSingleEnumList([NamedArgsSingleEnumList.TWO])
+        assert "TWO" in res
+
+    @pytest.mark.asyncio
+    async def test_single_float(self):
+        res = await b.TestFnNamedArgsSingleFloat(3.12)
+        assert "3.12" in res
+
+    @pytest.mark.asyncio
+    async def test_single_int(self):
+        res = await b.TestFnNamedArgsSingleInt(3566)
+        assert "3566" in res
+
+    @pytest.mark.asyncio
+    async def test_single_map_string_to_string(self):
+        res = await b.TestFnNamedArgsSingleMapStringToString(
+            {"lorem": "ipsum", "dolor": "sit"}
+        )
+        assert "lorem" in res
+
+    @pytest.mark.asyncio
+    async def test_single_map_string_to_class(self):
+        res = await b.TestFnNamedArgsSingleMapStringToClass(
+            {"lorem": StringToClassEntry(word="ipsum")}
+        )
+        assert res["lorem"].word == "ipsum"
+
+    @pytest.mark.asyncio
+    async def test_single_map_string_to_map(self):
+        res = await b.TestFnNamedArgsSingleMapStringToMap({"lorem": {"word": "ipsum"}})
+        assert res["lorem"]["word"] == "ipsum"
 
 
 class MyCustomClass(NamedArgsSingleClass):
@@ -106,6 +159,27 @@ async def test_should_work_with_image_url():
         )
     )
     assert_that(res.lower()).matches(r"(green|yellow|shrek|ogre)")
+
+
+@pytest.mark.asyncio
+async def test_should_work_with_image_list():
+    res = await b.TestImageListInput(
+        imgs=[
+            baml_py.Image.from_url(
+                "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+            ),
+            baml_py.Image.from_url(
+                "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png"
+            ),
+        ]
+    )
+    assert_that(res.lower()).matches(r"(green|yellow)")
+
+
+@pytest.mark.asyncio
+async def test_should_work_with_vertex():
+    res = await b.TestVertex("donkey kong")
+    assert_that("donkey kong" in res.lower())
 
 
 @pytest.mark.asyncio
@@ -173,6 +247,40 @@ async def test_aws():
 
 
 @pytest.mark.asyncio
+async def test_openai_shorthand():
+    res = await b.TestOpenAIShorthand(input="Mt Rainier is tall")
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_openai_shorthand_streaming():
+    res = await b.stream.TestOpenAIShorthand(
+        input="Mt Rainier is tall"
+    ).get_final_response()
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_anthropic_shorthand():
+    res = await b.TestAnthropicShorthand(input="Mt Rainier is tall")
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_anthropic_shorthand_streaming():
+    res = await b.stream.TestAnthropicShorthand(
+        input="Mt Rainier is tall"
+    ).get_final_response()
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_fallback_to_shorthand():
+    res = await b.TestFallbackToShorthand(input="Mt Rainier is tall")
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
 async def test_aws_streaming():
     res = await b.stream.TestAws(input="Mt Rainier is tall").get_final_response()
     assert len(res) > 0, "Expected non-empty result but got empty."
@@ -206,11 +314,12 @@ async def test_streaming():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
@@ -218,6 +327,50 @@ async def test_streaming():
 @pytest.mark.asyncio
 async def test_streaming_uniterated():
     final = await b.stream.PromptTestStreaming(
+        input="The color blue makes me sad"
+    ).get_final_response()
+    assert len(final) > 0, "Expected non-empty final but got empty."
+
+
+def test_streaming_sync():
+    stream = sync_b.stream.PromptTestStreaming(
+        input="Programming languages are fun to create"
+    )
+    msgs: list[str] = []
+
+    start_time = asyncio.get_event_loop().time()
+    last_msg_time = start_time
+    first_msg_time = start_time + 10
+    for msg in stream:
+        msgs.append(str(msg))
+        if len(msgs) == 1:
+            first_msg_time = asyncio.get_event_loop().time()
+
+        last_msg_time = asyncio.get_event_loop().time()
+
+    final = stream.get_final_response()
+
+    assert (
+        first_msg_time - start_time <= 1.5
+    ), "Expected first message within 1 second but it took longer."
+    assert (
+        last_msg_time - start_time >= 1
+    ), "Expected last message after 1.5 seconds but it was earlier."
+    assert len(final) > 0, "Expected non-empty final but got empty."
+    assert len(msgs) > 0, "Expected at least one streamed response but got none."
+    for prev_msg, msg in zip(msgs, msgs[1:]):
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
+        )
+    assert msgs[-1] == final, "Expected last stream message to match final response."
+
+
+def test_streaming_uniterated_sync():
+    final = sync_b.stream.PromptTestStreaming(
         input="The color blue makes me sad"
     ).get_final_response()
     assert len(final) > 0, "Expected non-empty final but got empty."
@@ -234,11 +387,12 @@ async def test_streaming_claude():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     print("msgs:")
     print(msgs[-1])
@@ -259,11 +413,12 @@ async def test_streaming_gemini():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     print("msgs:")
     print(msgs[-1])
@@ -274,7 +429,6 @@ async def test_streaming_gemini():
 
 @pytest.mark.asyncio
 async def test_tracing_async_only():
-
     @trace
     async def top_level_async_tracing():
         @trace
@@ -320,7 +474,7 @@ async def test_tracing_async_only():
 
 def test_tracing_sync():
     # res = parent_sync("first-arg-value")
-    res2 = sync_dummy_func("second-dummycall-arg")
+    _ = sync_dummy_func("second-dummycall-arg")
 
 
 def test_tracing_thread_pool():
@@ -340,9 +494,6 @@ async def test_tracing_async_gather():
 @pytest.mark.asyncio
 async def test_tracing_async_gather_top_level():
     await asyncio.gather(*[async_dummy_func("second-dummycall-arg") for _ in range(10)])
-
-
-import concurrent.futures
 
 
 @trace
@@ -396,10 +547,6 @@ def parent_sync(myStr: str):
     return "hello world parentsync"
 
 
-import asyncio
-import random
-
-
 @trace
 async def async_dummy_func(myArgggg: str):
     await asyncio.sleep(0.5 + random.random())
@@ -412,7 +559,7 @@ def sync_dummy_func(dummyFuncArg: str):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def cleanup(request):
+def cleanup():
     """Cleanup a testing directory once we are finished."""
     flush()
 
@@ -508,7 +655,7 @@ async def test_dynamic_class_nested_output_stream():
         input="My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
         baml_options={"tb": tb},
     )
-    msgs = []
+    msgs: List[partial_types.DynamicOutput] = []
     async for msg in stream:
         print("streamed ", msg)
         print("streamed ", msg.model_dump())
@@ -531,13 +678,15 @@ async def test_stream_dynamic_class_output():
     for prop, _ in tb.DynamicOutput.list_properties():
         print(f"Property: {prop}")
 
+    cr = baml_py.ClientRegistry()
+    cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini"})
+    cr.set_primary("MyClient")
     stream = b.stream.MyFunc(
         input="My name is Harrison. My hair is black and I'm 6 feet tall.",
-        baml_options={"tb": tb},
+        baml_options={"tb": tb, "client_registry": cr},
     )
-    msgs = []
+    msgs: List[partial_types.DynamicOutput] = []
     async for msg in stream:
-        print("streamed ", msg)
         print("streamed ", msg.model_dump())
         msgs.append(msg)
     final = await stream.get_final_response()
@@ -550,11 +699,161 @@ async def test_stream_dynamic_class_output():
 
 
 @pytest.mark.asyncio
+async def test_dynamic_inputs_list2():
+    tb = TypeBuilder()
+    tb.DynInputOutput.add_property("new_key", tb.string().optional())
+    custom_class = tb.add_class("MyBlah")
+    custom_class.add_property("nestedKey1", tb.string())
+    tb.DynInputOutput.add_property("blah", custom_class.type())
+
+    res = await b.DynamicListInputOutput(
+        [
+            DynInputOutput.model_validate(
+                {
+                    "new_key": "hi1",
+                    "testKey": "myTest",
+                    "blah": {
+                        "nestedKey1": "nestedVal",
+                    },
+                }
+            ),
+            DynInputOutput.model_validate(
+                {
+                    "new_key": "hi",
+                    "testKey": "myTest",
+                    "blah": {
+                        "nestedKey1": "nestedVal",
+                    },
+                }
+            ),
+        ],
+        {"tb": tb},
+    )
+    assert res[0].new_key == "hi1"
+    assert res[0].testKey == "myTest"
+    assert res[0].blah["nestedKey1"] == "nestedVal"
+    assert res[1].new_key == "hi"
+    assert res[1].testKey == "myTest"
+    assert res[1].blah["nestedKey1"] == "nestedVal"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_inputs_list():
+    tb = TypeBuilder()
+    tb.DynInputOutput.add_property("new_key", tb.string().optional())
+    custom_class = tb.add_class("MyBlah")
+    custom_class.add_property("nestedKey1", tb.string())
+    tb.DynInputOutput.add_property("blah", custom_class.type())
+
+    res = await b.DynamicListInputOutput(
+        [
+            DynInputOutput.model_validate(
+                {
+                    "new_key": "hi",
+                    "testKey": "myTest",
+                    "blah": {
+                        "nestedKey1": "nestedVal",
+                    },
+                }
+            ),
+            DynInputOutput.model_validate(
+                {
+                    "new_key": "hi",
+                    "testKey": "myTest",
+                    "blah": {
+                        "nestedKey1": "nestedVal",
+                    },
+                }
+            ),
+        ],
+        {"tb": tb},
+    )
+    assert res[0].new_key == "hi"
+    assert res[0].testKey == "myTest"
+    assert res[0].blah["nestedKey1"] == "nestedVal"
+    assert res[1].new_key == "hi"
+    assert res[1].testKey == "myTest"
+    assert res[1].blah["nestedKey1"] == "nestedVal"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_output_map():
+    tb = TypeBuilder()
+    tb.DynamicOutput.add_property("hair_color", tb.string())
+    tb.DynamicOutput.add_property(
+        "attributes", tb.map(tb.string(), tb.string())
+    ).description("Things like 'eye_color' or 'facial_hair'")
+    print(tb.DynamicOutput.list_properties())
+    for prop, _ in tb.DynamicOutput.list_properties():
+        print(f"Property: {prop}")
+
+    res = await b.MyFunc(
+        input="My name is Harrison. My hair is black and I'm 6 feet tall. I have blue eyes and a beard.",
+        baml_options={"tb": tb},
+    )
+
+    print("final ", res)
+    print("final ", res.model_dump())
+    print("final ", res.model_dump_json())
+    assert res.hair_color == "black"
+    assert res.attributes["eye_color"] == "blue"
+    assert res.attributes["facial_hair"] == "beard"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_output_union():
+    tb = TypeBuilder()
+    tb.DynamicOutput.add_property("hair_color", tb.string())
+    tb.DynamicOutput.add_property(
+        "attributes", tb.map(tb.string(), tb.string())
+    ).description("Things like 'eye_color' or 'facial_hair'")
+    # Define two classes
+    class1 = tb.add_class("Class1")
+    class1.add_property("meters", tb.float())
+
+    class2 = tb.add_class("Class2")
+    class2.add_property("feet", tb.float())
+    class2.add_property("inches", tb.float().optional())
+
+    # Use the classes in a union property
+    tb.DynamicOutput.add_property("height", tb.union([class1.type(), class2.type()]))
+    print(tb.DynamicOutput.list_properties())
+    for prop, _ in tb.DynamicOutput.list_properties():
+        print(f"Property: {prop}")
+
+    res = await b.MyFunc(
+        input="My name is Harrison. My hair is black and I'm 6 feet tall. I have blue eyes and a beard. I am 30 years old.",
+        baml_options={"tb": tb},
+    )
+
+    print("final ", res)
+    print("final ", res.model_dump())
+    print("final ", res.model_dump_json())
+    assert res.hair_color == "black"
+    assert res.attributes["eye_color"] == "blue"
+    assert res.attributes["facial_hair"] == "beard"
+    assert res.height["feet"] == 6
+
+    res = await b.MyFunc(
+        input="My name is Harrison. My hair is black and I'm 1.8 meters tall. I have blue eyes and a beard. I am 30 years old.",
+        baml_options={"tb": tb},
+    )
+
+    print("final ", res)
+    print("final ", res.model_dump())
+    print("final ", res.model_dump_json())
+    assert res.hair_color == "black"
+    assert res.attributes["eye_color"] == "blue"
+    assert res.attributes["facial_hair"] == "beard"
+    assert res.height["meters"] == 1.8
+
+
+@pytest.mark.asyncio
 async def test_nested_class_streaming():
     stream = b.stream.FnOutputClassNested(
         input="My name is Harrison. My hair is black and I'm 6 feet tall."
     )
-    msgs = []
+    msgs: List[partial_types.TestClassNested] = []
     async for msg in stream:
         print("streamed ", msg.model_dump(mode="json"))
         msgs.append(msg)
@@ -570,11 +869,10 @@ async def test_dynamic_clients():
     cb.add_llm_client("MyClient", "openai", {"model": "gpt-3.5-turbo"})
     cb.set_primary("MyClient")
 
-    final = await b.TestOllama(
-        input="My name is Harrison. My hair is black and I'm 6 feet tall.",
+    capitol = await b.ExpectFailure(
         baml_options={"client_registry": cb},
     )
-    print("final ", final)
+    assert_that(capitol.lower()).contains("london")
 
 
 @pytest.mark.asyncio
@@ -583,9 +881,12 @@ async def test_event_log_hook():
         print("Event log hook1: ")
         print("Event log event ", event)
 
+    flush()  # clear any existing hooks
     on_log_event(event_log_hook)
     res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
     assert res
+    flush()  # clear the hook
+    on_log_event(None)
 
 
 @pytest.mark.asyncio
@@ -622,7 +923,7 @@ async def test_stream_serialization_exception():
         async for msg in stream:
             print("streamed ", msg)
 
-        res = await stream.get_final_response()
+        _ = await stream.get_final_response()
 
     print("Exception message: ", excinfo)
     assert "Failed to coerce" in str(excinfo)
@@ -638,9 +939,33 @@ def test_stream2_serialization_exception():
             async for msg in stream:
                 print("streamed ", msg)
 
-            res = await stream.get_final_response()
+            _ = await stream.get_final_response()
 
         print("Exception message: ", excinfo)
         assert "Failed to coerce" in str(excinfo)
 
     asyncio.run(stream_func())
+
+@pytest.mark.asyncio
+async def test_caching():
+    story_idea = """
+    In a near-future society where dreams have become a tradable commodity and shared experience, a lonely and socially awkward teenager named Alex discovers they possess a rare and powerful ability to not only view but also manipulate the dreams of others. Initially thrilled by this newfound power, Alex begins subtly altering the dreams of classmates and family members, helping them overcome fears, boost confidence, or experience fantastical adventures.
+As Alex's skills grow, so does their influence. They start selling premium dream experiences on the black market, crafting intricate and addictive dreamscapes for wealthy clients. However, the line between dream and reality begins to blur for those exposed to Alex's creations. Some clients struggle to differentiate between their true memories and the artificial ones implanted by Alex's dream manipulation.
+Complications arise when a mysterious government agency takes notice of Alex's unique abilities. They offer Alex a chance to use their gift for "the greater good," hinting at applications in therapy, criminal rehabilitation, and even national security. Simultaneously, a underground resistance movement reaches out, warning Alex about the dangers of dream manipulation and the potential for mass control and exploitation.
+Caught between these opposing forces, Alex must navigate a complex web of ethical dilemmas. They grapple with questions of free will, the nature of consciousness, and the responsibility that comes with having power over people's minds. As the consequences of their actions spiral outward, affecting the lives of loved ones and strangers alike, Alex is forced to confront the true nature of their ability and decide how—or if—it should be used.
+The story explores themes of identity, the subconscious mind, the ethics of technology, and the power of imagination. It delves into the potential consequences of a world where our most private thoughts and experiences are no longer truly our own, and examines the fine line between helping others and manipulating them for personal gain or a perceived greater good.
+"""
+    rand = random.randint(0, 26)
+    story_idea += " " + rand * "a"
+    start = time.time()
+    res = await b.TestCaching(story_idea)
+    duration = time.time() - start
+
+    start = time.time()
+    res2 = await b.TestCaching(story_idea)
+    duration2 = time.time() - start
+
+    print("Duration no caching: ", duration)
+    print("Duration with caching: ", duration2)
+
+    assert duration2 < duration, "Expected second call to be faster than first by a large margin."

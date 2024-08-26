@@ -6,7 +6,10 @@ use anyhow::Result;
 use baml_types::{BamlValue, FieldType};
 use internal_baml_core::{
     error_unsupported,
-    ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
+    ir::{
+        repr::{ClientSpec, IntermediateRepr},
+        FunctionWalker, IRHelper,
+    },
 };
 use internal_baml_jinja::{
     types::OutputFormatContent, RenderContext, RenderContext_Client, RenderedPrompt,
@@ -17,7 +20,7 @@ use crate::RuntimeContext;
 
 pub struct PromptRenderer {
     function_name: String,
-    client_name: String,
+    client_spec: ClientSpec,
     output_defs: OutputFormatContent,
     output_type: FieldType,
 }
@@ -28,30 +31,24 @@ impl PromptRenderer {
         ir: &IntermediateRepr,
         ctx: &RuntimeContext,
     ) -> Result<PromptRenderer> {
-        let Some(func_v2) = function.as_v2() else {
-            error_unsupported!(
-                "function",
-                function.name(),
-                "legacy functions are not supported in the runtime"
-            )
-        };
+        let func_v2 = function.elem();
         let Some(config) = func_v2.configs.first() else {
             error_unsupported!("function", function.name(), "no valid prompt found")
         };
 
         Ok(PromptRenderer {
             function_name: function.name().into(),
-            client_name: match &ctx.client_overrides {
-                Some((Some(client), _)) => client.clone(),
+            client_spec: match &ctx.client_overrides {
+                Some((Some(client), _)) => ClientSpec::Named(client.clone()),
                 _ => config.client.clone(),
             },
-            output_defs: render_output_format(ir, ctx, &func_v2.output.elem)?,
-            output_type: func_v2.output.elem.clone(),
+            output_defs: render_output_format(ir, ctx, &func_v2.output)?,
+            output_type: func_v2.output.clone(),
         })
     }
 
-    pub fn client_name(&self) -> &str {
-        &self.client_name
+    pub fn client_spec(&self) -> &ClientSpec {
+        &self.client_spec
     }
 
     pub fn parse(&self, raw_string: &str, allow_partials: bool) -> Result<BamlValueWithFlags> {
@@ -72,13 +69,7 @@ impl PromptRenderer {
     ) -> Result<RenderedPrompt> {
         let func = ir.find_function(&self.function_name)?;
 
-        let Some(func_v2) = func.as_v2() else {
-            error_unsupported!(
-                "function",
-                self.function_name,
-                "legacy functions are not supported in the runtime"
-            )
-        };
+        let func_v2 = func.elem();
 
         let Some(config) = func_v2.configs.first() else {
             error_unsupported!("function", self.function_name, "no valid prompt found")

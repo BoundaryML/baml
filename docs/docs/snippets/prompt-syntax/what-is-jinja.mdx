@@ -1,14 +1,16 @@
 ---
 title: What is Jinja / Cookbook
+slug: docs/snippets/prompt-syntax/what-is-jinja
 ---
 
-BAML Prompt strings are essentially [Jinja](https://jinja.palletsprojects.com/en/3.1.x/templates/) templates, which offer the ability to express logic and data manipulation within strings. Jinja is a very popular and mature templating language amongst python developers, so github copilot or GPT4 can already help you write most of the logic you want.
+
+BAML Prompt strings are essentially [Minijinja](https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions) templates, which offer the ability to express logic and data manipulation within strings. Jinja is a very popular and mature templating language amongst Python developers, so Github Copilot or another LLM can already help you write most of the logic you want.
 
 ## Jinja Cookbook
 
 When in doubt -- use the BAML VSCode Playground preview. It will show you the fully rendered prompt, even when it has complex logic.
 
-### Basic Syntax
+### Basic Syntax 
 
 - `{% ... %}`: Use for executing statements such as for-loops or conditionals.
 - `{{ ... }}`: Use for outputting expressions or variables.
@@ -18,7 +20,7 @@ When in doubt -- use the BAML VSCode Playground preview. It will show you the fu
 
 Here's how you can iterate over a list of items, accessing each item's attributes:
 
-```jinja2
+```jinja Jinja
 function MyFunc(messages: Message[]) -> string {
   prompt #"
     {% for message in messages %}
@@ -32,7 +34,7 @@ function MyFunc(messages: Message[]) -> string {
 
 Use conditional statements to control the flow and output of your templates based on conditions:
 
-```jinja2
+```jinja Jinja
 function MyFunc(user: User) -> string {
   prompt #"
     {% if user.is_active %}
@@ -48,7 +50,7 @@ function MyFunc(user: User) -> string {
 
 You can define and use variables within your templates to simplify expressions or manage data:
 
-```jinja2
+```jinja
 function MyFunc(items: Item[]) -> string {
   prompt #"
     {% set total_price = 0 %}
@@ -62,9 +64,9 @@ function MyFunc(items: Item[]) -> string {
 
 ### Including other Templates
 
-To promote reusability, you can include other templates within a template. See [template strings](/docs/snippets/template-string):
+To promote reusability, you can include other templates within a template. See [template strings](../template-string.mdx):
 
-```rust
+```baml
 template_string PrintUserInfo(arg1: string, arg2: User) #"
   {{ arg1 }}
   The user's name is: {{ arg2.name }}

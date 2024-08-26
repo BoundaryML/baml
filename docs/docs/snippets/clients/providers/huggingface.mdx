@@ -1,0 +1,20 @@
+---
+title: huggingface
+slug: docs/snippets/clients/providers/huggingface
+---
+
+[HuggingFace](https://huggingface.co/) supports the OpenAI client, allowing you to use the
+[`openai-generic`](/docs/snippets/clients/providers/openai) provider with an
+overridden `base_url`.
+
+See https://huggingface.co/docs/inference-endpoints/index for more information on their Inference Endpoints.
+
+```baml BAML
+client<llm> MyClient {
+  provider openai-generic
+  options {
+    base_url "https://api-inference.huggingface.co/v1"
+    api_key env.HUGGINGFACE_API_KEY
+  }
+}
+```

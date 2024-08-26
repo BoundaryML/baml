@@ -32,12 +32,14 @@ impl WithScore for BamlValueWithFlags {
 impl WithScore for Flag {
     fn score(&self) -> i32 {
         match self {
+            Flag::InferedObject(_) => 0, // Dont penalize for this but instead handle it at the top level
             Flag::OptionalDefaultFromNoValue => 1,
             Flag::DefaultFromNoValue => 100,
             Flag::DefaultButHadValue(_) => 110,
             Flag::ObjectFromFixedJson(_) => 0,
             Flag::ObjectFromMarkdown(s) => *s,
             Flag::DefaultButHadUnparseableValue(_) => 2,
+            Flag::ObjectToMap(_) => 1,
             Flag::ObjectToString(_) => 2,
             Flag::ObjectToPrimitive(_) => 2,
             Flag::ExtraKey(_, _) => 1,
@@ -48,6 +50,8 @@ impl WithScore for Flag {
             Flag::SingleToArray => 1,
             // Parsing errors are bad.
             Flag::ArrayItemParseError(x, _) => 1 + (*x as i32),
+            Flag::MapKeyParseError(x, _) => 1,
+            Flag::MapValueParseError(x, _) => 1,
             // Harmless to drop additional matches
             Flag::FirstMatch(_, _) => 1,
             Flag::EnumOneFromMany(i) => i.into_iter().map(|(i, _)| *i as i32).sum::<i32>(),

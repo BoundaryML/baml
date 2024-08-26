@@ -6,9 +6,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
     for _config in ctx.db.walk_retry_policies() {
         // Nothing to validate.
     }
-    for _config in ctx.db.walk_printers() {
-        // Nothing to validate.
-    }
+
     for config in ctx.db.walk_test_cases() {
         // Ensure that the test case name is valid.
         let case = config.test_case();

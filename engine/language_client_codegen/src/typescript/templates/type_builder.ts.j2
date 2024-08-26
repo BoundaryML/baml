@@ -1,0 +1,79 @@
+import { FieldType } from '@boundaryml/baml/native'
+import { TypeBuilder as _TypeBuilder, EnumBuilder, ClassBuilder } from '@boundaryml/baml/type_builder'
+
+export default class TypeBuilder {
+    private tb: _TypeBuilder;
+    {% for cls in classes %}{% if cls.dynamic %}
+    {{cls.name}}: ClassBuilder<'{{cls.name}}'
+    {%- for (name, _, _) in cls.fields %}{% if loop.first %}, {%endif%}"{{name}}"{% if !loop.last %} | {% endif %}{% endfor -%}
+    >;
+    {% endif %}{% endfor %}
+    {% for enum in enums %}{% if enum.dynamic %}
+    {{enum.name}}: EnumBuilder<'{{enum.name}}'{%- for value in enum.values %}{% if loop.first %}, {%endif%}"{{value}}"{% if !loop.last %} | {% endif %}{% endfor -%}>;
+    {% endif %}{% endfor %}
+
+    constructor() {
+        this.tb = new _TypeBuilder({
+          classes: new Set([
+            {% for cls in classes %}"{{cls.name}}",{% endfor %}
+          ]),
+          enums: new Set([
+            {% for enum in enums %}"{{enum.name}}",{% endfor %}
+          ])
+        });
+        {% for cls in classes %}{% if cls.dynamic %}
+        this.{{cls.name}} = this.tb.classBuilder("{{cls.name}}", [
+          {% for (name, _, _) in cls.fields %}"{{name}}",{% endfor %}
+        ]);
+        {% endif %}{% endfor %}
+        {% for enum in enums %}{% if enum.dynamic %}
+        this.{{enum.name}} = this.tb.enumBuilder("{{enum.name}}", [
+          {% for value in enum.values %}"{{value}}",{% endfor %}
+        ]);
+        {% endif %}{% endfor %}
+    }
+
+    __tb() {
+      return this.tb._tb();
+    }
+    
+    string(): FieldType {
+        return this.tb.string()
+    }
+
+    int(): FieldType {
+        return this.tb.int()
+    }
+
+    float(): FieldType {
+        return this.tb.float()
+    }
+
+    bool(): FieldType {
+        return this.tb.bool()
+    }
+
+    list(type: FieldType): FieldType {
+        return this.tb.list(type)
+    }
+
+    null(): FieldType {
+        return this.tb.null()
+    }
+
+    map(key: FieldType, value: FieldType): FieldType {
+        return this.tb.map(key, value)
+    }
+
+    union(types: FieldType[]): FieldType {
+        return this.tb.union(types)
+    }
+
+    addClass<Name extends string>(name: Name): ClassBuilder<Name> {
+        return this.tb.addClass(name);
+    }
+
+    addEnum<Name extends string>(name: Name): EnumBuilder<Name> {
+        return this.tb.addEnum(name);
+    }
+}

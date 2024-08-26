@@ -1,10 +1,12 @@
 ---
 title: round-robin
+slug: docs/snippets/clients/round-robin
 ---
+
 
 The `round_robin` provider allows you to distribute requests across multiple clients in a round-robin fashion. After each call, the next client in the list will be used.
 
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider round-robin
   options {
@@ -28,14 +30,14 @@ client<llm> MyClient {
 
   **Default is `random(0, len(strategy))`**
 
-  In the [BAML Playground](/docs/get-started/quickstart/editors-vscode.mdx), Default is `0`.
+  In the [BAML Playground](/docs/get-started/quickstart/editors-vscode), Default is `0`.
 </ParamField>
 
 ## retry_policy
 
 When using a retry_policy with a round-robin client, it will rotate the strategy list after each retry.
 
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider round-robin
   retry_policy MyRetryPolicy
@@ -53,7 +55,7 @@ client<llm> MyClient {
 
 You can nest multiple round-robin clients inside of each other. The round-robin as you would expect.
 
-```rust BAML
+```baml BAML
 client<llm> MyClient {
   provider round-robin
   options {

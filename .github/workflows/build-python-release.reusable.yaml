@@ -1,0 +1,87 @@
+name: Release language_client_python
+
+on:
+  workflow_call: {}
+  push:
+    branches: [sam/glibc-aarch64]
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-python
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        _:
+          - target: x86_64-unknown-linux-gnu
+            runs_on: ubuntu-latest
+
+          - target: aarch64-unknown-linux-gnu
+            runs_on: ubuntu-latest
+            manylinux: 2_24
+            # I'm not sure if this actually works; I can't 'pip install ./local-path.whl'
+            # from inside a container based off quay.io/pypa/manylinux2014_aarch64
+            # see https://github.com/astral-sh/uv/issues/3439#issuecomment-2110448346
+            # manylinux: 2_28
+            # env:
+            #   # Workaround ring 0.17 build issue
+            #   # see https://github.com/briansmith/ring/issues/1728
+            #   CFLAGS_aarch64_unknown_linux_gnu: "-D__ARM_ARCH=8"
+
+          - target: x86_64-unknown-linux-musl
+            runs_on: ubuntu-latest
+            # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
+            manylinux: musllinux_1_1
+
+          - target: aarch64-unknown-linux-musl
+            runs_on: ubuntu-latest
+            # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
+            manylinux: musllinux_1_1
+
+          - target: x86_64-apple-darwin
+            runs_on: macos-latest
+            
+          - target: aarch64-apple-darwin
+            runs_on: macos-latest
+            
+          - target: x86_64-pc-windows-msvc
+            runs_on: windows-latest
+            
+    name: ${{ matrix._.target }}
+    runs-on: ${{ matrix._.runs_on }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+          architecture: ${{ matrix._.runs_on == 'windows-latest' && 'x64' || null }}
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        env: ${{ matrix._.env || fromJSON('{}') }}
+        with:
+          target: ${{ matrix._.target }}
+          command: build
+          # building in engine/ ensures that we pick up .cargo/config.toml
+          working-directory: engine
+          args: --release --out language_client_python/dist --manifest-path language_client_python/Cargo.toml
+          sccache: "true"
+          manylinux: ${{ matrix._.manylinux }}
+          before-script-linux: |
+            if command -v yum &> /dev/null; then
+                yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
+            else
+                # If we're running on debian-based system.
+                # sudo apt update -y && apt-get install -y libssl-dev openssl pkg-config
+                :
+            fi
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix._.target }}
+          path: engine/language_client_python/dist
+          if-no-files-found: error

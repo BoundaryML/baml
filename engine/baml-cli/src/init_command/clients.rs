@@ -141,7 +141,16 @@ fn google_clients<T: From<&'static str> + AsRef<str>>() -> Vec<ClientConfig<T>> 
     vec![ClientConfig {
         comment: None,
         provider: "google-ai".into(),
-        name: "Gemini".into(),
+        name: "GoogleAI".into(),
         params: vec![("model_name", "gemini"), ("api_key", "env.GOOGLE_API_KEY")],
+    }]
+}
+
+fn vertex_clients<T: From<&'static str> + AsRef<str>>() -> Vec<ClientConfig<T>> {
+    vec![ClientConfig {
+        comment: None,
+        provider: "vertex-ai".into(),
+        name: "Vertex".into(),
+        params: vec![("model_name", "vertex"), ("api_key", "env.GOOGLE_API_KEY")],
     }]
 }
