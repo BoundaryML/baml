@@ -606,3 +606,90 @@ test_deserializer!(
     FieldType::Class("Foo".to_string()),
     { "foo": true }
 );
+
+const NESTED_CLASSES: &str = r##"
+class Nested {
+  prop3 string | null @description(#"
+    write "three"
+  "#)
+  prop4 string | null @description(#"
+    write "four"
+  "#) @alias("blah")
+  prop20 Nested2
+}
+
+class Nested2 {
+  prop11 string | null @description(#"
+    write "three"
+  "#)
+  prop12 string | null @description(#"
+    write "four"
+  "#) @alias("blah")
+}
+
+class Schema {
+  prop1 string | null @description(#"
+    write "one"
+  "#)
+  prop2 Nested | string @description(#"
+    write "two"
+  "#)
+  prop5 (string | null)[] @description(#"
+    write "hi"
+  "#)
+  prop6 string | Nested[] @alias("blah") @description(#"
+    write the string "blah" regardless of the other types here
+  "#)
+  nested_attrs (string | null | Nested)[] @description(#"
+    write the string "nested" regardless of other types
+  "#)
+  parens (string | null) @description(#"
+    write "parens1"
+  "#)
+  other_group (string | (int | string)) @description(#"
+    write "other"
+  "#) @alias(other)
+}
+"##;
+
+test_deserializer!(
+    test_nested_classes_with_aliases,
+    NESTED_CLASSES,
+    r#"
+```json
+{
+  "prop1": "one",
+  "prop2": {
+    "prop3": "three",
+    "blah": "four",
+    "prop20": {
+      "prop11": "three",
+      "blah": "four"
+    }
+  },
+  "prop5": ["hi"],
+  "blah": "blah",
+  "nested_attrs": ["nested"],
+  "parens": "parens1",
+  "other": "other"
+}
+```
+"#,
+FieldType::Class("Schema".to_string()),
+{
+    "prop1": "one",
+    "prop2": {
+      "prop3": "three",
+      "prop4": "four",
+      "prop20": {
+        "prop11": "three",
+        "prop12": "four"
+      }
+    },
+    "prop5": ["hi"],
+    "prop6": "blah",
+    "nested_attrs": ["nested"],
+    "parens": "parens1",
+    "other_group": "other"
+  }
+);

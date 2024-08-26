@@ -372,7 +372,7 @@ export function startServer(options?: LSOptions): void {
 
       if (bamlConfig.config?.cliPath) {
         cliBuild(
-          bamlConfig.config?.cliPath!,
+          bamlConfig.config?.cliPath,
           URI.file(proj.rootPath()),
           (message) => {
             connection.window
@@ -394,7 +394,13 @@ export function startServer(options?: LSOptions): void {
         )
       } else {
         await bamlProjectManager.getProjectById(documentUri)?.runGeneratorsWithDebounce({
-          onSuccess: (message: string) => connection.sendNotification('baml/message', { type: 'info', message }),
+          onSuccess: (message: string) => {
+            connection.sendNotification('baml/message', { type: 'info', message })
+            if (proj.isTypescriptGeneratorPresent()) {
+              console.log('Restarting TS server')
+              restartTSServer()
+            }
+          },
           onError: (message: string) => connection.sendNotification('baml/message', { type: 'error', message }),
         })
       }
@@ -403,6 +409,12 @@ export function startServer(options?: LSOptions): void {
       showErrorToast(`Error occurred while generating BAML client code: ${e}`)
     }
   })
+
+  function restartTSServer() {
+    connection.sendRequest('executeCommand', 'typescript.restartTsServer').catch((e) => {
+      console.error('Error restarting TS server: ' + e)
+    })
+  }
 
   function getDocument(uri: string): TextDocument | undefined {
     return documents.get(uri)

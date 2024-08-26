@@ -143,7 +143,10 @@ fn parse_field_type_chain(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Opti
     combine_field_types(types)
 }
 
-fn parse_field_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
+pub(crate) fn parse_field_type_with_attr(
+    pair: Pair<'_>,
+    diagnostics: &mut Diagnostics,
+) -> Option<FieldType> {
     let mut field_type = None;
     let mut field_attributes = Vec::new();
 
@@ -161,7 +164,26 @@ fn parse_field_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> 
 
     match field_type {
         Some(mut ft) => {
-            ft.set_attributes(field_attributes);
+            // ft.set_attributes(field_attributes);
+            match &mut ft {
+                FieldType::Union(_, ref mut types, _, _) => {
+                    if let Some(last_type) = types.last_mut() {
+                        // last_type.reset_attributes();
+                        // log::info!("last_type: {:#?}", last_type);
+                        let last_type_attributes = last_type.attributes().to_owned();
+                        let mut new_attributes = last_type_attributes.clone();
+                        new_attributes.extend(field_attributes);
+                        ft.set_attributes(new_attributes);
+                    }
+
+                    // if let Some(attributes) = attributes.as_ref() {
+                    //     ft.set_attributes(attributes.clone()); // Clone the borrowed `Vec<Attribute>`
+                    // }
+                }
+                _ => {
+                    ft.set_attributes(field_attributes);
+                }
+            }
 
             Some(ft) // Return the field type with attributes
         }

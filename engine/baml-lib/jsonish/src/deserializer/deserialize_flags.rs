@@ -24,6 +24,7 @@ pub enum Flag {
 
     // Values here are all the possible matches.
     FirstMatch(usize, Vec<Result<BamlValueWithFlags, ParsingError>>),
+    UnionMatch(usize, Vec<Result<BamlValueWithFlags, ParsingError>>),
 
     EnumOneFromMany(Vec<(usize, String)>),
 
@@ -143,6 +144,14 @@ impl std::fmt::Display for Flag {
                 write!(f, "Substring match: {}", value)?;
             }
             Flag::FirstMatch(idx, values) => {
+                writeln!(f, "Picked item {}:", idx)?;
+                for (idx, value) in values.iter().enumerate() {
+                    if let Ok(value) = value {
+                        writeln!(f, "{idx}: {:#?}", value)?;
+                    }
+                }
+            }
+            Flag::UnionMatch(idx, values) => {
                 writeln!(f, "Picked item {}:", idx)?;
                 for (idx, value) in values.iter().enumerate() {
                     if let Ok(value) = value {

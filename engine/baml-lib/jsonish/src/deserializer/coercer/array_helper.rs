@@ -67,7 +67,11 @@ pub(super) fn pick_best(
                 // Add some flags so we know which value we picked
                 let mut v = v.clone();
                 if res.len() > 1 {
-                    v.add_flag(Flag::FirstMatch(i, res.to_vec()));
+                    v.add_flag(if matches!(target, FieldType::Union(_)) {
+                        Flag::UnionMatch(i, res.to_vec())
+                    } else {
+                        Flag::FirstMatch(i, res.to_vec())
+                    });
                 }
                 Ok(v.to_owned())
             }

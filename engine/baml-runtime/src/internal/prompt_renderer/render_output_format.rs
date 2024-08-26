@@ -1,4 +1,4 @@
-use std::collections::{HashSet};
+use std::collections::HashSet;
 
 use anyhow::Result;
 use baml_types::BamlValue;
@@ -204,8 +204,7 @@ fn relevant_data_models<'a>(
     let mut classes = Vec::new();
     let mut start: Vec<baml_types::FieldType> = vec![output.clone()];
 
-    while !start.is_empty() {
-        let output = start.pop().unwrap();
+    while let Some(output) = start.pop() {
         match &output {
             FieldType::Enum(enm) => {
                 if checked_types.insert(output.to_string()) {
