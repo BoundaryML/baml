@@ -1,6 +1,9 @@
 use super::{helpers::Pair, parse_attribute::parse_attribute, Rule};
 use crate::{
-    assert_correct_parser, ast::*, parser::parse_identifier::parse_identifier, unreachable_rule,
+    assert_correct_parser,
+    ast::*,
+    parser::{parse_field::parse_field_type_with_attr, parse_identifier::parse_identifier},
+    unreachable_rule,
 };
 use baml_types::TypeValue;
 use internal_baml_diagnostics::Diagnostics;
@@ -165,11 +168,28 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
             Rule::map => parse_map(current, diagnostics),
             Rule::group => parse_group(current, diagnostics),
             Rule::tuple => parse_tuple(current, diagnostics),
+            Rule::parenthesized_type => parse_parenthesized_type(current, diagnostics),
             _ => unreachable_rule!(current, Rule::base_type),
         };
     }
 
     unreachable!("A base type must be one of the above");
+}
+
+fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
+    assert_correct_parser!(pair, Rule::parenthesized_type);
+
+    for current in pair.into_inner() {
+        match current.as_rule() {
+            Rule::openParan | Rule::closeParan => continue,
+            Rule::field_type_with_attr => {
+                return parse_field_type_with_attr(current, diagnostics);
+            }
+            _ => unreachable_rule!(current, Rule::parenthesized_type),
+        }
+    }
+
+    unreachable!("impossible parenthesized parsing");
 }
 
 fn parse_array(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {

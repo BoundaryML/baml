@@ -70,7 +70,6 @@ pub(crate) fn parse_type_expression_block(
                                 matches!(sub_type, Some(SubType::Enum))
                                 ) {
                                     Ok(field) => {
-                                        
                                         fields.push(field);
                                     },
                                     Err(err) => diagnostics.push_error(err),

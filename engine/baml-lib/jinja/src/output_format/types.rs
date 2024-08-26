@@ -209,9 +209,6 @@ struct RenderState {
 
 impl OutputFormatContent {
     pub fn new(enums: Vec<Enum>, classes: Vec<Class>, target: FieldType) -> Self {
-        log::info!("enums: {:?}", enums);
-        log::info!("classes: {:?}", classes);
-        log::info!("target: {:?}", target);
         Self {
             enums: Arc::new(
                 enums
