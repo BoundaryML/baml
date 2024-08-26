@@ -20,8 +20,8 @@ use super::{
         OrchestratorNodeIterator,
     },
     traits::{
-        WithClient, WithPrompt, WithRenderRawCurl, WithRetryPolicy, WithSingleCallable,
-        WithStreamable,
+        WithClient, WithClientProperties, WithPrompt, WithRenderRawCurl, WithRetryPolicy,
+        WithSingleCallable, WithStreamable,
     },
     LLMResponse,
 };
@@ -48,6 +48,7 @@ pub enum LLMPrimitive2 {
 
 // #[derive(Delegate)]
 // #[delegate(WithRetryPolicy, WithRenderRawCurl)]
+#[derive(derive_more::From)]
 pub enum LLMPrimitiveProvider {
     OpenAI(OpenAIClient),
     Anthropic(AnthropicClient),
@@ -85,34 +86,36 @@ impl WithRetryPolicy for LLMPrimitiveProvider {
     }
 }
 
+impl WithClientProperties for LLMPrimitiveProvider {
+    fn client_properties(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        match_llm_provider!(self, client_properties)
+    }
+    fn allowed_metadata(&self) -> &super::AllowedMetadata {
+        match_llm_provider!(self, allowed_metadata)
+    }
+}
+
 impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
     type Error = anyhow::Error;
 
     fn try_from((value, ctx): (&ClientProperty, &RuntimeContext)) -> Result<Self> {
         match value.provider.as_str() {
-            "openai" => OpenAIClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::OpenAI),
-            "azure-openai" => {
-                OpenAIClient::dynamic_new_azure(value, ctx).map(LLMPrimitiveProvider::OpenAI)
-            }
-            "ollama" => {
-                OpenAIClient::dynamic_new_ollama(value, ctx).map(LLMPrimitiveProvider::OpenAI)
-            }
-            "anthropic" => {
-                AnthropicClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Anthropic)
-            }
-            "google-ai" => {
-                GoogleAIClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Google)
-            }
-            "vertex-ai" => VertexClient::dynamic_new(value, ctx).map(LLMPrimitiveProvider::Vertex),
+            "openai" => OpenAIClient::dynamic_new(value, ctx).map(Into::into),
+            "openai-generic" => OpenAIClient::dynamic_new_generic(value, ctx).map(Into::into),
+            "azure-openai" => OpenAIClient::dynamic_new_azure(value, ctx).map(Into::into),
+            "ollama" => OpenAIClient::dynamic_new_ollama(value, ctx).map(Into::into),
+            "anthropic" => AnthropicClient::dynamic_new(value, ctx).map(Into::into),
+            "google-ai" => GoogleAIClient::dynamic_new(value, ctx).map(Into::into),
+            "vertex-ai" => VertexClient::dynamic_new(value, ctx).map(Into::into),
             // dynamic_new is not implemented for aws::AwsClient
             other => {
                 let options = [
-                    "openai",
                     "anthropic",
-                    "ollama",
-                    "google-ai",
-                    "vertex-ai",
                     "azure-openai",
+                    "google-ai",
+                    "openai",
+                    "openai-generic",
+                    "vertex-ai",
                     "fallback",
                     "round-robin",
                 ];
@@ -131,32 +134,29 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
 
     fn try_from((client, ctx): (&ClientWalker, &RuntimeContext)) -> Result<Self> {
         match client.elem().provider.as_str() {
-            "baml-openai-chat" | "openai" => {
-                OpenAIClient::new(client, ctx).map(LLMPrimitiveProvider::OpenAI)
-            }
+            "baml-openai-chat" | "openai" => OpenAIClient::new(client, ctx).map(Into::into),
+            "openai-generic" => OpenAIClient::new_generic(client, ctx).map(Into::into),
             "baml-azure-chat" | "azure-openai" => {
-                OpenAIClient::new_azure(client, ctx).map(LLMPrimitiveProvider::OpenAI)
+                OpenAIClient::new_azure(client, ctx).map(Into::into)
             }
             "baml-anthropic-chat" | "anthropic" => {
-                AnthropicClient::new(client, ctx).map(LLMPrimitiveProvider::Anthropic)
+                AnthropicClient::new(client, ctx).map(Into::into)
             }
-            "baml-ollama-chat" | "ollama" => {
-                OpenAIClient::new_ollama(client, ctx).map(LLMPrimitiveProvider::OpenAI)
-            }
-            "google-ai" => GoogleAIClient::new(client, ctx).map(LLMPrimitiveProvider::Google),
-            "aws-bedrock" => aws::AwsClient::new(client, ctx).map(LLMPrimitiveProvider::Aws),
-            "vertex-ai" => VertexClient::new(client, ctx).map(LLMPrimitiveProvider::Vertex),
+            "baml-ollama-chat" | "ollama" => OpenAIClient::new_ollama(client, ctx).map(Into::into),
+            "google-ai" => GoogleAIClient::new(client, ctx).map(Into::into),
+            "aws-bedrock" => aws::AwsClient::new(client, ctx).map(Into::into),
+            "vertex-ai" => VertexClient::new(client, ctx).map(Into::into),
             other => {
                 let options = [
-                    "openai",
                     "anthropic",
-                    "ollama",
-                    "google-ai",
-                    "vertex-ai",
+                    "aws-bedrock",
                     "azure-openai",
+                    "google-ai",
+                    "openai",
+                    "openai-generic",
+                    "vertex-ai",
                     "fallback",
                     "round-robin",
-                    "aws-bedrock",
                 ];
                 anyhow::bail!(
                     "Unsupported provider: {}. Available ones are: {}",
@@ -165,6 +165,7 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                 )
             }
         }
+        .into()
     }
 }
 
@@ -218,11 +219,11 @@ impl IterOrchestrator for Arc<LLMPrimitiveProvider> {
         _previous: OrchestrationScope,
         _ctx: &RuntimeContext,
         _client_lookup: &'a dyn InternalClientLookup,
-    ) -> OrchestratorNodeIterator {
-        vec![OrchestratorNode::new(
+    ) -> Result<OrchestratorNodeIterator> {
+        Ok(vec![OrchestratorNode::new(
             ExecutionScope::Direct(self.name().to_string()),
             self.clone(),
-        )]
+        )])
     }
 }
 

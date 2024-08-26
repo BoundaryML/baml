@@ -4,7 +4,11 @@ slug: docs/snippets/clients/providers/gemini
 ---
 
 
-The `google-ai` provider supports the `https://generativelanguage.googleapis.com/v1/models/{model_id}/generateContent` and `https://generativelanguage.googleapis.com/v1/models/{model_id}/streamGenerateContent` endpoints.
+The `google-ai` provider supports the `https://generativelanguage.googleapis.com/v1beta/models/{model_id}/generateContent` and `https://generativelanguage.googleapis.com/v1beta/models/{model_id}/streamGenerateContent` endpoints.
+
+<Tip>
+The use of `v1beta` rather than `v1` aligns with the endpoint conventions established in [Google's SDKs](https://github.com/google-gemini/generative-ai-python/blob/8a29017e9120f0552ee3ad6092e8545d1aa6f803/google/generativeai/client.py#L60) and offers access to both the existing `v1` models and additional models exclusive to `v1beta`.
+</Tip>
 
 <Tip>
 BAML will automatically pick `streamGenerateContent` if you call the streaming interface.
@@ -27,12 +31,12 @@ The options are passed through directly to the API, barring a few. Here's a shor
   type="string"
 >
   Will be passed as the `x-goog-api-key` header. **Default: `env.GOOGLE_API_KEY`**
-  
+
   `x-goog-api-key: $api_key`
 </ParamField>
 
 <ParamField path="base_url" type="string">
-  The base URL for the API. **Default: `https://generativelanguage.googleapis.com/v1`**
+  The base URL for the API. **Default: `https://generativelanguage.googleapis.com/v1beta`**
 </ParamField>
 
 <ParamField
@@ -40,7 +44,7 @@ The options are passed through directly to the API, barring a few. Here's a shor
   type="string"
 >
   The default role for any prompts that don't specify a role. **Default: `user`**
-  
+
   We don't have any checks for this field, you can pass any string you wish.
 </ParamField>
 
@@ -49,7 +53,7 @@ The options are passed through directly to the API, barring a few. Here's a shor
   type="string"
 >
   The model to use. **Default: `gemini-1.5-flash`**
-  
+
   We don't have any checks for this field, you can pass any string you wish.
 
 | Model | Input(s) | Optimized for |
@@ -78,6 +82,7 @@ client<llm> MyClient {
 ```
 </ParamField>
 
+<Markdown src="../../../../snippets/allowed-role-metadata-basic.mdx" />
 
 ## Forwarded options
 <ParamField
@@ -88,4 +93,4 @@ client<llm> MyClient {
 </ParamField>
 
 
-For all other options, see the [official Google Gemini API documentation](https://ai.google.dev/api/rest/v1/models/generateContent).
+For all other options, see the [official Google Gemini API documentation](https://ai.google.dev/api/rest/v1beta/models/generateContent).

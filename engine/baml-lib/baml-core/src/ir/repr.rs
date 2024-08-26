@@ -4,11 +4,10 @@ use anyhow::{anyhow, Context, Result};
 use baml_types::FieldType;
 use either::Either;
 use indexmap::IndexMap;
-
 use internal_baml_parser_database::{
     walkers::{
-        ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
-        FunctionWalker, TemplateStringWalker,
+        ClassWalker, ClientSpec as AstClientSpec, ClientWalker, ConfigurationWalker,
+        EnumValueWalker, EnumWalker, FieldWalker, FunctionWalker, TemplateStringWalker,
     },
     ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes,
 };
@@ -691,7 +690,47 @@ pub struct FunctionConfig {
     pub prompt_template: String,
     #[serde(skip)]
     pub prompt_span: ast::Span,
-    pub client: ClientId,
+    pub client: ClientSpec,
+}
+
+// NB(sam): we used to use this to bridge the wasm layer, but
+// I don't think we do anymore.
+#[derive(serde::Serialize, Clone, Debug)]
+pub enum ClientSpec {
+    Named(String),
+    Shorthand(String),
+}
+
+impl ClientSpec {
+    pub fn as_str(&self) -> &str {
+        match self {
+            ClientSpec::Named(n) => n,
+            ClientSpec::Shorthand(n) => n,
+        }
+    }
+
+    pub fn new_from_id(arg: String) -> Self {
+        if arg.contains("/") {
+            ClientSpec::Shorthand(arg)
+        } else {
+            ClientSpec::Named(arg)
+        }
+    }
+}
+
+impl From<AstClientSpec> for ClientSpec {
+    fn from(spec: AstClientSpec) -> Self {
+        match spec {
+            AstClientSpec::Named(n) => ClientSpec::Named(n.to_string()),
+            AstClientSpec::Shorthand(n) => ClientSpec::Shorthand(n.to_string()),
+        }
+    }
+}
+
+impl std::fmt::Display for ClientSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 fn process_field(
@@ -770,11 +809,10 @@ impl WithRepr<Function> for FunctionWalker<'_> {
                 name: "default_config".to_string(),
                 prompt_template: self.jinja_prompt().to_string(),
                 prompt_span: self.ast_function().span().clone(),
-                client: self
-                    .client()
-                    .context("Unable to generate ctx.client")?
-                    .name()
-                    .to_string(),
+                client: match self.client_spec() {
+                    Ok(spec) => ClientSpec::from(spec),
+                    Err(e) => anyhow::bail!("{}", e.message()),
+                },
             }],
             default_config: "default_config".to_string(),
             tests: self

@@ -41,7 +41,27 @@ test image_file {
   functions [TestImageInput, TestImageInputAnthropic]
   args {
     img {
-      file "Łukasiewicz.jpg"
+      file "/Users/sam/mantis-shrimp.jpg"
+      // file "Łukasiewicz.jpg"
+    }
+  }
+}
+
+test image_file_abspath {
+  functions [TestImageInput, TestImageInputAnthropic]
+  args {
+    img {
+      // curl -L -o ~/mantis-shrimp.jpg "https://www.pbs.org/wnet/nature/files/2023/11/Odontodactylus_scyllarus_Re%CC%81union-e1699977649790.jpg"
+      file "/Users/sam/mantis-shrimp.jpg"
+    }
+  }
+}
+
+test image_file_nonexistent {
+  functions [TestImageInput, TestImageInputAnthropic]
+  args {
+    img {
+      file "does-not-exist.png"
     }
   }
 }

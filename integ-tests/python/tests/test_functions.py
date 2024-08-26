@@ -247,6 +247,40 @@ async def test_aws():
 
 
 @pytest.mark.asyncio
+async def test_openai_shorthand():
+    res = await b.TestOpenAIShorthand(input="Mt Rainier is tall")
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_openai_shorthand_streaming():
+    res = await b.stream.TestOpenAIShorthand(
+        input="Mt Rainier is tall"
+    ).get_final_response()
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_anthropic_shorthand():
+    res = await b.TestAnthropicShorthand(input="Mt Rainier is tall")
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_anthropic_shorthand_streaming():
+    res = await b.stream.TestAnthropicShorthand(
+        input="Mt Rainier is tall"
+    ).get_final_response()
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_fallback_to_shorthand():
+    res = await b.TestFallbackToShorthand(input="Mt Rainier is tall")
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
 async def test_aws_streaming():
     res = await b.stream.TestAws(input="Mt Rainier is tall").get_final_response()
     assert len(res) > 0, "Expected non-empty result but got empty."
@@ -935,3 +969,27 @@ async def test_descriptions():
     assert res.nested_attrs == ["nested"]  # Assuming it's a list with one item
     assert res.parens == "parens1"
     assert res.other_group == "other"
+
+@pytest.mark.asyncio
+async def test_caching():
+    story_idea = """
+    In a near-future society where dreams have become a tradable commodity and shared experience, a lonely and socially awkward teenager named Alex discovers they possess a rare and powerful ability to not only view but also manipulate the dreams of others. Initially thrilled by this newfound power, Alex begins subtly altering the dreams of classmates and family members, helping them overcome fears, boost confidence, or experience fantastical adventures.
+As Alex's skills grow, so does their influence. They start selling premium dream experiences on the black market, crafting intricate and addictive dreamscapes for wealthy clients. However, the line between dream and reality begins to blur for those exposed to Alex's creations. Some clients struggle to differentiate between their true memories and the artificial ones implanted by Alex's dream manipulation.
+Complications arise when a mysterious government agency takes notice of Alex's unique abilities. They offer Alex a chance to use their gift for "the greater good," hinting at applications in therapy, criminal rehabilitation, and even national security. Simultaneously, a underground resistance movement reaches out, warning Alex about the dangers of dream manipulation and the potential for mass control and exploitation.
+Caught between these opposing forces, Alex must navigate a complex web of ethical dilemmas. They grapple with questions of free will, the nature of consciousness, and the responsibility that comes with having power over people's minds. As the consequences of their actions spiral outward, affecting the lives of loved ones and strangers alike, Alex is forced to confront the true nature of their ability and decide how—or if—it should be used.
+The story explores themes of identity, the subconscious mind, the ethics of technology, and the power of imagination. It delves into the potential consequences of a world where our most private thoughts and experiences are no longer truly our own, and examines the fine line between helping others and manipulating them for personal gain or a perceived greater good.
+"""
+    rand = random.randint(0, 26)
+    story_idea += " " + rand * "a"
+    start = time.time()
+    res = await b.TestCaching(story_idea)
+    duration = time.time() - start
+
+    start = time.time()
+    res2 = await b.TestCaching(story_idea)
+    duration2 = time.time() - start
+
+    print("Duration no caching: ", duration)
+    print("Duration with caching: ", duration2)
+
+    assert duration2 < duration, "Expected second call to be faster than first by a large margin."

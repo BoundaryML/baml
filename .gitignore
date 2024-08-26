@@ -100,14 +100,12 @@ $RECYCLE.BIN/
 .stylelintcache
 .temp
 .tern-port
-.turbo!*
+.turbo
 .venv
-.venv/# Created by pytest automatically.
 .vercel
 .vscode-test
 .vscode-test/
 .vscode/
-.vscode/*
 .vuepress/dist
 .yarn-integrity
 .yarn/*

@@ -731,15 +731,14 @@ name = "baml-fmt"
 version = "0.53.1"
 dependencies = [
  "anyhow",
- "baml-lib",
  "base64 0.22.1",
- "colored",
  "dissimilar",
  "either",
  "enumflags2",
  "expect-test",
  "indoc",
- "internal-baml-jinja",
+ "internal-baml-core",
+ "internal-baml-schema-ast",
  "log",
  "lsp-types",
  "once_cell",
@@ -811,6 +810,7 @@ dependencies = [
  "colored",
  "console_log",
  "dashmap",
+ "derive_more",
  "dissimilar",
  "dunce",
  "either",
@@ -873,6 +873,7 @@ dependencies = [
  "anyhow",
  "baml-runtime",
  "baml-types",
+ "cfg-if",
  "console_error_panic_hook",
  "console_log",
  "dissimilar",
@@ -1236,6 +1237,12 @@ dependencies = [
 
 [[package]]
 name = "convert_case"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
+name = "convert_case"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
@@ -1407,6 +1414,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "206868b8242f27cecce124c19fd88157fbd0dd334df2587f36417bafbc85097b"
 dependencies = [
  "derive_builder_core",
+ "syn 2.0.71",
+]
+
+[[package]]
+name = "derive_more"
+version = "0.99.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f33878137e4dafd7fa914ad4e259e18a4e8e532b9617a2d0150262bf53abfce"
+dependencies = [
+ "convert_case 0.4.0",
+ "proc-macro2",
+ "quote",
+ "rustc_version",
  "syn 2.0.71",
 ]
 
@@ -2371,6 +2391,7 @@ dependencies = [
 name = "internal-baml-parser-database"
 version = "0.53.1"
 dependencies = [
+ "anyhow",
  "baml-types",
  "colored",
  "either",
@@ -2740,7 +2761,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eafd2b920906ea5b1f5f1f9d1eff9cc74e4ff8124dca41b501c1413079589187"
 dependencies = [
  "cfg-if",
- "convert_case",
+ "convert_case 0.6.0",
  "napi-derive-backend",
  "proc-macro2",
  "quote",
@@ -2753,7 +2774,7 @@ version = "1.0.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b370b784440c65eb9001d839012eb912ee43e3a2d0361e2c30c13052372c39fe"
 dependencies = [
- "convert_case",
+ "convert_case 0.6.0",
  "once_cell",
  "proc-macro2",
  "quote",

@@ -1,12 +1,14 @@
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
 use internal_baml_core::internal_baml_diagnostics::Diagnostics;
+use internal_baml_core::ir::repr::ClientSpec;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
+use crate::internal::llm_client::AllowedMetadata;
 use crate::tracing::{BamlTracer, TracingSpan};
 use crate::types::on_log_event::LogEventCallbackSync;
 use crate::{
@@ -104,7 +106,7 @@ pub trait InternalClientLookup<'a> {
     // Gets a top-level client/strategy by name
     fn get_llm_provider(
         &'a self,
-        client_name: &str,
+        client_spec: &ClientSpec,
         ctx: &RuntimeContext,
     ) -> Result<Arc<LLMProvider>>;
 
@@ -120,7 +122,7 @@ pub trait InternalRuntimeInterface {
 
     fn orchestration_graph(
         &self,
-        client_name: &str,
+        client_name: &ClientSpec,
         ctx: &RuntimeContext,
     ) -> Result<Vec<OrchestratorNode>>;
 
@@ -137,7 +139,7 @@ pub trait InternalRuntimeInterface {
         ctx: &RuntimeContext,
         params: &BamlMap<String, BamlValue>,
         node_index: Option<usize>,
-    ) -> Result<(RenderedPrompt, OrchestrationScope)>;
+    ) -> Result<(RenderedPrompt, OrchestrationScope, AllowedMetadata)>;
 
     #[allow(async_fn_in_trait)]
     async fn render_raw_curl(

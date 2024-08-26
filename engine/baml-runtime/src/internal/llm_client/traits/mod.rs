@@ -1,6 +1,8 @@
-use std::{path::PathBuf, pin::Pin};
+use std::{collections::HashMap, path::PathBuf, pin::Pin};
 
 use anyhow::{Context, Result};
+use aws_smithy_types::byte_stream::error::Error;
+use serde_json::{json, Map};
 
 mod chat;
 mod completion;
@@ -30,6 +32,11 @@ pub trait WithRetryPolicy {
     fn retry_policy_name(&self) -> Option<&str>;
 }
 
+pub trait WithClientProperties {
+    fn client_properties(&self) -> &HashMap<String, serde_json::Value>;
+    fn allowed_metadata(&self) -> &super::AllowedMetadata;
+}
+
 pub trait WithSingleCallable {
     #[allow(async_fn_in_trait)]
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse;
@@ -39,6 +46,75 @@ pub trait WithClient {
     fn context(&self) -> &RenderContext_Client;
 
     fn model_features(&self) -> &ModelFeatures;
+}
+
+pub trait ToProviderMessage: WithClient {
+    fn to_chat_message(
+        &self,
+        content: Map<String, serde_json::Value>,
+        text: &str,
+    ) -> Result<Map<String, serde_json::Value>>;
+    fn to_media_message(
+        &self,
+        content: Map<String, serde_json::Value>,
+        media: &baml_types::BamlMedia,
+    ) -> Result<Map<String, serde_json::Value>>;
+    fn role_to_message(
+        &self,
+        content: &RenderedChatMessage,
+    ) -> Result<Map<String, serde_json::Value>>;
+}
+
+fn merge_messages(chat: &Vec<RenderedChatMessage>) -> Vec<RenderedChatMessage> {
+    let mut chat = chat.clone();
+    let mut i = 0;
+    while i < chat.len() - 1 {
+        let (left, right) = chat.split_at_mut(i + 1);
+        if left[i].role == right[0].role && !right[0].allow_duplicate_role {
+            left[i].parts.extend(right[0].parts.drain(..));
+            chat.remove(i + 1);
+        } else {
+            i += 1;
+        }
+    }
+    chat
+}
+
+pub trait ToProviderMessageExt: ToProviderMessage {
+    fn chat_to_message(
+        &self,
+        chat: &Vec<RenderedChatMessage>,
+    ) -> Result<Map<String, serde_json::Value>>;
+
+    fn part_to_message(
+        &self,
+        content: Map<String, serde_json::Value>,
+        part: &ChatMessagePart,
+    ) -> Result<Map<String, serde_json::Value>> {
+        match part {
+            ChatMessagePart::Text(t) => self.to_chat_message(content, t),
+            ChatMessagePart::Media(m) => self.to_media_message(content, m),
+            ChatMessagePart::WithMeta(p, meta) => {
+                let mut content = self.part_to_message(content, &p)?;
+                for (k, v) in meta {
+                    if self.model_features().allowed_metadata.is_allowed(k) {
+                        content.insert(k.clone(), v.clone());
+                    }
+                }
+                Ok(content)
+            }
+        }
+    }
+
+    fn parts_to_message(
+        &self,
+        parts: &Vec<ChatMessagePart>,
+    ) -> Result<Vec<Map<String, serde_json::Value>>> {
+        Ok(parts
+            .iter()
+            .map(|p| self.part_to_message(Map::new(), p))
+            .collect::<Result<Vec<_>>>()?)
+    }
 }
 
 pub trait WithPrompt<'ir> {
@@ -139,6 +215,7 @@ where
         let prompt = match prompt {
             RenderedPrompt::Completion(_) => prompt,
             RenderedPrompt::Chat(chat) => {
+                let chat = merge_messages(&chat);
                 // We never need to resolve media URLs here: webview rendering understands how to handle URLs and file refs
                 let chat =
                     process_media_urls(ResolveMediaUrls::Never, true, None, ctx, &chat).await?;
@@ -303,18 +380,24 @@ async fn process_media_urls(
             .parts
             .iter()
             .map(|any_part| async move {
-                let ChatMessagePart::Media(part) = any_part else {
-                    return Ok(any_part.clone());
+                let Some(part) = any_part.as_media() else {
+                    return Ok::<ChatMessagePart, anyhow::Error>(any_part.clone());
                 };
-                process_media(
+                let media = process_media(
                     resolve_media_urls,
                     resolve_files,
                     render_settings,
                     ctx,
-                    part,
+                    &part,
                 )
                 .await
-                .map(ChatMessagePart::Media)
+                .map(ChatMessagePart::Media)?;
+
+                if let Some(meta) = any_part.meta() {
+                    Ok(media.with_meta(meta.clone()))
+                } else {
+                    Ok(media)
+                }
             })
             .collect::<Vec<_>>();
         async move {
@@ -327,6 +410,7 @@ async fn process_media_urls(
 
             Ok::<_, anyhow::Error>(RenderedChatMessage {
                 role: p.role.clone(),
+                allow_duplicate_role: p.allow_duplicate_role,
                 parts: new_parts,
             })
         }
@@ -351,7 +435,7 @@ async fn process_media(
         BamlMediaContent::File(media_file) => {
             // Prompt rendering preserves files, because the vscode webview understands files.
             // In all other cases, we always convert files to base64.
-            if (!resolve_files) {
+            if !resolve_files {
                 return Ok(part.clone());
             }
 

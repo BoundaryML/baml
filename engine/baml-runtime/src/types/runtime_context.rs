@@ -1,11 +1,10 @@
 use anyhow::Result;
 use baml_types::BamlValue;
-use futures::future::BoxFuture;
 use indexmap::IndexMap;
 use internal_baml_core::ir::{repr::Expression, FieldType};
 use serde;
 use serde_json;
-use std::{collections::HashMap, ffi::OsStr, future::Future, pin::Pin, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::internal::llm_client::llm_provider::LLMProvider;
 
@@ -41,8 +40,11 @@ pub struct RuntimeClassOverride {
 // pub type BamlSrcReader = fn(&str) -> Result<String>;
 cfg_if::cfg_if!(
     if #[cfg(target_arch = "wasm32")] {
-        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
+        use core::pin::Pin;
+        use core::future::Future;
+        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
     } else {
+        use futures::future::BoxFuture;
         pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, Result<Vec<u8>>>>>;
     }
 );

@@ -1,5 +1,6 @@
-use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue};
+use baml_types::{BamlMedia, BamlValue};
 use colored::*;
+mod chat_message_part;
 mod evaluate_type;
 mod get_vars;
 mod output_format;
@@ -12,8 +13,10 @@ use minijinja::{self, value::Kwargs};
 use minijinja::{context, ErrorKind, Value};
 use output_format::types::OutputFormatContent;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashMap;
 
+pub use crate::chat_message_part::ChatMessagePart;
 use crate::output_format::OutputFormat;
 
 fn get_env<'a>() -> minijinja::Environment<'a> {
@@ -174,7 +177,36 @@ fn render_minijinja(
                 }
             };
 
-            Ok(format!("{MAGIC_CHAT_ROLE_DELIMITER}:baml-start-baml:{role}:baml-end-baml:{MAGIC_CHAT_ROLE_DELIMITER}"))
+            let allow_duplicate_role = match kwargs.get::<bool>("__baml_allow_dupe_role__") {
+                Ok(allow_duplicate_role) => allow_duplicate_role,
+                Err(e) => match e.kind() {
+                    ErrorKind::MissingArgument => false,
+                    _ => return Err(e),
+                },
+            };
+
+            let additional_properties = {
+                let mut props = kwargs
+                    .args()
+                    .into_iter()
+                    .filter(|&k| k != "role")
+                    .map(|k| {
+                        Ok((
+                            k,
+                            serde_json::Value::deserialize(kwargs.get::<minijinja::Value>(k)?)?,
+                        ))
+                    })
+                    .collect::<Result<HashMap<&str, serde_json::Value>, minijinja::Error>>()?;
+
+                props.insert("role", role.clone().into());
+                props.insert("__baml_allow_dupe_role__", allow_duplicate_role.into());
+
+                props
+            };
+
+            let additional_properties = json!(additional_properties).to_string();
+
+            Ok(format!("{MAGIC_CHAT_ROLE_DELIMITER}:baml-start-baml:{additional_properties}:baml-end-baml:{MAGIC_CHAT_ROLE_DELIMITER}"))
         },
     );
 
@@ -196,21 +228,41 @@ fn render_minijinja(
 
     let mut chat_messages = vec![];
     let mut role = None;
+    let mut meta = None;
+    let mut allow_duplicate_role = false;
     for chunk in rendered.split(MAGIC_CHAT_ROLE_DELIMITER) {
         if chunk.starts_with(":baml-start-baml:") && chunk.ends_with(":baml-end-baml:") {
-            role = Some(
-                chunk
-                    .strip_prefix(":baml-start-baml:")
-                    .unwrap_or(chunk)
-                    .strip_suffix(":baml-end-baml:")
-                    .unwrap_or(chunk),
-            );
+            let parsed = chunk
+                .strip_prefix(":baml-start-baml:")
+                .unwrap_or(chunk)
+                .strip_suffix(":baml-end-baml:")
+                .unwrap_or(chunk);
+            if let Ok(mut parsed) =
+                serde_json::from_str::<HashMap<String, serde_json::Value>>(parsed)
+            {
+                if let Some(role_val) = parsed.remove("role") {
+                    role = Some(role_val.as_str().unwrap().to_string());
+                }
+
+                allow_duplicate_role = parsed
+                    .remove("__baml_allow_dupe_role__")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                if parsed.is_empty() {
+                    meta = None;
+                } else {
+                    meta = Some(parsed);
+                }
+            }
         } else if role.is_none() && chunk.is_empty() {
             // If there's only whitespace before the first `_.chat()` directive, we discard that chunk
         } else {
             let mut parts = vec![];
             for part in chunk.split(MAGIC_MEDIA_DELIMITER) {
-                if part.starts_with(":baml-start-media:") && part.ends_with(":baml-end-media:") {
+                let part = if part.starts_with(":baml-start-media:")
+                    && part.ends_with(":baml-end-media:")
+                {
                     let media_data = part
                         .strip_prefix(":baml-start-media:")
                         .unwrap_or(part)
@@ -218,23 +270,32 @@ fn render_minijinja(
                         .unwrap_or(part);
 
                     match serde_json::from_str::<BamlMedia>(media_data) {
-                        Ok(m) => parts.push(ChatMessagePart::Media(m)),
-                        Err(_) => {
-                            Err(minijinja::Error::new(
-                                ErrorKind::CannotUnpack,
-                                format!("Media variable had unrecognizable data: {}", media_data),
-                            ))?;
-                        }
+                        Ok(m) => Some(ChatMessagePart::Media(m)),
+                        Err(_) => Err(minijinja::Error::new(
+                            ErrorKind::CannotUnpack,
+                            format!("Media variable had unrecognizable data: {}", media_data),
+                        ))?,
                     }
                 } else if !part.trim().is_empty() {
-                    parts.push(ChatMessagePart::Text(part.trim().to_string()));
+                    Some(ChatMessagePart::Text(part.trim().to_string()))
+                } else {
+                    None
+                };
+
+                if let Some(part) = part {
+                    if let Some(meta) = &meta {
+                        parts.push(part.with_meta(meta.clone()));
+                    } else {
+                        parts.push(part);
+                    }
                 }
             }
 
             // Only add the message if it contains meaningful content
             if !parts.is_empty() {
                 chat_messages.push(RenderedChatMessage {
-                    role: role.unwrap_or(&default_role).to_string(),
+                    role: role.as_ref().unwrap_or(&default_role).to_string(),
+                    allow_duplicate_role,
                     parts,
                 });
             }
@@ -247,6 +308,7 @@ fn render_minijinja(
 #[derive(Debug, PartialEq, Serialize, Clone)]
 pub struct RenderedChatMessage {
     pub role: String,
+    pub allow_duplicate_role: bool,
     pub parts: Vec<ChatMessagePart>,
 }
 
@@ -273,12 +335,6 @@ impl ImageBase64 {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Clone)]
-pub enum ChatMessagePart {
-    Text(String), // raw user-provided text
-    Media(BamlMedia),
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum RenderedPrompt {
     Completion(String),
@@ -299,16 +355,7 @@ impl std::fmt::Display for RenderedPrompt {
                         message
                             .parts
                             .iter()
-                            .map(|p| match p {
-                                ChatMessagePart::Text(t) => t.clone(),
-                                ChatMessagePart::Media(media) => match &media.content {
-                                    BamlMediaContent::Url(url) =>
-                                        format!("<{}_placeholder: {}>", media.media_type, url.url),
-                                    BamlMediaContent::Base64(_) =>
-                                        format!("<{}_placeholder base64>", media.media_type),
-                                    _ => unreachable!(),
-                                },
-                            })
+                            .map(|p| p.to_string())
                             .collect::<Vec<String>>()
                             .join("")
                     )?;
@@ -351,6 +398,7 @@ impl RenderedPrompt {
             RenderedPrompt::Completion(message) => {
                 RenderedPrompt::Chat(vec![RenderedChatMessage {
                     role: chat_options.default_role.clone(),
+                    allow_duplicate_role: false,
                     parts: vec![ChatMessagePart::Text(message)],
                 }])
             }
@@ -366,6 +414,7 @@ impl RenderedPrompt {
                         m.parts.into_iter().map(|p| match p {
                             ChatMessagePart::Text(t) => t,
                             ChatMessagePart::Media(_) => "".to_string(), // we are choosing to ignore the image for now
+                            ChatMessagePart::WithMeta(p, _) => p.to_string(),
                         })
                     })
                     .collect::<Vec<String>>()
@@ -443,7 +492,7 @@ mod render_tests {
 
     use super::*;
 
-    use baml_types::BamlMap;
+    use baml_types::{BamlMap, BamlMediaType};
     use env_logger;
     use std::sync::Once;
 
@@ -488,6 +537,7 @@ mod render_tests {
             rendered,
             RenderedPrompt::Chat(vec![RenderedChatMessage {
                 role: "system".to_string(),
+                allow_duplicate_role: false,
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
                     ChatMessagePart::Media(BamlMedia::url(
@@ -538,6 +588,7 @@ mod render_tests {
             rendered,
             RenderedPrompt::Chat(vec![RenderedChatMessage {
                 role: "system".to_string(),
+                allow_duplicate_role: false,
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
                     ChatMessagePart::Media(BamlMedia::url(
@@ -585,6 +636,7 @@ mod render_tests {
             rendered,
             RenderedPrompt::Chat(vec![RenderedChatMessage {
                 role: "system".to_string(),
+                allow_duplicate_role: false,
                 parts: vec![
                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
                     ChatMessagePart::Media(BamlMedia::url(
@@ -643,6 +695,7 @@ mod render_tests {
             RenderedPrompt::Chat(vec![
                 RenderedChatMessage {
                     role: "system".to_string(),
+                    allow_duplicate_role: false,
                     parts: vec![ChatMessagePart::Text(
                         vec![
                             "You are an assistant that always responds",
@@ -655,6 +708,7 @@ mod render_tests {
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
+                    allow_duplicate_role: false,
                     parts: vec![ChatMessagePart::Text(
                         vec![
                             "Tell me a haiku about sakura. ",
@@ -936,6 +990,7 @@ mod render_tests {
             RenderedPrompt::Chat(vec![
                 RenderedChatMessage {
                     role: "system".to_string(),
+                    allow_duplicate_role: false,
                     parts: vec![ChatMessagePart::Text(
                         vec![
                             "You are an assistant that always responds",
@@ -948,12 +1003,14 @@ mod render_tests {
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
+                    allow_duplicate_role: false,
                     parts: vec![ChatMessagePart::Text(
                         "Tell me a haiku about sakura.".to_string()
                     )]
                 },
                 RenderedChatMessage {
                     role: "john doe".to_string(),
+                    allow_duplicate_role: false,
                     parts: vec![ChatMessagePart::Text(
                         "End the haiku with a line about your maker, openai.".to_string()
                     )]
@@ -999,6 +1056,7 @@ mod render_tests {
             rendered,
             RenderedPrompt::Chat(vec![RenderedChatMessage {
                 role: "system".to_string(),
+                allow_duplicate_role: false,
                 parts: vec![ChatMessagePart::Text(
                     vec![
                         "You are an assistant that always responds",

@@ -209,10 +209,18 @@
           "comment": "Function client properties",
           "patterns": [
             {
-              "match": "(client)\\s+(\\w+)",
+              "match": "(client)\\s+(\\w+|\"[^\"]*\")",
               "captures": {
                 "1": { "name": "variable.other.readwrite.client" },
-                "2": { "name": "entity.name.other.client" }
+                "2": {
+                  "patterns": [
+                    {
+                      "match": "\\w+",
+                      "name": "entity.name.other.client" 
+                    },
+                    { "include": "#string_literal" }
+                  ]
+                }
               },
               "name": "meta.client.declaration"
             },
@@ -255,10 +263,18 @@
       "patterns": [
         { "include": "#comment" },
         {
-          "match": "(client)\\s+(\\w+)",
+          "match": "(client)\\s+(\\w+|\"[^\"]*\")",
           "captures": {
             "1": { "name": "variable.other.readwrite.client" },
-            "2": { "name": "entity.name.other.client" }
+            "2": {
+              "patterns": [
+                {
+                  "match": "\\w+",
+                  "name": "entity.name.other.client" 
+                },
+                { "include": "#string_literal" }
+              ]
+            }
           },
           "name": "meta.client.declaration"
         },

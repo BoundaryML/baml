@@ -1,5 +1,5 @@
 use crate::Result;
-use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue};
+use baml_types::{BamlMedia, BamlMediaType, BamlValue};
 use magnus::{class, function, Module, Object, RModule};
 
 pub(crate) trait CloneAsBamlValue {

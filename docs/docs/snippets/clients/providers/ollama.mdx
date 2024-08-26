@@ -4,16 +4,23 @@ slug: docs/snippets/clients/providers/ollama
 ---
 
 
-For `ollama`, we provide a client that can be used to interact with [ollama](https://ollama.com/) `/chat/completions` endpoint.
+[Ollama](https://ollama.com/) supports the OpenAI client, allowing you to use the
+[`openai-generic`](/docs/snippets/clients/providers/openai) provider with an
+overridden `base_url`.
 
+<Tip>
+  Note that to call Ollama, you must use its OpenAI-compatible
+  `/v1` endpoint. See [Ollama's OpenAI compatibility
+  documentation](https://ollama.com/blog/openai-compatibility).
+</Tip>
 <Tip>You can try out BAML with Ollama at promptfiddle.com, by running `OLLAMA_ORIGINS='*' ollama serve`. Learn more in [here](https://www.boundaryml.com/blog/ollama-structured-output)</Tip>
 
-Example:
 ```baml BAML
 client<llm> MyClient {
-  provider ollama
+  provider "openai-generic"
   options {
-    model "llama3"
+    base_url "http://localhost:11434/v1"
+    model llama3
   }
 }
 ```
@@ -55,6 +62,8 @@ client<llm> MyClient {
 ```
 </ParamField>
 
+<Markdown src="../../../../snippets/allowed-role-metadata-basic.mdx" />
+
 ## Forwarded options
 <ParamField
    path="messages"
@@ -84,10 +93,7 @@ client<llm> MyClient {
 | `gemma` | Gemma is a family of lightweight, state-of-the-art open models built by Google DeepMind. Updated to version 1.1 |
 | `mixtral` | A set of Mixture of Experts (MoE) model with open weights by Mistral AI in 8x7b and 8x22b parameter sizes. |
 
-See ollama docs for the list of ollama models. [Model Library](https://ollama.com/library)
+For the most up-to-date list of models supported by Ollama, see their [Model Library](https://ollama.com/library).
 
 <Tip>To use a specific version you would do: `"mixtral:8x22b"`</Tip>
 </ParamField>
-
-
-For all other options, see the [official OpenAI API documentation](https://platform.openai.com/docs/api-reference/chat/create).

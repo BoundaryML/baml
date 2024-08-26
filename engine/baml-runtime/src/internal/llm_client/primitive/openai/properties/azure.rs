@@ -1,23 +1,26 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use internal_baml_core::ir::ClientWalker;
 
-use crate::RuntimeContext;
+use crate::{internal::llm_client::AllowedMetadata, RuntimeContext};
 
-use super::PostRequestProperities;
+use super::PostRequestProperties;
 
 pub fn resolve_properties(
     mut properties: HashMap<String, serde_json::Value>,
     ctx: &RuntimeContext,
-) -> Result<PostRequestProperities> {
+) -> Result<PostRequestProperties> {
     // POST https://{your-resource-name}.openai.azure.com/openai/deployments/{deployment-id}/chat/completions?api-version={api-version}
 
     let default_role = properties
         .remove("default_role")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "system".to_string());
-
+    let allowed_metadata = match properties.remove("allowed_role_metadata") {
+        Some(allowed_metadata) => serde_json::from_value(allowed_metadata)
+            .context("allowed_role_metadata must be 'all', 'none', or ['key1', 'key2']")?,
+        None => AllowedMetadata::None,
+    };
     // Ensure that either (resource_name, deployment_id) or base_url is provided
     let base_url = properties.remove("base_url");
     let resource_name = properties.remove("resource_name");
@@ -87,12 +90,13 @@ pub fn resolve_properties(
         .entry("max_tokens".into())
         .or_insert_with(|| 4096.into());
 
-    Ok(PostRequestProperities {
+    Ok(PostRequestProperties {
         default_role,
         base_url,
         api_key: None,
         headers,
         properties,
+        allowed_metadata,
         // Replace proxy_url with code below to disable proxying
         // proxy_url: None,
         proxy_url: ctx.env.get("BOUNDARY_PROXY_URL").map(|s| s.to_string()),
