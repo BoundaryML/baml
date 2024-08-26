@@ -203,15 +203,8 @@ fn relevant_data_models<'a>(
     let mut enums = Vec::new();
     let mut classes = Vec::new();
     let mut start: Vec<baml_types::FieldType> = vec![output.clone()];
-    log::debug!("IR {:#?}", ir);
 
-    while !start.is_empty() {
-        let output = start.pop().unwrap();
-        // log::debug!("Checked types: {:#?}", checked_types);
-        // log::debug!("classes: {:#?}", classes);
-
-        // log::debug!("Checking type: {:#?}", output);
-
+    while let Some(output) = start.pop() {
         match &output {
             FieldType::Enum(enm) => {
                 if checked_types.insert(output.to_string()) {

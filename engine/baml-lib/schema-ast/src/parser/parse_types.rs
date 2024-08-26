@@ -33,9 +33,6 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
         }
     }
 
-    log::debug!("-----field_type----");
-    log::debug!("field_type: {:#?}", ftype);
-
     match ftype {
         Some(ftype) => {
             if arity.is_optional() {
@@ -55,7 +52,6 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
 
 fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     assert_correct_parser!(pair, Rule::union);
-    log::debug!("Parsing union {:#?}", pair);
 
     let span = diagnostics.span(pair.as_span());
     let mut types = Vec::new();
@@ -76,21 +72,6 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
             _ => unreachable_rule!(current, Rule::union),
         }
     }
-
-    // log::debug!("types {:#?}", types);
-
-    // log::debug!("lastmut {:#?}", types.last_mut());
-
-    // let attributes = types
-    //     .last_mut()
-    //     .and_then(|t| t.attributes().to_owned().into())
-    //     .clone();
-    // log::debug!("attributes {:#?}", attributes);
-    // if let Some(last_type) = types.last_mut() {
-    //     last_type.reset_attributes();
-    // }
-    // log::info!("attributes2 {:#?}", attributes);
-    // log::info!("types len {:#?}", types.len());
 
     match types.len() {
         0 => unreachable!("A union must have atleast 1 type"),
@@ -134,7 +115,6 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
     );
 
     if let Some(current) = pair.into_inner().next() {
-        log::debug!("Parsing base type {:#?}", current);
         return match current.as_rule() {
             Rule::identifier => {
                 let identifier = parse_identifier(current.clone(), diagnostics);
