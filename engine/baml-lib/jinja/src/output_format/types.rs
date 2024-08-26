@@ -485,3 +485,115 @@ impl OutputFormatContent {
             .ok_or_else(|| anyhow::anyhow!("Class {} not found", name))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_render_string() {
+        let content = OutputFormatContent::new_string();
+        let rendered = content.render(RenderOptions::default()).unwrap();
+        assert_eq!(rendered, None);
+    }
+
+    #[test]
+    fn test_render_array() {
+        let content = OutputFormatContent::new_array();
+        let rendered = content.render(RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some("Answer with a JSON Array using this schema:\nstring[]".to_string())
+        );
+    }
+
+    #[test]
+    fn test_render_enum() {
+        let mut enums = vec![];
+        enums.push(Enum {
+            name: Name::new("Color".to_string()),
+            values: vec![
+                (Name::new("Red".to_string()), None),
+                (Name::new("Green".to_string()), None),
+                (Name::new("Blue".to_string()), None),
+            ],
+        });
+
+        let content = OutputFormatContent::new(enums, vec![], FieldType::Enum("Color".to_string()));
+        let rendered = content.render(RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some(
+                "Answer with any of the categories:\nColor\n----\n- Red\n- Green\n- Blue"
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn test_render_class() {
+        let mut classes = vec![];
+        classes.push(Class {
+            name: Name::new("Person".to_string()),
+            fields: vec![
+                (
+                    Name::new("name".to_string()),
+                    FieldType::Primitive(TypeValue::String),
+                    Some("The person's name".to_string()),
+                ),
+                (
+                    Name::new("age".to_string()),
+                    FieldType::Primitive(TypeValue::Int),
+                    Some("The person's age".to_string()),
+                ),
+            ],
+        });
+
+        let content =
+            OutputFormatContent::new(vec![], classes, FieldType::Class("Person".to_string()));
+        let rendered = content.render(RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some(
+                "Answer in JSON using this schema:\n{\n  // The person's name\n  name: string,\n  // The person's age\n  age: int,\n}"
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn test_render_class_with_multiline_descriptions() {
+        let mut classes = vec![];
+        classes.push(Class {
+            name: Name::new("Education".to_string()),
+            fields: vec![
+                (
+                    Name::new("school".to_string()),
+                    FieldType::Optional(Box::new(FieldType::Primitive(TypeValue::String))),
+                    Some("111\n  ".to_string()),
+                ),
+                (
+                    Name::new("degree".to_string()),
+                    FieldType::Primitive(TypeValue::String),
+                    Some("2222222".to_string()),
+                ),
+                (
+                    Name::new("year".to_string()),
+                    FieldType::Primitive(TypeValue::Int),
+                    None,
+                ),
+            ],
+        });
+
+        let content =
+            OutputFormatContent::new(vec![], classes, FieldType::Class("Education".to_string()));
+        let rendered = content.render(RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some(
+                "Answer in JSON using this schema:\n{\n  // 111\n  //   \n  school: string or null,\n  // 2222222\n  degree: string,\n  year: int,\n}"
+                    .to_string()
+            )
+        );
+    }
+}

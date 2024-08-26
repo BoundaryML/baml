@@ -1139,6 +1139,30 @@ class BamlAsyncClient:
       mdl = create_model("PromptTestStreamingReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    async def SchemaDescriptions(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Schema:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "SchemaDescriptions",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("SchemaDescriptionsReturnType", inner=(types.Schema, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def TestAnthropic(
         self,
         input: str,
@@ -3352,6 +3376,39 @@ class BamlStreamClient:
       partial_mdl = create_model("PromptTestStreamingPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def SchemaDescriptions(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.Schema, types.Schema]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "SchemaDescriptions",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("SchemaDescriptionsReturnType", inner=(types.Schema, ...))
+      partial_mdl = create_model("SchemaDescriptionsPartialReturnType", inner=(partial_types.Schema, ...))
+
+      return baml_py.BamlStream[partial_types.Schema, types.Schema](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

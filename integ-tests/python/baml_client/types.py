@@ -224,6 +224,19 @@ class NamedArgsSingleClass(BaseModel):
     key_two: bool
     key_three: int
 
+class Nested(BaseModel):
+    
+    
+    prop3: Union[str, Optional[None]]
+    prop4: Union[str, Optional[None]]
+    prop20: "Nested2"
+
+class Nested2(BaseModel):
+    
+    
+    prop11: Union[str, Optional[None]]
+    prop12: Union[str, Optional[None]]
+
 class OptionalTest_Prop1(BaseModel):
     
     
@@ -291,6 +304,17 @@ class Resume(BaseModel):
     experience: List["Education"]
     education: List[str]
     skills: List[str]
+
+class Schema(BaseModel):
+    
+    
+    prop1: Union[str, Optional[None]]
+    prop2: Union["Nested", str]
+    prop5: List[Union[str, Optional[None]]]
+    prop6: Union[str, List["Nested"]]
+    nested_attrs: List[Union[str, Optional[None], "Nested"]]
+    parens: Union[str, Optional[None]]
+    other_group: Union[str, Union[int, str]]
 
 class SearchParams(BaseModel):
     

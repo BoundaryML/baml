@@ -133,6 +133,19 @@ class NamedArgsSingleClass(BaseModel):
     key_two: Optional[bool] = None
     key_three: Optional[int] = None
 
+class Nested(BaseModel):
+    
+    
+    prop3: Optional[Union[Optional[str], Optional[None]]] = None
+    prop4: Optional[Union[Optional[str], Optional[None]]] = None
+    prop20: Optional["Nested2"] = None
+
+class Nested2(BaseModel):
+    
+    
+    prop11: Optional[Union[Optional[str], Optional[None]]] = None
+    prop12: Optional[Union[Optional[str], Optional[None]]] = None
+
 class OptionalTest_Prop1(BaseModel):
     
     
@@ -200,6 +213,17 @@ class Resume(BaseModel):
     experience: List["Education"]
     education: List[Optional[str]]
     skills: List[Optional[str]]
+
+class Schema(BaseModel):
+    
+    
+    prop1: Optional[Union[Optional[str], Optional[None]]] = None
+    prop2: Optional[Union["Nested", Optional[str]]] = None
+    prop5: List[Optional[Union[Optional[str], Optional[None]]]]
+    prop6: Optional[Union[Optional[str], List["Nested"]]] = None
+    nested_attrs: List[Optional[Union[Optional[str], Optional[None], "Nested"]]]
+    parens: Optional[Union[Optional[str], Optional[None]]] = None
+    other_group: Optional[Union[Optional[str], Optional[Union[Optional[int], Optional[str]]]]] = None
 
 class SearchParams(BaseModel):
     

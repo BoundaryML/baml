@@ -94,6 +94,10 @@ class Project {
     return firstErrorMessage
   }
 
+  isTypescriptGeneratorPresent() {
+    return this.list_generators().some((g) => g.output_type.toLocaleLowerCase() === 'typescript')
+  }
+
   getGeneratorDiagnostics() {
     try {
       if (!this.current_runtime) {
@@ -291,14 +295,14 @@ class Project {
   }
 
   list_functions(): BamlWasm.WasmFunction[] {
-    let runtime = this.runtime()
+    const runtime = this.runtime()
     if (!runtime) {
       throw new Error(`BAML Generate failed. Project has errors.`)
     }
     return runtime.list_functions()
   }
   list_testcases(): BamlWasm.WasmTestCase[] {
-    let runtime = this.runtime()
+    const runtime = this.runtime()
     if (!runtime) {
       throw new Error(`BAML Generate failed. Project has errors.`)
     }
@@ -546,7 +550,7 @@ class BamlProjectManager {
         this.notifier({ type: 'runtime_updated', root_path, files })
       }),
     )
-    return this.get_project(root_path)!
+    return this.get_project(root_path)
   }
 
   private remove_project(root_path: string) {

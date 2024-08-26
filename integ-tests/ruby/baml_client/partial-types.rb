@@ -36,6 +36,8 @@ module Baml
     class InnerClass < T::Struct; end
     class InnerClass2 < T::Struct; end
     class NamedArgsSingleClass < T::Struct; end
+    class Nested < T::Struct; end
+    class Nested2 < T::Struct; end
     class OptionalTest_Prop1 < T::Struct; end
     class OptionalTest_ReturnType < T::Struct; end
     class OrderInfo < T::Struct; end
@@ -46,6 +48,7 @@ module Baml
     class ReceiptItem < T::Struct; end
     class Recipe < T::Struct; end
     class Resume < T::Struct; end
+    class Schema < T::Struct; end
     class SearchParams < T::Struct; end
     class SomeClassNestedDynamic < T::Struct; end
     class StringToClassEntry < T::Struct; end
@@ -287,6 +290,36 @@ module Baml
         @props = props
       end
     end
+    class Nested < T::Struct
+      include Baml::Sorbet::Struct
+      const :prop3, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
+      const :prop4, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
+      const :prop20, Baml::PartialTypes::Nested2
+
+      def initialize(props)
+        super(
+          prop3: props[:prop3],
+          prop4: props[:prop4],
+          prop20: props[:prop20],
+        )
+
+        @props = props
+      end
+    end
+    class Nested2 < T::Struct
+      include Baml::Sorbet::Struct
+      const :prop11, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
+      const :prop12, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
+
+      def initialize(props)
+        super(
+          prop11: props[:prop11],
+          prop12: props[:prop12],
+        )
+
+        @props = props
+      end
+    end
     class OptionalTest_Prop1 < T::Struct
       include Baml::Sorbet::Struct
       const :omega_a, T.nilable(String)
@@ -436,6 +469,30 @@ module Baml
           experience: props[:experience],
           education: props[:education],
           skills: props[:skills],
+        )
+
+        @props = props
+      end
+    end
+    class Schema < T::Struct
+      include Baml::Sorbet::Struct
+      const :prop1, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
+      const :prop2, T.nilable(T.any(Baml::PartialTypes::Nested, T.nilable(String)))
+      const :prop5, T::Array[T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))]
+      const :prop6, T.nilable(T.any(T.nilable(String), T::Array[Baml::PartialTypes::Nested]))
+      const :nested_attrs, T::Array[T.nilable(T.any(T.nilable(String), T.nilable(NilClass), Baml::PartialTypes::Nested))]
+      const :parens, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
+      const :other_group, T.nilable(T.any(T.nilable(String), T.nilable(T.any(T.nilable(Integer), T.nilable(String)))))
+
+      def initialize(props)
+        super(
+          prop1: props[:prop1],
+          prop2: props[:prop2],
+          prop5: props[:prop5],
+          prop6: props[:prop6],
+          nested_attrs: props[:nested_attrs],
+          parens: props[:parens],
+          other_group: props[:other_group],
         )
 
         @props = props

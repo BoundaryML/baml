@@ -1,12 +1,16 @@
 use super::{helpers::Pair, parse_attribute::parse_attribute, Rule};
 use crate::{
-    assert_correct_parser, ast::*, parser::parse_identifier::parse_identifier, unreachable_rule,
+    assert_correct_parser,
+    ast::*,
+    parser::{parse_field::parse_field_type_with_attr, parse_identifier::parse_identifier},
+    unreachable_rule,
 };
 use baml_types::TypeValue;
 use internal_baml_diagnostics::Diagnostics;
 
 pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     assert_correct_parser!(pair, Rule::field_type, Rule::openParan, Rule::closeParan);
+
     let mut arity = FieldArity::Required;
     let mut ftype = None;
 
@@ -69,22 +73,10 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         }
     }
 
-    let attributes = types
-        .last_mut()
-        .and_then(|t| t.attributes().to_owned().into());
-    if let Some(last_type) = types.last_mut() {
-        last_type.reset_attributes();
-    }
-
     match types.len() {
         0 => unreachable!("A union must have atleast 1 type"),
         1 => Some(types[0].to_owned()),
-        _ => Some(FieldType::Union(
-            FieldArity::Required,
-            types,
-            span,
-            attributes,
-        )),
+        _ => Some(FieldType::Union(FieldArity::Required, types, span, None)),
     }
 }
 
@@ -156,11 +148,28 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
             Rule::map => parse_map(current, diagnostics),
             Rule::group => parse_group(current, diagnostics),
             Rule::tuple => parse_tuple(current, diagnostics),
+            Rule::parenthesized_type => parse_parenthesized_type(current, diagnostics),
             _ => unreachable_rule!(current, Rule::base_type),
         };
     }
 
     unreachable!("A base type must be one of the above");
+}
+
+fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
+    assert_correct_parser!(pair, Rule::parenthesized_type);
+
+    for current in pair.into_inner() {
+        match current.as_rule() {
+            Rule::openParan | Rule::closeParan => continue,
+            Rule::field_type_with_attr => {
+                return parse_field_type_with_attr(current, diagnostics);
+            }
+            _ => unreachable_rule!(current, Rule::parenthesized_type),
+        }
+    }
+
+    unreachable!("impossible parenthesized parsing");
 }
 
 fn parse_array(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {

@@ -221,6 +221,19 @@ export interface NamedArgsSingleClass {
   
 }
 
+export interface Nested {
+  prop3?: string | null | null
+  prop4?: string | null | null
+  prop20: Nested2
+  
+}
+
+export interface Nested2 {
+  prop11?: string | null | null
+  prop12?: string | null | null
+  
+}
+
 export interface OptionalTest_Prop1 {
   omega_a: string
   omega_b: number
@@ -286,6 +299,17 @@ export interface Resume {
   experience: Education[]
   education: string[]
   skills: string[]
+  
+}
+
+export interface Schema {
+  prop1?: string | null | null
+  prop2: Nested | string
+  prop5: (string | null | null)[]
+  prop6: string | Nested[]
+  nested_attrs: (string | null | null | Nested)[]
+  parens?: string | null | null
+  other_group: string | number | string
   
 }
 
