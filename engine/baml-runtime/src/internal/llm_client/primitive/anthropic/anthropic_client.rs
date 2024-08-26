@@ -87,7 +87,7 @@ fn resolve_properties(
 
     let allowed_metadata = match properties.remove("allowed_role_metadata") {
         Some(allowed_metadata) => serde_json::from_value(allowed_metadata)
-            .context("allowed_role_metadata must be 'all', 'none', or ['key1', 'key2']")?,
+            .context("allowed_role_metadata must be an array of keys. For example: ['key1', 'key2']")?,
         None => AllowedMetadata::None,
     };
 
