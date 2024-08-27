@@ -1,7 +1,7 @@
+use crate::errors::{BamlError, BamlInvalidArgumentError};
 use crate::parse_py_type::parse_py_type;
 use crate::types::function_results::FunctionResult;
 use crate::types::trace_stats::TraceStats;
-use crate::BamlError;
 
 use crate::types::function_result_stream::{FunctionResultStream, SyncFunctionResultStream};
 use crate::types::runtime_ctx_manager::RuntimeContextManager;
@@ -111,12 +111,14 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
     ) -> PyResult<PyObject> {
         let Some(args) = parse_py_type(args.into_bound(py).to_object(py), false)? else {
-            return Err(BamlError::new_err(
+            return Err(BamlInvalidArgumentError::new_err(
                 "Failed to parse args, perhaps you used a non-serializable type?",
             ));
         };
         let Some(args_map) = args.as_map_owned() else {
-            return Err(BamlError::new_err("Failed to parse args"));
+            return Err(BamlInvalidArgumentError::new_err(
+                "Failed to parse args. Expect kwargs",
+            ));
         };
         log::debug!("pyo3 call_function parsed args into: {:#?}", args_map);
 
@@ -127,12 +129,11 @@ impl BamlRuntime {
 
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let ctx_mng = ctx_mng;
-            let result = baml_runtime
+            let (result, _) = baml_runtime
                 .call_function(function_name, &args_map, &ctx_mng, tb.as_ref(), cb.as_ref())
                 .await;
 
             result
-                .0
                 .map(FunctionResult::from)
                 .map_err(BamlError::from_anyhow)
         })
@@ -149,12 +150,14 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
     ) -> PyResult<FunctionResult> {
         let Some(args) = parse_py_type(args, false)? else {
-            return Err(BamlError::new_err(
+            return Err(BamlInvalidArgumentError::new_err(
                 "Failed to parse args, perhaps you used a non-serializable type?",
             ));
         };
         let Some(args_map) = args.as_map_owned() else {
-            return Err(BamlError::new_err("Failed to parse args"));
+            return Err(BamlInvalidArgumentError::new_err(
+                "Failed to parse args as a map",
+            ));
         };
         log::debug!("pyo3 call_function_sync parsed args into: {:#?}", args_map);
 
@@ -187,12 +190,12 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
     ) -> PyResult<FunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).to_object(py), false)? else {
-            return Err(BamlError::new_err(
+            return Err(BamlInvalidArgumentError::new_err(
                 "Failed to parse args, perhaps you used a non-serializable type?",
             ));
         };
         let Some(args_map) = args.as_map() else {
-            return Err(BamlError::new_err("Failed to parse args"));
+            return Err(BamlInvalidArgumentError::new_err("Failed to parse args"));
         };
         log::debug!("pyo3 stream_function parsed args into: {:#?}", args_map);
 
@@ -228,12 +231,12 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
     ) -> PyResult<SyncFunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).to_object(py), false)? else {
-            return Err(BamlError::new_err(
+            return Err(BamlInvalidArgumentError::new_err(
                 "Failed to parse args, perhaps you used a non-serializable type?",
             ));
         };
         let Some(args_map) = args.as_map() else {
-            return Err(BamlError::new_err("Failed to parse args"));
+            return Err(BamlInvalidArgumentError::new_err("Failed to parse args"));
         };
         log::debug!("pyo3 stream_function parsed args into: {:#?}", args_map);
 

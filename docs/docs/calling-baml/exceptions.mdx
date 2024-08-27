@@ -7,11 +7,18 @@ When BAML raises an exception, it will be an instance of a subclass of `BamlErro
 ## Import path
 <CodeGroup>
 ```python Python
-from baml_py.errors import BamlError
+from baml_py.errors import BamlError, BamlInvalidArgumentError, BamlClientError, BamlClientHttpError, BamlValidationError
 ```
 
+
 ```typescript TypeScript
-import { BamlError } from '@boundaryml/baml/errors'
+// Instead of classes, TypeScript raises a string that is prefixed with:
+// "BamlError:"
+// Subclasses are sequentially appended to the string.
+// For example, BamlInvalidArgumentError is returned as:
+// "BamlError: BamlInvalidArgumentError:"
+// Or, BamlClientHttpError is returned as:
+// "BamlError: BamlClientError: BamlClientHttpError:"
 ```
 
 ```ruby Ruby

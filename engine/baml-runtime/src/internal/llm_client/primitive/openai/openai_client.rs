@@ -358,7 +358,7 @@ impl SseResponseTrait for OpenAIClient {
                                         request_options: params.clone(),
                                         latency: instant_start.elapsed(),
                                         message: format!("Failed to parse event: {:#?}", e),
-                                        code: ErrorCode::Other(2),
+                                        code: ErrorCode::UnsupportedResponse(2),
                                     },
                                 )));
                             }

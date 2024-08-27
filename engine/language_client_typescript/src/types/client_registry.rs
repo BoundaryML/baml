@@ -3,6 +3,7 @@ use napi::Env;
 use napi::JsObject;
 use napi_derive::napi;
 
+use crate::errors::invalid_argument_error;
 use crate::parse_ts_types;
 
 crate::lang_wrapper!(ClientRegistry, client_registry::ClientRegistry);
@@ -27,13 +28,10 @@ impl ClientRegistry {
     ) -> napi::Result<()> {
         let args = parse_ts_types::js_object_to_baml_value(env, options)?;
         if !args.is_map() {
-            return Err(napi::Error::new(
-                napi::Status::GenericFailure,
-                format!(
-                    "Invalid options: Expected a map of arguments, got: {}",
-                    args.r#type()
-                ),
-            ));
+            return Err(invalid_argument_error(&format!(
+                "Invalid options: Expected a map of arguments, got: {}",
+                args.r#type()
+            )));
         }
         let args_map = args.as_map_owned().unwrap();
 

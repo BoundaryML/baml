@@ -1,6 +1,8 @@
 use pyo3::prelude::{pymethods, PyAnyMethods, PyModule, PyResult};
 use pyo3::types::PyType;
 use pyo3::{Bound, Py, PyAny, PyObject, Python, ToPyObject};
+
+use crate::errors::BamlInvalidArgumentError;
 crate::lang_wrapper!(BamlImagePy, baml_types::BamlMedia);
 
 #[pymethods]
@@ -30,7 +32,7 @@ impl BamlImagePy {
     pub fn as_url(&self) -> PyResult<String> {
         match &self.inner.content {
             baml_types::BamlMediaContent::Url(url) => Ok(url.url.clone()),
-            _ => Err(crate::BamlError::new_err("Image is not a URL")),
+            _ => Err(BamlInvalidArgumentError::new_err("Image is not a URL")),
         }
     }
 
@@ -40,7 +42,7 @@ impl BamlImagePy {
                 base64.base64.clone(),
                 self.inner.mime_type.clone().unwrap_or("".to_string()),
             ]),
-            _ => Err(crate::BamlError::new_err("Image is not base64")),
+            _ => Err(BamlInvalidArgumentError::new_err("Image is not base64")),
         }
     }
 

@@ -2,6 +2,8 @@ use baml_types::BamlMediaContent;
 use pyo3::prelude::{pymethods, PyAnyMethods, PyModule, PyResult};
 use pyo3::types::PyType;
 use pyo3::{Bound, Py, PyAny, PyObject, Python, ToPyObject};
+
+use crate::errors::BamlError;
 crate::lang_wrapper!(BamlAudioPy, baml_types::BamlMedia);
 
 #[pymethods]
@@ -31,7 +33,7 @@ impl BamlAudioPy {
     pub fn as_url(&self) -> PyResult<String> {
         match &self.inner.content {
             BamlMediaContent::Url(url) => Ok(url.url.clone()),
-            _ => Err(crate::BamlError::new_err("Audio is not a URL")),
+            _ => Err(BamlError::new_err("Audio is not a URL")),
         }
     }
 
@@ -41,7 +43,7 @@ impl BamlAudioPy {
                 base64.base64.clone(),
                 self.inner.mime_type.clone().unwrap_or("".to_string()),
             ]),
-            _ => Err(crate::BamlError::new_err("Audio is not base64")),
+            _ => Err(BamlError::new_err("Audio is not base64")),
         }
     }
 
