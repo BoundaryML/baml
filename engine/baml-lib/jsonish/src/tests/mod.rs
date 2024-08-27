@@ -661,3 +661,23 @@ test_deserializer!(
       "four": "four"
     })
 );
+
+test_deserializer!(
+    test_leading_close_braces,
+    EXAMPLE_FILE_ORDERED_CLASS,
+    r#"]
+  {
+    "one": "one",
+    "two": "two",
+    "three": "three",
+    "four": "four"
+  }
+    "#,
+    FieldType::Class("OrderedClass".to_string()),
+    json!({
+      "one": "one",
+      "two": "two",
+      "three": "three",
+      "four": "four"
+    })
+);
