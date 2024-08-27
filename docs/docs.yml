@@ -97,6 +97,8 @@ navigation:
                 path: docs/snippets/clients/providers/vertex.mdx
               - page: vllm
                 path: docs/snippets/clients/providers/vllm.mdx
+              - page: LMStudio
+                path: docs/snippets/clients/providers/lmstudio.mdx
           - section: provider strategies
             contents:
               - page: fallback
