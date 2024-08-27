@@ -6,11 +6,13 @@ fn builder() -> reqwest::ClientBuilder {
         if #[cfg(target_arch = "wasm32")] {
             reqwest::Client::builder()
         } else {
+            let danger_accept_invalid_certs = matches!(std::env::var("DANGER_ACCEPT_INVALID_CERTS").as_deref(), Ok("1"));
             reqwest::Client::builder()
                 // NB: we can NOT set a total request timeout here: our users
                 // regularly have requests that take multiple minutes, due to how
                 // long LLMs take
                 .connect_timeout(Duration::from_secs(10))
+                .danger_accept_invalid_certs(danger_accept_invalid_certs) 
                 .http2_keep_alive_interval(Some(Duration::from_secs(10)))
         }
     }
