@@ -28,9 +28,12 @@ pub fn parse<'a>(str: &'a str, options: &ParseOptions) -> Result<Vec<Value>> {
                 }
 
                 if stack.is_empty() {
-                    // Assuming json_str_start is never None when stack is empty
                     let end_index = index + 1;
-                    let json_str = &str[json_str_start.unwrap()..end_index];
+                    let json_str = if let Some(start) = json_str_start {
+                        &str[start..end_index]
+                    } else {
+                        &str[..end_index]
+                    };
                     match entry::parse(
                         json_str,
                         options.next_from_mode(super::ParsingMode::AllJsonObjects),

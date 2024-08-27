@@ -26,8 +26,9 @@ pub(super) fn pick_best(
         return Err(ctx.error_unexpected_empty_array(target));
     }
 
+    let first = res.first().unwrap();
     if res.len() == 1 {
-        return res.first().unwrap().clone();
+        return first.clone();
     }
 
     let mut res_index = (0..res.len())
@@ -48,7 +49,7 @@ pub(super) fn pick_best(
         "Picking {} from {:?} items. Picked({:?}):\n{}",
         target,
         res_index,
-        res_index.first().unwrap(),
+        first,
         res.as_ref()
             .iter()
             .enumerate()
