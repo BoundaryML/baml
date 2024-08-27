@@ -1,6 +1,8 @@
 use baml_types::BamlValue;
 use napi_derive::napi;
 
+use crate::errors::invalid_argument_error;
+
 crate::lang_wrapper!(RuntimeContextManager, baml_runtime::RuntimeContextManager);
 
 #[napi]
@@ -10,17 +12,11 @@ impl RuntimeContextManager {
         let tags: Result<BamlValue, serde_json::Error> = serde_json::from_value(tags);
 
         let Ok(tags) = tags else {
-            return Err(napi::Error::new(
-                napi::Status::GenericFailure,
-                "Invalid tags",
-            ));
+            return Err(invalid_argument_error("Invalid tags"));
         };
 
         let Some(tags) = tags.as_map_owned() else {
-            return Err(napi::Error::new(
-                napi::Status::GenericFailure,
-                "Invalid tags",
-            ));
+            return Err(invalid_argument_error("Invalid tags"));
         };
 
         self.inner.upsert_tags(tags.into_iter().collect());

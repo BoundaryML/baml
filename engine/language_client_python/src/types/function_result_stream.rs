@@ -1,7 +1,7 @@
 use pyo3::prelude::{pymethods, PyResult};
 use pyo3::{PyObject, PyRefMut, Python};
 
-use crate::BamlError;
+use crate::errors::BamlError;
 
 use super::function_results::FunctionResult;
 use super::runtime_ctx_manager::RuntimeContextManager;

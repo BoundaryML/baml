@@ -14,8 +14,9 @@ pub(crate) mod internal;
 #[cfg(not(target_arch = "wasm32"))]
 mod cli;
 pub mod client_registry;
+pub mod errors;
 mod macros;
-mod request;
+pub mod request;
 mod runtime;
 pub mod runtime_interface;
 pub mod tracing;
@@ -236,7 +237,6 @@ impl BamlRuntime {
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
         let span = self.tracer.start_span(&function_name, ctx, &params);
-        log::trace!("Span started");
         let response = match ctx.create_ctx(tb, cb) {
             Ok(rctx) => {
                 self.inner

@@ -554,6 +554,30 @@ describe('Integ tests', () => {
     const res = b_sync.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
     expect(res).toContain('a')
   })
+
+  it('should raise an error when appropriate', async () => {
+    await expect(async () => {
+      await b.TestCaching(111 as unknown as string) // intentionally passing an int instead of a string
+    }).rejects.toThrow('BamlInvalidArgumentError')
+
+    await expect(async () => {
+      const cr = new ClientRegistry()
+      cr.addLlmClient('MyClient', 'openai', { model: 'gpt-4o-mini', api_key: 'INVALID_KEY' })
+      cr.setPrimary('MyClient')
+      await b.MyFunc("My name is Harrison. My hair is black and I'm 6 feet tall.", { clientRegistry: cr })
+    }).rejects.toThrow('BamlClientError')
+
+    await expect(async () => {
+      const cr = new ClientRegistry()
+      cr.addLlmClient('MyClient', 'openai', { model: 'gpt-4o-mini', api_key: 'INVALID_KEY' })
+      cr.setPrimary('MyClient')
+      await b.MyFunc("My name is Harrison. My hair is black and I'm 6 feet tall.", { clientRegistry: cr })
+    }).rejects.toThrow('BamlClientHttpError')
+
+    await expect(async () => {
+      await b.DummyOutputFunction('dummy input')
+    }).rejects.toThrow('BamlValidationError')
+  })
 })
 
 interface MyInterface {

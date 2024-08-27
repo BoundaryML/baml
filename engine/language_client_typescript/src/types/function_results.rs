@@ -1,6 +1,8 @@
 use baml_types::BamlValue;
 use napi_derive::napi;
 
+use crate::errors::from_anyhow_error;
+
 crate::lang_wrapper!(FunctionResult, baml_runtime::FunctionResult);
 
 #[napi]
@@ -19,7 +21,7 @@ impl FunctionResult {
         let parsed = self
             .inner
             .parsed_content()
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
+            .map_err(|e| from_anyhow_error(e))?;
 
         Ok(serde_json::json!(BamlValue::from(parsed)))
     }

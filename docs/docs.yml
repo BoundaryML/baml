@@ -41,6 +41,8 @@ navigation:
             path: docs/get-started/debugging/vscode-playground.mdx
           - page: Enable Logging
             path: docs/get-started/debugging/enable-logging.mdx
+          - page: Exception Handling
+            path: docs/calling-baml/exceptions.mdx
       - section: Deploying BAML Projects
         contents:
           - page: Docker

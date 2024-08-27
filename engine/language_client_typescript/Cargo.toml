@@ -21,6 +21,7 @@ napi = { version = "2", features = [
   "napi5",
   "async",
 ] }
+anyhow.workspace = true
 napi-derive = "2"
 serde.workspace = true
 serde_json.workspace = true

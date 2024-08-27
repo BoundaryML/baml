@@ -7,6 +7,7 @@ from .base64_test_data import image_b64, audio_b64
 
 load_dotenv()
 import baml_py
+from baml_py import errors
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
 from ..baml_client.globals import (
@@ -993,3 +994,30 @@ The story explores themes of identity, the subconscious mind, the ethics of tech
     print("Duration with caching: ", duration2)
 
     assert duration2 < duration, "Expected second call to be faster than first by a large margin."
+
+@pytest.mark.asyncio
+async def test_arg_exceptions():
+    with pytest.raises(errors.BamlInvalidArgumentError):
+        _ = await b.TestCaching(111) # intentionally passing an int instead of a string
+
+
+    with pytest.raises(errors.BamlClientError):
+        cr = baml_py.ClientRegistry()
+        cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini", "api_key": "INVALID_KEY"})
+        cr.set_primary("MyClient")
+        await b.MyFunc(
+            input="My name is Harrison. My hair is black and I'm 6 feet tall.",
+            baml_options={"client_registry": cr},
+        )
+
+    with pytest.raises(errors.BamlClientHttpError):
+        cr = baml_py.ClientRegistry()
+        cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini", "api_key": "INVALID_KEY"})
+        cr.set_primary("MyClient")
+        await b.MyFunc(
+            input="My name is Harrison. My hair is black and I'm 6 feet tall.",
+            baml_options={"client_registry": cr},
+        )
+
+    with pytest.raises(errors.BamlValidationError):
+        await b.DummyOutputFunction("dummy input")

@@ -4,8 +4,8 @@ pub mod repr;
 mod walker;
 
 pub use ir_helpers::{
-    ArgCoercer, ClassFieldWalker, ClassWalker, ClientWalker, EnumValueWalker, EnumWalker,
-    FunctionWalker, IRHelper, RetryPolicyWalker, TemplateStringWalker, TestCaseWalker,
+    scope_diagnostics, ArgCoercer, ClassFieldWalker, ClassWalker, ClientWalker, EnumValueWalker,
+    EnumWalker, FunctionWalker, IRHelper, RetryPolicyWalker, TemplateStringWalker, TestCaseWalker,
 };
 
 pub(super) use repr::IntermediateRepr;

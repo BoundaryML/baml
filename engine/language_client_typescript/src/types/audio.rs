@@ -2,6 +2,8 @@ use napi::bindgen_prelude::External;
 use napi_derive::napi;
 use serde_json::json;
 
+use crate::errors::invalid_argument_error;
+
 crate::lang_wrapper!(BamlAudio, baml_types::BamlMedia);
 
 #[napi]
@@ -35,10 +37,7 @@ impl BamlAudio {
     pub fn as_url(&self) -> napi::Result<String> {
         match &self.inner.content {
             baml_types::BamlMediaContent::Url(url) => Ok(url.url.clone()),
-            _ => Err(napi::Error::new(
-                napi::Status::GenericFailure,
-                "Audio is not a URL".to_string(),
-            )),
+            _ => Err(invalid_argument_error("Audio is not a URL")),
         }
     }
 
@@ -49,10 +48,7 @@ impl BamlAudio {
                 base64.base64.clone(),
                 self.inner.mime_type.clone().unwrap_or("".to_string()),
             ]),
-            _ => Err(napi::Error::new(
-                napi::Status::GenericFailure,
-                "Audio is not base64".to_string(),
-            )),
+            _ => Err(invalid_argument_error("Audio is not base64")),
         }
     }
 

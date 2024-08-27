@@ -1,5 +1,5 @@
-use crate::internal::llm_client::orchestrator::OrchestrationScope;
 pub use crate::internal::llm_client::LLMResponse;
+use crate::{errors::ExposedError, internal::llm_client::orchestrator::OrchestrationScope};
 use anyhow::Result;
 use colored::*;
 
@@ -102,10 +102,12 @@ impl FunctionResult {
                 if let Ok(val) = res {
                     Ok(val)
                 } else {
-                    anyhow::bail!("{}", self)
+                    Err(anyhow::anyhow!(
+                        crate::errors::ExposedError::ValidationError(format!("{}", self))
+                    ))
                 }
             })
-            .unwrap_or_else(|| anyhow::bail!("{}", self))
+            .unwrap_or_else(|| Err(anyhow::anyhow!(self.llm_response().clone())))
     }
 }
 

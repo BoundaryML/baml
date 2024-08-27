@@ -176,6 +176,18 @@ impl ErrorCode {
             code => ErrorCode::Other(code),
         }
     }
+
+    pub fn to_u16(&self) -> u16 {
+        match self {
+            ErrorCode::InvalidAuthentication => 401,
+            ErrorCode::NotSupported => 403,
+            ErrorCode::RateLimited => 429,
+            ErrorCode::ServerError => 500,
+            ErrorCode::ServiceUnavailable => 503,
+            ErrorCode::UnsupportedResponse(code) => *code,
+            ErrorCode::Other(code) => *code,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
