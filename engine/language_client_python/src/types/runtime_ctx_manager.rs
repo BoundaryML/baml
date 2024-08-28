@@ -1,8 +1,8 @@
 use pyo3::prelude::{pymethods, PyResult};
 use pyo3::{PyObject, Python, ToPyObject};
 
+use crate::errors::BamlError;
 use crate::parse_py_type::parse_py_type;
-use crate::BamlError;
 
 crate::lang_wrapper!(RuntimeContextManager, baml_runtime::RuntimeContextManager);
 

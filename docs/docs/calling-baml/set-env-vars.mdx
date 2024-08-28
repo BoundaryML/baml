@@ -27,6 +27,13 @@ Any of the following strategies are compatible with BAML:
 If you do anything to load environment variables in-process - e.g. using a
 `.env` file - make sure to do it before importing the BAML client.
 
+
+<Tip>
+If you run into issues with environment variables not being loaded, try using the `dotenv-cli` option instead. This will set the environment variables for the entire process in your terminal.<br />
+See: Node [dotenv-cli](https://www.npmjs.com/package/dotenv-cli) or Python [python-dotenv](https://pypi.org/project/dotenv-cli/).
+</Tip> 
+
+
 <CodeBlocks>
 
 ```python Python

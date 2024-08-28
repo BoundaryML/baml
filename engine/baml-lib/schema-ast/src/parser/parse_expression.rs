@@ -65,7 +65,7 @@ fn parse_string_literal(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expre
         }
         Rule::quoted_string_literal => {
             let contents = contents.into_inner().next().unwrap();
-            Expression::StringValue(contents.as_str().to_string(), span)
+            Expression::StringValue(unescape_string(contents.as_str()), span)
         }
         Rule::unquoted_string_literal => {
             let raw_content = contents.as_str();
@@ -199,4 +199,38 @@ pub(super) fn parse_raw_string(token: Pair<'_>, diagnostics: &mut Diagnostics) -
         Some((content, span)) => RawString::new(content, span, language),
         _ => unreachable!("Encountered impossible raw string during parsing"),
     }
+}
+
+fn unescape_string(val: &str) -> String {
+    let mut result = String::with_capacity(val.len());
+    let mut chars = val.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => result.push('\n'),
+                Some('r') => result.push('\r'),
+                Some('t') => result.push('\t'),
+                Some('0') => result.push('\0'),
+                Some('\'') => result.push('\''),
+                Some('\"') => result.push('\"'),
+                Some('\\') => result.push('\\'),
+                Some('x') => {
+                    let mut hex = String::new();
+                    hex.push(chars.next().unwrap());
+                    hex.push(chars.next().unwrap());
+                    result.push(u8::from_str_radix(&hex, 16).unwrap() as char);
+                }
+                Some(c) => {
+                    result.push('\\');
+                    result.push(c);
+                }
+                None => result.push('\\'),
+            }
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
 }

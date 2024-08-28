@@ -4,6 +4,8 @@ use napi::Env;
 use napi::{JsFunction, JsObject, JsUndefined};
 use napi_derive::napi;
 
+use crate::errors::from_anyhow_error;
+
 use super::function_results::FunctionResult;
 use super::runtime_ctx_manager::RuntimeContextManager;
 
@@ -89,7 +91,7 @@ impl FunctionResultStream {
                 .await;
             res.0
                 .map(FunctionResult::from)
-                .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))
+                .map_err(|e| from_anyhow_error(e))
         };
 
         env.execute_tokio_future(fut, |&mut _, data| Ok(data))

@@ -3,6 +3,8 @@ use pyo3::prelude::{pymethods, PyResult};
 use pyo3::{PyObject, Python};
 use pythonize::pythonize;
 
+use crate::errors::BamlError;
+
 crate::lang_wrapper!(FunctionResult, baml_runtime::FunctionResult);
 
 #[pymethods]
@@ -19,7 +21,7 @@ impl FunctionResult {
         let parsed = self
             .inner
             .parsed_content()
-            .map_err(crate::BamlError::from_anyhow)?;
+            .map_err(BamlError::from_anyhow)?;
 
         Ok(pythonize(py, &BamlValue::from(parsed))?)
     }

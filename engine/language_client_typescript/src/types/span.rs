@@ -3,7 +3,7 @@ use baml_types::BamlValue;
 use napi_derive::napi;
 
 use super::runtime_ctx_manager::RuntimeContextManager;
-use crate::BamlRuntime;
+use crate::{errors::invalid_argument_error, BamlRuntime};
 
 crate::lang_wrapper!(BamlSpan,
   Option<Option<baml_runtime::tracing::TracingSpan>>,
@@ -23,10 +23,7 @@ impl BamlSpan {
         let args: BamlValue = serde_json::from_value(args)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
         let Some(args_map) = args.as_map() else {
-            return Err(napi::Error::new(
-                napi::Status::GenericFailure,
-                "Invalid span args",
-            ));
+            return Err(invalid_argument_error("Invalid span args"));
         };
 
         let span = runtime

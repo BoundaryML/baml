@@ -1,3 +1,4 @@
+use crate::errors::{from_anyhow_error, invalid_argument_error};
 use crate::parse_ts_types;
 use crate::types::client_registry::ClientRegistry;
 use crate::types::function_result_stream::FunctionResultStream;
@@ -54,7 +55,7 @@ impl BamlRuntime {
     ) -> napi::Result<Self> {
         let directory = PathBuf::from(directory);
         Ok(CoreRuntime::from_directory(&directory, env_vars)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?
+            .map_err(|e| from_anyhow_error(e))?
             .into())
     }
 
@@ -65,7 +66,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
     ) -> napi::Result<Self> {
         Ok(CoreRuntime::from_file_content(&root_path, &files, env_vars)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?
+            .map_err(|e| from_anyhow_error(e))?
             .into())
     }
 
@@ -89,13 +90,10 @@ impl BamlRuntime {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
         if !args.is_map() {
-            return Err(napi::Error::new(
-                napi::Status::GenericFailure,
-                format!(
-                    "Invalid args: Expected a map of arguments, got: {}",
-                    args.r#type()
-                ),
-            ));
+            return Err(invalid_argument_error(&format!(
+                "Expected a map of arguments, got: {}",
+                args.r#type()
+            )));
         }
         let args_map = args.as_map_owned().unwrap();
 
@@ -112,7 +110,7 @@ impl BamlRuntime {
             result
                 .0
                 .map(FunctionResult::from)
-                .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+                .map_err(|e| from_anyhow_error(e))
         };
 
         env.execute_tokio_future(fut, |&mut _, data| Ok(data))
@@ -131,13 +129,10 @@ impl BamlRuntime {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
         if !args.is_map() {
-            return Err(napi::Error::new(
-                napi::Status::GenericFailure,
-                format!(
-                    "Invalid args: Expected a map of arguments, got: {}",
-                    args.r#type()
-                ),
-            ));
+            return Err(invalid_argument_error(&format!(
+                "Expected a map of arguments, got: {}",
+                args.r#type()
+            )));
         }
         let args_map = args.as_map_owned().unwrap();
 
@@ -154,7 +149,7 @@ impl BamlRuntime {
 
         result
             .map(FunctionResult::from)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+            .map_err(|e| from_anyhow_error(e))
     }
 
     #[napi]
@@ -170,13 +165,10 @@ impl BamlRuntime {
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
-            return Err(napi::Error::new(
-                napi::Status::GenericFailure,
-                format!(
-                    "Invalid args: Expected a map of arguments, got: {}",
-                    args.r#type()
-                ),
-            ));
+            return Err(invalid_argument_error(&format!(
+                "Expected a map of arguments, got: {}",
+                args.r#type()
+            )));
         }
         let args_map = args.as_map_owned().unwrap();
 
@@ -192,7 +184,7 @@ impl BamlRuntime {
                 tb.as_ref(),
                 client_registry.as_ref(),
             )
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
+            .map_err(|e| from_anyhow_error(e))?;
 
         let cb = match cb {
             Some(cb) => Some(env.create_reference(cb)?),
@@ -215,13 +207,10 @@ impl BamlRuntime {
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
-            return Err(napi::Error::new(
-                napi::Status::GenericFailure,
-                format!(
-                    "Invalid args: Expected a map of arguments, got: {}",
-                    args.r#type()
-                ),
-            ));
+            return Err(invalid_argument_error(&format!(
+                "Expected a map of arguments, got: {}",
+                args.r#type()
+            )));
         }
         let args_map = args.as_map_owned().unwrap();
 
@@ -237,7 +226,7 @@ impl BamlRuntime {
                 tb.as_ref(),
                 client_registry.as_ref(),
             )
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
+            .map_err(|e| from_anyhow_error(e))?;
 
         let cb = match cb {
             Some(cb) => Some(env.create_reference(cb)?),
@@ -301,7 +290,7 @@ impl BamlRuntime {
                 let res = self
                     .inner
                     .set_log_event_callback(Some(cb))
-                    .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()));
+                    .map_err(|e| from_anyhow_error(e));
                 let _ = tsfn.unref(&env);
 
                 match res {
@@ -316,7 +305,7 @@ impl BamlRuntime {
                 let res = self
                     .inner
                     .set_log_event_callback(None)
-                    .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()));
+                    .map_err(|e| from_anyhow_error(e));
 
                 match res {
                     Ok(_) => Ok(()),
@@ -341,9 +330,7 @@ impl BamlRuntime {
 
     #[napi]
     pub fn flush(&mut self, env: Env) -> napi::Result<()> {
-        self.inner
-            .flush()
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+        self.inner.flush().map_err(|e| from_anyhow_error(e))
     }
 
     #[napi]

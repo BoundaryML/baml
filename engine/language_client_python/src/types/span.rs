@@ -3,8 +3,8 @@ use baml_types::BamlValue;
 use pyo3::prelude::{pymethods, PyResult};
 use pyo3::{PyObject, Python, ToPyObject};
 
+use crate::errors::{BamlError, BamlInvalidArgumentError};
 use crate::parse_py_type::parse_py_type;
-use crate::BamlError;
 
 use super::runtime_ctx_manager::RuntimeContextManager;
 use crate::runtime::BamlRuntime;
@@ -28,7 +28,7 @@ impl BamlSpan {
         let args = parse_py_type(args.into_bound(py).to_object(py), true)?
             .unwrap_or(BamlValue::Map(Default::default()));
         let Some(args_map) = args.as_map() else {
-            return Err(BamlError::new_err("Failed to parse args"));
+            return Err(BamlInvalidArgumentError::new_err("Failed to parse args"));
         };
 
         let span = runtime

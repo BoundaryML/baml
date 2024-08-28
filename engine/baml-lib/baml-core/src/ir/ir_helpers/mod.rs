@@ -1,10 +1,10 @@
 mod error_utils;
-mod scope_diagnostics;
+pub mod scope_diagnostics;
 mod to_baml_arg;
 
 use self::scope_diagnostics::ScopeStack;
 use crate::{
-    error_not_found, error_unsupported,
+    error_not_found,
     ir::{
         repr::{IntermediateRepr, Walker},
         Class, Client, Enum, EnumValue, Field, FunctionNode, RetryPolicy, TemplateString, TestCase,
@@ -179,9 +179,9 @@ impl IRHelper for IntermediateRepr {
         }
 
         if scope.has_errors() {
-            anyhow::bail!(scope);
+            Err(anyhow::anyhow!(scope))
+        } else {
+            Ok(BamlValue::Map(baml_arg_map))
         }
-
-        Ok(BamlValue::Map(baml_arg_map))
     }
 }

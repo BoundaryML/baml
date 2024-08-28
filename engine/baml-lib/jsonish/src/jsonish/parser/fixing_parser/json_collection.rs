@@ -59,7 +59,10 @@ impl From<JsonCollection> for Option<Value> {
                 } else if let Ok(n) = s.parse::<u64>() {
                     Value::Number(n.into())
                 } else if let Ok(n) = s.parse::<f64>() {
-                    Value::Number(serde_json::Number::from_f64(n).unwrap())
+                    match serde_json::Number::from_f64(n) {
+                        Some(n) => Value::Number(n),
+                        None => Value::String(s.into()),
+                    }
                 } else {
                     Value::String(s.into())
                 }

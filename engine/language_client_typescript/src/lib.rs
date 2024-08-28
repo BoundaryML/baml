@@ -1,6 +1,7 @@
 use napi::{Env, JsUndefined};
 use napi_derive::napi;
 
+mod errors;
 mod parse_ts_types;
 mod runtime;
 mod types;

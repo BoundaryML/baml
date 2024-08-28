@@ -71,6 +71,13 @@ impl APIConfig {
             Self::Web(config) => &config.log_redaction_placeholder,
         }
     }
+
+    pub fn max_log_chunk_chars(&self) -> usize {
+        match self {
+            Self::LocalOnly(config) => config.max_log_chunk_chars,
+            Self::Web(config) => config.max_log_chunk_chars,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +90,7 @@ pub(super) struct CompleteAPIConfig {
     pub host_name: String,
     pub log_redaction_enabled: bool,
     pub log_redaction_placeholder: String,
+    pub max_log_chunk_chars: usize,
 
     client: reqwest::Client,
 }
@@ -99,6 +107,7 @@ pub(super) struct PartialAPIConfig {
     host_name: String,
     log_redaction_enabled: bool,
     log_redaction_placeholder: String,
+    pub max_log_chunk_chars: usize,
 }
 
 impl CompleteAPIConfig {
@@ -303,6 +312,7 @@ impl APIWrapper {
                     client: create_tracing_client()?,
                     log_redaction_enabled: config.log_redaction_enabled,
                     log_redaction_placeholder: config.log_redaction_placeholder,
+                    max_log_chunk_chars: config.max_log_chunk_chars,
                 }),
             },
             _ => Self {
@@ -315,6 +325,7 @@ impl APIWrapper {
                     host_name: config.host_name,
                     log_redaction_enabled: config.log_redaction_enabled,
                     log_redaction_placeholder: config.log_redaction_placeholder,
+                    max_log_chunk_chars: config.max_log_chunk_chars,
                 }),
             },
         })

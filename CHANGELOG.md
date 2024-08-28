@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.54.0](https://github.com/boundaryml/baml/compare/0.53.1..0.54.0) - 2024-08-27
+
+### BREAKING CHANGE
+
+- Update Default Gemini Base URL to v1beta (#891) - ([a5d8c58](https://github.com/boundaryml/baml/commit/a5d8c588e0fd0b7e186d7c71f1f6171334250629)) - gleed
+
+The default base URL for the Gemini provider has been updated to v1beta. This change is should have no impact on existing users as v1beta is the default version for the Gemini python library, we are mirroring this change in BAML.
+
+### Bug Fixes
+
+- Allow promptfiddle to talk to localhost ollama (#886) - ([5f02b2a](https://github.com/boundaryml/baml/commit/5f02b2ac688ceeb5a34e848a8ff87fd43a6b093a)) - Samuel Lijin
+- Update Parser for unions so they handle nested objects better (#900) - ([c5b9a75](https://github.com/boundaryml/baml/commit/c5b9a75ea6da7c45da1999032e2b256bec97d922)) - hellovai
+
+### Documentation
+
+- Add ollama to default prompt fiddle example (#888) - ([49146c0](https://github.com/boundaryml/baml/commit/49146c0e50c88615e4cc97adb595849c23bad8ae)) - Samuel Lijin
+- Adding improved docs + unit tests for caching (#895) - ([ff7be44](https://github.com/boundaryml/baml/commit/ff7be4478b706da049085d432b2ec98627b5da1f)) - hellovai
+
+### Features
+
+- Allow local filepaths to be used in tests in BAML files (image and audio) (#871) - ([fa6dc03](https://github.com/boundaryml/baml/commit/fa6dc03fcdd3255dd83e25d0bfb3b0e740991408)) - Samuel Lijin
+- Add support for absolute file paths in the file specifier (#881) - ([fcd189e](https://github.com/boundaryml/baml/commit/fcd189ed7eb81712bf3b641eb3dde158fc6a62af)) - hellovai
+- Implement shorthand clients (You can now use "openai/gpt-4o" as short for creating a complete client.) (#879) - ([ddd15c9](https://github.com/boundaryml/baml/commit/ddd15c92c3e8d81c24cb7305c9fcbb36b819900f)) - Samuel Lijin
+- Add support for arbritrary metadata (e.g. cache_policy for anthropic)  (#893) - ([0d63a70](https://github.com/boundaryml/baml/commit/0d63a70332477761a97783e203c98fd0bf67f151)) - hellovai
+- Expose Exceptions to user code: BamlError, BamlInvalidArgumentError, BamlClientError, BamlClientHttpError, BamlValidationError (#770) - ([7da14c4](https://github.com/boundaryml/baml/commit/7da14c480506e9791b3f4ce52ac73836a042d38a)) - hellovai
+
+
+### Internal
+- AST Restructuring (#857) - ([75b51cb](https://github.com/boundaryml/baml/commit/75b51cbf80a0c8ba19ae05b021ef3c94dacb4e30)) - Anish Palakurthi
+
 ## [0.53.1](https://github.com/boundaryml/baml/compare/0.53.0..0.53.1) - 2024-08-11
 
 ### Bug Fixes

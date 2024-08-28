@@ -63,7 +63,12 @@ impl JsonParseState {
     }
 
     fn consume(&mut self, token: char) -> Result<usize> {
-        let (last, _) = self.collection_stack.last_mut().unwrap();
+        let Some((last, _)) = self.collection_stack.last_mut() else {
+            return Err(anyhow::anyhow!(
+                "No collection to consume token: {:?}",
+                token
+            ));
+        };
         match last {
             JsonCollection::QuotedString(s)
             | JsonCollection::BlockComment(s)

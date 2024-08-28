@@ -54,6 +54,61 @@ pub struct BamlTracer {
 #[cfg(not(target_arch = "wasm32"))]
 static_assertions::assert_impl_all!(BamlTracer: Send, Sync);
 
+/// Trait for types that can be visualized in terminal logs
+pub trait Visualize {
+    fn visualize(&self, max_chunk_size: usize) -> String;
+}
+
+pub fn truncate_string(s: &str, max_size: usize) -> String {
+    if max_size > 0 && s.len() > max_size {
+        let half_size = max_size / 2;
+        format!(
+            "{}{}{}",
+            &s[..half_size],
+            "...[log trimmed]...".yellow().dimmed(),
+            &s[s.len() - half_size..]
+        )
+    } else {
+        s.to_string()
+    }
+}
+
+impl<'a> Visualize for FunctionResult {
+    fn visualize(&self, max_chunk_size: usize) -> String {
+        let mut s = vec![];
+        if self.event_chain().len() > 1 {
+            s.push(format!(
+                "{}",
+                format!("({} other previous tries)", self.event_chain().len() - 1).yellow()
+            ));
+        }
+        s.push(self.llm_response().visualize(max_chunk_size));
+        match self.parsed() {
+            Some(Ok(val)) => {
+                let val: BamlValue = val.into();
+                s.push(format!(
+                    "{}",
+                    format!("---Parsed Response ({})---", val.r#type()).blue()
+                ));
+                let json_str = serde_json::to_string_pretty(&val).unwrap();
+                s.push(format!("{}", truncate_string(&json_str, max_chunk_size)));
+            }
+            Some(Err(e)) => {
+                s.push(format!(
+                    "{}",
+                    format!("---Parsed Response ({})---", "Error".red()).blue()
+                ));
+                s.push(format!(
+                    "{}",
+                    truncate_string(&e.to_string(), max_chunk_size).red()
+                ));
+            }
+            None => {}
+        };
+        s.join("\n")
+    }
+}
+
 impl BamlTracer {
     pub fn new<T: AsRef<str>>(
         options: Option<APIWrapper>,
@@ -212,7 +267,7 @@ impl BamlTracer {
                 if is_ok { log::Level::Info } else { log::Level::Warn },
                 "{}{}",
                 name.map(|s| format!("Function {}:\n", s)).unwrap_or_default().purple(),
-                response
+                response.visualize(self.options.config.max_log_chunk_chars())
             );
         }
 
@@ -259,7 +314,7 @@ impl BamlTracer {
                 if is_ok { log::Level::Info } else { log::Level::Warn },
                 "{}{}",
                 name.map(|s| format!("Function {}:\n", s)).unwrap_or_default().purple(),
-                response
+                response.visualize(self.options.config.max_log_chunk_chars())
             );
         }
 

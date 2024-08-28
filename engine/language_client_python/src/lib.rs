@@ -1,17 +1,10 @@
+mod errors;
 mod parse_py_type;
 mod runtime;
 mod types;
 
 use pyo3::prelude::{pyfunction, pymodule, PyAnyMethods, PyModule, PyResult};
-use pyo3::{create_exception, wrap_pyfunction, Bound, PyErr, Python};
-
-create_exception!(baml_py, BamlError, pyo3::exceptions::PyException);
-
-impl BamlError {
-    fn from_anyhow(err: anyhow::Error) -> PyErr {
-        PyErr::new::<BamlError, _>(format!("{:?}", err))
-    }
-}
+use pyo3::{wrap_pyfunction, Bound, Python};
 
 #[pyfunction]
 fn invoke_runtime_cli(py: Python) -> PyResult<()> {
@@ -21,11 +14,11 @@ fn invoke_runtime_cli(py: Python) -> PyResult<()> {
             .extract::<Vec<String>>()?,
         baml_runtime::CallerType::Python,
     )
-    .map_err(BamlError::from_anyhow)?)
+    .map_err(errors::BamlError::from_anyhow)?)
 }
 
 #[pymodule]
-fn baml_py(_: Python<'_>, m: Bound<'_, PyModule>) -> PyResult<()> {
+fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
     if let Err(e) = env_logger::try_init_from_env(
         env_logger::Env::new()
             .filter("BAML_LOG")
@@ -55,6 +48,23 @@ fn baml_py(_: Python<'_>, m: Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<runtime::LogEventMetadata>()?;
 
     m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;
+    m.add("BamlError", m.py().get_type_bound::<errors::BamlError>())?;
+    m.add(
+        "BamlInvalidArgumentError",
+        m.py().get_type_bound::<errors::BamlInvalidArgumentError>(),
+    )?;
+    m.add(
+        "BamlClientError",
+        m.py().get_type_bound::<errors::BamlClientError>(),
+    )?;
+    m.add(
+        "BamlClientHttpError",
+        m.py().get_type_bound::<errors::BamlClientHttpError>(),
+    )?;
+    m.add(
+        "BamlValidationError",
+        m.py().get_type_bound::<errors::BamlValidationError>(),
+    )?;
 
     Ok(())
 }

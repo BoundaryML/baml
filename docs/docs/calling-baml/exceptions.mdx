@@ -1,0 +1,92 @@
+---
+title: "Exceptions"
+---
+
+When BAML raises an exception, it will be an instance of a subclass of `BamlError`. This allows you to catch all BAML-specific exceptions with a single `except` block.
+
+## Import path
+<CodeGroup>
+```python Python
+from baml_py.errors import BamlError, BamlInvalidArgumentError, BamlClientError, BamlClientHttpError, BamlValidationError
+```
+
+
+```typescript TypeScript
+// Instead of classes, TypeScript raises a string that is prefixed with:
+// "BamlError:"
+// Subclasses are sequentially appended to the string.
+// For example, BamlInvalidArgumentError is returned as:
+// "BamlError: BamlInvalidArgumentError:"
+// Or, BamlClientHttpError is returned as:
+// "BamlError: BamlClientError: BamlClientHttpError:"
+```
+
+```ruby Ruby
+Not available yet
+```  
+</CodeGroup>
+
+
+## BamlError
+
+Base class for all BAML exceptions.  
+
+<ResponseField
+  name="message"
+  type="string"
+>
+  A human-readable error message.
+</ResponseField>
+
+### BamlInvalidArgumentError
+
+Subclass of `BamlError`.
+
+Raised when one or multiple arguments to a function are invalid.
+
+### BamlClientError
+
+Subclass of `BamlError`.
+
+Raised when a client fails to return a valid response.
+
+<Warning>
+In the case of aggregate clients like `fallback` or those with `retry_policy`, only the last client's error is raised.  
+</Warning>
+
+#### BamlClientHttpError
+
+Subclass of `BamlClientError`.
+
+Raised when the HTTP request made by a client fails with a non-200 status code.
+
+<ResponseField
+  name="status_code"
+  type="int"
+>
+  The status code of the response.
+
+Common status codes are:
+
+- 1: Other
+- 2: Other
+- 400: Bad Request
+- 401: Unauthorized
+- 403: Forbidden
+- 404: Not Found
+- 429: Too Many Requests
+- 500: Internal Server Error
+</ResponseField>
+
+### BamlValidationError
+
+Subclass of `BamlError`.
+
+Raised when BAML fails to parse a string from the LLM into the specified object.
+
+<ResponseField
+  name="raw_llm_response"
+  type="string"
+>
+  The raw text from the LLM that failed to parse into the expected return type of a function.
+</ResponseField>
