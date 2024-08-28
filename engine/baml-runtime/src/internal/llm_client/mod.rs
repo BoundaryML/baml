@@ -93,6 +93,18 @@ pub enum LLMResponse {
 
 impl Error for LLMResponse {}
 
+impl crate::tracing::Visualize for LLMResponse {
+    fn visualize(&self, max_chunk_size: usize) -> String {
+        match self {
+            Self::Success(response) => response.visualize(max_chunk_size),
+            Self::LLMFailure(failure) => failure.visualize(max_chunk_size),
+            Self::OtherFailure(message) => {
+                format!("{}", format!("LLM call failed: {message}").red())
+            }
+        }
+    }
+}
+
 impl std::fmt::Display for LLMResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -229,6 +241,74 @@ impl std::fmt::Display for LLMCompleteResponse {
         writeln!(f, "{}", self.prompt.to_string().dimmed())?;
         writeln!(f, "{}", "---LLM REPLY---".blue())?;
         write!(f, "{}", self.content.dimmed())
+    }
+}
+
+impl crate::tracing::Visualize for LLMCompleteResponse {
+    fn visualize(&self, max_chunk_size: usize) -> String {
+        let s = vec![
+            format!(
+                "{}",
+                format!(
+                    "Client: {} ({}) - {}ms. StopReason: {}",
+                    self.client,
+                    self.model,
+                    self.latency.as_millis(),
+                    self.metadata.finish_reason.as_deref().unwrap_or("unknown")
+                )
+                .yellow()
+            ),
+            format!("{}", "---PROMPT---".blue()),
+            format!(
+                "{}",
+                crate::tracing::truncate_string(&self.prompt.to_string(), max_chunk_size).dimmed()
+            ),
+            format!("{}", "---LLM REPLY---".blue()),
+            format!(
+                "{}",
+                crate::tracing::truncate_string(&self.content, max_chunk_size).dimmed()
+            ),
+        ];
+        s.join("\n")
+    }
+}
+
+impl crate::tracing::Visualize for LLMErrorResponse {
+    fn visualize(&self, max_chunk_size: usize) -> String {
+        let mut s = vec![
+            format!(
+                "{}",
+                format!(
+                    "Client: {} ({}) - {}ms",
+                    self.client,
+                    self.model.as_deref().unwrap_or("<unknown>"),
+                    self.latency.as_millis(),
+                )
+                .yellow(),
+            ),
+            format!("{}", "---PROMPT---".blue()),
+            format!(
+                "{}",
+                crate::tracing::truncate_string(&self.prompt.to_string(), max_chunk_size).dimmed()
+            ),
+            format!("{}", "---REQUEST OPTIONS---".blue()),
+        ];
+        for (k, v) in &self.request_options {
+            s.push(format!(
+                "{}: {}",
+                k,
+                crate::tracing::truncate_string(&v.to_string(), max_chunk_size)
+            ));
+        }
+        s.push(format!(
+            "{}",
+            format!("---ERROR ({})---", self.code.to_string()).red()
+        ));
+        s.push(format!(
+            "{}",
+            crate::tracing::truncate_string(&self.message, max_chunk_size).red()
+        ));
+        s.join("\n")
     }
 }
 
