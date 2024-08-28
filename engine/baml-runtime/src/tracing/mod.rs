@@ -267,7 +267,7 @@ impl BamlTracer {
                 if is_ok { log::Level::Info } else { log::Level::Warn },
                 "{}{}",
                 name.map(|s| format!("Function {}:\n", s)).unwrap_or_default().purple(),
-                VisualFunctionResult(response)
+                response.visualize(self.options.config.max_log_chunk_chars())
             );
         }
 
