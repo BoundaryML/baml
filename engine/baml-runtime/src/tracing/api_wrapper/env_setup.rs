@@ -17,6 +17,8 @@ pub struct Config {
     pub log_redaction_enabled: bool,
     #[serde(default = "default_redaction_placeholder")]
     pub log_redaction_placeholder: String,
+    #[serde(default = "default_max_log_chunk_chars")]
+    pub max_log_chunk_chars: usize,
 }
 
 fn default_base_url() -> String {
@@ -43,6 +45,10 @@ fn default_host_name() -> String {
     hostname::get()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or("unknown".to_string())
+}
+
+fn default_max_log_chunk_chars() -> usize {
+    64_000
 }
 
 impl Config {
