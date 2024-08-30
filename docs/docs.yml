@@ -10,10 +10,6 @@ instances:
 
 title: BAML Documentation
 
-redirects:
-  - source: /docs/snippets/clients/providers/anthropic
-    destination: docs/snippets/clients/providers/overview#anthropic
-
 navigation:
   - section: Get started
     contents:
