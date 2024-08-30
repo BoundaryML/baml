@@ -28,7 +28,11 @@ pub fn parse<'a>(str: &'a str, options: &ParseOptions) -> Result<Vec<Value>> {
                 }
 
                 if stack.is_empty() {
-                    // Assuming json_str_start is never None when stack is empty
+                    // If we encounter a `}` or `]` while the stack is empty,
+                    // fail with mismatched bracket error.
+                    if json_str_start.is_none() {
+                        return Err(anyhow::anyhow!("Mismatched brackets"));
+                    }
                     let end_index = index + 1;
                     let json_str = &str[json_str_start.unwrap()..end_index];
                     match entry::parse(
@@ -118,5 +122,16 @@ print("Hello, world!")
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn bare_closing_brace_issue() {
+        let res = parse("}", &ParseOptions::default())
+            .expect_err("should fail to parse");
+        assert_eq!(res.to_string(), "Mismatched brackets");
+
+        let res = parse("]", &ParseOptions::default())
+            .expect_err("should fail to parse");
+        assert_eq!(res.to_string(), "Mismatched brackets");
     }
 }
