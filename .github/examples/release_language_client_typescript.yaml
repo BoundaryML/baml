@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - canary
-      - win32-arm64-build
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
