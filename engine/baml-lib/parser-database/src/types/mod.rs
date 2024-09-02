@@ -18,7 +18,7 @@ mod to_string_attributes;
 mod types;
 
 pub use to_string_attributes::{
-    DynamicStringAttributes, StaticStringAttributes, ToStringAttributes,
+    StaticStringAttributes, ToStringAttributes,
 };
 pub(crate) use types::EnumAttributes;
 pub(crate) use types::*;
@@ -240,28 +240,16 @@ pub(super) struct Types {
 impl Types {
     pub(super) fn refine_class_field(
         &self,
-        (class_id, field_id): (TypeExpId, FieldId),
-    ) -> either::Either<StaticFieldId, DynamicFieldId> {
-        match self.class_attributes.get(&class_id) {
-            Some(attrs) => match attrs.field_serilizers.get(&field_id) {
-                Some(ToStringAttributes::Dynamic(_attrs)) => either::Either::Right(field_id.into()),
-                _ => either::Either::Left(field_id.into()),
-            },
-            None => either::Either::Left(field_id.into()),
-        }
+        (_class_id, field_id): (TypeExpId, FieldId),
+    ) -> StaticFieldId {
+        field_id.into()
     }
 
     pub(super) fn refine_enum_value(
         &self,
-        (enum_id, value_id): (TypeExpId, FieldId),
-    ) -> either::Either<StaticFieldId, DynamicFieldId> {
-        match self.enum_attributes.get(&enum_id) {
-            Some(attrs) => match attrs.value_serilizers.get(&value_id) {
-                Some(ToStringAttributes::Dynamic(_attrs)) => either::Either::Right(value_id.into()),
-                _ => either::Either::Left(value_id.into()),
-            },
-            None => either::Either::Left(value_id.into()),
-        }
+        (_enum_id, value_id): (TypeExpId, FieldId),
+    ) -> StaticFieldId {
+        value_id.into()
     }
 }
 
@@ -553,16 +541,6 @@ impl StaticType {
             "Bytes" => Some(StaticType::Bytes),
             _ => None,
         }
-    }
-}
-
-/// An opaque identifier for a class field in a schema that is dynamic.
-#[derive(Copy, Clone, PartialEq, Debug, Hash, Eq, PartialOrd, Ord)]
-pub struct DynamicFieldId(u32);
-
-impl From<FieldId> for DynamicFieldId {
-    fn from(id: FieldId) -> Self {
-        DynamicFieldId(id.0)
     }
 }
 

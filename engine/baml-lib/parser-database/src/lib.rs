@@ -42,7 +42,7 @@ use either::Either;
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::{SchemaAst, WithIdentifier, WithName, WithSpan};
 pub use types::{
-    ContantDelayStrategy, DynamicStringAttributes, ExponentialBackoffStrategy, PrinterType,
+    ContantDelayStrategy, ExponentialBackoffStrategy, PrinterType,
     PromptAst, PromptVariable, RetryPolicy, RetryPolicyStrategy, StaticStringAttributes,
     StaticType, ToStringAttributes,
 };

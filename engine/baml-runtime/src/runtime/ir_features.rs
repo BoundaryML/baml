@@ -14,19 +14,22 @@ impl WithInternal for InternalBamlRuntime {
         IrFeatures::from(
             vec![],
             ir.walk_functions().any(|f| f.is_v2()),
-            ir.walk_classes()
-                .filter(|c| !c.elem().dynamic_fields.is_empty())
-                .map(|c| {
-                    (
-                        c.name().to_string(),
-                        c.elem()
-                            .dynamic_fields
-                            .iter()
-                            .map(|f| f.elem.name.to_string())
-                            .collect(),
-                    )
-                })
-                .collect(),
+            // TODO: (Greg) If we are removing all dynamic_fields, does that
+            // mean we don't have/need/use class getters?
+            Vec::new()
+            // ir.walk_classes()
+            //     .filter(|c| !c.elem().dynamic_fields.is_empty())
+            //     .map(|c| {
+            //         (
+            //             c.name().to_string(),
+            //             c.elem()
+            //                 .dynamic_fields
+            //                 .iter()
+            //                 .map(|f| f.elem.name.to_string())
+            //                 .collect(),
+            //         )
+            //     })
+            //     .collect(),
         )
     }
 

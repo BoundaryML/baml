@@ -6,17 +6,15 @@ pub(super) fn visit_description_attribute(
 ) {
     match ctx
         .visit_default_arg_with_idx("description")
-        .map(|(_, value)| coerce::string(value, ctx.diagnostics))
+        .map(|(_, value)| value)
     {
-        Ok(Some(description)) => {
-            if !attributes.add_meta(
-                ctx.interner.intern("description"),
-                ctx.interner.intern(description),
-            ) {
+        Ok(description) => {
+            if attributes.description().is_some() {
                 ctx.push_attribute_validation_error("Duplicate meta attribute.", true);
+            } else {
+                attributes.add_description(description.clone())
             }
         }
         Err(err) => ctx.push_error(err), // not flattened for error handing legacy reasons
-        Ok(None) => (),
     };
 }
