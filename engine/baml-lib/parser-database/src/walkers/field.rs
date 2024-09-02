@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use crate::{
     printer::WithSerializeableContent,
-    types::{DynamicStringAttributes, StaticStringAttributes, ToStringAttributes},
+    types::{StaticStringAttributes, ToStringAttributes},
     ParserDatabase,
 };
 
@@ -36,36 +36,11 @@ impl<'db> FieldWalker<'db> {
         &self.db.types.class_attributes[&self.id.0].field_serilizers[&self.id.1]
     }
 
-    /// Whether the field is dynamic.
-    pub fn is_dynamic(self) -> bool {
-        self.id.2
-    }
-
     /// Attributes for the field.
     pub fn static_attributes(self) -> &'db StaticStringAttributes {
         match self.attributes() {
             ToStringAttributes::Static(d) => d,
             _ => panic!("Expected static attributes"),
-        }
-    }
-
-    /// Attributes for the field.
-    pub fn dynamic_attributes(self) -> &'db DynamicStringAttributes {
-        match self.attributes() {
-            ToStringAttributes::Dynamic(d) => d,
-            _ => panic!("Expected dynamic attributes"),
-        }
-    }
-
-    /// The field's alias.
-    pub fn code_for_language(self, language: &str) -> Option<&'db str> {
-        match self.db.interner.lookup(language) {
-            Some(language) => self
-                .dynamic_attributes()
-                .code
-                .get(&language)
-                .and_then(|&s| self.db.interner.get(s)),
-            None => None,
         }
     }
 

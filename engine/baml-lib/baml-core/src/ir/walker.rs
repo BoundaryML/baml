@@ -167,7 +167,7 @@ impl Expression {
         }
     }
 
-    /// Normalize a `Expression` into a `BamlValue` in a given context.
+    /// Normalize an `Expression` into a `BamlValue` in a given context.
     ///
     /// TODO: Modify the context, rename it to `env` and make it a map
     /// from `String` to `BamlValue`. This generalizes the context from

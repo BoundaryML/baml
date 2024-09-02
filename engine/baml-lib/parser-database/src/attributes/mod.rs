@@ -2,8 +2,6 @@ use internal_baml_schema_ast::ast::{Top, TopId, TypeExpId, TypeExpressionBlock};
 
 mod alias;
 mod description;
-mod get;
-mod meta;
 mod to_string_attribute;
 use crate::{context::Context, types::ClassAttributes, types::EnumAttributes};
 use internal_baml_schema_ast::ast::SubType;

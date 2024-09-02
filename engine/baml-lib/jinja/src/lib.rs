@@ -496,6 +496,8 @@ pub fn render_expression(
     ctx: &HashMap<String, BamlValue>,
 ) -> anyhow::Result<String> {
     let env = get_env();
+    // In rust string literals, `{` is escaped as `{{`.
+    // So producing the string `{{}}` requires writing the literal `"{{{{}}}}"`
     let template = format!(r#"{{{{ {} }}}}"#, expression);
     let args_dict = minijinja::Value::from_serialize(ctx);
     Ok(env.render_str(&template, &args_dict)?)

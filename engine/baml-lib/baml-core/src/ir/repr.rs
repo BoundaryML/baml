@@ -218,30 +218,16 @@ fn to_ir_attributes(
     if let Some(ast_attributes) = maybe_ast_attributes {
         match ast_attributes {
             ToStringAttributes::Static(s) => {
-                if let Some(true) = s.dynamic_type() {
-                    attributes.insert("dynamic_type".to_string(), Expression::Bool(true));
-                }
-
-                if let Some(skip) = s.skip() {
-                    attributes.insert("skip".to_string(), Expression::Bool(*skip));
-                }
                 if let Some(v) = s.alias() {
                     attributes.insert("alias".to_string(), Expression::String(db[*v].to_string()));
                 }
-                for (&k, v) in s.meta().into_iter() {
-                    let expr = match v {
-                        LazyExpression::Ready(s) => Expression::String(s.clone()),
-                        LazyExpression::Unevaluated(e) => Expression::JinjaExpression(e.clone()),
+                if let Some(d) = s.description() {
+                    let ir_expr = match d {
+                        ast::Expression::StringValue(s,_) => Expression::String(s.clone()),
+                        ast::Expression::JinjaExpression(s,_) => Expression::JinjaExpression(s.clone()),
+                        _ => panic!("TODO"),
                     };
-                    attributes.insert(db[k].to_string(), expr);
-                }
-            }
-            ToStringAttributes::Dynamic(d) => {
-                for (&lang, &lang_code) in d.code.iter() {
-                    attributes.insert(
-                        format!("get/{}", db[lang].to_string()),
-                        Expression::String(db[lang_code].to_string()),
-                    );
+                    attributes.insert("description".to_string(), ir_expr);
                 }
             }
         }
@@ -556,7 +542,6 @@ type ClassId = String;
 pub struct Class {
     pub name: ClassId,
     pub static_fields: Vec<Node<Field>>,
-    pub dynamic_fields: Vec<Node<Field>>,
     pub inputs: Vec<(String, FieldType)>,
 }
 
@@ -576,10 +561,6 @@ impl WithRepr<Class> for ClassWalker<'_> {
             name: self.name().to_string(),
             static_fields: self
                 .static_fields()
-                .map(|e| e.node(db))
-                .collect::<Result<Vec<_>>>()?,
-            dynamic_fields: self
-                .dynamic_fields()
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
             inputs: match self.ast_type_block().input() {

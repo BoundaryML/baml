@@ -6,17 +6,15 @@ pub(super) fn visit_description_attribute(
 ) {
     match ctx
         .visit_default_arg_with_idx("description")
-        .map(|(_, value)| value.as_string_value_lazy())
+        .map(|(_, value)| value)
     {
-        Ok(Some(description)) => {
-            if !attributes.add_meta(
-                ctx.interner.intern("description"),
-                description.0,
-            ) {
+        Ok(description) => {
+            if attributes.description().is_some() {
                 ctx.push_attribute_validation_error("Duplicate meta attribute.", true);
+            } else {
+                attributes.add_description(description.clone())
             }
         }
         Err(err) => ctx.push_error(err), // not flattened for error handing legacy reasons
-        Ok(None) => (),
     };
 }

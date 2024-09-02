@@ -13,12 +13,8 @@ impl<'db> EnumWalker<'db> {
     pub fn values(self) -> impl ExactSizeIterator<Item = EnumValueWalker<'db>> {
         self.ast_type_block()
             .iter_fields()
-            .filter_map(move |(valid_id, _)| {
-                self.db
-                    .types
-                    .refine_enum_value((self.id, valid_id))
-                    .left()
-                    .map(|_id| self.walk((self.id, valid_id)))
+            .map(move |(valid_id, _)| {
+                self.walk((self.id, valid_id))
             })
             .collect::<Vec<_>>()
             .into_iter()
