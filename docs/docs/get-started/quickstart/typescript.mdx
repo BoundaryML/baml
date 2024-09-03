@@ -2,25 +2,26 @@
 slug: docs/get-started/quickstart/typescript
 ---
 
-Here's a sample repository: 
+Here's a sample repository:
 https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter
 
 To set up BAML in typescript do the following:
 
 <Steps>
   ### Install BAML VSCode Extension
-      https://marketplace.visualstudio.com/items?itemName=boundary.BAML
+      https://marketplace.visualstudio.com/items?itemName=boundary.baml-extension
 
       - syntax highlighting
       - testing playground
       - prompt previews
-  
-  ### Install baml
+
+### Install baml
+
       <CodeBlocks>
         ```bash npm
         npm install @boundaryml/baml
         ```
-        
+
         ```bash pnpm
         pnpm add @boundaryml/baml
         ```
@@ -29,14 +30,15 @@ To set up BAML in typescript do the following:
         yarn add @boundaryml/baml
         ```
     </CodeBlocks>
-  
-  ### Add some starter code
+
+### Add some starter code
+
       This will give you some starter BAML code in a `baml_src` directory.
       <CodeBlocks>
         ```bash npm
         npx baml-cli init
         ```
-        
+
         ```bash pnpm
         pnpx baml-cli init
         ```
@@ -45,8 +47,8 @@ To set up BAML in typescript do the following:
         yarn baml-cli init
         ```
     </CodeBlocks>
-  
-  ### Update your package.json
+
+### Update your package.json
 
     This command will help you convert `.baml` files to `.ts` files. Everytime you modify your `.baml` files,
     you must re-run this command, and regenerate the `baml_client` folder.
@@ -65,8 +67,9 @@ To set up BAML in typescript do the following:
       }
     }
     ```
-  
-  ### Use a baml function in typescript!
+
+### Use a baml function in typescript!
+
     <Tip>If `baml_client` doesn't exist, make sure to run `npm run baml-generate`</Tip>
 
     ```typescript index.ts
@@ -90,5 +93,5 @@ To set up BAML in typescript do the following:
       return await stream.get_final_response();
     }
     ```
-  
+
 </Steps>
