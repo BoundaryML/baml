@@ -156,3 +156,12 @@ client<llm> Lottery_SimpleSyntax {
     ]
   }
 }
+
+client<llm> TogetherAi {
+  provider "openai-generic"
+  options {
+    base_url "https://api.together.ai/v1"
+    api_key env.TOGETHER_API_KEY
+    model "meta-llama/Llama-3-70b-chat-hf"
+  }
+}

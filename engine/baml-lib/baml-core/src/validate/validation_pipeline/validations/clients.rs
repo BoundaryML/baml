@@ -10,6 +10,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         let allowed_providers = [
             "baml-openai-chat",
             "openai",
+            "openai-generic",
             "baml-azure-chat",
             "azure-openai",
             "baml-anthropic-chat",
