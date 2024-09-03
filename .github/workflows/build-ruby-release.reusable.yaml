@@ -27,14 +27,13 @@ jobs:
             # https://github.com/rake-compiler/rake-compiler-dock/issues/122
             # for more details.
             rb-sys-dock-setup: ./x86-64_linux-setup.sh
-          - platform: x86_64-linux
           - platform: x86_64-linux-musl
           - platform: aarch64-linux
           - platform: aarch64-linux-musl
           - platform: arm-linux
           - platform: arm64-darwin
-          - platform: x64-mingw32
-          - platform: x86-mingw-ucrt
+          # - platform: x64-mingw32
+          # - platform: x86-mingw-ucrt
 
     runs-on: ubuntu-latest
     defaults:
