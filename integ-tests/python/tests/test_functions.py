@@ -1021,3 +1021,8 @@ async def test_arg_exceptions():
 
     with pytest.raises(errors.BamlValidationError):
         await b.DummyOutputFunction("dummy input")
+
+@pytest.mark.asyncio
+async def test_map_as_param():
+    with pytest.raises(errors.BamlInvalidArgumentError):
+        _ = await b.TestFnNamedArgsSingleMapStringToMap({ "a" : "b"}) # intentionally passing the wrong type

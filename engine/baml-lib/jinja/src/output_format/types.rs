@@ -238,7 +238,7 @@ impl OutputFormatContent {
                 FieldType::List(_) => Some("Answer with a JSON Array using this schema:\n"),
                 FieldType::Union(_) => Some("Answer in JSON using any of these schemas:\n"),
                 FieldType::Optional(_) => Some("Answer in JSON using this schema:\n"),
-                FieldType::Map(_, _) => None,
+                FieldType::Map(_, _) => Some("Answer in JSON using this schema:\n"),
                 FieldType::Tuple(_) => None,
             },
         }
