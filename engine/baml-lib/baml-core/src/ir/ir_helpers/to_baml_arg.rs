@@ -269,15 +269,21 @@ impl ArgCoercer {
             }
             FieldType::Map(k, v) => {
                 if let BamlValue::Map(kv) = value {
+                    let mut map = BamlMap::new();
                     for (key, value) in kv {
-                        let mut key_scope = ScopeStack::new();
-                        let _ =
-                            self.coerce_arg(ir, k, &BamlValue::String(key.clone()), &mut key_scope);
+                        scope.push("<key>".to_string());
+                        let k = self.coerce_arg(ir, k, &BamlValue::String(key.clone()), scope);
+                        scope.pop(false);
 
-                        let mut value_scope = ScopeStack::new();
-                        let _ = self.coerce_arg(ir, v, value, &mut value_scope);
+                        if k.is_ok() {
+                            scope.push(key.to_string());
+                            if let Ok(v) = self.coerce_arg(ir, v, value, scope) {
+                                map.insert(key.clone(), v);
+                            }
+                            scope.pop(false);
+                        }
                     }
-                    Ok(value.clone())
+                    Ok(BamlValue::Map(map))
                 } else {
                     scope.push_error(format!("Expected map, got `{}`", value));
                     Err(())
