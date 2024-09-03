@@ -2,7 +2,7 @@
 slug: docs/get-started/quickstart/python
 ---
 
-Here's a sample repository:
+Here's a sample repository: 
 https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter
 
 To set up BAML in python do the following:
@@ -24,22 +24,20 @@ To set up BAML in python do the following:
       }
       ```
       </Tip>
-
-### Install baml
-
+  
+  ### Install baml
         ```bash
         pip install baml-py
         ```
-
-### Add some starter code
-
+  
+  ### Add some starter code
       This will give you some starter BAML code in a `baml_src` directory.
 
       ```bash
       baml-cli init
       ```
-
-### Generate python code from .baml files
+  
+  ### Generate python code from .baml files
 
     This command will help you convert `.baml` files to `.py` files. Everytime you modify your `.baml` files,
     you must re-run this command, and regenerate the `baml_client` folder.
@@ -51,9 +49,8 @@ To set up BAML in python do the following:
     ```bash
     baml-cli generate
     ```
-
-### Use a baml function in python!
-
+  
+  ### Use a baml function in python!
     <Tip>If `baml_client` doesn't exist, make sure to run the previous step!</Tip>
 
     <CodeBlocks>
@@ -61,7 +58,7 @@ To set up BAML in python do the following:
     from baml_client.sync_client import b
     from baml_client.types import Resume
 
-    def example(raw_resume: str) -> Resume:
+    def example(raw_resume: str) -> Resume: 
       # BAML's internal parser guarantees ExtractResume
       # to be always return a Resume type
       response = b.ExtractResume(raw_resume)
@@ -71,7 +68,7 @@ To set up BAML in python do the following:
       stream = b.stream.ExtractResume(raw_resume)
       for msg in stream:
         print(msg) # This will be a PartialResume type
-
+      
       # This will be a Resume type
       final = stream.get_final_response()
 
@@ -82,7 +79,7 @@ To set up BAML in python do the following:
     from baml_client.async_client import b
     from baml_client.types import Resume
 
-    async def example(raw_resume: str) -> Resume:
+    async def example(raw_resume: str) -> Resume: 
       # BAML's internal parser guarantees ExtractResume
       # to be always return a Resume type
       response = await b.ExtractResume(raw_resume)
@@ -92,12 +89,12 @@ To set up BAML in python do the following:
       stream = b.stream.ExtractResume(raw_resume)
       async for msg in stream:
         print(msg) # This will be a PartialResume type
-
+      
       # This will be a Resume type
       final = stream.get_final_response()
 
       return final
     ```
     </CodeBlocks>
-
+  
 </Steps>
