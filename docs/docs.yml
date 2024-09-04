@@ -159,6 +159,10 @@ navigation:
         path: docs/calling-baml/concurrent-calls.mdx
       - page: Multimodal
         path: docs/calling-baml/multi-modal.mdx
+  - section: NextJS
+    contents:
+      - page: NextJS Integration
+        path: docs/baml-nextjs/baml-nextjs.mdx
   - section: Observability [Paid]
     contents:
       - page: Enabling
