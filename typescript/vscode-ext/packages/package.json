@@ -47,6 +47,11 @@
           ],
           "description": "Generate code on save"
         },
+        "baml.restartTSServerOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Restart the TypeScript server on save, to have it read the new generated types."
+        },
         "baml.fileWatcher": {
           "scope": "window",
           "type": "boolean",

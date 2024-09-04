@@ -21,3 +21,15 @@ Possible options: `always`, `never`.
 
 If you choose `never`, you will have to run the `baml-cli generate` command manually.
 </ParamField>
+
+<ParamField
+  path="baml.restartTSServerOnSave"
+  type="boolean"
+  default={true}
+>
+Restarts the TypeScript Server in VSCode when the BAML extension generates the TypeScript baml_client files.
+VSCode has some issues picking up newly added directories and files, so this is a workaround for that.
+
+If it's not enabled, you may have to reload the TS server yourself to get it to recognize the new types.
+
+</ParamField>
