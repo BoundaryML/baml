@@ -1,0 +1,218 @@
+---
+title: Next.js Integration
+slug: docs/baml-nextjs/baml-nextjs
+---
+
+BAML can be used with Vercel's AI SDK to stream BAML functions to your UI.
+
+The latest example code is found in our [NextJS starter](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter), but this tutorial will guide you on how to add BAML step-by-step.
+
+See the [live demo](https://baml-examples.vercel.app/)
+
+<Note>
+You will need to use Server Actions, from the App Router, for this tutorial. You can still stream BAML functions from Route Handlers however.
+</Note>
+
+
+<Steps>
+### Install BAML, and Generate a BAML client for TypeScript
+- Follow [the TS installation guide](/docs/get-started/quickstart/typescript)
+- Install the VSCode extension and Save a baml file to generate the client (or use `npx baml-cli generate`).
+
+
+### Create streamable baml server actions
+Let's add some helpers to export our baml functions as streamable server actions. See the last line in this file, where we export the `extractResume` function.
+
+In `app/actions/streamable_objects.tsx` add the following code:
+```typescript
+"use server";
+import { createStreamableValue, StreamableValue } from "ai/rsc";
+import { b, Resume } from "@/baml_client";
+import { BamlStream } from "@boundaryml/baml";
+
+const MAX_ERROR_LENGTH = 3000;
+const TRUNCATION_MARKER = "[ERROR_LOG_TRUNCATED]";
+
+function truncateError(error: string): string {
+  if (error.length <= MAX_ERROR_LENGTH) return error;
+  const halfLength = Math.floor(
+    (MAX_ERROR_LENGTH - TRUNCATION_MARKER.length) / 2
+  );
+  return (
+    error.slice(0, halfLength) + TRUNCATION_MARKER + error.slice(-halfLength)
+  );
+}
+
+type BamlStreamReturnType<T> = T extends BamlStream<infer P, any> ? P : never;
+
+type StreamFunction<T> = (...args: any[]) => BamlStream<T, any>;
+
+
+async function streamHelper<T>(
+  streamFunction: (...args: any[]) => BamlStream<T, any>,
+  ...args: Parameters<typeof streamFunction>
+): Promise<{
+  object: StreamableValue<Partial<T>>;
+}> {
+  const stream = createStreamableValue<T>();
+
+  (async () => {
+    try {
+      const bamlStream = streamFunction(...args);
+      for await (const event of bamlStream) {
+        console.log("event", event);
+        if (event) {
+          stream.update(event as T);
+        }
+      }
+      const response = await bamlStream.getFinalResponse();
+      stream.update(response as T);
+      stream.done();
+    } catch (err) {
+      const errorMsg = truncateError((err as Error).message);
+      console.log("error", errorMsg);
+      stream.error(errorMsg);
+    }
+  })();
+
+  return { object: stream.value };
+}
+
+const streamableFunctions = {
+  extractResume: b.stream.ExtractResume,
+  extractUnstructuredResume: b.stream.ExtractResumeNoStructure,
+  analyzeBook: b.stream.AnalyzeBooks,
+  answerQuestion: b.stream.AnswerQuestion,
+  getRecipe: b.stream.GetRecipe,
+} as const;
+
+type StreamableFunctionName = keyof typeof streamableFunctions;
+
+function createStreamableFunction<T extends StreamableFunctionName>(
+  functionName: T
+): (...args: Parameters<(typeof streamableFunctions)[T]>) => Promise<{
+  object: StreamableValue<
+    Partial<BamlStreamReturnType<ReturnType<(typeof streamableFunctions)[T]>>>
+  >;
+}> {
+  return async (...args) =>
+    // need to bind to b.stream since we lose context here.
+    streamHelper(
+      streamableFunctions[functionName].bind(b.stream) as any,
+      ...args
+    );
+}
+
+export const extractResume = createStreamableFunction("extractResume");
+```
+
+
+### Create a hook to use the streamable functions
+This hook will work like [react-query](https://react-query.tanstack.com/), but for BAML functions.
+It will give you partial data, the loading status, and whether the stream was completed.
+
+In `app/_hooks/useStream.ts` add:
+```typescript
+import { useState, useEffect } from "react";
+import { readStreamableValue, StreamableValue } from "ai/rsc";
+
+/**
+ * A hook that streams data from a server action. The server action must return a StreamableValue.
+ * See the example action in app/actions/streamable_objects.tsx
+ *  **/
+export function useStream<T, P extends any[]>(
+  serverAction: (...args: P) => Promise<{ object: StreamableValue<Partial<T>, any> }>
+) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
+  const [isError, setIsError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [partialData, setPartialData] = useState<Partial<T> | undefined>(undefined); // Initialize data state
+  const [data, setData] = useState<T | undefined>(undefined); // full non-partial data
+
+  const mutate = async (
+    ...params: Parameters<typeof serverAction>
+  ): Promise<T | undefined> => {
+    console.log("mutate", params);
+    setIsLoading(true);
+    setIsError(false);
+    setError(null);
+
+    try {
+      const { object } = await serverAction(...params);
+      const asyncIterable = readStreamableValue(object);
+
+      let streamedData: Partial<T> | undefined;
+      for await (const value of asyncIterable) {
+        if (value !== undefined) {
+
+          // could also add a callback here.
+          // if (options?.onData) {
+          //   options.onData(value as T);
+          // }
+          console.log("value", value);
+          streamedData = value;
+          setPartialData(streamedData); // Update data state with the latest value
+        }
+      }
+
+
+      setIsComplete(true);
+      setData(streamedData as T);
+      // If it completes, it means it's the full data.
+      return streamedData as T;
+    } catch (err) {
+      console.log("error", err);
+
+      setIsError(true);
+      setError(new Error(JSON.stringify(err) ?? "An error occurred"));
+      return undefined;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // If you use the "data" property, your component will re-render when the data gets updated.
+  return { data, partialData, isLoading, isComplete, isError, error, mutate };
+}
+```
+
+
+
+### Stream your BAML function in a component
+In `app/page.tsx` you can use the hook to stream the BAML function and render the result in real-time.
+
+```tsx
+"use client";
+import {
+  extractResume,
+  extractUnstructuredResume,
+} from "../../actions/streamable_objects";
+// import types from baml files like this:
+import { Resume } from "@/baml_client";
+
+export default function Home() {
+  // you can also rename these fields by using ":", like how we renamed partialData to "partialResume"
+  const { data, partialData: partialResume, isLoading, isError, error, mutate } = useStream(extractResume);
+
+  return (
+    <div>
+      <h1>BoundaryML Next.js Example</h1>
+      <button onClick={() => mutate("Some resume text")}>Stream BAML</button>
+      {isLoading && <p>Loading...</p>}
+      {isError && <p>Error: {error?.message}</p>}
+      {partialData && <pre>{JSON.stringify(partialData, null, 2)}</pre>}
+      {data && <pre>{JSON.stringify(data, null, 2)}</pre>}
+    </div>
+  );
+}
+```
+
+</Steps>
+
+
+And now you're all set!
+
+If you have issues with your environment variables not loading, you may want to use [dotenv-cli](https://www.npmjs.com/package/dotenv-cli) to load your env vars before the nextjs process starts:
+
+`dotenv -- npm run dev`
