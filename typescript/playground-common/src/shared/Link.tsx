@@ -8,7 +8,7 @@ const Link: React.FC<{ item: StringSpan; display?: string; className?: string }>
   <VSCodeLink
     className={cn(className, 'font-medium underline underline-offset-2 hover:text-vscode-textLink-activeForeground')}
     onClick={() => {
-      vscode.postMessage({ command: 'jumpToFile', data: item })
+      vscode.postMessage({ command: 'jumpToFile', span: item })
     }}
   >
     <div className='flex flex-row items-center gap-0.5'>
