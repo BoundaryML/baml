@@ -2,9 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.54.2](https://github.com/boundaryml/baml/compare/0.54.1..0.54.2) - 2024-09-05
+
+### Features
+- Add a setting to disable restarting TS server in VSCode (#920) - ([628f236](https://github.com/boundaryml/baml/commit/628f2360c415fa8a7b0cd90d7249733ff06acaa9)) - aaronvg
+- Add prompt prefix for map types in ctx.output_format and add more type validation for map params (#919) - ([4d304c5](https://github.com/boundaryml/baml/commit/4d304c583b9188c1963a34e2a153baaf003e36ac)) - hellovai
+
+### Bug fixes
+- Fix glibC issues for python linux-x86_64 (#922) - ([9161bec](https://github.com/boundaryml/baml/commit/9161becccf626f8d13a15626481720f29e0f992c)) - Samuel Lijin
+
+
+### Documentation
+- Add nextjs hooks (#921) - ([fe14f5a](https://github.com/boundaryml/baml/commit/fe14f5a4ef95c9ccda916ff80ce852d3855554a3)) - aaronvg
+
+
 ## [0.54.1](https://github.com/boundaryml/baml/compare/0.54.0..0.54.1) - 2024-09-03
 
-## BREAKING CHANGE
+### BREAKING CHANGE
 
 - Fix escape characters in quoted strings (#905) - ([9ba6eb8](https://github.com/boundaryml/baml/commit/9ba6eb834e0145f4c57e582b63730d3d0ac9b2e9)) - hellovai
 

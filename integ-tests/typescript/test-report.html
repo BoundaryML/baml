@@ -257,15 +257,11 @@ header {
   font-size: 1rem;
   padding: 0 0.5rem;
 }
-</style></head><body><div class="jesthtml-content"><header><h1 id="title">Test Report</h1></header><div id="metadata-container"><div id="timestamp">Started: 2024-09-03 09:06:25</div><div id="summary"><div id="suite-summary"><div class="summary-total">Suites (1)</div><div class="summary-passed  summary-empty">0 passed</div><div class="summary-failed ">1 failed</div><div class="summary-pending  summary-empty">0 pending</div></div><div id="test-summary"><div class="summary-total">Tests (44)</div><div class="summary-passed ">41 passed</div><div class="summary-failed ">3 failed</div><div class="summary-pending  summary-empty">0 pending</div></div></div></div><div id="suite-1" class="suite-container"><input id="collapsible-0" type="checkbox" class="toggle" checked="checked"/><label for="collapsible-0"><div class="suite-info"><div class="suite-path">/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts</div><div class="suite-time warn">106.968s</div></div></label><div class="suite-tests"><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single bool</div><div class="test-status">failed</div><div class="test-duration">0.003s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: BamlError: BamlClientError: Something went wrong with the LLM client: LLM call failed: LLMErrorResponse { client: "Vertex", model: None, prompt: Chat([RenderedChatMessage { role: "user", allow_duplicate_role: false, parts: [Text("Return this value back to me: true")] }]), request_options: {}, start_time: SystemTime { tv_sec: 1725379586, tv_nsec: 490762000 }, latency: 153.541µs, message: "Error {\n    context: \"Failed to build request\",\n    source: \"Service account not found\",\n}", code: Other(2) }
+</style></head><body><div class="jesthtml-content"><header><h1 id="title">Test Report</h1></header><div id="metadata-container"><div id="timestamp">Started: 2024-09-05 06:52:56</div><div id="summary"><div id="suite-summary"><div class="summary-total">Suites (1)</div><div class="summary-passed  summary-empty">0 passed</div><div class="summary-failed ">1 failed</div><div class="summary-pending  summary-empty">0 pending</div></div><div id="test-summary"><div class="summary-total">Tests (44)</div><div class="summary-passed ">42 passed</div><div class="summary-failed ">2 failed</div><div class="summary-pending  summary-empty">0 pending</div></div></div></div><div id="suite-1" class="suite-container"><input id="collapsible-0" type="checkbox" class="toggle" checked="checked"/><label for="collapsible-0"><div class="suite-info"><div class="suite-path">/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts</div><div class="suite-time warn">101.607s</div></div></label><div class="suite-tests"><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single bool</div><div class="test-status">failed</div><div class="test-duration">0.004s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: BamlError: BamlClientError: Something went wrong with the LLM client: LLM call failed: LLMErrorResponse { client: "Vertex", model: None, prompt: Chat([RenderedChatMessage { role: "user", allow_duplicate_role: false, parts: [Text("Return this value back to me: true")] }]), request_options: {}, start_time: SystemTime { tv_sec: 1725544377, tv_nsec: 235214000 }, latency: 121.417µs, message: "Error {\n    context: \"Failed to build request\",\n    source: \"Service account not found\",\n}", code: Other(2) }
     at BamlAsyncClient.parsed [as TestFnNamedArgsSingleBool] (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:906:16)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:28:19)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single string list</div><div class="test-status">passed</div><div class="test-duration">0.58s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single class</div><div class="test-status">passed</div><div class="test-duration">0.502s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">multiple classes</div><div class="test-status">passed</div><div class="test-duration">0.529s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single enum list</div><div class="test-status">passed</div><div class="test-duration">0.408s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single float</div><div class="test-status">passed</div><div class="test-duration">0.432s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single int</div><div class="test-status">passed</div><div class="test-duration">0.393s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single optional string</div><div class="test-status">passed</div><div class="test-duration">0.424s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to string</div><div class="test-status">passed</div><div class="test-duration">0.568s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to class</div><div class="test-status">passed</div><div class="test-duration">0.688s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to map</div><div class="test-status">passed</div><div class="test-duration">0.747s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work for all outputs</div><div class="test-status">passed</div><div class="test-duration">5.603s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with retries1</div><div class="test-status">passed</div><div class="test-duration">0.981s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with retries2</div><div class="test-status">passed</div><div class="test-duration">2.039s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with fallbacks</div><div class="test-status">passed</div><div class="test-duration">1.869s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with image from url</div><div class="test-status">passed</div><div class="test-duration">1.32s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with image from base 64</div><div class="test-status">passed</div><div class="test-duration">1.03s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with audio base 64</div><div class="test-status">passed</div><div class="test-duration">1.339s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with audio from url</div><div class="test-status">passed</div><div class="test-duration">1.085s</div></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in OpenAI</div><div class="test-status">failed</div><div class="test-duration">5.995s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: expect(received).toBeLessThanOrEqual(expected)
-
-Expected: &lt;= 1500
-Received:    2744.2501668930054
-    at Object.toBeLessThanOrEqual (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:194:39)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in Gemini</div><div class="test-status">passed</div><div class="test-duration">8.92s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support AWS</div><div class="test-status">passed</div><div class="test-duration">2.624s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in AWS</div><div class="test-status">passed</div><div class="test-duration">2.341s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support OpenAI shorthand</div><div class="test-status">passed</div><div class="test-duration">9.936s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support OpenAI shorthand streaming</div><div class="test-status">passed</div><div class="test-duration">10.865s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support anthropic shorthand</div><div class="test-status">passed</div><div class="test-duration">3.265s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support anthropic shorthand streaming</div><div class="test-status">passed</div><div class="test-duration">4.075s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming without iterating</div><div class="test-status">passed</div><div class="test-duration">4.106s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in Claude</div><div class="test-status">passed</div><div class="test-duration">0.811s</div></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support vertex</div><div class="test-status">failed</div><div class="test-duration">0.002s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: BamlError: BamlClientError: Something went wrong with the LLM client: LLM call failed: LLMErrorResponse { client: "Vertex", model: None, prompt: Chat([RenderedChatMessage { role: "user", allow_duplicate_role: false, parts: [Text("Write a nice short story about Donkey Kong")] }]), request_options: {}, start_time: SystemTime { tv_sec: 1725379660, tv_nsec: 38966000 }, latency: 63.958µs, message: "Error {\n    context: \"Failed to build request\",\n    source: \"Service account not found\",\n}", code: Other(2) }
+    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:28:19)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single string list</div><div class="test-status">passed</div><div class="test-duration">0.605s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single class</div><div class="test-status">passed</div><div class="test-duration">0.536s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">multiple classes</div><div class="test-status">passed</div><div class="test-duration">0.573s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single enum list</div><div class="test-status">passed</div><div class="test-duration">0.619s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single float</div><div class="test-status">passed</div><div class="test-duration">0.426s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single int</div><div class="test-status">passed</div><div class="test-duration">0.438s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single optional string</div><div class="test-status">passed</div><div class="test-duration">0.52s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to string</div><div class="test-status">passed</div><div class="test-duration">0.675s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to class</div><div class="test-status">passed</div><div class="test-duration">0.739s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to map</div><div class="test-status">passed</div><div class="test-duration">0.871s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work for all outputs</div><div class="test-status">passed</div><div class="test-duration">4.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with retries1</div><div class="test-status">passed</div><div class="test-duration">0.951s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with retries2</div><div class="test-status">passed</div><div class="test-duration">2.027s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with fallbacks</div><div class="test-status">passed</div><div class="test-duration">1.517s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with image from url</div><div class="test-status">passed</div><div class="test-duration">1.275s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with image from base 64</div><div class="test-status">passed</div><div class="test-duration">1.231s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with audio base 64</div><div class="test-status">passed</div><div class="test-duration">1.16s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with audio from url</div><div class="test-status">passed</div><div class="test-duration">1.18s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in OpenAI</div><div class="test-status">passed</div><div class="test-duration">5.387s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in Gemini</div><div class="test-status">passed</div><div class="test-duration">17.085s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support AWS</div><div class="test-status">passed</div><div class="test-duration">2.788s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in AWS</div><div class="test-status">passed</div><div class="test-duration">2.233s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support OpenAI shorthand</div><div class="test-status">passed</div><div class="test-duration">7.601s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support OpenAI shorthand streaming</div><div class="test-status">passed</div><div class="test-duration">8.51s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support anthropic shorthand</div><div class="test-status">passed</div><div class="test-duration">3.669s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support anthropic shorthand streaming</div><div class="test-status">passed</div><div class="test-duration">3.669s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming without iterating</div><div class="test-status">passed</div><div class="test-duration">3.977s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in Claude</div><div class="test-status">passed</div><div class="test-duration">0.915s</div></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support vertex</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: BamlError: BamlClientError: Something went wrong with the LLM client: LLM call failed: LLMErrorResponse { client: "Vertex", model: None, prompt: Chat([RenderedChatMessage { role: "user", allow_duplicate_role: false, parts: [Text("Write a nice short story about Donkey Kong")] }]), request_options: {}, start_time: SystemTime { tv_sec: 1725544452, tv_nsec: 469190000 }, latency: 42.75µs, message: "Error {\n    context: \"Failed to build request\",\n    source: \"Service account not found\",\n}", code: Other(2) }
     at BamlAsyncClient.parsed [as TestVertex] (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:1242:16)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:282:17)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">supports tracing sync</div><div class="test-status">passed</div><div class="test-duration">0.023s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">supports tracing async</div><div class="test-status">passed</div><div class="test-duration">6.514s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types single</div><div class="test-status">passed</div><div class="test-duration">1.448s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types enum</div><div class="test-status">passed</div><div class="test-duration">0.894s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types class</div><div class="test-status">passed</div><div class="test-duration">2.043s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic inputs class</div><div class="test-status">passed</div><div class="test-duration">0.666s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic inputs list</div><div class="test-status">passed</div><div class="test-duration">0.74s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic output map</div><div class="test-status">passed</div><div class="test-duration">2.086s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic output union</div><div class="test-status">passed</div><div class="test-duration">2.682s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with nested classes</div><div class="test-status">passed</div><div class="test-duration">12.081s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic client</div><div class="test-status">passed</div><div class="test-duration">0.616s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with 'onLogEvent'</div><div class="test-status">passed</div><div class="test-duration">1.755s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with a sync client</div><div class="test-status">passed</div><div class="test-duration">0.495s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should raise an error when appropriate</div><div class="test-status">passed</div><div class="test-duration">0.893s</div></div></div></div><div class="suite-consolelog"><div class="suite-consolelog-header">Console Log</div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:40:15)
+    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:282:17)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">supports tracing sync</div><div class="test-status">passed</div><div class="test-duration">0.02s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">supports tracing async</div><div class="test-status">passed</div><div class="test-duration">4.761s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types single</div><div class="test-status">passed</div><div class="test-duration">0.896s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types enum</div><div class="test-status">passed</div><div class="test-duration">0.686s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types class</div><div class="test-status">passed</div><div class="test-duration">1.32s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic inputs class</div><div class="test-status">passed</div><div class="test-duration">0.666s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic inputs list</div><div class="test-status">passed</div><div class="test-duration">0.759s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic output map</div><div class="test-status">passed</div><div class="test-duration">1.194s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic output union</div><div class="test-status">passed</div><div class="test-duration">3.147s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with nested classes</div><div class="test-status">passed</div><div class="test-duration">8.6s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic client</div><div class="test-status">passed</div><div class="test-duration">0.539s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with 'onLogEvent'</div><div class="test-status">passed</div><div class="test-duration">1.811s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with a sync client</div><div class="test-status">passed</div><div class="test-duration">0.56s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should raise an error when appropriate</div><div class="test-status">passed</div><div class="test-duration">0.833s</div></div></div></div><div class="suite-consolelog"><div class="suite-consolelog-header">Console Log</div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:40:15)
     at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
     at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
@@ -280,11 +276,11 @@ Received:    2744.2501668930054
     at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
     at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">calling with class</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:46:15)</pre><pre class="suite-consolelog-item-message">got response key
 true
-52</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:132:15)</pre><pre class="suite-consolelog-item-message">Expected error Error: BamlError: BamlClientError: BamlClientHttpError: LLM call failed: LLMErrorResponse { client: "RetryClientConstant", model: None, prompt: Chat([RenderedChatMessage { role: "system", allow_duplicate_role: false, parts: [Text("Say a haiku")] }]), request_options: {"model": String("gpt-3.5-turbo")}, start_time: SystemTime { tv_sec: 1725379598, tv_nsec: 273938000 }, latency: 101.340625ms, message: "Request failed: {\n    \"error\": {\n        \"message\": \"Incorrect API key provided: blah. You can find your API key at https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": \"invalid_api_key\"\n    }\n}\n", code: InvalidAuthentication }
+52</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:132:15)</pre><pre class="suite-consolelog-item-message">Expected error Error: BamlError: BamlClientError: BamlClientHttpError: LLM call failed: LLMErrorResponse { client: "RetryClientConstant", model: None, prompt: Chat([RenderedChatMessage { role: "system", allow_duplicate_role: false, parts: [Text("Say a haiku")] }]), request_options: {"model": String("gpt-3.5-turbo")}, start_time: SystemTime { tv_sec: 1725544388, tv_nsec: 109879000 }, latency: 112.407625ms, message: "Request failed: {\n    \"error\": {\n        \"message\": \"Incorrect API key provided: blah. You can find your API key at https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": \"invalid_api_key\"\n    }\n}\n", code: InvalidAuthentication }
     at BamlAsyncClient.parsed [as TestRetryConstant] (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:1210:16)
     at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:129:7) {
   code: 'GenericFailure'
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:141:15)</pre><pre class="suite-consolelog-item-message">Expected error Error: BamlError: BamlClientError: BamlClientHttpError: LLM call failed: LLMErrorResponse { client: "RetryClientExponential", model: None, prompt: Chat([RenderedChatMessage { role: "system", allow_duplicate_role: false, parts: [Text("Say a haiku")] }]), request_options: {"model": String("gpt-3.5-turbo")}, start_time: SystemTime { tv_sec: 1725379600, tv_nsec: 334178000 }, latency: 85.182333ms, message: "Request failed: {\n    \"error\": {\n        \"message\": \"Incorrect API key provided: blahh. You can find your API key at https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": \"invalid_api_key\"\n    }\n}\n", code: InvalidAuthentication }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:141:15)</pre><pre class="suite-consolelog-item-message">Expected error Error: BamlError: BamlClientError: BamlClientHttpError: LLM call failed: LLMErrorResponse { client: "RetryClientExponential", model: None, prompt: Chat([RenderedChatMessage { role: "system", allow_duplicate_role: false, parts: [Text("Say a haiku")] }]), request_options: {"model": String("gpt-3.5-turbo")}, start_time: SystemTime { tv_sec: 1725544390, tv_nsec: 149697000 }, latency: 103.663291ms, message: "Request failed: {\n    \"error\": {\n        \"message\": \"Incorrect API key provided: blahh. You can find your API key at https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": \"invalid_api_key\"\n    }\n}\n", code: InvalidAuthentication }
     at BamlAsyncClient.parsed [as TestRetryExponential] (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:1226:16)
     at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:138:7) {
   code: 'GenericFailure'
@@ -337,9 +333,6 @@ true
     at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
     at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
     at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">dummyFunc2 returned</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
-    at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
     at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
     at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 0)
@@ -621,7 +614,7 @@ true
     at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
     at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: attributes</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:460:13)</pre><pre class="suite-consolelog-item-message">final  {
   hair_color: 'black',
-  attributes: { eye_color: 'blue', facial_hair: 'beard' }
+  attributes: { height: '6 feet', eye_color: 'blue', facial_hair: 'beard' }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:484:13)
     at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
@@ -688,1510 +681,247 @@ true
   hair_color: 'black',
   attributes: { eye_color: 'blue', facial_hair: 'beard' },
   height: { meters: 1.8 }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: '', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: '', prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value', prop2: null, inner: null }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: '', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: '', prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: 'World', prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: 'World', prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: 'World', prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: 'World', prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: 'World', prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: 'World', prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: 'World', prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: 'World', prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: 'World', prop2: '', inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'Hello', prop2: { prop1: 'World', prop2: 'N', inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: null }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: null }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: null }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: null }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: null }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: null }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: null }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: 'value2', prop2: '', inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
+  prop1: 'Hello',
   prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
+    prop1: 'World',
+    prop2: 'Nice',
     inner: { prop2: null, prop3: null }
   }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
+  prop1: 'Hello',
   prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
+    prop1: 'World',
+    prop2: 'Nice',
     inner: { prop2: null, prop3: null }
   }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
+  prop1: 'Hello',
   prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
+    prop1: 'World',
+    prop2: 'Nice',
     inner: { prop2: null, prop3: null }
   }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
+  prop1: 'Hello',
   prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
+    prop1: 'World',
+    prop2: 'Nice',
     inner: { prop2: null, prop3: null }
   }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
+  prop1: 'Hello',
   prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
+    prop1: 'World',
+    prop2: 'Nice',
     inner: { prop2: null, prop3: null }
   }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
+  prop1: 'Hello',
   prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
+    prop1: 'World',
+    prop2: 'Nice',
     inner: { prop2: null, prop3: null }
   }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
+  prop1: 'Hello',
   prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
+    prop1: 'World',
+    prop2: 'Nice',
     inner: { prop2: null, prop3: null }
   }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
+  prop1: 'Hello',
   prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
+    prop1: 'World',
+    prop2: 'Nice',
     inner: { prop2: null, prop3: null }
   }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 4, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: { prop2: 42, prop3: 3 } }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: { prop2: 42, prop3: 3 } }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.1 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: 3.14 }
-  }
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 4, prop3: null } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: null } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: null } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: null } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: null } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: null } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: null } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: null } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: null } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: null } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.1 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
+  prop1: 'Hello',
+  prop2: { prop1: 'World', prop2: 'Nice', inner: { prop2: 42, prop3: 3.14 } }
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:543:15)
     at callback (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:56:17)</pre><pre class="suite-consolelog-item-message">onLogEvent {
   metadata: {
-    eventId: 'baf1de15-004e-47cb-a883-372b3eb598e0',
-    rootEventId: 'baf1de15-004e-47cb-a883-372b3eb598e0'
+    eventId: '9fbb7ea8-a06b-42df-8d25-d9e9caafd78c',
+    rootEventId: '9fbb7ea8-a06b-42df-8d25-d9e9caafd78c'
   },
   prompt: '[\n' +
     '  {\n' +
@@ -2205,12 +935,12 @@ true
     ']',
   rawOutput: '["a", "b", "c"]',
   parsedOutput: '["a", "b", "c"]',
-  startTime: '2024-09-03T16:08:10.147Z'
+  startTime: '2024-09-05T13:54:35.586Z'
 }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:543:15)
     at callback (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:56:17)</pre><pre class="suite-consolelog-item-message">onLogEvent {
   metadata: {
-    eventId: 'ea17a01e-bc7e-425d-a0eb-e1291220e0da',
-    rootEventId: 'ea17a01e-bc7e-425d-a0eb-e1291220e0da'
+    eventId: 'd671b2ca-9048-4b34-9a53-632ab833c88f',
+    rootEventId: 'd671b2ca-9048-4b34-9a53-632ab833c88f'
   },
   prompt: '[\n' +
     '  {\n' +
@@ -2224,5 +954,5 @@ true
     ']',
   rawOutput: '["d", "e", "f"]',
   parsedOutput: '["d", "e", "f"]',
-  startTime: '2024-09-03T16:08:10.714Z'
+  startTime: '2024-09-05T13:54:36.071Z'
 }</pre></div></div></div></div></body></html>
