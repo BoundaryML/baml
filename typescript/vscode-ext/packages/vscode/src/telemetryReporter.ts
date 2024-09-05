@@ -9,7 +9,7 @@ const client = new PostHog('phc_732PWG6HFZ75S7h0TK2AuqRVkqZDiD4WePE9gXYJkOu')
 
 export interface TelemetryEvent {
   event: string
-  properties: any
+  properties: Record<string, any>
 }
 
 export default class TelemetryReporter {
@@ -20,7 +20,7 @@ export default class TelemetryReporter {
   private static TELEMETRY_SETTING_ID = 'telemetryLevel'
   // Deprecated since https://code.visualstudio.com/updates/v1_61#_telemetry-settings
   private static TELEMETRY_OLD_SETTING_ID = 'enableTelemetry'
-  private telemetryProps: any = {}
+  private telemetryProps: Record<string, any> = {}
 
   constructor(
     private extensionId: string,
@@ -56,7 +56,7 @@ export default class TelemetryReporter {
     }
   }
 
-  public async sendTelemetryEvent(data: TelemetryEvent): Promise<void> {
+  public sendTelemetryEvent(data: TelemetryEvent) {
     if (this.userOptIn) {
       client.capture({
         event: data.event,
