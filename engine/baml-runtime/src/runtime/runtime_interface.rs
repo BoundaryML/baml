@@ -389,7 +389,7 @@ impl RuntimeInterface for InternalBamlRuntime {
                 return Ok(FunctionResult::new(
                     OrchestrationScope::default(),
                     LLMResponse::UserFailure(format!(
-                        "Failed to resolve BAML function {function_name} (did you typo it?): {:?}",
+                        "BAML function {function_name} does not exist in baml_src/ (did you typo it?): {:?}",
                         e
                     )),
                     None,
