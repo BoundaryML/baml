@@ -4,8 +4,10 @@ name = "baml-runtime"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
-
 license-file.workspace = true
+
+[package.metadata.rustflags]
+RSTEST_TIMEOUT = "10"
 
 [build-dependencies]
 anyhow.workspace = true
@@ -15,7 +17,7 @@ anyhow.workspace = true
 base64.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
-clap = { version = "4.4.6", features = ["cargo", "derive"] }
+clap.workspace = true
 colored = "2.1.0"
 dashmap.workspace = true
 derive_more.workspace = true
@@ -24,8 +26,10 @@ either.workspace = true
 env_logger.workspace = true
 eventsource-stream = "0.2.3"
 futures.workspace = true
+http.workspace = true
 http-body.workspace = true
 indexmap.workspace = true
+indoc.workspace = true
 # instant = "0.1"  # do not use this or wasm-timer - use web-time instead
 json_comments = "0.2.2"
 jsonish = { path = "../baml-lib/jsonish" }
@@ -33,10 +37,10 @@ internal-baml-codegen.workspace = true
 baml-types = { path = "../baml-lib/baml-types" }
 internal-baml-core = { path = "../baml-lib/baml-core" }
 internal-baml-jinja = { path = "../baml-lib/jinja" }
-# internal-baml-client-llm = { path = "../baml-lib/client-llm" }
 log.workspace = true
 pin-project-lite.workspace = true
 reqwest-eventsource = "0.6.0"
+scopeguard.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 strsim = "0.11.1"
@@ -46,6 +50,9 @@ tokio = { version = "1", default-features = false, features = [
   "macros",
   "time",
 ] }
+tokio-stream = "0.1.15"
+# NOTE(sam): adding this caused a build error, I suspect because tower uses nightly features or something
+# tower = "0.5.0"
 uuid = { version = "1.8.0", features = ["v4", "serde"] }
 web-time.workspace = true
 static_assertions.workspace = true
@@ -105,7 +112,10 @@ ring = { version = "0.17.4", features = ["std", "wasm32_unknown_unknown_js"] }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 aws-config = "1.5.3"
 aws-sdk-bedrockruntime = "1.37.0"
+axum = "0.7.5"
+axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
 hostname = "0.3.1"
+notify-debouncer-full = "0.3.1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12.5", features = [
   "json",
@@ -119,11 +129,13 @@ defaults = []
 internal = []
 
 [dev-dependencies]
-console_log = { version = "1" }
+assert_cmd = "2"
+console_log = "1"
 dissimilar = "1.0.4"
 expect-test = "1.1.0"
 indoc.workspace = true
 either = "1.8.1"
+rstest = "0.22.0"
 wasm-bindgen-test = "0.3.42"
 walkdir = "2.5.0"
 wasm-logger = "0.2.0"

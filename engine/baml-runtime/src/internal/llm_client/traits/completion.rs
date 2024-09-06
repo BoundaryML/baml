@@ -29,7 +29,7 @@ where
 
     #[allow(async_fn_in_trait)]
     async fn completion(&self, _: &RuntimeContext, _: &String) -> LLMResponse {
-        LLMResponse::OtherFailure("Completion prompts are not supported by this provider".into())
+        LLMResponse::InternalFailure("Completion prompts are not supported by this provider".into())
     }
 }
 
@@ -39,7 +39,7 @@ where
 {
     #[allow(async_fn_in_trait)]
     async fn stream_completion(&self, _: &RuntimeContext, _: &String) -> StreamResponse {
-        Err(LLMResponse::OtherFailure(
+        Err(LLMResponse::InternalFailure(
             "Completion prompts are not supported by this provider".to_string(),
         ))
     }

@@ -21,7 +21,7 @@ pub struct WasmGeneratedFile {
 impl Into<WasmGeneratorOutput> for GenerateOutput {
     fn into(self) -> WasmGeneratorOutput {
         WasmGeneratorOutput {
-            output_dir: self.output_dir.to_string_lossy().to_string(),
+            output_dir: self.output_dir_full.to_string_lossy().to_string(),
             files: self
                 .files
                 .into_iter()

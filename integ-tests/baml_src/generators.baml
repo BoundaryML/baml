@@ -15,3 +15,10 @@ generator lang_ruby {
   output_dir "../ruby"
   version "0.54.2"
 }
+
+generator openapi {
+  output_type rest/openapi
+  output_dir "../openapi"
+  version "0.54.0"
+  on_generate "rm .gitignore"
+}

@@ -213,6 +213,38 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(T.any(Baml::Types::BookOrder, Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt))
+    }
+    def CustomTask(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("CustomTask may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "CustomTask",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
         img: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
@@ -2665,6 +2697,41 @@ module Baml
         baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[T.any(Baml::Types::BookOrder, Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt)])
+    }
+    def CustomTask(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("CustomTask may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "CustomTask",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[T.nilable(T.any(Baml::PartialTypes::BookOrder, Baml::PartialTypes::FlightConfirmation, Baml::PartialTypes::GroceryReceipt)), T.any(Baml::Types::BookOrder, Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt)].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

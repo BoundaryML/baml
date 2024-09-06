@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use super::InternalBamlRuntime;
 use crate::internal::llm_client::traits::WithClientProperties;
-use crate::internal::llm_client::AllowedMetadata;
+use crate::internal::llm_client::{AllowedMetadata, LLMResponse};
 use crate::{
     client_registry::ClientProperty,
     internal::{
@@ -383,15 +383,39 @@ impl RuntimeInterface for InternalBamlRuntime {
         params: &BamlMap<String, BamlValue>,
         ctx: RuntimeContext,
     ) -> Result<crate::FunctionResult> {
-        let func = self.get_function(&function_name, &ctx)?;
-        let baml_args = self.ir().check_function_params(
+        let func = match self.get_function(&function_name, &ctx) {
+            Ok(func) => func,
+            Err(e) => {
+                return Ok(FunctionResult::new(
+                    OrchestrationScope::default(),
+                    LLMResponse::UserFailure(format!(
+                        "Failed to resolve BAML function {function_name} (did you typo it?): {:?}",
+                        e
+                    )),
+                    None,
+                ))
+            }
+        };
+        let baml_args = match self.ir().check_function_params(
             &func,
             &params,
             ArgCoercer {
                 span_path: None,
                 allow_implicit_cast_to_string: false,
             },
-        )?;
+        ) {
+            Ok(args) => args,
+            Err(e) => {
+                return Ok(FunctionResult::new(
+                    OrchestrationScope::default(),
+                    LLMResponse::UserFailure(format!(
+                        "Failed while validating args for {function_name}: {:?}",
+                        e
+                    )),
+                    None,
+                ))
+            }
+        };
 
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
         let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;

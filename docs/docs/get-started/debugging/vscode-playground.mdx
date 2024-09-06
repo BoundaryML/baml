@@ -7,7 +7,7 @@ slug: docs/get-started/debugging/vscode-playground
 - Close the playground and reopen it
 - Try reloading the entire window by pressing `Ctrl + Shift + P` or `Cmd + Shift + P` and typing `Developer: Reload Window`
 - Ensure your VSCode Extension for BAML is up-to-date (It should should it its up-to-date in the Extensions tab in VSCode)
-<img src="../../../assets/images/docs_latest/vscode/extension-status.png" />
+<img src="/assets/images/docs_latest/vscode/extension-status.png" />
 
 - If nothing works, please file an issue on [Github](https://github.com/BoundaryML/baml/issues), ideally with a screenshot of the error and the steps to reproduce it.
 
@@ -29,7 +29,11 @@ We've seen sparse repros of this, but closing the playground and reopening it sh
 
 You can debug the actual network request being made by BAML by opening developer tools:
 
-<img src="../../../assets/images/docs_latest/vscode/dev-tools.png" />
+<img src="/assets/images/docs_latest/vscode/dev-tools.png" />
 
 ### BAML Client Generation Disabled
-This means your `generator` clause in your BAML file is out of sync with the version of the BAML extension you have installed. See [Generate](../../calling-baml/generate-baml-client.mdx) for more details.
+This means that either:
+
+- your `generator` clause in your BAML file is out of sync with the version of the BAML extension you have installed. See [Generate](../../calling-baml/generate-baml-client.mdx) for more details, or
+
+- one of your `generator` clauses sets `output_type "rest/openapi"`, which means you need to use `baml-cli dev` to run the generator

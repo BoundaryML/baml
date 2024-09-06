@@ -109,4 +109,12 @@ impl FieldType {
             _ => false,
         }
     }
+
+    pub fn is_null(&self) -> bool {
+        match self {
+            FieldType::Primitive(TypeValue::Null) => true,
+            FieldType::Optional(t) => t.is_null(),
+            _ => false,
+        }
+    }
 }

@@ -33,6 +33,14 @@ class Blah(BaseModel):
     
     prop4: Optional[str] = None
 
+class BookOrder(BaseModel):
+    
+    
+    orderId: Optional[str] = None
+    title: Optional[str] = None
+    quantity: Optional[int] = None
+    price: Optional[float] = None
+
 class ClassOptionalOutput(BaseModel):
     
     
@@ -52,6 +60,13 @@ class ClassWithImage(BaseModel):
     myImage: Optional[baml_py.Image] = None
     param2: Optional[str] = None
     fake_image: Optional["FakeImage"] = None
+
+class CustomTaskResult(BaseModel):
+    
+    
+    bookOrder: Optional[Union["BookOrder", Optional[None]]] = None
+    flightConfirmation: Optional[Union["FlightConfirmation", Optional[None]]] = None
+    groceryReceipt: Optional[Union["GroceryReceipt", Optional[None]]] = None
 
 class DummyOutput(BaseModel):
     
@@ -112,6 +127,23 @@ class FakeImage(BaseModel):
     
     
     url: Optional[str] = None
+
+class FlightConfirmation(BaseModel):
+    
+    
+    confirmationNumber: Optional[str] = None
+    flightNumber: Optional[str] = None
+    departureTime: Optional[str] = None
+    arrivalTime: Optional[str] = None
+    seatNumber: Optional[str] = None
+
+class GroceryReceipt(BaseModel):
+    
+    
+    receiptId: Optional[str] = None
+    storeName: Optional[str] = None
+    items: List[Optional[Union[Optional[str], Optional[int], Optional[float]]]]
+    totalAmount: Optional[float] = None
 
 class InnerClass(BaseModel):
     

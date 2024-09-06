@@ -187,7 +187,9 @@ impl BamlRuntimeFfi {
 fn invoke_runtime_cli(ruby: &Ruby, argv0: String, argv: Vec<String>) -> Result<()> {
     baml_runtime::BamlRuntime::run_cli(
         std::iter::once(argv0).chain(argv.into_iter()).collect(),
-        baml_runtime::CallerType::Ruby,
+        baml_runtime::RuntimeCliDefaults {
+            output_type: baml_types::GeneratorOutputType::RubySorbet,
+        },
     )
     .map_err(|e| {
         Error::new(

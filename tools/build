@@ -131,6 +131,7 @@ case "$_path" in
       command="cargo test --features=no_wasm,internal internal --verbose -- --nocapture"
     else
       command="cargo build --features=wasm --target=wasm32-unknown-unknown"
+      command="cargo build"
     fi
     #command="cargo test --features=no_wasm"
 

@@ -8,6 +8,7 @@ instances:
         repo: baml
         branch: canary
 
+
 title: BAML Documentation
 
 navigation:
@@ -26,6 +27,8 @@ navigation:
             path: docs/get-started/quickstart/typescript.mdx
           - page: Ruby
             path: docs/get-started/quickstart/ruby.mdx
+          - page: Any Language (OpenAPI)
+            path: docs/get-started/quickstart/openapi.mdx
           - page: VSCode
             path: docs/get-started/quickstart/editors-vscode.mdx
           - page: Other Editors
@@ -47,6 +50,8 @@ navigation:
             path: docs/get-started/deploying/nextjs.mdx
           - page: AWS
             path: docs/get-started/deploying/aws.mdx
+          - page: Docker (OpenAPI)
+            path: docs/get-started/deploying/openapi.mdx
   - section: BAML Snippets
     contents:
       - section: General BAML Syntax

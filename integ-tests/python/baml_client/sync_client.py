@@ -177,6 +177,30 @@ class BamlSyncClient:
       mdl = create_model("ClassifyMessage3ReturnType", inner=(types.Category, ...))
       return coerce(mdl, raw.parsed())
     
+    def CustomTask(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "CustomTask",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("CustomTaskReturnType", inner=(Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt], ...))
+      return coerce(mdl, raw.parsed())
+    
     def DescribeImage(
         self,
         img: baml_py.Image,
@@ -2052,6 +2076,39 @@ class BamlStreamClient:
       partial_mdl = create_model("ClassifyMessage3PartialReturnType", inner=(Optional[types.Category], ...))
 
       return baml_py.BamlSyncStream[Optional[types.Category], types.Category](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def CustomTask(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "CustomTask",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("CustomTaskReturnType", inner=(Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt], ...))
+      partial_mdl = create_model("CustomTaskPartialReturnType", inner=(Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], ...))
+
+      return baml_py.BamlSyncStream[Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

@@ -1,0 +1,344 @@
+---
+slug: docs/get-started/deploying/openapi
+---
+
+<Info>
+  This page assumes you've gone through the [OpenAPI quickstart].
+</Info>
+
+[OpenAPI quickstart]: /docs/get-started/quickstart/openapi
+
+To deploy BAML as a RESTful API, you'll need to do three things:
+
+- host your BAML functions in a Docker container
+- update your app to call it
+- run BAML and your app side-by-side using `docker-compose`
+
+Read on to learn how to do this with `docker-compose`.
+
+<Tip>
+  You can also run `baml-cli` in a subprocess from your app directly, and we
+  may recommend this approach in the future. Please let us know if you'd
+  like to see instructions for doing so, and in what language, by asking in
+  [Discord][discord] or [on the GitHub issue][openapi-feedback-github-issue].
+</Tip>
+
+## Host your BAML functions in a Docker container
+
+In the directory containing your `baml_src/` directory, create a
+`baml.Dockerfile` to host your BAML functions in a Docker container:
+
+<Note>
+  BAML-over-HTTP is currently a preview feature. Please provide feedback either
+  in [Discord][discord] or on [GitHub][openapi-feedback-github-issue] so that
+  we can stabilize the feature and keep you updated!
+</Note>
+
+```docker title="baml.Dockerfile"
+FROM node:20
+
+WORKDIR /app
+COPY baml_src/ .
+
+# If you want to pin to a specific version (which we recommend):
+# RUN npm install -g @boundaryml/baml@VERSION
+RUN npm install -g @boundaryml/baml
+
+CMD baml-cli serve --preview --port 2024
+```
+
+<Tabs>
+
+<Tab title="Using docker-compose">
+
+Assuming you intend to run your own application in a container, we recommend
+using `docker-compose` to run your app and BAML-over-HTTP side-by-side:
+
+```bash
+docker compose up --build --force-recreate
+```
+
+```yaml title="docker-compose.yaml"
+services:
+  baml-over-http:
+    build:
+      # This will build baml.Dockerfile when you run docker-compose up
+      context: .
+      dockerfile: baml.Dockerfile
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:2024/_debug/ping" ]
+      interval: 1s
+      timeout: 100ms
+      retries: 3
+    # This allows you to 'curl localhost:2024/_debug/ping' from your machine,
+    # i.e. the Docker host
+    ports:
+      - "2024:2024"
+
+  debug-container:
+    image: amazonlinux:latest
+    depends_on:
+      # Wait until the baml-over-http healthcheck passes to start this container
+      baml-over-http:
+        condition: service_healthy
+    command: "curl -v http://baml-over-http:2024/_debug/ping"
+```
+
+<Note>
+  To call the BAML server from your laptop (i.e. the host machine), you must use
+  `localhost:2024`. You may only reach it as `baml-over-http:2024` from within
+  another Docker container.
+</Note>
+
+</Tab>
+
+<Tab title="Using docker">
+
+If you don't care about using `docker-compose`, you can just run:
+
+```bash
+docker build -t baml-over-http -f baml.Dockerfile .
+docker run -p 2024:2024 baml-over-http
+```
+</Tab>
+
+</Tabs>
+
+To verify for yourself that BAML-over-HTTP is up and running, you can run:
+
+```bash
+curl http://localhost:2024/_debug/ping
+```
+
+## Update your app to call it
+
+Update your code to use `BAML_ENDPOINT`, if set, as the BAML address. This
+will allow you to point it at `baml-cli` running in another Docker container.
+
+<Tabs>
+<Tab title="C#">
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using Org.OpenAPITools.Api;
+using Org.OpenAPITools.Client;
+using Org.OpenAPITools.Model;
+
+namespace Example
+{
+    public class Example
+    {
+        public static void Main()
+        {
+            Configuration config = new Configuration();
+            var bamlEndpoint = Environment.GetEnvironmentVariable("BAML_ENDPOINT");
+            if (!string.IsNullOrEmpty(bamlEndpoint))
+            {
+                config.BasePath = bamlEndpoint;
+            }
+            var apiInstance = new DefaultApi(config);
+            // Use `apiInstance` to make API calls
+        }
+    }
+}
+```
+
+</Tab>
+
+<Tab title="Go">
+
+```go
+import (
+    "os"
+    openapiclient "path/to/your/openapi/client"
+)
+
+func main() {
+    cfg := openapiclient.NewConfiguration()
+    bamlEndpoint := os.Getenv("BAML_ENDPOINT")
+    if bamlEndpoint != "" {
+        cfg.BasePath = bamlEndpoint
+    }
+    client := openapiclient.NewAPIClient(cfg)
+    // Use `client` to make API calls
+}
+```
+
+</Tab>
+
+<Tab title="Java">
+
+```java
+import org.openapitools.client.ApiClient;
+import org.openapitools.client.ApiException;
+import org.openapitools.client.Configuration;
+import org.openapitools.client.api.DefaultApi;
+import org.openapitools.client.auth.*;
+
+public class ApiExample {
+    public static void main(String[] args) {
+        ApiClient defaultClient = Configuration.getDefaultApiClient();
+        String bamlEndpoint = System.getenv("BAML_ENDPOINT");
+        if (bamlEndpoint != null && !bamlEndpoint.isEmpty()) {
+            defaultClient.setBasePath(bamlEndpoint);
+        }
+
+        DefaultApi apiInstance = new DefaultApi(defaultClient);
+        // Use `apiInstance` to make API calls
+    }
+}
+```
+
+</Tab>
+
+<Tab title="PHP">
+
+```php
+require_once(__DIR__ . '/vendor/autoload.php');
+
+$config = OpenAPI\Client\Configuration::getDefaultConfiguration();
+
+$bamlEndpoint = getenv('BAML_ENDPOINT');
+if ($bamlEndpoint !== false && !empty($bamlEndpoint)) {
+    $config->setHost($bamlEndpoint);
+}
+
+$apiInstance = new OpenAPI\Client\Api\DefaultApi(
+    new GuzzleHttp\Client(),
+    $config
+);
+
+// Use `$apiInstance` to make API calls
+```
+
+</Tab>
+</Tabs>
+
+## Run your app with docker-compose
+
+Replace `debug-container` with the Dockerfile for your app in the
+`docker-compose.yaml` file:
+
+```yaml
+services:
+  baml-over-http:
+    build:
+      context: .
+      dockerfile: baml.Dockerfile
+    networks:
+      - my-app-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:2024/_debug/ping" ]
+      interval: 1s
+      timeout: 100ms
+      retries: 3
+    ports:
+      - "2024:2024"
+
+  my-app:
+    build:
+      context: .
+      dockerfile: my-app.Dockerfile
+    depends_on:
+      baml-over-http:
+        condition: service_healthy
+    environment:
+      - BAML_ENDPOINT=http://baml-over-http:2024
+
+  debug-container:
+    image: amazonlinux:latest
+    depends_on:
+      baml-over-http:
+        condition: service_healthy
+    command: sh -c 'curl -v "$${BAML_ENDPOINT}/_debug/ping"'
+    environment:
+      - BAML_ENDPOINT=http://baml-over-http:2024
+```
+
+Additionally, you'll want to make sure that you generate the BAML client at
+image build time, because `baml_client/` should not be checked into your repo.
+
+This means that in the CI workflow you use to push your Docker images, you'll
+want to do something like this:
+
+```yaml .github/workflows/build-image.yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build the BAML client
+        run: |
+          set -eux
+          npx @boundaryml/baml generate
+          docker build -t my-app .
+```
+
+## (Optional) Secure your BAML functions
+
+To secure your BAML server, you can also set a password on it using the
+`BAML_PASSWORD` environment variable:
+
+<Tabs>
+
+<Tab title="bash">
+
+```bash
+BAML_PASSWORD=sk-baml-your-secret-password \
+  baml-cli serve --preview --port 2024
+```
+</Tab>
+
+<Tab title="Dockerfile">
+
+```docker
+FROM node:20
+
+WORKDIR /app
+RUN npm install -g @boundaryml/baml
+COPY baml_src/ .
+
+ENV BAML_PASSWORD=sk-baml-your-secret-password
+CMD baml-cli serve --preview --port 2024
+```
+</Tab>
+
+</Tabs>
+
+This will require incoming requests to attach your specified password as
+authorization metadata. You can verify this by confirming that this returns `403
+Forbidden`:
+
+```bash
+curl -v "http://localhost:2024/_debug/status"
+```
+
+If you attach your password to the request, you'll see that it now returns `200 OK`:
+
+<Tabs>
+
+<Tab title="Using HTTP basic auth">
+```bash
+export BAML_PASSWORD=sk-baml-your-secret-password
+curl "http://baml:${BAML_PASSWORD}@localhost:2024/_debug/status"
+```
+</Tab>
+
+<Tab title="Using X-BAML-API-KEY">
+```bash
+export BAML_PASSWORD=sk-baml-your-secret-password
+curl "http://localhost:2024/_debug/status" -H "X-BAML-API-KEY: ${BAML_PASSWORD}"
+```
+</Tab>
+
+</Tabs>
+
+<Note>
+  `BAML_PASSWORD` will secure all endpoints _except_ `/_debug/ping`, so that you
+  can always debug the reachability of your BAML server.
+</Note>
+
+[discord]: https://discord.gg/BTNBeXGuaS
+[openapi-feedback-github-issue]: https://github.com/BoundaryML/baml/issues/892
