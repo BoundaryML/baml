@@ -153,10 +153,14 @@ you can get a client library for free.
 
   ### Use your OpenAPI client
 
-  `openapi-generator` will generate a `README` with instructions for installing and using your client; we've included snippets for some of the most popular languages below.
+  `openapi-generator` will generate a `README` with instructions for installing
+  and using your client; we've included snippets for some of the most popular
+  languages below. Check out
+  [`baml-examples`](https://github.com/BoundaryML/baml-examples) for example
+  projects with instructions for running them.
 
   <Note>
-    We've tested a few of the OpenAPI clients, but not all of them. If you run
+    We've tested a the below listed OpenAPI clients, but not all of them. If you run
     into issues with any of the OpenAPI clients, please let us know, either in
     [Discord][discord] or by commenting on
     [GitHub][openapi-feedback-github-issue] so that we can either help you out
@@ -165,61 +169,21 @@ you can get a client library for free.
 
 <Tabs>
 
-<Tab title="C#">
-```csharp
-using System.Collections.Generic;
-using System.Diagnostics;
-using Org.OpenAPITools.Api;
-using Org.OpenAPITools.Client;
-using Org.OpenAPITools.Model;
-
-namespace Example
-{
-    public class Example
-    {
-        public static void Main()
-        {
-
-            Configuration config = new Configuration();
-            var apiInstance = new DefaultApi(config);
-            var extractResumeRequest = new ExtractResumeRequest(); // ExtractResumeRequest | 
-
-            try
-            {
-                Recipe result = apiInstance.ExtractResume(extractResumeRequest);
-                Debug.WriteLine(result);
-            }
-            catch (ApiException e)
-            {
-                Debug.Print("Exception when calling DefaultApi.ExtractResume: " + e.Message );
-                Debug.Print("Status Code: "+ e.ErrorCode);
-                Debug.Print(e.StackTrace);
-            }
-
-        }
-    }
-}
-```
-</Tab>
-
 <Tab title="Go">
-```go go.mod
-replace openapi => ./baml_client
-```
 
-```go
+Run this with `go run main.go`:
+
+```go main.go
 package main
 
 import (
 	"context"
 	"fmt"
 	"log"
-	baml "openapi"
+  baml "my-golang-app/baml_client"
 )
 
 func main() {
-	fmt.Println("Hello, World!")
-
 	cfg := baml.NewConfiguration()
 	b := baml.NewAPIClient(cfg).DefaultAPI
 	extractResumeRequest := baml.ExtractResumeRequest{
@@ -239,17 +203,17 @@ func main() {
 <Tab title="Java">
 <Warning>
   The README that the Java OpenAPI generator generates will have one mistake: it
-  will suggest importing from `org.openapitools.client.models.*`, but the correct
-  package to import from is `org.openapitools.client.model.*`. The OpenAPI team
+  will suggest importing from `baml_client.models.*`, but the correct
+  package to import from is `baml_client.model.*`. The OpenAPI team
   will [fix this
   soon](https://github.com/OpenAPITools/openapi-generator/issues/19431).
 </Warning>
 ```Java
-import org.openapitools.client.ApiClient;
-import org.openapitools.client.ApiException;
-import org.openapitools.client.Configuration;
-import org.openapitools.client.model.*;
-import org.openapitools.client.api.DefaultApi;
+import com.boundaryml.baml_client.ApiClient;
+import com.boundaryml.baml_client.ApiException;
+import com.boundaryml.baml_client.Configuration;
+import com.boundaryml.baml_client.model.*;
+import com.boundaryml.baml_client.api.DefaultApi;
 
 public class Example {
   public static void main(String[] args) {
@@ -274,6 +238,12 @@ public class Example {
 
 <Tab title="PHP">
 
+<Warning>
+  The PHP OpenAPI generator doesn't support OpenAPI's `oneOf` type, which is
+  what we map BAML union types to. Please let us know if this is an issue for
+  you, and you need help working around it.
+</Warning>
+
 ```json composer.json
     "repositories": [
         {
@@ -290,10 +260,10 @@ public class Example {
 <?php
 require_once(__DIR__ . '/vendor/autoload.php');
 
-$apiInstance = new \OpenAPI\Client\Api\DefaultApi(
+$apiInstance = new BamlClient\Api\DefaultApi(
     new GuzzleHttp\Client()
 );
-$extract_resume_request = new \OpenAPI\Client\Model\ExtractResumeRequest();
+$extract_resume_request = new BamlClient\Model\ExtractResumeRequest();
 $extract_resume_request->setResume("Marie Curie was a Polish and naturalised-French physicist and chemist who conducted pioneering research on radioactivity");
 
 try {
@@ -302,6 +272,46 @@ try {
 } catch (Exception $e) {
     echo 'Exception when calling DefaultApi->extractResume: ', $e->getMessage(), PHP_EOL;
 }
+```
+</Tab>
+
+<Tab title="Ruby">
+
+Use `ruby -Ilib/baml_client app.rb` to run this:
+
+```ruby app.rb
+require 'baml_client'
+require 'pp'
+
+api_client = BamlClient::ApiClient.new
+b = BamlClient::DefaultApi.new(api_client)
+
+extract_resume_request = BamlClient::ExtractResumeRequest.new(
+  resume: <<~RESUME
+    John Doe
+
+    Education
+    - University of California, Berkeley
+    - B.S. in Computer Science
+    - graduated 2020
+
+    Skills
+    - Python
+    - Java
+    - C++
+  RESUME
+)
+
+begin
+  result = b.extract_resume(extract_resume_request)
+  pp result
+
+  edu0 = result.education[0]
+  puts "Education: #{edu0.school}, #{edu0.degree}, #{edu0.year}"
+rescue BamlClient::ApiError => e
+  puts "Error when calling DefaultApi#extract_resume"
+  pp e
+end
 ```
 </Tab>
 

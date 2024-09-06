@@ -116,66 +116,35 @@ Update your code to use `BAML_ENDPOINT`, if set, as the BAML address. This
 will allow you to point it at `baml-cli` running in another Docker container.
 
 <Tabs>
-<Tab title="C#">
-
-```csharp
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using Org.OpenAPITools.Api;
-using Org.OpenAPITools.Client;
-using Org.OpenAPITools.Model;
-
-namespace Example
-{
-    public class Example
-    {
-        public static void Main()
-        {
-            Configuration config = new Configuration();
-            var bamlEndpoint = Environment.GetEnvironmentVariable("BAML_ENDPOINT");
-            if (!string.IsNullOrEmpty(bamlEndpoint))
-            {
-                config.BasePath = bamlEndpoint;
-            }
-            var apiInstance = new DefaultApi(config);
-            // Use `apiInstance` to make API calls
-        }
-    }
-}
-```
-
-</Tab>
 
 <Tab title="Go">
 
 ```go
 import (
     "os"
-    openapiclient "path/to/your/openapi/client"
+    baml "my-golang-app/baml_client"
 )
 
 func main() {
-    cfg := openapiclient.NewConfiguration()
+    cfg := baml.NewConfiguration()
     bamlEndpoint := os.Getenv("BAML_ENDPOINT")
     if bamlEndpoint != "" {
         cfg.BasePath = bamlEndpoint
     }
-    client := openapiclient.NewAPIClient(cfg)
-    // Use `client` to make API calls
+    b := baml.NewAPIClient(cfg).DefaultAPI
+    // Use `b` to make API calls
 }
 ```
 
 </Tab>
 
 <Tab title="Java">
-
 ```java
-import org.openapitools.client.ApiClient;
-import org.openapitools.client.ApiException;
-import org.openapitools.client.Configuration;
-import org.openapitools.client.api.DefaultApi;
-import org.openapitools.client.auth.*;
+import com.boundaryml.baml_client.ApiClient;
+import com.boundaryml.baml_client.ApiException;
+import com.boundaryml.baml_client.Configuration;
+import com.boundaryml.baml_client.api.DefaultApi;
+import com.boundaryml.baml_client.auth.*;
 
 public class ApiExample {
     public static void main(String[] args) {
@@ -198,7 +167,7 @@ public class ApiExample {
 ```php
 require_once(__DIR__ . '/vendor/autoload.php');
 
-$config = OpenAPI\Client\Configuration::getDefaultConfiguration();
+$config = BamlClient\Configuration::getDefaultConfiguration();
 
 $bamlEndpoint = getenv('BAML_ENDPOINT');
 if ($bamlEndpoint !== false && !empty($bamlEndpoint)) {
@@ -214,6 +183,29 @@ $apiInstance = new OpenAPI\Client\Api\DefaultApi(
 ```
 
 </Tab>
+
+<Tab title="Ruby">
+```ruby
+require 'baml_client'
+
+api_client = BamlClient::ApiClient.new
+if ENV['BAML_ENDPOINT']
+  # Initialize the ApiClient with the custom BAML_ENDPOINT
+  api_client.config.host = ENV['BAML_ENDPOINT']
+end
+b = BamlClient::DefaultApi.new(api_client)
+```
+</Tab>
+
+<Tab title="Rust">
+```rust
+let mut config = baml_client::apis::configuration::Configuration::default();
+if let Some(base_path) = std::env::var("BAML_ENDPOINT").ok() {
+    config.base_path = base_path;
+}
+```
+</Tab>
+
 </Tabs>
 
 ## Run your app with docker-compose
