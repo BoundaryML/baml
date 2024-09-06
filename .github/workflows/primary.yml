@@ -88,3 +88,17 @@ jobs:
       - name: Test Rust
         run: cargo test
         working-directory: engine
+  build-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Build rust for wasm32
+        run: cargo build --package baml-schema-wasm --target=wasm32-unknown-unknown
+        working-directory: engine

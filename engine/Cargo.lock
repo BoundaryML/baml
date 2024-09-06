@@ -981,7 +981,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml-schema-build"
+name = "baml-schema-wasm"
 version = "0.54.2"
 dependencies = [
  "anyhow",

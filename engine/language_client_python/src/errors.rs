@@ -41,6 +41,9 @@ impl BamlError {
                         PyErr::new::<BamlClientHttpError, _>(format!("{}", err))
                     }
                 },
+                LLMResponse::UserFailure(msg) => {
+                    PyErr::new::<BamlInvalidArgumentError, _>(format!("Invalid argument: {}", msg))
+                }
                 LLMResponse::InternalFailure(_) => PyErr::new::<BamlClientError, _>(format!(
                     "Something went wrong with the LLM client: {}",
                     err

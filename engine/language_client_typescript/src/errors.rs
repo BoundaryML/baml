@@ -48,6 +48,10 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                     )
                 }
             },
+            LLMResponse::UserFailure(msg) => napi::Error::new(
+                napi::Status::GenericFailure,
+                format!("BamlError: BamlInvalidArgumentError: {}", msg),
+            ),
             LLMResponse::InternalFailure(_) => napi::Error::new(
                 napi::Status::GenericFailure,
                 format!(

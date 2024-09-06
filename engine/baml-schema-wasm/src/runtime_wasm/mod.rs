@@ -667,6 +667,9 @@ impl WithRenderError for baml_runtime::internal::llm_client::LLMResponse {
             baml_runtime::internal::llm_client::LLMResponse::LLMFailure(f) => {
                 format!("{} {}", f.message, f.code.to_string()).into()
             }
+            baml_runtime::internal::llm_client::LLMResponse::UserFailure(e) => {
+                format!("user error: {}", e).into()
+            }
             baml_runtime::internal::llm_client::LLMResponse::InternalFailure(e) => {
                 format!("{}", e).into()
             }
