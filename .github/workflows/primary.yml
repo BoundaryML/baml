@@ -96,6 +96,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+      - run: rustup target add wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
