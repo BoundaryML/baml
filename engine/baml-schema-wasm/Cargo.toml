@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "baml-schema-wasm"
+name = "baml-schema-build"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
