@@ -16,11 +16,8 @@ pub struct Harness {
 
 impl Harness {
     pub fn new<S: AsRef<str>>(test_name: S) -> Result<Self> {
-        cfg_if! {
-            if #[cfg(feature = "skip-integ-tests")] {
-            } else {
-                anyhow::bail!("Harness tests require OPENAI_API_KEY and ANTHROPIC_API_KEY; you can skip these using 'cargo test --features baml-runtime/skip-integ-tests'");
-            }
+        if std::env::var("OPENAI_API_KEY").is_err() || std::env::var("ANTHROPIC_API_KEY").is_err() {
+            anyhow::bail!("Integration tests using tests/harness.rs require OPENAI_API_KEY and ANTHROPIC_API_KEY; you can skip these using 'cargo test --lib'");
         }
 
         // Run the CLI in /tmp/baml-runtime-test-harness/test_name.

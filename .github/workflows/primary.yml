@@ -86,7 +86,8 @@ jobs:
         with:
           workspaces: engine
       - name: Test Rust
-        run: cargo test --features baml-runtime/skip-integ-tests
+        # skip integration tests, which require OPENAI_API_KEY and ANTHROPIC_API_KEY to be set
+        run: cargo test --lib --doc
         working-directory: engine
   build-wasm:
     runs-on: ubuntu-latest
