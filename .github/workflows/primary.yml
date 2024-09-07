@@ -86,8 +86,8 @@ jobs:
         with:
           workspaces: engine
       - name: Test Rust
-        # skip integration tests, which require OPENAI_API_KEY and ANTHROPIC_API_KEY to be set
-        run: cargo test --lib --doc
+        # skip doctests & integration tests (the latter require OPENAI_API_KEY and ANTHROPIC_API_KEY to be set)
+        run: cargo test --lib
         working-directory: engine
   build-wasm:
     runs-on: ubuntu-latest
