@@ -127,6 +127,7 @@ walkdir = "2.5.0"
 [features]
 defaults = []
 internal = []
+skip-integ-tests = []
 
 [dev-dependencies]
 assert_cmd = "2"

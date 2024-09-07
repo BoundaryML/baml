@@ -19,7 +19,7 @@ pub struct InitArgs {
     #[arg(
         long,
         help = r#"The OpenAPI client generator to run, if --client-type=openapi.
-Examples: "csharp", "go", "java", "php".  See full list at https://github.com/OpenAPITools/openapi-generator#overview."#
+Examples: "go", "java", "php", "ruby", "rust".  See full list at https://github.com/OpenAPITools/openapi-generator#overview."#
     )]
     openapi_client_type: Option<String>,
 }
@@ -127,60 +127,58 @@ fn generate_main_baml_content(
             output_type.recommended_default_client_mode()
         ),
     };
+    let openapi_generate_command = if matches!(output_type, GeneratorOutputType::OpenApi) {
+        let path = openapi_generator_path.unwrap_or("npx @openapitools/openapi-generator-cli");
 
-    let openapi_generator_path =
-        openapi_generator_path.unwrap_or("npx @openapitools/openapi-generator-cli");
+        let cmd = format!(
+            "{path} generate -i openapi.yaml -g {} -o .",
+            openapi_client_type.unwrap_or("OPENAPI_CLIENT_TYPE"),
+        );
 
-    let openapi_generate_command = format!(
-        "{openapi_generator_path} generate -i openapi.yaml -g {} -o .",
-        openapi_client_type.unwrap_or("OPENAPI_CLIENT_TYPE"),
-    );
-
-    let openapi_generate_command = match openapi_client_type {
+        let openapi_generate_command = match openapi_client_type {
         Some("go") => format!(
-            "{} --additional-properties enumClassPrefix=true,isGoSubmodule=true,packageName=baml_client,withGoMod=false",
-            openapi_generate_command
+            "{cmd} --additional-properties enumClassPrefix=true,isGoSubmodule=true,packageName=baml_client,withGoMod=false",
         ),
         Some("java") => format!(
-            "{} --additional-properties invokerPackage=com.boundaryml.baml_client,modelPackage=com.boundaryml.baml_client.model,apiPackage=com.boundaryml.baml_client.api,java8=true && cd ../baml_client && mvn clean install",
-            openapi_generate_command
+            "{cmd} --additional-properties invokerPackage=com.boundaryml.baml_client,modelPackage=com.boundaryml.baml_client.model,apiPackage=com.boundaryml.baml_client.api,java8=true && cd ../baml_client && mvn clean install",
         ),
         Some("php") => format!(
-            "{} --additional-properties composerPackageName=boundaryml/baml-client,invokerPackage=BamlClient",
-            openapi_generate_command
+            "{cmd} --additional-properties composerPackageName=boundaryml/baml-client,invokerPackage=BamlClient",
         ),
         Some("ruby") => format!(
-            "{} --additional-properties gemName=baml_client",
-            openapi_generate_command
+            "{cmd} --additional-properties gemName=baml_client",
         ),
         Some("rust") => format!(
-            "{} --additional-properties packageName=baml-client",
-            openapi_generate_command
+            "{cmd} --additional-properties packageName=baml-client",
         ),
-        _ => openapi_generate_command,
+        _ => cmd,
     };
 
-    let openapi_generate_command = match openapi_client_type {
-        Some(_) => format!(
-            r#"
+        let openapi_generate_command = match openapi_client_type {
+            Some(_) => format!(
+                r#"
     on_generate {:?}"#,
-            openapi_generate_command
-        ),
-        None => format!(
-            r#"
+                openapi_generate_command
+            ),
+            None => format!(
+                r#"
+    //
     // Uncomment this line to tell BAML to automatically generate an OpenAPI client for you.
     //on_generate {:?}"#,
-            openapi_generate_command
-        ),
-    };
+                openapi_generate_command
+            ),
+        };
 
-    let openapi_generate_command = format!(
-        r#"
+        format!(
+            r#"
     // 'baml-cli generate' will run this after generating openapi.yaml, to generate your OpenAPI client
     // This command will be run from within $output_dir
     {}"#,
-        openapi_generate_command.trim_start()
-    );
+            openapi_generate_command.trim_start()
+        )
+    } else {
+        "".to_string()
+    };
 
     vec![
         format!(
@@ -302,6 +300,35 @@ generator target {{
     }
 
     #[test]
+    fn test_generate_content_openapi_go() {
+        assert_eq!(
+            generate_main_baml_content(GeneratorOutputType::OpenApi, Some("openapi-generator"), Some("go")),
+            format!(r#"
+// This helps use auto generate libraries you can use in the language of
+// your choice. You can have multiple generators if you use multiple languages.
+// Just ensure that the output_dir is different for each generator.
+generator target {{
+    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    output_type "rest/openapi"
+
+    // Where the generated code will be saved (relative to baml_src/)
+    output_dir "../"
+
+    // The version of the BAML package you have installed (e.g. same version as your baml-py or @boundaryml/baml).
+    // The BAML VSCode extension version should also match this version.
+    version "{}"
+
+    // 'baml-cli generate' will run this after generating openapi.yaml, to generate your OpenAPI client
+    // This command will be run from within $output_dir
+    on_generate "openapi-generator generate -i openapi.yaml -g go -o . --additional-properties enumClassPrefix=true,isGoSubmodule=true,packageName=baml_client,withGoMod=false"
+}}
+"#,
+                env!("CARGO_PKG_VERSION")
+            ).trim_start()
+        );
+    }
+
+    #[test]
     fn test_generate_content_openapi_java() {
         assert_eq!(
             generate_main_baml_content(GeneratorOutputType::OpenApi, Some("openapi-generator"), Some("java")),
@@ -322,7 +349,7 @@ generator target {{
 
     // 'baml-cli generate' will run this after generating openapi.yaml, to generate your OpenAPI client
     // This command will be run from within $output_dir
-    on_generate "openapi-generator generate -i openapi.yaml -g java -o ."
+    on_generate "openapi-generator generate -i openapi.yaml -g java -o . --additional-properties invokerPackage=com.boundaryml.baml_client,modelPackage=com.boundaryml.baml_client.model,apiPackage=com.boundaryml.baml_client.api,java8=true && cd ../baml_client && mvn clean install"
 }}
 "#,
                 env!("CARGO_PKG_VERSION")

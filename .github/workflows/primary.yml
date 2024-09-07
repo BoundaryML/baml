@@ -86,7 +86,7 @@ jobs:
         with:
           workspaces: engine
       - name: Test Rust
-        run: cargo test
+        run: cargo test --features baml-runtime/skip-integ-tests
         working-directory: engine
   build-wasm:
     runs-on: ubuntu-latest

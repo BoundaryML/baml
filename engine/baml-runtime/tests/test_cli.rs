@@ -1,3 +1,5 @@
+mod harness;
+
 use std::{
     process::Stdio,
     time::{Duration, Instant},
@@ -9,52 +11,53 @@ use futures::stream::StreamExt;
 use harness::Harness;
 use http::StatusCode;
 use indoc::indoc;
-use pretty_assertions::assert_eq;
 use rstest::rstest;
 use scopeguard::defer;
 use serde_json::json;
-use test_log::test;
 
-mod harness;
+#[cfg(not(feature = "skip-integ-tests"))]
+mod test_cli {
+    use super::*;
+    use pretty_assertions::assert_eq;
 
-#[test]
-fn init() -> Result<()> {
-    let h = Harness::new("init_test")?;
+    #[rstest]
+    fn init() -> Result<()> {
+        let h = Harness::new("init_test")?;
 
-    let run = h.run_cli("init")?.output()?;
-    assert_eq!(run.status.code(), Some(0));
+        let run = h.run_cli("init")?.output()?;
+        assert_eq!(run.status.code(), Some(0));
 
-    Ok(())
-}
+        Ok(())
+    }
 
-#[rstest]
-#[tokio::test]
-async fn cli(#[values("dev", "serve")] cmd: &str) -> Result<()> {
-    let h = Harness::new(format!("{cmd}_test"))?;
+    #[rstest]
+    #[tokio::test]
+    async fn cli(#[values("dev", "serve")] cmd: &str) -> Result<()> {
+        let h = Harness::new(format!("{cmd}_test"))?;
 
-    const PORT: &str = "2024";
+        const PORT: &str = "2024";
 
-    let run = h.run_cli("init")?.output()?;
-    assert_eq!(run.status.code(), Some(0));
+        let run = h.run_cli("init")?.output()?;
+        assert_eq!(run.status.code(), Some(0));
 
-    let run = h.run_cli(cmd)?.output()?;
-    assert_ne!(run.status.code(), Some(0));
-    assert!(run.stdout.is_empty());
-    assert!(String::from_utf8(run.stderr)?.contains("Please run with --preview"),);
+        let run = h.run_cli(cmd)?.output()?;
+        assert_ne!(run.status.code(), Some(0));
+        assert!(run.stdout.is_empty());
+        assert!(String::from_utf8(run.stderr)?.contains("Please run with --preview"),);
 
-    let mut child = h
-        .run_cli(format!("{cmd} --preview --port {PORT}"))?
-        .spawn()?;
-    defer! { let _ = child.kill(); }
+        let mut child = h
+            .run_cli(format!("{cmd} --preview --port {PORT}"))?
+            .spawn()?;
+        defer! { let _ = child.kill(); }
 
-    assert!(
-        reqwest::get(&format!("http://localhost:{PORT}/_debug/ping"))
-            .await?
-            .status()
-            .is_success()
-    );
+        assert!(
+            reqwest::get(&format!("http://localhost:{PORT}/_debug/ping"))
+                .await?
+                .status()
+                .is_success()
+        );
 
-    let resume = indoc! {"
+        let resume = indoc! {"
       Vaibhav Gupta
       vbv@boundaryml.com
 
@@ -67,88 +70,89 @@ async fn cli(#[values("dev", "serve")] cmd: &str) -> Result<()> {
       - Rust
       - C++
     "};
-    let resp = reqwest::Client::new()
-        .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
-        .json(&json!({ "resume": resume }))
-        .send()
-        .await?;
-    assert!(resp.status().is_success());
-    let resp_json = resp.json::<serde_json::Value>().await?;
-    assert_eq!(resp_json["name"], "Vaibhav Gupta");
+        let resp = reqwest::Client::new()
+            .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
+            .json(&json!({ "resume": resume }))
+            .send()
+            .await?;
+        assert!(resp.status().is_success());
+        let resp_json = resp.json::<serde_json::Value>().await?;
+        assert_eq!(resp_json["name"], "Vaibhav Gupta");
 
-    let stream_start = Instant::now();
-    let resp = reqwest::Client::new()
-        .post(&format!("http://localhost:{PORT}/stream/ExtractResume"))
-        .json(&json!({ "resume": resume }))
-        .send()
-        .await?;
-    assert!(resp.status().is_success());
-    let resp = resp
-        .bytes_stream()
-        .eventsource()
-        .map(|event| match event {
-            Ok(event) => Ok((
-                serde_json::from_str::<serde_json::Value>(&event.data)?,
-                stream_start.elapsed(),
-            )),
-            Err(e) => Err(anyhow::Error::from(e)),
-        })
-        .collect::<Vec<_>>()
-        .await;
-    let resp = resp.into_iter().collect::<Result<Vec<_>>>()?;
+        let stream_start = Instant::now();
+        let resp = reqwest::Client::new()
+            .post(&format!("http://localhost:{PORT}/stream/ExtractResume"))
+            .json(&json!({ "resume": resume }))
+            .send()
+            .await?;
+        assert!(resp.status().is_success());
+        let resp = resp
+            .bytes_stream()
+            .eventsource()
+            .map(|event| match event {
+                Ok(event) => Ok((
+                    serde_json::from_str::<serde_json::Value>(&event.data)?,
+                    stream_start.elapsed(),
+                )),
+                Err(e) => Err(anyhow::Error::from(e)),
+            })
+            .collect::<Vec<_>>()
+            .await;
+        let resp = resp.into_iter().collect::<Result<Vec<_>>>()?;
 
-    assert!(resp.len() > 2);
-    let (_, time_to_first) = resp[0].clone();
-    let (last_data, time_to_last) = resp.last().context("No last data")?.clone();
-    assert!(
-        // This is a funky assertion, but the tldr is that it's our heuristic that streaming is working.
-        // Specifically, we're saying that:
-        //
-        //   - if the time to the first streamed response is fast, then the time
-        //      to the last streamed response will also be fast
-        //
-        //   - if the time to the first streamed response is slow, then the time
-        //      to the last streamed response should be at least 500ms later
-        time_to_last - time_to_first > std::cmp::min(Duration::from_millis(500), time_to_first),
-        "time-to-first={:?}, time-to-last={:?}",
-        time_to_first,
-        time_to_last
-    );
-    assert_eq!(last_data["name"], "Vaibhav Gupta");
+        assert!(resp.len() > 2);
+        let (_, time_to_first) = resp[0].clone();
+        let (last_data, time_to_last) = resp.last().context("No last data")?.clone();
+        assert!(
+            // This is a funky assertion, but the tldr is that it's our heuristic that streaming is working.
+            // Specifically, we're saying that:
+            //
+            //   - if the time to the first streamed response is fast, then the time
+            //      to the last streamed response will also be fast
+            //
+            //   - if the time to the first streamed response is slow, then the time
+            //      to the last streamed response should be at least 500ms later
+            time_to_last - time_to_first > std::cmp::min(Duration::from_millis(500), time_to_first),
+            "time-to-first={:?}, time-to-last={:?}",
+            time_to_first,
+            time_to_last
+        );
+        assert_eq!(last_data["name"], "Vaibhav Gupta");
 
-    Ok(())
-}
+        Ok(())
+    }
 
-#[tokio::test]
-async fn serve_respects_baml_password() -> Result<()> {
-    let h = Harness::new(format!("serve_password_test"))?;
+    #[rstest]
+    #[tokio::test]
+    async fn serve_respects_baml_password() -> Result<()> {
+        let h = Harness::new(format!("serve_password_test"))?;
 
-    const PORT: &str = "2025";
+        const PORT: &str = "2025";
 
-    let run = h.run_cli("init")?.output()?;
-    assert_eq!(run.status.code(), Some(0));
+        let run = h.run_cli("init")?.output()?;
+        assert_eq!(run.status.code(), Some(0));
 
-    let mut child = h
-        .run_cli(format!("serve --preview --port {PORT}"))?
-        .env("BAML_PASSWORD", "my-super-secret-password")
-        .spawn()?;
-    defer! { let _ = child.kill(); }
+        let mut child = h
+            .run_cli(format!("serve --preview --port {PORT}"))?
+            .env("BAML_PASSWORD", "my-super-secret-password")
+            .spawn()?;
+        defer! { let _ = child.kill(); }
 
-    assert!(
-        reqwest::get(&format!("http://localhost:{PORT}/_debug/ping"))
-            .await?
-            .status()
-            .is_success()
-    );
+        assert!(
+            reqwest::get(&format!("http://localhost:{PORT}/_debug/ping"))
+                .await?
+                .status()
+                .is_success()
+        );
 
-    assert_eq!(
-        reqwest::get(&format!("http://localhost:{PORT}/_debug/status"))
-            .await?
-            .status(),
-        StatusCode::FORBIDDEN
-    );
+        assert_eq!(
+            reqwest::get(&format!("http://localhost:{PORT}/_debug/status"))
+                .await?
+                .status(),
+            StatusCode::FORBIDDEN
+        );
 
-    let resume = indoc! {"
+        let resume = indoc! {"
       Vaibhav Gupta
       vbv@boundaryml.com
 
@@ -161,71 +165,72 @@ async fn serve_respects_baml_password() -> Result<()> {
       - Rust
       - C++
     "};
-    let resp = reqwest::Client::new()
-        .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
-        .json(&json!({ "resume": resume }))
-        .send()
-        .await?;
-    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-    assert_eq!(resp.text().await?, "No authorization metadata\n");
+        let resp = reqwest::Client::new()
+            .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
+            .json(&json!({ "resume": resume }))
+            .send()
+            .await?;
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        assert_eq!(resp.text().await?, "No authorization metadata\n");
 
-    let resp = reqwest::Client::new()
-        .post(&format!(
-            "http://baml:wrong-password@localhost:{PORT}/call/ExtractResume"
-        ))
-        .json(&json!({ "resume": resume }))
-        .send()
-        .await?;
-    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-    assert_eq!(
-        resp.text().await?,
-        "Incorrect password provided in basic auth\n"
-    );
+        let resp = reqwest::Client::new()
+            .post(&format!(
+                "http://baml:wrong-password@localhost:{PORT}/call/ExtractResume"
+            ))
+            .json(&json!({ "resume": resume }))
+            .send()
+            .await?;
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            resp.text().await?,
+            "Incorrect password provided in basic auth\n"
+        );
 
-    let resp = reqwest::Client::new()
-        .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
-        .header("x-baml-api-key", "my-super-secret-password")
-        .json(&json!({ "resume": resume }))
-        .send()
-        .await?;
-    assert_eq!(resp.status(), StatusCode::OK);
-    assert!(resp.text().await?.starts_with("{"));
+        let resp = reqwest::Client::new()
+            .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
+            .header("x-baml-api-key", "my-super-secret-password")
+            .json(&json!({ "resume": resume }))
+            .send()
+            .await?;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(resp.text().await?.starts_with("{"));
 
-    let resp = reqwest::Client::new()
-        .post(&format!(
-            "http://baml:my-super-secret-password@localhost:{PORT}/call/ExtractResume"
-        ))
-        .json(&json!({ "resume": resume }))
-        .send()
-        .await?;
-    assert_eq!(resp.status(), StatusCode::OK);
-    assert!(resp.text().await?.starts_with("{"));
+        let resp = reqwest::Client::new()
+            .post(&format!(
+                "http://baml:my-super-secret-password@localhost:{PORT}/call/ExtractResume"
+            ))
+            .json(&json!({ "resume": resume }))
+            .send()
+            .await?;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(resp.text().await?.starts_with("{"));
 
-    Ok(())
-}
+        Ok(())
+    }
 
-#[rstest]
-#[tokio::test]
-async fn cli_fails_if_port_unavailable(#[values("dev", "serve")] cmd: &str) -> Result<()> {
-    let h = Harness::new(format!("{cmd}_port_unavailable_test"))?;
+    #[rstest]
+    #[tokio::test]
+    async fn cli_fails_if_port_unavailable(#[values("dev", "serve")] cmd: &str) -> Result<()> {
+        let h = Harness::new(format!("{cmd}_port_unavailable_test"))?;
 
-    const PORT: &str = "2026";
+        const PORT: &str = "2026";
 
-    let run = h.run_cli("init")?.output()?;
-    assert_eq!(run.status.code(), Some(0));
+        let run = h.run_cli("init")?.output()?;
+        assert_eq!(run.status.code(), Some(0));
 
-    let mut child = h
-        .run_cli(format!("{cmd} --preview --port {PORT}"))?
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    defer! { let _ = child.kill(); }
+        let mut child = h
+            .run_cli(format!("{cmd} --preview --port {PORT}"))?
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        defer! { let _ = child.kill(); }
 
-    let run = h
-        .run_cli(format!("{cmd} --preview --port {PORT}"))?
-        .output()?;
-    assert_ne!(run.status.code(), Some(0));
-    assert!(String::from_utf8(run.stderr)?.contains("Address already in use"));
+        let run = h
+            .run_cli(format!("{cmd} --preview --port {PORT}"))?
+            .output()?;
+        assert_ne!(run.status.code(), Some(0));
+        assert!(String::from_utf8(run.stderr)?.contains("Address already in use"));
 
-    Ok(())
+        Ok(())
+    }
 }

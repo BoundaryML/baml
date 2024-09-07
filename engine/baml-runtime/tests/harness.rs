@@ -1,7 +1,8 @@
 use assert_cmd::prelude::*;
 
 use anyhow::{anyhow, Result};
-use std::{path::PathBuf, process::Command};
+use cfg_if::cfg_if;
+use std::{any, path::PathBuf, process::Command};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct CliOutput {
@@ -15,6 +16,13 @@ pub struct Harness {
 
 impl Harness {
     pub fn new<S: AsRef<str>>(test_name: S) -> Result<Self> {
+        cfg_if! {
+            if #[cfg(feature = "skip-integ-tests")] {
+            } else {
+                anyhow::bail!("Harness tests require OPENAI_API_KEY and ANTHROPIC_API_KEY; you can skip these using 'cargo test --features baml-runtime/skip-integ-tests'");
+            }
+        }
+
         // Run the CLI in /tmp/baml-runtime-test-harness/test_name.
         // Re-create it on test start, purging its contents. (We deliberately do NOT clean up after ourselves, to enable debugging of a failed test.)
         let test_dir = std::env::temp_dir()
