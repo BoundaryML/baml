@@ -3,7 +3,6 @@ title: Generate the BAML Client
 slug: docs/calling-baml/generate-baml-client
 ---
 
-
 <Info>This page assumes you've already defined a function in BAML. If you
 haven't done that yet, check out [how to define a function].</Info>
 
@@ -56,6 +55,10 @@ bundle add baml
 bundle exec baml-cli generate --from path/to/baml_src
 ```
 
+```bash OpenAPI
+npx @boundaryml/baml-cli generate --from path/to/baml_src
+```
+
 </CodeBlocks>
 
 ## Best Practices
@@ -85,7 +88,7 @@ generator target {
     default_client_mode "sync"
     
     // Version of runtime to generate code for (should match installed baml-py version)
-    version "0.50.0"
+    version "0.54.0"
 }
 ```
 
@@ -103,11 +106,11 @@ generator target {
     default_client_mode "async"
     
     // Version of runtime to generate code for (should match the package @boundaryml/baml version)
-    version "0.50.0"
+    version "0.54.0"
 }
 ```
 
-```baml Ruby
+```baml Ruby (beta)
 generator target {
     // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
     output_type "ruby/sorbet"
@@ -115,11 +118,25 @@ generator target {
     // Where the generated code will be saved (relative to baml_src/)
     output_dir "../"
     
-    // This is a no-op for Ruby and can be ignored as futures are colorless in Ruby
-    // default_client_mode "sync"
-
     // Version of runtime to generate code for (should match installed `baml` package version)
-    version "0.50.0"
+    version "0.54.0"
+}
+```
+
+```baml OpenAPI
+generator target {
+    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    output_type "rest/openapi"
+
+    // Where the generated code will be saved (relative to baml_src/)
+    output_dir "../"
+    
+    // Version of runtime to generate code for (should match installed `baml` package version)
+    version "0.54.0"
+
+    // 'baml-cli generate' will run this after generating openapi.yaml, to generate your OpenAPI client
+    // This command will be run from within $output_dir
+    on_generate "npx @openapitools/openapi-generator-cli generate -i openapi.yaml -g OPENAPI_CLIENT_TYPE -o ."
 }
 ```
 

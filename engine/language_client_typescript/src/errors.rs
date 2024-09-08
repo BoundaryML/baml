@@ -1,6 +1,5 @@
 use baml_runtime::{
-    errors::ExposedError, internal::llm_client::LLMResponse,
-    internal_core::ir::scope_diagnostics::ScopeStack,
+    errors::ExposedError, internal::llm_client::LLMResponse, scope_diagnostics::ScopeStack,
 };
 
 // napi::Error::new(napi::Status::GenericFailure, e.to_string()))
@@ -49,7 +48,11 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                     )
                 }
             },
-            LLMResponse::OtherFailure(_) => napi::Error::new(
+            LLMResponse::UserFailure(msg) => napi::Error::new(
+                napi::Status::GenericFailure,
+                format!("BamlError: BamlInvalidArgumentError: {}", msg),
+            ),
+            LLMResponse::InternalFailure(_) => napi::Error::new(
                 napi::Status::GenericFailure,
                 format!(
                     "BamlError: BamlClientError: Something went wrong with the LLM client: {}",

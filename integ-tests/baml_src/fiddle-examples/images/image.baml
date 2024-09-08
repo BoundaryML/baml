@@ -1,5 +1,5 @@
 function DescribeImage(img: image) -> string {
-  client AwsBedrock
+  client GPT4o
   prompt #"
     {{ _.role("user") }}
 

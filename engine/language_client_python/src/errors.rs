@@ -1,6 +1,5 @@
 use baml_runtime::{
-    errors::ExposedError, internal::llm_client::LLMResponse,
-    internal_core::ir::scope_diagnostics::ScopeStack,
+    errors::ExposedError, internal::llm_client::LLMResponse, scope_diagnostics::ScopeStack,
 };
 use pyo3::{create_exception, PyErr};
 
@@ -42,7 +41,10 @@ impl BamlError {
                         PyErr::new::<BamlClientHttpError, _>(format!("{}", err))
                     }
                 },
-                LLMResponse::OtherFailure(_) => PyErr::new::<BamlClientError, _>(format!(
+                LLMResponse::UserFailure(msg) => {
+                    PyErr::new::<BamlInvalidArgumentError, _>(format!("Invalid argument: {}", msg))
+                }
+                LLMResponse::InternalFailure(_) => PyErr::new::<BamlClientError, _>(format!(
                     "Something went wrong with the LLM client: {}",
                     err
                 )),

@@ -10,7 +10,12 @@ pub(crate) use runtime::BamlRuntime;
 
 #[napi(js_name = "invoke_runtime_cli")]
 pub fn run_cli(env: Env, params: Vec<String>) -> napi::Result<JsUndefined> {
-    baml_runtime::BamlRuntime::run_cli(params, baml_runtime::CallerType::Typescript)?;
+    baml_runtime::BamlRuntime::run_cli(
+        params,
+        baml_runtime::RuntimeCliDefaults {
+            output_type: baml_types::GeneratorOutputType::Typescript,
+        },
+    )?;
     env.get_undefined()
 }
 

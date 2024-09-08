@@ -1,12 +1,9 @@
 use anyhow::Result;
 use internal_baml_jinja::{ChatOptions, RenderedChatMessage};
 
-use crate::{
-    internal::llm_client::{LLMResponse},
-    RuntimeContext,
-};
+use crate::{internal::llm_client::LLMResponse, RuntimeContext};
 
-use super::{StreamResponse};
+use super::StreamResponse;
 
 pub trait WithChat: Sync + Send {
     fn chat_options(&self, ctx: &RuntimeContext) -> Result<ChatOptions>;
@@ -36,7 +33,7 @@ where
 
     #[allow(async_fn_in_trait)]
     async fn chat(&self, _: &RuntimeContext, _: &Vec<RenderedChatMessage>) -> LLMResponse {
-        LLMResponse::OtherFailure("Chat prompts are not supported by this provider".to_string())
+        LLMResponse::InternalFailure("Chat prompts are not supported by this provider".to_string())
     }
 }
 
@@ -50,7 +47,7 @@ where
         _: &RuntimeContext,
         _: &Vec<RenderedChatMessage>,
     ) -> StreamResponse {
-        Err(LLMResponse::OtherFailure(
+        Err(LLMResponse::InternalFailure(
             "Chat prompts are not supported by this provider".to_string(),
         ))
     }

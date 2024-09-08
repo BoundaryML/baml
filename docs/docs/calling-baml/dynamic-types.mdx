@@ -36,9 +36,10 @@ define in BAML will be available as properties of `TypeBuilder`. Think of the
 typebuilder as a registry of modified runtime types that the baml function will
 read from when building the output schema in the prompt.
 
-<CodeBlocks>
+<Tabs>
 
-```python Python
+<Tab title="Python">
+```python
 from baml_client.type_builder import TypeBuilder
 from baml_client import b
 
@@ -52,8 +53,10 @@ async def run():
   print(res)
 
 ```
+</Tab>
 
-```typescript TypeScript
+<Tab title="TypeScript">
+```typescript
 import TypeBuilder from '../baml_client/type_builder'
 import {
   b
@@ -68,8 +71,10 @@ async function run() {
   console.log(res)
 }
 ```
+</Tab>
 
-```ruby Ruby
+<Tab title="Ruby">
+```ruby
 require_relative '../baml_client'
 
 def run
@@ -81,7 +86,18 @@ def run
   puts res
 end
 ```
-</CodeBlocks>
+</Tab>
+
+<Tab title="OpenAPI">
+Dynamic types are not yet supported when used via OpenAPI.
+
+Please let us know if you want this feature, either via [Discord] or [GitHub][openapi-feedback-github-issue].
+
+[Discord]: https://discord.gg/BTNBeXGuaS
+[openapi-feedback-github-issue]: https://github.com/BoundaryML/baml/issues/892
+</Tab>
+
+</Tabs>
 
 ### Dynamic BAML Classes
 Existing BAML classes marked with @@dynamic will be available as properties of `TypeBuilder`.

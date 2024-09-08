@@ -131,9 +131,11 @@ module Baml
       end
     end
     class Blah < T::Struct; end
+    class BookOrder < T::Struct; end
     class ClassOptionalOutput < T::Struct; end
     class ClassOptionalOutput2 < T::Struct; end
     class ClassWithImage < T::Struct; end
+    class CustomTaskResult < T::Struct; end
     class DummyOutput < T::Struct; end
     class DynInputOutput < T::Struct; end
     class DynamicClassOne < T::Struct; end
@@ -143,6 +145,8 @@ module Baml
     class Email < T::Struct; end
     class Event < T::Struct; end
     class FakeImage < T::Struct; end
+    class FlightConfirmation < T::Struct; end
+    class GroceryReceipt < T::Struct; end
     class InnerClass < T::Struct; end
     class InnerClass2 < T::Struct; end
     class NamedArgsSingleClass < T::Struct; end
@@ -175,6 +179,24 @@ module Baml
       def initialize(props)
         super(
           prop4: props[:prop4],
+        )
+
+        @props = props
+      end
+    end
+    class BookOrder < T::Struct
+      include Baml::Sorbet::Struct
+      const :orderId, String
+      const :title, String
+      const :quantity, Integer
+      const :price, Float
+
+      def initialize(props)
+        super(
+          orderId: props[:orderId],
+          title: props[:title],
+          quantity: props[:quantity],
+          price: props[:price],
         )
 
         @props = props
@@ -221,6 +243,22 @@ module Baml
           myImage: props[:myImage],
           param2: props[:param2],
           fake_image: props[:fake_image],
+        )
+
+        @props = props
+      end
+    end
+    class CustomTaskResult < T::Struct
+      include Baml::Sorbet::Struct
+      const :bookOrder, T.any(Baml::Types::BookOrder, T.nilable(NilClass))
+      const :flightConfirmation, T.any(Baml::Types::FlightConfirmation, T.nilable(NilClass))
+      const :groceryReceipt, T.any(Baml::Types::GroceryReceipt, T.nilable(NilClass))
+
+      def initialize(props)
+        super(
+          bookOrder: props[:bookOrder],
+          flightConfirmation: props[:flightConfirmation],
+          groceryReceipt: props[:groceryReceipt],
         )
 
         @props = props
@@ -349,6 +387,44 @@ module Baml
       def initialize(props)
         super(
           url: props[:url],
+        )
+
+        @props = props
+      end
+    end
+    class FlightConfirmation < T::Struct
+      include Baml::Sorbet::Struct
+      const :confirmationNumber, String
+      const :flightNumber, String
+      const :departureTime, String
+      const :arrivalTime, String
+      const :seatNumber, String
+
+      def initialize(props)
+        super(
+          confirmationNumber: props[:confirmationNumber],
+          flightNumber: props[:flightNumber],
+          departureTime: props[:departureTime],
+          arrivalTime: props[:arrivalTime],
+          seatNumber: props[:seatNumber],
+        )
+
+        @props = props
+      end
+    end
+    class GroceryReceipt < T::Struct
+      include Baml::Sorbet::Struct
+      const :receiptId, String
+      const :storeName, String
+      const :items, T::Array[T.any(String, Integer, Float)]
+      const :totalAmount, Float
+
+      def initialize(props)
+        super(
+          receiptId: props[:receiptId],
+          storeName: props[:storeName],
+          items: props[:items],
+          totalAmount: props[:totalAmount],
         )
 
         @props = props

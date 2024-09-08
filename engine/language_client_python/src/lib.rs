@@ -12,7 +12,9 @@ fn invoke_runtime_cli(py: Python) -> PyResult<()> {
         py.import_bound("sys")?
             .getattr("argv")?
             .extract::<Vec<String>>()?,
-        baml_runtime::CallerType::Python,
+        baml_runtime::RuntimeCliDefaults {
+            output_type: baml_types::GeneratorOutputType::PythonPydantic,
+        },
     )
     .map_err(errors::BamlError::from_anyhow)?)
 }

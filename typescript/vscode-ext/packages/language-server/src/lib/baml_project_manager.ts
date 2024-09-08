@@ -366,7 +366,7 @@ class Project {
   }: { onSuccess: (message: string) => void; onError: (message: string) => void }) => {
     const startMillis = performance.now()
     try {
-      await Promise.all(
+      const generated = await Promise.all(
         this.wasmProject.run_generators().map(async (g) => {
           // Creating the tmpdir next to the output dir can cause some weird issues with vscode, if we recover
           // from an error and delete the tmpdir - vscode's explorer UI will still show baml_client.tmp even
@@ -424,7 +424,10 @@ class Project {
       )
       const endMillis = performance.now()
 
-      onSuccess(`BAML client generated! (took ${Math.round(endMillis - startMillis)}ms)`)
+      const generatedFileCount = generated.reduce((acc, g) => acc + g.files.length, 0)
+      if (generatedFileCount > 0) {
+        onSuccess(`BAML client generated! (took ${Math.round(endMillis - startMillis)}ms)`)
+      }
     } catch (e) {
       onError(`Failed to generate BAML client: ${e}`)
     }

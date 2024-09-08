@@ -86,9 +86,18 @@ pub struct RetryLLMResponse {
 
 #[derive(Debug, Clone)]
 pub enum LLMResponse {
+    /// BAML was able to successfully make the HTTP request and got a 2xx
+    /// response from the model provider
     Success(LLMCompleteResponse),
+    /// Usually: BAML was able to successfully make the HTTP request, but the
+    /// model provider returned a non-2xx response
     LLMFailure(LLMErrorResponse),
-    OtherFailure(String),
+    /// BAML failed to make an HTTP request to a model, because the user's args
+    /// failed to pass validation
+    UserFailure(String),
+    /// BAML failed to make an HTTP request to a model, because of some internal
+    /// error after the user's args passed validation
+    InternalFailure(String),
 }
 
 impl Error for LLMResponse {}
@@ -98,8 +107,14 @@ impl crate::tracing::Visualize for LLMResponse {
         match self {
             Self::Success(response) => response.visualize(max_chunk_size),
             Self::LLMFailure(failure) => failure.visualize(max_chunk_size),
-            Self::OtherFailure(message) => {
-                format!("{}", format!("LLM call failed: {message}").red())
+            Self::UserFailure(message) => {
+                format!(
+                    "{}",
+                    format!("Failed before LLM call (user error): {message}").red()
+                )
+            }
+            Self::InternalFailure(message) => {
+                format!("{}", format!("Failed before LLM call: {message}").red())
             }
         }
     }
@@ -110,7 +125,10 @@ impl std::fmt::Display for LLMResponse {
         match self {
             Self::Success(response) => write!(f, "{}", response),
             Self::LLMFailure(failure) => write!(f, "LLM call failed: {failure:?}"),
-            Self::OtherFailure(message) => write!(f, "LLM call failed: {message}"),
+            Self::UserFailure(message) => {
+                write!(f, "Failed before LLM call (user error): {message}")
+            }
+            Self::InternalFailure(message) => write!(f, "Failed before LLM call: {message}"),
         }
     }
 }
@@ -120,7 +138,12 @@ impl LLMResponse {
         match self {
             Self::Success(response) => Ok(&response.content),
             Self::LLMFailure(failure) => Err(anyhow::anyhow!("LLM call failed: {failure:?}")),
-            Self::OtherFailure(message) => Err(anyhow::anyhow!("LLM failed to call: {message}")),
+            Self::UserFailure(message) => Err(anyhow::anyhow!(
+                "Failed before LLM call (user error): {message}"
+            )),
+            Self::InternalFailure(message) => {
+                Err(anyhow::anyhow!("Failed before LLM call: {message}"))
+            }
         }
     }
 }

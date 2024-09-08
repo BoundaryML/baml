@@ -1,7 +1,7 @@
 
 
 function PromptTestClaude(input: string) -> string {
-  client Claude
+  client Sonnet
   prompt #"
     Tell me a haiku about {{ input }}
   "#
