@@ -386,14 +386,15 @@ impl RuntimeInterface for InternalBamlRuntime {
         let func = match self.get_function(&function_name, &ctx) {
             Ok(func) => func,
             Err(e) => {
-                return Ok(FunctionResult::new(
-                    OrchestrationScope::default(),
-                    LLMResponse::UserFailure(format!(
-                        "BAML function {function_name} does not exist in baml_src/ (did you typo it?): {:?}",
-                        e
-                    )),
-                    None,
-                ))
+                anyhow::bail!("BAML function {function_name} does not exist in baml_src/ (did you typo it?): {:?}", e);
+                // return Ok(FunctionResult::new(
+                //     OrchestrationScope::default(),
+                //     LLMResponse::UserFailure(format!(
+                //         "BAML function {function_name} does not exist in baml_src/ (did you typo it?): {:?}",
+                //         e
+                //     )),
+                //     None,
+                // ))
             }
         };
         let baml_args = match self.ir().check_function_params(
@@ -406,14 +407,15 @@ impl RuntimeInterface for InternalBamlRuntime {
         ) {
             Ok(args) => args,
             Err(e) => {
-                return Ok(FunctionResult::new(
-                    OrchestrationScope::default(),
-                    LLMResponse::UserFailure(format!(
-                        "Failed while validating args for {function_name}: {:?}",
-                        e
-                    )),
-                    None,
-                ))
+                anyhow::bail!("Failed while validating args for {function_name}: {:?}", e);
+                // return Ok(FunctionResult::new(
+                //     OrchestrationScope::default(),
+                //     LLMResponse::UserFailure(format!(
+                //         "Failed while validating args for {function_name}: {:?}",
+                //         e
+                //     )),
+                //     None,
+                // ))
             }
         };
 
