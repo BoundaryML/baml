@@ -47,17 +47,6 @@ pub struct RuntimeCliDefaults {
 
 impl RuntimeCli {
     pub fn run(&mut self, defaults: RuntimeCliDefaults) -> Result<()> {
-        if let Err(e) = env_logger::Builder::from_env(
-            env_logger::Env::new()
-                .filter_or("BAML_LOG", "info")
-                .write_style("BAML_LOG_STYLE"),
-        )
-        // .format_target(false)
-        .try_init()
-        {
-            eprintln!("Failed to initialize BAML logger: {:#}", e);
-        };
-
         match &mut self.command {
             Commands::Generate(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;

@@ -233,4 +233,72 @@ mod test_cli {
 
         Ok(())
     }
+
+    #[rstest]
+    #[tokio::test]
+    async fn invalid_arg() -> Result<()> {
+        let h = Harness::new(format!("invalid_arg_test"))?;
+
+        const PORT: &str = "2035";
+
+        let run = h.run_cli("init")?.output()?;
+        assert_eq!(run.status.code(), Some(0));
+
+        let mut child = h
+            .run_cli(format!("serve --preview --port {PORT}"))?
+            .spawn()?;
+        defer! { let _ = child.kill(); }
+
+        assert!(
+            reqwest::get(&format!("http://localhost:{PORT}/_debug/ping"))
+                .await?
+                .status()
+                .is_success()
+        );
+
+        let resume = indoc! {"
+      Vaibhav Gupta
+      vbv@boundaryml.com
+
+      Experience:
+      - Founder at BoundaryML
+      - CV Engineer at Google
+      - CV Engineer at Microsoft
+
+      Skills:
+      - Rust
+      - C++
+    "};
+        let resp = reqwest::Client::new()
+            .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
+            .json(&json!({ "resume": resume }))
+            .send()
+            .await?;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = reqwest::Client::new()
+            .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
+            .json(&json!({ "not-resume": resume }))
+            .send()
+            .await?;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let resp = reqwest::Client::new()
+            .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
+            .json(&json!({ "resume": { "not": "string" } }))
+            .send()
+            .await?;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let resp = reqwest::Client::new()
+            .post(&format!(
+                "http://localhost:{PORT}/call/ExtractResumeNonexistent"
+            ))
+            .json(&json!({ "resume": resume }))
+            .send()
+            .await?;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        Ok(())
+    }
 }
