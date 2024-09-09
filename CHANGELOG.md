@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.55.0](https://github.com/boundaryml/baml/compare/0.54.2..0.55.0) - 2024-09-09
+
+With this release, we're announcing support for BAML in all languages: we now
+allow you to call your functions over an HTTP interface, and will generate an
+OpenAPI specification for your BAML functions, so you can now generate a client
+in any language of your choice, be it Golang, Java, PHP, Ruby, Rust, or any of
+the other languages which OpenAPI supports.
+
+Start here to learn more: https://docs.boundaryml.com/docs/get-started/quickstart/openapi
+
+### Features
+
+- implement BAML-over-HTTP (#908) - ([484fa93](https://github.com/boundaryml/baml/commit/484fa93a5a4b4677f531e6ef03bb88d144925c12)) - Samuel Lijin
+- Add anonymous telemetry about playground actions (#925) - ([6f58c9e](https://github.com/boundaryml/baml/commit/6f58c9e3e464a8e774771706c2b0d76adb9e6cda)) - hellovai
+
 ## [0.54.2](https://github.com/boundaryml/baml/compare/0.54.1..0.54.2) - 2024-09-05
 
 ### Features
