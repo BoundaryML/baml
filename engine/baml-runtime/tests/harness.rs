@@ -1,7 +1,7 @@
 use assert_cmd::prelude::*;
 
-use anyhow::{anyhow, Result};
-use cfg_if::cfg_if;
+use anyhow::Result;
+use indoc::indoc;
 use std::{any, path::PathBuf, process::Command};
 
 #[derive(Debug, Eq, PartialEq)]
@@ -17,7 +17,11 @@ pub struct Harness {
 impl Harness {
     pub fn new<S: AsRef<str>>(test_name: S) -> Result<Self> {
         if std::env::var("OPENAI_API_KEY").is_err() || std::env::var("ANTHROPIC_API_KEY").is_err() {
-            anyhow::bail!("Integration tests using tests/harness.rs require OPENAI_API_KEY and ANTHROPIC_API_KEY; you can skip these using 'cargo test --lib'");
+            anyhow::bail!(indoc! {"
+                Integration tests using tests/harness.rs require OPENAI_API_KEY and ANTHROPIC_API_KEY.
+                
+                You can skip these using 'cargo test --lib', or run these specifically using 'cargo test --test test_cli'.
+            "});
         }
 
         // Run the CLI in /tmp/baml-runtime-test-harness/test_name.
