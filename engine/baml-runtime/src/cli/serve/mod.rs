@@ -403,11 +403,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                     BamlError::InternalError(message.clone()).into_response()
                 }
             },
-            Err(e) => BamlError::InternalError(format!(
-                "{:?}",
-                e.context("Failed to produce FunctionResult")
-            ))
-            .into_response(),
+            Err(e) => BamlError::from_anyhow(e).into_response(),
         }
     }
 

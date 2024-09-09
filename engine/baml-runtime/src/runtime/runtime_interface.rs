@@ -386,38 +386,44 @@ impl RuntimeInterface for InternalBamlRuntime {
         let func = match self.get_function(&function_name, &ctx) {
             Ok(func) => func,
             Err(e) => {
-                anyhow::bail!("BAML function {function_name} does not exist in baml_src/ (did you typo it?): {:?}", e);
-                // return Ok(FunctionResult::new(
-                //     OrchestrationScope::default(),
-                //     LLMResponse::UserFailure(format!(
-                //         "BAML function {function_name} does not exist in baml_src/ (did you typo it?): {:?}",
-                //         e
-                //     )),
-                //     None,
-                // ))
+                return Ok(FunctionResult::new(
+                    OrchestrationScope::default(),
+                    LLMResponse::UserFailure(format!(
+                        "BAML function {function_name} does not exist in baml_src/ (did you typo it?): {:?}",
+                        e
+                    )),
+                    None,
+                ))
             }
         };
-        let baml_args = match self.ir().check_function_params(
+        let baml_args = self.ir().check_function_params(
             &func,
             &params,
             ArgCoercer {
                 span_path: None,
                 allow_implicit_cast_to_string: false,
             },
-        ) {
-            Ok(args) => args,
-            Err(e) => {
-                anyhow::bail!("Failed while validating args for {function_name}: {:?}", e);
-                // return Ok(FunctionResult::new(
-                //     OrchestrationScope::default(),
-                //     LLMResponse::UserFailure(format!(
-                //         "Failed while validating args for {function_name}: {:?}",
-                //         e
-                //     )),
-                //     None,
-                // ))
-            }
-        };
+        )?;
+        // let baml_args = match self.ir().check_function_params(
+        //     &func,
+        //     &params,
+        //     ArgCoercer {
+        //         span_path: None,
+        //         allow_implicit_cast_to_string: false,
+        //     },
+        // ) {
+        //     Ok(args) => args,
+        //     Err(e) => {
+        //         return Ok(FunctionResult::new(
+        //             OrchestrationScope::default(),
+        //             LLMResponse::UserFailure(format!(
+        //                 "Failed while validating args for {function_name}: {:?}",
+        //                 e
+        //             )),
+        //             None,
+        //         ))
+        //     }
+        // };
 
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
         let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
