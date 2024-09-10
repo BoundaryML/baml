@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.55.1](https://github.com/boundaryml/baml/compare/0.55.0..0.55.1) - 2024-09-10
+
+### Bug Fixes
+
+- baml-cli in python works again - ([b57ca0f](https://github.com/boundaryml/baml/commit/b57ca0f529c80f59b79b19132a8f1339a6b7bfe2)) - Sam Lijin
+
+### Documentation
+
+- update java install instructions (#933) - ([b497003](https://github.com/boundaryml/baml/commit/b49700356f2f69c4acbdc953a66a95224656ffaf)) - Samuel Lijin
+
+### Miscellaneous Chores
+
+- add version headers to the openapi docs (#931) - ([21545f2](https://github.com/boundaryml/baml/commit/21545f2a4d9b3987134d98ac720705dde2045290)) - Samuel Lijin
+
 ## [0.55.0](https://github.com/boundaryml/baml/compare/0.54.2..0.55.0) - 2024-09-09
 
 With this release, we're announcing support for BAML in all languages: we now
