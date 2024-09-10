@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bug Fixes
 
+- in generated TS code, put eslint-disable before ts-nocheck - ([16d04c6](https://github.com/BoundaryML/baml/commit/16d04c6e360eefca10b4e0d008b03c34de279491)) - Sam Lijin
 - baml-cli in python works again - ([b57ca0f](https://github.com/boundaryml/baml/commit/b57ca0f529c80f59b79b19132a8f1339a6b7bfe2)) - Sam Lijin
 
 ### Documentation
