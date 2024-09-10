@@ -28,37 +28,57 @@ you can get a client library for free.
     extension</a> ([marketplace][baml-vscode-marketplace]) for syntax highlighting,
     real-time prompt previews, and an interactive testing playground.
 
-    - Install `npx`, which will allow you to run BAML and `openapi-generator`
+    - Install `npx` and `java`, which you'll need to run BAML and `openapi-generator` respectively
 
       <Tabs>
         <Tab title="macOS (brew)">
           ```bash
-          brew install npm  # will install npm and npx
+          brew install npm openapi-generator
+          # 'npm' will install npx
+          # 'openapi-generator' will install both Java and openapi-generator-cli
           ```
         </Tab>
 
         <Tab title="Linux (apt)">
           ```bash
-          apt install npm  # will install npm and npx
+          apt install npm default-jdk -y
+          # 'npm' will install npx; 'default-jdk' will install java
           ```
         </Tab>
 
-        <Tab title="Linux (yum)">
+        <Tab title="Linux (yum/dnf)">
           ```bash
-          yum install npm  # will install npm and npx
+          dnf install npm java-21-openjdk -y
+          # dnf is the successor to yum
+          ```
+
+          Amazon Linux 2023:
+          ```bash
+          dnf install npm java-21-amazon-corretto -y
+          # 'npm' will install npx
+          # 'java-21-amazon-corretto' will install java
+          ```
+
+          Amazon Linux 2:
+          ```bash
+          curl -sL https://rpm.nodesource.com/setup_16.x | bash -
+          yum install nodejs -y
+          # 'nodejs' will install npx
+          amazon-linux-extras install java-openjdk11 -y
+          # 'java-openjdk11' will install java
           ```
         </Tab>
 
         <Tab title="Windows">
-          Use the [Node.js
-          installer](https://nodejs.org/en/download/prebuilt-installer), which
-          will make `npx` available to you.
+          To install `npx`, use the [Node.js installer](https://nodejs.org/en/download/prebuilt-installer).
+
+          To install `java`, use the [Adoptium OpenJDK `.msi` installer](https://adoptium.net/temurin/releases/?os=windows).
         </Tab>
 
         <Tab title="Other">
-          Use the [Node.js
-          installer](https://nodejs.org/en/download/prebuilt-installer), which
-          will make `npx` available to you.
+          To install `npx`, use the [Node.js installer](https://nodejs.org/en/download/prebuilt-installer).
+
+          To install `java`, use the [Adoptium OpenJDK packages](https://adoptium.net/installation/linux/).
         </Tab>
       </Tabs>
 
@@ -164,7 +184,7 @@ you can get a client library for free.
   projects with instructions for running them.
 
   <Note>
-    We've tested a the below listed OpenAPI clients, but not all of them. If you run
+    We've tested the below listed OpenAPI clients, but not all of them. If you run
     into issues with any of the OpenAPI clients, please let us know, either in
     [Discord][discord] or by commenting on
     [GitHub][openapi-feedback-github-issue] so that we can either help you out
