@@ -257,348 +257,312 @@ header {
   font-size: 1rem;
   padding: 0 0.5rem;
 }
-</style></head><body><div class="jesthtml-content"><header><h1 id="title">Test Report</h1></header><div id="metadata-container"><div id="timestamp">Started: 2024-08-27 00:48:14</div><div id="summary"><div id="suite-summary"><div class="summary-total">Suites (1)</div><div class="summary-passed  summary-empty">0 passed</div><div class="summary-failed ">1 failed</div><div class="summary-pending  summary-empty">0 pending</div></div><div id="test-summary"><div class="summary-total">Tests (44)</div><div class="summary-passed ">41 passed</div><div class="summary-failed ">3 failed</div><div class="summary-pending  summary-empty">0 pending</div></div></div></div><div id="suite-1" class="suite-container"><input id="collapsible-0" type="checkbox" class="toggle" checked="checked"/><label for="collapsible-0"><div class="suite-info"><div class="suite-path">/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts</div><div class="suite-time warn">117.565s</div></div></label><div class="suite-tests"><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single bool</div><div class="test-status">failed</div><div class="test-duration">0.004s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: BamlError: BamlClientError: Something went wrong with the LLM client: LLM call failed: LLMErrorResponse { client: "Vertex", model: None, prompt: Chat([RenderedChatMessage { role: "user", allow_duplicate_role: false, parts: [Text("Return this value back to me: true")] }]), request_options: {}, start_time: SystemTime { tv_sec: 1724744894, tv_nsec: 471891000 }, latency: 139.167µs, message: "Error {\n    context: \"Failed to build request\",\n    source: \"Service account not found\",\n}", code: Other(2) }
-    at BamlAsyncClient.parsed [as TestFnNamedArgsSingleBool] (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:906:16)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:28:19)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single string list</div><div class="test-status">passed</div><div class="test-duration">2.063s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single class</div><div class="test-status">passed</div><div class="test-duration">0.523s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">multiple classes</div><div class="test-status">passed</div><div class="test-duration">0.546s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single enum list</div><div class="test-status">passed</div><div class="test-duration">0.497s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single float</div><div class="test-status">passed</div><div class="test-duration">0.58s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single int</div><div class="test-status">passed</div><div class="test-duration">0.464s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single optional string</div><div class="test-status">passed</div><div class="test-duration">0.524s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to string</div><div class="test-status">passed</div><div class="test-duration">0.591s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to class</div><div class="test-status">passed</div><div class="test-duration">0.669s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to map</div><div class="test-status">passed</div><div class="test-duration">1.886s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work for all outputs</div><div class="test-status">passed</div><div class="test-duration">3.672s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with retries1</div><div class="test-status">passed</div><div class="test-duration">0.952s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with retries2</div><div class="test-status">passed</div><div class="test-duration">2.186s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with fallbacks</div><div class="test-status">passed</div><div class="test-duration">1.748s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with image from url</div><div class="test-status">passed</div><div class="test-duration">1.582s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with image from base 64</div><div class="test-status">passed</div><div class="test-duration">4.011s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with audio base 64</div><div class="test-status">passed</div><div class="test-duration">9.94s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with audio from url</div><div class="test-status">passed</div><div class="test-duration">6.806s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in OpenAI</div><div class="test-status">passed</div><div class="test-duration">4.764s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in Gemini</div><div class="test-status">passed</div><div class="test-duration">11.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support AWS</div><div class="test-status">passed</div><div class="test-duration">2.569s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in AWS</div><div class="test-status">passed</div><div class="test-duration">3.35s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support OpenAI shorthand</div><div class="test-status">passed</div><div class="test-duration">10.277s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support OpenAI shorthand streaming</div><div class="test-status">passed</div><div class="test-duration">12.933s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support anthropic shorthand</div><div class="test-status">passed</div><div class="test-duration">2.984s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support anthropic shorthand streaming</div><div class="test-status">passed</div><div class="test-duration">2.523s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming without iterating</div><div class="test-status">passed</div><div class="test-duration">2.409s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in Claude</div><div class="test-status">passed</div><div class="test-duration">0.71s</div></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support vertex</div><div class="test-status">failed</div><div class="test-duration">0.001s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: BamlError: BamlClientError: Something went wrong with the LLM client: LLM call failed: LLMErrorResponse { client: "Vertex", model: None, prompt: Chat([RenderedChatMessage { role: "user", allow_duplicate_role: false, parts: [Text("Write a nice short story about Donkey Kong")] }]), request_options: {}, start_time: SystemTime { tv_sec: 1724744987, tv_nsec: 282251000 }, latency: 36.083µs, message: "Error {\n    context: \"Failed to build request\",\n    source: \"Service account not found\",\n}", code: Other(2) }
-    at BamlAsyncClient.parsed [as TestVertex] (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:1242:16)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:282:17)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">supports tracing sync</div><div class="test-status">passed</div><div class="test-duration">0.014s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">supports tracing async</div><div class="test-status">passed</div><div class="test-duration">4.444s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types single</div><div class="test-status">passed</div><div class="test-duration">1.237s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types enum</div><div class="test-status">passed</div><div class="test-duration">0.648s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types class</div><div class="test-status">passed</div><div class="test-duration">1.198s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic inputs class</div><div class="test-status">passed</div><div class="test-duration">0.582s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic inputs list</div><div class="test-status">passed</div><div class="test-duration">0.727s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic output map</div><div class="test-status">passed</div><div class="test-duration">0.921s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic output union</div><div class="test-status">passed</div><div class="test-duration">2.238s</div></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with nested classes</div><div class="test-status">failed</div><div class="test-duration">7.909s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: BamlError: BamlValidationError: Parsing error: Client: Ollama (llama2) - 7823ms. StopReason: stop
----PROMPT---
-[chat] system: Return a made up json blob that matches this schema:
-Answer in JSON using this schema:
-{
-  prop1: string,
-  prop2: {
-    prop1: string,
-    prop2: string,
-    inner: {
-      prop2: int,
-      prop3: float,
-    },
-  },
-}
----
-
-JSON:
-
----LLM REPLY---
-{
-  "prop1": "value1",
-  "prop2": {
-    "prop1": "value2",
-    "prop2": "value3",
-    "inner": {
-      "prop2": 42,
-      " prop3": 3.14,
-    }
-  }
-}
----Parsed Response---
-Failed to coerce value: Error parsing '&lt;root&gt;': Unparsed field: prop2
-  Error parsing 'prop2': Unparsed field: inner
-    Error parsing 'prop2.inner': Missing required field: prop3
-    at BamlStream.parsed [as getFinalResponse] (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/stream.js:58:39)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:522:19)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic client</div><div class="test-status">passed</div><div class="test-duration">0.437s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with 'onLogEvent'</div><div class="test-status">passed</div><div class="test-duration">2.202s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with a sync client</div><div class="test-status">passed</div><div class="test-duration">0.493s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should raise an error when appropriate</div><div class="test-status">passed</div><div class="test-duration">1.009s</div></div></div></div><div class="suite-consolelog"><div class="suite-consolelog-header">Console Log</div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:40:15)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+</style></head><body><div class="jesthtml-content"><header><h1 id="title">Test Report</h1></header><div id="metadata-container"><div id="timestamp">Started: 2024-09-10 09:30:29</div><div id="summary"><div id="suite-summary"><div class="summary-total">Suites (1)</div><div class="summary-passed  summary-empty">0 passed</div><div class="summary-failed ">1 failed</div><div class="summary-pending  summary-empty">0 pending</div></div><div id="test-summary"><div class="summary-total">Tests (44)</div><div class="summary-passed ">42 passed</div><div class="summary-failed ">2 failed</div><div class="summary-pending  summary-empty">0 pending</div></div></div></div><div id="suite-1" class="suite-container"><input id="collapsible-0" type="checkbox" class="toggle" checked="checked"/><label for="collapsible-0"><div class="suite-info"><div class="suite-path">/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts</div><div class="suite-time warn">82.868s</div></div></label><div class="suite-tests"><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single bool</div><div class="test-status">passed</div><div class="test-duration">0.536s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single string list</div><div class="test-status">passed</div><div class="test-duration">0.534s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single class</div><div class="test-status">passed</div><div class="test-duration">0.468s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">multiple classes</div><div class="test-status">passed</div><div class="test-duration">0.539s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single enum list</div><div class="test-status">passed</div><div class="test-duration">0.44s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single float</div><div class="test-status">passed</div><div class="test-duration">0.415s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single int</div><div class="test-status">passed</div><div class="test-duration">0.5s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single optional string</div><div class="test-status">passed</div><div class="test-duration">0.514s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to string</div><div class="test-status">passed</div><div class="test-duration">0.859s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to class</div><div class="test-status">passed</div><div class="test-duration">0.652s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests &gt; should work for all inputs</div><div class="test-title">single map string to map</div><div class="test-status">passed</div><div class="test-duration">0.717s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work for all outputs</div><div class="test-status">passed</div><div class="test-duration">4.598s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with retries1</div><div class="test-status">passed</div><div class="test-duration">0.862s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with retries2</div><div class="test-status">passed</div><div class="test-duration">1.903s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">works with fallbacks</div><div class="test-status">passed</div><div class="test-duration">1.767s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with image from url</div><div class="test-status">passed</div><div class="test-duration">0.972s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with image from base 64</div><div class="test-status">passed</div><div class="test-duration">0.995s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with audio base 64</div><div class="test-status">passed</div><div class="test-duration">1.307s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with audio from url</div><div class="test-status">passed</div><div class="test-duration">1.125s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in OpenAI</div><div class="test-status">passed</div><div class="test-duration">2.957s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in Gemini</div><div class="test-status">passed</div><div class="test-duration">10.006s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support AWS</div><div class="test-status">passed</div><div class="test-duration">2.435s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in AWS</div><div class="test-status">passed</div><div class="test-duration">2.434s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support OpenAI shorthand</div><div class="test-status">passed</div><div class="test-duration">7.561s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support OpenAI shorthand streaming</div><div class="test-status">passed</div><div class="test-duration">8.742s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support anthropic shorthand</div><div class="test-status">passed</div><div class="test-duration">2.633s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support anthropic shorthand streaming</div><div class="test-status">passed</div><div class="test-duration">2.807s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming without iterating</div><div class="test-status">passed</div><div class="test-duration">3.751s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support streaming in Claude</div><div class="test-status">passed</div><div class="test-duration">1.734s</div></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should support vertex</div><div class="test-status">failed</div><div class="test-duration">0.002s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: BamlError: BamlClientError: Something went wrong with the LLM client: LLM call failed: LLMErrorResponse { client: "Vertex", model: None, prompt: Chat([RenderedChatMessage { role: "user", allow_duplicate_role: false, parts: [Text("Write a nice short story about Donkey Kong")] }]), request_options: {}, start_time: SystemTime { tv_sec: 1725985894, tv_nsec: 717161000 }, latency: 141.667µs, message: "Error {\n    context: \"Failed to build request\",\n    source: \"Service account not found\",\n}", code: Other(2) }
+    at BamlAsyncClient.parsed [as TestVertex] (/Users/sam/baml/integ-tests/typescript/baml_client/async_client.ts:1258:16)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:282:17)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">supports tracing sync</div><div class="test-status">passed</div><div class="test-duration">0.007s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">supports tracing async</div><div class="test-status">passed</div><div class="test-duration">4.279s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types single</div><div class="test-status">passed</div><div class="test-duration">0.918s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types enum</div><div class="test-status">passed</div><div class="test-duration">0.622s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic types class</div><div class="test-status">passed</div><div class="test-duration">1.042s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic inputs class</div><div class="test-status">passed</div><div class="test-duration">0.674s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic inputs list</div><div class="test-status">passed</div><div class="test-duration">0.814s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic output map</div><div class="test-status">passed</div><div class="test-duration">1.375s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic output union</div><div class="test-status">passed</div><div class="test-duration">2.364s</div></div></div><div class="test-result failed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with nested classes</div><div class="test-status">failed</div><div class="test-duration">0.105s</div></div><div class="failureMessages"> <pre class="failureMsg">Error: BamlError: BamlClientError: Something went wrong with the LLM client: LLM call failed: LLMErrorResponse { client: "Ollama", model: None, prompt: Chat([RenderedChatMessage { role: "system", allow_duplicate_role: false, parts: [Text("Return a made up json blob that matches this schema:\nAnswer in JSON using this schema:\n{\n  prop1: string,\n  prop2: {\n    prop1: string,\n    prop2: string,\n    inner: {\n      prop2: int,\n      prop3: float,\n    },\n  },\n}\n---\n\nJSON:")] }]), request_options: {"model": String("llama2")}, start_time: SystemTime { tv_sec: 1725985906, tv_nsec: 821877000 }, latency: 2.156792ms, message: "reqwest::Error { kind: Request, url: Url { scheme: \"http\", cannot_be_a_base: false, username: \"\", password: None, host: Some(Domain(\"localhost\")), port: Some(11434), path: \"/v1/chat/completions\", query: None, fragment: None }, source: hyper_util::client::legacy::Error(Connect, ConnectError(\"tcp connect error\", Os { code: 61, kind: ConnectionRefused, message: \"Connection refused\" })) }", code: Other(2) }
+    at BamlStream.parsed [as getFinalResponse] (/Users/sam/baml/engine/language_client_typescript/stream.js:58:39)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:522:19)</pre></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with dynamic client</div><div class="test-status">passed</div><div class="test-duration">0.574s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with 'onLogEvent'</div><div class="test-status">passed</div><div class="test-duration">1.725s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should work with a sync client</div><div class="test-status">passed</div><div class="test-duration">0.529s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Integ tests</div><div class="test-title">should raise an error when appropriate</div><div class="test-status">passed</div><div class="test-duration">2.586s</div></div></div></div><div class="suite-consolelog"><div class="suite-consolelog-header">Console Log</div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:40:15)
+    at Promise.then.completed (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">calling with class</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:46:15)</pre><pre class="suite-consolelog-item-message">got response key
+    at callAsyncCircusFn (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">calling with class</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:46:15)</pre><pre class="suite-consolelog-item-message">got response key
 true
-52</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:132:15)</pre><pre class="suite-consolelog-item-message">Expected error Error: BamlError: BamlClientError: BamlClientHttpError: LLM call failed: LLMErrorResponse { client: "RetryClientConstant", model: None, prompt: Chat([RenderedChatMessage { role: "system", allow_duplicate_role: false, parts: [Text("Say a haiku")] }]), request_options: {"model": String("gpt-3.5-turbo")}, start_time: SystemTime { tv_sec: 1724744907, tv_nsec: 375853000 }, latency: 96.282875ms, message: "Request failed: {\n    \"error\": {\n        \"message\": \"Incorrect API key provided: blah. You can find your API key at https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": \"invalid_api_key\"\n    }\n}\n", code: InvalidAuthentication }
-    at BamlAsyncClient.parsed [as TestRetryConstant] (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:1210:16)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:129:7) {
+52</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:132:15)</pre><pre class="suite-consolelog-item-message">Expected error Error: BamlError: BamlClientError: BamlClientHttpError: LLM call failed: LLMErrorResponse { client: "RetryClientConstant", model: None, prompt: Chat([RenderedChatMessage { role: "system", allow_duplicate_role: false, parts: [Text("Say a haiku")] }]), request_options: {"model": String("gpt-3.5-turbo")}, start_time: SystemTime { tv_sec: 1725985841, tv_nsec: 427006000 }, latency: 116.995375ms, message: "Request failed: {\n    \"error\": {\n        \"message\": \"Incorrect API key provided: blah. You can find your API key at https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": \"invalid_api_key\"\n    }\n}\n", code: InvalidAuthentication }
+    at BamlAsyncClient.parsed [as TestRetryConstant] (/Users/sam/baml/integ-tests/typescript/baml_client/async_client.ts:1226:16)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:129:7) {
   code: 'GenericFailure'
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:141:15)</pre><pre class="suite-consolelog-item-message">Expected error Error: BamlError: BamlClientError: BamlClientHttpError: LLM call failed: LLMErrorResponse { client: "RetryClientExponential", model: None, prompt: Chat([RenderedChatMessage { role: "system", allow_duplicate_role: false, parts: [Text("Say a haiku")] }]), request_options: {"model": String("gpt-3.5-turbo")}, start_time: SystemTime { tv_sec: 1724744909, tv_nsec: 411288000 }, latency: 251.040667ms, message: "Request failed: {\n    \"error\": {\n        \"message\": \"Incorrect API key provided: blahh. You can find your API key at https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": \"invalid_api_key\"\n    }\n}\n", code: InvalidAuthentication }
-    at BamlAsyncClient.parsed [as TestRetryExponential] (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:1226:16)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:138:7) {
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:141:15)</pre><pre class="suite-consolelog-item-message">Expected error Error: BamlError: BamlClientError: BamlClientHttpError: LLM call failed: LLMErrorResponse { client: "RetryClientExponential", model: None, prompt: Chat([RenderedChatMessage { role: "system", allow_duplicate_role: false, parts: [Text("Say a haiku")] }]), request_options: {"model": String("gpt-3.5-turbo")}, start_time: SystemTime { tv_sec: 1725985843, tv_nsec: 380159000 }, latency: 92.771291ms, message: "Request failed: {\n    \"error\": {\n        \"message\": \"Incorrect API key provided: blahh. You can find your API key at https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": \"invalid_api_key\"\n    }\n}\n", code: InvalidAuthentication }
+    at BamlAsyncClient.parsed [as TestRetryExponential] (/Users/sam/baml/integ-tests/typescript/baml_client/async_client.ts:1242:16)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:138:7) {
   code: 'GenericFailure'
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:294:15)
-    at func (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:69:38)
-    at AsyncLocalStorage.run (node:async_hooks:338:14)
-    at run (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:67:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:303:5)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:294:15)
+    at func (/Users/sam/baml/engine/language_client_typescript/async_context_vars.js:69:38)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at run (/Users/sam/baml/engine/language_client_typescript/async_context_vars.js:67:22)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:303:5)
+    at Promise.then.completed (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">hello world</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:297:15)
-    at func (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:69:38)
-    at AsyncLocalStorage.run (node:async_hooks:338:14)
-    at run (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:67:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:303:5)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at callAsyncCircusFn (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">hello world</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:297:15)
+    at func (/Users/sam/baml/engine/language_client_typescript/async_context_vars.js:69:38)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at run (/Users/sam/baml/engine/language_client_typescript/async_context_vars.js:67:22)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:303:5)
+    at Promise.then.completed (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">dummyFunc returned</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:300:15)
-    at func (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:69:38)
-    at AsyncLocalStorage.run (node:async_hooks:338:14)
-    at run (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:67:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:303:5)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at callAsyncCircusFn (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">dummyFunc returned</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:300:15)
+    at func (/Users/sam/baml/engine/language_client_typescript/async_context_vars.js:69:38)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at run (/Users/sam/baml/engine/language_client_typescript/async_context_vars.js:67:22)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:303:5)
+    at Promise.then.completed (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">dummyFunc2 returned</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at callAsyncCircusFn (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">dummyFunc2 returned</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 0)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 0)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 1)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 0)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 2)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 0)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:326:15)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:326:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 0)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">dummy hi1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">dummy hi1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 0)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 1)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 1)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 1)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 2)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 1)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:326:15)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:326:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 1)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">dummy hi2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">dummy hi2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 0)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 2)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 1)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 2)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 2)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 2)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:326:15)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:326:15)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 2)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">dummy hi3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:340:15)
-    at func (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:44)
-    at AsyncLocalStorage.run (node:async_hooks:338:14)
-    at run (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:28)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:356:5)</pre><pre class="suite-consolelog-item-message">hello world</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:333:5)</pre><pre class="suite-consolelog-item-message">dummy hi3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:340:15)
+    at func (/Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:44)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at run (/Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:28)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:356:5)</pre><pre class="suite-consolelog-item-message">hello world</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 0)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 1)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 2)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:326:15)
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:326:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)</pre><pre class="suite-consolelog-item-message">dummy firstDummyFuncArg</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)</pre><pre class="suite-consolelog-item-message">dummy firstDummyFuncArg</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 0)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at /Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:345:20
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:345:20
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 1)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at /Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:345:20
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:345:20
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 2)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at /Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:345:20
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:326:15)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at /Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:345:20
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">dummy secondDummyFuncArg</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:345:20
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:326:15)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:345:20
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">dummy secondDummyFuncArg</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 0)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at /Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:353:20
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:353:20
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested1</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
     at runNextTicks (node:internal/process/task_queues:60:5)
-    at listOnTimeout (node:internal/timers:538:9)
-    at processTimers (node:internal/timers:512:7)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at listOnTimeout (node:internal/timers:540:9)
+    at processTimers (node:internal/timers:514:7)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 1)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at /Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:353:20
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:353:20
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested2</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:315:15)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
     at async Promise.all (index 2)
-    at dummyFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at /Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:353:20
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:326:15)
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at /Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:353:20
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:38
-    at /Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:13
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">dummy thirdDummyFuncArg</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:359:15)
-    at func (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:90:44)
-    at AsyncLocalStorage.run (node:async_hooks:338:14)
-    at run (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:88:28)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:365:5)</pre><pre class="suite-consolelog-item-message">hello world</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:369:13)</pre><pre class="suite-consolelog-item-message">stats {"failed":0,"started":30,"finalized":30,"submitted":30,"sent":30,"done":30}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:393:13)</pre><pre class="suite-consolelog-item-message">[
+    at dummyFn (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:321:22)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:353:20
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">samDummyNested nested3</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:326:15)
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at /Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:353:20
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:38
+    at /Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:13
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:339:17)</pre><pre class="suite-consolelog-item-message">dummy thirdDummyFuncArg</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:359:15)
+    at func (/Users/sam/baml/engine/language_client_typescript/async_context_vars.js:90:44)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at run (/Users/sam/baml/engine/language_client_typescript/async_context_vars.js:88:28)
+    at Object.&lt;anonymous&gt; (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:365:5)</pre><pre class="suite-consolelog-item-message">hello world</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:369:13)</pre><pre class="suite-consolelog-item-message">stats {"failed":0,"started":30,"finalized":30,"submitted":30,"sent":30,"done":30}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:393:13)</pre><pre class="suite-consolelog-item-message">[
   {
     name: 'Harrison',
     hair_color: 'BLACK',
@@ -606,19 +570,19 @@ true
     height: 1.83,
     hobbies: [ 'SPORTS' ]
   }
-]</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:450:13)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+]</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:450:13)
+    at Promise.then.completed (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">[
+    at callAsyncCircusFn (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">[
   [
     'hair_color',
     ClassPropertyBuilder { bldr: ClassPropertyBuilder {} }
@@ -627,46 +591,46 @@ true
     'attributes',
     ClassPropertyBuilder { bldr: ClassPropertyBuilder {} }
   ]
-]</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:452:15)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+]</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:452:15)
+    at Promise.then.completed (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: hair_color</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:452:15)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at callAsyncCircusFn (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: hair_color</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:452:15)
+    at Promise.then.completed (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: attributes</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:460:13)</pre><pre class="suite-consolelog-item-message">final  {
+    at callAsyncCircusFn (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: attributes</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:460:13)</pre><pre class="suite-consolelog-item-message">final  {
   hair_color: 'black',
-  attributes: { eye_color: 'blue', facial_hair: 'beard' }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:484:13)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+  attributes: { height: '6 feet', eye_color: 'blue', facial_hair: 'beard' }
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:484:13)
+    at Promise.then.completed (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">[
+    at callAsyncCircusFn (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">[
   [
     'hair_color',
     ClassPropertyBuilder { bldr: ClassPropertyBuilder {} }
@@ -676,330 +640,55 @@ true
     ClassPropertyBuilder { bldr: ClassPropertyBuilder {} }
   ],
   [ 'height', ClassPropertyBuilder { bldr: ClassPropertyBuilder {} } ]
-]</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:486:15)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+]</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:486:15)
+    at Promise.then.completed (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: hair_color</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:486:15)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at callAsyncCircusFn (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: hair_color</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:486:15)
+    at Promise.then.completed (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: attributes</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:486:15)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at callAsyncCircusFn (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: attributes</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:486:15)
+    at Promise.then.completed (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
     at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: height</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:494:13)</pre><pre class="suite-consolelog-item-message">final  {
+    at callAsyncCircusFn (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/Users/sam/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)</pre><pre class="suite-consolelog-item-message">Property: height</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:494:13)</pre><pre class="suite-consolelog-item-message">final  {
   hair_color: 'black',
   attributes: { eye_color: 'blue', facial_hair: 'beard', age: '30' },
   height: { feet: 6, inches: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:505:13)</pre><pre class="suite-consolelog-item-message">final  {
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:505:13)</pre><pre class="suite-consolelog-item-message">final  {
   hair_color: 'black',
   attributes: { eye_color: 'blue', facial_hair: 'beard' },
   height: { meters: 1.8 }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: null, prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: '', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: null }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: null, prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: '', prop2: null, inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value', prop2: null, inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: null, inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg { prop1: 'value1', prop2: { prop1: 'value2', prop2: '', inner: null } }</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: { prop1: 'value2', prop2: 'value3', inner: null }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: null, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: null, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: null, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: null, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: null, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: null, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: null, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: null, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 4, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at Object.log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:518:15)</pre><pre class="suite-consolelog-item-message">msg {
-  prop1: 'value1',
-  prop2: {
-    prop1: 'value2',
-    prop2: 'value3',
-    inner: { prop2: 42, prop3: null }
-  }
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:543:15)
-    at callback (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:56:17)</pre><pre class="suite-consolelog-item-message">onLogEvent {
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:543:15)
+    at callback (/Users/sam/baml/engine/language_client_typescript/async_context_vars.js:56:17)</pre><pre class="suite-consolelog-item-message">onLogEvent {
   metadata: {
-    eventId: '4f05a7f4-c040-4200-a5b1-a6458e162147',
-    rootEventId: '4f05a7f4-c040-4200-a5b1-a6458e162147'
+    eventId: '1836cca3-2ec9-4efb-8dd4-54cee01ee7cd',
+    rootEventId: '1836cca3-2ec9-4efb-8dd4-54cee01ee7cd'
   },
   prompt: '[\n' +
     '  {\n' +
@@ -1013,12 +702,12 @@ true
     ']',
   rawOutput: '["a", "b", "c"]',
   parsedOutput: '["a", "b", "c"]',
-  startTime: '2024-08-27T07:50:08.476Z'
-}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/integ-tests.test.ts:543:15)
-    at callback (/Users/vbv/repos/gloo-lang/engine/language_client_typescript/async_context_vars.js:56:17)</pre><pre class="suite-consolelog-item-message">onLogEvent {
+  startTime: '2024-09-10T16:31:47.812Z'
+}</pre></div><div class="suite-consolelog-item"><pre class="suite-consolelog-item-origin">    at log (/Users/sam/baml/integ-tests/typescript/tests/integ-tests.test.ts:543:15)
+    at callback (/Users/sam/baml/engine/language_client_typescript/async_context_vars.js:56:17)</pre><pre class="suite-consolelog-item-message">onLogEvent {
   metadata: {
-    eventId: '33e24dc8-b793-40e7-b853-f28ecae28620',
-    rootEventId: '33e24dc8-b793-40e7-b853-f28ecae28620'
+    eventId: '55fa7d1f-14c6-4f24-9362-7c3123580c4b',
+    rootEventId: '55fa7d1f-14c6-4f24-9362-7c3123580c4b'
   },
   prompt: '[\n' +
     '  {\n' +
@@ -1032,5 +721,5 @@ true
     ']',
   rawOutput: '["d", "e", "f"]',
   parsedOutput: '["d", "e", "f"]',
-  startTime: '2024-08-27T07:50:08.951Z'
+  startTime: '2024-09-10T16:31:48.366Z'
 }</pre></div></div></div></div></body></html>

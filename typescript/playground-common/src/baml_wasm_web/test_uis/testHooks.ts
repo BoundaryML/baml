@@ -69,6 +69,16 @@ export const useRunHooks = () => {
         set(isRunningAtom, true)
         set(showTestsAtom, true)
 
+        vscode.postMessage({
+          command: 'telemetry',
+          meta: {
+            action: 'run_tests',
+            data: {
+              num_tests: testNames.length,
+            },
+          },
+        })
+
         // First clear any previous test results
         testStatusAtom.setShouldRemove(() => true)
         // Remove the shouldRemove function so we don't remove future test results

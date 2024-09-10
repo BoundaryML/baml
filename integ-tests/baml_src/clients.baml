@@ -112,6 +112,14 @@ client<llm> AwsBedrock {
   }
 }
 
+client<llm> Sonnet {
+  provider anthropic
+  options {
+    model claude-3-5-sonnet-20240620
+    api_key env.ANTHROPIC_API_KEY
+  }
+}
+
 client<llm> Claude {
   provider anthropic
   options {
@@ -154,5 +162,14 @@ client<llm> Lottery_SimpleSyntax {
       GPT35
       Claude
     ]
+  }
+}
+
+client<llm> TogetherAi {
+  provider "openai-generic"
+  options {
+    base_url "https://api.together.ai/v1"
+    api_key env.TOGETHER_API_KEY
+    model "meta-llama/Llama-3-70b-chat-hf"
   }
 }

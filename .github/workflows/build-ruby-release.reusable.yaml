@@ -27,10 +27,13 @@ jobs:
             # https://github.com/rake-compiler/rake-compiler-dock/issues/122
             # for more details.
             rb-sys-dock-setup: ./x86-64_linux-setup.sh
+          - platform: x86_64-linux-musl
           - platform: aarch64-linux
-          - platform: x86_64-darwin
+          - platform: aarch64-linux-musl
+          - platform: arm-linux
           - platform: arm64-darwin
-          #- x64-mingw-ucrt
+          # - platform: x64-mingw32
+          # - platform: x86-mingw-ucrt
 
     runs-on: ubuntu-latest
     defaults:
@@ -98,7 +101,7 @@ jobs:
             --ruby-versions 3.3,3.2,3.1 \
             --build \
             -- ${{ matrix._.rb-sys-dock-setup }}
-          
+
       - name: Show built gem
         shell: bash
         run: find pkg -name '*.gem'

@@ -2,7 +2,7 @@
   "name": "baml-extension",
   "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.54.0",
+  "version": "0.55.1",
   "publisher": "Boundary",
   "repository": "https://github.com/BoundaryML/baml",
   "homepage": "https://www.boundaryml.com",
@@ -46,6 +46,11 @@
             "always"
           ],
           "description": "Generate code on save"
+        },
+        "baml.restartTSServerOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Restart the TypeScript server on save, to have it read the new generated types."
         },
         "baml.fileWatcher": {
           "scope": "window",

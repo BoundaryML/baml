@@ -27,19 +27,22 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use anyhow::Context;
 use anyhow::Result;
 
 use baml_types::BamlMap;
 use baml_types::BamlValue;
+use cfg_if::cfg_if;
 use client_registry::ClientRegistry;
 use indexmap::IndexMap;
+use internal_baml_core::configuration::Generator;
 use internal_baml_core::configuration::GeneratorOutputType;
-use internal_core::configuration::Generator;
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
+use std::sync::OnceLock;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use cli::CallerType;
+pub use cli::RuntimeCliDefaults;
 pub use runtime_context::BamlSrcReader;
 use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
@@ -55,16 +58,17 @@ pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 #[cfg(feature = "internal")]
 pub use runtime_interface::InternalRuntimeInterface;
 
-#[cfg(feature = "internal")]
-pub use internal_baml_core as internal_core;
-
 #[cfg(not(feature = "internal"))]
 pub(crate) use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 #[cfg(not(feature = "internal"))]
 pub(crate) use runtime_interface::InternalRuntimeInterface;
 
+pub use internal_baml_core::internal_baml_diagnostics;
 pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
-pub use internal_baml_core::ir::{FieldType, IRHelper, TypeValue};
+pub use internal_baml_core::ir::{scope_diagnostics, FieldType, IRHelper, TypeValue};
+
+#[cfg(not(target_arch = "wasm32"))]
+static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
 
 pub struct BamlRuntime {
     inner: InternalBamlRuntime,
@@ -79,22 +83,65 @@ impl BamlRuntime {
         &self.env_vars
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    fn get_tokio_singleton() -> Result<Arc<tokio::runtime::Runtime>> {
+        match TOKIO_SINGLETON.get_or_init(|| tokio::runtime::Runtime::new().map(Arc::new)) {
+            Ok(t) => Ok(t.clone()),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn parse_baml_src_path(path: impl Into<PathBuf>) -> Result<PathBuf> {
+        let mut path: PathBuf = path.into();
+
+        if !path.exists() {
+            anyhow::bail!(
+                "Expected --from '{}' to be a baml_src/ directory, but it does not exist",
+                path.display()
+            );
+        }
+
+        if !path.is_dir() {
+            anyhow::bail!(
+                "Expected --from '{}' to be a baml_src/ directory, but it is not",
+                path.display()
+            );
+        }
+
+        if path.file_name() != Some(std::ffi::OsStr::new("baml_src")) {
+            let contained = path.join("baml_src");
+
+            if contained.exists() && contained.is_dir() {
+                path = contained;
+            } else {
+                anyhow::bail!(
+                    "Expected --from '{}' to be a baml_src/ directory, but it is not",
+                    path.display()
+                );
+            }
+        }
+
+        Ok(path)
+    }
+
     /// Load a runtime from a directory
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_directory<T: AsRef<str>>(
         path: &std::path::PathBuf,
         env_vars: HashMap<T, T>,
     ) -> Result<Self> {
+        let path = Self::parse_baml_src_path(path.clone())?;
+
         let copy = env_vars
             .iter()
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
         Ok(BamlRuntime {
-            inner: InternalBamlRuntime::from_directory(path)?,
+            inner: InternalBamlRuntime::from_directory(&path)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
             #[cfg(not(target_arch = "wasm32"))]
-            async_runtime: tokio::runtime::Runtime::new()?.into(),
+            async_runtime: Self::get_tokio_singleton()?,
         })
     }
 
@@ -112,7 +159,7 @@ impl BamlRuntime {
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
             #[cfg(not(target_arch = "wasm32"))]
-            async_runtime: tokio::runtime::Runtime::new()?.into(),
+            async_runtime: Self::get_tokio_singleton()?,
         })
     }
 
@@ -122,7 +169,7 @@ impl BamlRuntime {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn run_cli(argv: Vec<String>, caller_type: cli::CallerType) -> Result<()> {
+    pub fn run_cli(argv: Vec<String>, caller_type: cli::RuntimeCliDefaults) -> Result<()> {
         cli::RuntimeCli::parse_from(argv.into_iter()).run(caller_type)
     }
 
@@ -314,10 +361,32 @@ impl BamlRuntime {
                         generator.version.clone(),
                         no_version_check,
                         generator.default_client_mode(),
+                        generator.on_generate.clone(),
                     )?,
                 ))
             })
-            .collect::<Result<_>>()?;
+            .collect::<Result<_>>()
+            .context("Internal error: failed to collect generators")?;
+
+        // VSCode / WASM can't run "on_generate", so if any generator specifies on_generate,
+        // we disable codegen. (This can be super surprising behavior to someone, but we'll cross
+        // that bridge when we get there)
+        cfg_if! {
+            if #[cfg(target_arch = "wasm32")] {
+                if client_types
+                    .iter()
+                    .any(|(g, _)| !g.on_generate.is_empty())
+                {
+                    // We could also return an error here, but what really matters is whether we message
+                    // the user about it in VSCode. IMO the user shouldn't get a message about "vscode not
+                    // generating code, run 'baml-cli dev' to generate code" because that's surprising
+                    //
+                    // We _could_ do something like "show that message the first time the user tries to
+                    // codegen for rest/openapi", but that's overengineered, I think
+                    return Ok(vec![]);
+                }
+            }
+        }
 
         client_types
             .iter()
@@ -325,10 +394,10 @@ impl BamlRuntime {
                 generator
                     .output_type
                     .generate_client(self.inner.ir(), args)
-                    .map_err(|e| {
+                    .with_context(|| {
                         let ((line, col), _) = generator.span.line_and_column();
-                        anyhow::anyhow!(
-                            "Error in file {}:{line}:{col} {e}",
+                        format!(
+                            "Error while running generator defined at {}:{line}:{col}",
                             generator.span.file.path()
                         )
                     })

@@ -3,7 +3,7 @@ name: Release language_client_python
 on:
   workflow_call: {}
   push:
-    branches: [sam/glibc-aarch64]
+    branches: [manylinux-x86]
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -18,6 +18,7 @@ jobs:
         _:
           - target: x86_64-unknown-linux-gnu
             runs_on: ubuntu-latest
+            manylinux: 2_17
 
           - target: aarch64-unknown-linux-gnu
             runs_on: ubuntu-latest

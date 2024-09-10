@@ -1,12 +1,60 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
-
 version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  # npm packages
+  - package-ecosystem: "npm"
+    directory: "/" # root directory or adjust if packages are located elsewhere
     schedule:
-      # Check for updates to GitHub Actions every week
+      interval: "monthly" # Perform updates once a month
+    open-pull-requests-limit: 1 # Only one PR at a time
+    commit-message:
+      prefix: "chore" # Set the commit prefix to "chore"
+    rebase-strategy: auto # Automatically rebases PRs if needed
+    target-branch: "canary" # Target the 'canary' branch for PRs
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/" # root directory or location of the workflows
+    schedule:
       interval: "monthly"
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: "chore"
+    rebase-strategy: auto
+    target-branch: "canary"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+
+  # Python (pip)
+  - package-ecosystem: "pip"
+    directory: "/" # adjust if your Python code is in a different folder
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: "chore"
+    rebase-strategy: auto
+    target-branch: "canary"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+  # Docker
+  - package-ecosystem: "docker"
+    directory: "/" # adjust if your Dockerfile is in a subdirectory
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: "chore"
+    rebase-strategy: auto
+    target-branch: "canary"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"

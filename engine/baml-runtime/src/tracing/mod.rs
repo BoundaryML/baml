@@ -446,7 +446,13 @@ fn error_from_result(result: &FunctionResult) -> Option<api_wrapper::core_types:
                 traceback: None,
                 r#override: None,
             }),
-            LLMResponse::OtherFailure(s) => Some(api_wrapper::core_types::Error {
+            LLMResponse::UserFailure(s) => Some(api_wrapper::core_types::Error {
+                code: 2,
+                message: s.clone(),
+                traceback: None,
+                r#override: None,
+            }),
+            LLMResponse::InternalFailure(s) => Some(api_wrapper::core_types::Error {
                 code: 2,
                 message: s.clone(),
                 traceback: None,
@@ -600,7 +606,21 @@ impl From<&FunctionResult> for MetadataType {
 impl From<&LLMResponse> for LLMEventSchema {
     fn from(response: &LLMResponse) -> Self {
         match response {
-            LLMResponse::OtherFailure(s) => LLMEventSchema {
+            LLMResponse::UserFailure(s) => LLMEventSchema {
+                model_name: "<unknown>".into(),
+                provider: "<unknown>".into(),
+                input: LLMEventInput {
+                    prompt: LLMEventInputPrompt {
+                        template: Template::Single("<unable to render prompt>".into()),
+                        template_args: Default::default(),
+                        r#override: None,
+                    },
+                    request_options: Default::default(),
+                },
+                output: None,
+                error: Some(s.clone()),
+            },
+            LLMResponse::InternalFailure(s) => LLMEventSchema {
                 model_name: "<unknown>".into(),
                 provider: "<unknown>".into(),
                 input: LLMEventInput {

@@ -2,6 +2,77 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.55.1](https://github.com/boundaryml/baml/compare/0.55.0..0.55.1) - 2024-09-10
+
+### Bug Fixes
+
+- in generated TS code, put eslint-disable before ts-nocheck - ([16d04c6](https://github.com/BoundaryML/baml/commit/16d04c6e360eefca10b4e0d008b03c34de279491)) - Sam Lijin
+- baml-cli in python works again - ([b57ca0f](https://github.com/boundaryml/baml/commit/b57ca0f529c80f59b79b19132a8f1339a6b7bfe2)) - Sam Lijin
+
+### Documentation
+
+- update java install instructions (#933) - ([b497003](https://github.com/boundaryml/baml/commit/b49700356f2f69c4acbdc953a66a95224656ffaf)) - Samuel Lijin
+
+### Miscellaneous Chores
+
+- add version headers to the openapi docs (#931) - ([21545f2](https://github.com/boundaryml/baml/commit/21545f2a4d9b3987134d98ac720705dde2045290)) - Samuel Lijin
+
+## [0.55.0](https://github.com/boundaryml/baml/compare/0.54.2..0.55.0) - 2024-09-09
+
+With this release, we're announcing support for BAML in all languages: we now
+allow you to call your functions over an HTTP interface, and will generate an
+OpenAPI specification for your BAML functions, so you can now generate a client
+in any language of your choice, be it Golang, Java, PHP, Ruby, Rust, or any of
+the other languages which OpenAPI supports.
+
+Start here to learn more: https://docs.boundaryml.com/docs/get-started/quickstart/openapi
+
+### Features
+
+- implement BAML-over-HTTP (#908) - ([484fa93](https://github.com/boundaryml/baml/commit/484fa93a5a4b4677f531e6ef03bb88d144925c12)) - Samuel Lijin
+- Add anonymous telemetry about playground actions (#925) - ([6f58c9e](https://github.com/boundaryml/baml/commit/6f58c9e3e464a8e774771706c2b0d76adb9e6cda)) - hellovai
+
+## [0.54.2](https://github.com/boundaryml/baml/compare/0.54.1..0.54.2) - 2024-09-05
+
+### Features
+- Add a setting to disable restarting TS server in VSCode (#920) - ([628f236](https://github.com/boundaryml/baml/commit/628f2360c415fa8a7b0cd90d7249733ff06acaa9)) - aaronvg
+- Add prompt prefix for map types in ctx.output_format and add more type validation for map params (#919) - ([4d304c5](https://github.com/boundaryml/baml/commit/4d304c583b9188c1963a34e2a153baaf003e36ac)) - hellovai
+
+### Bug fixes
+- Fix glibC issues for python linux-x86_64 (#922) - ([9161bec](https://github.com/boundaryml/baml/commit/9161becccf626f8d13a15626481720f29e0f992c)) - Samuel Lijin
+
+
+### Documentation
+- Add nextjs hooks (#921) - ([fe14f5a](https://github.com/boundaryml/baml/commit/fe14f5a4ef95c9ccda916ff80ce852d3855554a3)) - aaronvg
+
+
+## [0.54.1](https://github.com/boundaryml/baml/compare/0.54.0..0.54.1) - 2024-09-03
+
+### BREAKING CHANGE
+
+- Fix escape characters in quoted strings (#905) - ([9ba6eb8](https://github.com/boundaryml/baml/commit/9ba6eb834e0145f4c57e582b63730d3d0ac9b2e9)) - hellovai
+
+Prior `"\n"` was interpreted as `"\\n"` in quoted strings. This has been fixed to interpret `"\n"` as newline characters and true for other escape characters.
+
+
+### Documentation
+
+- updated dead vs-code-extension link (#914) - ([b12f164](https://github.com/boundaryml/baml/commit/b12f1649cf5bfd0d457c5d6d117fd3a21ba5dc6b)) - Christian Warmuth
+- Update docs for setting env vars (#904) - ([ec1ca94](https://github.com/boundaryml/baml/commit/ec1ca94c91af2a51b4190a0bad0e0bc1c052f2a3)) - hellovai
+- Add docs for LMStudio (#906) - ([ea4c187](https://github.com/boundaryml/baml/commit/ea4c18782de1f713e8d69d473f9e1818c97024c6)) - hellovai
+- Fix docs for anthropic (#910) - ([aba2764](https://github.com/boundaryml/baml/commit/aba2764e5b04820d00b08bf52bda603ee27631f1)) - hellovai
+- Update discord links on docs (#911) - ([927357d](https://github.com/boundaryml/baml/commit/927357dd64b36c25513352ed4968ebc62dad6132)) - hellovai
+
+### Features
+
+- BAML_LOG will truncate messages to 1000 characters (modify using env var BOUNDARY_MAX_LOG_CHUNK_SIZE) (#907) - ([d266e5c](https://github.com/boundaryml/baml/commit/d266e5c4157f3b28d2f6454a7ea265dda7296bb2)) - hellovai
+
+### Bug Fixes
+- Improve parsing parsing when there are initial closing `]` or `}` (#903) - ([46b0cde](https://github.com/boundaryml/baml/commit/46b0cdeffb15bbab20a43728f52ad2a05623e6f7)) - hellovai
+- Update build script for ruby to build all platforms (#915) - ([df2f51e](https://github.com/boundaryml/baml/commit/df2f51e52615451b3643cc124e7262f11965f3ef)) - hellovai
+- Add unit-test for openai-generic provider and ensure it compiles (#916) - ([fde7c50](https://github.com/boundaryml/baml/commit/fde7c50c939c505906417596d16c7c4607173339)) - hellovai
+
+
 ## [0.54.0](https://github.com/boundaryml/baml/compare/0.53.1..0.54.0) - 2024-08-27
 
 ### BREAKING CHANGE

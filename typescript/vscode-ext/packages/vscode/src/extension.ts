@@ -234,7 +234,7 @@ export function activate(context: vscode.ExtensionContext) {
       const config = vscode.workspace.getConfiguration()
       config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
 
-      WebPanelView.render(context.extensionUri, getPort)
+      WebPanelView.render(context.extensionUri, getPort, telemetry)
       if (telemetry) {
         telemetry.sendTelemetryEvent({
           event: 'baml.openBamlPanel',
@@ -263,7 +263,7 @@ export function activate(context: vscode.ExtensionContext) {
       showTests?: boolean
       testCaseName?: string
     }) => {
-      WebPanelView.render(context.extensionUri, getPort)
+      WebPanelView.render(context.extensionUri, getPort, telemetry)
       if (telemetry) {
         telemetry.sendTelemetryEvent({
           event: 'baml.runBamlTest',

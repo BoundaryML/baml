@@ -4,7 +4,7 @@ interface AppStateContextProps {
   showTokens: boolean
   setShowTokens: React.Dispatch<React.SetStateAction<boolean>>
   showWhitespace: boolean
-  setShowWhitespace: React.Dispatch<React.SetStateAction<boolean>>
+  // setShowWhitespace: React.Dispatch<React.SetStateAction<boolean>>
   showCurlRequest: boolean
   setShowCurl: React.Dispatch<React.SetStateAction<boolean>>
   showTestResults: boolean
@@ -15,7 +15,8 @@ const AppStateContext = createContext<AppStateContextProps | undefined>(undefine
 
 export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [showTokens, setShowTokens] = useState(false)
-  const [showWhitespace, setShowWhitespace] = useState(false)
+  const showWhitespace = false
+  // const [showWhitespace, setShowWhitespace] = useState(false)
   const [showCurlRequest, setShowCurl] = useState(false)
   const [showTestResults, setShowTestResults] = useState(true)
 
@@ -25,7 +26,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         showTokens,
         setShowTokens,
         showWhitespace,
-        setShowWhitespace,
         showCurlRequest,
         setShowCurl,
         showTestResults,

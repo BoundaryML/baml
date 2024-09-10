@@ -8,6 +8,7 @@ import { EchoResponse, GetBamlSrcResponse, GetWebviewUriResponse, WebviewToVscod
 import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { URI } from 'vscode-uri'
 import { bamlConfig, requestDiagnostics } from '../plugins/language-server'
+import TelemetryReporter from '../telemetryReporter'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -41,7 +42,12 @@ export class WebPanelView {
    * @param panel A reference to the webview panel
    * @param extensionUri The URI of the directory containing the extension
    */
-  private constructor(panel: WebviewPanel, extensionUri: Uri, portLoader: () => number) {
+  private constructor(
+    panel: WebviewPanel,
+    extensionUri: Uri,
+    portLoader: () => number,
+    private reporter: TelemetryReporter,
+  ) {
     this._panel = panel
     this._port = portLoader
 
@@ -62,7 +68,7 @@ export class WebPanelView {
    *
    * @param extensionUri The URI of the directory containing the extension.
    */
-  public static render(extensionUri: Uri, portLoader: () => number) {
+  public static render(extensionUri: Uri, portLoader: () => number, reporter: TelemetryReporter) {
     if (WebPanelView.currentPanel) {
       // If the webview panel already exists reveal it
       WebPanelView.currentPanel._panel.reveal(ViewColumn.Beside)
@@ -93,12 +99,16 @@ export class WebPanelView {
         },
       )
 
-      WebPanelView.currentPanel = new WebPanelView(panel, extensionUri, portLoader)
+      WebPanelView.currentPanel = new WebPanelView(panel, extensionUri, portLoader, reporter)
     }
   }
 
-  public postMessage(command: string, content: any) {
-    this._panel.webview.postMessage({ command: command, content: content })
+  public postMessage<T>(command: string, content: T) {
+    this._panel.webview.postMessage({ command: command, content })
+    this.reporter.sendTelemetryEvent({
+      event: `baml.webview.${command}`,
+      properties: {},
+    })
   }
 
   /**
@@ -168,74 +178,97 @@ export class WebPanelView {
    */
   private _setWebviewMessageListener(webview: Webview) {
     webview.onDidReceiveMessage(
-      async (message: any) => {
-        const command = message.command
-        const text = message.text
-
-        switch (command) {
-          case 'get_port':
-            // Code that should run in response to the hello message command
-            console.log(`Sending port from WebPanelView: ${this._port()}`)
-            this.postMessage('port_number', {
-              port: this._port(),
-            })
-            return
-
-          case 'add_project':
-            ;(async () => {
-              await requestDiagnostics()
-              console.log('last opened func', openPlaygroundConfig.lastOpenedFunction)
-              this.postMessage('select_function', {
-                root_path: 'default',
-                function_name: openPlaygroundConfig.lastOpenedFunction,
-              })
-              this.postMessage('baml_cli_version', bamlConfig.cliVersion)
-            })()
-
-            return
-          case 'receiveData':
-            // Code that should run in response to the hello message command
-            window.showInformationMessage(text)
-            return
-
-          case 'cancelTestRun': {
-            // testExecutor.cancelExistingTestRun()
-            return
-          }
-          case 'removeTest': {
-            // const removeTestRequest: {
-            //   root_path: string
-            //   funcName: string
-            //   testCaseName: StringSpan
-            // } = message.data
-            // const uri = vscode.Uri.file(removeTestRequest.testCaseName.source_file)
-            // try {
-            //   await vscode.workspace.fs.delete(uri)
-            //   WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
-            // } catch (e: any) {
-            //   console.log(e)
-            // }
-            return
-          }
-          case 'jumpToFile': {
-            try {
-              console.log('jumpToFile', message.data)
-              const span = message.data as StringSpan
-              // span.source_file is a file:/// URI
-              const uri = vscode.Uri.parse(span.source_file)
-              await vscode.workspace.openTextDocument(uri).then((doc) => {
-                const range = new vscode.Range(doc.positionAt(span.start), doc.positionAt(span.end))
-                vscode.window.showTextDocument(doc, { selection: range, viewColumn: ViewColumn.One })
-              })
-            } catch (e: any) {
-              console.log(e)
+      async (
+        message:
+          | {
+              command: 'get_port' | 'add_project' | 'cancelTestRun' | 'removeTest'
             }
-            return
+          | {
+              command: 'jumpToFile'
+              span: StringSpan
+            }
+          | {
+              command: 'telemetry'
+              meta: {
+                action: string
+                data: Record<string, unknown>
+              }
+            }
+          | {
+              rpcId: number
+              data: WebviewToVscodeRpc
+            },
+      ) => {
+        if ('command' in message) {
+          switch (message.command) {
+            case 'get_port':
+              // Code that should run in response to the hello message command
+              console.log(`Sending port from WebPanelView: ${this._port()}`)
+              this.postMessage('port_number', {
+                port: this._port(),
+              })
+              return
+
+            case 'add_project':
+              ;(async () => {
+                await requestDiagnostics()
+                console.log('last opened func', openPlaygroundConfig.lastOpenedFunction)
+                this.postMessage('select_function', {
+                  root_path: 'default',
+                  function_name: openPlaygroundConfig.lastOpenedFunction,
+                })
+                this.postMessage('baml_cli_version', bamlConfig.cliVersion)
+              })()
+
+              return
+            case 'cancelTestRun': {
+              // testExecutor.cancelExistingTestRun()
+              return
+            }
+            case 'removeTest': {
+              // const removeTestRequest: {
+              //   root_path: string
+              //   funcName: string
+              //   testCaseName: StringSpan
+              // } = message.data
+              // const uri = vscode.Uri.file(removeTestRequest.testCaseName.source_file)
+              // try {
+              //   await vscode.workspace.fs.delete(uri)
+              //   WebPanelView.currentPanel?.postMessage('setDb', Array.from(BamlDB.entries()))
+              // } catch (e: any) {
+              //   console.log(e)
+              // }
+              return
+            }
+            case 'jumpToFile': {
+              try {
+                console.log('jumpToFile', message.span)
+                const span = message.span
+                // span.source_file is a file:/// URI
+
+                const uri = vscode.Uri.parse(span.source_file)
+                await vscode.workspace.openTextDocument(uri).then((doc) => {
+                  const range = new vscode.Range(doc.positionAt(span.start), doc.positionAt(span.end))
+                  vscode.window.showTextDocument(doc, { selection: range, viewColumn: ViewColumn.One })
+                })
+              } catch (e: any) {
+                console.log(e)
+              }
+              return
+            }
+            case 'telemetry': {
+              const { action, data } = message.meta
+              this.reporter.sendTelemetryEvent({
+                event: `baml.webview.${action}`,
+                properties: data,
+              })
+              return
+            }
           }
         }
 
         // console.log('message from webview, after above handlers:', message)
-        const vscodeMessage = message.data as WebviewToVscodeRpc
+        const vscodeMessage = message.data
         const vscodeCommand = vscodeMessage.vscodeCommand
 
         // TODO: implement error handling in our RPC framework

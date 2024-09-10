@@ -14,6 +14,7 @@ const FIRST_CLASS_PROPERTIES: &[&str] = &[
     "output_dir",
     "version",
     "default_client_mode",
+    "on_generate",
 ];
 
 fn parse_required_key<'a>(
@@ -183,6 +184,18 @@ pub(crate) fn parse_generator(
         }
         Ok(None) => {
             builder.default_client_mode(None);
+        }
+        Err(err) => {
+            errors.push(err);
+        }
+    }
+
+    match parse_optional_key(&args, "on_generate") {
+        Ok(Some(cmd)) => {
+            builder.on_generate(vec![cmd.to_string()]);
+        }
+        Ok(None) => {
+            builder.on_generate(vec![]);
         }
         Err(err) => {
             errors.push(err);

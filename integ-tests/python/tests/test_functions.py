@@ -971,6 +971,7 @@ async def test_descriptions():
     assert res.parens == "parens1"
     assert res.other_group == "other"
 
+
 @pytest.mark.asyncio
 async def test_caching():
     story_idea = """
@@ -993,17 +994,26 @@ The story explores themes of identity, the subconscious mind, the ethics of tech
     print("Duration no caching: ", duration)
     print("Duration with caching: ", duration2)
 
-    assert duration2 < duration, "Expected second call to be faster than first by a large margin."
+    assert (
+        duration2 < duration
+    ), "Expected second call to be faster than first by a large margin."
+
 
 @pytest.mark.asyncio
 async def test_arg_exceptions():
-    with pytest.raises(errors.BamlInvalidArgumentError):
-        _ = await b.TestCaching(111) # intentionally passing an int instead of a string
+    with pytest.raises(IndexError):
+        print("this should fail:", [0, 1, 2][5])
 
+    with pytest.raises(errors.BamlInvalidArgumentError):
+        _ = await b.TestCaching(
+            111
+        )  # ldintentionally passing an int instead of a string
 
     with pytest.raises(errors.BamlClientError):
         cr = baml_py.ClientRegistry()
-        cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini", "api_key": "INVALID_KEY"})
+        cr.add_llm_client(
+            "MyClient", "openai", {"model": "gpt-4o-mini", "api_key": "INVALID_KEY"}
+        )
         cr.set_primary("MyClient")
         await b.MyFunc(
             input="My name is Harrison. My hair is black and I'm 6 feet tall.",
@@ -1012,7 +1022,9 @@ async def test_arg_exceptions():
 
     with pytest.raises(errors.BamlClientHttpError):
         cr = baml_py.ClientRegistry()
-        cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini", "api_key": "INVALID_KEY"})
+        cr.add_llm_client(
+            "MyClient", "openai", {"model": "gpt-4o-mini", "api_key": "INVALID_KEY"}
+        )
         cr.set_primary("MyClient")
         await b.MyFunc(
             input="My name is Harrison. My hair is black and I'm 6 feet tall.",
@@ -1021,3 +1033,11 @@ async def test_arg_exceptions():
 
     with pytest.raises(errors.BamlValidationError):
         await b.DummyOutputFunction("dummy input")
+
+
+@pytest.mark.asyncio
+async def test_map_as_param():
+    with pytest.raises(errors.BamlInvalidArgumentError):
+        _ = await b.TestFnNamedArgsSingleMapStringToMap(
+            {"a": "b"}
+        )  # intentionally passing the wrong type

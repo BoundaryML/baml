@@ -411,9 +411,11 @@ export function startServer(options?: LSOptions): void {
   })
 
   function restartTSServer() {
-    connection.sendRequest('executeCommand', 'typescript.restartTsServer').catch((e) => {
-      console.error('Error restarting TS server: ' + e)
-    })
+    if (bamlConfig.config?.restartTSServerOnSave) {
+      connection.sendRequest('executeCommand', 'typescript.restartTsServer').catch((e) => {
+        console.error('Error restarting TS server: ' + e)
+      })
+    }
   }
 
   function getDocument(uri: string): TextDocument | undefined {

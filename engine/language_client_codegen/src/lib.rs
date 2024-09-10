@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use indexmap::IndexMap;
 use internal_baml_core::{
     configuration::{GeneratorDefaultClientMode, GeneratorOutputType},
@@ -8,6 +8,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use version_check::{check_version, GeneratorType, VersionCheckMode};
 
 mod dir_writer;
+mod openapi;
 mod python;
 mod ruby;
 mod typescript;
@@ -20,12 +21,14 @@ pub struct GeneratorArgs {
     /// Path to the BAML source directory
     baml_src_dir: PathBuf,
 
-    input_file_map: BTreeMap<PathBuf, String>,
+    inlined_file_map: BTreeMap<PathBuf, String>,
 
     version: String,
     no_version_check: bool,
+
     // Default call mode for functions
     default_client_mode: GeneratorDefaultClientMode,
+    on_generate: Vec<String>,
 }
 
 fn relative_path_to_baml_src(path: &PathBuf, baml_src: &PathBuf) -> Result<PathBuf> {
@@ -46,6 +49,7 @@ impl GeneratorArgs {
         version: String,
         no_version_check: bool,
         default_client_mode: GeneratorDefaultClientMode,
+        on_generate: Vec<String>,
     ) -> Result<Self> {
         let baml_src = baml_src_dir.into();
         let input_file_map: BTreeMap<PathBuf, String> = input_files
@@ -57,15 +61,16 @@ impl GeneratorArgs {
             output_dir_relative_to_baml_src: output_dir_relative_to_baml_src.into(),
             baml_src_dir: baml_src.clone(),
             // for the key, whhich is the name, just get the filename
-            input_file_map,
+            inlined_file_map: input_file_map,
             version,
             no_version_check,
             default_client_mode,
+            on_generate,
         })
     }
 
     pub fn file_map(&self) -> Result<Vec<(String, String)>> {
-        self.input_file_map
+        self.inlined_file_map
             .iter()
             .map(|(k, v)| {
                 Ok((
@@ -107,7 +112,10 @@ impl GeneratorArgs {
 
 pub struct GenerateOutput {
     pub client_type: GeneratorOutputType,
-    pub output_dir: PathBuf,
+    /// Relative path to the output directory (output_dir in the generator)
+    pub output_dir_shorthand: PathBuf,
+    /// The absolute path that the generated baml client was written to
+    pub output_dir_full: PathBuf,
     pub files: IndexMap<PathBuf, String>,
 }
 
@@ -169,14 +177,44 @@ impl GenerateClient for GeneratorOutputType {
         }
 
         let files = match self {
-            GeneratorOutputType::RubySorbet => ruby::generate(ir, gen),
+            GeneratorOutputType::OpenApi => openapi::generate(ir, gen),
             GeneratorOutputType::PythonPydantic => python::generate(ir, gen),
+            GeneratorOutputType::RubySorbet => ruby::generate(ir, gen),
             GeneratorOutputType::Typescript => typescript::generate(ir, gen),
         }?;
 
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            for cmd in gen.on_generate.iter() {
+                log::info!("Running {:?} in {}", cmd, gen.output_dir().display());
+                let status = std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(cmd)
+                    .current_dir(gen.output_dir())
+                    .status()
+                    .context(format!("Failed to run on_generate command {:?}", cmd))?;
+                if !status.success() {
+                    anyhow::bail!(
+                        "on_generate command finished with {}: {:?}",
+                        match status.code() {
+                            Some(code) => format!("exit code {}", code),
+                            None => "no exit code".to_string(),
+                        },
+                        cmd,
+                    );
+                }
+            }
+
+            if matches!(self, GeneratorOutputType::OpenApi) && gen.on_generate.is_empty() {
+                // TODO: we should auto-suggest a command for the user to run here
+                log::warn!("No on_generate commands were provided for OpenAPI generator - skipping OpenAPI client generation");
+            }
+        }
+
         Ok(GenerateOutput {
             client_type: self.clone(),
-            output_dir: gen.output_dir(),
+            output_dir_shorthand: gen.output_dir_relative_to_baml_src.clone(),
+            output_dir_full: gen.output_dir(),
             files,
         })
     }

@@ -8,11 +8,8 @@ instances:
         repo: baml
         branch: canary
 
-title: BAML Documentation
 
-redirects:
-  - source: /docs/snippets/clients/providers/anthropic
-    destination: docs/snippets/clients/providers/overview#anthropic
+title: BAML Documentation
 
 navigation:
   - section: Get started
@@ -30,6 +27,8 @@ navigation:
             path: docs/get-started/quickstart/typescript.mdx
           - page: Ruby
             path: docs/get-started/quickstart/ruby.mdx
+          - page: Any Language (OpenAPI)
+            path: docs/get-started/quickstart/openapi.mdx
           - page: VSCode
             path: docs/get-started/quickstart/editors-vscode.mdx
           - page: Other Editors
@@ -51,6 +50,8 @@ navigation:
             path: docs/get-started/deploying/nextjs.mdx
           - page: AWS
             path: docs/get-started/deploying/aws.mdx
+          - page: Docker (OpenAPI)
+            path: docs/get-started/deploying/openapi.mdx
   - section: BAML Snippets
     contents:
       - section: General BAML Syntax
@@ -163,6 +164,10 @@ navigation:
         path: docs/calling-baml/concurrent-calls.mdx
       - page: Multimodal
         path: docs/calling-baml/multi-modal.mdx
+  - section: NextJS
+    contents:
+      - page: NextJS Integration
+        path: docs/baml-nextjs/baml-nextjs.mdx
   - section: Observability [Paid]
     contents:
       - page: Enabling
