@@ -1,7 +1,8 @@
-use anyhow::{Result};
+use anyhow::Result;
 use notify_debouncer_full::{new_debouncer, notify::*};
+use std::ops::DerefMut;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use std::{path::PathBuf};
 
 use crate::{cli::generate::GenerateArgs, BamlRuntime};
 
@@ -118,7 +119,10 @@ Thanks for trying out BAML!
                                 }
                                 .run(defaults);
 
-                                std::mem::swap(&mut *server.b.lock().await, &mut new_runtime);
+                                std::mem::swap(
+                                    server.b.write().await.deref_mut(),
+                                    &mut new_runtime,
+                                );
                                 log::info!(
                                     "Reloaded runtime in {}ms ({})",
                                     elapsed.as_millis(),

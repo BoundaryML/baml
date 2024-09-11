@@ -27,7 +27,7 @@ use core::pin::Pin;
 use futures::Stream;
 use serde_json::json;
 use std::{path::PathBuf, sync::Arc, task::Poll};
-use tokio::{net::TcpListener, sync::Mutex};
+use tokio::{net::TcpListener, sync::RwLock};
 use tokio_stream::StreamExt;
 
 use crate::{
@@ -115,7 +115,7 @@ Thanks for trying out BAML!
 pub(super) struct Server {
     src_dir: PathBuf,
     port: u16,
-    pub(super) b: Arc<Mutex<BamlRuntime>>,
+    pub(super) b: Arc<RwLock<BamlRuntime>>,
 }
 
 #[derive(Debug)]
@@ -201,7 +201,7 @@ impl Server {
             Arc::new(Self {
                 src_dir: src_dir.clone(),
                 port,
-                b: Arc::new(Mutex::new(BamlRuntime::from_directory(
+                b: Arc::new(RwLock::new(BamlRuntime::from_directory(
                     &src_dir,
                     std::env::vars().collect(),
                 )?)),
@@ -377,10 +377,8 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
 
         let ctx_mgr = RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None);
 
-        let (result, _trace_id) = self
-            .b
-            .lock()
-            .await
+        let locked = self.b.read().await;
+        let (result, _trace_id) = locked
             .call_function(b_fn, &args, &ctx_mgr, None, None)
             .await;
 
@@ -439,7 +437,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
 
             let mut result_stream = self
                 .b
-                .lock()
+                .read()
                 .await
                 .stream_function(b_fn, &args, &ctx_mgr, None, None)?;
 
