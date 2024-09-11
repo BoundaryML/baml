@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.55.2](https://github.com/boundaryml/baml/compare/0.55.1..0.55.2) - 2024-09-11
+
+### Bug Fixes
+
+- use correct locking strategy inside baml-cli serve (#943) - ([fcb694d](https://github.com/boundaryml/baml/commit/fcb694d033317d8538cc7b2c61aaa94f772778db)) - Samuel Lijin
+
+### Features
+
+- allow using DANGER_ACCEPT_INVALID_CERTS to disable https verification (#901) - ([8873fe7](https://github.com/boundaryml/baml/commit/8873fe7577bc879cf0d550063252c4532dcdfced)) - Samuel Lijin
+
 ## [0.55.1](https://github.com/boundaryml/baml/compare/0.55.0..0.55.1) - 2024-09-10
 
 ### Bug Fixes
