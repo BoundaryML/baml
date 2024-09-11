@@ -378,11 +378,9 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         let ctx_mgr = RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None);
 
         let locked = self.b.read().await;
-        log::info!("Holding lock for function call");
         let (result, _trace_id) = locked
             .call_function(b_fn, &args, &ctx_mgr, None, None)
             .await;
-        log::info!("about to release lock for function call");
 
         match result {
             Ok(function_result) => match function_result.llm_response() {
