@@ -1,3 +1,5 @@
+use std::thread::current;
+
 use super::{helpers::Pair, parse_attribute::parse_attribute, Rule};
 use crate::{
     assert_correct_parser,
@@ -26,7 +28,9 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
 
                 ftype = result;
             }
-            Rule::optional_token => arity = FieldArity::Optional,
+            Rule::optional_token => {
+                arity = FieldArity::Optional;
+            }
             _ => {
                 unreachable_rule!(current, Rule::field_type)
             }
@@ -38,7 +42,10 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
             if arity.is_optional() {
                 match ftype.to_nullable() {
                     Ok(ftype) => Some(ftype),
-                    Err(_) => None,
+                    Err(e) => {
+                        diagnostics.push_error(e);
+                        None
+                    }
                 }
             } else {
                 Some(ftype)

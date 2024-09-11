@@ -537,7 +537,15 @@ impl WithRepr<Field> for FieldWalker<'_> {
         Ok(Field {
             name: self.name().to_string(),
             r#type: Node {
-                elem: self.ast_field().expr.clone().ok_or(anyhow!(""))?.repr(db)?,
+                elem: self
+                    .ast_field()
+                    .expr
+                    .clone()
+                    .ok_or(anyhow!(
+                        "Internal error occurred while resolving repr of field {:?}",
+                        self.name(),
+                    ))?
+                    .repr(db)?,
                 attributes: self.attributes(db),
             },
         })

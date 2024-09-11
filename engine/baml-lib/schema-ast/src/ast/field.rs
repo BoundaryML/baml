@@ -180,11 +180,11 @@ impl FieldType {
                 attributes.to_owned(),
             )),
             FieldType::Map(_, span, _) => Err(DatamodelError::new_validation_error(
-                "Dictionaries can not be optional",
+                "Maps are not allowed to be optional (please remove the ?)",
                 span.clone(),
             )),
             FieldType::List(_, _, span, _) => Err(DatamodelError::new_validation_error(
-                "Lists can not be optional",
+                "Lists are not allowed to be optional (please remove the ?)",
                 span.clone(),
             )),
         }

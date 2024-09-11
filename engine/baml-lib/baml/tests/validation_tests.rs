@@ -1,6 +1,7 @@
 mod panic_with_diff;
 
-use baml_lib::{SourceFile, ValidatedSchema};
+use baml_lib::SourceFile;
+use internal_baml_core::ir::repr::IntermediateRepr;
 
 use std::sync::Once;
 
@@ -15,15 +16,18 @@ use strip_ansi_escapes::strip_str;
 const TESTS_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/validation_files");
 
 /// Parse and analyze a Prisma schema, returning Err if there are any diagnostics (warnings or errors).
-fn parse_schema_fail_on_diagnostics(
-    file: impl Into<SourceFile>,
-) -> Result<ValidatedSchema, String> {
+fn parse_schema_fail_on_diagnostics(file: impl Into<SourceFile>) -> Result<(), String> {
     let path = PathBuf::from("./unknown");
     let file = file.into();
     let schema = baml_lib::validate(&path, vec![file]);
 
     match (schema.diagnostics.warnings(), schema.diagnostics.errors()) {
-        ([], []) => Ok(schema),
+        ([], []) => {
+            match IntermediateRepr::from_parser_database(&schema.db, schema.configuration) {
+                Ok(_ir) => Ok(()),
+                Err(e) => Err(format!("{:?}", e.context("Error while converting AST to IR (did you mean to add a step to AST validation?)")))
+            }
+        }
         (warnings, errors) => {
             let mut message: Vec<u8> = Vec::new();
 
