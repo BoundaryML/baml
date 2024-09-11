@@ -28,12 +28,15 @@ impl GenerateArgs {
     }
 
     fn generate_clients(&self, defaults: super::RuntimeCliDefaults) -> Result<()> {
-        let runtime = BamlRuntime::from_directory(&self.from, std::env::vars().collect())?;
-        let src_files = baml_src_files(&self.from)?;
+        let runtime = BamlRuntime::from_directory(&self.from, std::env::vars().collect())
+            .context("Failed to build BAML runtime")?;
+        let src_files = baml_src_files(&self.from)
+            .context("Failed while searching for .baml files in baml_src/")?;
         let all_files = src_files
             .iter()
             .map(|k| Ok((k.clone(), std::fs::read_to_string(&k)?)))
-            .collect::<Result<_>>()?;
+            .collect::<Result<_>>()
+            .context("Failed while reading .baml files in baml_src/")?;
         let generated = runtime
             .run_generators(&all_files, self.no_version_check)
             .context("Client generation failed")?;
@@ -62,19 +65,25 @@ impl GenerateArgs {
             // Normally `baml_client` is added via the generator, but since we're not running the generator, we need to add it manually.
             let output_dir_relative_to_baml_src = PathBuf::from("..");
             let version = env!("CARGO_PKG_VERSION");
-            let generate_output = runtime.generate_client(
-                &client_type,
-                &internal_baml_codegen::GeneratorArgs::new(
-                    &output_dir_relative_to_baml_src.join("baml_client"),
-                    &self.from,
-                    all_files.iter(),
-                    version.to_string(),
-                    false,
-                    default_client_mode,
-                    // TODO: this should be set if user is asking for openapi
-                    vec![],
-                )?,
-            )?;
+            let generate_output = runtime
+                .generate_client(
+                    &client_type,
+                    &internal_baml_codegen::GeneratorArgs::new(
+                        &output_dir_relative_to_baml_src.join("baml_client"),
+                        &self.from,
+                        all_files.iter(),
+                        version.to_string(),
+                        false,
+                        default_client_mode,
+                        // TODO: this should be set if user is asking for openapi
+                        vec![],
+                    )
+                    .context("Failed while resolving .baml paths in baml_src/")?,
+                )
+                .context(format!(
+                    "Failed to run generator for {client_type} in {}",
+                    output_dir_relative_to_baml_src.display()
+                ))?;
 
             log::info!(
                 "Generated 1 baml_client: {}",

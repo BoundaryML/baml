@@ -182,12 +182,14 @@ navigation:
         path: docs/comparisons/pydantic.mdx
   - section: Reference
     contents:
+      - page: Contact Us
+        path: docs/contact.mdx
+      - page: Environment Variables
+        path: docs/reference/env-vars.mdx
       - section: Incidents
         contents:
           - page: SSRF Issue in fiddle-proxy (July 2024)
             path: docs/incidents/2024-07-10-ssrf-issue-in-fiddle-proxy.mdx
-      - page: Contact Us
-        path: docs/contact.mdx
 
 navbar-links:
   - type: github

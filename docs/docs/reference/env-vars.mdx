@@ -1,0 +1,50 @@
+---
+slug: docs/reference/env-vars
+---
+
+This is a full list of all environment variables that the BAML runtime respects.
+
+`BAML_LOG`
+
+- defaults to `warn` when used as a library, defaults to `info` in `baml-cli`
+- sets the log level for BAML
+- can be one of `error`, `warn`, `info`, `debug`, or `trace` (note that `debug` and `trace` are reserved for internal use and are not stable)
+
+`BAML_LOG_STYLE`
+
+- `auto` (default) will attempt to print style characters, but don’t force the issue. If the console isn’t available on Windows, or if TERM=dumb, for example, then don’t print colors.
+- `always` will always print style characters even if they aren’t supported by the terminal. This includes emitting ANSI colors on Windows if the console API is unavailable.
+- `never` will never print style characters.
+
+`BAML_PASSWORD`
+
+Sets the password for `baml-cli serve`. See [Deploying BAML Projects / Docker (OpenAPI)](/docs/get-started/deploying/openapi) for more details.
+
+- if unset, all incoming HTTP requests to `baml-cli serve` are authorized
+- if set, all incoming HTTP requests must attach the password using either HTTP basic auth or the `X-BAML-API-KEY` header
+
+`DANGER_ACCEPT_INVALID_CERTS`
+
+- when `DANGER_ACCEPT_INVALID_CERTS=1`, turns off HTTPS cert validation
+- only set this in development or testing environments
+
+## Clients
+
+<Note>
+  You may also have your own environment variable references in clients, e.g. using
+  `api_key env.MY_API_KEY` in a client definition.
+</Note>
+
+`ANTHROPIC_API_KEY`
+
+Attached as `Authorization: Bearer $ANTHROPIC_API_KEY` to all `anthropic/<model>` clients and the
+default `Haiku` and `Sonnet` clients created by `baml-cli init`.
+
+See the [`anthropic` provider docs](/docs/snippets/clients/providers/anthropic) for more details.
+
+`OPENAI_API_KEY`
+
+Attached as `Authorization: Bearer $OPENAI_API_KEY` to all `openai/<model>` clients and the
+default `GPT4o` and `GPT4oMini` clients created by `baml-cli init`.
+
+See the [`openai` provider docs](/docs/snippets/clients/providers/openai) for more details.
