@@ -74,7 +74,6 @@ pub(crate) fn parse_type_expr(
     let mut field_type = None;
     let mut comment: Option<Comment> = block_comment.and_then(parse_comment_block);
 
-    dbg!(&pair);
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
@@ -82,7 +81,6 @@ pub(crate) fn parse_type_expr(
                 comment = merge_comments(comment, parse_trailing_comment(current));
             }
             Rule::field_type_chain => {
-                // dbg!(&is_enum);
                 if !is_enum {
                     field_type = parse_field_type_chain(current, diagnostics);
                 }
@@ -91,12 +89,6 @@ pub(crate) fn parse_type_expr(
             _ => parsing_catch_all(current, "field"),
         }
     }
-
-    log::debug!(
-        "parse_type_expr: name: {:#?}, field_type: {:#?}",
-        name,
-        field_type
-    );
 
     match (name, field_type) {
         (Some(name), Some(field_type)) => Ok(Field {
@@ -135,12 +127,10 @@ fn parse_field_type_chain(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Opti
     let mut types = Vec::new();
     let mut operators = Vec::new();
 
-    // dbg!(&pair);
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::field_type_with_attr => {
                 if let Some(field_type) = parse_field_type_with_attr(current, diagnostics) {
-                    // dbg!(&field_type);
                     types.push(field_type);
                 }
             }
@@ -161,7 +151,6 @@ pub(crate) fn parse_field_type_with_attr(
     let mut field_attributes = Vec::new();
 
     for current in pair.into_inner() {
-        // dbg!(&current);
         match current.as_rule() {
             Rule::field_type => field_type = parse_field_type(current, diagnostics),
             Rule::field_attribute => field_attributes.push(parse_attribute(current, diagnostics)),
