@@ -236,7 +236,7 @@ mod test_cli {
 
     #[rstest]
     #[tokio::test]
-    async fn invalid_arg() -> Result<()> {
+    async fn call_function_error_codes() -> Result<()> {
         let h = Harness::new(format!("invalid_arg_test"))?;
 
         const PORT: &str = "2035";
@@ -298,6 +298,112 @@ mod test_cli {
             .send()
             .await?;
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn stream_function_error_codes() -> Result<()> {
+        let h = Harness::new(format!("invalid_arg_test"))?;
+
+        const PORT: &str = "2035";
+
+        let run = h.run_cli("init")?.output()?;
+        assert_eq!(run.status.code(), Some(0));
+
+        let mut child = h
+            .run_cli(format!("serve --preview --port {PORT}"))?
+            .spawn()?;
+        defer! { let _ = child.kill(); }
+
+        assert!(
+            reqwest::get(&format!("http://localhost:{PORT}/_debug/ping"))
+                .await?
+                .status()
+                .is_success()
+        );
+
+        let resume = indoc! {"
+      Vaibhav Gupta
+      vbv@boundaryml.com
+
+      Experience:
+      - Founder at BoundaryML
+      - CV Engineer at Google
+      - CV Engineer at Microsoft
+
+      Skills:
+      - Rust
+      - C++
+    "};
+        let stream_start = Instant::now();
+        let resp = reqwest::Client::new()
+            .post(&format!("http://localhost:{PORT}/stream/ExtractResume"))
+            .json(&json!({ "resume": resume }))
+            .send()
+            .await?;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = resp
+            .bytes_stream()
+            .eventsource()
+            .map(|event| match event {
+                Ok(event) => Ok((
+                    serde_json::from_str::<serde_json::Value>(&event.data)?,
+                    stream_start.elapsed(),
+                )),
+                Err(e) => Err(anyhow::Error::from(e)),
+            })
+            .collect::<Vec<_>>()
+            .await;
+        let resp = resp.into_iter().collect::<Result<Vec<_>>>()?;
+        assert!(resp
+            .last()
+            .context("Stream should have at least 1 event")?
+            .0["name"]
+            .as_str()
+            .context("retval.name should be a string")?
+            .contains("Vaibhav"));
+
+        let resp = reqwest::Client::new()
+            .post(&format!("http://localhost:{PORT}/stream/ExtractResume"))
+            .json(&json!({ "not-resume": resume }))
+            .send()
+            .await?;
+        let stream_start = Instant::now();
+        let resp = resp
+            .bytes_stream()
+            .eventsource()
+            .map(|event| match event {
+                Ok(event) => Ok((
+                    serde_json::from_str::<serde_json::Value>(&event.data)?,
+                    stream_start.elapsed(),
+                )),
+                Err(e) => Err(anyhow::Error::from(e)),
+            })
+            .collect::<Vec<_>>()
+            .await;
+        let resp = resp.into_iter().collect::<Result<Vec<_>>>()?;
+        assert_eq!(resp, vec![]);
+        // assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        // let resp = reqwest::Client::new()
+        //     .post(&format!("http://localhost:{PORT}/stream/ExtractResume"))
+        //     .json(&json!({ "resume": { "not": "string" } }))
+        //     .send()
+        //     .await?;
+        // // assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        // let resp = reqwest::Client::new()
+        //     .post(&format!(
+        //         "http://localhost:{PORT}/stream/ExtractResumeNonexistent"
+        //     ))
+        //     .json(&json!({ "resume": resume }))
+        //     .send()
+        //     .await?;
+        // // assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        // assert_eq!(resp.text().await?, "Function not found\n");
 
         Ok(())
     }
