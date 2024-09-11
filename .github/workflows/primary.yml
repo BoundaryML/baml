@@ -64,7 +64,7 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: engine/language_client_typescript
       - name: Build Node
-        run: pnpm build
+        run: pnpm build:debug
         working-directory: engine/language_client_typescript
       - name: Install Node
         run: pnpm install --frozen-lockfile
