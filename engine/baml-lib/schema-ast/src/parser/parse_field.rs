@@ -74,7 +74,7 @@ pub(crate) fn parse_type_expr(
     let mut field_type = None;
     let mut comment: Option<Comment> = block_comment.and_then(parse_comment_block);
 
-    // dbg!(&pair);
+    dbg!(&pair);
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),

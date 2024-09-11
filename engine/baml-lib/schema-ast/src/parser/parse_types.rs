@@ -16,8 +16,7 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     let mut arity = FieldArity::Required;
     let mut ftype = None;
 
-    for (i, current) in pair.into_inner().enumerate() {
-        // dbg!((i, &current));
+    for current in pair.into_inner() {
         match current.as_rule() {
             Rule::union => {
                 let result = parse_union(current, diagnostics);

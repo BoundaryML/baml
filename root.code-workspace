@@ -80,7 +80,7 @@
       "titleBar.activeForeground": "#FFFBFB"
     },
     "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome",
-    "terminal.integrated.scrollback": 1000000
+    "terminal.integrated.scrollback": 1e6
     
   },
   "extensions": {

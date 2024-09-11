@@ -24,7 +24,7 @@ fn parse_schema_fail_on_diagnostics(file: impl Into<SourceFile>) -> Result<(), S
     match (schema.diagnostics.warnings(), schema.diagnostics.errors()) {
         ([], []) => {
             match IntermediateRepr::from_parser_database(&schema.db, schema.configuration) {
-                Ok(ir) => Ok(()),
+                Ok(_ir) => Ok(()),
                 Err(e) => Err(format!("{:?}", e.context("Error while converting AST to IR (did you mean to add a step to AST validation?)")))
             }
         }
