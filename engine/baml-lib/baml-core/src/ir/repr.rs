@@ -542,7 +542,7 @@ impl WithRepr<Field> for FieldWalker<'_> {
                     .expr
                     .clone()
                     .ok_or(anyhow!(
-                        "blowing up while resolving representation of field {}",
+                        "Internal error occurred while resolving repr of field {:?}",
                         self.name(),
                     ))?
                     .repr(db)?,
