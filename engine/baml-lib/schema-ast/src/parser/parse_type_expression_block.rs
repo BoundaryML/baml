@@ -27,17 +27,12 @@ pub(crate) fn parse_type_expression_block(
     let mut input = None;
 
     for current in pair.into_inner() {
-        
-
         match current.as_rule() {
-            Rule::type_expression_keyword => {
-                match current.as_str() {
-                    "class" => sub_type = Some(SubType::Class.clone()),
-                    "enum" => sub_type = Some(SubType::Enum.clone()),
-                    _ => sub_type = Some(SubType::Other(current.as_str().to_string())),
-                }
-
-            }
+            Rule::type_expression_keyword => match current.as_str() {
+                "class" => sub_type = Some(SubType::Class.clone()),
+                "enum" => sub_type = Some(SubType::Enum.clone()),
+                _ => sub_type = Some(SubType::Other(current.as_str().to_string())),
+            },
 
             Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
@@ -49,14 +44,11 @@ pub(crate) fn parse_type_expression_block(
                 let mut pending_field_comment: Option<Pair<'_>> = None;
 
                 for item in current.into_inner() {
-                    
-
                     match item.as_rule() {
                         Rule::block_attribute => {
                             attributes.push(parse_attribute(item, diagnostics));
                         }
                         Rule::type_expression =>{
-                            
                             match parse_type_expr(
                                     &name,
                                     sub_type.clone().map(|st| match st {
@@ -90,12 +82,10 @@ pub(crate) fn parse_type_expression_block(
                 }
             }
 
-            _ => {
-                parsing_catch_all(current, "type_expression")
-            }
+            _ => parsing_catch_all(current, "type_expression"),
         }
     }
-  
+
     match name {
         Some(name) => TypeExpressionBlock {
             name,
