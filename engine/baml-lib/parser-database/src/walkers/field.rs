@@ -95,6 +95,7 @@ impl<'db> WithSpan for FieldWalker<'db> {
     }
 }
 
+/// TODO: is this actually used anywhere?
 impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
     fn serialize_data(&self, db: &'_ ParserDatabase) -> serde_json::Value {
         match self.1 {
@@ -107,8 +108,9 @@ impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
                 "optional": arity.is_optional(),
                 "options": fts.iter().map(|ft| (self.0, ft).serialize_data( db)).collect::<Vec<_>>(),
             }),
-            FieldType::List(ft, dims, ..) => json!({
+            FieldType::List(arity, ft, dims, ..) => json!({
                 "rtype": "list",
+                "optional": arity.is_optional(),
                 "dims": dims,
                 "inner": (self.0, ft.deref()).serialize_data( db),
             }),

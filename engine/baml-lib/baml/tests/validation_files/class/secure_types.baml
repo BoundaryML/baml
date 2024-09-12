@@ -15,6 +15,8 @@ class ComplexTypes {
   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
   n map<complex_key_type[], map<another_key, (int | string[])>>
   o (((int | string) | bool[]), (float, double) | long_long_identifier_123)
+  p string[]?
+  q map<string, string>?
 }
 
 // error: Type `apple_pie` does not exist. Did you mean one of these: `ComplexTypes`, `float`, `bool`, `string`, `int`?
@@ -268,4 +270,16 @@ class ComplexTypes {
 //    | 
 // 16 |   n map<complex_key_type[], map<another_key, (int | string[])>>
 // 17 |   o (((int | string) | bool[]), (float, double) | long_long_identifier_123)
+//    | 
+// error: Error validating: Lists are not allowed to be optional
+//   -->  class/secure_types.baml:18
+//    | 
+// 17 |   o (((int | string) | bool[]), (float, double) | long_long_identifier_123)
+// 18 |   p string[]?
+//    | 
+// error: Error validating: Maps are not allowed to be optional
+//   -->  class/secure_types.baml:19
+//    | 
+// 18 |   p string[]?
+// 19 |   q map<string, string>?
 //    | 
