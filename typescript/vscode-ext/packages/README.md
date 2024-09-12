@@ -23,7 +23,7 @@ This VS Code extension provides support for the Baml language used to define LLM
 ```bash Python
 # If using your local installation, venv or conda:
 pip install baml-py
-baml-cli generate init
+baml-cli init
 ```
 
 ```bash TypeScript
