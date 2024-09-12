@@ -24,8 +24,6 @@ navigation:
             path: docs/get-started/quickstart/python.mdx
           - page: TypeScript
             path: docs/get-started/quickstart/typescript.mdx
-          - page: Ruby
-            path: docs/get-started/quickstart/ruby.mdx
           - page: Any Language (OpenAPI)
             path: docs/get-started/quickstart/openapi.mdx
           - page: VSCode
@@ -151,7 +149,7 @@ navigation:
         path: docs/calling-baml/dynamic-types.mdx
       - page: Client Registry
         path: docs/calling-baml/client-registry.mdx
-  - section: BAML with Python/TS/Ruby
+  - section: BAML with Python/TS/OpenAPI
     contents:
       - page: Generate the BAML Client
         path: docs/calling-baml/generate-baml-client.mdx
