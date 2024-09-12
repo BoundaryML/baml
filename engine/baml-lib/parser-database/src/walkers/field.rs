@@ -1,10 +1,4 @@
-use std::ops::Deref;
-
-use crate::{
-    printer::WithSerializeableContent,
-    types::{DynamicStringAttributes, StaticStringAttributes, ToStringAttributes},
-    ParserDatabase,
-};
+use crate::types::{DynamicStringAttributes, StaticStringAttributes, ToStringAttributes};
 
 use super::{ClassWalker, Walker};
 
@@ -92,76 +86,5 @@ impl<'db> WithName for FieldWalker<'db> {
 impl<'db> WithSpan for FieldWalker<'db> {
     fn span(&self) -> &internal_baml_diagnostics::Span {
         self.ast_field().span()
-    }
-}
-
-/// TODO: is this actually used anywhere?
-impl<'db> WithSerializeableContent for (&ParserDatabase, &FieldType) {
-    fn serialize_data(&self, db: &'_ ParserDatabase) -> serde_json::Value {
-        match self.1 {
-            FieldType::Tuple(..) | FieldType::Map(..) => json!({
-                "rtype": "unsupported",
-                "optional": false,
-            }),
-            FieldType::Union(arity, fts, ..) => json!({
-                "rtype": "union",
-                "optional": arity.is_optional(),
-                "options": fts.iter().map(|ft| (self.0, ft).serialize_data( db)).collect::<Vec<_>>(),
-            }),
-            FieldType::List(arity, ft, dims, ..) => json!({
-                "rtype": "list",
-                "optional": arity.is_optional(),
-                "dims": dims,
-                "inner": (self.0, ft.deref()).serialize_data( db),
-            }),
-            FieldType::Primitive(arity, t, ..) => json!({
-                "rtype": match t {
-                    TypeValue::String => "string",
-                    TypeValue::Int => "int",
-                    TypeValue::Float => "float",
-                    TypeValue::Bool => "bool",
-                    TypeValue::Media(BamlMediaType::Image) => "image",
-                    TypeValue::Media(BamlMediaType::Audio) => "audio",
-                    TypeValue::Null => "null",
-
-                },
-                "optional": arity.is_optional(),
-            }),
-            FieldType::Symbol(arity, name, ..) => match self.0.find_type(name) {
-                Some(either::Either::Left(cls)) => {
-                    let mut class_type = cls.serialize_data(db);
-                    let Some(obj) = class_type.as_object_mut() else {
-                        return class_type;
-                    };
-                    obj.insert("optional".to_string(), arity.is_optional().into());
-                    class_type
-                }
-                Some(either::Either::Right(enm)) => {
-                    json!({
-                        "rtype": "enum",
-                        "optional": arity.is_optional(),
-                        "name": enm.name(),
-                    })
-                }
-                None => json!({
-                    "rtype": "unsupported",
-                    "optional": false,
-                }),
-            },
-        }
-    }
-}
-
-impl<'db> WithSerializeableContent for FieldWalker<'db> {
-    fn serialize_data(&self, db: &'_ ParserDatabase) -> serde_json::Value {
-        let type_meta = match self.r#type() {
-            Some(field_type) => (self.db, field_type).serialize_data(db),
-            None => json!(null),
-        };
-
-        json!({
-            "name": self.name(),
-            "type_meta": type_meta,
-        })
     }
 }

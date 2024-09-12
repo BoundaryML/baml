@@ -1,17 +1,11 @@
 use std::collections::HashSet;
 
 use super::{field::FieldWalker, EnumWalker};
-use crate::{
-    printer::{serialize_with_printer, WithSerializeableContent},
-    types::ToStringAttributes,
-    ParserDatabase, WithSerialize,
-};
+use crate::types::ToStringAttributes;
 use either::Either;
-use internal_baml_diagnostics::DatamodelError;
 use internal_baml_schema_ast::ast::Identifier;
 use internal_baml_schema_ast::ast::SubType;
 use internal_baml_schema_ast::ast::{self, ArgumentId, WithIdentifier, WithName, WithSpan};
-use serde_json::json;
 use std::collections::HashMap;
 
 /// A `class` declaration in the Prisma schema.
@@ -216,80 +210,5 @@ impl<'db> WithIdentifier for ClassWalker<'db> {
 impl<'db> WithSpan for ClassWalker<'db> {
     fn span(&self) -> &internal_baml_diagnostics::Span {
         self.ast_type_block().span()
-    }
-}
-
-impl<'db> WithSerializeableContent for ClassWalker<'db> {
-    fn serialize_data(&self, db: &'_ ParserDatabase) -> serde_json::Value {
-        json!({
-            "rtype": "class",
-            "optional": false,
-            "name": self.name(),
-            "fields": self.static_fields().map(|f| f.serialize_data(db)).collect::<Vec<_>>(),
-            // Dynamic fields are not serialized.
-        })
-    }
-}
-
-impl<'db> WithSerialize for ClassWalker<'db> {
-    fn serialize(
-        &self,
-        db: &'_ ParserDatabase,
-        span: &internal_baml_diagnostics::Span,
-    ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
-        // Eventually we should validate what parameters are in meta.
-        match serialize_with_printer(false, self.serialize_data(db)) {
-            Ok(val) => Ok(val),
-            Err(e) => Err(DatamodelError::new_validation_error(
-                &format!("Error serializing class: {}\n{}", self.name(), e),
-                span.clone(),
-            )),
-        }
-    }
-
-    fn output_format(
-        &self,
-        db: &'_ ParserDatabase,
-        span: &internal_baml_diagnostics::Span,
-    ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
-        let class_schema = self.serialize(db, span)?;
-
-        let mut enum_schemas = self
-            .required_enums()
-            // TODO(sam) - if enum serialization fails, then we do not surface the error to the user.
-            // That is bad!!!!!!!
-            .filter_map(|e| match e.serialize(db, e.identifier().span()) {
-                Ok(enum_schema) => Some((e.name().to_string(), enum_schema)),
-                Err(_) => None,
-            })
-            .collect::<Vec<_>>();
-        // Enforce a stable order on enum schemas. Without this, the order is actually unstable, and the order can ping-pong
-        // when the vscode ext re-renders the live preview
-        enum_schemas.sort_by_key(|(name, _)| name.to_string());
-        let enum_schemas = enum_schemas
-            .into_iter()
-            .map(|(_, enum_schema)| enum_schema)
-            .collect::<Vec<_>>();
-
-        let enum_schemas = match enum_schemas.len() {
-            0 => "".to_string(),
-            1 => format!(
-                "\n\nUse this enum for the output:\n{}",
-                enum_schemas.join("")
-            ),
-            _ => format!(
-                "\n\nUse these enums for the output:\n{}",
-                enum_schemas
-                    .into_iter()
-                    .map(|enum_schema| format!("{enum_schema}\n---"))
-                    .collect::<Vec<_>>()
-                    .join("\n\n")
-            ),
-        };
-
-        Ok(format!(
-            "Use this output format:\n{}{}",
-            class_schema, enum_schemas
-        ))
     }
 }
