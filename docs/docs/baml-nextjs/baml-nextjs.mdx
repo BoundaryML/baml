@@ -20,94 +20,95 @@ You will need to use Server Actions, from the App Router, for this tutorial. You
 - Install the VSCode extension and Save a baml file to generate the client (or use `npx baml-cli generate`).
 
 
-### Create streamable baml server actions
+### Create some helper utilities to stream BAML functions
 Let's add some helpers to export our baml functions as streamable server actions. See the last line in this file, where we export the `extractResume` function.
 
-In `app/actions/streamable_objects.tsx` add the following code:
+In `app/utils/streamableObject.tsx` add the following code:
 ```typescript
-"use server";
-import { createStreamableValue, StreamableValue } from "ai/rsc";
-import { b, Resume } from "@/baml_client";
+import { createStreamableValue, StreamableValue as BaseStreamableValue } from "ai/rsc";
 import { BamlStream } from "@boundaryml/baml";
 
-const MAX_ERROR_LENGTH = 3000;
-const TRUNCATION_MARKER = "[ERROR_LOG_TRUNCATED]";
 
-function truncateError(error: string): string {
-  if (error.length <= MAX_ERROR_LENGTH) return error;
-  const halfLength = Math.floor(
-    (MAX_ERROR_LENGTH - TRUNCATION_MARKER.length) / 2
-  );
-  return (
-    error.slice(0, halfLength) + TRUNCATION_MARKER + error.slice(-halfLength)
-  );
-}
+// ------------------------------
+// Helper functions
+// ------------------------------
 
-type BamlStreamReturnType<T> = T extends BamlStream<infer P, any> ? P : never;
+/**
+ * Type alias for defining a StreamableValue based on a BamlStream.
+ * It captures either a partial or final result depending on the stream state.
+ */
+type StreamableValue<T extends BamlStream<any, any>> =
+  | { partial: T extends BamlStream<infer StreamRet, any> ? StreamRet : never }
+  | { final: T extends BamlStream<any, infer Ret> ? Ret : never };
 
-type StreamFunction<T> = (...args: any[]) => BamlStream<T, any>;
-
-
-async function streamHelper<T>(
-  streamFunction: (...args: any[]) => BamlStream<T, any>,
-  ...args: Parameters<typeof streamFunction>
+/**
+ * Helper function to manage and handle a BamlStream.
+ * It consumes the stream, updates the streamable value for each partial event,
+ * and finalizes the stream when complete.
+ *
+ * @param bamlStream - The BamlStream to be processed.
+ * @returns A promise that resolves with an object containing the BaseStreamableValue.
+ */
+export async function streamHelper<T extends BamlStream<any, any>>(
+  bamlStream: T,
 ): Promise<{
-  object: StreamableValue<Partial<T>>;
+  object: BaseStreamableValue<StreamableValue<T>>;
 }> {
-  const stream = createStreamableValue<T>();
+  const stream = createStreamableValue<StreamableValue<T>>();
 
+  // Asynchronous function to process the BamlStream events
   (async () => {
     try {
-      const bamlStream = streamFunction(...args);
+      // Iterate through the stream and update the stream value with partial data
       for await (const event of bamlStream) {
-        console.log("event", event);
-        if (event) {
-          stream.update(event as T);
-        }
+        stream.update({ partial: event });
       }
+
+      // Obtain the final response once all events are processed
       const response = await bamlStream.getFinalResponse();
-      stream.update(response as T);
-      stream.done();
+      stream.done({ final: response });
     } catch (err) {
-      const errorMsg = truncateError((err as Error).message);
-      console.log("error", errorMsg);
-      stream.error(errorMsg);
+      // Handle any errors during stream processing
+      stream.error(err);
     }
   })();
 
   return { object: stream.value };
 }
 
-const streamableFunctions = {
-  extractResume: b.stream.ExtractResume,
-  extractUnstructuredResume: b.stream.ExtractResumeNoStructure,
-  analyzeBook: b.stream.AnalyzeBooks,
-  answerQuestion: b.stream.AnswerQuestion,
-  getRecipe: b.stream.GetRecipe,
-} as const;
-
-type StreamableFunctionName = keyof typeof streamableFunctions;
-
-function createStreamableFunction<T extends StreamableFunctionName>(
-  functionName: T
-): (...args: Parameters<(typeof streamableFunctions)[T]>) => Promise<{
-  object: StreamableValue<
-    Partial<BamlStreamReturnType<ReturnType<(typeof streamableFunctions)[T]>>>
-  >;
+/**
+ * Utility function to create a streamable function from a BamlStream-producing function.
+ * This function returns an asynchronous function that manages the streaming process.
+ *
+ * @param func - A function that produces a BamlStream when called.
+ * @returns An asynchronous function that returns a BaseStreamableValue for the stream.
+ */
+export function makeStreamable<
+  BamlStreamFunc extends (...args: any) => BamlStream<any, any>,
+>(
+  func: BamlStreamFunc
+): (...args: Parameters<BamlStreamFunc>) => Promise<{
+  object: BaseStreamableValue<StreamableValue<ReturnType<BamlStreamFunc>>>;
 }> {
-  return async (...args) =>
-    // need to bind to b.stream since we lose context here.
-    streamHelper(
-      streamableFunctions[functionName].bind(b.stream) as any,
-      ...args
-    );
+  return async (...args) => {
+    const stream = func(...args);
+    return streamHelper(stream);
+  };
 }
 
-export const extractResume = createStreamableFunction("extractResume");
 ```
 
+### Export your BAML functions to streamable server actions
 
-### Create a hook to use the streamable functions
+In `app/actions/extract.tsx` add the following code:
+```typescript
+import { makeStreamable } from "../_baml_utils/streamableObjects";
+
+
+export const extractResume = makeStreamable(b.stream.ExtractResume);
+```
+
+### Create a hook to use the streamable functions in React Components
 This hook will work like [react-query](https://react-query.tanstack.com/), but for BAML functions.
 It will give you partial data, the loading status, and whether the stream was completed.
 
@@ -118,21 +119,26 @@ import { readStreamableValue, StreamableValue } from "ai/rsc";
 
 /**
  * A hook that streams data from a server action. The server action must return a StreamableValue.
+ * See the example actiimport { useState, useEffect } from "react";
+import { readStreamableValue, StreamableValue } from "ai/rsc";
+
+/**
+ * A hook that streams data from a server action. The server action must return a StreamableValue.
  * See the example action in app/actions/streamable_objects.tsx
  *  **/
-export function useStream<T, P extends any[]>(
-  serverAction: (...args: P) => Promise<{ object: StreamableValue<Partial<T>, any> }>
+export function useStream<PartialRet, Ret, P extends any[]>(
+  serverAction: (...args: P) => Promise<{ object: StreamableValue<{ partial: PartialRet } | { final: Ret }, any> }>
 ) {
   const [isLoading, setIsLoading] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [isError, setIsError] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [partialData, setPartialData] = useState<Partial<T> | undefined>(undefined); // Initialize data state
-  const [data, setData] = useState<T | undefined>(undefined); // full non-partial data
+  const [partialData, setPartialData] = useState<PartialRet | undefined>(undefined); // Initialize data state
+  const [streamResult, setData] = useState<Ret  | undefined>(undefined); // full non-partial data
 
   const mutate = async (
     ...params: Parameters<typeof serverAction>
-  ): Promise<T | undefined> => {
+  ): Promise<Ret | undefined> => {
     console.log("mutate", params);
     setIsLoading(true);
     setIsError(false);
@@ -142,7 +148,6 @@ export function useStream<T, P extends any[]>(
       const { object } = await serverAction(...params);
       const asyncIterable = readStreamableValue(object);
 
-      let streamedData: Partial<T> | undefined;
       for await (const value of asyncIterable) {
         if (value !== undefined) {
 
@@ -151,16 +156,18 @@ export function useStream<T, P extends any[]>(
           //   options.onData(value as T);
           // }
           console.log("value", value);
-          streamedData = value;
-          setPartialData(streamedData); // Update data state with the latest value
+          if ("partial" in value) {
+            setPartialData(value.partial); // Update data state with the latest value
+          } else if ("final" in value) {
+            setData(value.final); // Update data state with the latest value
+            setIsComplete(true);
+            return value.final;
+          }
         }
       }
 
-
-      setIsComplete(true);
-      setData(streamedData as T);
-      // If it completes, it means it's the full data.
-      return streamedData as T;
+      // // If it completes, it means it's the full data.
+      // return streamedData;
     } catch (err) {
       console.log("error", err);
 
@@ -173,8 +180,9 @@ export function useStream<T, P extends any[]>(
   };
 
   // If you use the "data" property, your component will re-render when the data gets updated.
-  return { data, partialData, isLoading, isComplete, isError, error, mutate };
+  return { data: streamResult, partialData, isLoading, isComplete, isError, error, mutate };
 }
+
 ```
 
 
@@ -193,11 +201,13 @@ import { Resume } from "@/baml_client";
 
 export default function Home() {
   // you can also rename these fields by using ":", like how we renamed partialData to "partialResume"
-  const { data, partialData: partialResume, isLoading, isError, error, mutate } = useStream(extractResume);
+  // `mutate` is a function that will start the stream. It takes in the same arguments as the BAML function.
+  const { data: completedData, partialData: partialResume, isLoading, isError, error, mutate } = useStream(extractResume);
 
   return (
     <div>
       <h1>BoundaryML Next.js Example</h1>
+      
       <button onClick={() => mutate("Some resume text")}>Stream BAML</button>
       {isLoading && <p>Loading...</p>}
       {isError && <p>Error: {error?.message}</p>}
