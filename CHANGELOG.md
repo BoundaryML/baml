@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.55.3](https://github.com/boundaryml/baml/compare/0.55.2..0.55.3) - 2024-09-11
+
+### Bug Fixes
+
+- show actionable errors for string[]? and map<...>? type validation (#946) - ([48879c0](https://github.com/boundaryml/baml/commit/48879c0744f79b482ef0d2b0624464053558ada4)) - Samuel Lijin
+
+### Documentation
+
+- add reference docs about env vars (#945) - ([dd43bc5](https://github.com/boundaryml/baml/commit/dd43bc59087e809e09ca7d3caf628e179a28fc3e)) - Samuel Lijin
+
+
 ## [0.55.2](https://github.com/boundaryml/baml/compare/0.55.1..0.55.2) - 2024-09-11
 
 ### Bug Fixes
