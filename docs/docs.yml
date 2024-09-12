@@ -8,7 +8,6 @@ instances:
         repo: baml
         branch: canary
 
-
 title: BAML Documentation
 
 navigation:
@@ -100,6 +99,8 @@ navigation:
                 path: docs/snippets/clients/providers/vllm.mdx
               - page: LMStudio
                 path: docs/snippets/clients/providers/lmstudio.mdx
+              - page: KeywordsAI
+                path: docs/snippets/clients/providers/keywordsai.mdx
           - section: provider strategies
             contents:
               - page: fallback
