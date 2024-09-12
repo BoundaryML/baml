@@ -1,9 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-  "baml-cli",
   "baml-lib/*",
-  "baml-fmt",
   "baml-runtime",
   "baml-schema-wasm",
   "language_client_codegen",
@@ -12,9 +10,7 @@ members = [
   "language_client_typescript",
 ]
 default-members = [
-  "baml-cli",
   "baml-lib/*",
-  "baml-fmt",
   "baml-runtime",
   # Disabled by default: --features no_wasm and --features wasm are mutually exclusive
   # Building baml-schema-wasm in combination with everything else triggers feature unification,

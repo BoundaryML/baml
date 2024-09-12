@@ -1,5 +1,4 @@
-#![doc = include_str!("../README.md")]
-#![deny(rust_2018_idioms, unsafe_code, missing_docs)]
+#![deny(unsafe_code)]
 
 use std::path::PathBuf;
 
