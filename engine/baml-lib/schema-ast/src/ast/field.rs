@@ -154,7 +154,7 @@ impl FieldType {
 
     pub fn to_nullable(&self) -> Self {
         let mut as_nullable = self.to_owned();
-        if as_nullable.is_nullable() {
+        if as_nullable.is_optional() {
             return as_nullable;
         }
         match &mut as_nullable {
@@ -164,70 +164,21 @@ impl FieldType {
             FieldType::Tuple(ref mut arity, ..) => *arity = FieldArity::Optional,
             FieldType::Map(ref mut arity, ..) => *arity = FieldArity::Optional,
             FieldType::List(ref mut arity, ..) => *arity = FieldArity::Optional,
-            // FieldType::Primitive(_arity, type_value, span, attributes) => Ok(FieldType::Primitive(
-            //     FieldArity::Optional,
-            //     type_value.to_owned(),
-            //     span.to_owned(),
-            //     attributes.to_owned(),
-            // )),
-            // FieldType::Union(arity, items, span, attributes) => {
-            //     let mut items = items.clone();
-
-            //     items.push(FieldType::Primitive(
-            //         FieldArity::Required,
-            //         TypeValue::Null,
-            //         span.clone(),
-            //         None,
-            //     ));
-            //     Ok(FieldType::Union(
-            //         *arity,
-            //         items,
-            //         span.to_owned(),
-            //         attributes.to_owned(),
-            //     ))
-            // }
-            // FieldType::Tuple(_arity, options, span, attributes) => Ok(FieldType::Tuple(
-            //     FieldArity::Optional,
-            //     options.to_owned(),
-            //     span.to_owned(),
-            //     attributes.to_owned(),
-            // )),
-            // FieldType::Map(_, _, span, _) => Err(DatamodelError::new_validation_error(
-            //     "Maps are not allowed to be optional (please remove the ?)",
-            //     span.clone(),
-            // )),
-            // FieldType::List(_, _, _, span, _) => Err(DatamodelError::new_validation_error(
-            //     "Lists are not allowed to be optional (please remove the ?)",
-            //     span.clone(),
-            // )),
         };
 
         as_nullable
     }
 
-    pub fn is_nullable(&self) -> bool {
+    pub fn is_optional(&self) -> bool {
         match self {
             FieldType::Symbol(arity, ..) => arity.is_optional(),
             FieldType::Union(arity, f, _, _) => {
-                arity.is_optional() || f.iter().any(|t| t.is_nullable())
+                arity.is_optional() || f.iter().any(|t| t.is_optional())
             }
             FieldType::Tuple(arity, _, _, _) => arity.is_optional(),
             FieldType::Primitive(arity, _, _, _) => arity.is_optional(),
             FieldType::Map(arity, _kv, _, _) => arity.is_optional(),
             FieldType::List(arity, _t, _, _, _) => arity.is_optional(),
-        }
-    }
-    // Whether the field could theoretically be made optional.
-    pub fn can_be_null(&self) -> bool {
-        match self {
-            FieldType::Symbol(_arity, t, ..) => true,
-            FieldType::Primitive(_arity, ..) => true,
-            // There's a bug with unions where we cant parse optionals in unions right now
-            FieldType::Union(_arity, _f, ..) => false,
-            FieldType::Tuple(_arity, ..) => true,
-            // Lists can't be nullable
-            FieldType::Map(_kv, ..) => false,
-            FieldType::List(_t, ..) => false,
         }
     }
 

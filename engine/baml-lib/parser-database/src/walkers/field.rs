@@ -2,9 +2,7 @@ use crate::types::{DynamicStringAttributes, StaticStringAttributes, ToStringAttr
 
 use super::{ClassWalker, Walker};
 
-use baml_types::{BamlMediaType, TypeValue};
 use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName, WithSpan};
-use serde_json::json;
 
 /// A model field, scalar or relation.
 pub type FieldWalker<'db> = Walker<'db, (ast::TypeExpId, ast::FieldId, bool)>;

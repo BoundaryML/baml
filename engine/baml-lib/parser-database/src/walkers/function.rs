@@ -208,7 +208,7 @@ impl<'db> ArgWalker<'db> {
 
     /// The name of the function.
     pub fn is_optional(self) -> bool {
-        self.field_type().is_nullable()
+        self.field_type().is_optional()
     }
 
     /// The name of the function.
