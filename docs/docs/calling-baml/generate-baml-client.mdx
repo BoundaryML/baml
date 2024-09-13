@@ -16,50 +16,60 @@ you save a BAML file. Otherwise, you can generate the client manually:
 
 [BAML extension]: https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension
 
+<Tabs>
+<Tab title="Python">
+
 <CodeBlocks>
-
-```bash Python
+```bash pipx
 pipx run baml-cli generate --from path/to/baml_src
+```
 
-# If using your local installation, venv or conda:
+```bash pip
 pip install baml-py
 baml-cli generate --from path/to/baml_src
+```
 
-# If using poetry:
+```bash poetry
 poetry add baml-py
 poetry run baml-cli generate --from path/to/baml_src
+```
 
-# If using pipenv:
+```bash pipenv
 pipenv install baml-py
 pipenv run baml-cli generate --from path/to/baml_src
 ```
+</CodeBlocks>
+</Tab>
 
-```bash TypeScript
+<Tab title="TypeScript">
+<CodeBlocks>
+```bash npx
 npx @boundaryml/baml generate --from path/to/baml_src
+```
 
-# If using npm:
+```bash npm
 npm install @boundaryml/baml
 npm run baml-cli generate --from path/to/baml_src
+```
 
-# If using pnpm:
+```bash pnpm
 pnpm install @boundaryml/baml
 pnpm run baml-cli generate --from path/to/baml_src
+```
 
-# If using pnpm:
+```bash yarn
 yarn add @boundaryml/baml
 yarn run baml-cli generate --from path/to/baml_src
 ```
+</CodeBlocks>
+</Tab>
 
-```bash Ruby (beta)
-bundle add baml
-bundle exec baml-cli generate --from path/to/baml_src
-```
-
+<Tab title="OpenAPI">
 ```bash OpenAPI
 npx @boundaryml/baml-cli generate --from path/to/baml_src
 ```
-
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 ## Best Practices
 
@@ -76,7 +86,7 @@ generate code for each of them.
 
 ```baml Python
 generator target {
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
+    // Valid values: "python/pydantic", "typescript", "rest/openapi"
     output_type "python/pydantic"
     
     // Where the generated code will be saved (relative to baml_src/)
@@ -94,7 +104,7 @@ generator target {
 
 ```baml TypeScript
 generator target {
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
+    // Valid values: "python/pydantic", "typescript", "rest/openapi"
     output_type "typescript"
     
     // Where the generated code will be saved (relative to baml_src/)
@@ -110,22 +120,9 @@ generator target {
 }
 ```
 
-```baml Ruby (beta)
-generator target {
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
-    output_type "ruby/sorbet"
-
-    // Where the generated code will be saved (relative to baml_src/)
-    output_dir "../"
-    
-    // Version of runtime to generate code for (should match installed `baml` package version)
-    version "0.54.0"
-}
-```
-
 ```baml OpenAPI
 generator target {
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "rest/openapi"
     output_type "rest/openapi"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -170,7 +167,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Install your Python/Node/Ruby (beta) dependencies here
+      # Install your Python/Node/etc dependencies here
 
       - name: Generate BAML client
         run: baml-cli generate --from baml_src

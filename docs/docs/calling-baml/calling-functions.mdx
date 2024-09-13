@@ -83,28 +83,6 @@ if (require.main === module) {
 ```
 </Tab>
 
-<Tab title="Ruby (beta)">
-
-BAML will generate `Baml.Client.ClassifyMessage()` for you, which you can use like so:
-
-```ruby main.rb
-require_relative "baml_client/client"
-
-$b = Baml.Client
-
-def main
-    category = $b.ClassifyMessage(input: "I want to cancel my order")
-    puts category
-    category == Baml::Types::Category::CancelOrder
-end
-
-if __FILE__ == $0
-  puts main
-end
-
-```
-
-</Tab>
 <Tab title="OpenAPI">
 
 If you're using an OpenAPI-generated client, every BAML function will generate

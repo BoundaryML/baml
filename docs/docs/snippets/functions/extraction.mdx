@@ -66,14 +66,11 @@ import { Category } from 'baml_client/types'
   const result_from_image = await b.DescribeCharacter(Image.fromUrl("http://..."))
 ```
 
-```ruby ruby
-require_relative "baml_client/client"
-
-$b = Baml.Client
-
-# images are not supported in Ruby
-def example
-  stream = $b.DescribeCharacter("Bob the builder wears overalls")
-end
+```bash OpenAPI
+curl localhost:2024/call/ClassifyMessage -d '{ \
+  "image_or_paragraph": { \
+    "url": "http://..." \
+  }
+}'
 ```
 </CodeBlocks>
