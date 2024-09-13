@@ -149,7 +149,7 @@ fn generate_main_baml_content(
             "{cmd} --additional-properties gemName=baml_client",
         ),
         Some("rust") => format!(
-            "{cmd} --additional-properties packageName=baml-client",
+            "{cmd} --additional-properties packageName=baml-client,avoidBoxedModels=true",
         ),
         _ => cmd,
     };
