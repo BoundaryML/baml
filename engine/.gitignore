@@ -2,6 +2,11 @@
 # will have compiled files and executables
 debug/
 target/
+# NOTE(sam): I use this so that rust-analyzer doesn't have to share build directories with
+# the cargo build CLI, by setting
+#    "rust-analyzer.cargo.targetDir": "./target-rust-analyzer",
+# in VSCode settings.
+target-rust-analyzer/
 
 # NOTE(sam): I use this on my own laptop, so that `cargo build` doesn't have
 # to fight rust-analyzer for the build directory lock.

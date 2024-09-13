@@ -31,6 +31,7 @@ pub(crate) fn parse_attribute(
             arguments,
             span,
         },
+        // This is suspicious, can probably cause a panic
         None => unreachable!("Name should always be defined for attribute."),
     }
 }

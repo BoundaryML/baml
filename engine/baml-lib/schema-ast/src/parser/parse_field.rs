@@ -155,7 +155,7 @@ pub(crate) fn parse_field_type_with_attr(
             Rule::field_type => field_type = parse_field_type(current, diagnostics),
             Rule::field_attribute => field_attributes.push(parse_attribute(current, diagnostics)),
             _ => {
-                parsing_catch_all(current, "field_type_with_attr!");
+                parsing_catch_all(current, "field_type_with_attr");
             }
         }
     }

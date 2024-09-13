@@ -68,6 +68,10 @@ fn print_env() {
 }
 
 fn main() {
+    if cfg!(target_os = "macos") {
+        println!("cargo:rustc-env=MACOSX_DEPLOYMENT_TARGET=10.13");
+    }
+
     let baml_build = env::var("BAML_BUILD_HELP").unwrap_or_else(|_| "AUTO".to_string());
 
     if baml_build != "AUTO" {

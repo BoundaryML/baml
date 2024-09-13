@@ -20,7 +20,7 @@ pub use configuration::*;
 use either::Either;
 pub use field::*;
 pub use function::*;
-use internal_baml_schema_ast::ast::{self, FieldType, Identifier, TopId, WithName};
+use internal_baml_schema_ast::ast::{FieldType, Identifier, TopId, WithName};
 pub use r#class::*;
 pub use r#enum::*;
 
@@ -259,10 +259,13 @@ impl<'db> crate::ParserDatabase {
                 }
                 t
             }
-            FieldType::List(inner, dims, ..) => {
+            FieldType::List(arity, inner, dims, ..) => {
                 let mut t = self.to_jinja_type(inner);
                 for _ in 0..*dims {
                     t = Type::List(Box::new(t));
+                }
+                if arity.is_optional() {
+                    t = Type::None | t;
                 }
                 t
             }
@@ -280,10 +283,16 @@ impl<'db> crate::ParserDatabase {
                 }
                 t
             }
-            FieldType::Map(kv, ..) => Type::Map(
-                Box::new(self.to_jinja_type(&kv.0)),
-                Box::new(self.to_jinja_type(&kv.1)),
-            ),
+            FieldType::Map(arity, kv, ..) => {
+                let mut t = Type::Map(
+                    Box::new(self.to_jinja_type(&kv.0)),
+                    Box::new(self.to_jinja_type(&kv.1)),
+                );
+                if arity.is_optional() {
+                    t = Type::None | t
+                }
+                t
+            }
             FieldType::Primitive(arity, t, ..) => {
                 let mut t = match &t {
                     TypeValue::String => Type::String,
