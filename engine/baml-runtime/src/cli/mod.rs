@@ -1,4 +1,4 @@
-mod generate;
+pub mod generate;
 mod init;
 
 use anyhow::Result;

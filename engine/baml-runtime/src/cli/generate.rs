@@ -7,13 +7,13 @@ use std::path::PathBuf;
 #[derive(clap::Args, Debug)]
 pub struct GenerateArgs {
     #[arg(long, help = "path/to/baml_src", default_value = "./baml_src")]
-    from: String,
+    pub from: String,
     #[arg(
         long,
         help = "Generate baml_client without checking for version mismatch",
         default_value_t = false
     )]
-    no_version_check: bool,
+    pub no_version_check: bool,
 }
 
 impl GenerateArgs {

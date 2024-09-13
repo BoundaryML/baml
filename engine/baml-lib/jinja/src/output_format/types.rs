@@ -48,6 +48,9 @@ pub struct Class {
     pub fields: Vec<(Name, FieldType, Option<String>)>,
 }
 
+/// The information about a return type of an LLM function necessary for
+/// constructing an LLM prompt. This data is available within a prompt
+/// string via the `{{ ctx.output_format }}` splice.
 #[derive(Debug, Clone)]
 pub struct OutputFormatContent {
     enums: Arc<IndexMap<String, Enum>>,

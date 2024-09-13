@@ -22,6 +22,8 @@ impl std::fmt::Display for RenderContext_Client {
     }
 }
 
+// TODO: (Greg) This type is duplicated in `src/lib.rs`. Are they both
+//       needed? If not, delete one.
 #[derive(Debug)]
 pub struct RenderContext {
     client: RenderContext_Client,

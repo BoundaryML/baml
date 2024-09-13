@@ -141,6 +141,13 @@ impl BamlValue {
             _ => None,
         }
     }
+
+    pub fn as_list_owned(self) -> Option<Vec<BamlValue>> {
+        match self {
+            BamlValue::List(vals) => Some(vals),
+            _ => None,
+        }
+    }
 }
 
 impl std::fmt::Display for BamlValue {

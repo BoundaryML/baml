@@ -11,7 +11,7 @@ use self::types::OutputFormatContent;
 
 #[derive(Debug)]
 pub struct OutputFormat {
-    text: OutputFormatContent,
+    text: OutputFormatContent, // QUESTION: (Greg) Why is this field called `text`?
 }
 
 impl OutputFormat {

@@ -12,7 +12,7 @@ pub mod internal;
 pub(crate) mod internal;
 
 #[cfg(not(target_arch = "wasm32"))]
-mod cli;
+pub mod cli;
 pub mod client_registry;
 pub mod errors;
 mod macros;

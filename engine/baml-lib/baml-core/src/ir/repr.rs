@@ -196,7 +196,10 @@ pub struct NodeAttributes {
     ///   - @alias(...) becomes ("alias", ...)
     ///   - @get(python code) becomes ("get/python", python code)
     #[serde(with = "indexmap::map::serde_seq")]
-    meta: IndexMap<String, Expression>,
+    pub meta: IndexMap<String, Expression>,
+
+    pub asserts: Vec<(String, Expression)>,
+    pub checks: Vec<(String, Expression)>,
 
     // Spans
     #[serde(skip)]
@@ -209,11 +212,27 @@ impl NodeAttributes {
     }
 }
 
+impl Default for NodeAttributes  {
+    fn default() -> Self {
+        NodeAttributes {
+            meta: IndexMap::new(),
+            asserts: vec![],
+            checks: vec![],
+            span: None,
+        }
+    }
+}
+
 fn to_ir_attributes(
     db: &ParserDatabase,
     maybe_ast_attributes: Option<&ToStringAttributes>,
-) -> IndexMap<String, Expression> {
+) -> (IndexMap<String, Expression>,
+      Vec<(String, Expression)>,
+      Vec<(String, Expression)>
+) {
     let mut attributes = IndexMap::new();
+    let mut asserts = Vec::new();
+    let mut checks = Vec::new();
 
     if let Some(ast_attributes) = maybe_ast_attributes {
         match ast_attributes {
@@ -229,11 +248,22 @@ fn to_ir_attributes(
                     };
                     attributes.insert("description".to_string(), ir_expr);
                 }
+
+                asserts = s
+                    .asserts()
+                    .iter()
+                    .map(|(name,expr)| expr.repr(db).map(|e| (name.clone(), e)))
+                    .collect::<Result<Vec<_>>>().expect("TODO");
+                checks = s
+                    .checks()
+                    .iter()
+                    .map(|(name,expr)| expr.repr(db).map(|e| (name.clone(), e)))
+                    .collect::<Result<Vec<_>>>().expect("TODO");
             }
         }
     }
 
-    attributes
+    (attributes, asserts, checks)
 }
 
 /// Nodes allow attaching metadata to a given IR entity: attributes, source location, etc
@@ -249,6 +279,9 @@ pub trait WithRepr<T> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
+            asserts: unimplemented!(),
+            checks: unimplemented!(),
+
             span: None,
         }
     }
@@ -435,7 +468,8 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: Default::default(),
-
+            asserts: unimplemented!(),
+            checks: unimplemented!(),
             span: Some(self.span().clone()),
         }
     }
@@ -475,8 +509,11 @@ pub struct Enum {
 
 impl WithRepr<EnumValue> for EnumValueWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        let (meta, asserts, checks) = to_ir_attributes(db, self.get_default_attributes());
         let attributes = NodeAttributes {
-            meta: to_ir_attributes(db, self.get_default_attributes()),
+            meta,
+            asserts,
+            checks,
             span: Some(self.span().clone()),
         };
 
@@ -490,8 +527,11 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
 
 impl WithRepr<Enum> for EnumWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        let (meta, asserts, checks) = to_ir_attributes(db, self.get_default_attributes(SubType::Enum));
         let attributes = NodeAttributes {
-            meta: to_ir_attributes(db, self.get_default_attributes(SubType::Enum)),
+            meta,
+            asserts,
+            checks,
             span: Some(self.span().clone()),
         };
 
@@ -517,8 +557,11 @@ pub struct Field {
 
 impl WithRepr<Field> for FieldWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        let (meta, asserts, checks) = to_ir_attributes(db, self.get_default_attributes());
         let attributes = NodeAttributes {
-            meta: to_ir_attributes(db, self.get_default_attributes()),
+            meta,
+            asserts,
+            checks,
             span: Some(self.span().clone()),
         };
 
@@ -536,7 +579,7 @@ impl WithRepr<Field> for FieldWalker<'_> {
     }
 }
 
-type ClassId = String;
+pub type ClassId = String;
 
 #[derive(serde::Serialize, Debug)]
 pub struct Class {
@@ -547,9 +590,11 @@ pub struct Class {
 
 impl WithRepr<Class> for ClassWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
-        let default_attributes = self.get_default_attributes(SubType::Class);
+        let (meta, asserts, checks) = to_ir_attributes(db, self.get_default_attributes(SubType::Class));
         let attributes = NodeAttributes {
-            meta: to_ir_attributes(db, default_attributes),
+            meta,
+            asserts,
+            checks,
             span: Some(self.span().clone()),
         };
 
@@ -768,6 +813,8 @@ impl WithRepr<Function> for FunctionWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: Default::default(),
+            asserts: unimplemented!(),
+            checks: unimplemented!(),
             span: Some(self.span().clone()),
         }
     }
@@ -824,6 +871,8 @@ impl WithRepr<Client> for ClientWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
+            asserts: unimplemented!(),
+            checks: unimplemented!(),
             span: Some(self.span().clone()),
         }
     }
@@ -864,6 +913,8 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
+            asserts: unimplemented!(),
+            checks: unimplemented!(),
             span: Some(self.span().clone()),
         }
     }
@@ -905,6 +956,8 @@ impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
         let span = self.0.test_case().functions[self.1].1.clone();
         NodeAttributes {
             meta: IndexMap::new(),
+            asserts: unimplemented!(),
+            checks: unimplemented!(),
 
             span: Some(span),
         }
@@ -921,6 +974,8 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
+            asserts: unimplemented!(),
+            checks: unimplemented!(),
             span: Some(self.span().clone()),
         }
     }

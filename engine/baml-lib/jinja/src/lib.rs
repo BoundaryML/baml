@@ -82,6 +82,10 @@ pub struct RenderContext_Client {
     pub default_role: String,
 }
 
+/// A collection of values about the rendering context that will be made
+/// available to a prompt via `{{ ctx }}`. For example `{{ ctx.client.name }}`
+/// used in a prompt string will resolve to the name of the client, e.g.
+/// "openai".
 #[derive(Debug)]
 pub struct RenderContext {
     pub client: RenderContext_Client,
