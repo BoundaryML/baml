@@ -2,7 +2,7 @@
 title: Client Registry
 slug: docs/calling-baml/client-registry
 ---
-{/* TODO: use fern Group elements instead of CodeBlock elements for Python/TS/Ruby */}
+{/* TODO: use fern Group elements instead of CodeBlock elements for Python/TS/OpenAPI */}
 
 If you need to modify the model / parameters for an LLM client at runtime, you can modify the `ClientRegistry` for any specified function.
 
@@ -52,39 +52,8 @@ async function run() {
 ```
 </Tab>
 
-<Tab title="Ruby">
-
-```ruby
-require_relative "baml_client/client"
-
-def run
-  cr = Baml::ClientRegistry.new
-
-  # Creates a new client
-  cr.add_llm_client(
-    name: 'MyAmazingClient',
-    provider: 'openai',
-    options: {
-      model: 'gpt-4o',
-      temperature: 0.7,
-      api_key: ENV['OPENAI_API_KEY']
-    }
-  )
-
-  # Sets MyAmazingClient as the primary client
-  cr.set_primary('MyAmazingClient')
-
-  # ExtractResume will now use MyAmazingClient as the calling client
-  res = Baml.Client.extract_resume(input: '...', baml_options: { client_registry: cr })
-end
-
-# Call the asynchronous function
-run
-```
-</Tab>
-
 <Tab title="OpenAPI">
-Dynamic types are not yet supported when used via OpenAPI.
+Client registries are not yet supported when used via OpenAPI.
 
 Please let us know if you want this feature, either via [Discord] or [GitHub][openapi-feedback-github-issue].
 

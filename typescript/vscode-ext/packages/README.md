@@ -1,48 +1,30 @@
-# Baml Language VS Code Extension
+# BAML Language VSCode Extension
 
-This VS Code extension provides support for the Baml language used to define LLM functions, test them in the integrated LLM Playground and build agentic workflows.
+Provides integrated support for BAML, an expressive language for structured text generation.
 
-### General features
+Please check out our [documentation] for the most up-to-date information.
 
-1. **Syntax Highlighting**: Provides enhanced readability and coding experience by highlighting the Baml language syntax for any file with the `.baml` extension.
-2. **Dynamic playground**: Run and test your prompts in real-time.
-3. **Build typed clients in several languages**: Command +S a baml file to build a baml client to call your functions in Python or TS.
+To provide feedback, please join our [Discord], file an issue on [Github], or
+any [other support channel](https://docs.boundaryml.com/contact).
+
+[Discord]: https://discord.gg/BTNBeXGuaS
+[Github]: https://github.com/BoundaryML/baml/issues
+
+### Features
+
+- **Syntax Highlighting**: a cornerstone of any programming language
+- **Playground**: preview your prompt in real-time as you edit your prompts
+- **Code Lenses**: press "▶ Open Playground" or "▶ Run Test" from any BAML file
+- **100% local**: your prompts and data stay on your machine
+- **Statically typed templates**: get compile-time errors for prompt template expansion
+- **Integrated support for any programming language**: we auto-generate native bindings for Python and TypeScript, and expose an HTTP/RESTful interface with built-in OpenAPI support for all other languages
 
 ## Usage
 
-1. **Install BAML dependency**:
+To get started, choose the relevant quickstart guide in our [documentation].
 
-- python: `pip install baml-py`
-- typescript: `npm install @boundaryml/baml`
-- ruby: `bundle init && bundle add baml sorbet-runtime`
+**Add your own API keys in the playground (settings icon) to test your functions**
 
-2. **Create a baml_src directory with a main.baml file and you're all set!**
+Check out more examples at [promptfiddle.com](https://promptfiddle.com)
 
-   Or you can try our `init` script to get an example directory setup for you:
-
-```bash Python
-# If using your local installation, venv or conda:
-pip install baml-py
-baml-cli generate init
-```
-
-```bash TypeScript
-# If using npm:
-npm install @boundaryml/baml
-npm run baml-cli init
-```
-
-```bash Ruby
-bundle add baml
-bundle exec baml-cli init
-```
-
-3. **Add your own api keys in the playground (settings icon) to test your functions**
-
-4. See more examples at \*\*[promptfiddle.com](promptfiddle.com)
-
-## Documentation
-
-See our [documentation](https://docs.boundaryml.com)
-
-For any issues, feature requests, or contributions, please reach out at contact@boundaryml.com
+[documentation]: https://docs.boundaryml.com

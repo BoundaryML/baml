@@ -149,7 +149,7 @@ fn generate_main_baml_content(
             "{cmd} --additional-properties gemName=baml_client",
         ),
         Some("rust") => format!(
-            "{cmd} --additional-properties packageName=baml-client",
+            "{cmd} --additional-properties packageName=baml-client,avoidBoxedModels=true",
         ),
         _ => cmd,
     };
@@ -187,7 +187,7 @@ fn generate_main_baml_content(
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "rest/openapi"
     output_type "{output_type}"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -225,7 +225,7 @@ mod tests {
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "rest/openapi"
     output_type "python/pydantic"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -254,7 +254,7 @@ generator target {{
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "rest/openapi"
     output_type "typescript"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -283,7 +283,7 @@ generator target {{
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "rest/openapi"
     output_type "ruby/sorbet"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -308,7 +308,7 @@ generator target {{
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "rest/openapi"
     output_type "rest/openapi"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -337,7 +337,7 @@ generator target {{
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "rest/openapi"
     output_type "rest/openapi"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -366,7 +366,7 @@ generator target {{
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "rest/openapi"
     output_type "rest/openapi"
 
     // Where the generated code will be saved (relative to baml_src/)
