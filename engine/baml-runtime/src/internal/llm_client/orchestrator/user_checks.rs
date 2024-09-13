@@ -2,11 +2,10 @@ use anyhow::Result;
 use anyhow::Context;
 use std::collections::HashMap;
 use baml_types::BamlValue;
-use internal_baml_core::ir::{FieldType, TypeValue};
 use internal_baml_jinja::render_expression;
 
 use internal_baml_core::ir::repr::{ClassId, Expression};
-use internal_baml_core::ir::repr::{Class, Field, Node};
+use internal_baml_core::ir::repr::{Class, Field};
 use crate::BamlMap;
 
 /// The result of running validation on a value with checks.
@@ -239,7 +238,8 @@ pub fn evaluate_predicate(this: &BamlValue, expr: &Expression) -> Result<bool> {
 
 #[cfg(test)]
 mod tests {
-    use internal_baml_core::ir::repr::NodeAttributes;
+    use internal_baml_core::ir::{FieldType, TypeValue};
+    use internal_baml_core::ir::repr::{Node, NodeAttributes};
 
     use super::*;
 

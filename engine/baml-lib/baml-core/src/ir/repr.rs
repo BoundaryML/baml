@@ -279,9 +279,8 @@ pub trait WithRepr<T> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
-            asserts: unimplemented!(),
-            checks: unimplemented!(),
-
+            asserts: vec![],
+            checks: vec![],
             span: None,
         }
     }
@@ -468,8 +467,8 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: Default::default(),
-            asserts: unimplemented!(),
-            checks: unimplemented!(),
+            asserts: vec![],
+            checks: vec![],
             span: Some(self.span().clone()),
         }
     }
@@ -813,8 +812,8 @@ impl WithRepr<Function> for FunctionWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: Default::default(),
-            asserts: unimplemented!(),
-            checks: unimplemented!(),
+            asserts: vec![],
+            checks: vec![],
             span: Some(self.span().clone()),
         }
     }
@@ -871,8 +870,8 @@ impl WithRepr<Client> for ClientWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
-            asserts: unimplemented!(),
-            checks: unimplemented!(),
+            asserts: vec![],
+            checks: vec![],
             span: Some(self.span().clone()),
         }
     }
@@ -913,8 +912,8 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
-            asserts: unimplemented!(),
-            checks: unimplemented!(),
+            asserts: vec![],
+            checks: vec![],
             span: Some(self.span().clone()),
         }
     }
@@ -956,8 +955,8 @@ impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
         let span = self.0.test_case().functions[self.1].1.clone();
         NodeAttributes {
             meta: IndexMap::new(),
-            asserts: unimplemented!(),
-            checks: unimplemented!(),
+            asserts: vec![],
+            checks: vec![],
 
             span: Some(span),
         }
@@ -974,8 +973,8 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
-            asserts: unimplemented!(),
-            checks: unimplemented!(),
+            asserts: vec![], // TODO: (Greg) add asserts and checks to TestCase.
+            checks: vec![],
             span: Some(self.span().clone()),
         }
     }
