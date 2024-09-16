@@ -10,7 +10,11 @@ instances:
 
 title: BAML Documentation
 
+
+
 navigation:
+  - api: API Reference
+    slug: docs/api
   - section: Get started
     contents:
       - page: What is BAML?
@@ -175,6 +179,11 @@ navigation:
         path: docs/observability/overview.mdx
       - page: Tracing and tagging functions
         path: docs/observability/tracing-tagging.mdx
+  - section: Extraction API
+    contents:
+      - page: Extraction API
+        path: docs/dashboard/extraction-api.mdx
+      
   - section: Comparisons
     contents:
       - page: Comparing Marvin
