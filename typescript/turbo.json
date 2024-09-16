@@ -15,7 +15,7 @@
       "outputs": ["dist/**"]
     },
     "@gloo-ai/baml-schema-wasm-web#build": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "@gloo-ai/baml-schema-wasm-node#build"],
       "inputs": ["../../engine/**/*.rs", "../../engine/**/*.toml", "../../engine/**/*.j2"],
       "outputs": ["dist/**"]
     },

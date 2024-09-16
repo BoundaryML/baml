@@ -1,0 +1,207 @@
+openapi: 3.1.0
+info:
+  title: File Upload and JSON Conversion API
+  description: |
+    This API allows users to upload one or multiple files of various types and receive their contents as JSON blobs.
+    Optionally, users can include a prompt to customize the processing.
+  version: 1.5.0
+servers:
+  - url: https://api.example.com/v1
+    description: Production server
+
+paths:
+  /upload:
+    post:
+      summary: Upload one or multiple files and receive their JSON representations
+      description: |
+        Uploads one or multiple supported file types and returns their contents as JSON blobs along with metadata and usage information.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                uploaded_files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: |
+                    The files to be uploaded. Supported formats include:
+                    .bmp, .csv, .doc, .docx, .eml, .epub, .heic, .html, .jpeg, .png, .md, .msg,
+                    .odt, .org, .p7s, .pdf, .ppt, .pptx, .rst, .rtf, .tiff, .txt, .tsv,
+                    .xls, .xlsx, and .xml.
+                prompt:
+                  type: string
+                  description: An optional prompt to guide the processing of the uploaded files.
+              required:
+                - uploaded_files
+      responses:
+        '200':
+          description: Successful file upload and conversion
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    description: An array of processed file results.
+                    items:
+                      type: object
+                      properties:
+                        file_name:
+                          type: string
+                          description: The original name of the uploaded file.
+                        extracted_content:
+                          oneOf:
+                            - type: object
+                              description: The JSON representation of the uploaded file's content.
+                            - type: array
+                              items:
+                                type: object
+                              description: An array of JSON representations if the file contains multiple JSON blobs.
+                          description: The JSON representation(s) of the uploaded file's content.
+                        metadata:
+                          oneOf:
+                            - $ref: '#/components/schemas/PDFMetadata'
+                            - $ref: '#/components/schemas/XMLMetadata'
+                            - $ref: '#/components/schemas/CSVMetadata'
+                            - $ref: '#/components/schemas/DocMetadata'
+                            - $ref: '#/components/schemas/ImageMetadata'
+                            # Add other metadata schemas as needed
+                          description: Metadata extracted from the uploaded file.
+                      required:
+                        - file_name
+                        - extracted_content
+                        - metadata
+                  usage:
+                    $ref: '#/components/schemas/Usage'
+                required:
+                  - results
+                  - usage
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: Unsupported media type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    Usage:
+      type: object
+      properties:
+        consumed_credits:
+          type: integer
+          format: int32
+          description: The number of credits consumed for processing the request.
+      required:
+        - consumed_credits
+
+    PDFMetadata:
+      type: object
+      properties:
+        title:
+          type: string
+          description: The title of the PDF document.
+        author:
+          type: string
+          description: The author of the PDF document.
+        number_of_pages:
+          type: integer
+          description: The total number of pages in the PDF document.
+      required:
+        - title
+        - author
+        - number_of_pages
+      description: Metadata specific to PDF files.
+
+    XMLMetadata:
+      type: object
+      properties:
+        root_element:
+          type: string
+          description: The root element of the XML document.
+        namespace:
+          type: string
+          description: The XML namespace used in the document.
+      required:
+        - root_element
+      description: Metadata specific to XML files.
+
+    CSVMetadata:
+      type: object
+      properties:
+        delimiter:
+          type: string
+          description: The delimiter used in the CSV file.
+        number_of_rows:
+          type: integer
+          description: The total number of rows in the CSV file.
+        number_of_columns:
+          type: integer
+          description: The total number of columns in the CSV file.
+      required:
+        - delimiter
+        - number_of_rows
+        - number_of_columns
+      description: Metadata specific to CSV files.
+
+    DocMetadata:
+      type: object
+      properties:
+        word_count:
+          type: integer
+          description: The total number of words in the document.
+        character_count:
+          type: integer
+          description: The total number of characters in the document.
+      required:
+        - word_count
+        - character_count
+      description: Metadata specific to DOC/DOCX files.
+
+    ImageMetadata:
+      type: object
+      properties:
+        format:
+          type: string
+          description: The image format (e.g., PNG, JPEG, BMP).
+        width:
+          type: integer
+          description: The width of the image in pixels.
+        height:
+          type: integer
+          description: The height of the image in pixels.
+      required:
+        - format
+        - width
+        - height
+      description: Metadata specific to image files like PNG, JPEG, BMP, etc.
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: A descriptive error message.
+        code:
+          type: integer
+          description: The HTTP status code applicable to this error.
+      required:
+        - error
+        - code
