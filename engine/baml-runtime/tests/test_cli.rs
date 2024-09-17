@@ -33,10 +33,10 @@ mod test_cli {
     // NB(sam): this test is flaky due to how the port reservation works. harness needs to be updated to choose ports for test cases.
     #[rstest]
     #[tokio::test]
-    async fn cli(#[values("dev", "serve")] cmd: &str) -> Result<()> {
+    async fn cli(
+        #[values(("dev", "2022"), ("serve", "2023"))] (cmd, port): (&str, &str),
+    ) -> Result<()> {
         let h = Harness::new(format!("{cmd}_test"))?;
-
-        const PORT: &str = "2024";
 
         let run = h.run_cli("init")?.output()?;
         assert_eq!(run.status.code(), Some(0));
@@ -47,7 +47,7 @@ mod test_cli {
         assert!(String::from_utf8(run.stderr)?.contains("Please run with --preview"),);
 
         let mut child = h
-            .run_cli(format!("{cmd} --preview --port {PORT}"))?
+            .run_cli(format!("{cmd} --preview --port {port}"))?
             .spawn()?;
         defer! {
             let _ = child.kill();
@@ -55,7 +55,7 @@ mod test_cli {
         }
 
         assert!(
-            reqwest::get(&format!("http://localhost:{PORT}/_debug/ping"))
+            reqwest::get(&format!("http://localhost:{port}/_debug/ping"))
                 .await?
                 .status()
                 .is_success()
@@ -75,7 +75,7 @@ mod test_cli {
       - C++
     "};
         let resp = reqwest::Client::new()
-            .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
+            .post(&format!("http://localhost:{port}/call/ExtractResume"))
             .json(&json!({ "resume": resume }))
             .send()
             .await?;
@@ -85,7 +85,7 @@ mod test_cli {
 
         let stream_start = Instant::now();
         let resp = reqwest::Client::new()
-            .post(&format!("http://localhost:{PORT}/stream/ExtractResume"))
+            .post(&format!("http://localhost:{port}/stream/ExtractResume"))
             .json(&json!({ "resume": resume }))
             .send()
             .await?;
