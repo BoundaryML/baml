@@ -3,6 +3,8 @@ use crate::{context::Context, types::ToStringAttributes};
 
 use super::alias::visit_alias_attribute;
 use super::description::visit_description_attribute;
+use super::assert::visit_assert_or_check_attributes;
+
 
 pub(super) fn visit(ctx: &mut Context<'_>, as_block: bool) -> Option<ToStringAttributes> {
     let mut modified = false;
@@ -20,6 +22,19 @@ pub(super) fn visit(ctx: &mut Context<'_>, as_block: bool) -> Option<ToStringAtt
         modified = true;
         ctx.validate_visited_arguments();
     }
+
+    if ctx.visit_repeated_attr("assert") {
+        visit_assert_or_check_attributes("assert", &mut attributes, ctx);
+        modified = true;
+        ctx.validate_visited_arguments();
+    }
+
+    if ctx.visit_repeated_attr("check") {
+        visit_assert_or_check_attributes("check", &mut attributes, ctx);
+        modified = true;
+        ctx.validate_visited_arguments();
+    }
+
 
     if modified {
         Some(ToStringAttributes::Static(attributes))

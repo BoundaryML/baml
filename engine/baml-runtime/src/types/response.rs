@@ -1,4 +1,5 @@
 pub use crate::internal::llm_client::LLMResponse;
+use crate::internal::llm_client::orchestrator::user_checks::UserFailure;
 use crate::{errors::ExposedError, internal::llm_client::orchestrator::OrchestrationScope};
 use anyhow::Result;
 use colored::*;
@@ -7,10 +8,11 @@ use baml_types::BamlValue;
 use jsonish::BamlValueWithFlags;
 
 pub struct FunctionResult {
-    event_chain: Vec<(
+    pub event_chain: Vec<(
         OrchestrationScope,
         LLMResponse,
         Option<Result<jsonish::BamlValueWithFlags>>,
+        Vec<UserFailure>
     )>,
 }
 
@@ -49,9 +51,10 @@ impl FunctionResult {
         scope: OrchestrationScope,
         response: LLMResponse,
         parsed: Option<Result<BamlValueWithFlags>>,
+        failed_checks: Vec<UserFailure>,
     ) -> Self {
         Self {
-            event_chain: vec![(scope, response, parsed)],
+            event_chain: vec![(scope, response, parsed, failed_checks)],
         }
     }
 
@@ -61,6 +64,7 @@ impl FunctionResult {
         OrchestrationScope,
         LLMResponse,
         Option<Result<BamlValueWithFlags>>,
+        Vec<UserFailure>,
     )> {
         &self.event_chain
     }
@@ -70,6 +74,7 @@ impl FunctionResult {
             OrchestrationScope,
             LLMResponse,
             Option<Result<BamlValueWithFlags>>,
+            Vec<UserFailure>,
         )>,
     ) -> Result<Self> {
         if chain.is_empty() {
@@ -142,6 +147,7 @@ pub enum TestFailReason<'a> {
     TestUnspecified(&'a anyhow::Error),
     TestLLMFailure(&'a LLMResponse),
     TestParseFailure(&'a anyhow::Error),
+    // TestFailedAssertion(&'a UserFailure), -- TODO: (Greg) add this.
 }
 
 impl PartialEq for TestFailReason<'_> {

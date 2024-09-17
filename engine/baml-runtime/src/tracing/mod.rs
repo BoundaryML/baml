@@ -591,7 +591,7 @@ impl From<&FunctionResult> for MetadataType {
             result
                 .event_chain()
                 .iter()
-                .map(|(_, r, _)| r.into())
+                .map(|(_, r, _, _)| r.into())
                 .collect::<Vec<_>>(),
         )
     }

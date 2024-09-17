@@ -16,7 +16,7 @@ use crate::{
     FunctionResult, RuntimeContext,
 };
 
-use super::{OrchestrationScope, OrchestratorNodeIterator};
+use super::{user_checks::UserFailure, OrchestrationScope, OrchestratorNodeIterator};
 
 pub async fn orchestrate_stream<F>(
     iter: OrchestratorNodeIterator,
@@ -32,6 +32,7 @@ pub async fn orchestrate_stream<F>(
         OrchestrationScope,
         LLMResponse,
         Option<Result<BamlValueWithFlags>>,
+        Vec<UserFailure>,
     )>,
     Duration,
 )
@@ -46,7 +47,8 @@ where
         let prompt = match node.render_prompt(ir, prompt, ctx, params).await {
             Ok(p) => p,
             Err(e) => {
-                results.push((node.scope, LLMResponse::OtherFailure(e.to_string()), None));
+                // TODO: (Greg) Handle user asserts and checks.
+                results.push((node.scope, LLMResponse::OtherFailure(e.to_string()), None, vec![]));
                 continue;
             }
         };
@@ -64,6 +66,7 @@ where
                                     node.scope.clone(),
                                     LLMResponse::Success(s.clone()),
                                     Some(parsed),
+                                    vec![], // TODO: (Greg) compute checks and asserts for streams.
                                 ));
                             }
                             _ => {}
@@ -93,12 +96,12 @@ where
             _ => None,
         };
         let sleep_duration = node.error_sleep_duration().cloned();
-        results.push((node.scope, final_response, parsed_response));
+        results.push((node.scope, final_response, parsed_response, vec![])); // TODO: (Greg) user checks in stream.
 
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results
             .last()
-            .map_or(false, |(_, r, _)| matches!(r, LLMResponse::Success(_)))
+            .map_or(false, |(_, r, _, _)| matches!(r, LLMResponse::Success(_))) // TODO: (Greg) Is this right, considering checks/asserts?
         {
             break;
         } else {

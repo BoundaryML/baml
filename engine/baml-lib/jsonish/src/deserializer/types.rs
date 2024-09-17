@@ -72,7 +72,7 @@ impl BamlValueWithFlags {
 
 #[derive(Debug, Clone)]
 pub struct ValueWithFlags<T> {
-    value: T,
+    pub value: T,
     pub(super) flags: DeserializerConditions,
 }
 

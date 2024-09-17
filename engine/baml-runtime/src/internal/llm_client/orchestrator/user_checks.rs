@@ -54,7 +54,7 @@ pub struct UserFailure {
 /// that contain classes with further asserts and checks.
 pub fn run_user_checks(
     baml_value: &BamlValue,
-    typing_env: &HashMap<ClassId, Class>
+    typing_env: &HashMap<&str, &Class>
 ) -> Result<UserChecksResult> {
 
     // List all classes of this value, including the top-level class.
@@ -70,7 +70,7 @@ pub fn run_user_checks(
         }})
         .map(|(field_ctx, class_name, class)| {
             typing_env
-                .get(class_name)
+                .get(class_name.as_str())
                 .context("Faild to find type in context")
                 .map(|ty| (field_ctx, class_name, class, ty))
 
@@ -140,7 +140,7 @@ pub fn check_class(
     field_context: Vec<String>,
     (class_name, class_fields): (String, BamlMap<String, BamlValue>),
     class_type: &Class,
-    typing_env: &HashMap<String, Class>,
+    typing_env: &HashMap<&str, &Class>,
 ) -> Result<UserChecksResult> {
 
     // Run checks in each field.
@@ -173,7 +173,7 @@ pub fn run_user_checks_field(
     field_context: Vec<String>,
     value: &BamlValue,
     type_: &Field,
-    typing_env: &HashMap<ClassId, Class>,
+    typing_env: &HashMap<&str, &Class>,
 ) -> Result<UserChecksResult> {
     let field_type = type_.r#type.elem.clone();
     let field_name = type_.name.to_string();
@@ -432,6 +432,10 @@ mod tests {
         ].into_iter().collect::<HashMap<String, Class>>()
     }
 
+    fn to_refs(types: &HashMap<String, Class>) -> HashMap<&str, &Class> {
+        types.iter().map(|(name, class)| (name.as_ref(), class)).collect()
+    }
+
     #[test]
     fn test_contained_classes() {
         let (foo, bar, _baz, qux, quxs) = mk_example_instance(vec![1,2,3]);
@@ -459,7 +463,7 @@ mod tests {
     fn test_checks_and_asserts_success() {
         let (foo, _bar, _baz, _qux, _quxs) = mk_example_instance(vec![2,3,4,5]);
         let types = mk_example_typing_env();
-        let res = run_user_checks(&foo, &types).unwrap();
+        let res = run_user_checks(&foo, &to_refs(&types)).unwrap();
         assert_eq!(res, UserChecksResult::Success);
     }
 
@@ -467,7 +471,7 @@ mod tests {
     fn test_checks_and_asserts_warning_not_enough_quxs() {
         let (foo, _bar, _baz, _qux, _quxs) = mk_example_instance(vec![2]);
         let types = mk_example_typing_env();
-        let res = run_user_checks(&foo, &types).unwrap();
+        let res = run_user_checks(&foo, &to_refs(&types)).unwrap();
         assert_eq!(res, UserChecksResult::AssertFailure(
             UserFailure {
                 field_context: vec![],
@@ -481,7 +485,7 @@ mod tests {
     fn test_checks_and_asserts_multiple_check_failures() {
         let (foo, _bar, _baz, _qux, _quxs) = mk_example_instance(vec![0, 0, 0]);
         let types = mk_example_typing_env();
-        let res = run_user_checks(&foo, &types).unwrap();
+        let res = run_user_checks(&foo, &to_refs(&types)).unwrap();
         assert_eq!(res, UserChecksResult::CheckFailures(vec![
             UserFailure {
                 field_context: vec!["quxs".to_string(), "0".to_string()],

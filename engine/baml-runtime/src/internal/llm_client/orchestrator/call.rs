@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use baml_types::BamlValue;
-use internal_baml_core::ir::repr::IntermediateRepr;
+use internal_baml_core::ir::{repr::IntermediateRepr, repr::Class};
 use jsonish::BamlValueWithFlags;
 use web_time::Duration;
 
@@ -15,7 +17,7 @@ use crate::{
     RuntimeContext,
 };
 
-use super::{OrchestrationScope, OrchestratorNodeIterator};
+use super::{user_checks::{run_user_checks, UserChecksResult, UserFailure}, OrchestrationScope, OrchestratorNodeIterator};
 
 pub async fn orchestrate(
     iter: OrchestratorNodeIterator,
@@ -29,6 +31,7 @@ pub async fn orchestrate(
         OrchestrationScope,
         LLMResponse,
         Option<Result<BamlValueWithFlags>>,
+        Vec<UserFailure>,
     )>,
     Duration,
 ) {
@@ -39,7 +42,7 @@ pub async fn orchestrate(
         let prompt = match node.render_prompt(ir, prompt, ctx, params).await {
             Ok(p) => p,
             Err(e) => {
-                results.push((node.scope, LLMResponse::OtherFailure(e.to_string()), None));
+                results.push((node.scope, LLMResponse::OtherFailure(e.to_string()), None, vec![]));
                 continue;
             }
         };
@@ -49,13 +52,32 @@ pub async fn orchestrate(
             _ => None,
         };
 
+        let user_checks_result = match parsed_response.as_ref() {
+            Some(Ok(ref val_with_tags)) => {
+                let val: BamlValue = val_with_tags.clone().into();
+                let typing_context = ir
+                    .walk_classes()
+                    .map(|class_node| (class_node.name(), class_node.elem()))
+                    .collect();
+                run_user_checks(&val, &typing_context)
+            },
+            _ => Ok(UserChecksResult::Success),
+        };
+
+        let (checked_response, check_failures) = match user_checks_result {
+            Ok(UserChecksResult::Success) => (parsed_response, vec![]),
+            Ok(UserChecksResult::AssertFailure(f)) => (Some(Err(anyhow::anyhow!(format!("TODO: got assert failure: {:?}", f)))), vec![]),
+            Ok(UserChecksResult::CheckFailures(fs)) => (parsed_response, fs),
+            Err(e) => (Some(Err(anyhow::anyhow!("Failed to run user_checks: {}", e))), vec![]),
+        };
+
         let sleep_duration = node.error_sleep_duration().cloned();
-        results.push((node.scope, response, parsed_response));
+        results.push((node.scope, response, checked_response, check_failures));
 
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results
             .last()
-            .map_or(false, |(_, r, _)| matches!(r, LLMResponse::Success(_)))
+            .map_or(false, |(_, r, _, _)| matches!(r, LLMResponse::Success(_))) // TODO: (Greg) Handle asserts/checks?
         {
             break;
         } else {
