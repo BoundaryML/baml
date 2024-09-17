@@ -1,0 +1,15 @@
+[package]
+name = "tutorial"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+baml-lib = { path = "../baml-lib/baml" }
+baml-runtime = { path = "../baml-runtime", features = ["internal"] }
+baml-types = { path = "../baml-lib/baml-types" }
+internal-baml-codegen.workspace = true
+internal-baml-core.workspace = true

@@ -4462,6 +4462,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
+name = "tutorial"
+version = "0.54.1"
+dependencies = [
+ "anyhow",
+ "baml-lib",
+ "baml-runtime",
+ "baml-types",
+ "internal-baml-codegen",
+ "internal-baml-core",
+]
+
+[[package]]
 name = "typenum"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
