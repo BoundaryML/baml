@@ -150,6 +150,11 @@ you can get a client library for free.
   - run `mvn clean install` to install the generated client library to your
     local Maven repository
 
+  <Warning>
+    If you only use Maven through an IDE (e.g. IntelliJ IDEA), you should
+    remove `&& mvn clean install` from the generated `on_generate` command.
+  </Warning>
+
   </Tab>
 
   <Tab title="PHP">
@@ -256,7 +261,17 @@ func main() {
 </Tab>
 
 <Tab title="Java">
-First, add the OpenAPI-generated client to your project:
+First, add the OpenAPI-generated client to your project.
+
+<AccordionGroup>
+
+<Accordion title="If you have 'mvn' in your PATH">
+
+You can use the default `on_generate` command, which will tell `baml dev` to
+install the OpenAPI-generated client into your local Maven repository by running
+`mvn clean install` every time you save a change to a BAML file.
+
+To depend on the client in your local Maven repo, you can use these configs:
 
 <CodeGroup>
 ```xml pom.xml
@@ -279,6 +294,72 @@ dependencies {
 }
 ```
 </CodeGroup>
+
+</Accordion>
+
+<Accordion title="If you don't have 'mvn' in your PATH">
+
+You'll probably want to comment out `on_generate` and instead use either the [OpenAPI Maven plugin] or [OpenAPI Gradle plugin] to build your OpenAPI client.
+
+[OpenAPI Maven plugin]: https://github.com/OpenAPITools/openapi-generator/tree/master/modules/openapi-generator-maven-plugin
+[OpenAPI Gradle plugin]: https://github.com/OpenAPITools/openapi-generator/tree/master/modules/openapi-generator-gradle-plugin
+
+<CodeGroup>
+```xml pom.xml
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.openapitools</groupId>
+            <artifactId>openapi-generator-maven-plugin</artifactId>
+            <version>7.8.0</version> <!-- Use the latest stable version -->
+            <executions>
+                <execution>
+                    <goals>
+                        <goal>generate</goal>
+                    </goals>
+                    <configuration>
+                        <inputSpec>${project.basedir}/baml_client/openapi.yaml</inputSpec>
+                        <generatorName>baml</generatorName> <!-- or another generator name, e.g. 'kotlin' or 'spring' -->
+                        <output>${project.build.directory}/generated-sources/openapi</output>
+                        <apiPackage>com.boundaryml.baml_client.api</apiPackage>
+                        <modelPackage>com.boundaryml.baml_client.model</modelPackage>
+                        <invokerPackage>com.boundaryml.baml_client</invokerPackage>
+                        <java8>true</java8>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+```
+
+```kotlin settings.gradle.kts
+plugins {
+    id("org.openapi.generator") version "7.8.0"
+}
+
+openApiGenerate {
+    generatorName.set("java") // Change to 'kotlin', 'spring', etc. if needed
+    inputSpec.set("${projectDir}/baml_client/openapi.yaml")
+    outputDir.set("$buildDir/generated-sources/openapi")
+    apiPackage.set("com.boundaryml.baml_client.api")
+    modelPackage.set("com.boundaryml.baml_client.model")
+    invokerPackage.set("com.boundaryml.baml_client")
+    additionalProperties.set(mapOf("java8" to "true"))
+}
+
+sourceSets["main"].java {
+    srcDir("$buildDir/generated-sources/openapi/src/main/java")
+}
+
+tasks.named("compileJava") {
+    dependsOn("openApiGenerate")
+}
+```
+</CodeGroup>
+
+</Accordion>
+</AccordionGroup>
 
 Then, copy this code into wherever your `main` function is:
 
