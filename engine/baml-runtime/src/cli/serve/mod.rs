@@ -327,53 +327,10 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
     }
 
     async fn baml_call(self: Arc<Self>, b_fn: String, b_args: serde_json::Value) -> Response {
-        // We do this conversion in a 3-step POST -> JSON -> Map -> Map<String,
-        // BamlValue>, instead of a 2-step POST -> BamlValue -> BamlValue::Map,
-        // because this approach lets us provide the users with better errors.
-
-        let args: serde_json::Value = match serde_json::from_value(b_args) {
-            Ok(v) => v,
-            Err(e) => {
-                return BamlError::InvalidArgument(
-                    format!("POST data must be valid JSON: {:?}", e).into(),
-                )
-                .into_response();
-            }
+        let args = match parse_args(&b_fn, b_args) {
+            Ok(args) => args,
+            Err(e) => return e.into_response(),
         };
-
-        let args = match args {
-            serde_json::Value::Object(v) => v,
-            _ => {
-                return BamlError::InvalidArgument(
-                    format!("POST data must be a JSON map of the arguments for BAML function {b_fn}, from arg name to value").into()
-                )
-                .into_response();
-            }
-        };
-
-        let args: IndexMap<String, BamlValue> = match args
-            .into_iter()
-            .map(|(k, v)| serde_json::from_value(v).map(|v| (k, v)))
-            .collect::<serde_json::Result<_>>()
-        {
-            Ok(v) => v,
-            Err(e) => {
-                return BamlError::InvalidArgument(
-                    format!(
-                        "Arguments must be convertible from JSON to BamlValue: {:?}",
-                        e
-                    )
-                    .into(),
-                )
-                .into_response();
-            }
-        };
-
-        for (_, v) in args.iter() {
-            if let Err(e) = v.validate_for_baml_serve() {
-                return e.into_response();
-            }
-        }
 
         let ctx_mgr = RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None);
 
@@ -405,10 +362,6 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         }
     }
 
-    /// TODO: improve our error handling pattern
-    ///
-    /// anyhow-error-response allows converting an anyhow::Error into an axum response
-    /// https://docs.rs/axum/latest/axum/error_handling/index.html#axums-error-handling-model
     async fn baml_call_axum(
         self: Arc<Self>,
         extract::Path(b_fn): extract::Path<String>,
@@ -417,54 +370,85 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         self.baml_call(b_fn, b_args).await
     }
 
-    fn baml_stream(
-        self: Arc<Self>,
-        b_fn: String,
-        b_args: serde_json::Value,
-    ) -> Pin<Box<dyn Stream<Item = BamlValue> + Send>> {
+    fn baml_stream(self: Arc<Self>, b_fn: String, b_args: serde_json::Value) -> Response {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
+        let args = match parse_args(&b_fn, b_args) {
+            Ok(args) => args,
+            Err(e) => return e.into_response(),
+        };
+
         tokio::spawn(async move {
-            let args: BamlValue = serde_json::from_value(b_args)
-                .context("Failed to convert arguments from JSON to BamlValue")?;
-
-            let args = args
-                .as_map()
-                .context("Arguments provided must be a map, from arg name to value")?;
-
             let ctx_mgr =
                 RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None);
 
-            let mut result_stream = self
+            let result_stream = self
                 .b
                 .read()
                 .await
-                .stream_function(b_fn, &args, &ctx_mgr, None, None)?;
+                .stream_function(b_fn, &args, &ctx_mgr, None, None);
 
-            let (result, _trace_id) = result_stream
-                .run(
-                    Some(move |result| {
-                        // If the receiver is closed (either because it called close or it was dropped),
-                        // we can't really do anything
-                        match sender.send(result) {
-                            Ok(_) => (),
-                            Err(e) => {
-                                log::error!("Error sending result to receiver: {:?}", e);
+            match result_stream {
+                Ok(mut result_stream) => {
+                    let (result, _trace_id) = result_stream
+                        .run(
+                            Some(move |result| {
+                                // If the receiver is closed (either because it called close or it was dropped),
+                                // we can't really do anything
+                                match sender.send(result) {
+                                    Ok(_) => (),
+                                    Err(e) => {
+                                        log::error!("Error sending result to receiver: {:?}", e);
+                                    }
+                                }
+                            }),
+                            &ctx_mgr,
+                            None,
+                            None,
+                        )
+                        .await;
+
+                    match result {
+                        Ok(function_result) => match function_result.llm_response() {
+                            LLMResponse::Success(_) => match function_result.parsed_content() {
+                                // Just because the LLM returned 2xx doesn't mean that it returned parse-able content!
+                                Ok(parsed) => {
+                                    dbg!(parsed);
+                                    (StatusCode::OK, Json::<BamlValue>(parsed.into()))
+                                        .into_response()
+                                }
+
+                                Err(e) => {
+                                    log::debug!("Error parsing content: {:?}", e);
+                                    BamlError::ValidationFailure(format!("{:?}", e)).into_response()
+                                }
+                            },
+                            LLMResponse::LLMFailure(failure) => {
+                                log::debug!("LLMResponse::LLMFailure: {:?}", failure);
+                                BamlError::ClientError(format!("{:?}", failure.message))
+                                    .into_response()
                             }
-                        }
-                    }),
-                    &ctx_mgr,
-                    None,
-                    None,
-                )
-                .await;
-
-            result
+                            LLMResponse::UserFailure(message) => {
+                                BamlError::InvalidArgument(message.clone()).into_response()
+                            }
+                            LLMResponse::InternalFailure(message) => {
+                                BamlError::InternalError(message.clone()).into_response()
+                            }
+                        },
+                        Err(e) => BamlError::from_anyhow(e).into_response(),
+                    }
+                }
+                Err(e) => BamlError::InternalError(format!("Error starting stream: {:?}", e))
+                    .into_response(),
+            }
         });
 
-        let event_stream = EventStream { receiver };
+        // TODO: streaming is broken. the above should return first.
+        let stream = Box::pin(EventStream { receiver }).map(|bv| Event::default().json_data(bv));
 
-        Box::pin(event_stream)
+        Sse::new(stream)
+            .keep_alive(KeepAlive::default())
+            .into_response()
     }
 
     // newline-delimited can be implemented using axum_streams::StreamBodyAs::json_nl(self.baml_stream(path, body))
@@ -473,13 +457,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         extract::Path(path): extract::Path<String>,
         extract::Json(body): extract::Json<serde_json::Value>,
     ) -> Response {
-        let stream = self
-            .baml_stream(path, body)
-            .map(|bv| Event::default().json_data(bv));
-
-        Sse::new(stream)
-            .keep_alive(KeepAlive::default())
-            .into_response()
+        self.baml_stream(path, body)
     }
 }
 
@@ -495,11 +473,63 @@ impl Stream for EventStream {
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         match self.receiver.poll_recv(cx) {
-            Poll::Ready(Some(item)) => Poll::Ready(Some(
-                item.parsed().as_ref().unwrap().as_ref().unwrap().into(),
-            )),
+            Poll::Ready(Some(item)) => match item.parsed_content() {
+                // TODO: not sure if this is the correct way to implement this.
+                Ok(parsed) => Poll::Ready(Some(parsed.into())),
+                Err(_) => Poll::Pending,
+            },
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Pending => Poll::Pending,
         }
     }
+}
+
+fn parse_args(
+    b_fn: &str,
+    b_args: serde_json::Value,
+) -> Result<IndexMap<String, BamlValue>, BamlError> {
+    // We do this conversion in a 3-step POST -> JSON -> Map -> Map<String,
+    // BamlValue>, instead of a 2-step POST -> BamlValue -> BamlValue::Map,
+    // because this approach lets us provide the users with better errors.
+
+    let args: serde_json::Value = match serde_json::from_value(b_args) {
+        Ok(v) => v,
+        Err(e) => {
+            return Err(BamlError::InvalidArgument(
+                format!("POST data must be valid JSON: {:?}", e).into(),
+            ));
+        }
+    };
+
+    let args = match args {
+        serde_json::Value::Object(v) => v,
+        _ => {
+            return Err(BamlError::InvalidArgument(
+                format!("POST data must be a JSON map of the arguments for BAML function {b_fn}, from arg name to value").into()
+            ));
+        }
+    };
+
+    let args: IndexMap<String, BamlValue> = match args
+        .into_iter()
+        .map(|(k, v)| serde_json::from_value(v).map(|v| (k, v)))
+        .collect::<serde_json::Result<_>>()
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return Err(BamlError::InvalidArgument(
+                format!(
+                    "Arguments must be convertible from JSON to BamlValue: {:?}",
+                    e
+                )
+                .into(),
+            ));
+        }
+    };
+
+    for (_, v) in args.iter() {
+        v.validate_for_baml_serve()?;
+    }
+
+    Ok(args)
 }
