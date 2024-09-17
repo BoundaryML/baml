@@ -70,9 +70,18 @@ you can get a client library for free.
         </Tab>
 
         <Tab title="Windows">
-          To install `npx`, use the [Node.js installer](https://nodejs.org/en/download/prebuilt-installer).
+          To install `npx` and `java`:
 
-          To install `java`, use the [Adoptium OpenJDK `.msi` installer](https://adoptium.net/temurin/releases/?os=windows).
+            1. Use the [Node.js installer](https://nodejs.org/en/download/prebuilt-installer) to install `npx` (default installer settings are fine).
+            2. Run `npm install -g npm@latest` to update `npx` (there is currently an [issue][npx-windows-issue] with the default install of `npx` on Windows where it doesn't work out of the box).
+            3. Run the [Adoptium OpenJDK `.msi` installer](https://adoptium.net/temurin/releases/?os=windows) (install the JDK; default installer settings are fine).
+
+          You can verify that `npx` and `java` are installed by running:
+          
+          ```powershell
+          npx -version
+          java -version
+          ```
         </Tab>
 
         <Tab title="Other">
@@ -89,10 +98,17 @@ you can get a client library for free.
       on your needs, we can also provide a static binary for using BAML.
       </Note>
 
-  
+  [npx-windows-issue]: https://github.com/nodejs/node/issues/53538
+
   ### Create a new BAML project
 
-  This will give you some starter BAML code in a `baml_src` directory.
+  This will give you some starter BAML code in a `baml_src` directory, and also
+  set up `generator.baml` based on `--openapi-client-type`, so that BAML will:
+  
+  - compile your BAML functions into an OpenAPI specification, and 
+  - configure `on_generate` to generate an OpenAPI client in the language of your choosing
+
+  <p></p>
 
   <Tabs>
 
@@ -122,16 +138,31 @@ you can get a client library for free.
   </Tab>
 
   <Tab title="Java">
+  
   ```bash
   npx @boundaryml/baml init \
     --client-type rest/openapi --openapi-client-type java
   ```
+
+  Notice that `on_generate` has been initialized for you to:
+
+  - run the OpenAPI generator to generate a Java client library, and _also_
+  - run `mvn clean install` to install the generated client library to your
+    local Maven repository
+
   </Tab>
 
   <Tab title="PHP">
   ```bash
   npx @boundaryml/baml init \
     --client-type rest/openapi --openapi-client-type php
+  ```
+  </Tab>
+
+  <Tab title="Ruby">
+  ```bash
+  npx @boundaryml/baml init \
+    --client-type rest/openapi --openapi-client-type ruby
   ```
   </Tab>
 
@@ -225,17 +256,38 @@ func main() {
 </Tab>
 
 <Tab title="Java">
-<Warning>
-  The README that the Java OpenAPI generator generates will have one mistake: it
-  will suggest importing from `baml_client.models.*`, but the correct
-  package to import from is `baml_client.model.*`. The OpenAPI team
-  will [fix this
-  soon](https://github.com/OpenAPITools/openapi-generator/issues/19431).
-</Warning>
+First, add the OpenAPI-generated client to your project:
+
+<CodeGroup>
+```xml pom.xml
+<dependency>
+  <groupId>org.openapitools</groupId>
+  <artifactId>openapi-java-client</artifactId>
+  <version>0.1.0</version>
+  <scope>compile</scope>
+</dependency>
+```
+
+```kotlin settings.gradle.kts
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    implementation("org.openapitools:openapi-java-client:0.1.0")
+}
+```
+</CodeGroup>
+
+Then, copy this code into wherever your `main` function is:
+
 ```Java
 import com.boundaryml.baml_client.ApiClient;
 import com.boundaryml.baml_client.ApiException;
 import com.boundaryml.baml_client.Configuration;
+// NOTE: baml_client/README.md will suggest importing from models.* - that is wrong.
+// See https://github.com/OpenAPITools/openapi-generator/issues/19431 for more details.
 import com.boundaryml.baml_client.model.*;
 import com.boundaryml.baml_client.api.DefaultApi;
 
@@ -268,6 +320,8 @@ public class Example {
   you, and you need help working around it.
 </Warning>
 
+First, add the OpenAPI-generated client to your project:
+
 ```json composer.json
     "repositories": [
         {
@@ -279,6 +333,8 @@ public class Example {
         "boundaryml/baml-client": "*@dev"
     }
 ```
+
+You can now use this code to call a BAML function:
 
 ```PHP
 <?php
@@ -350,10 +406,14 @@ end
   ```
 </Tip>
 
+First, add the OpenAPI-generated client to your project:
+
 ```toml Cargo.toml
 [dependencies]
 baml-client = { path = "./baml_client" }
 ```
+
+You can now use `cargo run`:
 
 ```rust
 use baml_client::models::ExtractResumeRequest;

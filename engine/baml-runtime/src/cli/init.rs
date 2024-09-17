@@ -3,6 +3,7 @@ use std::{path::PathBuf, process::Command};
 use anyhow::Result;
 use baml_types::GeneratorOutputType;
 use include_dir::include_dir;
+use which::which;
 
 #[derive(clap::Args, Debug)]
 pub struct InitArgs {
@@ -29,23 +30,15 @@ static SAMPLE_PROJECT: include_dir::Dir =
 
 /// TODO: one problem with this impl - this requires all users to install openapi-generator the same way
 fn infer_openapi_command() -> Result<&'static str> {
-    if Command::new("which")
-        .args(["openapi-generator"])
-        .output()
-        .is_ok_and(|output| output.status.success())
-    {
+    if which("openapi-generator").is_ok() {
         return Ok("openapi-generator");
     }
 
-    if Command::new("which")
-        .args(["openapi-generator-cli"])
-        .output()
-        .is_ok_and(|output| output.status.success())
-    {
+    if which("openapi-generator-cli").is_ok() {
         return Ok("openapi-generator-cli");
     }
 
-    if Command::new("npx").args(["--version"]).status().is_ok() {
+    if which("npx").is_ok() {
         return Ok("npx @openapitools/openapi-generator-cli");
     }
 
@@ -74,7 +67,10 @@ impl InitArgs {
         let openapi_generator_path = infer_openapi_command();
 
         if let Err(e) = &openapi_generator_path {
-            log::warn!("OpenAPI client generator will be skipped, since we failed to find one in your PATH: {}", e);
+            log::warn!(
+                "Failed to find openapi-generator-cli in your PATH, defaulting to using npx: {}",
+                e
+            );
         }
 
         let main_baml_content = generate_main_baml_content(
@@ -140,7 +136,7 @@ fn generate_main_baml_content(
             "{cmd} --additional-properties enumClassPrefix=true,isGoSubmodule=true,packageName=baml_client,withGoMod=false",
         ),
         Some("java") => format!(
-            "{cmd} --additional-properties invokerPackage=com.boundaryml.baml_client,modelPackage=com.boundaryml.baml_client.model,apiPackage=com.boundaryml.baml_client.api,java8=true && cd ../baml_client && mvn clean install",
+            "{cmd} --additional-properties invokerPackage=com.boundaryml.baml_client,modelPackage=com.boundaryml.baml_client.model,apiPackage=com.boundaryml.baml_client.api,java8=true && mvn clean install",
         ),
         Some("php") => format!(
             "{cmd} --additional-properties composerPackageName=boundaryml/baml-client,invokerPackage=BamlClient",
