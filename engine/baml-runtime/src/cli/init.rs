@@ -345,7 +345,7 @@ generator target {{
 
     // 'baml-cli generate' will run this after generating openapi.yaml, to generate your OpenAPI client
     // This command will be run from within $output_dir
-    on_generate "openapi-generator generate -i openapi.yaml -g java -o . --additional-properties invokerPackage=com.boundaryml.baml_client,modelPackage=com.boundaryml.baml_client.model,apiPackage=com.boundaryml.baml_client.api,java8=true && cd ../baml_client && mvn clean install"
+    on_generate "openapi-generator generate -i openapi.yaml -g java -o . --additional-properties invokerPackage=com.boundaryml.baml_client,modelPackage=com.boundaryml.baml_client.model,apiPackage=com.boundaryml.baml_client.api,java8=true && mvn clean install"
 }}
 "#,
                 env!("CARGO_PKG_VERSION")
