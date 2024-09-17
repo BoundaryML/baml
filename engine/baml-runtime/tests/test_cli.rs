@@ -30,6 +30,7 @@ mod test_cli {
         Ok(())
     }
 
+    // NB(sam): this test is flaky due to how the port reservation works. harness needs to be updated to choose ports for test cases.
     #[rstest]
     #[tokio::test]
     async fn cli(#[values("dev", "serve")] cmd: &str) -> Result<()> {
