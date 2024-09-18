@@ -47,10 +47,15 @@ pub fn resolve_properties(
         None => Default::default(),
     };
 
+    let api_key = properties
+        .remove("api_key")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .filter(|s| !s.is_empty());
+
     Ok(PostRequestProperties {
         default_role,
         base_url,
-        api_key: None,
+        api_key,
         headers,
         properties,
         proxy_url: ctx

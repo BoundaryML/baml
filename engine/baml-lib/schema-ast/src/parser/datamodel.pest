@@ -105,11 +105,11 @@ numeric_literal = @{ ("-")? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 // ######################################
 // String literals. These behave specially in BAML.
 // ######################################
-banned_chars            = @{ "#" | "@" | "{" | "(" | "[" | "<" | "}" | ")" | "]" | ">" | "," | "'" | NEWLINE }
+banned_chars            = @{ "#" | "@" | "{" | "(" | "[" | "<" | "}" | ")" | "]" | ">" | "," | "'" | "//" | ":" | NEWLINE }
 banned_start_chars      =  { WHITESPACE | banned_chars }
 banned_end_chars        =  { WHITESPACE | banned_chars }
 unquoted_string_literal =  { (!banned_start_chars ~ ANY) ~ (!banned_chars ~ ANY)* ~ (!banned_end_chars ~ ANY)* }
-quoted_string_content   = @{ (!"\"" ~ !NEWLINE ~ ANY)* }
+quoted_string_content   = @{ (("\\\"" | !("\"" | NEWLINE) ~ ANY))* }
 quoted_string_literal   = ${ "\"" ~ quoted_string_content ~ "\"" }
 
 // TODO: Support comments in raw string literals
