@@ -49,7 +49,7 @@ block_attribute = { "@@" ~ identifier ~ arguments_list? }
 field_attribute = { "@" ~ identifier ~ arguments_list? }
 
 // Pest is greedy, order is very important here.
-field_type          = { (union | non_union) ~ optional_token? }
+field_type          = { (union | (non_union ~ (field_attribute)*)) ~ optional_token? }
 optional_token      = { "?" }
 union               = { base_type_with_attr ~ (field_operator ~ base_type_with_attr)+ }
 base_type_with_attr = { base_type ~ (NEWLINE? ~ field_attribute)* }
