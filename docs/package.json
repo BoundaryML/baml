@@ -1,5 +1,5 @@
 {
-  "scripts" : {
+  "scripts": {
     "dev": "npx fern docs dev",
     "preview": "npx fern generate --preview --docs"
   },

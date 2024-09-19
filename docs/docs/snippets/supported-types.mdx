@@ -4,7 +4,7 @@ slug: docs/snippets/supported-types
 ---
 
 
-Here's a list of all the types you can extract from LLMs with BAML:
+Here's a list of all the types that can be represented in BAML:
 
 ## Primitive types
 * `bool`
@@ -95,15 +95,15 @@ from baml_client import b
 async def run():
   # from URL
   res = await b.TestAudioInput(
-      img=Audio.from_url(
-          "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+      audio=Audio.from_url(
+          "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg"
       )
   )
 
   # Base64
   b64 = "iVBORw0K...."
   res = await b.TestAudioInput(
-    img=Audio.from_base64("image/png", b64)
+    audio=Audio.from_base64("audio/ogg", b64)
   )
 ```
 
@@ -114,13 +114,13 @@ import { Audio } from "@boundaryml/baml"
 
   // URL
   let res = await b.TestAudioInput(
-    Audio.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.mp4'),
+    Audio.fromUrl('https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg'),
   )
 
   // Base64
   const audio_base64 = ".."
   let res = await b.TestAudioInput(
-    Audio.fromBase64('image/png', audio_base64),
+    Audio.fromBase64('audio/ogg', audio_base64),
   )
   
 ```
@@ -131,7 +131,7 @@ import { Audio } from "@boundaryml/baml"
 
 ### enum
 
-**See also:** [Enum](/docs/syntax/enum)
+**See also:** [Enum](/docs/snippets/enum)
 
 A user-defined type consisting of a set of named constants.
 Use it when you need a model to choose from a known set of values, like in classification problems
@@ -145,7 +145,7 @@ enum Name {
 
 ### class
 
-**See also:** [Class](/docs/syntax/class)
+**See also:** [Class](/docs/snippets/class)
 
 Classes are for user-defined complex data structures.
 

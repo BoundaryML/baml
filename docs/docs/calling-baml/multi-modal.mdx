@@ -65,14 +65,14 @@ async def run():
   # from URL
   res = await b.TestAudioInput(
       img=Audio.from_url(
-          "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+          "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg"
       )
   )
 
   # Base64
   b64 = "iVBORw0K...."
   res = await b.TestAudioInput(
-    img=Audio.from_base64("image/png", b64)
+    audio=Audio.from_base64("audio/ogg", b64)
   )
 ```
 
@@ -83,13 +83,13 @@ import { Audio } from "@boundaryml/baml"
 
   // URL
   let res = await b.TestAudioInput(
-    Audio.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.mp4'),
+    Audio.fromUrl('https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg'),
   )
 
   // Base64
   const audio_base64 = ".."
   let res = await b.TestAudioInput(
-    Audio.fromBase64('image/png', audio_base64),
+    Audio.fromBase64('audio/ogg', audio_base64),
   )
   
 ```
