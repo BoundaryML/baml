@@ -36,6 +36,13 @@ client<llm> MyClient {
   **Default: `system`**
 </ParamField>
 
+<ParamField path="api_key" type="string" default="<none>">
+  Will be used to build the `Authorization` header, like so: `Authorization: Bearer $api_key`
+  If `api_key` is not set, or is set to an empty string, the `Authorization` header will not be sent.
+
+  **Default: `<none>`**
+</ParamField>
+
 <ParamField path="headers" type="object">
   Additional headers to send with the request.
 
