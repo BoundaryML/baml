@@ -168,7 +168,7 @@ fn generate_main_baml_content(
         format!(
             r#"
     // 'baml-cli generate' will run this after generating openapi.yaml, to generate your OpenAPI client
-    // This command will be run from within $output_dir
+    // This command will be run from within $output_dir/baml_client
     {}"#,
             openapi_generate_command.trim_start()
         )
@@ -315,7 +315,7 @@ generator target {{
     version "{}"
 
     // 'baml-cli generate' will run this after generating openapi.yaml, to generate your OpenAPI client
-    // This command will be run from within $output_dir
+    // This command will be run from within $output_dir/baml_client
     on_generate "openapi-generator generate -i openapi.yaml -g go -o . --additional-properties enumClassPrefix=true,isGoSubmodule=true,packageName=baml_client,withGoMod=false"
 }}
 "#,
@@ -344,7 +344,7 @@ generator target {{
     version "{}"
 
     // 'baml-cli generate' will run this after generating openapi.yaml, to generate your OpenAPI client
-    // This command will be run from within $output_dir
+    // This command will be run from within $output_dir/baml_client
     on_generate "openapi-generator generate -i openapi.yaml -g java -o . --additional-properties invokerPackage=com.boundaryml.baml_client,modelPackage=com.boundaryml.baml_client.model,apiPackage=com.boundaryml.baml_client.api,java8=true && mvn clean install"
 }}
 "#,
@@ -373,7 +373,7 @@ generator target {{
     version "{}"
 
     // 'baml-cli generate' will run this after generating openapi.yaml, to generate your OpenAPI client
-    // This command will be run from within $output_dir
+    // This command will be run from within $output_dir/baml_client
     //
     // Uncomment this line to tell BAML to automatically generate an OpenAPI client for you.
     //on_generate "npx @openapitools/openapi-generator-cli generate -i openapi.yaml -g OPENAPI_CLIENT_TYPE -o ."
