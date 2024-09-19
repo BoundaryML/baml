@@ -153,11 +153,9 @@ pub(crate) fn parse_field_type_with_attr(
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::field_type => field_type = parse_field_type(current, diagnostics),
-            Rule::field_type_with_attr => {}
             Rule::field_attribute => field_attributes.push(parse_attribute(current, diagnostics)),
-            Rule::trailing_comment => {}
             _ => {
-                parsing_catch_all(current, "field_type_with_attr!");
+                parsing_catch_all(current, "field_type_with_attr");
             }
         }
     }

@@ -114,11 +114,22 @@ pub enum FieldType {
     Symbol(FieldArity, Identifier, Option<Vec<Attribute>>),
     Primitive(FieldArity, TypeValue, Span, Option<Vec<Attribute>>),
     // The second field is the number of dims for the list
-    List(Box<FieldType>, u32, Span, Option<Vec<Attribute>>),
+    List(
+        FieldArity,
+        Box<FieldType>,
+        u32,
+        Span,
+        Option<Vec<Attribute>>,
+    ),
     Tuple(FieldArity, Vec<FieldType>, Span, Option<Vec<Attribute>>),
     // Unions don't have arity, as they can be flattened.
     Union(FieldArity, Vec<FieldType>, Span, Option<Vec<Attribute>>),
-    Map(Box<(FieldType, FieldType)>, Span, Option<Vec<Attribute>>),
+    Map(
+        FieldArity,
+        Box<(FieldType, FieldType)>,
+        Span,
+        Option<Vec<Attribute>>,
+    ),
 }
 
 impl FieldType {
@@ -141,79 +152,33 @@ impl FieldType {
         }
     }
 
-    pub fn to_nullable(&self) -> Result<Self, DatamodelError> {
-        if self.is_nullable() {
-            return Ok(self.to_owned());
+    pub fn to_nullable(&self) -> Self {
+        let mut as_nullable = self.to_owned();
+        if as_nullable.is_optional() {
+            return as_nullable;
         }
-        match self {
-            FieldType::Symbol(_arity, idn, attributes) => Ok(FieldType::Symbol(
-                FieldArity::Optional,
-                Identifier::Local(idn.name().to_string(), idn.span().clone()),
-                attributes.to_owned(),
-            )),
-            FieldType::Primitive(_arity, type_value, span, attributes) => Ok(FieldType::Primitive(
-                FieldArity::Optional,
-                type_value.to_owned(),
-                span.to_owned(),
-                attributes.to_owned(),
-            )),
-            FieldType::Union(arity, items, span, attributes) => {
-                let mut items = items.clone();
+        match &mut as_nullable {
+            FieldType::Symbol(ref mut arity, ..) => *arity = FieldArity::Optional,
+            FieldType::Primitive(ref mut arity, ..) => *arity = FieldArity::Optional,
+            FieldType::Union(ref mut arity, ..) => *arity = FieldArity::Optional,
+            FieldType::Tuple(ref mut arity, ..) => *arity = FieldArity::Optional,
+            FieldType::Map(ref mut arity, ..) => *arity = FieldArity::Optional,
+            FieldType::List(ref mut arity, ..) => *arity = FieldArity::Optional,
+        };
 
-                items.push(FieldType::Primitive(
-                    FieldArity::Required,
-                    TypeValue::Null,
-                    span.clone(),
-                    None,
-                ));
-                Ok(FieldType::Union(
-                    *arity,
-                    items,
-                    span.to_owned(),
-                    attributes.to_owned(),
-                ))
-            }
-            FieldType::Tuple(_arity, options, span, attributes) => Ok(FieldType::Tuple(
-                FieldArity::Optional,
-                options.to_owned(),
-                span.to_owned(),
-                attributes.to_owned(),
-            )),
-            FieldType::Map(_, span, _) => Err(DatamodelError::new_validation_error(
-                "Dictionaries can not be optional",
-                span.clone(),
-            )),
-            FieldType::List(_, _, span, _) => Err(DatamodelError::new_validation_error(
-                "Lists can not be optional",
-                span.clone(),
-            )),
-        }
+        as_nullable
     }
 
-    pub fn is_nullable(&self) -> bool {
+    pub fn is_optional(&self) -> bool {
         match self {
             FieldType::Symbol(arity, ..) => arity.is_optional(),
             FieldType::Union(arity, f, _, _) => {
-                arity.is_optional() || f.iter().any(|t| t.is_nullable())
+                arity.is_optional() || f.iter().any(|t| t.is_optional())
             }
             FieldType::Tuple(arity, _, _, _) => arity.is_optional(),
             FieldType::Primitive(arity, _, _, _) => arity.is_optional(),
-            // Lists can't be nullable
-            FieldType::Map(_kv, _, _) => false,
-            FieldType::List(_t, _, _, _) => false,
-        }
-    }
-    // Whether the field could theoretically be made optional.
-    pub fn can_be_null(&self) -> bool {
-        match self {
-            FieldType::Symbol(_arity, t, ..) => true,
-            FieldType::Primitive(_arity, ..) => true,
-            // There's a bug with unions where we cant parse optionals in unions right now
-            FieldType::Union(_arity, _f, ..) => false,
-            FieldType::Tuple(_arity, ..) => true,
-            // Lists can't be nullable
-            FieldType::Map(_kv, ..) => false,
-            FieldType::List(_t, ..) => false,
+            FieldType::Map(arity, _kv, _, _) => arity.is_optional(),
+            FieldType::List(arity, _t, _, _, _) => arity.is_optional(),
         }
     }
 
@@ -226,12 +191,12 @@ impl FieldType {
 
             FieldType::Union(_, f, ..) => f.iter().flat_map(|t| t.flat_idns()).collect(),
             FieldType::Tuple(_, f, ..) => f.iter().flat_map(|t| t.flat_idns()).collect(),
-            FieldType::Map(kv, ..) => {
+            FieldType::Map(_, kv, ..) => {
                 let mut idns = kv.1.flat_idns();
                 idns.extend(kv.0.flat_idns());
                 idns
             }
-            FieldType::List(t, ..) => t.flat_idns(),
+            FieldType::List(_, t, ..) => t.flat_idns(),
             FieldType::Primitive(..) => vec![],
         }
     }
@@ -302,8 +267,16 @@ impl std::fmt::Display for FieldType {
                     if arity.is_optional() { "?" } else { "" }
                 )
             }
-            FieldType::Map(kv, ..) => write!(f, "map<{}, {}>", kv.0, kv.1),
-            FieldType::List(t, ..) => write!(f, "{}[]", t),
+            FieldType::Map(arity, kv, ..) => write!(
+                f,
+                "map<{}, {}>{}",
+                kv.0,
+                kv.1,
+                if arity.is_optional() { "?" } else { "" }
+            ),
+            FieldType::List(arity, t, ..) => {
+                write!(f, "{}[]{}", t, if arity.is_optional() { "?" } else { "" },)
+            }
             FieldType::Primitive(arity, t, ..) => {
                 write!(f, "{}{}", t, if arity.is_optional() { "?" } else { "" })
             }

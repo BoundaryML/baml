@@ -201,6 +201,8 @@ pub(super) fn parse_raw_string(token: Pair<'_>, diagnostics: &mut Diagnostics) -
     }
 }
 
+// NOTE(sam): this doesn't handle unicode escape sequences e.g. \u1234
+// also this has panicks in it (see the hex logic)
 fn unescape_string(val: &str) -> String {
     let mut result = String::with_capacity(val.len());
     let mut chars = val.chars().peekable();

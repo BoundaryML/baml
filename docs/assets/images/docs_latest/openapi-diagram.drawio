@@ -1,0 +1,34 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36" version="24.7.7">
+  <diagram name="Page-1" id="IBP3ZyO2FRTOo5MFRLAC">
+    <mxGraphModel dx="1434" dy="761" grid="1" gridSize="5" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="iyppU8A8im01KiWM7F2Y-2" value="POST /call/MyBamlFunction" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Helveticaui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace;fontColor=#7E55F8;fontStyle=0;fontSize=14;" parent="1" vertex="1">
+          <mxGeometry x="420" y="290" width="130" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="iyppU8A8im01KiWM7F2Y-5" value="&lt;pre&gt;&lt;br&gt;&lt;/pre&gt;" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="585" y="285" width="160" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="iyppU8A8im01KiWM7F2Y-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#7E55F8;strokeWidth=1.5;" parent="1" source="iyppU8A8im01KiWM7F2Y-6" target="iyppU8A8im01KiWM7F2Y-5" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="iyppU8A8im01KiWM7F2Y-6" value="&lt;pre style=&quot;font-size: 14px;&quot;&gt;&lt;font style=&quot;font-size: 14px;&quot; face=&quot;Helvetica&quot;&gt;OpenAPI&lt;br style=&quot;font-size: 14px;&quot;&gt;client&lt;/font&gt;&lt;/pre&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontFamily=OpenSans, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, Roboto, Oxygen, Ubuntu, Cantarell, &quot;Open Sans&quot;, &quot;Helvetica Neue&quot;, sans-serif;fontSize=14;" parent="1" vertex="1">
+          <mxGeometry x="290" y="290" width="100" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="Q0mZcIDexRsLYvT9Odtg-4" value="MyApp" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontFamily=OpenSans, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, Roboto, Oxygen, Ubuntu, Cantarell, &quot;Open Sans&quot;, &quot;Helvetica Neue&quot;, sans-serif;" vertex="1" parent="1">
+          <mxGeometry x="290" y="260" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="Q0mZcIDexRsLYvT9Odtg-5" value="baml-cli serve" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Helveticaui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="585" y="255" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="Q0mZcIDexRsLYvT9Odtg-6" value="MyBamlFunction.baml" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Helveticaui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="585" y="345" width="165" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="Q0mZcIDexRsLYvT9Odtg-8" value="" style="shape=image;imageAspect=0;aspect=fixed;verticalLabelPosition=bottom;verticalAlign=top;image=data:image/svg+xml,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJsdWNpZGUgbHVjaWRlLWZpbGUtY29kZS0yIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS13aWR0aD0iMSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNCAyNCIgaGVpZ2h0PSIyNCIgd2lkdGg9IjI0Ij48cGF0aCBkPSJNNCAyMmgxNGEyIDIgMCAwIDAgMi0yVjdsLTUtNUg2YTIgMiAwIDAgMC0yIDJ2NCIvPjxwYXRoIGQ9Ik0xNCAydjRhMiAyIDAgMCAwIDIgMmg0Ii8+PHBhdGggZD0ibTUgMTItMyAzIDMgMyIvPjxwYXRoIGQ9Im05IDE4IDMtMy0zLTMiLz48L3N2Zz4=;" vertex="1" parent="1">
+          <mxGeometry x="643" y="296" width="49" height="49" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

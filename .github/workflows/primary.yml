@@ -64,7 +64,7 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: engine/language_client_typescript
       - name: Build Node
-        run: pnpm build
+        run: pnpm build:debug
         working-directory: engine/language_client_typescript
       - name: Install Node
         run: pnpm install --frozen-lockfile
@@ -86,5 +86,21 @@ jobs:
         with:
           workspaces: engine
       - name: Test Rust
-        run: cargo test
+        # skip doctests & integration tests (the latter require OPENAI_API_KEY and ANTHROPIC_API_KEY to be set)
+        run: cargo test --lib
         working-directory: engine
+  build-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - run: rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Build rust for wasm32
+        run: cargo build --target=wasm32-unknown-unknown
+        working-directory: engine/baml-schema-wasm

@@ -6,24 +6,23 @@ use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::llm_client::AllowedMetadata;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
-use baml_runtime::internal_core::configuration::GeneratorOutputType;
 use baml_runtime::BamlSrcReader;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::RenderCurlSettings;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
-use baml_types::{BamlMap, BamlMediaType, BamlValue, TypeValue};
+use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
 
 use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
-use internal_baml_core::ir::Expression;
 use js_sys::Promise;
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -323,8 +322,8 @@ pub struct WasmGeneratorConfig {
     pub span: WasmSpan,
 }
 
-impl From<&baml_runtime::internal_core::internal_baml_diagnostics::Span> for WasmSpan {
-    fn from(span: &baml_runtime::internal_core::internal_baml_diagnostics::Span) -> Self {
+impl From<&baml_runtime::internal_baml_diagnostics::Span> for WasmSpan {
+    fn from(span: &baml_runtime::internal_baml_diagnostics::Span) -> Self {
         let (start, end) = span.line_and_column();
         WasmSpan {
             file_path: span.file.path().to_string(),
@@ -668,7 +667,10 @@ impl WithRenderError for baml_runtime::internal::llm_client::LLMResponse {
             baml_runtime::internal::llm_client::LLMResponse::LLMFailure(f) => {
                 format!("{} {}", f.message, f.code.to_string()).into()
             }
-            baml_runtime::internal::llm_client::LLMResponse::OtherFailure(e) => {
+            baml_runtime::internal::llm_client::LLMResponse::UserFailure(e) => {
+                format!("user error: {}", e).into()
+            }
+            baml_runtime::internal::llm_client::LLMResponse::InternalFailure(e) => {
                 format!("{}", e).into()
             }
         }
@@ -974,20 +976,20 @@ impl WasmRuntime {
             "VSCodeCLI" => GeneratorType::VSCodeCLI,
             "VSCode" => GeneratorType::VSCode,
             "CLI" => GeneratorType::CLI,
-            _ => return Some("Invalid generator type".to_string()),
+            other => return Some(format!("Invalid generator type: {:?}", other)),
         };
 
         let version_check_mode = match version_check_mode {
             "Strict" => VersionCheckMode::Strict,
             "None" => VersionCheckMode::None,
-            _ => return Some("Invalid version check mode".to_string()),
+            other => return Some(format!("Invalid version check mode: {:?}", other)),
         };
 
-        let generator_language = match generator_language {
-            "python/pydantic" => GeneratorOutputType::PythonPydantic,
-            "typescript" => GeneratorOutputType::Typescript,
-            "ruby/sorbet" => GeneratorOutputType::RubySorbet,
-            _ => return Some("Invalid generator language".to_string()),
+        let Ok(generator_language) = GeneratorOutputType::from_str(generator_language) else {
+            return Some(format!(
+                "Invalid generator language: {:?}",
+                generator_language
+            ));
         };
 
         check_version(

@@ -8,25 +8,25 @@ name = "baml"
 crate-type = ["cdylib"]
 
 [dependencies]
+anyhow.workspace = true
 baml-types = { path = "../baml-lib/baml-types" }
 baml-runtime = { path = "../baml-runtime", features = ["internal"] }
 env_logger.workspace = true
 futures.workspace = true
+indexmap.workspace = true
 internal-baml-codegen.workspace = true
 log.workspace = true
 napi = { version = "2", features = [
-  "serde-json",
   "anyhow",
-  "tokio_rt",
-  "napi5",
   "async",
+  "napi5",
+  "serde-json",
+  "tokio_rt",
 ] }
-anyhow.workspace = true
 napi-derive = "2"
 serde.workspace = true
 serde_json.workspace = true
 tokio = { version = "1", features = ["full"] }
-indexmap.workspace = true
 
 [build-dependencies]
 napi-build = "2.1.3"

@@ -2,13 +2,15 @@
 title: Client Registry
 slug: docs/calling-baml/client-registry
 ---
-{/* TODO: use fern Group elements instead of CodeBlock elements for Python/TS/Ruby */}
+{/* TODO: use fern Group elements instead of CodeBlock elements for Python/TS/OpenAPI */}
 
 If you need to modify the model / parameters for an LLM client at runtime, you can modify the `ClientRegistry` for any specified function.
 
-<CodeBlocks>
+<Tabs>
 
-```python Python
+<Tab title="Python">
+
+```python
 import os
 from baml_py import ClientRegistry
 
@@ -27,7 +29,10 @@ async def run():
     res = await b.ExtractResume("...", { "client_registry": cr })
 ```
 
-```typescript TypeScript
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
 import { ClientRegistry } from '@boundaryml/baml'
 
 async function run() {
@@ -45,36 +50,18 @@ async function run() {
     const res = await b.ExtractResume("...", { clientRegistry: cr })
 }
 ```
+</Tab>
 
-```ruby Ruby
-require_relative "baml_client/client"
+<Tab title="OpenAPI">
+Client registries are not yet supported when used via OpenAPI.
 
-def run
-  cr = Baml::ClientRegistry.new
+Please let us know if you want this feature, either via [Discord] or [GitHub][openapi-feedback-github-issue].
 
-  # Creates a new client
-  cr.add_llm_client(
-    name: 'MyAmazingClient',
-    provider: 'openai',
-    options: {
-      model: 'gpt-4o',
-      temperature: 0.7,
-      api_key: ENV['OPENAI_API_KEY']
-    }
-  )
+[Discord]: https://discord.gg/BTNBeXGuaS
+[openapi-feedback-github-issue]: https://github.com/BoundaryML/baml/issues/892
+</Tab>
 
-  # Sets MyAmazingClient as the primary client
-  cr.set_primary('MyAmazingClient')
-
-  # ExtractResume will now use MyAmazingClient as the calling client
-  res = Baml.Client.extract_resume(input: '...', baml_options: { client_registry: cr })
-end
-
-# Call the asynchronous function
-run
-```
-
-</CodeBlocks>
+</Tabs>
 
 ## ClientRegistry Interface
 

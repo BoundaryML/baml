@@ -1,9 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-  "baml-cli",
   "baml-lib/*",
-  "baml-fmt",
   "baml-runtime",
   "baml-schema-wasm",
   "language_client_codegen",
@@ -12,9 +10,7 @@ members = [
   "language_client_typescript",
 ]
 default-members = [
-  "baml-cli",
   "baml-lib/*",
-  "baml-fmt",
   "baml-runtime",
   # Disabled by default: --features no_wasm and --features wasm are mutually exclusive
   # Building baml-schema-wasm in combination with everything else triggers feature unification,
@@ -33,19 +29,23 @@ askama = "0.12.1"
 base64 = "0.22.1"
 bytes = "1.6.0"
 cfg-if = "1.0.0"
+clap = { version = "4.4.6", features = ["cargo", "derive"] }
 dashmap = "5.5.3"
 derive_builder = "0.20.0"
 derive_more = "0.99.18"
 either = "1.8.1"
 env_logger = "0.11.3"
 futures = { version = "0.3.30", features = ["executor"] }
-log = "0.4.20"
+http = "1.1.0"
 http-body = "1.0.0"
 indexmap = { version = "2.1.0", features = ["serde"] }
-indoc = "2.0.1"
+indoc = "2.0.5"
+log = "0.4.20"
 regex = "1.10.4"
+scopeguard = "1.2.0"
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
-serde = { version = "1", features = ["derive", "rc"] }
+serde = { version = "1", features = ["alloc", "derive", "rc"] }
+serde_yaml = "0.9.34"
 static_assertions = "1.1.0"
 strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = "0.26.2"
@@ -62,7 +62,7 @@ internal-baml-jinja = { path = "baml-lib/jinja" }
 internal-baml-schema-ast = { path = "baml-lib/schema-ast" }
 
 [workspace.package]
-version = "0.54.2"
+version = "0.55.3"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

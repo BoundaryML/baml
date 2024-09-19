@@ -1,18 +1,15 @@
 use either::Either;
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_schema_ast::ast::{ArgumentId, Identifier, WithIdentifier, WithSpan};
-use serde_json::json;
 
 use crate::{
     ast::{self, WithName},
-    printer::{serialize_with_printer, WithSerializeableContent},
     types::FunctionType,
-    ParserDatabase, WithSerialize,
 };
 
-use super::{ClassWalker, ClientWalker, ConfigurationWalker, EnumWalker, Walker};
+use super::{ClassWalker, ConfigurationWalker, EnumWalker, Walker};
 
-use std::{collections::HashMap, iter::ExactSizeIterator};
+use std::iter::ExactSizeIterator;
 
 /// A `function` declaration in the Prisma schema.
 pub type FunctionWalker<'db> = Walker<'db, (bool, ast::ValExpId)>;
@@ -211,7 +208,7 @@ impl<'db> ArgWalker<'db> {
 
     /// The name of the function.
     pub fn is_optional(self) -> bool {
-        self.field_type().is_nullable()
+        self.field_type().is_optional()
     }
 
     /// The name of the function.
@@ -242,81 +239,5 @@ impl<'db> ArgWalker<'db> {
 impl WithSpan for FunctionWalker<'_> {
     fn span(&self) -> &internal_baml_diagnostics::Span {
         self.ast_function().span()
-    }
-}
-
-impl<'db> WithSerializeableContent for ArgWalker<'db> {
-    fn serialize_data(&self, db: &'_ ParserDatabase) -> serde_json::Value {
-        json!({
-            "rtype": "inline",
-            "value": (self.db, &self.ast_arg().1.field_type).serialize_data( db)
-        })
-    }
-}
-
-impl<'db> WithSerializeableContent for FunctionWalker<'db> {
-    fn serialize_data(&self, db: &'_ ParserDatabase) -> serde_json::Value {
-        // TODO: We should handle the case of multiple output args
-        json!({
-            "rtype": "output",
-            "value": self.walk_output_args()
-                        .map(|f| f.serialize_data(db))
-                        .next()
-                        .unwrap_or(serde_json::Value::Null)
-        })
-    }
-}
-
-impl<'db> WithSerialize for FunctionWalker<'db> {
-    fn serialize(
-        &self,
-        db: &'_ ParserDatabase,
-        span: &internal_baml_diagnostics::Span,
-    ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
-        // Eventually we should validate what parameters are in meta.
-        match serialize_with_printer(false, self.serialize_data(db)) {
-            Ok(val) => Ok(val),
-            Err(e) => Err(DatamodelError::new_validation_error(
-                &format!("Error serializing output for {}\n{}", self.name(), e),
-                span.clone(),
-            )),
-        }
-    }
-
-    fn output_format(
-        &self,
-        db: &'_ ParserDatabase,
-        span: &internal_baml_diagnostics::Span,
-    ) -> Result<String, internal_baml_diagnostics::DatamodelError> {
-        let class_schema = self.serialize(db, span)?;
-
-        let mut enum_schemas = self
-            .walk_output_args()
-            .flat_map(|arg| arg.required_enums())
-            .map(|e| (e.name().to_string(), e))
-            .collect::<HashMap<_, _>>()
-            .iter()
-            // TODO(sam) - if enum serialization fails, then we do not surface the error to the user.
-            // That is bad!!!!!!!
-            .filter_map(|(_, e)| match e.serialize(db, e.identifier().span()) {
-                Ok(enum_schema) => Some((e.name().to_string(), enum_schema)),
-                Err(_) => None,
-            })
-            .collect::<Vec<_>>();
-
-        if enum_schemas.is_empty() {
-            Ok(class_schema)
-        } else {
-            // Enforce a stable order on enum schemas. Without this, the order is actually unstable, and the order can ping-pong
-            // when the vscode ext re-renders the live preview
-            enum_schemas.sort_by_key(|(name, _)| name.to_string());
-
-            let enum_schemas = enum_schemas
-                .into_iter()
-                .map(|(_, enum_schema)| enum_schema)
-                .collect::<Vec<_>>();
-            let enum_schemas = enum_schemas.join("\n---\n\n");
-            Ok(format!("{}\n\n{}", class_schema, enum_schemas))
-        }
     }
 }

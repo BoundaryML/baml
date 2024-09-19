@@ -84,20 +84,37 @@ pub fn check_version(
                 "https://docs.boundaryml.com/docs/calling-baml/generate-baml-client#troubleshooting-version-conflicts"
             )
         } else {
-            let update_instruction = match generator_language {
-                GeneratorOutputType::PythonPydantic => format!("pip install --upgrade baml-py=={}", gen_version),
-                GeneratorOutputType::Typescript => format!("npm install --save-dev @boundaryml/baml@{}", gen_version),
-                GeneratorOutputType::RubySorbet => format!("gem install baml -v {}", gen_version),
-            };
-            (
-                match generator_type {
-                   GeneratorType::VSCode => 
-                        format!("Update your VSCode extension to version '{}' to match the version in the BAML generator config. Also update your BAML package: {}", gen_version, update_instruction),
-                        GeneratorType::VSCodeCLI | GeneratorType::CLI => 
-                        format!("Update your installed BAML CLI package to version '{}' to match the version in the BAML generator config: {}", gen_version, update_instruction),
-                },
-                "https://docs.boundaryml.com/docs/calling-baml/generate-baml-client#troubleshooting-version-conflicts"
-            )
+            if matches!(generator_language, GeneratorOutputType::OpenApi) {
+                (
+                    match generator_type {
+                        GeneratorType::VSCode => {
+                                format!("Update your VSCode extension to version '{}' to match the version in the BAML generator config, and use 'npx @boundaryml/baml@{}' to run the CLI.", gen_version, gen_version)
+                        }
+                        GeneratorType::VSCodeCLI | GeneratorType::CLI => {
+                            format!("Use BAML v{} to match the version in the BAML generator config, like so: npx @boundaryml/baml@{} generate", gen_version, gen_version)
+                        },
+                    },
+                    "https://docs.boundaryml.com/docs/calling-baml/generate-baml-client#troubleshooting-version-conflicts"
+                )
+            } else {
+                let update_instruction = match generator_language {
+                    GeneratorOutputType::OpenApi => format!("use 'npx @boundaryml/baml@{gen_version}'"),
+                    GeneratorOutputType::PythonPydantic => format!("pip install --upgrade baml-py=={}", gen_version),
+                    GeneratorOutputType::Typescript => format!("npm install --save-dev @boundaryml/baml@{}", gen_version),
+                    GeneratorOutputType::RubySorbet => format!("gem install baml -v {}", gen_version),
+                };
+                (
+                    match generator_type {
+                        GeneratorType::VSCode => {
+                                format!("Update your VSCode extension to version '{}' to match the version in the BAML generator config. Also update your BAML package: {}", gen_version, update_instruction)
+                        }
+                        GeneratorType::VSCodeCLI | GeneratorType::CLI => {
+                            format!("Update your installed BAML CLI package to version '{}' to match the version in the BAML generator config: {}", gen_version, update_instruction)
+                        },
+                    },
+                    "https://docs.boundaryml.com/docs/calling-baml/generate-baml-client#troubleshooting-version-conflicts"
+                )
+            }
         };
   
         let formatted_link = match is_diagnostic {

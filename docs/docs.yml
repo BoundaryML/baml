@@ -24,8 +24,8 @@ navigation:
             path: docs/get-started/quickstart/python.mdx
           - page: TypeScript
             path: docs/get-started/quickstart/typescript.mdx
-          - page: Ruby
-            path: docs/get-started/quickstart/ruby.mdx
+          - page: Any Language (OpenAPI)
+            path: docs/get-started/quickstart/openapi.mdx
           - page: VSCode
             path: docs/get-started/quickstart/editors-vscode.mdx
           - page: Other Editors
@@ -47,6 +47,8 @@ navigation:
             path: docs/get-started/deploying/nextjs.mdx
           - page: AWS
             path: docs/get-started/deploying/aws.mdx
+          - page: Docker (OpenAPI)
+            path: docs/get-started/deploying/openapi.mdx
   - section: BAML Snippets
     contents:
       - section: General BAML Syntax
@@ -95,6 +97,8 @@ navigation:
                 path: docs/snippets/clients/providers/vllm.mdx
               - page: LMStudio
                 path: docs/snippets/clients/providers/lmstudio.mdx
+              - page: KeywordsAI
+                path: docs/snippets/clients/providers/keywordsai.mdx
           - section: provider strategies
             contents:
               - page: fallback
@@ -145,7 +149,7 @@ navigation:
         path: docs/calling-baml/dynamic-types.mdx
       - page: Client Registry
         path: docs/calling-baml/client-registry.mdx
-  - section: BAML with Python/TS/Ruby
+  - section: BAML with Python/TS/OpenAPI
     contents:
       - page: Generate the BAML Client
         path: docs/calling-baml/generate-baml-client.mdx
@@ -177,12 +181,14 @@ navigation:
         path: docs/comparisons/pydantic.mdx
   - section: Reference
     contents:
+      - page: Contact Us
+        path: docs/contact.mdx
+      - page: Environment Variables
+        path: docs/reference/env-vars.mdx
       - section: Incidents
         contents:
           - page: SSRF Issue in fiddle-proxy (July 2024)
             path: docs/incidents/2024-07-10-ssrf-issue-in-fiddle-proxy.mdx
-      - page: Contact Us
-        path: docs/contact.mdx
 
 navbar-links:
   - type: github

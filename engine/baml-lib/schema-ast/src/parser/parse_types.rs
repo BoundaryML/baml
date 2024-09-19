@@ -26,7 +26,9 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
 
                 ftype = result;
             }
-            Rule::optional_token => arity = FieldArity::Optional,
+            Rule::optional_token => {
+                arity = FieldArity::Optional;
+            }
             _ => {
                 unreachable_rule!(current, Rule::field_type)
             }
@@ -36,16 +38,14 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     match ftype {
         Some(ftype) => {
             if arity.is_optional() {
-                match ftype.to_nullable() {
-                    Ok(ftype) => Some(ftype),
-                    Err(_) => None,
-                }
+                Some(ftype.to_nullable())
             } else {
                 Some(ftype)
             }
         }
         None => {
-            unreachable!("Ftype should always be defined")
+            log::error!("Ftype should always be defined");
+            None
         }
     }
 }
@@ -187,7 +187,13 @@ fn parse_array(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
     }
 
     match field {
-        Some(field) => Some(FieldType::List(Box::new(field), dims, span, None)),
+        Some(field) => Some(FieldType::List(
+            FieldArity::Required,
+            Box::new(field),
+            dims,
+            span,
+            None,
+        )),
         _ => unreachable!("Field must have been defined"),
     }
 }
@@ -213,6 +219,7 @@ fn parse_map(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType>
         0 => None,
         1 => None,
         2 => Some(FieldType::Map(
+            FieldArity::Required,
             Box::new((fields[0].to_owned(), fields[1].to_owned())),
             span,
             None,

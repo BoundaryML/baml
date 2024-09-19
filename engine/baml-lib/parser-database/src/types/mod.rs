@@ -13,7 +13,6 @@ use internal_baml_schema_ast::ast::{
 };
 
 mod configurations;
-pub(crate) mod post_prompt;
 mod prompt;
 mod to_string_attributes;
 mod types;

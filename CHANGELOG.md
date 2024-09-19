@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.55.3](https://github.com/boundaryml/baml/compare/0.55.2..0.55.3) - 2024-09-11
+
+### Bug Fixes
+
+- show actionable errors for string[]? and map<...>? type validation (#946) - ([48879c0](https://github.com/boundaryml/baml/commit/48879c0744f79b482ef0d2b0624464053558ada4)) - Samuel Lijin
+
+### Documentation
+
+- add reference docs about env vars (#945) - ([dd43bc5](https://github.com/boundaryml/baml/commit/dd43bc59087e809e09ca7d3caf628e179a28fc3e)) - Samuel Lijin
+
+
+## [0.55.2](https://github.com/boundaryml/baml/compare/0.55.1..0.55.2) - 2024-09-11
+
+### Bug Fixes
+
+- use correct locking strategy inside baml-cli serve (#943) - ([fcb694d](https://github.com/boundaryml/baml/commit/fcb694d033317d8538cc7b2c61aaa94f772778db)) - Samuel Lijin
+
+### Features
+
+- allow using DANGER_ACCEPT_INVALID_CERTS to disable https verification (#901) - ([8873fe7](https://github.com/boundaryml/baml/commit/8873fe7577bc879cf0d550063252c4532dcdfced)) - Samuel Lijin
+
+## [0.55.1](https://github.com/boundaryml/baml/compare/0.55.0..0.55.1) - 2024-09-10
+
+### Bug Fixes
+
+- in generated TS code, put eslint-disable before ts-nocheck - ([16d04c6](https://github.com/BoundaryML/baml/commit/16d04c6e360eefca10b4e0d008b03c34de279491)) - Sam Lijin
+- baml-cli in python works again - ([b57ca0f](https://github.com/boundaryml/baml/commit/b57ca0f529c80f59b79b19132a8f1339a6b7bfe2)) - Sam Lijin
+
+### Documentation
+
+- update java install instructions (#933) - ([b497003](https://github.com/boundaryml/baml/commit/b49700356f2f69c4acbdc953a66a95224656ffaf)) - Samuel Lijin
+
+### Miscellaneous Chores
+
+- add version headers to the openapi docs (#931) - ([21545f2](https://github.com/boundaryml/baml/commit/21545f2a4d9b3987134d98ac720705dde2045290)) - Samuel Lijin
+
+## [0.55.0](https://github.com/boundaryml/baml/compare/0.54.2..0.55.0) - 2024-09-09
+
+With this release, we're announcing support for BAML in all languages: we now
+allow you to call your functions over an HTTP interface, and will generate an
+OpenAPI specification for your BAML functions, so you can now generate a client
+in any language of your choice, be it Golang, Java, PHP, Ruby, Rust, or any of
+the other languages which OpenAPI supports.
+
+Start here to learn more: https://docs.boundaryml.com/docs/get-started/quickstart/openapi
+
+### Features
+
+- implement BAML-over-HTTP (#908) - ([484fa93](https://github.com/boundaryml/baml/commit/484fa93a5a4b4677f531e6ef03bb88d144925c12)) - Samuel Lijin
+- Add anonymous telemetry about playground actions (#925) - ([6f58c9e](https://github.com/boundaryml/baml/commit/6f58c9e3e464a8e774771706c2b0d76adb9e6cda)) - hellovai
+
 ## [0.54.2](https://github.com/boundaryml/baml/compare/0.54.1..0.54.2) - 2024-09-05
 
 ### Features

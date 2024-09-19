@@ -303,19 +303,30 @@ impl WithRepr<FieldType> for ast::FieldType {
                 },
                 arity,
             ),
-            ast::FieldType::List(ft, dims, ..) => {
+            ast::FieldType::List(arity, ft, dims, ..) => {
                 // NB: potential bug: this hands back a 1D list when dims == 0
                 let mut repr = FieldType::List(Box::new(ft.repr(db)?));
 
                 for _ in 1u32..*dims {
-                    repr = FieldType::List(Box::new(repr));
+                    repr = FieldType::list(repr);
+                }
+
+                if arity.is_optional() {
+                    repr = FieldType::optional(repr);
                 }
 
                 repr
             }
-            ast::FieldType::Map(kv, ..) => {
+            ast::FieldType::Map(arity, kv, ..) => {
                 // NB: we can't just unpack (*kv) into k, v because that would require a move/copy
-                FieldType::Map(Box::new((*kv).0.repr(db)?), Box::new((*kv).1.repr(db)?))
+                let mut repr =
+                    FieldType::Map(Box::new((*kv).0.repr(db)?), Box::new((*kv).1.repr(db)?));
+
+                if arity.is_optional() {
+                    repr = FieldType::optional(repr);
+                }
+
+                repr
             }
             ast::FieldType::Union(arity, t, ..) => {
                 // NB: preempt union flattening by mixing arity into union types
@@ -537,7 +548,15 @@ impl WithRepr<Field> for FieldWalker<'_> {
         Ok(Field {
             name: self.name().to_string(),
             r#type: Node {
-                elem: self.ast_field().expr.clone().ok_or(anyhow!(""))?.repr(db)?,
+                elem: self
+                    .ast_field()
+                    .expr
+                    .clone()
+                    .ok_or(anyhow!(
+                        "Internal error occurred while resolving repr of field {:?}",
+                        self.name(),
+                    ))?
+                    .repr(db)?,
                 attributes: self.attributes(db),
             },
         })

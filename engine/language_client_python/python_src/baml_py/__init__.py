@@ -1,5 +1,11 @@
 # BAML Python API: provides the Python API for the BAML runtime.
 
+if __name__ == "baml_py":
+    import os
+
+    if "BAML_LOG" not in os.environ:
+        os.environ["BAML_LOG"] = "info"
+
 # Re-export the pyo3 API
 from .baml_py import (
     BamlRuntime,

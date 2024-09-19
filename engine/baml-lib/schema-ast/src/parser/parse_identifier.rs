@@ -42,6 +42,7 @@ fn parse_path_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Ident
         }
     }
 
+    // TODO: THIS IS SUSPECT
     assert!(
         vec.len() > 1,
         "Path identifier must have at least 2 elements. Path({}) Raw({})",

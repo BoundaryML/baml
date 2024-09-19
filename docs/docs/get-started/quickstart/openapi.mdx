@@ -1,0 +1,525 @@
+---
+slug: docs/get-started/quickstart/openapi
+---
+
+<Info>
+  This feature was added in: v0.55.0.
+</Info>
+
+<Note>
+  OpenAPI support is currently a preview feature. Please provide feedback either
+  in [Discord][discord] or on [GitHub][openapi-feedback-github-issue] so that
+  we can stabilize the feature and keep you updated!
+</Note>
+
+BAML allows you to expose your BAML functions as RESTful APIs:
+
+<div class="flex flex-col items-center">
+  <img src="/assets/images/docs_latest/openapi-diagram.drawio.svg" alt="OpenAPI diagram" />
+</div>
+
+We also make it easy to generate an OpenAPI client based on your BAML functions, so that
+you can get a client library for free.
+
+<Steps>
+  ### Install the BAML developer tools
+  
+    - <a href="vscode:extension/Boundary.baml-extension">Install the VSCode
+    extension</a> ([marketplace][baml-vscode-marketplace]) for syntax highlighting,
+    real-time prompt previews, and an interactive testing playground.
+
+    - Install `npx` and `java`, which you'll need to run BAML and `openapi-generator` respectively
+
+      <Tabs>
+        <Tab title="macOS (brew)">
+          ```bash
+          brew install npm openapi-generator
+          # 'npm' will install npx
+          # 'openapi-generator' will install both Java and openapi-generator-cli
+          ```
+        </Tab>
+
+        <Tab title="Linux (apt)">
+          ```bash
+          apt install npm default-jdk -y
+          # 'npm' will install npx; 'default-jdk' will install java
+          ```
+        </Tab>
+
+        <Tab title="Linux (yum/dnf)">
+          ```bash
+          dnf install npm java-21-openjdk -y
+          # dnf is the successor to yum
+          ```
+
+          Amazon Linux 2023:
+          ```bash
+          dnf install npm java-21-amazon-corretto -y
+          # 'npm' will install npx
+          # 'java-21-amazon-corretto' will install java
+          ```
+
+          Amazon Linux 2:
+          ```bash
+          curl -sL https://rpm.nodesource.com/setup_16.x | bash -
+          yum install nodejs -y
+          # 'nodejs' will install npx
+          amazon-linux-extras install java-openjdk11 -y
+          # 'java-openjdk11' will install java
+          ```
+        </Tab>
+
+        <Tab title="Windows">
+          To install `npx` and `java`:
+
+            1. Use the [Node.js installer](https://nodejs.org/en/download/prebuilt-installer) to install `npx` (default installer settings are fine).
+            2. Run `npm install -g npm@latest` to update `npx` (there is currently an [issue][npx-windows-issue] with the default install of `npx` on Windows where it doesn't work out of the box).
+            3. Run the [Adoptium OpenJDK `.msi` installer](https://adoptium.net/temurin/releases/?os=windows) (install the JDK; default installer settings are fine).
+
+          You can verify that `npx` and `java` are installed by running:
+          
+          ```powershell
+          npx -version
+          java -version
+          ```
+        </Tab>
+
+        <Tab title="Other">
+          To install `npx`, use the [Node.js installer](https://nodejs.org/en/download/prebuilt-installer).
+
+          To install `java`, use the [Adoptium OpenJDK packages](https://adoptium.net/installation/linux/).
+        </Tab>
+      </Tabs>
+
+      <Note>
+      If you can't use `npx`, please [let us know][openapi-feedback-github-issue]! 
+
+      It's currently the easiest way to use BAML and `openapi-generator`, but depending
+      on your needs, we can also provide a static binary for using BAML.
+      </Note>
+
+  [npx-windows-issue]: https://github.com/nodejs/node/issues/53538
+
+  ### Create a new BAML project
+
+  This will give you some starter BAML code in a `baml_src` directory, and also
+  set up `generator.baml` based on `--openapi-client-type`, so that BAML will:
+  
+  - compile your BAML functions into an OpenAPI specification, and 
+  - configure `on_generate` to generate an OpenAPI client in the language of your choosing
+
+  <p></p>
+
+  <Tabs>
+
+  <Tab title="C#">
+  ```bash
+  npx @boundaryml/baml init \
+    --client-type rest/openapi --openapi-client-type csharp
+  ```
+  </Tab>
+
+  <Tab title="C++">
+
+  <Tip>OpenAPI supports [5 different C++ client types][openapi-client-types];
+  any of them will work with BAML.</Tip>
+
+  ```bash
+  npx @boundaryml/baml init \
+    --client-type rest/openapi --openapi-client-type cpp-restsdk
+  ```
+  </Tab>
+
+  <Tab title="Go">
+  ```bash
+  npx @boundaryml/baml init \
+    --client-type rest/openapi --openapi-client-type go
+  ```
+  </Tab>
+
+  <Tab title="Java">
+  
+  ```bash
+  npx @boundaryml/baml init \
+    --client-type rest/openapi --openapi-client-type java
+  ```
+
+  Notice that `on_generate` has been initialized for you to:
+
+  - run the OpenAPI generator to generate a Java client library, and _also_
+  - run `mvn clean install` to install the generated client library to your
+    local Maven repository
+
+  <Warning>
+    If you only use Maven through an IDE (e.g. IntelliJ IDEA), you should
+    remove `&& mvn clean install` from the generated `on_generate` command.
+  </Warning>
+
+  </Tab>
+
+  <Tab title="PHP">
+  ```bash
+  npx @boundaryml/baml init \
+    --client-type rest/openapi --openapi-client-type php
+  ```
+  </Tab>
+
+  <Tab title="Ruby">
+  ```bash
+  npx @boundaryml/baml init \
+    --client-type rest/openapi --openapi-client-type ruby
+  ```
+  </Tab>
+
+  <Tab title="Rust">
+  ```bash
+  npx @boundaryml/baml init \
+    --client-type rest/openapi --openapi-client-type rust
+  ```
+  </Tab>
+
+  <Tab title="Other">
+
+  As long as there's an OpenAPI client generator that works with your stack,
+  you can use it with BAML. Check out the [full list in the OpenAPI docs][openapi-client-types].
+
+  ```bash
+  npx @boundaryml/baml init \
+    --client-type rest/openapi --openapi-client-type $OPENAPI_CLIENT_TYPE
+  ```
+  </Tab>
+
+  </Tabs>
+
+  ### Start the development server
+
+  This will do four things:
+
+    - serve your BAML functions over a RESTful interface on `localhost:2024`
+    - generate an OpenAPI schema in `baml_client/openapi.yaml`
+    - run `openapi-generator -g $OPENAPI_CLIENT_TYPE` in `baml_client` to
+      generate an OpenAPI client for you to use
+    - re-run the above steps whenever you modify your `.baml` files
+
+  <Note>
+    BAML-over-HTTP is currently a preview feature. Please provide feedback
+    either in [Discord][discord] or on [GitHub][openapi-feedback-github-issue]
+    so that we can stabilize the feature and keep you updated!
+  </Note>
+
+  ```bash
+  npx @boundaryml/baml dev --preview
+  ```
+
+  ### Use your OpenAPI client
+
+  `openapi-generator` will generate a `README` with instructions for installing
+  and using your client; we've included snippets for some of the most popular
+  languages below. Check out
+  [`baml-examples`](https://github.com/BoundaryML/baml-examples) for example
+  projects with instructions for running them.
+
+  <Note>
+    We've tested the below listed OpenAPI clients, but not all of them. If you run
+    into issues with any of the OpenAPI clients, please let us know, either in
+    [Discord][discord] or by commenting on
+    [GitHub][openapi-feedback-github-issue] so that we can either help you out
+    or fix it!
+  </Note>
+
+<Tabs>
+
+<Tab title="Go">
+
+Run this with `go run main.go`:
+
+```go main.go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+  baml "my-golang-app/baml_client"
+)
+
+func main() {
+	cfg := baml.NewConfiguration()
+	b := baml.NewAPIClient(cfg).DefaultAPI
+	extractResumeRequest := baml.ExtractResumeRequest{
+		Resume: "Ada Lovelace (@gmail.com) was an English mathematician and writer",
+	}
+	resp, r, err := b.ExtractResume(context.Background()).ExtractResumeRequest(extractResumeRequest).Execute()
+	if err != nil {
+		fmt.Printf("Error when calling b.ExtractResume: %v\n", err)
+		fmt.Printf("Full HTTP response: %v\n", r)
+		return
+	}
+	log.Printf("Response from server: %v\n", resp)
+}
+```
+</Tab>
+
+<Tab title="Java">
+First, add the OpenAPI-generated client to your project.
+
+<AccordionGroup>
+
+<Accordion title="If you have 'mvn' in your PATH">
+
+You can use the default `on_generate` command, which will tell `baml dev` to
+install the OpenAPI-generated client into your local Maven repository by running
+`mvn clean install` every time you save a change to a BAML file.
+
+To depend on the client in your local Maven repo, you can use these configs:
+
+<CodeGroup>
+```xml pom.xml
+<dependency>
+  <groupId>org.openapitools</groupId>
+  <artifactId>openapi-java-client</artifactId>
+  <version>0.1.0</version>
+  <scope>compile</scope>
+</dependency>
+```
+
+```kotlin settings.gradle.kts
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    implementation("org.openapitools:openapi-java-client:0.1.0")
+}
+```
+</CodeGroup>
+
+</Accordion>
+
+<Accordion title="If you don't have 'mvn' in your PATH">
+
+You'll probably want to comment out `on_generate` and instead use either the [OpenAPI Maven plugin] or [OpenAPI Gradle plugin] to build your OpenAPI client.
+
+[OpenAPI Maven plugin]: https://github.com/OpenAPITools/openapi-generator/tree/master/modules/openapi-generator-maven-plugin
+[OpenAPI Gradle plugin]: https://github.com/OpenAPITools/openapi-generator/tree/master/modules/openapi-generator-gradle-plugin
+
+<CodeGroup>
+```xml pom.xml
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.openapitools</groupId>
+            <artifactId>openapi-generator-maven-plugin</artifactId>
+            <version>7.8.0</version> <!-- Use the latest stable version -->
+            <executions>
+                <execution>
+                    <goals>
+                        <goal>generate</goal>
+                    </goals>
+                    <configuration>
+                        <inputSpec>${project.basedir}/baml_client/openapi.yaml</inputSpec>
+                        <generatorName>baml</generatorName> <!-- or another generator name, e.g. 'kotlin' or 'spring' -->
+                        <output>${project.build.directory}/generated-sources/openapi</output>
+                        <apiPackage>com.boundaryml.baml_client.api</apiPackage>
+                        <modelPackage>com.boundaryml.baml_client.model</modelPackage>
+                        <invokerPackage>com.boundaryml.baml_client</invokerPackage>
+                        <java8>true</java8>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+```
+
+```kotlin settings.gradle.kts
+plugins {
+    id("org.openapi.generator") version "7.8.0"
+}
+
+openApiGenerate {
+    generatorName.set("java") // Change to 'kotlin', 'spring', etc. if needed
+    inputSpec.set("${projectDir}/baml_client/openapi.yaml")
+    outputDir.set("$buildDir/generated-sources/openapi")
+    apiPackage.set("com.boundaryml.baml_client.api")
+    modelPackage.set("com.boundaryml.baml_client.model")
+    invokerPackage.set("com.boundaryml.baml_client")
+    additionalProperties.set(mapOf("java8" to "true"))
+}
+
+sourceSets["main"].java {
+    srcDir("$buildDir/generated-sources/openapi/src/main/java")
+}
+
+tasks.named("compileJava") {
+    dependsOn("openApiGenerate")
+}
+```
+</CodeGroup>
+
+</Accordion>
+</AccordionGroup>
+
+Then, copy this code into wherever your `main` function is:
+
+```Java
+import com.boundaryml.baml_client.ApiClient;
+import com.boundaryml.baml_client.ApiException;
+import com.boundaryml.baml_client.Configuration;
+// NOTE: baml_client/README.md will suggest importing from models.* - that is wrong.
+// See https://github.com/OpenAPITools/openapi-generator/issues/19431 for more details.
+import com.boundaryml.baml_client.model.*;
+import com.boundaryml.baml_client.api.DefaultApi;
+
+public class Example {
+  public static void main(String[] args) {
+    ApiClient defaultClient = Configuration.getDefaultApiClient();
+    DefaultApi apiInstance = new DefaultApi(defaultClient);
+    ExtractResumeRequest extractResumeRequest = new ExtractResumeRequest(); // ExtractResumeRequest | 
+    try {
+      Resume result = apiInstance.extractResume(extractResumeRequest);
+      System.out.println(result);
+    } catch (ApiException e) {
+      System.err.println("Exception when calling DefaultApi#extractResume");
+      System.err.println("Status code: " + e.getCode());
+      System.err.println("Reason: " + e.getResponseBody());
+      System.err.println("Response headers: " + e.getResponseHeaders());
+      e.printStackTrace();
+    }
+  }
+}
+
+```
+</Tab>
+
+<Tab title="PHP">
+
+<Warning>
+  The PHP OpenAPI generator doesn't support OpenAPI's `oneOf` type, which is
+  what we map BAML union types to. Please let us know if this is an issue for
+  you, and you need help working around it.
+</Warning>
+
+First, add the OpenAPI-generated client to your project:
+
+```json composer.json
+    "repositories": [
+        {
+            "type": "path",
+            "url": "baml_client"
+        }
+    ],
+    "require": {
+        "boundaryml/baml-client": "*@dev"
+    }
+```
+
+You can now use this code to call a BAML function:
+
+```PHP
+<?php
+require_once(__DIR__ . '/vendor/autoload.php');
+
+$apiInstance = new BamlClient\Api\DefaultApi(
+    new GuzzleHttp\Client()
+);
+$extract_resume_request = new BamlClient\Model\ExtractResumeRequest();
+$extract_resume_request->setResume("Marie Curie was a Polish and naturalised-French physicist and chemist who conducted pioneering research on radioactivity");
+
+try {
+    $result = $apiInstance->extractResume($extract_resume_request);
+    print_r($result);
+} catch (Exception $e) {
+    echo 'Exception when calling DefaultApi->extractResume: ', $e->getMessage(), PHP_EOL;
+}
+```
+</Tab>
+
+<Tab title="Ruby">
+
+Use `ruby -Ilib/baml_client app.rb` to run this:
+
+```ruby app.rb
+require 'baml_client'
+require 'pp'
+
+api_client = BamlClient::ApiClient.new
+b = BamlClient::DefaultApi.new(api_client)
+
+extract_resume_request = BamlClient::ExtractResumeRequest.new(
+  resume: <<~RESUME
+    John Doe
+
+    Education
+    - University of California, Berkeley
+    - B.S. in Computer Science
+    - graduated 2020
+
+    Skills
+    - Python
+    - Java
+    - C++
+  RESUME
+)
+
+begin
+  result = b.extract_resume(extract_resume_request)
+  pp result
+
+  edu0 = result.education[0]
+  puts "Education: #{edu0.school}, #{edu0.degree}, #{edu0.year}"
+rescue BamlClient::ApiError => e
+  puts "Error when calling DefaultApi#extract_resume"
+  pp e
+end
+```
+</Tab>
+
+<Tab title="Rust">
+
+<Tip>
+  If you're using `cargo watch -- cargo build` and seeing build failures because it can't find
+  the generated `baml_client`, try increasing the delay on `cargo watch` to 1 second like so:
+
+  ```bash
+  cargo watch --delay 1 -- cargo build
+  ```
+</Tip>
+
+First, add the OpenAPI-generated client to your project:
+
+```toml Cargo.toml
+[dependencies]
+baml-client = { path = "./baml_client" }
+```
+
+You can now use `cargo run`:
+
+```rust
+use baml_client::models::ExtractResumeRequest;
+use baml_client::apis::default_api as b;
+
+#[tokio::main]
+async fn main() {
+    let config = baml_client::apis::configuration::Configuration::default();
+
+    let resp = b::extract_resume(&config, ExtractResumeRequest {
+        resume: "Tony Hoare is a British computer scientist who has made foundational contributions to programming languages, algorithms, operating systems, formal verification, and concurrent computing.".to_string(),
+    }).await.unwrap();
+
+    println!("{:#?}", resp);
+}
+```
+</Tab>
+
+</Tabs>
+
+</Steps>
+
+Read on to learn how to [deploy your BAML functions](/docs/get-started/deploying/openapi).
+
+[discord]: https://discord.gg/BTNBeXGuaS
+[openapi-client-types]: https://github.com/OpenAPITools/openapi-generator#overview
+[openapi-feedback-github-issue]: https://github.com/BoundaryML/baml/issues/892
+[baml-vscode-marketplace]: https://marketplace.visualstudio.com/items?itemName=boundary.BAML-extension

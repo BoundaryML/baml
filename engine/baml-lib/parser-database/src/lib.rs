@@ -33,10 +33,9 @@ mod coerce_expression;
 mod context;
 mod interner;
 mod names;
-mod printer;
 mod types;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 use either::Either;
@@ -51,7 +50,6 @@ pub use types::{
 use self::{context::Context, interner::StringId, types::Types};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};
 use names::Names;
-pub use printer::WithSerialize;
 
 /// ParserDatabase is a container for a Schema AST, together with information
 /// gathered during schema validation. Each validation step enriches the
