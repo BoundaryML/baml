@@ -175,7 +175,7 @@ const activateClient = (
             },
             async (progress, token) => {
               let customCancellationToken: vscode.CancellationTokenSource | null = null
-              return new Promise(async (resolve) => {
+              const rest = new Promise<null>((resolve) => {
                 customCancellationToken = new vscode.CancellationTokenSource()
 
                 customCancellationToken.token.onCancellationRequested(() => {
@@ -190,14 +190,17 @@ const activateClient = (
                 const totalMs = message.durationMs || 1500 // Total duration in milliseconds (2 seconds)
                 const updateCount = 50 // Number of updates
                 const intervalMs = totalMs / updateCount // Interval between updates
-
-                for (let i = 0; i < updateCount; i++) {
-                  const prog = ((i + 1) / updateCount) * 100
-                  progress.report({ increment: prog, message: message.message })
-                  await sleep(intervalMs)
-                }
-                resolve(null)
+                ;(async () => {
+                  for (let i = 0; i < updateCount; i++) {
+                    const prog = ((i + 1) / updateCount) * 100
+                    progress.report({ increment: prog, message: message.message })
+                    await sleep(intervalMs)
+                  }
+                  resolve(null)
+                })()
               })
+
+              return rest
             },
           )
           break
@@ -336,7 +339,7 @@ const plugin: BamlVSCodePlugin = {
       }),
 
       commands.registerCommand('baml.checkForUpdates', async () => {
-        checkForUpdates({ showIfNoUpdates: true }).catch((e) => {
+        await checkForUpdates({ showIfNoUpdates: true }).catch((e) => {
           console.error('Failed to check for updates', e)
         })
       }),

@@ -145,10 +145,7 @@
           "beginCaptures": {
             "1": { "name": "storage.type.baml" }
           },
-          "patterns": [
-            { "include": "#type_definition" },
-            { "include": "#type_definition" }
-          ],
+          "patterns": [{ "include": "#type_definition" }, { "include": "#type_definition" }],
           "end": ">"
         },
         {
@@ -216,7 +213,7 @@
                   "patterns": [
                     {
                       "match": "\\w+",
-                      "name": "entity.name.other.client" 
+                      "name": "entity.name.other.client"
                     },
                     { "include": "#string_literal" }
                   ]
@@ -270,7 +267,7 @@
               "patterns": [
                 {
                   "match": "\\w+",
-                  "name": "entity.name.other.client" 
+                  "name": "entity.name.other.client"
                 },
                 { "include": "#string_literal" }
               ]
@@ -497,7 +494,6 @@
       "beginCaptures": {
         "1": { "name": "variable.other.readwrite" },
         "2": { "name": "string.quoted.block.baml.startquote" }
-
       },
       "end": "((\"){1,3}#)",
       "endCaptures": {
@@ -541,11 +537,25 @@
       }
     },
     "key_string_pair": {
-      "match": "(\"\\w+\"|\\b\\w+\\b)\\s+(\"[^\"]*\")",
-      "captures": {
+      "begin": "(\"\\w+\"|\\b\\w+\\b)\\s+(\")",
+      "beginCaptures": {
         "1": { "name": "variable.other.readwrite" },
         "2": { "name": "string.quoted.double" }
-      }
+      },
+      "end": "\"",
+      "endCaptures": {
+        "0": { "name": "string.quoted.double" }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape",
+          "match": "\\\\."
+        },
+        {
+          "name": "string.quoted.double",
+          "match": "[^\"\\\\]+"
+        }
+      ]
     },
     "key_custom_string_pair": {
       "match": "(\"\\w+\"|\\b\\w+\\b)\\s+((?!null)[^\\s\\[\\{]+)",
@@ -584,13 +594,20 @@
       "contentName": "variable.other.readwrite.array",
       "patterns": [
         { "include": "#key_array_pair" },
-        { "include": "#string_quoted" },
+        { "include": "#string_quoted2" },
         { "include": "#constant_numeric" }
       ]
     },
-    "string_quoted": {
-      "match": "\"[^\"]*\"",
-      "name": "string.quoted.double"
+    "string_quoted2": {
+      "name": "string.quoted.double",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape",
+          "match": "\\\\."
+        }
+      ]
     },
     "string_unquoted": {
       "match": "\\b\\w+\\b",
