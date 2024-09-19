@@ -46,7 +46,7 @@ export class WebPanelView {
     panel: WebviewPanel,
     extensionUri: Uri,
     portLoader: () => number,
-    private reporter: TelemetryReporter,
+    private reporter?: TelemetryReporter,
   ) {
     this._panel = panel
     this._port = portLoader
@@ -105,7 +105,7 @@ export class WebPanelView {
 
   public postMessage<T>(command: string, content: T) {
     this._panel.webview.postMessage({ command: command, content })
-    this.reporter.sendTelemetryEvent({
+    this.reporter?.sendTelemetryEvent({
       event: `baml.webview.${command}`,
       properties: {},
     })
@@ -258,7 +258,7 @@ export class WebPanelView {
             }
             case 'telemetry': {
               const { action, data } = message.meta
-              this.reporter.sendTelemetryEvent({
+              this.reporter?.sendTelemetryEvent({
                 event: `baml.webview.${action}`,
                 properties: data,
               })

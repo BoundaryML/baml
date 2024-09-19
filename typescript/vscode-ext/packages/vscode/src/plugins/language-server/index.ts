@@ -53,7 +53,10 @@ export const requestDiagnostics = async () => {
 
 export const requestBamlCLIVersion = async () => {
   try {
-    const version = await client.sendRequest('bamlCliVersion')
+    const version = await client?.sendRequest('bamlCliVersion')
+    if (!version) {
+      return
+    }
     console.log('Got BAML CLI version', version)
     bamlConfig.cliVersion = version as string
   } catch (e) {
@@ -245,9 +248,9 @@ const activateClient = (
     // And check again once every hour
     intervalTimers.push(
       setInterval(
-        async () => {
+        () => {
           console.log(`checking for updates ${new Date().toString()}`)
-          await checkForUpdates({ showIfNoUpdates: false })
+          checkForUpdates({ showIfNoUpdates: false })
         },
         60 * 60 * 1000 /* 1h in milliseconds: min/hr * secs/min * ms/sec */,
       ),
