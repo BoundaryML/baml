@@ -264,6 +264,39 @@ A mapping of strings to elements of another type.
 
 - Not yet supported. Use a `class` instead.
 
+## Type Constraints
+
+Constraints allow you to write custom logic limit the possible values a type can take.
+There are two types of constraints: checks and asserts. They can be added to a type using
+attributes:
+
+**Syntax:** `Type @check({{Predicate}}, Label)`, `Type @assert({{Predicate}}, Label)`
+
+**Example:** `int @check({{ this > 0 }}, "Positive")`
+
+**Example:**
+
+```
+class Classroom {
+  teacher_name string @assert({{ this|length > 0 }}, "Nonempty name")
+  student_count int @check({{ this > 0 && this < 100 }}, "Realistic class size")
+}
+```
+
+When an `@assert` on a function argument or a return type fails, the LLM function
+will throw an error instead of returning a valid value. Use `@assert` to enforce
+strict conditions on your types.
+
+When `@check`s appear in a function's return type, information about the checks will
+be associated with the return value. For `@check`s that are part of composite types,
+such as a class field, the information will be associated with that field.
+
+`@check`s and `@asserts` within Union types will be used to choose which variant of the
+Union to return.
+
+When streaming LLM functions that contain a failing `@assert`, the `@assert` will not
+cause the response to fail, until streaming is finished.
+
 ## Examples and Equivalents
 
 Here are some examples and what their equivalents are in different languages.
