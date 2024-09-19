@@ -168,7 +168,7 @@ fn generate_main_baml_content(
         format!(
             r#"
     // 'baml-cli generate' will run this after generating openapi.yaml, to generate your OpenAPI client
-    // This command will be run from within $output_dir
+    // This command will be run from within $output_dir/baml_client
     {}"#,
             openapi_generate_command.trim_start()
         )
