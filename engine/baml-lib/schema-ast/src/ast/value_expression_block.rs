@@ -116,20 +116,21 @@ impl BlockArgs {
     }
 }
 
-/// A model declaration.
+/// A block declaration.
+/// A complete Function, Client, Generator, Test, or RetryPolicy.
 #[derive(Debug, Clone)]
 pub struct ValueExprBlock {
-    /// The name of the model.
+    /// The name of the block.
     ///
     /// ```ignore
-    /// function Foo { .. }
-    ///       ^^^
+    /// function Foo(...) {...}
+    ///          ^^^
     /// ```
     pub(crate) name: Identifier,
-    /// The fields of the model.
+    /// The fields of the block.
     ///
     /// ```ignore
-    /// model Foo {
+    /// class Foo {
     ///   id    Int    @id
     ///   ^^^^^^^^^^^^^^^^
     ///   field String
@@ -138,32 +139,32 @@ pub struct ValueExprBlock {
     /// ```
     pub(crate) input: Option<BlockArgs>,
     pub(crate) output: Option<BlockArg>,
-    /// The documentation for this model.
+    /// The documentation for this block.
     ///
     /// ```ignore
     /// /// Lorem ipsum
     ///     ^^^^^^^^^^^
-    /// model Foo {
+    /// class Foo {
     ///   id    Int    @id
     ///   field String
     /// }
     /// ```
     pub(crate) documentation: Option<Comment>,
-    /// The attributes of this model.
+    /// The attributes of this block.
     ///
     /// ```ignore
-    /// model Foo {
+    /// class Foo {
     ///   id    Int    @id
     ///   field String
     ///
-    ///   @@index([field])
-    ///   ^^^^^^^^^^^^^^^^
-    ///   @@map("Bar")
-    ///   ^^^^^^^^^^^^
+    ///   @@description("A Foo")
+    ///   ^^^^^^^^^^^^^^^^^^^^^^
+    ///   @@check({{ this.field|length < 100 }}, "Short field")
+    ///   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     /// }
     /// ```
     pub attributes: Vec<Attribute>,
-    /// The location of this model in the text representation.
+    /// The location of this block in the text representation.
     pub(crate) span: Span,
     pub fields: Vec<Field<Expression>>,
 
