@@ -63,6 +63,8 @@ app.use(
       const originalUrl = req.headers['baml-original-url']
 
       if (typeof originalUrl === 'string') {
+        delete req.headers['baml-original-url']
+        delete req.headers['origin']
         return originalUrl
       } else {
         throw new Error('baml-original-url header is missing or invalid')

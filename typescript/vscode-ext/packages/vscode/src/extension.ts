@@ -200,12 +200,14 @@ export function activate(context: vscode.ExtensionContext) {
         return path
       },
       router: (req) => {
+        console.log('proxy middleware', req)
         // Extract the original target URL from the custom header
         let originalUrl = req.headers['baml-original-url']
         if (typeof originalUrl === 'string') {
           delete req.headers['baml-original-url']
+          delete req.headers['origin']
 
-          req.headers['origin'] = `http://localhost:${port}`
+          // req.headers['origin'] = `http://localhost:${port}`
 
           // Ensure the URL does not end with a slash
           if (originalUrl.endsWith('/')) {
@@ -218,7 +220,22 @@ export function activate(context: vscode.ExtensionContext) {
       },
       logger: console,
       on: {
+        proxyReq: (proxyReq, req, res) => {
+          console.log('proxying request', { proxyReq, req, res })
+          // Handle OPTIONS requests
+          if (req.method === 'OPTIONS') {
+            res.statusCode = 204
+            res.setHeader('Access-Control-Allow-Origin', '*')
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS')
+            res.setHeader('Access-Control-Allow-Headers', '*')
+            res.end()
+          }
+
+          // Delete the "origin" header from the outgoing request
+          // proxyReq.removeHeader('origin')
+        },
         proxyRes: (proxyRes, req, res) => {
+          console.log('proxying response', { proxyRes, req, res })
           proxyRes.headers['Access-Control-Allow-Origin'] = '*'
         },
         error: (error) => {
