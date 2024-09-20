@@ -87,6 +87,7 @@ app.use(
           for (const [header, value] of Object.entries(headers)) {
             proxyReq.setHeader(header, value)
           }
+          proxyReq.removeHeader('origin')
         } catch (err) {
           // This is not console.warn because it's not important
           console.log('baml-original-url is not parsable', err)

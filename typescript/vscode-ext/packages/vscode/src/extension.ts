@@ -203,9 +203,9 @@ export function activate(context: vscode.ExtensionContext) {
         // Extract the original target URL from the custom header
         let originalUrl = req.headers['baml-original-url']
         if (typeof originalUrl === 'string') {
+          // For some reason, Node doesn't like deleting headers in the proxyReq function.
           delete req.headers['baml-original-url']
-
-          req.headers['origin'] = `http://localhost:${port}`
+          delete req.headers['origin']
 
           // Ensure the URL does not end with a slash
           if (originalUrl.endsWith('/')) {
@@ -218,6 +218,9 @@ export function activate(context: vscode.ExtensionContext) {
       },
       logger: console,
       on: {
+        proxyReq: (proxyReq, req, res) => {
+          console.debug('Proxying an LLM request (to bypass CORS)', { proxyReq, req, res })
+        },
         proxyRes: (proxyRes, req, res) => {
           proxyRes.headers['Access-Control-Allow-Origin'] = '*'
         },
