@@ -10,7 +10,7 @@ end
 Rake::TestTask.new do |t|
   t.libs << "../../engine/language_client_ruby/lib"
   t.libs << "baml_client"
-  t.test_files = FileList["test_filtered.rb"]
-  # t.test_files = FileList["test_*.rb"]
+  # t.test_files = FileList["test_filtered.rb"]
+  t.test_files = FileList["test_*.rb"]
   t.options = '--verbose'
 end

@@ -2,7 +2,33 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
-## [0.55.3](https://github.com/boundaryml/baml/compare/0.55.2..0.55.3) - 2024-09-11
+## [0.56.0](https://github.com/boundaryml/baml/compare/0.55.3..0.56.0) - 2024-09-20
+
+Shout outs to Nico for fixing some internal Rust dependencies, and to Lorenz for correcting our documentation! We really appreciate it :)
+
+
+### Features
+
+- use better default for openapi/rust client (#958) - ([b74ef15](https://github.com/boundaryml/baml/commit/b74ef15fd4dc09ecc7d1ac8284e7f22cd6d5864c)) - Samuel Lijin
+
+### Bug Fixes
+
+- push optional-list and optional-map validation to post-parse (#959) - ([c0480d5](https://github.com/boundaryml/baml/commit/c0480d5cfd46ce979e957223dc7b5fa744778552)) - Samuel Lijin
+- improve OpenAPI instructions for windows/java (#962) - ([6010efb](https://github.com/boundaryml/baml/commit/6010efbb7990fda966640c3af267de41362d3fa4)) - Samuel Lijin
+- assorted fixes: unquoted strings, openai-generic add api_key for bearer auth, support escape characters in quoted strings (#965) - ([847f3a9](https://github.com/boundaryml/baml/commit/847f3a9bb0f00303eae7e410663efc63e54c38b6)) - hellovai
+- serde-serialize can cause a package dependency cycle (#967) - ([109ae09](https://github.com/boundaryml/baml/commit/109ae0914852f2ee4a771d27103e4e46ad672647)) - Nico
+- make anthropic work in fiddle/vscode (#970) - ([32eccae](https://github.com/boundaryml/baml/commit/32eccae44b27c3fec5fbc3270b6657819d75a426)) - Samuel Lijin
+- make dynamic enums work as outputs in Ruby (#972) - ([7530402](https://github.com/boundaryml/baml/commit/7530402f0dc063f10f57cf7aa7f06790574de705)) - Samuel Lijin
+
+### Documentation
+
+- suggest correct python init command in vscode readme (#954) - ([e99c5dd](https://github.com/boundaryml/baml/commit/e99c5dd1903078d08aef451e4addc6110d7ca279)) - Samuel Lijin
+- add more vscode debugging instructions (#955) - ([342b657](https://github.com/boundaryml/baml/commit/342b657da69441306fa7711d7d14893cf8036f84)) - Samuel Lijin
+- NextJS hook needs to be bound to the correct context (#957) - ([ee80451](https://github.com/boundaryml/baml/commit/ee80451de85063b37e658ba58571c791e8514273)) - aaronvg
+- update nextjs hooks and docs (#952) - ([01cf855](https://github.com/boundaryml/baml/commit/01cf855500159066fdcd162dc2e2087768d5ba28)) - aaronvg
+- Fix some documentation typos (#966) - ([5193cd7](https://github.com/boundaryml/baml/commit/5193cd70686173c863af5ce40fd6bb3792406951)) - Greg Hale
+- Keywords AI router (#953) - ([1c6f975](https://github.com/boundaryml/baml/commit/1c6f975d8cc793841745da0db82ee1e2f1908e56)) - aaronvg
+- Fix `post_generate` comment (#968) - ([919c79f](https://github.com/boundaryml/baml/commit/919c79fa8cd85a96e6559055b2bb436d925dcb2a)) - lorenzoh
 
 ### Bug Fixes
 
