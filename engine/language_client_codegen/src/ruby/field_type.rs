@@ -6,7 +6,7 @@ impl ToRuby for FieldType {
     fn to_ruby(&self) -> String {
         match self {
             FieldType::Class(name) => format!("Baml::Types::{}", name.clone()),
-            FieldType::Enum(name) => format!("Baml::Types::{}", name.clone()),
+            FieldType::Enum(name) => format!("T.any(Baml::Types::{}, String)", name.clone()),
             // https://sorbet.org/docs/stdlib-generics
             FieldType::List(inner) => format!("T::Array[{}]", inner.to_ruby()),
             FieldType::Map(key, value) => {

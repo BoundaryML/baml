@@ -74,6 +74,22 @@ export class BamlAsyncClient {
     return raw.parsed() as string
   }
   
+  async ClassifyDynEnumTwo(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Promise<(string | DynEnumTwo)> {
+    const raw = await this.runtime.callFunction(
+      "ClassifyDynEnumTwo",
+      {
+        "input": input
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as (string | DynEnumTwo)
+  }
+  
   async ClassifyMessage(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -1321,6 +1337,29 @@ class BamlStreamClient {
       raw,
       (a): a is RecursivePartialNull<string> => a,
       (a): a is string => a,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+    )
+  }
+  
+  ClassifyDynEnumTwo(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): BamlStream<RecursivePartialNull<(string | DynEnumTwo)>, (string | DynEnumTwo)> {
+    const raw = this.runtime.streamFunction(
+      "ClassifyDynEnumTwo",
+      {
+        "input": input
+      },
+      undefined,
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return new BamlStream<RecursivePartialNull<(string | DynEnumTwo)>, (string | DynEnumTwo)>(
+      raw,
+      (a): a is RecursivePartialNull<(string | DynEnumTwo)> => a,
+      (a): a is (string | DynEnumTwo) => a,
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
     )

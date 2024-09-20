@@ -105,6 +105,30 @@ class BamlSyncClient:
       mdl = create_model("AudioInputReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    def ClassifyDynEnumTwo(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Union[types.DynEnumTwo, str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "ClassifyDynEnumTwo",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("ClassifyDynEnumTwoReturnType", inner=(Union[types.DynEnumTwo, str], ...))
+      return coerce(mdl, raw.parsed())
+    
     def ClassifyMessage(
         self,
         input: str,
@@ -1977,6 +2001,39 @@ class BamlStreamClient:
       partial_mdl = create_model("AudioInputPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlSyncStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def ClassifyDynEnumTwo(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[Union[types.DynEnumTwo, str]], Union[types.DynEnumTwo, str]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "ClassifyDynEnumTwo",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("ClassifyDynEnumTwoReturnType", inner=(Union[types.DynEnumTwo, str], ...))
+      partial_mdl = create_model("ClassifyDynEnumTwoPartialReturnType", inner=(Optional[Union[types.DynEnumTwo, str]], ...))
+
+      return baml_py.BamlSyncStream[Optional[Union[types.DynEnumTwo, str]], Union[types.DynEnumTwo, str]](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

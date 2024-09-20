@@ -304,7 +304,7 @@ module Baml
       include Baml::Sorbet::Struct
       const :hi, String
       const :some_class, Baml::Types::SomeClassNestedDynamic
-      const :status, Baml::Types::DynEnumOne
+      const :status, T.any(Baml::Types::DynEnumOne, String)
 
       def initialize(props)
         super(
@@ -524,7 +524,7 @@ module Baml
       include Baml::Sorbet::Struct
       const :omega_1, T.nilable(Baml::Types::OptionalTest_Prop1)
       const :omega_2, T.nilable(String)
-      const :omega_3, T::Array[T.nilable(Baml::Types::OptionalTest_CategoryType)]
+      const :omega_3, T::Array[T.nilable(T.any(Baml::Types::OptionalTest_CategoryType, String))]
 
       def initialize(props)
         super(
@@ -538,7 +538,7 @@ module Baml
     end
     class OrderInfo < T::Struct
       include Baml::Sorbet::Struct
-      const :order_status, Baml::Types::OrderStatus
+      const :order_status, T.any(Baml::Types::OrderStatus, String)
       const :tracking_number, T.nilable(String)
       const :estimated_arrival_date, T.nilable(String)
 
@@ -555,7 +555,7 @@ module Baml
     class Person < T::Struct
       include Baml::Sorbet::Struct
       const :name, T.nilable(String)
-      const :hair_color, T.nilable(Baml::Types::Color)
+      const :hair_color, T.nilable(T.any(Baml::Types::Color, String))
 
       def initialize(props)
         super(
@@ -582,7 +582,7 @@ module Baml
     end
     class RaysData < T::Struct
       include Baml::Sorbet::Struct
-      const :dataType, Baml::Types::DataType
+      const :dataType, T.any(Baml::Types::DataType, String)
       const :value, T.any(Baml::Types::Resume, Baml::Types::Event)
 
       def initialize(props)
@@ -691,7 +691,7 @@ module Baml
       const :jobTitle, T.nilable(Baml::Types::WithReasoning)
       const :company, T.nilable(Baml::Types::WithReasoning)
       const :description, T::Array[Baml::Types::WithReasoning]
-      const :tags, T::Array[T.any(Baml::Types::Tag, String)]
+      const :tags, T::Array[T.any(T.any(Baml::Types::Tag, String), String)]
 
       def initialize(props)
         super(
@@ -767,7 +767,7 @@ module Baml
     class TestClassWithEnum < T::Struct
       include Baml::Sorbet::Struct
       const :prop1, String
-      const :prop2, Baml::Types::EnumInClass
+      const :prop2, T.any(Baml::Types::EnumInClass, String)
 
       def initialize(props)
         super(
