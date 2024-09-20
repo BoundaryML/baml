@@ -63,8 +63,6 @@ app.use(
       const originalUrl = req.headers['baml-original-url']
 
       if (typeof originalUrl === 'string') {
-        delete req.headers['baml-original-url']
-        delete req.headers['origin']
         return originalUrl
       } else {
         throw new Error('baml-original-url header is missing or invalid')
@@ -89,6 +87,7 @@ app.use(
           for (const [header, value] of Object.entries(headers)) {
             proxyReq.setHeader(header, value)
           }
+          proxyReq.removeHeader('origin')
         } catch (err) {
           // This is not console.warn because it's not important
           console.log('baml-original-url is not parsable', err)
