@@ -52,11 +52,13 @@ dotenv.config()
 import { b } from 'baml-client'
 ```
 
-```text OpenAPI
-Make sure to set the environment variables wherever you run `baml-cli dev` or `baml-cli serve`.
+```ruby Ruby (beta)
+require 'dotenv/load'
 
-See the [deployment instructions](/docs/get-started/deploying/openapi) to learn more.
+# Wait to import the BAML client until after loading environment variables
+require 'baml_client'
 ```
+
 
 </CodeBlocks>
 
@@ -67,6 +69,7 @@ Environment variables are primarily used in clients to propagate authorization
 credentials, such as API keys, like so:
 
 ```baml
+
 client<llm> GPT4o {
   provider baml-openai-chat
   options {

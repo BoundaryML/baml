@@ -2,9 +2,9 @@
 slug: docs/calling-baml/dynamic-types
 ---
 
-Sometimes you have **output schemas that change at runtime** -- for example if
-the list of `Categories` you need to classify comes from a database, or your
-users can customize a prompt schema.
+Sometimes you have a **output schemas that change at runtime** -- for example if
+you have a list of Categories that you need to classify that come from a
+database, or your schema is user-provided.
 
 **Dynamic types are types that can be modified at runtime**, which means you can
 change the output schema of a function at runtime.
@@ -12,78 +12,95 @@ change the output schema of a function at runtime.
 Here are the steps to make this work:
 1. Add `@@dynamic` to the class or enum definition to mark it as dynamic
 
-    ```rust baml
-    enum Category {
-      VALUE1 // normal static enum values that don't change
-      VALUE2
-      @@dynamic // this enum can have more values added at runtime
-    } 
+```rust baml
+enum Category {
+  VALUE1 // normal static enum values that don't change
+  VALUE2
+  @@dynamic // this enum can have more values added at runtime
+} 
 
-    function DynamicCategorizer(input: string) -> Category {
-      client GPT4
-      prompt #"
-        Given a string, classify it into a category
-        {{ input }}
-        
-        {{ ctx.output_format }}
-      "#
-    }
+function DynamicCategorizer(input: string) -> Category {
+  client GPT4
+  prompt #"
+    Given a string, classify it into a category
+    {{ input }}
+     
+    {{ ctx.output_format }}
+  "#
+}
 
-    ```
+```
 
 2. Create a TypeBuilder and modify the existing type. All dynamic types you
 define in BAML will be available as properties of `TypeBuilder`. Think of the
 typebuilder as a registry of modified runtime types that the baml function will
 read from when building the output schema in the prompt.
 
-    <Tabs>
+<Tabs>
 
-    <Tab title="Python">
-    ```python
-    from baml_client.type_builder import TypeBuilder
-    from baml_client import b
+<Tab title="Python">
+```python
+from baml_client.type_builder import TypeBuilder
+from baml_client import b
 
-    async def run():
-      tb = TypeBuilder()
-      tb.Category.add_value('VALUE3')
-      tb.Category.add_value('VALUE4')
-      # Pass the typebuilder in the baml_options argument -- the last argument of the function.
-      res = await b.DynamicCategorizer("some input", { "tb": tb })
-      # Now res can be VALUE1, VALUE2, VALUE3, or VALUE4
-      print(res)
+async def run():
+  tb = TypeBuilder()
+  tb.Category.add_value('VALUE3')
+  tb.Category.add_value('VALUE4')
+  # Pass the typebuilder in the baml_options argument -- the last argument of the function.
+  res = await b.DynamicCategorizer("some input", { "tb": tb })
+  # Now res can be VALUE1, VALUE2, VALUE3, or VALUE4
+  print(res)
 
-    ```
-    </Tab>
+```
+</Tab>
 
-    <Tab title="TypeScript">
-    ```typescript
-    import TypeBuilder from '../baml_client/type_builder'
-    import {
-      b
-    } from '../baml_client'
+<Tab title="TypeScript">
+```typescript
+import TypeBuilder from '../baml_client/type_builder'
+import {
+  b
+} from '../baml_client'
 
-    async function run() {
-      const tb = new TypeBuilder()
-      tb.Category.addValue('VALUE3')
-      tb.Category.addValue('VALUE4')
-      const res = await b.DynamicCategorizer("some input", { tb: tb })
-      // Now res can be VALUE1, VALUE2, VALUE3, or VALUE4
-      console.log(res)
-    }
-    ```
-    </Tab>
+async function run() {
+  const tb = new TypeBuilder()
+  tb.Category.addValue('VALUE3')
+  tb.Category.addValue('VALUE4')
+  const res = await b.DynamicCategorizer("some input", { tb: tb })
+  // Now res can be VALUE1, VALUE2, VALUE3, or VALUE4
+  console.log(res)
+}
+```
+</Tab>
 
-    <Tab title="OpenAPI">
-    Dynamic types are not yet supported when used via OpenAPI.
+<Tab title="Ruby">
+```ruby
+require_relative '../baml_client'
 
-    Please let us know if you want this feature, either via [Discord] or [GitHub][openapi-feedback-github-issue].
-    </Tab>
+def run
+  tb = Baml::TypeBuilder.new
+  tb.Category.add_value('VALUE3')
+  tb.Category.add_value('VALUE4')
+  res = Baml.Client.dynamic_categorizer(input: "some input", baml_options: {tb: tb})
+  # Now res can be VALUE1, VALUE2, VALUE3, or VALUE4
+  puts res
+end
+```
+</Tab>
 
-    </Tabs>
+<Tab title="OpenAPI">
+Dynamic types are not yet supported when used via OpenAPI.
+
+Please let us know if you want this feature, either via [Discord] or [GitHub][openapi-feedback-github-issue].
+
+[Discord]: https://discord.gg/BTNBeXGuaS
+[openapi-feedback-github-issue]: https://github.com/BoundaryML/baml/issues/892
+</Tab>
+
+</Tabs>
 
 ### Dynamic BAML Classes
-
-Existing BAML classes marked with `@@dynamic` will be available as properties of `TypeBuilder`.
+Existing BAML classes marked with @@dynamic will be available as properties of `TypeBuilder`.
 
 ```rust BAML
 class User {
@@ -105,8 +122,7 @@ function DynamicUserCreator(user_info: string) -> User {
 
 Modify the `User` schema at runtime:
 
-<Tabs>
-<Tab title="Python">
+<CodeBlocks>
 
 ```python Python
 from baml_client.type_builder import TypeBuilder
@@ -121,11 +137,8 @@ async def run():
   print(res)
 
 ```
-</Tab>
 
-<Tab title="TypeScript">
-
-```typescript
+```typescript TypeScript
 import TypeBuilder from '../baml_client/type_builder'
 import {
   b
@@ -140,23 +153,29 @@ async function run() {
   console.log(res)
 }
 ```
-</Tab>
 
-<Tab title="OpenAPI">
+```ruby Ruby
+require_relative 'baml_client/client'
 
-Dynamic types are not yet supported when used via OpenAPI.
-
-Please let us know if you want this feature, either via [Discord] or [GitHub][openapi-feedback-github-issue].
-
-</Tab>
-</Tabs>
+def run
+  tb = Baml::TypeBuilder.new
+  tb.User.add_property('email', tb.string)
+  tb.User.add_property('address', tb.string)
+  
+  res = Baml.Client.dynamic_user_creator(input: "some user info", baml_options: {tb: tb})
+  # Now res can have email and address fields
+  puts res
+end
+```
+</CodeBlocks>
 
 ### Creating new dynamic classes or enums not in BAML
 Here we create a new `Hobbies` enum, and a new class called `Address`.
 
-<Tabs>
-<Tab title="Python">
-```python
+
+<CodeBlocks>
+
+```python Python
 from baml_client.type_builder import TypeBuilder
 from baml_client import b
 
@@ -176,11 +195,8 @@ async def run():
   print(res)
 
 ```
-</Tab>
 
-<Tab title="TypeScript">
-
-```typescript
+```typescript TypeScript
 import TypeBuilder from '../baml_client/type_builder'
 import { b } from '../baml_client'
 
@@ -201,46 +217,49 @@ async function run() {
   console.log(res)
 }
 ```
-</Tab>
 
-<Tab title="OpenAPI">
+```ruby Ruby
+require_relative 'baml_client/client'
 
-Dynamic types are not yet supported when used via OpenAPI.
+def run
+  tb = Baml::TypeBuilder.new
+  hobbies_enum = tb.add_enum('Hobbies')
+  hobbies_enum.add_value('Soccer')
+  hobbies_enum.add_value('Reading')
 
-Please let us know if you want this feature, either via [Discord] or [GitHub][openapi-feedback-github-issue].
+  address_class = tb.add_class('Address')
+  address_class.add_property('street', tb.string)
 
-</Tab>
-</Tabs>
+  tb.User.add_property('hobby', hobbies_enum.type.optional)
+  tb.User.add_property('address', address_class.type.optional)
+  
+  res = Baml::Client.dynamic_user_creator(input: "some user info", baml_options: { tb: tb })
+  # Now res might have the hobby property, which can be Soccer or Reading
+  puts res
+end
+```
+</CodeBlocks>
 
 ### Adding descriptions to dynamic types
 
-<Tabs>
-<Tab title="Python">
-```python
-from baml_client.type_builder import TypeBuilder
-from baml_client import b
+<CodeBlocks>
 
-async def run():
-  tb = TypeBuilder()
-  tb.User.add_property("email", tb.string()).description("The user's email")
+```python Python
+tb = TypeBuilder()
+tb.User.add_property("email", tb.string()).description("The user's email")
 ```
-</Tab>
 
-<Tab title="TypeScript">
-```typescript
+```typescript TypeScript
 const tb = new TypeBuilder()
 tb.User.addProperty("email", tb.string()).description("The user's email")
 ```
-</Tab>
 
-<Tab title="OpenAPI">
+```ruby Ruby
+tb = Baml::TypeBuilder.new
+tb.User.add_property("email", tb.string).description("The user's email")
+```
 
-Dynamic types are not yet supported when used via OpenAPI.
-
-Please let us know if you want this feature, either via [Discord] or [GitHub][openapi-feedback-github-issue].
-
-</Tab>
-</Tabs>
+</CodeBlocks>
 
 ### Building dynamic types from JSON schema
 
@@ -248,10 +267,9 @@ We have a working implementation of this, but are waiting for a concrete use cas
 Please chime in on [the GitHub issue](https://github.com/BoundaryML/baml/issues/771) if this is
 something you'd like to use.
 
-<Tabs>
-<Tab title="Python">
-```python
-import pydantic
+<CodeBlocks>
+
+```python Python
 import pydantic
 from baml_client import b
 
@@ -267,11 +285,8 @@ res = await b.ExtractPeople(
     {"tb": tb},
 )
 ```
-</Tab>
 
-<Tab title="TypeScript">
-```typescript
-import 'z' from zod
+```typescript TypeScript
 import 'z' from zod
 import 'zodToJsonSchema' from zod-to-json-schema
 import { b } from '../baml_client'
@@ -293,16 +308,15 @@ const res = await b.ExtractPeople(
 )
 ```
 
-</Tab>
+```ruby Ruby
+tb = Baml::TypeBuilder.new
+tb.unstable_features.add_json_schema(...)
 
-<Tab title="OpenAPI">
+res = Baml::Client.extract_people(
+  input: "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+  baml_options: { tb: tb }
+)
 
-Dynamic types are not yet supported when used via OpenAPI.
-
-Please let us know if you want this feature, either via [Discord] or [GitHub][openapi-feedback-github-issue].
-
-</Tab>
-</Tabs>
-
-[Discord]: https://discord.gg/BTNBeXGuaS
-[openapi-feedback-github-issue]: https://github.com/BoundaryML/baml/issues/892
+puts res
+```
+</CodeBlocks>
