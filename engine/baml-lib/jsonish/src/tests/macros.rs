@@ -16,6 +16,12 @@ macro_rules! test_failing_deserializer {
     };
 }
 
+/// Arguments:
+///  name: name of test function to generate.
+///  file_content: a BAML schema.
+///  raw_string: an example payload coming from an LLM to parse.
+///  target_type: The type to try to parse raw_string into.
+///  json: The expected JSON encoding that the parser should return.
 macro_rules! test_deserializer {
     ($name:ident, $file_content:expr, $raw_string:expr, $target_type:expr, $($json:tt)+) => {
         #[test_log::test]
