@@ -159,7 +159,8 @@ impl TypeCoercer for Class {
                             }
                             // If we're missing a field, thats ok!
                             None => Some(BamlValueWithFlags::Null(
-                                DeserializerConditions::new().with_flag(Flag::DefaultFromNoValue),
+                                DeserializerConditions::new()
+                                    .with_flag(Flag::OptionalDefaultFromNoValue),
                             )),
                         };
 

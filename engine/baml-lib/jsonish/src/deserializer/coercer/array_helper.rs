@@ -38,11 +38,42 @@ pub(super) fn pick_best(
         })
         .collect::<Vec<_>>();
 
-    // Sort by score
-    res_index.sort_by(|&(a, a_score), &(b, b_score)| match a_score.cmp(&b_score) {
-        std::cmp::Ordering::Equal => a.cmp(&b),
-        std::cmp::Ordering::Less => std::cmp::Ordering::Less,
-        std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
+    // Pick the best one, but in case of picking "default" values like null or empty list, prefer picking the first one
+    let mut all_valid_scores = res_index
+        .iter()
+        .filter_map(|&(i, score)| match res.get(i) {
+            Some(Ok(r)) => Some((
+                i,
+                score,
+                r.conditions().flags.iter().any(|f| {
+                    matches!(
+                        f,
+                        Flag::DefaultFromNoValue | Flag::OptionalDefaultFromNoValue
+                    )
+                }) || match r {
+                    BamlValueWithFlags::List(flags, items) => {
+                        items.is_empty()
+                            && flags.flags.iter().any(|f| matches!(f, Flag::SingleToArray))
+                    }
+                    _ => false,
+                },
+                r,
+            )),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    // Sort by (false, score, index)
+    all_valid_scores.sort_by(|&(a, a_score, a_default, _), &(b, b_score, b_default, _)| {
+        match a_default.cmp(&b_default) {
+            std::cmp::Ordering::Equal => match a_score.cmp(&b_score) {
+                std::cmp::Ordering::Equal => a.cmp(&b),
+                std::cmp::Ordering::Less => std::cmp::Ordering::Less,
+                std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
+            },
+            std::cmp::Ordering::Less => std::cmp::Ordering::Less,
+            std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
+        }
     });
 
     log::trace!(
@@ -62,22 +93,20 @@ pub(super) fn pick_best(
     );
 
     // Take the best one
-    match res_index.first() {
-        Some(&(i, _)) => match res.get(i) {
-            Some(Ok(v)) => {
-                // Add some flags so we know which value we picked
-                let mut v = v.clone();
-                if res.len() > 1 {
-                    v.add_flag(if matches!(target, FieldType::Union(_)) {
-                        Flag::UnionMatch(i, res.to_vec())
-                    } else {
-                        Flag::FirstMatch(i, res.to_vec())
-                    });
-                }
-                Ok(v.to_owned())
+    match all_valid_scores.first() {
+        Some(&(i, _, _, v)) => {
+            let mut v = v.clone();
+            if res.len() > 1 {
+                v.add_flag(if matches!(target, FieldType::Union(_)) {
+                    Flag::UnionMatch(i, res.to_vec())
+                } else {
+                    Flag::FirstMatch(i, res.to_vec())
+                });
             }
-            // TODO: @hellovai: Return all errors
-            Some(Err(_)) => {
+            Ok(v.to_owned())
+        }
+        None => {
+            if res.len() > 0 {
                 let errors = res.iter().filter_map(|r| match r {
                     Ok(_) => None,
                     Err(e) => Some(e),
@@ -86,9 +115,9 @@ pub(super) fn pick_best(
                     &format!("Failed to find any {} in {} items", target, res.len()),
                     errors,
                 ))
+            } else {
+                Err(ctx.error_internal("Index out of bounds"))
             }
-            None => Err(ctx.error_internal("Index out of bounds")),
-        },
-        None => Err(ctx.error_unexpected_empty_array(target)),
+        }
     }
 }
