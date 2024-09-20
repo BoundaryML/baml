@@ -239,7 +239,6 @@ mod tests {
         let source = SourceFile::new_static(root_path.into(), input);
 
         let result = parse_schema(&root_path.into(), &source).unwrap();
-        dbg!(&result.0);
         assert_eq!(result.1.errors().len(), 0);
     }
 }
