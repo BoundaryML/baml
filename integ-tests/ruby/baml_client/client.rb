@@ -119,7 +119,39 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::Category)
+      ).returns(T.any(Baml::Types::DynEnumTwo, String))
+    }
+    def ClassifyDynEnumTwo(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("ClassifyDynEnumTwo may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "ClassifyDynEnumTwo",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(T.any(Baml::Types::Category, String))
     }
     def ClassifyMessage(
         *varargs,
@@ -151,7 +183,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::Category)
+      ).returns(T.any(Baml::Types::Category, String))
     }
     def ClassifyMessage2(
         *varargs,
@@ -183,7 +215,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::Category)
+      ).returns(T.any(Baml::Types::Category, String))
     }
     def ClassifyMessage3(
         *varargs,
@@ -759,7 +791,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[Baml::Types::EnumOutput])
+      ).returns(T::Array[T.any(Baml::Types::EnumOutput, String)])
     }
     def FnEnumListOutput(
         *varargs,
@@ -791,7 +823,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::EnumOutput)
+      ).returns(T.any(Baml::Types::EnumOutput, String))
     }
     def FnEnumOutput(
         *varargs,
@@ -1047,7 +1079,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::TestEnum)
+      ).returns(T.any(Baml::Types::TestEnum, String))
     }
     def FnTestAliasedEnumOutput(
         *varargs,
@@ -1109,7 +1141,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        myArg: Baml::Types::NamedArgsSingleEnum,
+        myArg: T.any(Baml::Types::NamedArgsSingleEnum, String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
@@ -1845,7 +1877,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        myArg: T::Array[Baml::Types::NamedArgsSingleEnumList],
+        myArg: T::Array[T.any(Baml::Types::NamedArgsSingleEnumList, String)],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
@@ -2602,7 +2634,42 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::BamlStream[Baml::Types::Category])
+      ).returns(Baml::BamlStream[T.any(Baml::Types::DynEnumTwo, String)])
+    }
+    def ClassifyDynEnumTwo(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("ClassifyDynEnumTwo may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "ClassifyDynEnumTwo",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[T.nilable(Baml::Types::DynEnumTwo), T.any(Baml::Types::DynEnumTwo, String)].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[T.any(Baml::Types::Category, String)])
     }
     def ClassifyMessage(
         *varargs,
@@ -2626,7 +2693,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
       )
-      Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
+      Baml::BamlStream[T.nilable(Baml::Types::Category), T.any(Baml::Types::Category, String)].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -2637,7 +2704,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::BamlStream[Baml::Types::Category])
+      ).returns(Baml::BamlStream[T.any(Baml::Types::Category, String)])
     }
     def ClassifyMessage2(
         *varargs,
@@ -2661,7 +2728,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
       )
-      Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
+      Baml::BamlStream[T.nilable(Baml::Types::Category), T.any(Baml::Types::Category, String)].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -2672,7 +2739,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::BamlStream[Baml::Types::Category])
+      ).returns(Baml::BamlStream[T.any(Baml::Types::Category, String)])
     }
     def ClassifyMessage3(
         *varargs,
@@ -2696,7 +2763,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
       )
-      Baml::BamlStream[T.nilable(Baml::Types::Category), Baml::Types::Category].new(
+      Baml::BamlStream[T.nilable(Baml::Types::Category), T.any(Baml::Types::Category, String)].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -3302,7 +3369,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::BamlStream[T::Array[Baml::Types::EnumOutput]])
+      ).returns(Baml::BamlStream[T::Array[T.any(Baml::Types::EnumOutput, String)]])
     }
     def FnEnumListOutput(
         *varargs,
@@ -3326,7 +3393,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
       )
-      Baml::BamlStream[T::Array[T.nilable(Baml::Types::EnumOutput)], T::Array[Baml::Types::EnumOutput]].new(
+      Baml::BamlStream[T::Array[T.nilable(Baml::Types::EnumOutput)], T::Array[T.any(Baml::Types::EnumOutput, String)]].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -3337,7 +3404,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::BamlStream[Baml::Types::EnumOutput])
+      ).returns(Baml::BamlStream[T.any(Baml::Types::EnumOutput, String)])
     }
     def FnEnumOutput(
         *varargs,
@@ -3361,7 +3428,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
       )
-      Baml::BamlStream[T.nilable(Baml::Types::EnumOutput), Baml::Types::EnumOutput].new(
+      Baml::BamlStream[T.nilable(Baml::Types::EnumOutput), T.any(Baml::Types::EnumOutput, String)].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -3617,7 +3684,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::BamlStream[Baml::Types::TestEnum])
+      ).returns(Baml::BamlStream[T.any(Baml::Types::TestEnum, String)])
     }
     def FnTestAliasedEnumOutput(
         *varargs,
@@ -3641,7 +3708,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
       )
-      Baml::BamlStream[T.nilable(Baml::Types::TestEnum), Baml::Types::TestEnum].new(
+      Baml::BamlStream[T.nilable(Baml::Types::TestEnum), T.any(Baml::Types::TestEnum, String)].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -3685,7 +3752,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        myArg: Baml::Types::NamedArgsSingleEnum,
+        myArg: T.any(Baml::Types::NamedArgsSingleEnum, String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
@@ -4490,7 +4557,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        myArg: T::Array[Baml::Types::NamedArgsSingleEnumList],
+        myArg: T::Array[T.any(Baml::Types::NamedArgsSingleEnumList, String)],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }

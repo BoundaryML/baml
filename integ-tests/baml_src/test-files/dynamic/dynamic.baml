@@ -81,3 +81,13 @@ function MyFunc(input: string) -> DynamicOutput {
   "#
 }
 
+function ClassifyDynEnumTwo(input: string) -> DynEnumTwo {
+  client GPT35
+  prompt #"
+    Given a string, extract info using the schema:
+
+    {{ input}}
+
+    {{ ctx.output_format }}
+  "#
+}

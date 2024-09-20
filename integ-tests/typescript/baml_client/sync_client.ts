@@ -74,6 +74,22 @@ export class BamlSyncClient {
     return raw.parsed() as string
   }
   
+  ClassifyDynEnumTwo(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): (string | DynEnumTwo) {
+    const raw = this.runtime.callFunctionSync(
+      "ClassifyDynEnumTwo",
+      {
+        "input": input
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as (string | DynEnumTwo)
+  }
+  
   ClassifyMessage(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }

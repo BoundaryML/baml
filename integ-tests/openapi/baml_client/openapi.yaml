@@ -45,6 +45,19 @@ paths:
                 title: AudioInputResponse
                 type: string
       operationId: AudioInput
+  /call/ClassifyDynEnumTwo:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ClassifyDynEnumTwo'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ClassifyDynEnumTwoResponse
+                $ref: '#/components/schemas/DynEnumTwo'
+      operationId: ClassifyDynEnumTwo
   /call/ClassifyMessage:
     post:
       requestBody:
@@ -1072,6 +1085,19 @@ components:
                 $ref: '#/components/schemas/BamlAudio'
             required:
             - aud
+            additionalProperties: false
+    ClassifyDynEnumTwo:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ClassifyDynEnumTwoRequest
+            type: object
+            properties:
+              input:
+                type: string
+            required:
+            - input
             additionalProperties: false
     ClassifyMessage:
       required: true
