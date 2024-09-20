@@ -218,8 +218,10 @@ export function activate(context: vscode.ExtensionContext) {
       },
       logger: console,
       on: {
+        proxyReq: (proxyReq, req, res) => {
+          console.debug('Proxying an LLM request (to bypass CORS)', { proxyReq, req, res })
+        },
         proxyRes: (proxyRes, req, res) => {
-          console.log('proxying response', { proxyRes, req, res })
           proxyRes.headers['Access-Control-Allow-Origin'] = '*'
         },
         error: (error) => {
