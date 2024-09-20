@@ -1,0 +1,77 @@
+---
+slug: docs/get-started/quickstart/ruby
+---
+
+Here's a sample repository: https://github.com/BoundaryML/baml-examples/tree/main/ruby-example
+
+To set up BAML in ruby do the following:
+
+<Steps>
+  ### Install BAML VSCode Extension
+      https://marketplace.visualstudio.com/items?itemName=boundary.baml-extension
+
+      - syntax highlighting
+      - testing playground
+      - prompt previews
+
+  
+  ### Install baml
+        ```bash
+        bundle init
+        bundle add baml sorbet-runtime
+        ```
+  
+  ### Add some starter code
+      This will give you some starter BAML code in a `baml_src` directory.
+
+      ```bash
+      bundle exec baml-cli init
+      ```
+
+  
+  ### Generate Ruby code from .baml files
+
+    This command will help you convert `.baml` files to `.rb` files. Everytime you modify your `.baml` files,
+    you must re-run this command, and regenerate the `baml_client` folder.
+
+    <Tip>
+      Our [VSCode extension](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension) automatically runs this command when you save a BAML file.
+    </Tip>
+
+    ```bash
+    bundle exec baml-cli generate
+    ```
+
+  
+  ### Use a baml function in Ruby!
+    <Tip>If `baml_client` doesn't exist, make sure to run the previous step!</Tip>
+
+    ```ruby main.rb
+    require_relative "baml_client/client"
+
+    def example(raw_resume)
+        # r is an instance of Baml::Types::Resume, defined in baml_client/types
+        r = Baml.Client.ExtractResume(resume: raw_resume)
+
+        puts "ExtractResume response:"
+        puts r.inspect
+    end
+
+    def example_stream(raw_resume)
+        stream = Baml.Client.stream.ExtractResume(resume: raw_resume)
+
+        stream.each do |msg|
+            # msg is an instance of Baml::PartialTypes::Resume
+            # defined in baml_client/partial_types
+            puts msg.inspect
+        end
+
+        stream.get_final_response
+    end
+
+    example 'Grace Hopper created COBOL'
+    example_stream 'Grace Hopper created COBOL'
+    ```
+
+  
+</Steps>

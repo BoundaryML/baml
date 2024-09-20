@@ -21,8 +21,8 @@ from baml_py.errors import BamlError, BamlInvalidArgumentError, BamlClientError,
 // "BamlError: BamlClientError: BamlClientHttpError:"
 ```
 
-```text OpenAPI
-We do not generate error types in OpenAPI.
+```ruby Ruby
+Not available yet
 ```  
 </CodeGroup>
 
@@ -44,8 +44,6 @@ Subclass of `BamlError`.
 
 Raised when one or multiple arguments to a function are invalid.
 
-When using BAML-over-HTTP a.k.a. OpenAPI, this is `400 Bad Request`.
-
 ### BamlClientError
 
 Subclass of `BamlError`.
@@ -56,13 +54,11 @@ Raised when a client fails to return a valid response.
 In the case of aggregate clients like `fallback` or those with `retry_policy`, only the last client's error is raised.  
 </Warning>
 
-When using BAML-over-HTTP a.k.a. OpenAPI, this is `502 Bad Gateway`.
-
 #### BamlClientHttpError
 
 Subclass of `BamlClientError`.
 
-Raised when BAML successfully makes an HTTP request to an LLM provider, but the provider returns a non-200 status code.
+Raised when the HTTP request made by a client fails with a non-200 status code.
 
 <ResponseField
   name="status_code"
@@ -94,5 +90,3 @@ Raised when BAML fails to parse a string from the LLM into the specified object.
 >
   The raw text from the LLM that failed to parse into the expected return type of a function.
 </ResponseField>
-
-When using BAML-over-HTTP a.k.a. OpenAPI, this is `500 Internal Server Error` (we expect to use a more specific status code here soon).

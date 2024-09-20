@@ -59,10 +59,20 @@ import { Category } from 'baml_client/types'
 ...
   const result = await b.ClassifyMessage("I want to cancel my order")
   assert(result === Category.Cancel)
-```
 
-```bash OpenAPI
-curl localhost:2024/call/ClassifyMessage -d '{"input": "I want to cancel my order"}'
+```ruby ruby
+require_relative "baml_client/client"
+
+$b = Baml.Client
+
+def main
+    category = $b.ClassifyMessage(input: "I want to cancel my order")
+    puts category == Baml::Types::Category::CancelOrder
+end
+
+if __FILE__ == $0
+  main
+end
 ```
 </CodeBlocks>
 
