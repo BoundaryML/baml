@@ -201,6 +201,46 @@ mod tests {
             _ => panic!("Expected a model declaration"),
         }
     }
+
+    #[test]
+    fn test_example() {
+        let input = r##"
+          function EvaluateCaption(imgs: image[], captions: string[]) -> string {
+            client GPTo4
+            prompt #"
+              Evaluate the quality of the captions for the images.
+
+              {{ imgs }}
+              {{ captions }}
+            "#
+          }
+
+          test EvaluateCaptionTest {
+            functions [EvaluateCaption]
+            args {
+              image [{
+                file ../../files/images/restaurant.png
+              },{
+                file ../../files/images/bear.png
+              }]
+              captions [
+                #"
+                  A bear walking next to a rabbit in the woods.
+                "#,
+                #"
+                  A restaurant full of diners.
+                "#,
+              ]
+            }
+          }
+        "##;
+
+        let root_path = "example_file.baml";
+        let source = SourceFile::new_static(root_path.into(), input);
+
+        let result = parse_schema(&root_path.into(), &source).unwrap();
+        assert_eq!(result.1.errors().len(), 0);
+    }
 }
 
 fn get_expected_from_error(positives: &[Rule]) -> String {

@@ -236,3 +236,50 @@ fn unescape_string(val: &str) -> String {
 
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::{BAMLParser, Rule};
+    use pest::{parses_to, consumes_to};
+
+    #[test]
+    fn array_trailing_comma() {
+
+        parses_to!{
+            parser: BAMLParser,
+            input: "[1,2],",
+            rule: Rule::expression,
+            tokens: [expression(0, 5,[
+                array_expression(0, 5,[
+                expression(1,2,[numeric_literal(1,2)]),
+                expression(3,4,[numeric_literal(3,4)]),
+            ])])]
+        };
+
+        parses_to!{
+            parser: BAMLParser,
+            input: r##"[#"foo"#, #"bar"#]"##,
+            rule: Rule::expression,
+            tokens: [expression(0, 18, [
+                array_expression(0, 18, [
+                    expression(1,8,[
+                        string_literal(1,8,[
+                            raw_string_literal(1,8,[
+                                raw_string_literal_content_1(3,6)
+                            ])
+                        ])
+                    ]),
+                    expression(10,17,[
+                        string_literal(10,17,[
+                            raw_string_literal(10,17,[
+                                raw_string_literal_content_1(12,15)
+                            ])
+                        ])
+                    ]),
+                ])
+            ])]
+        };
+
+    }
+
+}
