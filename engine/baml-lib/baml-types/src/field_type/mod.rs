@@ -40,11 +40,30 @@ impl std::fmt::Display for TypeValue {
     }
 }
 
+/// Subset of [`crate::BamlValue`] allowed for literal type definitions.
+#[derive(serde::Serialize, Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub enum LiteralValue {
+    String(String),
+    Int(i64),
+    Bool(bool),
+}
+
+impl std::fmt::Display for LiteralValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LiteralValue::String(str) => write!(f, "\"{str}\""),
+            LiteralValue::Int(int) => write!(f, "{int}"),
+            LiteralValue::Bool(bool) => write!(f, "{bool}"),
+        }
+    }
+}
+
 /// FieldType represents the type of either a class field or a function arg.
 #[derive(serde::Serialize, Debug, Clone)]
 pub enum FieldType {
     Primitive(TypeValue),
     Enum(String),
+    Literal(LiteralValue),
     Class(String),
     List(Box<FieldType>),
     Map(Box<FieldType>, Box<FieldType>),
@@ -61,6 +80,7 @@ impl std::fmt::Display for FieldType {
                 write!(f, "{}", name)
             }
             FieldType::Primitive(t) => write!(f, "{}", t),
+            FieldType::Literal(v) => write!(f, "{}", v),
             FieldType::Union(choices) => {
                 write!(
                     f,

@@ -159,6 +159,9 @@ impl<'db> WithJsonSchema for FieldType {
             FieldType::Class(name) | FieldType::Enum(name) => json!({
                 "$ref": format!("#/definitions/{}", name),
             }),
+            FieldType::Literal(v) => json!({
+                "const": v.to_string(),
+            }),
             FieldType::Primitive(t) => match t {
                 TypeValue::String => json!({
                     "type": "string",

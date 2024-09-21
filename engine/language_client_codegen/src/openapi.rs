@@ -538,6 +538,7 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                     r#ref: format!("#/components/schemas/{}", name),
                 },
             },
+            FieldType::Literal(value) => todo!(),
             FieldType::List(inner) => TypeSpecWithMeta {
                 meta: TypeMetadata {
                     title: None,

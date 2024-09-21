@@ -264,6 +264,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     format!("{name}")
                 }
             }
+            FieldType::Literal(value) => value.to_string(),
             FieldType::Class(name) => format!("{name}"),
             FieldType::List(inner) => match inner.as_ref() {
                 FieldType::Union(_) | FieldType::Optional(_) => {

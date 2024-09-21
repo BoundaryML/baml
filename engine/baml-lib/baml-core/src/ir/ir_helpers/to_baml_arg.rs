@@ -1,4 +1,4 @@
-use baml_types::{BamlMap, BamlMediaType, BamlValue, FieldType, TypeValue};
+use baml_types::{BamlMap, BamlMediaType, BamlValue, FieldType, LiteralValue, TypeValue};
 use core::result::Result;
 use std::path::PathBuf;
 
@@ -198,6 +198,25 @@ impl ArgCoercer {
                     Err(())
                 }
             },
+            FieldType::Literal(literal) => {
+                let is_exact_match = match (literal, value) {
+                    (LiteralValue::Int(lit_int), BamlValue::Int(baml_int)) => lit_int == baml_int,
+                    (LiteralValue::String(lit_str), BamlValue::String(baml_str)) => {
+                        lit_str == baml_str
+                    }
+                    (LiteralValue::Bool(lit_bool), BamlValue::Bool(baml_bool)) => {
+                        lit_bool == baml_bool
+                    }
+                    _ => false,
+                };
+
+                if is_exact_match {
+                    Ok(value.clone())
+                } else {
+                    scope.push_error(format!("Expected literal {:?}, got `{}`", literal, value));
+                    Err(())
+                }
+            }
             FieldType::Class(name) => match value {
                 BamlValue::Class(n, _) if n == name => return Ok(value.clone()),
                 BamlValue::Class(_, obj) | BamlValue::Map(obj) => match ir.find_class(name) {

@@ -142,6 +142,7 @@ fn relevant_data_models<'a>(
                     });
                 }
             }
+            FieldType::Literal(value) => todo!(),
             FieldType::List(inner) | FieldType::Optional(inner) => {
                 if !checked_types.contains(&inner.to_string()) {
                     start.push(inner.as_ref().clone());
