@@ -401,7 +401,7 @@ pub struct WasmParsedTestResponse {
     #[wasm_bindgen(readonly)]
     pub value: String,
     #[wasm_bindgen(readonly)]
-    pub explanation: String,
+    pub explanation: Option<String>,
 }
 
 #[wasm_bindgen]
@@ -518,7 +518,15 @@ impl WasmTestResponse {
             .parsed_content()?;
         Ok(WasmParsedTestResponse {
             value: serde_json::to_string(&BamlValue::from(parsed_response))?,
-            explanation: format!("{}", parsed_response.explanation(),),
+            // explanation: format!("{}", parsed_response.explanation()),
+            explanation: {
+                let j = parsed_response.explanation_json();
+                if j.is_empty() {
+                    None
+                } else {
+                    Some(serde_json::to_string(&j)?)
+                }
+            },
         })
     }
 

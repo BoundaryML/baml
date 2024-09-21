@@ -1,8 +1,11 @@
 use std::collections::HashSet;
 
 use baml_types::{BamlMap, BamlMedia, BamlValue};
+use serde_json::json;
+use strsim::jaro;
 
 use super::{
+    coercer::ParsingError,
     deserialize_flags::{DeserializerConditions, Flag},
     score::WithScore,
 };
@@ -68,124 +71,137 @@ impl BamlValueWithFlags {
             BamlValueWithFlags::Media(v) => &v.flags,
         }
     }
+}
 
-    pub fn explanation(&self) -> String {
+struct ParseExplanation {
+    scope: Vec<String>,
+    explanation: String,
+}
+
+impl std::fmt::Display for ParseExplanation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} - {}", self.scope.join("."), self.explanation)
+    }
+}
+
+trait ParsingErrorToUiJson {
+    fn to_ui_json(&self) -> serde_json::Value;
+}
+
+impl ParsingErrorToUiJson for ParsingError {
+    fn to_ui_json(&self) -> serde_json::Value {
+        json!({
+            self.scope.join("."): self.reason,
+            "causes": self.causes.iter().map(|c| c.to_ui_json()).collect::<Vec<_>>(),
+        })
+    }
+}
+
+impl BamlValueWithFlags {
+    pub fn explanation_json(&self) -> Vec<serde_json::Value> {
         let mut expl = vec![];
-        self.explanation_impl(vec!["".to_string()], &mut expl);
-        match expl.len() {
-            0 => "".to_string(),
-            1 => format!("Error while parsing:\n\n{}", expl[0]),
-            _ => format!("Errors while parsing:\n\n{}", expl.join("\n")),
-        }
+        self.explanation_impl(vec!["<root>".to_string()], &mut expl);
+        expl.into_iter().map(|e| e.to_ui_json()).collect::<Vec<_>>()
     }
 
-    pub fn explanation_impl(&self, scope: Vec<String>, expls: &mut Vec<String>) {
-        // String(ValueWithFlags<String>),
-        // Int(ValueWithFlags<i64>),
-        // Float(ValueWithFlags<f64>),
-        // Bool(ValueWithFlags<bool>),
-        // List(DeserializerConditions, Vec<BamlValueWithFlags>),
-        // Map(
-        //     DeserializerConditions,
-        //     BamlMap<String, (DeserializerConditions, BamlValueWithFlags)>,
-        // ),
-        // Enum(String, ValueWithFlags<String>),
-        // Class(
-        //     String,
-        //     DeserializerConditions,
-        //     BamlMap<String, BamlValueWithFlags>,
-        // ),
-        // Null(DeserializerConditions),
-        // Image(ValueWithFlags<BamlMedia>),
+    pub fn explanation_impl(&self, scope: Vec<String>, expls: &mut Vec<ParsingError>) {
         match self {
-            BamlValueWithFlags::String(v) => match v.flags.explanation() {
-                Some(expl) => expls.push(format!(
-                    "{} - error while parsing string: {}",
-                    scope.join("."),
-                    expl
-                )),
-                None => {}
-            },
-            BamlValueWithFlags::Int(v) => match v.flags.explanation() {
-                Some(expl) => expls.push(format!(
-                    "{} - error while parsing int: {}",
-                    scope.join("."),
-                    expl
-                )),
-                None => {}
-            },
-            BamlValueWithFlags::Float(v) => match v.flags.explanation() {
-                Some(expl) => expls.push(format!(
-                    "{} - error while parsing float: {}",
-                    scope.join("."),
-                    expl
-                )),
-                None => {}
-            },
-            BamlValueWithFlags::Bool(v) => match v.flags.explanation() {
-                Some(expl) => expls.push(format!(
-                    "{} - error while parsing bool: {}",
-                    scope.join("."),
-                    expl
-                )),
-                None => {}
-            },
-
+            BamlValueWithFlags::String(v) => {
+                let causes = v.flags.explanation();
+                if !causes.is_empty() {
+                    expls.push(ParsingError {
+                        scope: scope.clone(),
+                        reason: format!("error while parsing string"),
+                        causes,
+                    });
+                }
+            }
+            BamlValueWithFlags::Int(v) => {
+                let causes = v.flags.explanation();
+                if !causes.is_empty() {
+                    expls.push(ParsingError {
+                        scope: scope.clone(),
+                        reason: format!("error while parsing int"),
+                        causes,
+                    });
+                }
+            }
+            BamlValueWithFlags::Float(v) => {
+                let causes = v.flags.explanation();
+                if !causes.is_empty() {
+                    expls.push(ParsingError {
+                        scope: scope.clone(),
+                        reason: format!("error while parsing float"),
+                        causes,
+                    });
+                }
+            }
+            BamlValueWithFlags::Bool(v) => {
+                let causes = v.flags.explanation();
+                if !causes.is_empty() {
+                    expls.push(ParsingError {
+                        scope: scope.clone(),
+                        reason: format!("error while parsing bool"),
+                        causes,
+                    });
+                }
+            }
             BamlValueWithFlags::List(flags, values) => {
-                match flags.explanation() {
-                    Some(expl) => expls.push(format!(
-                        "{} - error while parsing list: {}",
-                        scope.join("."),
-                        expl
-                    )),
-                    None => {}
+                let causes = flags.explanation();
+                if !causes.is_empty() {
+                    expls.push(ParsingError {
+                        scope: scope.clone(),
+                        reason: format!("error while parsing list"),
+                        causes,
+                    });
                 }
                 for (i, value) in values.iter().enumerate() {
                     let mut scope = scope.clone();
-                    scope.push(format!("{}", i));
+                    scope.push(format!("parsed:{}", i));
                     value.explanation_impl(scope, expls);
                 }
             }
             BamlValueWithFlags::Map(flags, kv) => {
-                match flags.explanation() {
-                    Some(expl) => expls.push(format!(
-                        "{} - error while parsing map: {}",
-                        scope.join("."),
-                        expl
-                    )),
-                    None => {}
+                let causes = flags.explanation();
+                if !causes.is_empty() {
+                    expls.push(ParsingError {
+                        scope: scope.clone(),
+                        reason: format!("error while parsing map"),
+                        causes,
+                    });
                 }
                 for (k, (v_flags, v)) in kv.iter() {
-                    let mut scope = scope.clone();
-                    scope.push(format!("{}", k));
-                    match v_flags.explanation() {
-                        Some(expl) => expls.push(format!(
-                            "{} - error while parsing map: {}",
-                            scope.join("."),
-                            expl
-                        )),
-                        None => {}
+                    let causes = v_flags.explanation();
+                    if !causes.is_empty() {
+                        expls.push(ParsingError {
+                            scope: scope.clone(),
+                            reason: format!("error while parsing value for map key '{}'", k),
+                            causes,
+                        });
                     }
+                    let mut scope = scope.clone();
+                    scope.push(format!("parsed:{}", k));
                     v.explanation_impl(scope, expls);
                 }
             }
-            BamlValueWithFlags::Enum(_, v) => match v.flags.explanation() {
-                Some(expl) => expls.push(format!(
-                    "{} - error while parsing enum: {}",
-                    scope.join("."),
-                    expl
-                )),
-                None => {}
-            },
+            BamlValueWithFlags::Enum(enum_name, v) => {
+                let causes = v.flags.explanation();
+                if !causes.is_empty() {
+                    expls.push(ParsingError {
+                        scope: scope.clone(),
+                        reason: format!("error while parsing {enum_name} enum value"),
+                        causes,
+                    });
+                }
+            }
             BamlValueWithFlags::Class(class_name, v, fields) => {
-                match v.explanation() {
-                    Some(expl) => expls.push(format!(
-                        "{} - error while parsing class {}: {}",
-                        scope.join("."),
-                        class_name,
-                        expl
-                    )),
-                    None => {}
+                let causes = v.explanation();
+                if !causes.is_empty() {
+                    expls.push(ParsingError {
+                        scope: scope.clone(),
+                        reason: format!("error while parsing class {}", class_name),
+                        causes,
+                    });
                 }
                 for (k, v) in fields.iter() {
                     let mut scope = scope.clone();
@@ -194,22 +210,26 @@ impl BamlValueWithFlags {
                 }
             }
 
-            BamlValueWithFlags::Null(v) => match v.explanation() {
-                Some(expl) => expls.push(format!(
-                    "{} - error while parsing null: {}",
-                    scope.join("."),
-                    expl
-                )),
-                None => {}
-            },
-            BamlValueWithFlags::Media(v) => match v.flags.explanation() {
-                Some(expl) => expls.push(format!(
-                    "{} - error while parsing media: {}",
-                    scope.join("."),
-                    expl
-                )),
-                None => {}
-            },
+            BamlValueWithFlags::Null(v) => {
+                let causes = v.explanation();
+                if !causes.is_empty() {
+                    expls.push(ParsingError {
+                        scope: scope.clone(),
+                        reason: format!("error while parsing null"),
+                        causes,
+                    });
+                }
+            }
+            BamlValueWithFlags::Media(v) => {
+                let causes = v.flags.explanation();
+                if !causes.is_empty() {
+                    expls.push(ParsingError {
+                        scope: scope.clone(),
+                        reason: format!("error while parsing media"),
+                        causes,
+                    });
+                }
+            }
         }
     }
 }

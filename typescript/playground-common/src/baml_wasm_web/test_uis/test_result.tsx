@@ -123,7 +123,7 @@ const ParsedTestResult: React.FC<{ doneStatus: string; parsed?: WasmParsedTestRe
   failure,
 }) => {
   const [copiedParsed, setCopiedParsed] = useState(false)
-  const [showExplanation, setShowExplanation] = useState(true)
+  const [showExplanation, setShowExplanation] = useState(false)
 
   const sorted_parsed = parsed ? JSON.parse(parsed.value) : undefined
 
@@ -132,21 +132,62 @@ const ParsedTestResult: React.FC<{ doneStatus: string; parsed?: WasmParsedTestRe
       <div className='flex relative flex-col'>
         <div className='flex flex-row '>
           Parsed LLM Response
-          <Button
-            variant='ghost'
-            size='icon'
-            className='inline h-2 w-2 pl-1'
-            onClick={() => setShowExplanation(!showExplanation)}
-            aria-label='Toggle information'
-          >
-            <InfoIcon className='h-4 w-4' />
-          </Button>
+          <Tooltip delayDuration={100}>
+            <TooltipTrigger asChild>
+              <Button
+                variant='ghost'
+                size='icon'
+                className='inline h-2 w-2 pl-1'
+                onClick={() => {
+                  if (parsed?.explanation) {
+                    setShowExplanation(!showExplanation)
+                  }
+                }}
+                aria-label='Toggle information'
+              >
+                {showExplanation ? (
+                  <div className='text-xs text-white whitespace-prewrap'>
+                    <InfoIcon className='h-4 w-4 inline-block align-top' />
+                    &nbsp;Showing Explanation
+                  </div>
+                ) : (
+                  <InfoIcon className='h-4 w-4' />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {(() => {
+                if (showExplanation) {
+                  return 'Showing parsing explanation. Click to show the parsed response.'
+                }
+                if (parsed?.explanation) {
+                  return 'Click to show parsing explanation'
+                }
+                return 'No parsing explanation available'
+              })()}
+            </TooltipContent>
+          </Tooltip>
         </div>
         <div className='relative px-1 py-2'>
-          {showExplanation && parsed ? (
+          {showExplanation && parsed && parsed.explanation ? (
             <>
-              <div className='text-xs whitespace-pre-wrap'>Showing explanation:</div>
-              <pre className='text-xs whitespace-pre-wrap'>{parsed.explanation}</pre>
+              <JsonView
+                enableClipboard={false}
+                className='bg-[#1E1E1E] px-1 py-1 rounded-sm'
+                theme='a11y'
+                collapseStringsAfterLength={200}
+                matchesURL
+                src={JSON.parse(parsed.explanation)}
+              />
+              <div className='flex absolute right-2 top-3 items-center'>
+                <button
+                  className='text-vscode-descriptionForeground hover:text-vscode-foreground'
+                  onClick={() => copyToClipboard(JSON.stringify(sorted_parsed, null, 2), setCopiedParsed)}
+                >
+                  {copiedParsed ? <Check size={16} /> : <Copy size={16} />}
+                </button>
+                {copiedParsed && <span className='ml-1 text-xs text-vscode-foreground'>Copied</span>}
+              </div>
             </>
           ) : (
             <>

@@ -239,13 +239,19 @@ impl TypeCoercer for Class {
                 })
                 .collect::<Vec<_>>();
 
-            if !missing_required_fields.is_empty() || !unparsed_required_fields.is_empty() {
+            let unparsed_or_missing = required_values
+                .iter()
+                .filter_map(|(k, v)| match v {
+                    Some(Ok(_)) => None,
+                    Some(Err(e)) => Some((k.clone(), Some(e.clone()))),
+                    None => Some((k.clone(), None)),
+                })
+                .collect::<Vec<_>>();
+
+            // if !missing_required_fields.is_empty() || !unparsed_required_fields.is_empty() {
+            if !unparsed_or_missing.is_empty() {
                 if completed_cls.is_empty() {
-                    return Err(ctx.error_missing_required_field(
-                        &unparsed_required_fields,
-                        &missing_required_fields,
-                        value,
-                    ));
+                    return Err(ctx.error_missing_required_field(unparsed_or_missing, value));
                 }
             } else {
                 let merged_errors = required_values

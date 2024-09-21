@@ -62,6 +62,7 @@ impl ParsingContext<'_> {
                 })
             ),
             scope: self.scope.clone(),
+            causes: vec![],
         }
     }
 
@@ -70,33 +71,10 @@ impl ParsingContext<'_> {
         summary: &str,
         error: impl IntoIterator<Item = &'a ParsingError>,
     ) -> ParsingError {
-        let reasons = error
-            .into_iter()
-            .map(|e| {
-                // Strip all shared prefixes (assume the same unless different length)
-                let remaining =
-                    e.scope
-                        .iter()
-                        .skip(self.scope.len())
-                        .fold("".to_string(), |acc, f| {
-                            if acc.is_empty() {
-                                return f.clone();
-                            }
-                            return format!("{}.{}", acc, f);
-                        });
-
-                if remaining.is_empty() {
-                    return e.reason.clone();
-                } else {
-                    // Prefix each new lines in e.reason with "  "
-                    return format!("{}: {}", remaining, e.reason.replace("\n", "\n  "));
-                }
-            })
-            .collect::<Vec<_>>();
-
         ParsingError {
-            reason: format!("{}:\n{}", summary, reasons.join("\n").replace("\n", "\n  ")),
+            reason: format!("{}", summary),
             scope: self.scope.clone(),
+            causes: error.into_iter().map(|e| e.clone()).collect(),
         }
     }
 
@@ -104,6 +82,7 @@ impl ParsingContext<'_> {
         ParsingError {
             reason: format!("Expected {}, got empty array", target.to_string()),
             scope: self.scope.clone(),
+            causes: vec![],
         }
     }
 
@@ -111,6 +90,7 @@ impl ParsingContext<'_> {
         ParsingError {
             reason: format!("Expected {}, got null", target),
             scope: self.scope.clone(),
+            causes: vec![],
         }
     }
 
@@ -118,6 +98,7 @@ impl ParsingContext<'_> {
         ParsingError {
             reason: "Image type is not supported here".to_string(),
             scope: self.scope.clone(),
+            causes: vec![],
         }
     }
 
@@ -125,6 +106,7 @@ impl ParsingContext<'_> {
         ParsingError {
             reason: "Audio type is not supported here".to_string(),
             scope: self.scope.clone(),
+            causes: vec![],
         }
     }
 
@@ -132,57 +114,38 @@ impl ParsingContext<'_> {
         ParsingError {
             reason: format!("Maps may only have strings for keys, but got {}", key_type),
             scope: self.scope.clone(),
+            causes: vec![],
         }
     }
 
-    pub(crate) fn error_missing_required_field<T: AsRef<str>>(
+    pub(crate) fn error_missing_required_field(
         &self,
-        unparsed_fields: &[(T, T)],
-        missing_fields: &[T],
+        unparsed_or_missing: Vec<(String, Option<ParsingError>)>,
         item: Option<&crate::jsonish::Value>,
     ) -> ParsingError {
-        let fields = missing_fields
-            .iter()
-            .map(|c| c.as_ref())
-            .collect::<Vec<_>>()
-            .join(", ");
-        let missing_error = match missing_fields.len() {
-            0 => None,
-            1 => Some(format!("Missing required field: {}", fields)),
-            _ => Some(format!("Missing required fields: {}", fields)),
-        };
-
-        let unparsed = unparsed_fields
-            .iter()
-            .map(|(k, v)| format!("{}: {}", k.as_ref(), v.as_ref().replace("\n", "\n  ")))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let unparsed_error = match unparsed_fields.len() {
-            0 => None,
-            1 => Some(format!(
-                "Unparsed field: {}\n  {}",
-                unparsed_fields[0].0.as_ref(),
-                unparsed_fields[0].1.as_ref().replace("\n", "\n  ")
-            )),
-            _ => Some(format!(
-                "Unparsed fields:\n{}\n  {}",
-                unparsed_fields
-                    .iter()
-                    .map(|(k, _)| k.as_ref())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                unparsed.replace("\n", "\n  ")
-            )),
-        };
+        let (missing, unparsed): (Vec<_>, Vec<_>) =
+            unparsed_or_missing.iter().partition(|(_, f)| f.is_none());
 
         ParsingError {
-            reason: match (missing_error, unparsed_error) {
-                (Some(m), Some(u)) => format!("{}\n{}", m, u),
-                (Some(m), None) => m,
-                (None, Some(u)) => u,
-                (None, None) => "Unexpected error".to_string(),
-            },
+            reason: format!(
+                "Failed while parsing required fields: missing={}, unparsed={}",
+                missing.len(),
+                unparsed.len()
+            ),
             scope: self.scope.clone(),
+            causes: unparsed_or_missing
+                .into_iter()
+                .map(|(k, f)| match f {
+                    // Failed while parsing required field
+                    Some(e) => e,
+                    // Missing required field
+                    None => ParsingError {
+                        scope: self.scope.clone(),
+                        reason: format!("Missing required field: {}", k),
+                        causes: vec![],
+                    },
+                })
+                .collect(),
         }
     }
 
@@ -192,8 +155,17 @@ impl ParsingContext<'_> {
         got: &T,
     ) -> ParsingError {
         ParsingError {
-            reason: format!("Expected {}, got {}.\n{:#?}", target, got, got),
+            reason: format!(
+                "Expected {}, got {:?}.",
+                match target {
+                    FieldType::Enum(_) => format!("{} enum value", target),
+                    FieldType::Class(_) => format!("{}", target),
+                    _ => format!("{target}"),
+                },
+                got
+            ),
             scope: self.scope.clone(),
+            causes: vec![],
         }
     }
 
@@ -201,14 +173,16 @@ impl ParsingContext<'_> {
         ParsingError {
             reason: format!("Internal error: {}", error),
             scope: self.scope.clone(),
+            causes: vec![],
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ParsingError {
-    reason: String,
-    scope: Vec<String>,
+    pub scope: Vec<String>,
+    pub reason: String,
+    pub causes: Vec<ParsingError>,
 }
 
 impl std::fmt::Display for ParsingError {
@@ -216,12 +190,11 @@ impl std::fmt::Display for ParsingError {
         if self.scope.is_empty() {
             return write!(f, "Error parsing '<root>': {}", self.reason);
         }
-        write!(
-            f,
-            "Error parsing '{}': {}",
-            self.scope.join("."),
-            self.reason
-        )
+        write!(f, "{}: {}", self.scope.join("."), self.reason)?;
+        for cause in &self.causes {
+            write!(f, "\n  - {}", format!("{}", cause).replace("\n", "\n  "))?;
+        }
+        Ok(())
     }
 }
 

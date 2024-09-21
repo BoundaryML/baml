@@ -45,7 +45,7 @@ cfg_if::cfg_if!(
         pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
     } else {
         use futures::future::BoxFuture;
-        pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, Result<Vec<u8>>>>>;
+        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> BoxFuture<'static, Result<Vec<u8>>>>>;
     }
 );
 
