@@ -56,7 +56,7 @@ impl DeserializerConditions {
             .filter_map(|c| match c {
                 Flag::ObjectFromMarkdown(_) => None,
                 Flag::ObjectFromFixedJson(_) => None,
-                Flag::ArrayItemParseError(idx, e) => {
+                Flag::ArrayItemParseError(_idx, e) => {
                     // TODO: should idx be recorded?
                     Some(e.clone())
                 }
@@ -67,11 +67,11 @@ impl DeserializerConditions {
                 Flag::StrippedNonAlphaNumeric(_) => None,
                 Flag::SubstringMatch(_) => None,
                 Flag::SingleToArray => None,
-                Flag::MapKeyParseError(idx, e) => {
+                Flag::MapKeyParseError(_idx, e) => {
                     // Some(format!("Error parsing key {} in map: {}", idx, e))
                     Some(e.clone())
                 }
-                Flag::MapValueParseError(key, e) => {
+                Flag::MapValueParseError(_key, e) => {
                     // Some(format!( "Error parsing value for key '{}' in map: {}", key, e))
                     Some(e.clone())
                 }
@@ -91,7 +91,6 @@ impl DeserializerConditions {
                 Flag::UnionMatch(_idx, _) => None,
                 Flag::DefaultButHadUnparseableValue(e) => Some(e.clone()),
             })
-            // .map(|s| format!("<flag>{}</flag>", s))
             .collect::<Vec<_>>()
     }
 }

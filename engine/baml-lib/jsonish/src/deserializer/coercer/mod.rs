@@ -187,10 +187,16 @@ pub struct ParsingError {
 
 impl std::fmt::Display for ParsingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.scope.is_empty() {
-            return write!(f, "Error parsing '<root>': {}", self.reason);
-        }
-        write!(f, "{}: {}", self.scope.join("."), self.reason)?;
+        write!(
+            f,
+            "{}: {}",
+            if self.scope.is_empty() {
+                "<root>".to_string()
+            } else {
+                self.scope.join(".")
+            },
+            self.reason
+        )?;
         for cause in &self.causes {
             write!(f, "\n  - {}", format!("{}", cause).replace("\n", "\n  "))?;
         }

@@ -73,17 +73,6 @@ impl BamlValueWithFlags {
     }
 }
 
-struct ParseExplanation {
-    scope: Vec<String>,
-    explanation: String,
-}
-
-impl std::fmt::Display for ParseExplanation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} - {}", self.scope.join("."), self.explanation)
-    }
-}
-
 trait ParsingErrorToUiJson {
     fn to_ui_json(&self) -> serde_json::Value;
 }
@@ -91,7 +80,11 @@ trait ParsingErrorToUiJson {
 impl ParsingErrorToUiJson for ParsingError {
     fn to_ui_json(&self) -> serde_json::Value {
         json!({
-            self.scope.join("."): self.reason,
+            if self.scope.is_empty() {
+                "<root>".to_string()
+            } else {
+                self.scope.join(".")
+            }: self.reason,
             "causes": self.causes.iter().map(|c| c.to_ui_json()).collect::<Vec<_>>(),
         })
     }

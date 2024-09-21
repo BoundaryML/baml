@@ -401,6 +401,7 @@ pub struct WasmParsedTestResponse {
     #[wasm_bindgen(readonly)]
     pub value: String,
     #[wasm_bindgen(readonly)]
+    /// JSON-string of the explanation, if there were any ParsingErrors
     pub explanation: Option<String>,
 }
 
@@ -518,7 +519,6 @@ impl WasmTestResponse {
             .parsed_content()?;
         Ok(WasmParsedTestResponse {
             value: serde_json::to_string(&BamlValue::from(parsed_response))?,
-            // explanation: format!("{}", parsed_response.explanation()),
             explanation: {
                 let j = parsed_response.explanation_json();
                 if j.is_empty() {
@@ -1507,15 +1507,6 @@ impl WasmFunction {
         let (test_response, span) = rt
             .run_test(&function_name, &test_name, &ctx, Some(cb))
             .await;
-
-        log::debug!(
-            "Test response contains: {:?}",
-            test_response
-                .as_ref()
-                .unwrap()
-                .function_response
-                .parsed_content()
-        );
 
         Ok(WasmTestResponse {
             test_response,

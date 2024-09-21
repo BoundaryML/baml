@@ -163,7 +163,7 @@ const ParsedTestResult: React.FC<{ doneStatus: string; parsed?: WasmParsedTestRe
                 if (parsed?.explanation) {
                   return 'Click to show parsing explanation'
                 }
-                return 'No parsing explanation available'
+                return 'Parsing succeeded'
               })()}
             </TooltipContent>
           </Tooltip>
