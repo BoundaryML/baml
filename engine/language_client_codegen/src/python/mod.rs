@@ -197,6 +197,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     format!("types.{name}")
                 }
             }
+            FieldType::Literal(value) => todo!(),
             FieldType::Class(name) => format!("types.{name}"),
             FieldType::List(inner) => format!("List[{}]", inner.to_type_ref(ir)),
             FieldType::Map(key, value) => {
@@ -237,6 +238,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 }
             }
             FieldType::Class(name) => format!("partial_types.{name}"),
+            FieldType::Literal(value) => todo!(),
             FieldType::List(inner) => format!("List[{}]", inner.to_partial_type_ref(ir)),
             FieldType::Map(key, value) => {
                 format!(

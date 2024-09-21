@@ -130,6 +130,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         match self {
             FieldType::Class(name) => format!("Baml::PartialTypes::{}", name.clone()),
             FieldType::Enum(name) => format!("T.nilable(Baml::Types::{})", name.clone()),
+            FieldType::Literal(value) => todo!(),
             // https://sorbet.org/docs/stdlib-generics
             FieldType::List(inner) => format!("T::Array[{}]", inner.to_partial_type_ref()),
             FieldType::Map(key, value) => {

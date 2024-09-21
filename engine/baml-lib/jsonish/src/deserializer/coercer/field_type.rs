@@ -77,6 +77,7 @@ impl TypeCoercer for FieldType {
             _ => match self {
                 FieldType::Primitive(p) => p.coerce(ctx, target, value),
                 FieldType::Enum(e) => IrRef::Enum(e).coerce(ctx, target, value),
+                FieldType::Literal(l) => todo!(),
                 FieldType::Class(c) => IrRef::Class(c).coerce(ctx, target, value),
                 FieldType::List(_) => coerce_array(ctx, self, value),
                 FieldType::Union(_) => coerce_union(ctx, self, value),
@@ -98,6 +99,7 @@ impl DefaultValue for FieldType {
 
         match self {
             FieldType::Enum(e) => None,
+            FieldType::Literal(_) => None,
             FieldType::Class(c) => None,
             FieldType::List(_) => Some(BamlValueWithFlags::List(get_flags(), Vec::new())),
             FieldType::Union(items) => items.iter().find_map(|i| i.default_value(error)),

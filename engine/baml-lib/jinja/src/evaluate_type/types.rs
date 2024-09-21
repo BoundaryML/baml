@@ -5,6 +5,7 @@ use std::{
     vec,
 };
 
+use baml_types::LiteralValue;
 use minijinja::machinery::{
     ast::{Call, Spanned},
     Span,
@@ -23,6 +24,7 @@ pub enum Type {
     Number,
     String,
     Bool,
+    Literal(LiteralValue),
     List(Box<Type>),
     Map(Box<Type>, Box<Type>),
     Tuple(Vec<Type>),
@@ -78,6 +80,7 @@ impl Type {
             Type::Number => "number".into(),
             Type::String => "string".into(),
             Type::Bool => "bool".into(),
+            Type::Literal(value) => format!("literal[{value}]"), // TODO: This one's probably wrong.
             Type::List(l) => format!("list[{}]", l.name()),
             Type::Map(k, v) => format!("map[{}, {}]", k.name(), v.name()),
             Type::Tuple(v) => format!(

@@ -291,6 +291,14 @@ impl WithRepr<FieldType> for ast::FieldType {
                     repr
                 }
             }
+            ast::FieldType::Literal(arity, literal_value, ..) => {
+                let repr = FieldType::Literal(literal_value.clone());
+                if arity.is_optional() {
+                    FieldType::Optional(Box::new(repr))
+                } else {
+                    repr
+                }
+            }
             ast::FieldType::Symbol(arity, idn, ..) => type_with_arity(
                 match db.find_type(idn) {
                     Some(Either::Left(class_walker)) => {

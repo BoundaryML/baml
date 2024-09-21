@@ -52,8 +52,9 @@ field_attribute = { "@" ~ identifier ~ arguments_list? }
 field_type          = { (union | non_union) ~ optional_token? }
 optional_token      = { "?" }
 union               = { base_type_with_attr ~ (field_operator ~ base_type_with_attr)+ }
+literal_type        = { numeric_literal | quoted_string_literal }
 base_type_with_attr = { base_type ~ (NEWLINE? ~ field_attribute)* }
-base_type           = { array_notation | map | identifier | group | tuple | parenthesized_type }
+base_type           = { array_notation | map | identifier | group | tuple | parenthesized_type | literal_type }
 
 array_suffix   = { "[]" }
 array_notation = { base_type_without_array ~ array_suffix+ }
@@ -67,7 +68,7 @@ tuple      = { openParan ~ field_type ~ ("," ~ field_type)+ ~ closeParan }
 
 base_type_without_array = { map | identifier | group | tuple }
 
-non_union = { array_notation | map | identifier | group | tuple }
+non_union = { array_notation | map | identifier | group | tuple | literal_type }
 
 parenthesized_type = { openParan ~ field_type_with_attr ~ closeParan }
 
