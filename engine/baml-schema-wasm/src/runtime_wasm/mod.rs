@@ -396,6 +396,15 @@ pub struct WasmTestResponse {
     tracing_project_id: Option<String>,
 }
 
+#[wasm_bindgen(getter_with_clone, inspectable)]
+pub struct WasmParsedTestResponse {
+    #[wasm_bindgen(readonly)]
+    pub value: String,
+    #[wasm_bindgen(readonly)]
+    /// JSON-string of the explanation, if there were any ParsingErrors
+    pub explanation: Option<String>,
+}
+
 #[wasm_bindgen]
 pub enum TestStatus {
     Passed,
@@ -500,19 +509,30 @@ impl WasmTestResponse {
         }
     }
 
-    #[wasm_bindgen]
-    pub fn parsed_response(&self) -> Option<String> {
-        self.test_response.as_ref().ok().and_then(|r| {
-            r.function_response
-                .parsed()
-                .as_ref()
-                .map(|p| {
-                    p.as_ref()
-                        .map(|p| serde_json::to_string(&BamlValue::from(p)))
-                        .map_or_else(|_| None, |s| s.ok())
-                })
-                .flatten()
+    fn parsed_response_impl(&self) -> anyhow::Result<WasmParsedTestResponse> {
+        let parsed_response = self
+            .test_response
+            .as_ref()
+            .ok()
+            .context("No test response")?
+            .function_response
+            .parsed_content()?;
+        Ok(WasmParsedTestResponse {
+            value: serde_json::to_string(&BamlValue::from(parsed_response))?,
+            explanation: {
+                let j = parsed_response.explanation_json();
+                if j.is_empty() {
+                    None
+                } else {
+                    Some(serde_json::to_string(&j)?)
+                }
+            },
         })
+    }
+
+    #[wasm_bindgen]
+    pub fn parsed_response(&self) -> Option<WasmParsedTestResponse> {
+        self.parsed_response_impl().ok()
     }
 
     #[wasm_bindgen]

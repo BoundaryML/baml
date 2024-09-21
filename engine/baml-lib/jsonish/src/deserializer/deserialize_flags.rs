@@ -49,6 +49,52 @@ pub struct DeserializerConditions {
     pub(super) flags: Vec<Flag>,
 }
 
+impl DeserializerConditions {
+    pub fn explanation(&self) -> Vec<ParsingError> {
+        self.flags
+            .iter()
+            .filter_map(|c| match c {
+                Flag::ObjectFromMarkdown(_) => None,
+                Flag::ObjectFromFixedJson(_) => None,
+                Flag::ArrayItemParseError(_idx, e) => {
+                    // TODO: should idx be recorded?
+                    Some(e.clone())
+                }
+                Flag::ObjectToString(_) => None,
+                Flag::ObjectToPrimitive(_) => None,
+                Flag::ObjectToMap(_) => None,
+                Flag::ExtraKey(_, _) => None,
+                Flag::StrippedNonAlphaNumeric(_) => None,
+                Flag::SubstringMatch(_) => None,
+                Flag::SingleToArray => None,
+                Flag::MapKeyParseError(_idx, e) => {
+                    // Some(format!("Error parsing key {} in map: {}", idx, e))
+                    Some(e.clone())
+                }
+                Flag::MapValueParseError(_key, e) => {
+                    // Some(format!( "Error parsing value for key '{}' in map: {}", key, e))
+                    Some(e.clone())
+                }
+                Flag::JsonToString(_) => None,
+                Flag::ImpliedKey(_) => None,
+                Flag::InferedObject(_) => None,
+                Flag::FirstMatch(_idx, _) => None,
+                Flag::EnumOneFromMany(_matches) => None,
+                Flag::DefaultFromNoValue => None,
+                Flag::DefaultButHadValue(_) => None,
+                Flag::OptionalDefaultFromNoValue => None,
+                Flag::StringToBool(_) => None,
+                Flag::StringToNull(_) => None,
+                Flag::StringToChar(_) => None,
+                Flag::FloatToInt(_) => None,
+                Flag::NoFields(_) => None,
+                Flag::UnionMatch(_idx, _) => None,
+                Flag::DefaultButHadUnparseableValue(e) => Some(e.clone()),
+            })
+            .collect::<Vec<_>>()
+    }
+}
+
 impl std::fmt::Debug for DeserializerConditions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
