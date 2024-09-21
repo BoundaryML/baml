@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.56.1](https://github.com/boundaryml/baml/compare/0.56.0..0.56.1) - 2024-09-21
+
+
+### Bug Fixes
+- Improved parser for unions (#975) - ([b390521](https://github.com/boundaryml/baml/commit/b39052111529f217762b3271846006bec4a604de)) - hellovai
+- [syntax] Allow lists to contain trailing comma (#974) - ([9e3dc6c](https://github.com/boundaryml/baml/commit/9e3dc6c90954905a96b599ef28c40094fe48a43e)) - Greg Hale
+
 ## [0.56.0](https://github.com/boundaryml/baml/compare/0.55.3..0.56.0) - 2024-09-20
 
 Shout outs to Nico for fixing some internal Rust dependencies, and to Lorenz for correcting our documentation! We really appreciate it :)
