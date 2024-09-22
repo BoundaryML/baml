@@ -1,6 +1,7 @@
 use anyhow::Result;
 use baml_types::BamlMediaType;
 use internal_baml_core::ir::{FieldType, TypeValue};
+use internal_baml_jinja::render_expression;
 
 use crate::deserializer::{
     coercer::TypeCoercer,

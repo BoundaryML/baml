@@ -82,7 +82,6 @@ pub fn run_user_checks(
                  field_ctx.clone(),
                  (class_name.to_string(), class.clone()),
                  type_,
-                 typing_env
              )
         )
         .collect::<Result<Vec<UserChecksResult>>>()?;
@@ -140,7 +139,6 @@ pub fn check_class(
     field_context: Vec<String>,
     (class_name, class_fields): (String, BamlMap<String, BamlValue>),
     class_type: &Class,
-    typing_env: &HashMap<&str, &Class>,
 ) -> Result<UserChecksResult> {
 
     // Run checks in each field.
@@ -153,7 +151,6 @@ pub fn check_class(
                 field_context.clone(),
                 &field_value,
                 &field.elem,
-                typing_env
             );
             dbg!((&field_context, &res));
             res
@@ -173,7 +170,6 @@ pub fn run_user_checks_field(
     field_context: Vec<String>,
     value: &BamlValue,
     type_: &Field,
-    typing_env: &HashMap<&str, &Class>,
 ) -> Result<UserChecksResult> {
     let field_type = type_.r#type.elem.clone();
     let field_name = type_.name.to_string();

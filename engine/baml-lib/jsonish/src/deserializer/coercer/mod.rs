@@ -234,6 +234,17 @@ pub trait TypeCoercer {
         target: &FieldType,
         value: Option<&crate::jsonish::Value>,
     ) -> Result<BamlValueWithFlags, ParsingError>;
+
+}
+
+pub fn coerce_and_validate<T: TypeCoercer>(
+    unvalidated_value: &T,
+    ctx: &ParsingContext,
+    target: &FieldType,
+    value: Option<&crate::jsonish::Value>,
+) -> Result<BamlValueWithFlags, ParsingError> {
+    let coerce_result = unvalidated_value.coerce(ctx, target, value);
+    let validation_results = run_user_checks(coerce_result.into(), unimplemented!())
 }
 
 pub trait DefaultValue {
