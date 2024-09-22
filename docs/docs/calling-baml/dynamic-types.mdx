@@ -177,22 +177,22 @@ Here we create a new `Hobbies` enum, and a new class called `Address`.
 
 ```python Python
 from baml_client.type_builder import TypeBuilder
-from baml_client import b
+from baml_client.async_client import b
 
 async def run():
-  tb = TypeBuilder()
-  const hobbiesEnum = tb.add_enum('Hobbies')
-  hobbiesEnum.add_value('Soccer')
-  hobbiesEnum.add_value('Reading')
+    tb = TypeBuilder()
+    hobbies_enum = tb.add_enum("Hobbies")
+    hobbies_enum.add_value("Soccer")
+    hobbies_enum.add_value("Reading")
 
-  address_class = tb.add_class('Address')
-  address_class.add_property('street', tb.string())
+    address_class = tb.add_class("Address")
+    address_class.add_property("street", tb.string())
 
-  tb.User.add_property('hobby', hobbiesEnum.type().optional())
-  tb.User.add_property('address', addressClass.type().optional())
-  res = await b.DynamicUserCreator("some user info", { "tb": tb })
-  # Now res might have the hobby property, which can be Soccer or Reading
-  print(res)
+    tb.User.add_property("hobby", hobbies_enum.type().optional())
+    tb.User.add_property("address", address_class.type().optional())
+    res = await b.DynamicUserCreator("some user info", {"tb": tb})
+    # Now res might have the hobby property, which can be Soccer or Reading
+    print(res)
 
 ```
 
