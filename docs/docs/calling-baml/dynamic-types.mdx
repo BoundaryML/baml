@@ -180,19 +180,19 @@ from baml_client.type_builder import TypeBuilder
 from baml_client.async_client import b
 
 async def run():
-    tb = TypeBuilder()
-    hobbies_enum = tb.add_enum("Hobbies")
-    hobbies_enum.add_value("Soccer")
-    hobbies_enum.add_value("Reading")
+  tb = TypeBuilder()
+  hobbies_enum = tb.add_enum("Hobbies")
+  hobbies_enum.add_value("Soccer")
+  hobbies_enum.add_value("Reading")
 
-    address_class = tb.add_class("Address")
-    address_class.add_property("street", tb.string())
+  address_class = tb.add_class("Address")
+  address_class.add_property("street", tb.string())
 
-    tb.User.add_property("hobby", hobbies_enum.type().optional())
-    tb.User.add_property("address", address_class.type().optional())
-    res = await b.DynamicUserCreator("some user info", {"tb": tb})
-    # Now res might have the hobby property, which can be Soccer or Reading
-    print(res)
+  tb.User.add_property("hobby", hobbies_enum.type().optional())
+  tb.User.add_property("address", address_class.type().optional())
+  res = await b.DynamicUserCreator("some user info", {"tb": tb})
+  # Now res might have the hobby property, which can be Soccer or Reading
+  print(res)
 
 ```
 
