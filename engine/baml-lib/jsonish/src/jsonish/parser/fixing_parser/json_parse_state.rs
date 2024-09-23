@@ -28,6 +28,11 @@ impl JsonParseState {
 
         let name = collection.name();
 
+        log::debug!("Completing collection: {:?}", name);
+        if name == "TripleQuotedString" {
+            log::debug!("TripleQuotedString: {:?}", collection);
+        }
+
         let value: Value = match collection.into() {
             Some(value) => value,
             None => return,
@@ -71,6 +76,7 @@ impl JsonParseState {
         };
         match last {
             JsonCollection::QuotedString(s)
+            | JsonCollection::TripleQuotedString(s)
             | JsonCollection::BlockComment(s)
             | JsonCollection::SingleQuotedString(s)
             | JsonCollection::UnquotedString(s)
@@ -391,6 +397,29 @@ impl JsonParseState {
                         _ => self.find_any_starting_value(token, next),
                     }
                 }
+                JsonCollection::TripleQuotedString(_) => {
+                    // We should be expecting:
+                    if token == '"' {
+                        let is_triple_quoted = match next.peek() {
+                            Some((_, '"')) => match next.peek() {
+                                Some((_, '"')) => true,
+                                None => true,
+                                _ => false,
+                            },
+                            None => true,
+                            _ => false,
+                        };
+
+                        if is_triple_quoted {
+                            self.complete_collection();
+                            Ok(3)
+                        } else {
+                            self.consume(token)
+                        }
+                    } else {
+                        self.consume(token)
+                    }
+                }
                 JsonCollection::QuotedString(_) => {
                     // We could be expecting:
                     // - A closing quote
@@ -498,10 +527,27 @@ impl JsonParseState {
                     .push((JsonCollection::Array(vec![]), Default::default()));
             }
             '"' => {
-                self.collection_stack.push((
-                    JsonCollection::QuotedString(String::new()),
-                    Default::default(),
-                ));
+                // Peek if next 2 characters are also quotes
+                let is_triple_quoted = match next.peek() {
+                    Some((_, '"')) => match next.peek() {
+                        Some((_, '"')) => true,
+                        _ => false,
+                    },
+                    _ => false,
+                };
+
+                if is_triple_quoted {
+                    self.collection_stack.push((
+                        JsonCollection::TripleQuotedString(String::new()),
+                        Default::default(),
+                    ));
+                    return Ok(2);
+                } else {
+                    self.collection_stack.push((
+                        JsonCollection::QuotedString(String::new()),
+                        Default::default(),
+                    ))
+                }
             }
             '\'' => {
                 self.collection_stack.push((

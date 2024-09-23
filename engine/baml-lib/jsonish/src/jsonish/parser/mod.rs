@@ -26,15 +26,20 @@ impl Default for ParseOptions {
     }
 }
 
-enum ParsingMode {
+pub(super) enum ParsingMode {
     JsonMarkdown,
+    JsonMarkdownString,
     AllJsonObjects,
 }
 
 impl ParseOptions {
-    pub fn next_from_mode(&self, curr_mode: ParsingMode) -> Self {
+    pub(super) fn next_from_mode(&self, curr_mode: ParsingMode) -> Self {
         let mut new = self.clone();
         match curr_mode {
+            ParsingMode::JsonMarkdownString => {
+                new.allow_markdown_json = false;
+                new.allow_as_string = true;
+            }
             ParsingMode::JsonMarkdown => {
                 new.allow_markdown_json = false;
                 new.allow_as_string = false;

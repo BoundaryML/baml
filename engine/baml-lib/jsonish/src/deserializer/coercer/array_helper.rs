@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
 use anyhow::Result;
 use internal_baml_core::ir::FieldType;
@@ -45,12 +47,7 @@ pub(super) fn pick_best(
             Some(Ok(r)) => Some((
                 i,
                 score,
-                r.conditions().flags.iter().any(|f| {
-                    matches!(
-                        f,
-                        Flag::DefaultFromNoValue | Flag::OptionalDefaultFromNoValue
-                    )
-                }) || match r {
+                match r {
                     BamlValueWithFlags::List(flags, items) => {
                         items.is_empty()
                             && flags.flags.iter().any(|f| matches!(f, Flag::SingleToArray))
@@ -64,17 +61,40 @@ pub(super) fn pick_best(
         .collect::<Vec<_>>();
 
     // Sort by (false, score, index)
-    all_valid_scores.sort_by(|&(a, a_score, a_default, _), &(b, b_score, b_default, _)| {
-        match a_default.cmp(&b_default) {
-            std::cmp::Ordering::Equal => match a_score.cmp(&b_score) {
-                std::cmp::Ordering::Equal => a.cmp(&b),
+    all_valid_scores.sort_by(
+        |&(a, a_score, a_default, a_val), &(b, b_score, b_default, b_val)| {
+            if a_val.r#type() == b_val.r#type() && matches!(a_val, BamlValueWithFlags::List(_, _)) {
+                let a_is_single = a_val
+                    .conditions()
+                    .flags
+                    .iter()
+                    .any(|f| matches!(f, Flag::SingleToArray));
+                let b_is_single = b_val
+                    .conditions()
+                    .flags
+                    .iter()
+                    .any(|f| matches!(f, Flag::SingleToArray));
+
+                match (a_is_single, b_is_single) {
+                    // Return B
+                    (true, false) => return std::cmp::Ordering::Greater,
+                    // Return A
+                    (false, true) => return std::cmp::Ordering::Less,
+                    _ => {}
+                }
+            }
+
+            match a_default.cmp(&b_default) {
+                std::cmp::Ordering::Equal => match a_score.cmp(&b_score) {
+                    std::cmp::Ordering::Equal => a.cmp(&b),
+                    std::cmp::Ordering::Less => std::cmp::Ordering::Less,
+                    std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
+                },
                 std::cmp::Ordering::Less => std::cmp::Ordering::Less,
                 std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
-            },
-            std::cmp::Ordering::Less => std::cmp::Ordering::Less,
-            std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
-        }
-    });
+            }
+        },
+    );
 
     log::trace!(
         "Picking {} from {:?} items. Picked({:?}):\n{}",
