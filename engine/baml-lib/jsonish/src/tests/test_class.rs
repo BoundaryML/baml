@@ -693,3 +693,323 @@ FieldType::Class("Schema".to_string()),
     "other_group": "other"
   }
 );
+
+test_deserializer!(
+test_ekinsdrow,
+r#"
+
+// ------------ Heading 3 ----------------
+class Heading3 {
+  type Heading3Type @description("Always heading_3")
+  heading_3 HeadingBody @description("Heading 3 block with rich text")
+}
+
+class HeadingBody {
+  rich_text RichText[] @description("The rich text content of the heading")
+  is_toggleable bool @description("Whether the heading is toggleable")
+}
+
+/// ------------ Paragraph ----------------
+class Paragraph {
+  type ParagraphType @description("Always paragraph")
+  paragraph ParagraphBody @description("Paragraph block with rich text")
+}
+
+class ParagraphBody {
+  rich_text RichText[] @description("The rich text displayed in the paragraph block")
+  children string[] @description("Optional nested child blocks for paragraph")
+}
+
+/// ------------ RichText ----------------
+class RichText {
+  type RichTextType @description("Always text")
+  text RichTextContent
+}
+
+  class RichTextContent {
+    content string @description("The content of the rich text element")
+  }
+
+/// ------------ To Do ----------------
+class ToDo {
+  type ToDoType @description("Always to_do")
+  to_do ToDoBody @description("To-do block with checkbox and content")
+}
+
+class ToDoBody {
+  rich_text RichText[] @description("The text content of the to-do item")
+  checked bool? @description("Whether the to-do item is checked")
+  children Paragraph[] @description("Optional nested child blocks for to-do")
+}
+
+class Page {
+    object string @description("Always page")
+    icon Icon
+    children (Breadcrumb | ColumnList | Heading3 | Paragraph | ToDo)[] @description("Some blocks of the page")
+}
+
+// ------------ Breadcrumb ----------------
+class Breadcrumb {
+  type BreadcrumbType @description("Always breadcrumb")
+  breadcrumb map<string, string> @description("Always empty map")
+}
+
+// ------------ Breadcrumb ----------------
+class Breadcrumb1 {
+  type BreadcrumbType @description("Always breadcrumb")
+  breadcrumb map<string, string> @description("Always empty map")
+}
+
+/// ------------ Column List ----------------
+class ColumnList {
+  type ColumnListType @description("Always column_list")
+  column_list ColumnListBody @description("Column list block with columns")
+}
+
+class ColumnListBody {
+  children Column[] @description("The columns in the column list. Max length is 5")
+}
+
+class Column {
+  type ColumnType @description("Always column")
+  column ColumnBody @description("Always empty map for columns")
+}
+
+class ColumnBody {
+  children (Breadcrumb1 | Heading3 | Paragraph | ToDo)[] @description("Content of the column. Can contain any block type. Min length is 1")
+}
+
+class Icon {
+    emoji string @description("The emoji of the icon")
+}
+
+enum ColumnType  {
+    Column @alias("column")
+}
+
+enum BookmarkType {
+    Bookmark @alias("bookmark")
+  }
+  
+  enum BreadcrumbType {
+    Breadcrumb @alias("breadcrumb")
+  }
+  
+  enum BulletedListItemType {
+    BulletedListItem @alias("bulleted_list_item")
+  }
+  
+  enum CalloutType {
+    Callout @alias("callout")
+  }
+  
+  enum CodeType {
+    Code @alias("code")
+  }
+  
+  enum ColumnListType {
+    ColumnList @alias("column_list")
+  }
+  
+  enum DividerType {
+    Divider @alias("divider")
+  }
+  
+  enum EmbedType {
+    Embed @alias("embed")
+  }
+  
+  enum EquationType {
+    Equation @alias("equation")
+  }
+  
+  enum FileType {
+    File @alias("file")
+  }
+  
+  enum Heading1Type {
+    Heading1 @alias("heading1")
+  }
+  
+  enum Heading2Type {
+    Heading2 @alias("heading2")
+  }
+  
+  enum Heading3Type {
+    Heading3 @alias("heading_3")
+  }
+  
+  enum ImageFileType {
+    ImageFile @alias("image_file")
+  }
+  
+  enum NumberedListItemType {
+    NumberedListItem @alias("numbered_list_item")
+  }
+  
+  enum ParagraphType {
+    Paragraph @alias("paragraph")
+  }
+  
+  enum PDFType {
+    PDF @alias("pdf")
+  }
+  
+  enum QuoteType {
+    Quote @alias("quote")
+  }
+  
+  enum RichTextType {
+    RichText @alias("text")
+  }
+  
+  enum TableType {
+    Table @alias("table")
+  }
+  
+  enum TableOfContentsType {
+    TableOfContents @alias("table_of_contents")
+  }
+  
+  enum ToDoType {
+    ToDo @alias("to_do")
+  }
+  
+  enum ToggleType {
+    Toggle @alias("toggle")
+  }
+  
+  enum VideoType {
+    Video @alias("video")
+  }
+    "#,
+r#"{
+  "object": "page",
+  "icon": {
+    "emoji": "📚"
+  },
+  "children": [
+    {
+      "type": "column_list",
+      "column_list": {
+        "children": [
+          {
+            "type": "column",
+            "column": {
+              "children": [
+                {
+                  "type": "heading_3",
+                  "heading_3": {
+                    "rich_text": [
+                      {
+                        "type": "text",
+                        "text": {
+                          "content": "The Lord of the Rings"
+                        }
+                      }
+                    ],
+                    "is_toggleable": false
+                  }
+                },
+                {
+                  "type": "paragraph",
+                  "paragraph": {
+                    "rich_text": [
+                      {
+                        "type": "text",
+                        "text": {
+                          "content": "J.R.R. Tolkien"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "to_do",
+                  "to_do": {
+                    "rich_text": [
+                      {
+                        "type": "text",
+                        "text": {
+                          "content": "Read again"
+                        }
+                      }
+                    ],
+                    "checked": false
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}"#,
+FieldType::Class("Page".into()),
+{
+    "object": "page",
+    "icon": {
+      "emoji": "📚"
+    },
+    "children": [
+      {
+        "type": "ColumnList",
+        "column_list": {
+          "children": [
+            {
+              "type": "Column",
+              "column": {
+                "children": [
+                  {
+                    "type": "Heading3",
+                    "heading_3": {
+                      "rich_text": [
+                        {
+                          "type": "RichText",
+                          "text": {
+                            "content": "The Lord of the Rings"
+                          }
+                        }
+                      ],
+                      "is_toggleable": false
+                    }
+                  },
+                  {
+                    "type": "Paragraph",
+                    "paragraph": {
+                      "rich_text": [
+                        {
+                          "type": "RichText",
+                          "text": {
+                            "content": "J.R.R. Tolkien"
+                          }
+                        }
+                      ],
+                    "children": []
+                    }
+                  },
+                  {
+                    "type": "ToDo",
+                    "to_do": {
+                      "rich_text": [
+                        {
+                          "type": "RichText",
+                          "text": {
+                            "content": "Read again"
+                          }
+                        }
+                      ],
+                      "checked": false,
+                    "children": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+);
