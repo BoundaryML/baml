@@ -222,20 +222,42 @@ impl TypeCoercer for Class {
             }
             log::trace!("----");
 
-            let unparsed_or_missing = required_values
+            let unparsed_required_fields = required_values
                 .iter()
                 .filter_map(|(k, v)| match v {
                     Some(Ok(_)) => None,
-                    Some(Err(e)) => Some((k.clone(), Some(e.clone()))),
-                    None => Some((k.clone(), None)),
+                    Some(Err(e)) => Some((k.clone(), e)),
+                    None => None,
+                })
+                .collect::<Vec<_>>();
+            let missing_required_fields = required_values
+                .iter()
+                .filter_map(|(k, v)| match v {
+                    Some(Ok(_)) => None,
+                    Some(Err(e)) => None,
+                    None => Some(k.clone()),
                 })
                 .collect::<Vec<_>>();
 
-            if !unparsed_or_missing.is_empty() {
+            if !missing_required_fields.is_empty() || !unparsed_required_fields.is_empty() {
                 if completed_cls.is_empty() {
-                    return Err(ctx.error_missing_required_field(unparsed_or_missing, value));
+                    return Err(ctx.error_missing_required_field(
+                        unparsed_required_fields,
+                        missing_required_fields,
+                        value,
+                    ));
                 }
             } else {
+                // TODO: Figure out how to propagate these errors as flags.
+                let merged_errors = required_values
+                    .iter()
+                    .filter_map(|(_k, v)| v.clone())
+                    .filter_map(|v| match v {
+                        Ok(_) => None,
+                        Err(e) => Some(e.to_string()),
+                    })
+                    .collect::<Vec<_>>();
+
                 let valid_fields = required_values
                     .iter()
                     .filter_map(|(k, v)| match v.to_owned() {

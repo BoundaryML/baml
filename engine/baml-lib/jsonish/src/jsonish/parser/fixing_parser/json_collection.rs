@@ -8,6 +8,7 @@ pub enum JsonCollection {
     Object(Vec<String>, Vec<Value>),
     Array(Vec<Value>),
     QuotedString(String),
+    TripleQuotedString(String),
     SingleQuotedString(String),
     // Handles numbers, booleans, null, and unquoted strings
     UnquotedString(String),
@@ -24,6 +25,7 @@ impl JsonCollection {
             JsonCollection::Array(_) => "Array",
             JsonCollection::QuotedString(_) => "String",
             JsonCollection::SingleQuotedString(_) => "String",
+            JsonCollection::TripleQuotedString(_) => "TripleQuotedString",
             JsonCollection::UnquotedString(_) => "UnquotedString",
             JsonCollection::TrailingComment(_) => "Comment",
             JsonCollection::BlockComment(_) => "Comment",
@@ -45,6 +47,7 @@ impl From<JsonCollection> for Option<Value> {
             }
             JsonCollection::Array(values) => Value::Array(values),
             JsonCollection::QuotedString(s) => Value::String(s),
+            JsonCollection::TripleQuotedString(s) => Value::String(s),
             JsonCollection::SingleQuotedString(s) => Value::String(s),
             JsonCollection::UnquotedString(s) => {
                 let s = s.trim();

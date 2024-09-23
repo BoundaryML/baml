@@ -1,7 +1,11 @@
 use anyhow::Result;
 
 use crate::jsonish::{
-    parser::{fixing_parser, markdown_parser, multi_json_parser},
+    parser::{
+        fixing_parser,
+        markdown_parser::{self, MarkdownResult},
+        multi_json_parser,
+    },
     value::Fixes,
     Value,
 };
@@ -30,11 +34,18 @@ pub fn parse<'a>(str: &'a str, mut options: ParseOptions) -> Result<Value> {
             Ok(items) => match items.len() {
                 0 => {}
                 1 => {
-                    let (str, v) = items.into_iter().next().unwrap();
-                    return Ok(Value::AnyOf(
-                        vec![Value::Markdown(str.to_string(), Box::new(v))],
-                        str.to_string(),
-                    ));
+                    let res = items.into_iter().next().unwrap();
+                    match res {
+                        MarkdownResult::CodeBlock(s, v) => {
+                            return Ok(Value::AnyOf(
+                                vec![Value::Markdown(s.to_string(), Box::new(v))],
+                                str.to_string(),
+                            ));
+                        }
+                        _ => {
+                            log::debug!("Unexpected markdown result: {:?}", res);
+                        }
+                    }
                 }
                 _ => {
                     // In the case of multiple JSON objects:
@@ -45,14 +56,44 @@ pub fn parse<'a>(str: &'a str, mut options: ParseOptions) -> Result<Value> {
                     //  - All the items as a list
                     //  - The original string
 
+                    let others = items
+                        .iter()
+                        .filter_map(|res| match res {
+                            MarkdownResult::String(s) => Some(Value::String(s.to_string())),
+                            _ => None,
+                        })
+                        .map(|v| {
+                            parse(
+                                str,
+                                options.next_from_mode(
+                                    crate::jsonish::parser::ParsingMode::JsonMarkdownString,
+                                ),
+                            )
+                        })
+                        .filter_map(|res| match res {
+                            Ok(v) => Some(v),
+                            Err(e) => {
+                                log::debug!("Error parsing markdown string: {:?}", e);
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
+
+                    println!("Found: {}", others.len());
+
                     let items = items
                         .into_iter()
+                        .filter_map(|res| match res {
+                            MarkdownResult::CodeBlock(s, v) => Some((s, v)),
+                            _ => None,
+                        })
                         .map(|(s, v)| Value::Markdown(s.to_string(), Box::new(v)))
                         .collect::<Vec<_>>();
                     let array = Value::Array(items.clone());
                     let items = items
                         .into_iter()
                         .chain(std::iter::once(array))
+                        .chain(others)
                         .collect::<Vec<_>>();
                     return Ok(Value::AnyOf(items, str.to_string()));
                 }

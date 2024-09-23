@@ -333,7 +333,7 @@ impl BamlValueWithFlags {
         }
     }
 
-    fn r#type(&self) -> String {
+    pub(super) fn r#type(&self) -> String {
         match self {
             BamlValueWithFlags::String(_) => "String".to_string(),
             BamlValueWithFlags::Int(_) => "Int".to_string(),
