@@ -230,10 +230,8 @@ impl OutputFormatContent {
     }
 
     fn prefix<'a>(&self, options: &'a RenderOptions) -> Option<&'a str> {
-        match &options.prefix {
-            RenderSetting::Always(prefix) => Some(prefix.as_str()),
-            RenderSetting::Never => None,
-            RenderSetting::Auto => match &self.target {
+        fn auto_prefix(ty: &FieldType) -> Option<&'static str> {
+            match ty {
                 FieldType::Primitive(TypeValue::String) => None,
                 FieldType::Primitive(_) => Some("Answer as a: "),
                 FieldType::Enum(_) => Some("Answer with any of the categories:\n"),
@@ -243,7 +241,13 @@ impl OutputFormatContent {
                 FieldType::Optional(_) => Some("Answer in JSON using this schema:\n"),
                 FieldType::Map(_, _) => Some("Answer in JSON using this schema:\n"),
                 FieldType::Tuple(_) => None,
-            },
+                FieldType::Constrained{base, ..} => auto_prefix(base),
+            }
+        }
+        match &options.prefix {
+            RenderSetting::Always(prefix) => Some(prefix.as_str()),
+            RenderSetting::Never => None,
+            RenderSetting::Auto => auto_prefix( &self.target ),
         }
     }
 
@@ -377,6 +381,7 @@ impl OutputFormatContent {
                 value_type: self.inner_type_render(options, value_type, render_state, false)?,
             }
             .to_string(),
+            FieldType::Constrained { base, .. } => self.inner_type_render(options, base, render_state, false)?, // TODO: (Greg) doublecheck.
         })
     }
 

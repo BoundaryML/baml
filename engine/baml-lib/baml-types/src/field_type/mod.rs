@@ -40,6 +40,28 @@ impl std::fmt::Display for TypeValue {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub enum ConstraintLevel {
+    Check,
+    Assert,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct Constraint {
+    level: ConstraintLevel,
+    expression: String,
+    label: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct TypeConstraints(pub Vec<Constraint>);
+
+impl TypeConstraints {
+    pub fn empty() -> TypeConstraints {
+        TypeConstraints(Vec::new())
+    }
+}
+
 /// FieldType represents the type of either a class field or a function arg.
 #[derive(serde::Serialize, Debug, Clone)]
 pub enum FieldType {
@@ -51,6 +73,7 @@ pub enum FieldType {
     Union(Vec<FieldType>),
     Tuple(Vec<FieldType>),
     Optional(Box<FieldType>),
+    Constrained{ base: Box<FieldType>, constraints: TypeConstraints },
 }
 
 // Impl display for FieldType
@@ -86,6 +109,7 @@ impl std::fmt::Display for FieldType {
             FieldType::Map(k, v) => write!(f, "map<{}, {}>", k.to_string(), v.to_string()),
             FieldType::List(t) => write!(f, "{}[]", t.to_string()),
             FieldType::Optional(t) => write!(f, "{}?", t.to_string()),
+            FieldType::Constrained{ base, .. } => write!(f, "{}", base.to_string()),
         }
     }
 }
