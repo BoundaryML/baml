@@ -105,7 +105,7 @@ fn parse_base_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> O
 
     match base_type {
         Some(mut ft) => {
-            ft.set_attributes(attributes);
+            ft.extend_attributes(attributes);
             Some(ft)
         }
         None => None,

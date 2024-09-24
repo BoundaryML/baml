@@ -90,19 +90,6 @@ pub(crate) fn parse_type_expr(
         }
     }
 
-    // dbg!(&field_attributes);
-    // panic!("stop");
-
-    // // Attributes that should be associated with a type may have been parsed along
-    // // with the field and vice versa. This function associates attributes with
-    // // the correct entity.
-    // let (new_field_attributes, new_type_attributes) =
-    //     partition_attributes(field_attributes, field_type.clone());
-    // field_attributes = new_field_attributes;
-    // field_type
-    //     .as_mut()
-    //     .map(|ft| ft.set_attributes(new_type_attributes));
-
     match (name, &field_type) {
         (Some(name), Some(field_type)) => Ok(Field {
             expr: Some(field_type.clone()),
@@ -137,18 +124,21 @@ fn merge_comments(existing: Option<Comment>, new: Option<Comment>) -> Option<Com
 }
 
 pub fn parse_field_type_chain(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
+    eprintln!("parse_field_type_chain");
     let mut types = Vec::new();
     let mut operators = Vec::new();
 
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::field_type_with_attr => {
-                eprintln!("About to parse_field_type_with_attr from field_type_chain");
                 if let Some(field_type) = parse_field_type_with_attr(current, diagnostics) {
                     types.push(field_type);
                 }
             }
-            Rule::field_operator => operators.push(current.as_str().to_string()),
+            Rule::field_operator => {
+                eprintln!("Field Operator");
+                operators.push(current.as_str().to_string())
+            }
             _ => parsing_catch_all(current, "field_type_chain"),
         }
     }
@@ -161,14 +151,14 @@ pub(crate) fn parse_field_type_with_attr(
     pair: Pair<'_>,
     diagnostics: &mut Diagnostics,
 ) -> Option<FieldType> {
-    eprintln!("Starting parse_field_type_with_attr");
-    dbg!(&pair);
     let mut field_type = None;
     let mut field_attributes = Vec::new();
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::field_type => field_type = parse_field_type(current, diagnostics),
+            Rule::field_type => {
+                field_type = parse_field_type(current, diagnostics);
+            }
             Rule::field_type_with_attr => {} // TODO: (Greg) Why do we need this match?
             Rule::field_attribute => field_attributes.push(parse_attribute(current, diagnostics)),
             Rule::trailing_comment => {}
@@ -204,10 +194,7 @@ pub(crate) fn parse_field_type_with_attr(
 
             Some(ft) // Return the field type with attributes
         }
-        None => {
-            eprintln!("NO FIELD TYPE");
-            None
-        }
+        None => None,
     }
 }
 
@@ -282,19 +269,8 @@ mod tests {
     use pest::Parser;
 
     #[test]
-    fn union_association() {
+    fn type_union_association() {
         let root_path = "test_file.baml";
-
-        // let input = r#"int | string @check({{true}}, "true")"#;
-        // let source = SourceFile::new_static(root_path.into(), input);
-        // let mut diagnostics = Diagnostics::new(root_path.into());
-        // diagnostics.set_source(&source);
-        // let parsed = BAMLParser::parse(Rule::field_type_chain, input)
-        //     .unwrap()
-        //     .next()
-        //     .unwrap();
-        // let result = parse_field_type_chain(parsed, &mut diagnostics).unwrap();
-        // assert_eq!(result.attributes()[0].name.to_string().as_str(), "check");
 
         let input = r#"int | (string @check({{true}}, "true"))"#;
         let source = SourceFile::new_static(root_path.into(), input);
@@ -305,11 +281,34 @@ mod tests {
             .next()
             .unwrap();
         let result = parse_field_type_chain(parsed, &mut diagnostics).unwrap();
-        panic!("STOP");
-        // dbg!(&result);
-        // if let FieldType::Union(_, types, _, _) = &result {
-        //     assert_eq!(types[1].attributes().len(), 1);
-        // }
-        // assert_eq!(result.attributes()[0].name.to_string().as_str(), "check");
+        if let FieldType::Union(_, types, _, _, _) = &result {
+            assert_eq!(types[1].attributes().len(), 1);
+            assert_eq!(types[1].attributes()[0].name.to_string().as_str(), "check");
+        } else {
+            panic!("Expected union");
+        }
+    }
+
+    #[test]
+    fn field_union_association() {
+        let root_path = "test_file.baml";
+
+        let input = r#"bar int | (string @check({{true}}, "true")) @description("hi")"#;
+        let source = SourceFile::new_static(root_path.into(), input);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+        let parsed = BAMLParser::parse(Rule::type_expression, input)
+            .unwrap()
+            .next()
+            .unwrap();
+        let result =
+            parse_type_expr(&None, "class", parsed, None, &mut diagnostics, false).unwrap();
+        assert_eq!(result.name.to_string().as_str(), "bar");
+        dbg!(&result);
+        assert_eq!(result.attributes().len(), 1);
+        assert_eq!(
+            result.attributes()[0].name.to_string().as_str(),
+            "description"
+        );
     }
 }
