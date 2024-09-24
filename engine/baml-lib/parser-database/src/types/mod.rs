@@ -295,6 +295,23 @@ fn visit_enum<'db>(
     enm: &'db ast::TypeExpressionBlock,
     ctx: &mut Context<'db>,
 ) {
+    // Ensure that every value in the enum does not have an expression.
+    enm.fields
+        .iter()
+        .filter_map(|field| {
+            if field.expr.is_some() {
+                Some((field.span(), field.name()))
+            } else {
+                None
+            }
+        })
+        .for_each(|(span, field)| {
+            ctx.push_error(DatamodelError::new_validation_error(
+                format!("Unexpected type specified for value `{}`", field).as_str(),
+                span.clone(),
+            ));
+        });
+
     let input_deps = enm.input().map(|f| f.flat_idns()).unwrap_or_default();
     ctx.types.enum_dependencies.insert(
         enm_id,
@@ -307,6 +324,24 @@ fn visit_class<'db>(
     class: &'db ast::TypeExpressionBlock,
     ctx: &mut Context<'db>,
 ) {
+    // Ensure that every value in the class is actually a name: type.
+    class
+        .fields
+        .iter()
+        .filter_map(|field| {
+            if field.expr.is_none() {
+                Some((field.span(), field.name()))
+            } else {
+                None
+            }
+        })
+        .for_each(|(span, field)| {
+            ctx.push_error(DatamodelError::new_validation_error(
+                format!("No type specified for field `{}`", field).as_str(),
+                span.clone(),
+            ));
+        });
+
     let mut used_types = class
         .iter_fields()
         .flat_map(|(_, f)| f.expr.iter().flat_map(|e| e.flat_idns()))
