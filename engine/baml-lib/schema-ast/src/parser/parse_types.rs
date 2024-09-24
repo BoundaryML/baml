@@ -269,3 +269,18 @@ fn parse_tuple(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         _ => Some(FieldType::Tuple(FieldArity::Required, fields, span, None)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use pest::parses_to;
+
+    #[test]
+    fn type_attributes() {
+        parses_to!{
+            parser: BAMLParser,
+            rule: Rule::type_expression,
+            input: r#"int @description("hi")"#,
+            tokens: [],
+        }
+    }
+}

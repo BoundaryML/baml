@@ -187,6 +187,9 @@ mod tests {
 
         let result = parse_schema(&root_path.into(), &source);
 
+        dbg!(&result);
+        panic!("STOP");
+
         assert!(result.is_ok());
         let (schema_ast, _) = result.unwrap();
 
