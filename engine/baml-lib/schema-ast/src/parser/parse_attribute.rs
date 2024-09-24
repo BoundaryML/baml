@@ -29,6 +29,7 @@ pub(crate) fn parse_attribute(
         Some(name) => Attribute {
             name,
             arguments,
+            parenthesized: false,
             span,
         },
         None => unreachable!("Name should always be defined for attribute."),

@@ -19,6 +19,11 @@ pub struct Attribute {
     ///         ^^^^^^^^^^^^^^^^^^^^^^^^
     /// ```
     pub arguments: ArgumentsList,
+    /// Whether the Attribute was closely associated to a type, via parens.
+    /// Through most of the parser, we assume this to be false while creating
+    /// `Attribute`s. The one place where `Attributes` are pased in a parenthesized
+    /// context, we mutate this value to `true`.
+    pub parenthesized: bool,
     /// The AST span of the node.
     pub span: Span,
 }

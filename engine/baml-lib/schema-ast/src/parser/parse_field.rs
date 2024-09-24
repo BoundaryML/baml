@@ -173,14 +173,17 @@ pub(crate) fn parse_field_type_with_attr(
             eprintln!("{:?}", ft);
             // ft.set_attributes(field_attributes);
             match &mut ft {
-                FieldType::Union(_, ref mut types, _, _) => {
-                    if let Some(last_type) = types.last_mut() {
+                FieldType::Union(_, ref mut variants, _, _) => {
+                    if let Some(last_variant) = variants.last_mut() {
                         // last_type.reset_attributes();
                         // log::info!("last_type: {:#?}", last_type);
-                        let last_type_attributes = last_type.attributes().to_owned();
-                        let mut new_attributes = last_type_attributes.clone();
-                        new_attributes.extend(field_attributes);
-                        ft.set_attributes(new_attributes);
+                        let last_variant_attributes = last_variant.attributes().to_owned();
+                        let (attrs_for_variant, attrs_for_union): (Vec<Attribute>, Vec<Attribute>) =
+                            last_variant_attributes
+                                .into_iter()
+                                .partition(|attr| attr.parenthesized);
+                        last_variant.set_attributes(attrs_for_variant);
+                        ft.extend_attributes(attrs_for_union);
                     }
 
                     // if let Some(attributes) = attributes.as_ref() {
@@ -281,7 +284,7 @@ mod tests {
             .next()
             .unwrap();
         let result = parse_field_type_chain(parsed, &mut diagnostics).unwrap();
-        if let FieldType::Union(_, types, _, _, _) = &result {
+        if let FieldType::Union(_, types, _, _) = &result {
             assert_eq!(types[1].attributes().len(), 1);
             assert_eq!(types[1].attributes()[0].name.to_string().as_str(), "check");
         } else {

@@ -268,6 +268,20 @@ impl FieldType {
             | FieldType::List(.., attr) => *attr = Some(attributes),
         }
     }
+
+    pub fn extend_attributes(&mut self, attributes: Vec<Attribute>) {
+        match self {
+            FieldType::Symbol(.., attr)
+            | FieldType::Primitive(.., attr)
+            | FieldType::Union(.., attr)
+            | FieldType::Tuple(.., attr)
+            | FieldType::Map(.., attr)
+            | FieldType::List(.., attr) => match attr.as_mut() {
+                Some(ats) => ats.extend(attributes),
+                None => {}
+            },
+        }
+    }
 }
 
 // Impl display for FieldType

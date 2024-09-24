@@ -170,7 +170,20 @@ fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
             Rule::openParan | Rule::closeParan => continue,
             Rule::field_type_with_attr => {
                 eprintln!("About to call parse_field_type_with_attr from parenthesized_type");
-                return parse_field_type_with_attr(current, diagnostics);
+                let mut type_ = parse_field_type_with_attr(current, diagnostics);
+                type_.as_mut().map(|t| {
+                    let protected_attributes = t
+                        .attributes()
+                        .iter()
+                        .map(|attr| Attribute {
+                            parenthesized: true,
+                            ..attr.clone()
+                        })
+                        .collect();
+                    t.set_attributes(protected_attributes);
+                    t
+                });
+                return type_;
             }
             _ => unreachable_rule!(current, Rule::parenthesized_type),
         }
