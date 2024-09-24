@@ -292,6 +292,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => format!("{} | null", inner.to_type_ref(ir)),
+            FieldType::Constrained { base, .. } => base.to_type_ref(ir),
         }
     }
 }

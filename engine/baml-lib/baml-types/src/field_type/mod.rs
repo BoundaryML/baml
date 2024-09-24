@@ -48,9 +48,9 @@ pub enum ConstraintLevel {
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct Constraint {
-    level: ConstraintLevel,
-    expression: String,
-    label: String,
+    pub level: ConstraintLevel,
+    pub expression: String,
+    pub label: String,
 }
 
 #[derive(Clone, Debug, serde::Serialize)]

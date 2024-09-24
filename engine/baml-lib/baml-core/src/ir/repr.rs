@@ -244,7 +244,8 @@ fn to_ir_attributes(
                     let ir_expr = match d {
                         ast::Expression::StringValue(s,_) => Expression::String(s.clone()),
                         ast::Expression::JinjaExpression(s,_) => Expression::JinjaExpression(s.clone()),
-                        _ => panic!("TODO"),
+                        ast::Expression::RawStringValue(s) => Expression::String(s.value().to_string()), // TODO: (Greg) Ok?
+                        _ => panic!("TODO: {:?}", d),
                     };
                     attributes.insert("description".to_string(), ir_expr);
                 }

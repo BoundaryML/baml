@@ -83,6 +83,7 @@ impl TypeCoercer for FieldType {
                 FieldType::Optional(_) => coerce_optional(ctx, self, value),
                 FieldType::Map(_, _) => coerce_map(ctx, self, value),
                 FieldType::Tuple(_) => Err(ctx.error_internal("Tuple not supported")),
+                FieldType::Constrained{base,..} => base.coerce(ctx, target, value), // TODO: (Greg) Does ctx need to be updated?
             },
         }
     }
@@ -117,6 +118,7 @@ impl DefaultValue for FieldType {
                 }
             }
             FieldType::Primitive(_) => None,
+            FieldType::Constrained{base, ..} => base.default_value(error)
         }
     }
 }

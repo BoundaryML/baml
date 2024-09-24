@@ -159,6 +159,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => inner.to_partial_type_ref(),
+            FieldType::Constrained{base, ..} => base.to_partial_type_ref(),
         }
     }
 }

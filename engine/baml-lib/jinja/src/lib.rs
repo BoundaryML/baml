@@ -1,3 +1,4 @@
+use anyhow::Result;
 use baml_types::{BamlMedia, BamlValue};
 use colored::*;
 mod chat_message_part;
@@ -505,6 +506,20 @@ pub fn render_expression(
     let template = format!(r#"{{{{ {} }}}}"#, expression);
     let args_dict = minijinja::Value::from_serialize(ctx);
     Ok(env.render_str(&template, &args_dict)?)
+}
+
+// TODO: (Greg) better error handling.
+// TODO: (Greg) Upstream, typecheck the expression.
+pub fn evaluate_predicate(this: &BamlValue, predicate_expression: &str) -> Result<bool, anyhow::Error> {
+    let ctx : HashMap<String, BamlValue> =
+        [("this".to_string(), this.clone())]
+        .into_iter()
+        .collect();
+    match render_expression(&predicate_expression, &ctx)?.as_ref() {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(anyhow::anyhow!("TODO")),
+    }
 }
 
 #[cfg(test)]

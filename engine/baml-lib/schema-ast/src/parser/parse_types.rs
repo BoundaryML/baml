@@ -13,6 +13,7 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
 
     let mut arity = FieldArity::Required;
     let mut ftype = None;
+    let mut attributes = Vec::new();
 
     for current in pair.into_inner() {
         match current.as_rule() {
@@ -26,6 +27,10 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
 
                 ftype = result;
             }
+            Rule::field_attribute => {
+                let attribute = parse_attribute(current, diagnostics);
+                attributes.push(attribute);
+            }
             Rule::optional_token => arity = FieldArity::Optional,
             _ => {
                 unreachable_rule!(current, Rule::field_type)
@@ -34,7 +39,8 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     }
 
     match ftype {
-        Some(ftype) => {
+        Some(mut ftype) => {
+            ftype.set_attributes(attributes);
             if arity.is_optional() {
                 match ftype.to_nullable() {
                     Ok(ftype) => Some(ftype),

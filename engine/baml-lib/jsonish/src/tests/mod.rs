@@ -189,7 +189,12 @@ fn relevant_data_models<'a>(
                     });
                 }
             }
-            FieldType::Primitive(_) => {}
+            FieldType::Primitive(_) => {},
+            FieldType::Constrained{base, ..} => {
+                if !checked_types.contains(&base.to_string()) {
+                    start.push(*base.clone());
+                }
+            }
         }
     }
 

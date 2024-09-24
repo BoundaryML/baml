@@ -4,7 +4,6 @@ mod python_language_features;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use either::Either;
 use indexmap::IndexMap;
 use internal_baml_core::{
     configuration::GeneratorDefaultClientMode,
@@ -221,6 +220,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_ref(ir)),
+            FieldType::Constrained{base, ..} => base.to_type_ref(ir),
         }
     }
 
@@ -264,6 +264,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => inner.to_partial_type_ref(ir),
+            FieldType::Constrained{base, ..} => base.to_partial_type_ref(ir),
         }
     }
 }

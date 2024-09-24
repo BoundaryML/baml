@@ -10,6 +10,8 @@ pub(super) fn visit(ctx: &mut Context<'_>, as_block: bool) -> Option<ToStringAtt
     let mut modified = false;
 
     let mut attributes = StaticStringAttributes::default();
+
+    dbg!(ctx.ast);
     // @alias or @@alias
     if ctx.visit_optional_single_attr("alias") {
         visit_alias_attribute(&mut attributes, ctx);

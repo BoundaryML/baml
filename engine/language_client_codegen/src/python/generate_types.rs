@@ -199,6 +199,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_ref(ir)),
+            FieldType::Constrained{base, ..} => base.to_type_ref(ir),
         }
     }
 
@@ -248,6 +249,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => inner.to_partial_type_ref(ir, false),
+            FieldType::Constrained{base, ..} => base.to_partial_type_ref(ir, wrapped), // false?
         }
     }
 }

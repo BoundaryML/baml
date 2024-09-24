@@ -70,7 +70,7 @@ pub(crate) fn parse_type_expr(
 ) -> Result<Field<FieldType>, DatamodelError> {
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
-    let mut enum_attributes = Vec::<Attribute>::new();
+    let mut field_attributes = Vec::<Attribute>::new();
     let mut field_type = None;
     let mut comment: Option<Comment> = block_comment.and_then(parse_comment_block);
 
@@ -85,12 +85,22 @@ pub(crate) fn parse_type_expr(
                     field_type = parse_field_type_chain(current, diagnostics);
                 }
             }
-            Rule::field_attribute => enum_attributes.push(parse_attribute(current, diagnostics)),
+            Rule::field_attribute => field_attributes.push(parse_attribute(current, diagnostics)),
             _ => parsing_catch_all(current, "field"),
         }
     }
 
-    match (name, field_type) {
+    // Attributes that should be associated with a type may have been parsed along
+    // with the field and vice versa. This function associates attributes with
+    // the correct entity.
+    let (new_field_attributes, new_type_attributes) = partition_attributes(
+        field_attributes,
+        field_type.clone()
+    );
+    field_attributes = new_field_attributes;
+    field_type.as_mut().map(|ft| ft.set_attributes(new_type_attributes));
+
+    match (name, &field_type) {
         (Some(name), Some(field_type)) => Ok(Field {
             expr: Some(field_type.clone()),
             name,
@@ -101,7 +111,7 @@ pub(crate) fn parse_type_expr(
         (Some(name), None) => Ok(Field {
             expr: None,
             name,
-            attributes: enum_attributes,
+            attributes: field_attributes,
             documentation: comment,
             span: diagnostics.span(pair_span),
         }),
@@ -190,6 +200,7 @@ pub(crate) fn parse_field_type_with_attr(
         None => None,
     }
 }
+
 fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
     if types.is_empty() {
         return None;
@@ -226,4 +237,27 @@ fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
     }
 
     Some(combined_type)
+}
+
+
+fn partition_attributes(
+    input_field_attributes: Vec<Attribute>,
+    field_type: Option<FieldType>
+) -> (Vec<Attribute>, Vec<Attribute>) {
+    dbg!(&input_field_attributes);
+    dbg!(&field_type);
+    fn is_for_field(attr: &&Attribute) -> bool {
+        ["assert", "check"].contains(&attr.name())
+    }
+
+    let mut all_attrs = input_field_attributes.clone();
+    if let Some(ft) = field_type.as_ref() {
+        all_attrs.extend(ft.attributes().iter().cloned());
+    }
+
+    let (field_attrs, non_field_attrs): (Vec<&Attribute>, Vec<&Attribute>) =
+        all_attrs.iter().partition(is_for_field);
+
+    (field_attrs.into_iter().cloned().collect(),
+     non_field_attrs.into_iter().cloned().collect())
 }

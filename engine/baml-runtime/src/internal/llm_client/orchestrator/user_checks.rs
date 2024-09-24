@@ -2,9 +2,9 @@ use anyhow::Result;
 use anyhow::Context;
 use std::collections::HashMap;
 use baml_types::BamlValue;
-use internal_baml_jinja::render_expression;
+use internal_baml_jinja::evaluate_predicate;
 
-use internal_baml_core::ir::repr::{ClassId, Expression};
+use internal_baml_core::ir::repr::Expression;
 use internal_baml_core::ir::repr::{Class, Field};
 use crate::BamlMap;
 
@@ -175,7 +175,11 @@ pub fn run_user_checks_field(
     let field_name = type_.name.to_string();
 
     for (assert_name, assert_expr) in type_.r#type.attributes.asserts.iter() {
-        let res = evaluate_predicate(&value, assert_expr)?;
+        let predicate = match assert_expr {
+            Expression::JinjaExpression(e) => Ok(e),
+            _ => Err(anyhow::anyhow!("Expected Jinja expression")),
+        }?;
+        let res = evaluate_predicate(&value, predicate)?;
         if !res {
             let failure = UserFailure {
                 field_context: field_context.clone(),
@@ -191,7 +195,11 @@ pub fn run_user_checks_field(
         .checks
         .iter()
         .filter_map(|(check_name, check_expr)| {
-            evaluate_predicate(&value, check_expr).map(
+            let predicate = match check_expr {
+                Expression::JinjaExpression(e) => Ok(e),
+                _ => Err(anyhow::anyhow!("Expected JinjaExpression")),
+            }.ok()?;
+            evaluate_predicate(&value, predicate).map(
                 |r| if r {
                     None
                 } else {
@@ -214,23 +222,6 @@ pub fn run_user_checks_field(
 
 }
 
-// TODO: (Greg) better error handling.
-// TODO: (Greg) Upstream, typecheck the expression.
-pub fn evaluate_predicate(this: &BamlValue, expr: &Expression) -> Result<bool> {
-    let predicate_code = match expr {
-        Expression::JinjaExpression(s) => Ok(s),
-        _ => Err(anyhow::anyhow!("Expected jinja expression")),
-    }?;
-    let ctx : HashMap<String, BamlValue> =
-        [("this".to_string(), this.clone())]
-        .into_iter()
-        .collect();
-    match render_expression(&predicate_code, &ctx)?.as_ref() {
-        "true" => Ok(true),
-        "false" => Ok(false),
-        _ => Err(anyhow::anyhow!("TODO")),
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -243,17 +234,17 @@ mod tests {
     fn test_evaluate_predicate() {
         assert_eq!(evaluate_predicate(
             &BamlValue::String("foo".to_string()),
-            &Expression::JinjaExpression("this|length >= 3".to_string())
+            "this|length >= 3"
         ).unwrap(), true);
 
         assert_eq!(evaluate_predicate(
             &BamlValue::String("foo".to_string()),
-            &Expression::JinjaExpression("this|length > 3".to_string())
+            "this|length > 3"
         ).unwrap(), false);
 
         assert_eq!(evaluate_predicate(
             &BamlValue::Int(10),
-            &Expression::JinjaExpression("this == 10".to_string())
+            "this == 10"
         ).unwrap(), true);
     }
 
@@ -283,7 +274,6 @@ mod tests {
                 vec![],
                 &BamlValue::Int(10),
                 &field_typedef,
-                &HashMap::new(),
             ).unwrap(),
             UserChecksResult::Success
         )

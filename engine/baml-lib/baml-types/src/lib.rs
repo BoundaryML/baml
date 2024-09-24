@@ -7,6 +7,6 @@ mod baml_value;
 mod field_type;
 
 pub use baml_value::BamlValue;
-pub use field_type::{FieldType, TypeValue};
+pub use field_type::{FieldType, TypeValue, TypeConstraints, Constraint, ConstraintLevel};
 pub use map::Map as BamlMap;
 pub use media::{BamlMedia, BamlMediaContent, BamlMediaType, MediaBase64, MediaUrl};

@@ -43,6 +43,7 @@ impl ToRuby for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => format!("T.nilable({})", inner.to_ruby()),
+            FieldType::Constrained{base,..} => base.to_ruby(),
         }
     }
 }
