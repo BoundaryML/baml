@@ -6,6 +6,7 @@ in
       cargo
       rustc
       nodePackages.pnpm
+      ruby
       python3
       poetry
       rust-analyzer
