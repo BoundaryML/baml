@@ -11,10 +11,12 @@ type_expression_contents = {
     (type_expression | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 type_expression          = {
-    identifier ~ field_type_chain? ~ (NEWLINE? ~ (field_attribute | trailing_comment))* ~ NEWLINE?
+identifier ~ field_type_chain? ~ (NEWLINE? ~ (field_attribute | trailing_comment))* ~ NEWLINE?
 }
 
-field_operator       = { "|" | "&" }
+// `field_type_chain` an `union` serve similar roles; `union` specifically
+// handles the case of a parenthesized list of `base_type_with_attr`s
+field_operator       = { "|" }
 field_type_chain     = { field_type_with_attr ~ (field_operator ~ field_type_with_attr)* }
 field_type_with_attr = { field_type ~ (NEWLINE? ~ (field_attribute | trailing_comment))* }
 
@@ -22,7 +24,7 @@ field_type_with_attr = { field_type ~ (NEWLINE? ~ (field_attribute | trailing_co
 // Unified Block for Function, Test, Client, Generator
 // ######################################
 value_expression_keyword  = { FUNCTION_KEYWORD | TEST_KEYWORD | CLIENT_KEYWORD | RETRY_POLICY_KEYWORD | GENERATOR_KEYWORD }
-value_expression_block    = { value_expression_keyword ~ identifier ~ named_argument_list? ~ ARROW? ~ field_type? ~ SPACER_TEXT ~ BLOCK_OPEN ~ value_expression_contents ~ BLOCK_CLOSE }
+value_expression_block    = { value_expression_keyword ~ identifier ~ named_argument_list? ~ ARROW? ~ field_type_chain? ~ SPACER_TEXT ~ BLOCK_OPEN ~ value_expression_contents ~ BLOCK_CLOSE }
 value_expression_contents = {
     (value_expression | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
@@ -38,7 +40,7 @@ assignment           = { "=" }
 template_declaration = { TEMPLATE_KEYWORD ~ identifier ~ assignment? ~ named_argument_list? ~ raw_string_literal }
 
 colon          = { ":" }
-named_argument = { identifier ~ ((":" ~ field_type) | colon)? }
+named_argument = { identifier ~ ((":" ~ field_type_chain) | colon)? }
 // Be forgiving and allow trailing comma
 named_argument_list = { openParan ~ SPACER_TEXT ~ named_argument? ~ ("," ~ SPACER_TEXT ~ named_argument)* ~ ","? ~ SPACER_TEXT ~ closeParan }
 
@@ -49,7 +51,7 @@ block_attribute = { "@@" ~ identifier ~ arguments_list? }
 field_attribute = { "@" ~ identifier ~ arguments_list? }
 
 // Pest is greedy, order is very important here.
-field_type          = { (union | (non_union ~ (field_attribute)*)) ~ optional_token? }
+field_type          = { (union | non_union) ~ optional_token? }
 optional_token      = { "?" }
 union               = { base_type_with_attr ~ (field_operator ~ base_type_with_attr)+ }
 base_type_with_attr = { base_type ~ (NEWLINE? ~ field_attribute)* }

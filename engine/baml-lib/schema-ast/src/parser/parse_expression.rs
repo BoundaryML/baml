@@ -237,22 +237,17 @@ fn unescape_string(val: &str) -> String {
 }
 
 pub fn parse_jinja_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
-    dbg!(&token);
     assert_correct_parser!(token, Rule::jinja_expression);
     let inner_text = token.as_str()[2..token.as_str().len() - 2].to_string();
-    dbg!("inner_text: {:?}", &inner_text);
-    Expression::JinjaExpression(
-        inner_text,
-        diagnostics.span(token.as_span()),
-    )
+    Expression::JinjaExpression(inner_text, diagnostics.span(token.as_span()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::{BAMLParser, Rule};
     use internal_baml_diagnostics::{Diagnostics, SourceFile};
     use pest::Parser;
-    use crate::parser::{BAMLParser, Rule};
 
     #[test]
     fn test_parse_jinja_expression() {
@@ -262,12 +257,14 @@ mod tests {
         let mut diagnostics = Diagnostics::new(root_path.into());
         diagnostics.set_source(&source);
 
-        let pair = BAMLParser::parse(Rule::jinja_expression, input).unwrap().next().unwrap();
+        let pair = BAMLParser::parse(Rule::jinja_expression, input)
+            .unwrap()
+            .next()
+            .unwrap();
         let expr = parse_jinja_expression(pair, &mut diagnostics);
         match expr {
             Expression::JinjaExpression(s, _) => assert_eq!(s, " 1 + 1 "),
             _ => panic!("Expected JinjaExpression, got {:?}", expr),
         }
     }
-
 }

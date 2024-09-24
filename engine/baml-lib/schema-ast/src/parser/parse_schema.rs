@@ -187,16 +187,13 @@ mod tests {
 
         let result = parse_schema(&root_path.into(), &source);
 
-        dbg!(&result);
-        panic!("STOP");
-
         assert!(result.is_ok());
         let (schema_ast, _) = result.unwrap();
 
         assert_eq!(schema_ast.tops.len(), 1);
 
         match &schema_ast.tops[0] {
-            Top::Class(TypeExpressionBlock{name, fields,..}) => {
+            Top::Class(TypeExpressionBlock { name, fields, .. }) => {
                 assert_eq!(name.name(), "MyClass");
                 assert_eq!(fields.len(), 2);
                 assert_eq!(fields[0].name.name(), "myProperty");

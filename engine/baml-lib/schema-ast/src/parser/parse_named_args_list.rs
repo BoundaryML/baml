@@ -1,7 +1,8 @@
 use internal_baml_diagnostics::Diagnostics;
 
 use super::{
-    helpers::parsing_catch_all, parse_identifier::parse_identifier, parse_types::parse_field_type,
+    helpers::parsing_catch_all, parse_field::parse_field_type_chain,
+    parse_identifier::parse_identifier,
 };
 use crate::{
     assert_correct_parser,
@@ -84,7 +85,7 @@ pub fn parse_function_arg(
     );
     let span = diagnostics.span(pair.as_span());
 
-    match parse_field_type(pair, diagnostics) {
+    match parse_field_type_chain(pair, diagnostics) {
         Some(ftype) => Ok(BlockArg {
             span,
             field_type: ftype,

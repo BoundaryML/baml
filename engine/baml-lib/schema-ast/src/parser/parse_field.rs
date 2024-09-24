@@ -90,15 +90,18 @@ pub(crate) fn parse_type_expr(
         }
     }
 
-    // Attributes that should be associated with a type may have been parsed along
-    // with the field and vice versa. This function associates attributes with
-    // the correct entity.
-    let (new_field_attributes, new_type_attributes) = partition_attributes(
-        field_attributes,
-        field_type.clone()
-    );
-    field_attributes = new_field_attributes;
-    field_type.as_mut().map(|ft| ft.set_attributes(new_type_attributes));
+    // dbg!(&field_attributes);
+    // panic!("stop");
+
+    // // Attributes that should be associated with a type may have been parsed along
+    // // with the field and vice versa. This function associates attributes with
+    // // the correct entity.
+    // let (new_field_attributes, new_type_attributes) =
+    //     partition_attributes(field_attributes, field_type.clone());
+    // field_attributes = new_field_attributes;
+    // field_type
+    //     .as_mut()
+    //     .map(|ft| ft.set_attributes(new_type_attributes));
 
     match (name, &field_type) {
         (Some(name), Some(field_type)) => Ok(Field {
@@ -133,13 +136,14 @@ fn merge_comments(existing: Option<Comment>, new: Option<Comment>) -> Option<Com
     }
 }
 
-fn parse_field_type_chain(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
+pub fn parse_field_type_chain(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     let mut types = Vec::new();
     let mut operators = Vec::new();
 
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::field_type_with_attr => {
+                eprintln!("About to parse_field_type_with_attr from field_type_chain");
                 if let Some(field_type) = parse_field_type_with_attr(current, diagnostics) {
                     types.push(field_type);
                 }
@@ -157,13 +161,15 @@ pub(crate) fn parse_field_type_with_attr(
     pair: Pair<'_>,
     diagnostics: &mut Diagnostics,
 ) -> Option<FieldType> {
+    eprintln!("Starting parse_field_type_with_attr");
+    dbg!(&pair);
     let mut field_type = None;
     let mut field_attributes = Vec::new();
 
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::field_type => field_type = parse_field_type(current, diagnostics),
-            Rule::field_type_with_attr => {}
+            Rule::field_type_with_attr => {} // TODO: (Greg) Why do we need this match?
             Rule::field_attribute => field_attributes.push(parse_attribute(current, diagnostics)),
             Rule::trailing_comment => {}
             _ => {
@@ -174,6 +180,7 @@ pub(crate) fn parse_field_type_with_attr(
 
     match field_type {
         Some(mut ft) => {
+            eprintln!("{:?}", ft);
             // ft.set_attributes(field_attributes);
             match &mut ft {
                 FieldType::Union(_, ref mut types, _, _) => {
@@ -197,7 +204,10 @@ pub(crate) fn parse_field_type_with_attr(
 
             Some(ft) // Return the field type with attributes
         }
-        None => None,
+        None => {
+            eprintln!("NO FIELD TYPE");
+            None
+        }
     }
 }
 
@@ -239,25 +249,67 @@ fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
     Some(combined_type)
 }
 
+// fn partition_attributes(
+//     input_field_attributes: Vec<Attribute>,
+//     field_type: Option<FieldType>,
+// ) -> (Vec<Attribute>, Vec<Attribute>) {
+//     dbg!(&input_field_attributes);
+//     dbg!(&field_type);
+//     fn is_for_field(attr: &&Attribute) -> bool {
+//         ["assert", "check"].contains(&attr.name())
+//     }
+//
+//     let mut all_attrs = input_field_attributes.clone();
+//     if let Some(ft) = field_type.as_ref() {
+//         all_attrs.extend(ft.attributes().iter().cloned());
+//     }
+//
+//     let (field_attrs, non_field_attrs): (Vec<&Attribute>, Vec<&Attribute>) =
+//         all_attrs.iter().partition(is_for_field);
+//
+//     (
+//         field_attrs.into_iter().cloned().collect(),
+//         non_field_attrs.into_iter().cloned().collect(),
+//     )
+// }
 
-fn partition_attributes(
-    input_field_attributes: Vec<Attribute>,
-    field_type: Option<FieldType>
-) -> (Vec<Attribute>, Vec<Attribute>) {
-    dbg!(&input_field_attributes);
-    dbg!(&field_type);
-    fn is_for_field(attr: &&Attribute) -> bool {
-        ["assert", "check"].contains(&attr.name())
+#[cfg(test)]
+mod tests {
+
+    use super::super::{BAMLParser, Rule};
+    use super::*;
+    use internal_baml_diagnostics::{Diagnostics, SourceFile};
+    use pest::Parser;
+
+    #[test]
+    fn union_association() {
+        let root_path = "test_file.baml";
+
+        // let input = r#"int | string @check({{true}}, "true")"#;
+        // let source = SourceFile::new_static(root_path.into(), input);
+        // let mut diagnostics = Diagnostics::new(root_path.into());
+        // diagnostics.set_source(&source);
+        // let parsed = BAMLParser::parse(Rule::field_type_chain, input)
+        //     .unwrap()
+        //     .next()
+        //     .unwrap();
+        // let result = parse_field_type_chain(parsed, &mut diagnostics).unwrap();
+        // assert_eq!(result.attributes()[0].name.to_string().as_str(), "check");
+
+        let input = r#"int | (string @check({{true}}, "true"))"#;
+        let source = SourceFile::new_static(root_path.into(), input);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+        let parsed = BAMLParser::parse(Rule::field_type_chain, input)
+            .unwrap()
+            .next()
+            .unwrap();
+        let result = parse_field_type_chain(parsed, &mut diagnostics).unwrap();
+        panic!("STOP");
+        // dbg!(&result);
+        // if let FieldType::Union(_, types, _, _) = &result {
+        //     assert_eq!(types[1].attributes().len(), 1);
+        // }
+        // assert_eq!(result.attributes()[0].name.to_string().as_str(), "check");
     }
-
-    let mut all_attrs = input_field_attributes.clone();
-    if let Some(ft) = field_type.as_ref() {
-        all_attrs.extend(ft.attributes().iter().cloned());
-    }
-
-    let (field_attrs, non_field_attrs): (Vec<&Attribute>, Vec<&Attribute>) =
-        all_attrs.iter().partition(is_for_field);
-
-    (field_attrs.into_iter().cloned().collect(),
-     non_field_attrs.into_iter().cloned().collect())
 }

@@ -169,6 +169,7 @@ fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
         match current.as_rule() {
             Rule::openParan | Rule::closeParan => continue,
             Rule::field_type_with_attr => {
+                eprintln!("About to call parse_field_type_with_attr from parenthesized_type");
                 return parse_field_type_with_attr(current, diagnostics);
             }
             _ => unreachable_rule!(current, Rule::parenthesized_type),
