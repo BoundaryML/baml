@@ -239,30 +239,6 @@ fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
     Some(combined_type)
 }
 
-// fn partition_attributes(
-//     input_field_attributes: Vec<Attribute>,
-//     field_type: Option<FieldType>,
-// ) -> (Vec<Attribute>, Vec<Attribute>) {
-//     dbg!(&input_field_attributes);
-//     dbg!(&field_type);
-//     fn is_for_field(attr: &&Attribute) -> bool {
-//         ["assert", "check"].contains(&attr.name())
-//     }
-//
-//     let mut all_attrs = input_field_attributes.clone();
-//     if let Some(ft) = field_type.as_ref() {
-//         all_attrs.extend(ft.attributes().iter().cloned());
-//     }
-//
-//     let (field_attrs, non_field_attrs): (Vec<&Attribute>, Vec<&Attribute>) =
-//         all_attrs.iter().partition(is_for_field);
-//
-//     (
-//         field_attrs.into_iter().cloned().collect(),
-//         non_field_attrs.into_iter().cloned().collect(),
-//     )
-// }
-
 #[cfg(test)]
 mod tests {
 
