@@ -62,6 +62,9 @@ impl WithScore for Flag {
             Flag::StringToChar(_) => 1,
             Flag::FloatToInt(_) => 1,
             Flag::NoFields(_) => 1,
+
+            Flag::AssertFailure(_) => 50,
+            Flag::CheckFailures(cs) => 5 * cs.len() as i32,
         }
     }
 }

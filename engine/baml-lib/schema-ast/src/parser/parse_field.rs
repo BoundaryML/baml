@@ -283,7 +283,6 @@ mod tests {
         let result =
             parse_type_expr(&None, "class", parsed, None, &mut diagnostics, false).unwrap();
         assert_eq!(result.name.to_string().as_str(), "bar");
-        dbg!(&result);
         assert_eq!(result.attributes().len(), 1);
         assert_eq!(
             result.attributes()[0].name.to_string().as_str(),

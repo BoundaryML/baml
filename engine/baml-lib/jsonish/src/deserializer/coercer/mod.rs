@@ -7,9 +7,12 @@ mod coerce_union;
 mod field_type;
 mod ir_ref;
 use anyhow::Result;
-use internal_baml_jinja::types::OutputFormatContent;
+use baml_types::{BamlValue, Constraint, ConstraintFailure, ConstraintLevel, ConstraintsResult};
+use internal_baml_jinja::{evaluate_predicate, types::OutputFormatContent};
 
-use internal_baml_core::ir::FieldType;
+use internal_baml_core::ir::{Expression, FieldType};
+
+use crate::deserializer::deserialize_flags::Flag;
 
 use super::types::BamlValueWithFlags;
 
@@ -235,18 +238,71 @@ pub trait TypeCoercer {
         value: Option<&crate::jsonish::Value>,
     ) -> Result<BamlValueWithFlags, ParsingError>;
 
+    /// Coorce a value to a target type, and penalize the conversion according
+    /// to failed constraints. Failing a constraint will not necessarily fail
+    /// the coorsion; it will only flag the coersion result with the fact of
+    /// the constraint failures.
+    fn coerce_and_validate<T: TypeCoercer>(
+        unvalidated_value: &T,
+        ctx: &ParsingContext,
+        target: &FieldType,
+        value: Option<&crate::jsonish::Value>,
+    ) -> Result<BamlValueWithFlags, ParsingError> {
+        let mut coerced_value = unvalidated_value.coerce(ctx, target, value)?;
+        let constraints_result = run_user_checks_shallow(
+            &coerced_value.clone().into(),
+            target
+        ).map_err(|e| ParsingError {
+            reason: format!("Failed to evaluate constraints: {:?}", e),
+            scope: ctx.scope.clone(),
+        })?;
+        match constraints_result {
+            ConstraintsResult::Success => {},
+            ConstraintsResult::AssertFailure(f) => coerced_value.add_flag(Flag::AssertFailure(f)),
+            ConstraintsResult::CheckFailures(fs) => coerced_value.add_flag(Flag::CheckFailures(fs)),
+        }
+        Ok(coerced_value)
+    }
+
 }
 
-// pub fn coerce_and_validate<T: TypeCoercer>(
-//     unvalidated_value: &T,
-//     ctx: &ParsingContext,
-//     target: &FieldType,
-//     value: Option<&crate::jsonish::Value>,
-// ) -> Result<BamlValueWithFlags, ParsingError> {
-//     let coerce_result = unvalidated_value.coerce(ctx, target, value);
-//     let validation_results = run_user_checks(coerce_result.into(), unimplemented!())
-// }
 
 pub trait DefaultValue {
     fn default_value(&self, error: Option<&ParsingError>) -> Option<BamlValueWithFlags>;
+}
+
+/// Run all checks and asserts for every field, recursing into fields
+/// that contain classes with further asserts and checks.
+pub fn run_user_checks_shallow(
+    baml_value: &BamlValue,
+    type_: &FieldType,
+) -> Result<ConstraintsResult> {
+
+    match type_ {
+        FieldType::Constrained { base, constraints } => {
+            let mut check_failures: Vec<ConstraintFailure> = vec![];
+            for Constraint { level, expression, label } in constraints.0.iter() {
+                let constraint_succeeded = evaluate_predicate(baml_value, expression)
+                    .map_err(|e| anyhow::anyhow!(format!("Error evaluating constraint: {:?}",e)))?;
+                if !constraint_succeeded {
+                    let constraint_failure = ConstraintFailure { constraint_name: label.to_string() };
+                    match level {
+                        ConstraintLevel::Check => {
+                            check_failures.push(constraint_failure);
+                        },
+                        ConstraintLevel::Assert => {
+                            return Ok(ConstraintsResult::AssertFailure( constraint_failure ));
+                        }
+                    }
+                }
+            }
+            if check_failures.len() == 0 {
+                Ok(ConstraintsResult::Success)
+            } else {
+                Ok(ConstraintsResult::CheckFailures(check_failures))
+            }
+        },
+        _ => Ok(ConstraintsResult::Success)
+    }
+
 }

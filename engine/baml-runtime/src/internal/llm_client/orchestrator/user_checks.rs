@@ -8,46 +8,6 @@ use internal_baml_core::ir::repr::Expression;
 use internal_baml_core::ir::repr::{Class, Field};
 use crate::BamlMap;
 
-/// The result of running validation on a value with checks.
-#[derive(Clone, Debug, PartialEq)]
-pub enum UserChecksResult {
-    Success,
-    AssertFailure(UserFailure),
-    CheckFailures(Vec<UserFailure>),
-}
-
-impl UserChecksResult {
-    /// Combine two `UserChecksResult`s, following the semantics of asserts and
-    /// checks. The first assert short-circuits all other results, otherwise
-    /// failed checks combine, returning `Success` if neither result has any
-    /// failed checks.
-    ///
-    pub fn combine(self, other: Self) -> Self {
-        use UserChecksResult::*;
-        match (&self, &other) {
-            (AssertFailure(_), _) => self,
-            (_, AssertFailure(_)) => other,
-            (CheckFailures(fs1), CheckFailures(fs2)) => {
-                let mut fs = fs1.clone();
-                fs.extend_from_slice(fs2);
-                CheckFailures(fs.to_vec())
-            },
-            (Success, _) => other,
-            (_, Success) => self,
-        }
-    }
-}
-
-/// A single failure of a user-defined @check or @assert.
-#[derive(Clone, Debug, PartialEq)]
-pub struct UserFailure {
-    /// The context of the field.
-    pub field_context: Vec<String>,
-    /// The class field that failed the check.
-    pub field_name: String,
-    /// The user-supplied name for the check that failed.
-    pub check_name: String,
-}
 
 
 /// Run all checks and asserts for every field, recursing into fields
@@ -55,7 +15,7 @@ pub struct UserFailure {
 pub fn run_user_checks(
     baml_value: &BamlValue,
     typing_env: &HashMap<&str, &Class>
-) -> Result<UserChecksResult> {
+) -> Result<ConstraintsResult> {
 
     // List all classes of this value, including the top-level class.
     let contained = contained_classes(vec![], baml_value);
@@ -84,16 +44,18 @@ pub fn run_user_checks(
                  type_,
              )
         )
-        .collect::<Result<Vec<UserChecksResult>>>()?;
+        .collect::<Result<Vec<ConstraintsResult>>>()?;
 
     dbg!(&results);
-    let result = results
+    let fold = results
         .into_iter()
-        .fold(UserChecksResult::Success, |res, acc| res.combine(acc.clone()));
+        .fold(ConstraintsResult::Success, |res, acc| res.combine(acc.clone()));
+    let result = fold;
     dbg!(&result);
     Ok(result)
 
 }
+
 
 /// List all classes contained in a BamlValue, recursively.
 /// For a BamlValue::Class, return all fields that are also classes.
@@ -139,7 +101,7 @@ pub fn check_class(
     field_context: Vec<String>,
     (class_name, class_fields): (String, BamlMap<String, BamlValue>),
     class_type: &Class,
-) -> Result<UserChecksResult> {
+) -> Result<ConstraintsResult> {
 
     // Run checks in each field.
     let result = class_type
@@ -155,9 +117,9 @@ pub fn check_class(
             dbg!((&field_context, &res));
             res
         })
-        .collect::<Result<Vec<UserChecksResult>>>()?
+        .collect::<Result<Vec<ConstraintsResult>>>()?
         .iter()
-        .fold(UserChecksResult::Success, |res, acc| res.combine(acc.clone()));
+        .fold(ConstraintsResult::Success, |res, acc| res.combine(acc.clone()));
     dbg!(&result);
 
     Ok(result)
@@ -170,7 +132,7 @@ pub fn run_user_checks_field(
     field_context: Vec<String>,
     value: &BamlValue,
     type_: &Field,
-) -> Result<UserChecksResult> {
+) -> Result<ConstraintsResult> {
     let field_type = type_.r#type.elem.clone();
     let field_name = type_.name.to_string();
 
@@ -181,15 +143,15 @@ pub fn run_user_checks_field(
         }?;
         let res = evaluate_predicate(&value, predicate)?;
         if !res {
-            let failure = UserFailure {
+            let failure = ConstraintFailure {
                 field_context: field_context.clone(),
                 field_name: type_.name.clone(),
                 check_name: assert_name.to_string()
             };
-            return Ok(UserChecksResult::AssertFailure(failure));
+            return Ok(ConstraintsResult::AssertFailure(failure));
         }
     }
-    let failed_checks : Vec<UserFailure> = type_
+    let failed_checks : Vec<ConstraintFailure> = type_
         .r#type
         .attributes
         .checks
@@ -203,7 +165,7 @@ pub fn run_user_checks_field(
                 |r| if r {
                     None
                 } else {
-                    Some(UserFailure {
+                    Some(ConstraintFailure {
                         field_context: field_context.clone(),
                         field_name: field_name.clone(),
                         check_name: check_name.to_string()
@@ -215,9 +177,9 @@ pub fn run_user_checks_field(
         )
         .collect::<Result<Vec<_>>>()?;
     if failed_checks.len() > 0 {
-        Ok(UserChecksResult::CheckFailures(failed_checks))
+        Ok(ConstraintsResult::CheckFailures(failed_checks))
     } else {
-        Ok(UserChecksResult::Success)
+        Ok(ConstraintsResult::Success)
     }
 
 }
@@ -275,26 +237,26 @@ mod tests {
                 &BamlValue::Int(10),
                 &field_typedef,
             ).unwrap(),
-            UserChecksResult::Success
+            ConstraintsResult::Success
         )
     }
 
     #[test]
     fn test_combine_results() {
-        fn failure() -> UserFailure {
-            UserFailure { field_context: vec![], field_name: "test".to_string(), check_name: "test".to_string() }
+        fn failure() -> ConstraintFailure {
+            ConstraintFailure { field_context: vec![], field_name: "test".to_string(), check_name: "test".to_string() }
         }
-        fn ok() -> UserChecksResult {
-            UserChecksResult::Success
+        fn ok() -> ConstraintsResult {
+            ConstraintsResult::Success
         }
-        fn assert() -> UserChecksResult {
-            UserChecksResult::AssertFailure(failure())
+        fn assert() -> ConstraintsResult {
+            ConstraintsResult::AssertFailure(failure())
         }
-        fn check_1() -> UserChecksResult {
-            UserChecksResult::CheckFailures(vec![failure()])
+        fn check_1() -> ConstraintsResult {
+            ConstraintsResult::CheckFailures(vec![failure()])
         }
-        fn check_2() -> UserChecksResult {
-            UserChecksResult::CheckFailures(vec![failure(), failure()])
+        fn check_2() -> ConstraintsResult {
+            ConstraintsResult::CheckFailures(vec![failure(), failure()])
         }
 
         // Identity checks.
@@ -450,7 +412,7 @@ mod tests {
         let (foo, _bar, _baz, _qux, _quxs) = mk_example_instance(vec![2,3,4,5]);
         let types = mk_example_typing_env();
         let res = run_user_checks(&foo, &to_refs(&types)).unwrap();
-        assert_eq!(res, UserChecksResult::Success);
+        assert_eq!(res, ConstraintsResult::Success);
     }
 
     #[test]
@@ -458,8 +420,8 @@ mod tests {
         let (foo, _bar, _baz, _qux, _quxs) = mk_example_instance(vec![2]);
         let types = mk_example_typing_env();
         let res = run_user_checks(&foo, &to_refs(&types)).unwrap();
-        assert_eq!(res, UserChecksResult::AssertFailure(
-            UserFailure {
+        assert_eq!(res, ConstraintsResult::AssertFailure(
+            ConstraintFailure {
                 field_context: vec![],
                 field_name: "quxs".to_string(),
                 check_name: "this|length > 2".to_string(),
@@ -472,18 +434,18 @@ mod tests {
         let (foo, _bar, _baz, _qux, _quxs) = mk_example_instance(vec![0, 0, 0]);
         let types = mk_example_typing_env();
         let res = run_user_checks(&foo, &to_refs(&types)).unwrap();
-        assert_eq!(res, UserChecksResult::CheckFailures(vec![
-            UserFailure {
+        assert_eq!(res, ConstraintsResult::CheckFailures(vec![
+            ConstraintFailure {
                 field_context: vec!["quxs".to_string(), "0".to_string()],
                 field_name: "i".to_string(),
                 check_name: "this >= 2".to_string(),
             },
-            UserFailure {
+            ConstraintFailure {
                 field_context: vec!["quxs".to_string(), "1".to_string()],
                 field_name: "i".to_string(),
                 check_name: "this >= 2".to_string(),
             },
-            UserFailure {
+            ConstraintFailure {
                 field_context: vec!["quxs".to_string(), "2".to_string()],
                 field_name: "i".to_string(),
                 check_name: "this >= 2".to_string(),

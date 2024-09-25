@@ -1,3 +1,5 @@
+use baml_types::ConstraintFailure;
+
 use super::{coercer::ParsingError, types::BamlValueWithFlags};
 
 #[derive(Debug, Clone)]
@@ -42,6 +44,10 @@ pub enum Flag {
 
     // X -> Object convertions.
     NoFields(Option<crate::jsonish::Value>),
+
+    // Constraint results.
+    AssertFailure(ConstraintFailure),
+    CheckFailures(Vec<ConstraintFailure>),
 }
 
 #[derive(Clone)]
@@ -181,6 +187,15 @@ impl std::fmt::Display for Flag {
                     writeln!(f, "{:#?}", value)?;
                 } else {
                     writeln!(f, "<empty>")?;
+                }
+            }
+            Flag::AssertFailure(ConstraintFailure{ constraint_name }) => {
+                write!(f, "Failed assert: {}", constraint_name)?;
+            }
+            Flag::CheckFailures(cs) => {
+                write!(f, "Failed {} checks:", cs.len())?;
+                for ConstraintFailure{ constraint_name } in cs.iter() {
+                    write!(f, "  - {}", constraint_name)?;
                 }
             }
         }
