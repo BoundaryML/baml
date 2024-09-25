@@ -8,12 +8,11 @@ pub enum ToStringAttributes {
     Static(StaticStringAttributes),
 }
 
-
 ///
 #[derive(Debug, Default)]
 pub struct StaticStringAttributes {
     description: Option<Expression>,
-    alias: Option<StringId>, // TODO: This should be a LazyExpression.
+    alias: Option<StringId>, // TODO: This should be an Expression.
     asserts: Vec<(String, Expression)>,
     checks: Vec<(String, Expression)>,
 }
@@ -21,14 +20,13 @@ pub struct StaticStringAttributes {
 // TODO: (Greg) replace getters/setters with public fields,
 // because getters/setters aren't adding any logic.
 impl StaticStringAttributes {
-
     /// Set a description.
-    pub fn add_description(&mut self, description: Expression){
+    pub fn add_description(&mut self, description: Expression) {
         self.description.replace(description);
     }
 
     /// Get the description.
-    pub fn description(&self) -> &Option<Expression>{
+    pub fn description(&self) -> &Option<Expression> {
         &self.description
     }
 
@@ -61,5 +59,4 @@ impl StaticStringAttributes {
     pub fn checks(&self) -> &[(String, Expression)] {
         self.checks.as_ref()
     }
-
 }

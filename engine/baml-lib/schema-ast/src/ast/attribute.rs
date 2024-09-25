@@ -33,6 +33,11 @@ impl Attribute {
     pub fn span_for_argument(&self, argument: ArguementId) -> Span {
         self.arguments[argument].span.clone()
     }
+
+    pub fn eq_up_to_span(&self, other: &Attribute) {
+        assert_eq!(self.name.to_string(), other.name.to_string());
+        assert_eq!(self.parenthesized, other.parenthesized);
+    }
 }
 
 impl WithIdentifier for Attribute {

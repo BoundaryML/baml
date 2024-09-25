@@ -56,6 +56,12 @@ pub struct Argument {
     pub span: Span,
 }
 
+impl Argument {
+    pub fn eq_up_to_span(&self, other: &Argument) {
+        assert_eq!(self.to_string(), other.to_string())
+    }
+}
+
 impl Display for Argument {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.value, f)

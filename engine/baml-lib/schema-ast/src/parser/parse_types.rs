@@ -243,18 +243,26 @@ fn parse_map(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType>
 
 fn parse_group(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     assert_correct_parser!(pair, Rule::group);
+    let mut attributes = Vec::new();
+    let mut field_type = None;
 
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::openParan | Rule::closeParan => continue,
             Rule::field_type => {
-                return parse_field_type(current, diagnostics);
+                field_type = parse_field_type(current, diagnostics);
+            }
+            Rule::field_attribute => {
+                let mut attr = parse_attribute(current, diagnostics);
+                attr.parenthesized = true;
+                attributes.push(attr);
             }
             _ => unreachable_rule!(current, Rule::group),
         }
     }
 
-    unreachable!("impossible group parsing");
+    field_type.as_mut().map(|ft| ft.set_attributes(attributes));
+    field_type
 }
 
 fn parse_tuple(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
@@ -268,6 +276,11 @@ fn parse_tuple(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         match current.as_rule() {
             Rule::openParan | Rule::closeParan => continue,
 
+            Rule::field_type_with_attr => {
+                if let Some(f) = parse_field_type_with_attr(current, diagnostics) {
+                    fields.push(f)
+                }
+            }
             Rule::field_type => {
                 if let Some(f) = parse_field_type(current, diagnostics) {
                     fields.push(f)

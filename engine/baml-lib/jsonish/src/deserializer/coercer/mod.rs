@@ -249,23 +249,19 @@ pub trait TypeCoercer {
         value: Option<&crate::jsonish::Value>,
     ) -> Result<BamlValueWithFlags, ParsingError> {
         let mut coerced_value = unvalidated_value.coerce(ctx, target, value)?;
-        let constraints_result = run_user_checks_shallow(
-            &coerced_value.clone().into(),
-            target
-        ).map_err(|e| ParsingError {
-            reason: format!("Failed to evaluate constraints: {:?}", e),
-            scope: ctx.scope.clone(),
-        })?;
+        let constraints_result = run_user_checks_shallow(&coerced_value.clone().into(), target)
+            .map_err(|e| ParsingError {
+                reason: format!("Failed to evaluate constraints: {:?}", e),
+                scope: ctx.scope.clone(),
+            })?;
         match constraints_result {
-            ConstraintsResult::Success => {},
+            ConstraintsResult::Success => {}
             ConstraintsResult::AssertFailure(f) => coerced_value.add_flag(Flag::AssertFailure(f)),
             ConstraintsResult::CheckFailures(fs) => coerced_value.add_flag(Flag::CheckFailures(fs)),
         }
         Ok(coerced_value)
     }
-
 }
-
 
 pub trait DefaultValue {
     fn default_value(&self, error: Option<&ParsingError>) -> Option<BamlValueWithFlags>;
@@ -277,21 +273,29 @@ pub fn run_user_checks_shallow(
     baml_value: &BamlValue,
     type_: &FieldType,
 ) -> Result<ConstraintsResult> {
-
     match type_ {
-        FieldType::Constrained { base, constraints } => {
+        FieldType::Constrained { constraints, .. } => {
             let mut check_failures: Vec<ConstraintFailure> = vec![];
-            for Constraint { level, expression, label } in constraints.0.iter() {
-                let constraint_succeeded = evaluate_predicate(baml_value, expression)
-                    .map_err(|e| anyhow::anyhow!(format!("Error evaluating constraint: {:?}",e)))?;
+            for Constraint {
+                level,
+                expression,
+                label,
+            } in constraints.0.iter()
+            {
+                let constraint_succeeded =
+                    evaluate_predicate(baml_value, expression).map_err(|e| {
+                        anyhow::anyhow!(format!("Error evaluating constraint: {:?}", e))
+                    })?;
                 if !constraint_succeeded {
-                    let constraint_failure = ConstraintFailure { constraint_name: label.to_string() };
+                    let constraint_failure = ConstraintFailure {
+                        constraint_name: label.to_string(),
+                    };
                     match level {
                         ConstraintLevel::Check => {
                             check_failures.push(constraint_failure);
-                        },
+                        }
                         ConstraintLevel::Assert => {
-                            return Ok(ConstraintsResult::AssertFailure( constraint_failure ));
+                            return Ok(ConstraintsResult::AssertFailure(constraint_failure));
                         }
                     }
                 }
@@ -301,8 +305,7 @@ pub fn run_user_checks_shallow(
             } else {
                 Ok(ConstraintsResult::CheckFailures(check_failures))
             }
-        },
-        _ => Ok(ConstraintsResult::Success)
+        }
+        _ => Ok(ConstraintsResult::Success),
     }
-
 }

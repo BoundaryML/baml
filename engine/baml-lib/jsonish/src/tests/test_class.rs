@@ -693,3 +693,53 @@ FieldType::Class("Schema".to_string()),
     "other_group": "other"
   }
 );
+
+const SMALL: &str = r##"
+class Nested {
+  foo (int | string)[] @alias("bar")
+}
+
+class Small {
+  nested (int | Nested) @alias("n")
+}
+"##;
+
+// TODO: (Greg) Discover behavior I actually
+// want to test and then fix the names
+// to reflect that.
+test_deserializer!(
+    test_small,
+    SMALL,
+    r#"
+```json```
+{
+  "n": {
+    "bar": ["hi", 2]
+  }
+}
+"#,
+    FieldType::Class("Small".to_string()),
+    {
+       "nested": {
+           "foo": ["hi", 2]
+        }
+    }
+);
+
+// TODO: (Greg) Discover behavior I actually
+// want to test and then fix the names
+// to reflect that.
+test_deserializer!(
+    test_small_2,
+    SMALL,
+    r#"
+```json```
+{
+    "bar": ["hi", 2]
+}
+"#,
+    FieldType::Class("Nested".to_string()),
+    {
+        "foo": ["hi", 2]
+    }
+);

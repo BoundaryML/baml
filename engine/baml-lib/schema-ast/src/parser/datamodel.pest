@@ -64,8 +64,8 @@ map = { "map" ~ "<" ~ field_type ~ "," ~ field_type ~ ">" }
 
 openParan  = { "(" }
 closeParan = { ")" }
-group      = { openParan ~ field_type ~ closeParan }
-tuple      = { openParan ~ field_type ~ ("," ~ field_type)+ ~ closeParan }
+group      = { openParan ~ field_type ~ (field_attribute)* ~ closeParan }
+tuple      = { openParan ~ field_type_with_attr ~ ("," ~ field_type_with_attr)+ ~ closeParan }
 
 base_type_without_array = { map | identifier | group | tuple }
 

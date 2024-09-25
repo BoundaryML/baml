@@ -282,6 +282,106 @@ impl FieldType {
             },
         }
     }
+
+    pub fn eq_up_to_span(&self, other: &Self) {
+        use FieldType::*;
+
+        fn attrs_eq(attrs1: &Option<Vec<Attribute>>, attrs2: &Option<Vec<Attribute>>) {
+            let attrs1 = attrs1.clone().unwrap_or(vec![]);
+            let attrs2 = attrs2.clone().unwrap_or(vec![]);
+            assert_eq!(
+                attrs1.len(),
+                attrs2.len(),
+                "Attribute lengths are different"
+            );
+            for (x, y) in attrs1.iter().zip(attrs2) {
+                x.eq_up_to_span(&y);
+            }
+        }
+        match (self, other) {
+            (Symbol(arity1, ident1, attrs1), Symbol(arity2, ident2, attrs2)) => {
+                assert_eq!(arity1, arity2);
+                assert_eq!(ident1, ident2);
+                attrs_eq(attrs1, attrs2);
+            }
+            (Symbol(..), _) => {
+                panic!(
+                    "Different types:\n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+            (Primitive(arity1, prim_ty1, _, attrs1), Primitive(arity2, prim_ty2, _, attrs2)) => {
+                assert_eq!(arity1, arity2);
+                assert_eq!(prim_ty1, prim_ty2);
+                attrs_eq(attrs1, attrs2);
+            }
+            (Primitive(..), _) => {
+                panic!(
+                    "Different types: \n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+            (List(inner1, dims1, _, attrs1), List(inner2, dims2, _, attrs2)) => {
+                inner1.eq_up_to_span(inner2);
+                assert_eq!(dims1, dims2);
+                attrs_eq(attrs1, attrs2);
+            }
+            (List(..), _) => {
+                panic!(
+                    "Different types: \n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+            (Tuple(arity1, inner1, _, attrs1), Tuple(arity2, inner2, _, attrs2)) => {
+                assert_eq!(arity1, arity2);
+                for (t1, t2) in inner1.iter().zip(inner2) {
+                    t1.eq_up_to_span(t2);
+                }
+                attrs_eq(attrs1, attrs2);
+            }
+            (Tuple(..), _) => {
+                panic!(
+                    "Different types: \n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+            (Union(arity1, variants1, _, attrs1), Union(arity2, variants2, _, attrs2)) => {
+                assert_eq!(arity1, arity2);
+                assert_eq!(
+                    variants1.len(),
+                    variants2.len(),
+                    "Unions have the same number of variants"
+                );
+                for (v1, v2) in variants1.iter().zip(variants2) {
+                    v1.eq_up_to_span(v2);
+                }
+                attrs_eq(attrs1, attrs2);
+            }
+            (Union(..), _) => {
+                panic!(
+                    "Different types: \n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+            (Map(kv1, _, attrs1), Map(kv2, _, attrs2)) => {
+                kv1.0.eq_up_to_span(&kv2.0);
+                kv1.1.eq_up_to_span(&kv2.1);
+                attrs_eq(attrs1, attrs2);
+            }
+            (Map(..), _) => {
+                panic!(
+                    "Different types: \n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+        }
+    }
 }
 
 // Impl display for FieldType
@@ -298,7 +398,7 @@ impl std::fmt::Display for FieldType {
             }
             FieldType::Union(arity, ft, ..) => {
                 let mut ft = ft.iter().map(|t| t.to_string()).collect::<Vec<_>>();
-                ft.sort();
+                ft.sort(); // Greg: Why??
                 write!(
                     f,
                     "({}){}",

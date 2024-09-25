@@ -64,6 +64,11 @@ impl Span {
             _ => ((0, 0), (0, 0)),
         }
     }
+
+    pub fn fake() -> Span {
+        let fake_source = ("fake-file.baml".into(), "fake contents").into();
+        Span::empty(fake_source)
+    }
 }
 
 impl From<(SourceFile, pest::Span<'_>)> for Span {

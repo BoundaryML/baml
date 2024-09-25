@@ -1,8 +1,8 @@
 use baml_types::TypeValue;
 
 use crate::ast::Span;
-use std::fmt;
 use internal_baml_jinja::LazyExpression;
+use std::fmt;
 
 use super::{Identifier, WithName, WithSpan};
 
@@ -252,7 +252,7 @@ impl Expression {
     pub fn as_string_value_lazy(&self) -> Option<(LazyExpression<String>, &Span)> {
         // Shortcut to an evaluaded lazy string if the value is already a string.
         if let Some((s, span)) = self.as_string_value() {
-            return Some((LazyExpression::Ready(s.to_string()), span))
+            return Some((LazyExpression::Ready(s.to_string()), span));
         }
 
         // Otherwise, if we have a jinja expression, return it as a lazy expression.
@@ -355,5 +355,9 @@ impl Expression {
                 | Expression::Identifier(Identifier::Invalid(_, _))
                 | Expression::Identifier(Identifier::Local(_, _))
         )
+    }
+
+    pub fn eq_up_to_span(&self, other: &Expression) {
+        assert_eq!(self.to_string(), other.to_string());
     }
 }

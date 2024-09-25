@@ -36,20 +36,19 @@ mod names;
 mod printer;
 mod types;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 use either::Either;
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::{SchemaAst, WithIdentifier, WithName, WithSpan};
 pub use types::{
-    ContantDelayStrategy, ExponentialBackoffStrategy, PrinterType,
-    PromptAst, PromptVariable, RetryPolicy, RetryPolicyStrategy, StaticStringAttributes,
-    StaticType, ToStringAttributes,
+    ContantDelayStrategy, ExponentialBackoffStrategy, PrinterType, PromptAst, PromptVariable,
+    RetryPolicy, RetryPolicyStrategy, StaticStringAttributes, StaticType, ToStringAttributes,
 };
 
 use self::{context::Context, interner::StringId, types::Types};
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use names::Names;
 pub use printer::WithSerialize;
 
