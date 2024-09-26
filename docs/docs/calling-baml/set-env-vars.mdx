@@ -4,6 +4,23 @@ slug: docs/calling-baml/set-env-vars
 ---
 
 
+## Environment Variables in BAML
+
+Environment variables are primarily used in clients to propagate authorization
+credentials, such as API keys, like so:
+
+```baml
+
+client<llm> GPT4o {
+  provider baml-openai-chat
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+  }
+}
+```
+
+## Setting Environment Variables in Python/Typescript/etc
 
 The generated BAML client will capture all environment variables when you import it,
 and will not be able to see any environment variables you load after importing
@@ -22,8 +39,11 @@ Any of the following strategies are compatible with BAML:
 <Tip>If BAML doesn't work for your use case, please [contact us]!</Tip>
 
 
-## Loading env variables in your program
+## Modifying env variables in your program
 
+<Info>
+This is available in Baml Version 0.57+
+</Info>
 
 <CodeBlocks>
 
@@ -58,22 +78,6 @@ require 'baml_client'
 
 </CodeBlocks>
 
-
-## Environment Variables in BAML
-
-Environment variables are primarily used in clients to propagate authorization
-credentials, such as API keys, like so:
-
-```baml
-
-client<llm> GPT4o {
-  provider baml-openai-chat
-  options {
-    model gpt-4o
-    api_key env.OPENAI_API_KEY
-  }
-}
-```
 
 We do not currently support any other mechanisms for providing authorization
 credentials, including but not limited to:
