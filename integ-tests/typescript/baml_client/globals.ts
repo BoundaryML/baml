@@ -18,20 +18,17 @@ $ pnpm add @boundaryml/baml
 import { BamlCtxManager, BamlRuntime } from '@boundaryml/baml'
 import { getBamlFiles } from './inlinedbaml'
 
+
 export const DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntime.fromFiles(
   'baml_src',
   getBamlFiles(),
-  process.env,
+  process.env
 )
-export const DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX = new BamlCtxManager(
-  DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME,
-)
+export const DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX = new BamlCtxManager(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
 
-export function resetBamlEnvVars(envVars: Record<string, undefined | string>) {
+
+export function resetBamlEnvVars(envVars: Record<string, string>) {
   if (DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX.allowResets()) {
-    const envVars = Object.fromEntries(
-      Object.entries(envVars).filter((acc, [key, value]): value is string => value !== undefined),
-    )
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.reset('baml_src', getBamlFiles(), envVars)
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX.reset()
   } else {
