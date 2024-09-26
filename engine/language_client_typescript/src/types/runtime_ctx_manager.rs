@@ -29,4 +29,9 @@ impl RuntimeContextManager {
             inner: self.inner.deep_clone(),
         }
     }
+
+    #[napi]
+    pub fn context_depth(&self) -> u32 {
+        self.inner.context_depth() as u32
+    }
 }

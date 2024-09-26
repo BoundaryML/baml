@@ -40,6 +40,32 @@ class CtxManager:
             ctx[thread_id] = self.rt.create_context_manager()
         return ctx[thread_id]
 
+    
+    def allow_reset(self) -> bool:
+        ctx = self.ctx.get()
+        
+        if len(ctx) > 1:
+            print("Too many ctxs!")
+            return False
+
+
+        thread_id = current_thread_id()
+        if thread_id not in ctx:
+            print("Thread not in ctx!")
+            return False        
+
+        for c in ctx.values():
+            if c.context_depth() > 0:
+                print("Context depth is greater than 0!")
+                return False
+    
+
+        return True
+
+    def reset(self) -> None:
+        self.ctx.set({current_thread_id(): self.rt.create_context_manager()})
+        
+
     def upsert_tags(self, **tags: str) -> None:
         mngr = self.__ctx()
         mngr.upsert_tags(tags)
@@ -114,6 +140,7 @@ class CtxManager:
                     self.end_trace(span, response)
                     return response
                 except Exception as e:
+                    print("Except but ending trace!")
                     self.end_trace(span, e)
                     raise e
 

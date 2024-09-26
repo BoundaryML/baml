@@ -21,6 +21,7 @@ export declare class BamlImage {
 export declare class BamlRuntime {
   static fromDirectory(directory: string, envVars: Record<string, string>): BamlRuntime
   static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): BamlRuntime
+  reset(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): void
   createContextManager(): RuntimeContextManager
   callFunction(functionName: string, args: { [string]: any }, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, cb?: ClientRegistry | undefined | null): Promise<FunctionResult>
   callFunctionSync(functionName: string, args: { [string]: any }, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, cb?: ClientRegistry | undefined | null): FunctionResult
@@ -83,6 +84,7 @@ export declare class FunctionResultStream {
 export declare class RuntimeContextManager {
   upsertTags(tags: any): void
   deepClone(): RuntimeContextManager
+  contextDepth(): number
 }
 
 export declare class TraceStats {

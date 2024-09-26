@@ -71,6 +71,19 @@ impl BamlRuntime {
     }
 
     #[napi]
+    pub fn reset(
+        &mut self,
+        root_path: String,
+        files: HashMap<String, String>,
+        env_vars: HashMap<String, String>,
+    ) -> napi::Result<()> {
+        self.inner = CoreRuntime::from_file_content(&root_path, &files, env_vars)
+            .map_err(from_anyhow_error)?
+            .into();
+        Ok(())
+    }
+
+    #[napi]
     pub fn create_context_manager(&self) -> RuntimeContextManager {
         self.inner
             .create_ctx_manager(BamlValue::String("typescript".to_string()), None)

@@ -27,4 +27,9 @@ impl RuntimeContextManager {
             inner: self.inner.deep_clone(),
         }
     }
+
+    #[pyo3()]
+    fn context_depth(&self) -> usize {
+        self.inner.context_depth()
+    }
 }

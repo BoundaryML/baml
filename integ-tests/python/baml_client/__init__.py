@@ -16,6 +16,8 @@
 from . import types
 from . import tracing
 from . import partial_types
+from .globals import reset_baml_env_vars
+
 
 from .async_client import b
 
@@ -26,4 +28,5 @@ __all__ = [
   "partial_types",
   "tracing",
   "types",
+  "reset_baml_env_vars",
 ]

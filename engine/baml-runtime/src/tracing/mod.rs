@@ -46,7 +46,6 @@ pub struct TracingSpan {
 
 pub struct BamlTracer {
     options: APIWrapper,
-    enabled: bool,
     tracer: Option<TracerImpl>,
     trace_stats: TraceStats,
 }
@@ -127,7 +126,6 @@ impl BamlTracer {
             } else {
                 None
             },
-            enabled: options.enabled(),
             options,
             trace_stats,
         };
@@ -162,9 +160,6 @@ impl BamlTracer {
         self.trace_stats.guard().start();
         let span_id = ctx.enter(function_name);
         log::trace!("Entering span {:#?} in {:?}", span_id, function_name);
-        if !self.enabled {
-            return None;
-        }
         let span = TracingSpan {
             span_id,
             params: params.clone(),
