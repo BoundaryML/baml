@@ -170,4 +170,9 @@ impl RuntimeContextManager {
             enum_overrides: Default::default(),
         }
     }
+
+    pub fn context_depth(&self) -> usize {
+        let ctx = self.context.lock().unwrap();
+        ctx.len()
+    }
 }

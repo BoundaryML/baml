@@ -24,38 +24,34 @@ Any of the following strategies are compatible with BAML:
 
 ## Loading env variables in your program
 
-If you do anything to load environment variables in-process - e.g. using a
-`.env` file - make sure to do it before importing the BAML client.
-
-
-<Tip>
-If you run into issues with environment variables not being loaded, try using the `dotenv-cli` option instead. This will set the environment variables for the entire process in your terminal.<br />
-See: Node [dotenv-cli](https://www.npmjs.com/package/dotenv-cli) or Python [python-dotenv](https://pypi.org/project/dotenv-cli/).
-</Tip> 
-
 
 <CodeBlocks>
 
 ```python Python
-import dotenv
-dotenv.load_dotenv()
 
-# Wait to import the BAML client until after loading environment variables
 from baml_client import b
+from baml_client import reset_baml_env_vars
+import os
+import dotenv
+
+dotenv.load_dotenv()
+reset_baml_env_vars(os.environ)
 ```
 
 ```typescript TypeScript
 import dotenv from 'dotenv'
-dotenv.config()
-
 // Wait to import the BAML client until after loading environment variables
-import { b } from 'baml-client'
+import { b, resetBamlEnvVars } from 'baml-client'
+
+dotenv.config()
+resetBamlEnvVars(process.env)
 ```
 
 ```ruby Ruby (beta)
 require 'dotenv/load'
 
 # Wait to import the BAML client until after loading environment variables
+# reset_baml_env_vars is not yet implemented in the Ruby client
 require 'baml_client'
 ```
 

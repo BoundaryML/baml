@@ -94,11 +94,9 @@ export function startServer(options?: LSOptions): void {
           const warnings = params.errors.reduce((acc, [, diagnostics]) => {
             return acc + diagnostics.filter((d) => d.severity === 2).length
           }, 0)
-          try {
-            connection.sendRequest('runtime_diagnostics', { errors, warnings })
-          } catch (e) {
-            console.error('> Error sending runtime_diagnostics', e)
-          }
+          connection.sendRequest('runtime_diagnostics', { errors, warnings }).catch((e) => {
+            console.error('Error sending runtime_diagnostics: ' + e)
+          })
           break
         case 'error':
         case 'warn':

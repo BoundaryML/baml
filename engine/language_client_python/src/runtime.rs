@@ -94,6 +94,19 @@ impl BamlRuntime {
     }
 
     #[pyo3()]
+    fn reset(
+        &mut self,
+        root_path: String,
+        files: HashMap<String, String>,
+        env_vars: HashMap<String, String>,
+    ) -> PyResult<()> {
+        self.inner = CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
+            .map_err(BamlError::from_anyhow)?
+            .into();
+        Ok(())
+    }
+
+    #[pyo3()]
     fn create_context_manager(&self) -> RuntimeContextManager {
         self.inner
             .create_ctx_manager(baml_types::BamlValue::String("python".to_string()), None)

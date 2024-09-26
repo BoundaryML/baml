@@ -14,6 +14,23 @@ export class BamlCtxManager {
     })
   }
 
+  allowResets(): boolean {
+    let store = this.ctx.getStore()
+    if (store === undefined) {
+      return true
+    }
+    if (store.contextDepth() > 0) {
+      return false
+    }
+
+    return true
+  }
+
+  reset(): void {
+    this.ctx = new AsyncLocalStorage<RuntimeContextManager>()
+    this.ctx.enterWith(this.rt.createContextManager())
+  }
+
   upsertTags(tags: Record<string, string>): void {
     const manager = this.ctx.getStore()!
     manager.upsertTags(tags)

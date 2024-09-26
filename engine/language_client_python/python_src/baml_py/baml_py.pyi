@@ -70,6 +70,7 @@ class BamlAudioPy:
 class RuntimeContextManager:
     def upsert_tags(self, tags: Dict[str, Any]) -> None: ...
     def deep_clone(self) -> RuntimeContextManager: ...
+    def context_depth(self) -> int: ...
 
 class BamlRuntime:
     @staticmethod
@@ -86,6 +87,9 @@ class BamlRuntime:
     def from_files(
         root_path: str, files: Dict[str, str], env_vars: Dict[str, str]
     ) -> BamlRuntime: ...
+    def reset(
+        self, root_path: str, files: Dict[str, str], env_vars: Dict[str, str]
+    ) -> None: ...
     def stream_function(
         self,
         function_name: str,

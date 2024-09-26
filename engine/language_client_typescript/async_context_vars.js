@@ -14,6 +14,20 @@ class BamlCtxManager {
             this.rt.flush();
         });
     }
+    allowResets() {
+        let store = this.ctx.getStore();
+        if (store === undefined) {
+            return true;
+        }
+        if (store.contextDepth() > 0) {
+            return false;
+        }
+        return true;
+    }
+    reset() {
+        this.ctx = new async_hooks_1.AsyncLocalStorage();
+        this.ctx.enterWith(this.rt.createContextManager());
+    }
     upsertTags(tags) {
         const manager = this.ctx.getStore();
         manager.upsertTags(tags);
