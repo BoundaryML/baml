@@ -45,7 +45,7 @@ pub(crate) fn parse_named_argument_list(
                     name = Some(parse_identifier(arg, diagnostics));
                 }
                 Rule::colon => {}
-                Rule::field_type => {
+                Rule::field_type | Rule::field_type_chain => {
                     r#type = Some(parse_function_arg(arg, diagnostics)?);
                 }
                 _ => parsing_catch_all(arg, "named_argument_list"),
@@ -79,7 +79,7 @@ pub fn parse_function_arg(
     diagnostics: &mut Diagnostics,
 ) -> Result<BlockArg, DatamodelError> {
     assert!(
-        pair.as_rule() == Rule::field_type,
+        [Rule::field_type, Rule::field_type_chain].contains(&pair.as_rule()),
         "parse_function_arg called on the wrong rule: {:?}",
         pair.as_rule()
     );
