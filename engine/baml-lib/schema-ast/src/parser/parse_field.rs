@@ -4,7 +4,7 @@ use super::{
     parse_comments::*,
     parse_expression::parse_expression,
     parse_identifier::parse_identifier,
-    parse_types::parse_field_type,
+    parse_types::{parse_field_type, reassociate_union_attributes},
     Rule,
 };
 use crate::ast::*;
@@ -124,7 +124,6 @@ fn merge_comments(existing: Option<Comment>, new: Option<Comment>) -> Option<Com
 }
 
 pub fn parse_field_type_chain(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    dbg!("");
     let mut types = Vec::new();
     let mut operators = Vec::new();
 
@@ -169,34 +168,19 @@ pub(crate) fn parse_field_type_with_attr(
 
     match field_type {
         Some(mut ft) => {
-            dbg!(&ft);
             // ft.set_attributes(field_attributes);
             match &mut ft {
                 FieldType::Union(_arity, ref mut variants, _, _) => {
-                    panic!("UNION");
-                    if let Some(last_variant) = variants.last_mut() {
-                        // last_type.reset_attributes();
-                        // log::info!("last_type: {:#?}", last_type);
-                        let last_variant_attributes = last_variant.attributes().to_owned();
-                        let (attrs_for_variant, attrs_for_union): (Vec<Attribute>, Vec<Attribute>) =
-                            last_variant_attributes
-                                .into_iter()
-                                .partition(|attr| attr.parenthesized);
-                        dbg!(&attrs_for_variant);
-                        dbg!(&attrs_for_union);
-                        last_variant.set_attributes(attrs_for_variant);
-                        ft.extend_attributes(attrs_for_union);
-                        ft.extend_attributes(field_attributes);
-                    }
+                    reassociate_union_attributes(&mut ft);
 
                     // if let Some(attributes) = attributes.as_ref() {
                     //     ft.set_attributes(attributes.clone()); // Clone the borrowed `Vec<Attribute>`
                     // }
                 }
                 _ => {
-                    ft.set_attributes(field_attributes);
                 }
             }
+            ft.extend_attributes(field_attributes);
 
             Some(ft) // Return the field type with attributes
         }
@@ -351,7 +335,7 @@ mod tests {
     #[test]
     fn nested_parentheses() {
         test_parse_baml_type! {
-            source: r#"(int | (bool | string)) @alias("hi")"#,
+            source: r#"(int | (bool | string)) @description("hi")"#,
             target: FieldType::Union(
                 FieldArity::Required,
                 vec![

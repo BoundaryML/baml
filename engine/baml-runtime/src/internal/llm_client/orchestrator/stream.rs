@@ -16,7 +16,8 @@ use crate::{
     FunctionResult, RuntimeContext,
 };
 
-use super::{user_checks::UserFailure, OrchestrationScope, OrchestratorNodeIterator};
+use super::{OrchestrationScope, OrchestratorNodeIterator};
+use baml_types::{ConstraintFailure};
 
 pub async fn orchestrate_stream<F>(
     iter: OrchestratorNodeIterator,
@@ -32,7 +33,7 @@ pub async fn orchestrate_stream<F>(
         OrchestrationScope,
         LLMResponse,
         Option<Result<BamlValueWithFlags>>,
-        Vec<UserFailure>,
+        Vec<ConstraintFailure>,
     )>,
     Duration,
 )

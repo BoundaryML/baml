@@ -1,7 +1,7 @@
 use anyhow::Result;
 use anyhow::Context;
 use std::collections::HashMap;
-use baml_types::BamlValue;
+use baml_types::{BamlValue, ConstraintFailure, ConstraintsResult};
 use internal_baml_jinja::evaluate_predicate;
 
 use internal_baml_core::ir::repr::Expression;
@@ -144,9 +144,7 @@ pub fn run_user_checks_field(
         let res = evaluate_predicate(&value, predicate)?;
         if !res {
             let failure = ConstraintFailure {
-                field_context: field_context.clone(),
-                field_name: type_.name.clone(),
-                check_name: assert_name.to_string()
+                constraint_name: assert_name.to_string()
             };
             return Ok(ConstraintsResult::AssertFailure(failure));
         }
@@ -156,7 +154,7 @@ pub fn run_user_checks_field(
         .attributes
         .checks
         .iter()
-        .filter_map(|(check_name, check_expr)| {
+        .filter_map(|(constraint_name, check_expr)| {
             let predicate = match check_expr {
                 Expression::JinjaExpression(e) => Ok(e),
                 _ => Err(anyhow::anyhow!("Expected JinjaExpression")),
@@ -166,9 +164,7 @@ pub fn run_user_checks_field(
                     None
                 } else {
                     Some(ConstraintFailure {
-                        field_context: field_context.clone(),
-                        field_name: field_name.clone(),
-                        check_name: check_name.to_string()
+                        constraint_name: constraint_name.to_string()
                     })
                 }
             ).transpose()
@@ -244,7 +240,7 @@ mod tests {
     #[test]
     fn test_combine_results() {
         fn failure() -> ConstraintFailure {
-            ConstraintFailure { field_context: vec![], field_name: "test".to_string(), check_name: "test".to_string() }
+            ConstraintFailure { constraint_name: "test".to_string() }
         }
         fn ok() -> ConstraintsResult {
             ConstraintsResult::Success
@@ -422,9 +418,7 @@ mod tests {
         let res = run_user_checks(&foo, &to_refs(&types)).unwrap();
         assert_eq!(res, ConstraintsResult::AssertFailure(
             ConstraintFailure {
-                field_context: vec![],
-                field_name: "quxs".to_string(),
-                check_name: "this|length > 2".to_string(),
+                constraint_name: "this|length > 2".to_string(),
             }
         ));
     }
@@ -436,19 +430,13 @@ mod tests {
         let res = run_user_checks(&foo, &to_refs(&types)).unwrap();
         assert_eq!(res, ConstraintsResult::CheckFailures(vec![
             ConstraintFailure {
-                field_context: vec!["quxs".to_string(), "0".to_string()],
-                field_name: "i".to_string(),
-                check_name: "this >= 2".to_string(),
+                constraint_name: "this >= 2".to_string(),
             },
             ConstraintFailure {
-                field_context: vec!["quxs".to_string(), "1".to_string()],
-                field_name: "i".to_string(),
-                check_name: "this >= 2".to_string(),
+                constraint_name: "this >= 2".to_string(),
             },
             ConstraintFailure {
-                field_context: vec!["quxs".to_string(), "2".to_string()],
-                field_name: "i".to_string(),
-                check_name: "this >= 2".to_string(),
+                constraint_name: "this >= 2".to_string(),
             }
         ]));
     }

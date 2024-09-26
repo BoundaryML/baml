@@ -278,7 +278,7 @@ impl FieldType {
             | FieldType::Map(.., attr)
             | FieldType::List(.., attr) => match attr.as_mut() {
                 Some(ats) => ats.extend(attributes),
-                None => {}
+                None => { *attr = Some(attributes) }
             },
         }
     }

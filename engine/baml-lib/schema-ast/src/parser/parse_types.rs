@@ -19,7 +19,6 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
         match current.as_rule() {
             Rule::union => {
                 let result = parse_union(current, diagnostics);
-
                 ftype = result;
             }
             Rule::non_union => {
@@ -40,7 +39,7 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
 
     match ftype {
         Some(mut ftype) => {
-            ftype.set_attributes(attributes);
+            ftype.extend_attributes(attributes);
             if arity.is_optional() {
                 match ftype.to_nullable() {
                     Ok(ftype) => Some(ftype),
@@ -79,11 +78,17 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         }
     }
 
-    match types.len() {
+
+
+    let mut union = match types.len() {
         0 => unreachable!("A union must have atleast 1 type"),
         1 => Some(types[0].to_owned()),
         _ => Some(FieldType::Union(FieldArity::Required, types, span, None)),
-    }
+    };
+    union.as_mut().map(|ft| reassociate_union_attributes(ft));
+    union
+
+
 }
 
 fn parse_base_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
@@ -169,7 +174,6 @@ fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
         match current.as_rule() {
             Rule::openParan | Rule::closeParan => continue,
             Rule::field_type_with_attr => {
-                eprintln!("About to call parse_field_type_with_attr from parenthesized_type");
                 let mut type_ = parse_field_type_with_attr(current, diagnostics);
                 type_.as_mut().map(|t| {
                     let protected_attributes = t
@@ -261,7 +265,7 @@ fn parse_group(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         }
     }
 
-    field_type.as_mut().map(|ft| ft.set_attributes(attributes));
+    field_type.as_mut().map(|ft| ft.extend_attributes(attributes));
     field_type
 }
 
@@ -294,6 +298,25 @@ fn parse_tuple(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         0 => None,
         1 => Some(fields[0].to_owned()),
         _ => Some(FieldType::Tuple(FieldArity::Required, fields, span, None)),
+    }
+}
+
+pub fn reassociate_union_attributes(field_type: &mut FieldType) {
+    match field_type {
+        FieldType::Union(_arity, ref mut variants, _, _) => {
+            if let Some(last_variant) = variants.last_mut() {
+                let last_variant_attributes = last_variant.attributes().to_owned();
+                let (attrs_for_variant, attrs_for_union): (Vec<Attribute>, Vec<Attribute>) =
+                    last_variant_attributes
+                    .into_iter()
+                    .partition(|attr| attr.parenthesized);
+                last_variant.set_attributes(attrs_for_variant);
+                field_type.extend_attributes(attrs_for_union);
+            }
+        },
+        _ => {
+            eprintln!("TODO: Warn, this should only be called when parsing a union.");
+        }
     }
 }
 

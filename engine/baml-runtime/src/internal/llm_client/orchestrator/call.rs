@@ -17,7 +17,8 @@ use crate::{
     RuntimeContext,
 };
 
-use super::{user_checks::{run_user_checks, UserChecksResult, UserFailure}, OrchestrationScope, OrchestratorNodeIterator};
+use baml_types::{ConstraintFailure, ConstraintsResult};
+use super::{user_checks::{run_user_checks}, OrchestrationScope, OrchestratorNodeIterator};
 
 pub async fn orchestrate(
     iter: OrchestratorNodeIterator,
@@ -31,7 +32,7 @@ pub async fn orchestrate(
         OrchestrationScope,
         LLMResponse,
         Option<Result<BamlValueWithFlags>>,
-        Vec<UserFailure>,
+        Vec<ConstraintFailure>,
     )>,
     Duration,
 ) {
@@ -61,13 +62,13 @@ pub async fn orchestrate(
                     .collect();
                 run_user_checks(&val, &typing_context)
             },
-            _ => Ok(UserChecksResult::Success),
+            _ => Ok(ConstraintsResult::Success),
         };
 
         let (checked_response, check_failures) = match user_checks_result {
-            Ok(UserChecksResult::Success) => (parsed_response, vec![]),
-            Ok(UserChecksResult::AssertFailure(f)) => (Some(Err(anyhow::anyhow!(format!("TODO: got assert failure: {:?}", f)))), vec![]),
-            Ok(UserChecksResult::CheckFailures(fs)) => (parsed_response, fs),
+            Ok(ConstraintsResult::Success) => (parsed_response, vec![]),
+            Ok(ConstraintsResult::AssertFailure(f)) => (Some(Err(anyhow::anyhow!(format!("TODO: got assert failure: {:?}", f)))), vec![]),
+            Ok(ConstraintsResult::CheckFailures(fs)) => (parsed_response, fs),
             Err(e) => (Some(Err(anyhow::anyhow!("Failed to run user_checks: {}", e))), vec![]),
         };
 
