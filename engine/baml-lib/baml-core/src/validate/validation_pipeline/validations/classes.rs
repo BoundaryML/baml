@@ -15,6 +15,13 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             }
         }
 
+        for c in cls.dynamic_fields() {
+            let field = c.ast_field();
+            if let Some(ft) = &field.expr {
+                validate_type(ctx, &ft);
+            }
+        }
+
         for args in cls.walk_input_args() {
             let arg = args.ast_arg();
             validate_type(ctx, &arg.1.field_type)
