@@ -526,16 +526,6 @@ impl StaticType {
     }
 }
 
-/// An opaque identifier for a class field in a schema that is dynamic.
-#[derive(Copy, Clone, PartialEq, Debug, Hash, Eq, PartialOrd, Ord)]
-pub struct DynamicFieldId(u32);
-
-impl From<FieldId> for DynamicFieldId {
-    fn from(id: FieldId) -> Self {
-        DynamicFieldId(id.0)
-    }
-}
-
 /// An opaque identifier for a class field.
 #[derive(Copy, Clone, PartialEq, Debug, Eq, Hash)]
 pub struct StaticFieldId(u32);
