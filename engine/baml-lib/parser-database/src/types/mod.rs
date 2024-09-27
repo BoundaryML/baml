@@ -235,34 +235,6 @@ pub(super) struct Types {
         HashMap<either::Either<ast::TemplateStringId, ast::ValExpId>, TemplateStringProperties>,
 }
 
-impl Types {
-    pub(super) fn refine_class_field(
-        &self,
-        (class_id, field_id): (TypeExpId, FieldId),
-    ) -> either::Either<StaticFieldId, DynamicFieldId> {
-        match self.class_attributes.get(&class_id) {
-            Some(attrs) => match attrs.field_serilizers.get(&field_id) {
-                // Some(ToStringAttributes::Dynamic(_attrs)) => either::Either::Right(field_id.into()),
-                _ => either::Either::Left(field_id.into()),
-            },
-            None => either::Either::Left(field_id.into()),
-        }
-    }
-
-    pub(super) fn refine_enum_value(
-        &self,
-        (enum_id, value_id): (TypeExpId, FieldId),
-    ) -> either::Either<StaticFieldId, DynamicFieldId> {
-        match self.enum_attributes.get(&enum_id) {
-            Some(attrs) => match attrs.value_serilizers.get(&value_id) {
-                // Some(ToStringAttributes::Dynamic(_attrs)) => either::Either::Right(value_id.into()),
-                _ => either::Either::Left(value_id.into()),
-            },
-            None => either::Either::Left(value_id.into()),
-        }
-    }
-}
-
 fn visit_template_string<'db>(
     idx: ast::TemplateStringId,
     template_string: &'db ast::TemplateString,
