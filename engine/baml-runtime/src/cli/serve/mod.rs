@@ -380,21 +380,15 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         extract::Path(b_fn): extract::Path<String>,
         extract::Json(b_args): extract::Json<serde_json::Value>,
     ) -> Response {
-        let b_options = match b_args.get("__baml_options") {
-            Some(options_value) => {
-                match serde_json::from_value::<BamlOptions>(options_value.clone()) {
-                    Ok(options) => Some(options),
-                    Err(e) => {
-                        return BamlError::InvalidArgument(format!(
-                            "Failed to parse __baml_options: {:?}",
-                            e
-                        ))
-                        .into_response()
-                    }
-                }
-            }
-            None => None,
-        };
+        let b_options = b_args.get("__baml_options").and_then(|options_value| {
+            serde_json::from_value::<BamlOptions>(options_value.clone()).ok()
+        });
+
+        if b_options.is_none() {
+            return BamlError::InvalidArgument("Failed to parse __baml_options".to_string())
+                .into_response();
+        }
+        // XXX
         log::info!("Received client registry: {:?}", b_options);
 
         self.baml_call(b_fn, b_args, b_options).await
