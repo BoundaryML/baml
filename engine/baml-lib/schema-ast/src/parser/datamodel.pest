@@ -5,8 +5,7 @@ schema = {
 // ######################################
 // Unified Block for Class and Enum
 // ######################################
-type_expression_keyword  = { ENUM_KEYWORD | CLASS_KEYWORD | identifier }
-type_expression_block    = { type_expression_keyword ~ identifier ~ named_argument_list? ~ BLOCK_OPEN ~ type_expression_contents ~ BLOCK_CLOSE }
+type_expression_block    = { identifier ~ identifier ~ named_argument_list? ~ BLOCK_OPEN ~ type_expression_contents ~ BLOCK_CLOSE }
 type_expression_contents = {
     (type_expression | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
@@ -174,8 +173,6 @@ BLOCK_LEVEL_CATCH_ALL = { !BLOCK_CLOSE ~ CATCH_ALL }
 CATCH_ALL             = { (!NEWLINE ~ ANY)+ ~ NEWLINE? }
 
 TYPE_KEYWORD         = { "type" }
-ENUM_KEYWORD         = { "enum" }
-CLASS_KEYWORD        = { "class" }
 FUNCTION_KEYWORD     = { "function" }
 TEMPLATE_KEYWORD     = { "template_string" | "string_template" }
 TEST_KEYWORD         = { "test" }

@@ -28,14 +28,24 @@ pub(crate) fn parse_type_expression_block(
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::type_expression_keyword => match current.as_str() {
-                "class" => sub_type = Some(SubType::Class.clone()),
-                "enum" => sub_type = Some(SubType::Enum.clone()),
-                _ => sub_type = Some(SubType::Other(current.as_str().to_string())),
-            },
+            // There are two identifiers in the children of type_expression_block.
+            // So we do different things with an `identifier` as we incrementally
+            // build the `TypeExpressionBlock`.
+            Rule::identifier => {
+                if sub_type.is_none() {
+                    // First identifier is the type of block (e.g. class, enum).
+                    match current.as_str() {
+                        "class" => sub_type = Some(SubType::Class.clone()),
+                        "enum" => sub_type = Some(SubType::Enum.clone()),
+                        _ => sub_type = Some(SubType::Other(current.as_str().to_string())),
+                    }
+                } else {
+                    // Subsequent identifier is the name of the block.
+                    name = Some(parse_identifier(current, diagnostics));
+                }
+            }
 
             Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
-            Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
             Rule::named_argument_list => match parse_named_argument_list(current, diagnostics) {
                 Ok(arg) => input = Some(arg),
                 Err(err) => diagnostics.push_error(err),
@@ -99,5 +109,41 @@ pub(crate) fn parse_type_expression_block(
                 .unwrap_or(SubType::Other("Subtype not found".to_string())),
         },
         _ => panic!("Encountered impossible type_expression declaration during parsing",),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::{BAMLParser, Rule};
+    use pest::{consumes_to, fails_with, parses_to};
+
+    #[test]
+    fn keyword_name_mandatory_whitespace() {
+        // This is the expected form.
+        parses_to! {
+            parser: BAMLParser,
+            input: "class Foo {}",
+            rule: Rule::type_expression_block,
+            tokens: [type_expression_block(0, 12, [
+                 identifier(0,5,[single_word(0,5)]),
+                 identifier(6,9,[single_word(6,9)]),
+                 BLOCK_OPEN(10,11),
+                 type_expression_contents(11,11),
+                 BLOCK_CLOSE(11,12),
+            ])]
+        }
+
+        // This form passed with a historical version of the
+        // grammar that allowed type expression keywords adjacent
+        // to type expression identifiers with no mandatory
+        // whitespace.
+        fails_with! {
+            parser: BAMLParser,
+            input: "classFoo {}",
+            rule: Rule::type_expression_block,
+            positives: [Rule::identifier],
+            negatives: [],
+            pos: 9
+        }
     }
 }
