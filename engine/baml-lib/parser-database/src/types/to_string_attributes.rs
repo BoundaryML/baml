@@ -13,6 +13,7 @@ pub enum ToStringAttributes {
 pub struct StaticStringAttributes {
     description: Option<Expression>,
     alias: Option<StringId>, // TODO: This should be a LazyExpression.
+    dynamic_type: Option<bool>,
 }
 
 impl StaticStringAttributes {
@@ -34,5 +35,15 @@ impl StaticStringAttributes {
     /// Get the alias.
     pub fn alias(&self) -> &Option<StringId> {
         &self.alias
+    }
+
+    /// Get dynamism of type.
+    pub fn dynamic_type(&self) -> &Option<bool> {
+        &self.dynamic_type
+    }
+
+    /// Set dynamism of type.
+    pub fn set_dynamic_type(&mut self) {
+        self.dynamic_type.replace(true);
     }
 }

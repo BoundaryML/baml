@@ -224,7 +224,10 @@ fn to_ir_attributes(
                 if let Some(d) = s.description() {
                     let ir_expr = match d {
                         ast::Expression::StringValue(s, _) => Expression::String(s.clone()),
-                        _ => panic!("TODO"),
+                        ast::Expression::RawStringValue(s) => {
+                            Expression::RawString(s.value().to_string())
+                        }
+                        _ => panic!("Couldn't deal with description: {:?}", d),
                     };
                     attributes.insert("description".to_string(), ir_expr);
                 }
@@ -558,6 +561,7 @@ type ClassId = String;
 pub struct Class {
     pub name: ClassId,
     pub static_fields: Vec<Node<Field>>,
+    pub dynamic_fields: Vec<Node<Field>>,
     pub inputs: Vec<(String, FieldType)>,
 }
 
@@ -577,6 +581,10 @@ impl WithRepr<Class> for ClassWalker<'_> {
             name: self.name().to_string(),
             static_fields: self
                 .static_fields()
+                .map(|e| e.node(db))
+                .collect::<Result<Vec<_>>>()?,
+            dynamic_fields: self
+                .dynamic_fields()
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
             inputs: match self.ast_type_block().input() {
