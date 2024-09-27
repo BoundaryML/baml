@@ -194,7 +194,6 @@ pub struct NodeAttributes {
     ///
     ///   - @skip becomes ("skip", bool)
     ///   - @alias(...) becomes ("alias", ...)
-    ///   - @get(python code) becomes ("get/python", python code)
     #[serde(with = "indexmap::map::serde_seq")]
     meta: IndexMap<String, Expression>,
 
@@ -218,6 +217,9 @@ fn to_ir_attributes(
     if let Some(ast_attributes) = maybe_ast_attributes {
         match ast_attributes {
             ToStringAttributes::Static(s) => {
+                if let Some(true) = s.dynamic_type() {
+                    attributes.insert("dynamic_type".to_string(), Expression::Bool(true));
+                }
                 if let Some(v) = s.alias() {
                     attributes.insert("alias".to_string(), Expression::String(db[*v].to_string()));
                 }
