@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use baml_types::{BamlMap, BamlValue};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{internal::llm_client::llm_provider::LLMProvider, RuntimeContext};
 
@@ -16,7 +16,7 @@ pub enum PrimitiveClient {
     Vertex,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct ClientProperty {
     pub name: String,
     pub provider: String,
@@ -24,7 +24,7 @@ pub struct ClientProperty {
     pub options: BamlMap<String, BamlValue>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ClientRegistry {
     clients: HashMap<String, ClientProperty>,
     primary: Option<String>,
