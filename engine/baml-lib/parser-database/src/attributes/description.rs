@@ -1,4 +1,4 @@
-use crate::{coerce, context::Context, types::StaticStringAttributes};
+use crate::{context::Context, types::StaticStringAttributes};
 
 pub(super) fn visit_description_attribute(
     attributes: &mut StaticStringAttributes,
@@ -10,7 +10,7 @@ pub(super) fn visit_description_attribute(
     {
         Ok(description) => {
             if attributes.description().is_some() {
-                ctx.push_attribute_validation_error("Duplicate meta attribute.", true);
+                ctx.push_attribute_validation_error("Duplicate description attribute.", true);
             } else {
                 attributes.add_description(description.clone())
             }
