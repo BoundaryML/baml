@@ -487,20 +487,6 @@ pub fn render_prompt(
     }
 }
 
-/// Render a bare minijinaja expression with the given context.
-/// E.g. `"a|length > 2"` with context `{"a": [1, 2, 3]}` will return `"true"`.
-pub fn render_expression(
-    expression: &str,
-    ctx: &HashMap<String, BamlValue>,
-) -> anyhow::Result<String> {
-    let env = get_env();
-    // In rust string literals, `{` is escaped as `{{`.
-    // So producing the string `{{}}` requires writing the literal `"{{{{}}}}"`
-    let template = format!(r#"{{{{ {} }}}}"#, expression);
-    let args_dict = minijinja::Value::from_serialize(ctx);
-    Ok(env.render_str(&template, &args_dict)?)
-}
-
 #[cfg(test)]
 mod render_tests {
 

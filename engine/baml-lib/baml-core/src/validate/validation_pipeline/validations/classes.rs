@@ -14,7 +14,6 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                 validate_type(ctx, &ft);
             }
         }
-
         for c in cls.dynamic_fields() {
             let field = c.ast_field();
             if let Some(ft) = &field.expr {
