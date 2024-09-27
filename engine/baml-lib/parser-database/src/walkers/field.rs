@@ -1,4 +1,4 @@
-use crate::types::{StaticStringAttributes, ToStringAttributes};
+use crate::types::Attributes;
 
 use super::{ClassWalker, Walker};
 
@@ -24,20 +24,17 @@ impl<'db> FieldWalker<'db> {
     }
 
     /// Traverse the field's attributes.
-    pub fn attributes(self) -> &'db ToStringAttributes {
+    pub fn attributes(self) -> &'db Attributes {
         &self.db.types.class_attributes[&self.id.0].field_serilizers[&self.id.1]
     }
 
     /// Attributes for the field.
-    pub fn static_attributes(self) -> &'db StaticStringAttributes {
-        match self.attributes() {
-            ToStringAttributes::Static(d) => d,
-            _ => panic!("Expected static attributes"),
-        }
+    pub fn static_attributes(self) -> &'db Attributes {
+        self.attributes()
     }
 
     /// The field's default attributes.
-    pub fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
+    pub fn get_default_attributes(&self) -> Option<&'db Attributes> {
         let result = self
             .db
             .types

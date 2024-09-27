@@ -9,7 +9,7 @@ use internal_baml_parser_database::{
         ClassWalker, ClientSpec as AstClientSpec, ClientWalker, ConfigurationWalker,
         EnumValueWalker, EnumWalker, FieldWalker, FunctionWalker, TemplateStringWalker,
     },
-    ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes,
+    Attributes, ParserDatabase, PromptAst, RetryPolicyStrategy,
 };
 use internal_baml_schema_ast::ast::SubType;
 
@@ -210,30 +210,24 @@ impl NodeAttributes {
 
 fn to_ir_attributes(
     db: &ParserDatabase,
-    maybe_ast_attributes: Option<&ToStringAttributes>,
+    maybe_ast_attributes: Option<&Attributes>,
 ) -> IndexMap<String, Expression> {
     let mut attributes = IndexMap::new();
 
-    if let Some(ast_attributes) = maybe_ast_attributes {
-        match ast_attributes {
-            ToStringAttributes::Static(s) => {
-                if let Some(true) = s.dynamic_type() {
-                    attributes.insert("dynamic_type".to_string(), Expression::Bool(true));
-                }
-                if let Some(v) = s.alias() {
-                    attributes.insert("alias".to_string(), Expression::String(db[*v].to_string()));
-                }
-                if let Some(d) = s.description() {
-                    let ir_expr = match d {
-                        ast::Expression::StringValue(s, _) => Expression::String(s.clone()),
-                        ast::Expression::RawStringValue(s) => {
-                            Expression::RawString(s.value().to_string())
-                        }
-                        _ => panic!("Couldn't deal with description: {:?}", d),
-                    };
-                    attributes.insert("description".to_string(), ir_expr);
-                }
-            }
+    if let Some(ast_attrs) = maybe_ast_attributes {
+        if let Some(true) = ast_attrs.dynamic_type() {
+            attributes.insert("dynamic_type".to_string(), Expression::Bool(true));
+        }
+        if let Some(v) = ast_attrs.alias() {
+            attributes.insert("alias".to_string(), Expression::String(db[*v].to_string()));
+        }
+        if let Some(d) = ast_attrs.description() {
+            let ir_expr = match d {
+                ast::Expression::StringValue(s, _) => Expression::String(s.clone()),
+                ast::Expression::RawStringValue(s) => Expression::RawString(s.value().to_string()),
+                _ => panic!("Couldn't deal with description: {:?}", d),
+            };
+            attributes.insert("description".to_string(), ir_expr);
         }
     }
 

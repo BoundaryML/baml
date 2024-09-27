@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use super::{field::FieldWalker, EnumWalker};
-use crate::types::ToStringAttributes;
+use crate::types::Attributes;
 use either::Either;
 use internal_baml_schema_ast::ast::Identifier;
 use internal_baml_schema_ast::ast::SubType;
@@ -91,7 +91,7 @@ impl<'db> ClassWalker<'db> {
         )
     }
     /// Getter for default attributes
-    pub fn get_default_attributes(&self, sub_type: SubType) -> Option<&'db ToStringAttributes> {
+    pub fn get_default_attributes(&self, sub_type: SubType) -> Option<&'db Attributes> {
         match sub_type {
             SubType::Enum => self
                 .db

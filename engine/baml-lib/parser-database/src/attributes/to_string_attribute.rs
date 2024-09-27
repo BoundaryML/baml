@@ -1,13 +1,12 @@
-use crate::types::StaticStringAttributes;
-use crate::{context::Context, types::ToStringAttributes};
+use crate::{context::Context, types::Attributes};
 
 use super::alias::visit_alias_attribute;
 use super::description::visit_description_attribute;
 
-pub(super) fn visit(ctx: &mut Context<'_>, as_block: bool) -> Option<ToStringAttributes> {
+pub(super) fn visit(ctx: &mut Context<'_>, as_block: bool) -> Option<Attributes> {
     let mut modified = false;
 
-    let mut attributes = StaticStringAttributes::default();
+    let mut attributes = Attributes::default();
     // @alias or @@alias
     if ctx.visit_optional_single_attr("alias") {
         visit_alias_attribute(&mut attributes, ctx);
@@ -30,7 +29,7 @@ pub(super) fn visit(ctx: &mut Context<'_>, as_block: bool) -> Option<ToStringAtt
     }
 
     if modified {
-        Some(ToStringAttributes::Static(attributes))
+        Some(attributes)
     } else {
         None
     }

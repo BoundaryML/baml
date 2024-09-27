@@ -17,7 +17,7 @@ mod prompt;
 mod to_string_attributes;
 mod types;
 
-pub use to_string_attributes::{StaticStringAttributes, ToStringAttributes};
+pub use crate::attributes::Attributes;
 pub(crate) use types::EnumAttributes;
 pub(crate) use types::*;
 

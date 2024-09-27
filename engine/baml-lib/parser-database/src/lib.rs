@@ -42,9 +42,8 @@ use either::Either;
 pub use internal_baml_schema_ast::ast;
 use internal_baml_schema_ast::ast::{SchemaAst, WithIdentifier, WithName, WithSpan};
 pub use types::{
-    ContantDelayStrategy, ExponentialBackoffStrategy, PrinterType,
-    PromptAst, PromptVariable, RetryPolicy, RetryPolicyStrategy, StaticStringAttributes,
-    StaticType, ToStringAttributes,
+    Attributes, ContantDelayStrategy, ExponentialBackoffStrategy, PrinterType, PromptAst,
+    PromptVariable, RetryPolicy, RetryPolicyStrategy, StaticType,
 };
 
 use self::{context::Context, interner::StringId, types::Types};

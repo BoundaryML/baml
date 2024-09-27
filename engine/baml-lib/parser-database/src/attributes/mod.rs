@@ -3,9 +3,49 @@ use internal_baml_schema_ast::ast::{Top, TopId, TypeExpId, TypeExpressionBlock};
 mod alias;
 mod description;
 mod to_string_attribute;
+use crate::interner::StringId;
 use crate::{context::Context, types::ClassAttributes, types::EnumAttributes};
-use internal_baml_schema_ast::ast::SubType;
+use internal_baml_schema_ast::ast::{Expression, SubType};
 
+///
+#[derive(Debug, Default)]
+pub struct Attributes {
+    description: Option<Expression>,
+    alias: Option<StringId>, // TODO: This should be a LazyExpression.
+    dynamic_type: Option<bool>,
+}
+
+impl Attributes {
+    /// Set a description.
+    pub fn add_description(&mut self, description: Expression) {
+        self.description.replace(description);
+    }
+
+    /// Get the description.
+    pub fn description(&self) -> &Option<Expression> {
+        &self.description
+    }
+
+    /// Set an alias.
+    pub fn add_alias(&mut self, alias: StringId) {
+        self.alias.replace(alias);
+    }
+
+    /// Get the alias.
+    pub fn alias(&self) -> &Option<StringId> {
+        &self.alias
+    }
+
+    /// Get dynamism of type.
+    pub fn dynamic_type(&self) -> &Option<bool> {
+        &self.dynamic_type
+    }
+
+    /// Set dynamism of type.
+    pub fn set_dynamic_type(&mut self) {
+        self.dynamic_type.replace(true);
+    }
+}
 pub(super) fn resolve_attributes(ctx: &mut Context<'_>) {
     for top in ctx.ast.iter_tops() {
         match top {
