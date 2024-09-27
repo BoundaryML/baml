@@ -10,196 +10,210 @@ instances:
 
 title: BAML Documentation
 
-
+tabs:
+  baml-docs:
+    display-name: BAML
+  boundary-extraction-api:
+    display-name: Document Extraction API
+  observability:
+    display-name: Observability
 
 navigation:
-  - api: API Reference
-    slug: docs/api
-  - section: Get started
-    contents:
-      - page: What is BAML?
-        path: docs/get-started/what-is-baml.mdx
-      - page: Interactive Demos
-        path: docs/get-started/interactive-demos.mdx
-      - section: Quickstart
-        collapsed: false
+  - tab: baml-docs
+    layout:
+      - section: Get started
         contents:
-          - page: Python
-            path: docs/get-started/quickstart/python.mdx
-          - page: TypeScript
-            path: docs/get-started/quickstart/typescript.mdx
-          - page: Ruby
-            path: docs/get-started/quickstart/ruby.mdx
-          - page: Any Language (OpenAPI)
-            path: docs/get-started/quickstart/openapi.mdx
-          - page: VSCode
-            path: docs/get-started/quickstart/editors-vscode.mdx
-          - page: Other Editors
-            path: docs/get-started/quickstart/editors-other.mdx
-      - section: Debugging
-        collapsed: false
-        contents:
-          - page: VSCode Playground
-            path: docs/get-started/debugging/vscode-playground.mdx
-          - page: Enable Logging
-            path: docs/get-started/debugging/enable-logging.mdx
-          - page: Exception Handling
-            path: docs/calling-baml/exceptions.mdx
-      - section: Deploying BAML Projects
-        contents:
-          - page: Docker
-            path: docs/get-started/deploying/docker.mdx
-          - page: Nextjs
-            path: docs/get-started/deploying/nextjs.mdx
-          - page: AWS
-            path: docs/get-started/deploying/aws.mdx
-          - page: Docker (OpenAPI)
-            path: docs/get-started/deploying/openapi.mdx
-  - section: BAML Snippets
-    contents:
-      - section: General BAML Syntax
-        contents:
-          - page: comments
-            path: docs/snippets/syntax/comments.mdx
-          - page: strings
-            path: docs/snippets/syntax/strings.mdx
-          - page: Lists
-            path: docs/snippets/syntax/lists.mdx
-          - page: Dictionaries
-            path: docs/snippets/syntax/dictionaries.mdx
-      - page: Supported Types
-        path: docs/snippets/supported-types.mdx
-      - section: LLM Clients
-        contents:
-          - page: Overview
-            path: docs/snippets/clients/overview.mdx
-          - section: providers
+          - page: What is BAML?
+            path: docs/get-started/what-is-baml.mdx
+          - page: Interactive Demos
+            path: docs/get-started/interactive-demos.mdx
+          - section: Quickstart
+            collapsed: false
             contents:
-              - page: anthropic
-                path: docs/snippets/clients/providers/anthropic.mdx
-              - page: aws-bedrock
-                path: docs/snippets/clients/providers/aws-bedrock.mdx
-              - page: azure-openai
-                path: docs/snippets/clients/providers/azure.mdx
-              - page: google-ai
-                path: docs/snippets/clients/providers/gemini.mdx
-              - page: groq
-                path: docs/snippets/clients/providers/groq.mdx
-              - page: huggingface
-                path: docs/snippets/clients/providers/huggingface.mdx
-              - page: ollama
-                path: docs/snippets/clients/providers/ollama.mdx
-              - page: openai
-                path: docs/snippets/clients/providers/openai.mdx
-              - page: openai-generic
-                path: docs/snippets/clients/providers/openai-generic.mdx
-              - page: openrouter
-                path: docs/snippets/clients/providers/openrouter.mdx
-              - page: together-ai
-                path: docs/snippets/clients/providers/together.mdx
-              - page: vertex-ai
-                path: docs/snippets/clients/providers/vertex.mdx
-              - page: vllm
-                path: docs/snippets/clients/providers/vllm.mdx
-              - page: LMStudio
-                path: docs/snippets/clients/providers/lmstudio.mdx
-              - page: KeywordsAI
-                path: docs/snippets/clients/providers/keywordsai.mdx
-          - section: provider strategies
+              - page: Python
+                path: docs/get-started/quickstart/python.mdx
+              - page: TypeScript
+                path: docs/get-started/quickstart/typescript.mdx
+              - page: Ruby
+                path: docs/get-started/quickstart/ruby.mdx
+              - page: Any Language (OpenAPI)
+                path: docs/get-started/quickstart/openapi.mdx
+              - page: VSCode
+                path: docs/get-started/quickstart/editors-vscode.mdx
+              - page: Other Editors
+                path: docs/get-started/quickstart/editors-other.mdx
+          - section: Debugging
+            collapsed: false
             contents:
-              - page: fallback
-                path: docs/snippets/clients/fallback.mdx
-              - page: round-robin
-                path: docs/snippets/clients/round-robin.mdx
-              - page: retry_policy
-                path: docs/snippets/clients/retry.mdx
-      - section: Functions
+              - page: VSCode Playground
+                path: docs/get-started/debugging/vscode-playground.mdx
+              - page: Enable Logging
+                path: docs/get-started/debugging/enable-logging.mdx
+              - page: Exception Handling
+                path: docs/calling-baml/exceptions.mdx
+          - section: Deploying BAML Projects
+            contents:
+              - page: Docker
+                path: docs/get-started/deploying/docker.mdx
+              - page: Nextjs
+                path: docs/get-started/deploying/nextjs.mdx
+              - page: AWS
+                path: docs/get-started/deploying/aws.mdx
+              - page: Docker (OpenAPI)
+                path: docs/get-started/deploying/openapi.mdx
+      - section: BAML Snippets
         contents:
-          - page: Overview
-            path: docs/snippets/functions/overview.mdx
-          - page: Classification
-            path: docs/snippets/functions/classification.mdx
-          - page: Extraction
-            path: docs/snippets/functions/extraction.mdx
-          - page: Function Calling / Tools
-            path: docs/snippets/functions/function-calling.mdx
-      - page: class
-        path: docs/snippets/class.mdx
-      - page: enum
-        path: docs/snippets/enum.mdx
-      - section: Prompt Syntax
+          - section: General BAML Syntax
+            contents:
+              - page: comments
+                path: docs/snippets/syntax/comments.mdx
+              - page: strings
+                path: docs/snippets/syntax/strings.mdx
+              - page: Lists
+                path: docs/snippets/syntax/lists.mdx
+              - page: Dictionaries
+                path: docs/snippets/syntax/dictionaries.mdx
+          - page: Supported Types
+            path: docs/snippets/supported-types.mdx
+          - section: LLM Clients
+            contents:
+              - page: Overview
+                path: docs/snippets/clients/overview.mdx
+              - section: providers
+                contents:
+                  - page: anthropic
+                    path: docs/snippets/clients/providers/anthropic.mdx
+                  - page: aws-bedrock
+                    path: docs/snippets/clients/providers/aws-bedrock.mdx
+                  - page: azure-openai
+                    path: docs/snippets/clients/providers/azure.mdx
+                  - page: google-ai
+                    path: docs/snippets/clients/providers/gemini.mdx
+                  - page: groq
+                    path: docs/snippets/clients/providers/groq.mdx
+                  - page: huggingface
+                    path: docs/snippets/clients/providers/huggingface.mdx
+                  - page: ollama
+                    path: docs/snippets/clients/providers/ollama.mdx
+                  - page: openai
+                    path: docs/snippets/clients/providers/openai.mdx
+                  - page: openai-generic
+                    path: docs/snippets/clients/providers/openai-generic.mdx
+                  - page: openrouter
+                    path: docs/snippets/clients/providers/openrouter.mdx
+                  - page: together-ai
+                    path: docs/snippets/clients/providers/together.mdx
+                  - page: vertex-ai
+                    path: docs/snippets/clients/providers/vertex.mdx
+                  - page: vllm
+                    path: docs/snippets/clients/providers/vllm.mdx
+                  - page: LMStudio
+                    path: docs/snippets/clients/providers/lmstudio.mdx
+                  - page: KeywordsAI
+                    path: docs/snippets/clients/providers/keywordsai.mdx
+              - section: provider strategies
+                contents:
+                  - page: fallback
+                    path: docs/snippets/clients/fallback.mdx
+                  - page: round-robin
+                    path: docs/snippets/clients/round-robin.mdx
+                  - page: retry_policy
+                    path: docs/snippets/clients/retry.mdx
+          - section: Functions
+            contents:
+              - page: Overview
+                path: docs/snippets/functions/overview.mdx
+              - page: Classification
+                path: docs/snippets/functions/classification.mdx
+              - page: Extraction
+                path: docs/snippets/functions/extraction.mdx
+              - page: Function Calling / Tools
+                path: docs/snippets/functions/function-calling.mdx
+          - page: class
+            path: docs/snippets/class.mdx
+          - page: enum
+            path: docs/snippets/enum.mdx
+          - section: Prompt Syntax
+            contents:
+              - page: What is Jinja / Cookbook
+                path: docs/snippets/prompt-syntax/what-is-jinja.mdx
+              - page: ctx.output_format
+                path: docs/snippets/prompt-syntax/output-format.mdx
+              - page: _.role
+                path: docs/snippets/prompt-syntax/roles.mdx
+              - page: Variables
+                path: docs/snippets/prompt-syntax/variables.mdx
+              - page: Conditionals
+                path: docs/snippets/prompt-syntax/conditionals.mdx
+              - page: Loops
+                path: docs/snippets/prompt-syntax/loops.mdx
+              - page: Comments
+                path: docs/snippets/prompt-syntax/comments.mdx
+              - page: ctx (accessing metadata)
+                path: docs/snippets/prompt-syntax/ctx.mdx
+          - page: Template String
+            path: docs/snippets/template-string.mdx
+          - page: Test Cases
+            path: docs/snippets/test-cases.mdx
+      - section: Advanced BAML Features
         contents:
-          - page: What is Jinja / Cookbook
-            path: docs/snippets/prompt-syntax/what-is-jinja.mdx
-          - page: ctx.output_format
-            path: docs/snippets/prompt-syntax/output-format.mdx
-          - page: _.role
-            path: docs/snippets/prompt-syntax/roles.mdx
-          - page: Variables
-            path: docs/snippets/prompt-syntax/variables.mdx
-          - page: Conditionals
-            path: docs/snippets/prompt-syntax/conditionals.mdx
-          - page: Loops
-            path: docs/snippets/prompt-syntax/loops.mdx
-          - page: Comments
-            path: docs/snippets/prompt-syntax/comments.mdx
-          - page: ctx (accessing metadata)
-            path: docs/snippets/prompt-syntax/ctx.mdx
-      - page: Template String
-        path: docs/snippets/template-string.mdx
-      - page: Test Cases
-        path: docs/snippets/test-cases.mdx
-  - section: Advanced BAML Features
-    contents:
-      - page: Dynamic Types
-        path: docs/calling-baml/dynamic-types.mdx
-      - page: Client Registry
-        path: docs/calling-baml/client-registry.mdx
-  - section: BAML with Python/TS/Ruby
-    contents:
-      - page: Generate the BAML Client
-        path: docs/calling-baml/generate-baml-client.mdx
-      - page: Set Environment Variables
-        path: docs/calling-baml/set-env-vars.mdx
-      - page: Calling BAML Functions
-        path: docs/calling-baml/calling-functions.mdx
-      - page: Streaming BAML Functions
-        path: docs/calling-baml/streaming.mdx
-      - page: Concurrent function calls
-        path: docs/calling-baml/concurrent-calls.mdx
-      - page: Multimodal
-        path: docs/calling-baml/multi-modal.mdx
-  - section: NextJS
-    contents:
-      - page: NextJS Integration
-        path: docs/baml-nextjs/baml-nextjs.mdx
-  - section: Observability [Paid]
-    contents:
-      - page: Enabling
-        path: docs/observability/overview.mdx
-      - page: Tracing and tagging functions
-        path: docs/observability/tracing-tagging.mdx
-  - section: Extraction API
-    contents:
-      - page: Extraction API
-        path: docs/dashboard/extraction-api.mdx
-      
-  - section: Comparisons
-    contents:
-      - page: Comparing Marvin
-        path: docs/comparisons/marvin.mdx
-      - page: Comparing Pydantic
-        path: docs/comparisons/pydantic.mdx
-  - section: Reference
-    contents:
-      - page: Contact Us
-        path: docs/contact.mdx
-      - page: Environment Variables
-        path: docs/reference/env-vars.mdx
-      - section: Incidents
+          - page: Dynamic Types
+            path: docs/calling-baml/dynamic-types.mdx
+          - page: Client Registry
+            path: docs/calling-baml/client-registry.mdx
+      - section: BAML with Python/TS/Ruby
         contents:
-          - page: SSRF Issue in fiddle-proxy (July 2024)
-            path: docs/incidents/2024-07-10-ssrf-issue-in-fiddle-proxy.mdx
+          - page: Generate the BAML Client
+            path: docs/calling-baml/generate-baml-client.mdx
+          - page: Set Environment Variables
+            path: docs/calling-baml/set-env-vars.mdx
+          - page: Calling BAML Functions
+            path: docs/calling-baml/calling-functions.mdx
+          - page: Streaming BAML Functions
+            path: docs/calling-baml/streaming.mdx
+          - page: Concurrent function calls
+            path: docs/calling-baml/concurrent-calls.mdx
+          - page: Multimodal
+            path: docs/calling-baml/multi-modal.mdx
+      - section: NextJS
+        contents:
+          - page: NextJS Integration
+            path: docs/baml-nextjs/baml-nextjs.mdx
+
+      - section: Observability [Paid]
+        contents:
+          - page: Enabling
+            path: docs/observability/overview.mdx
+          - page: Tracing and tagging functions
+            path: docs/observability/tracing-tagging.mdx
+      - section: Extraction API
+        contents:
+          - page: Extraction API
+            path: docs/dashboard/extraction-api.mdx
+
+      - section: Comparisons
+        contents:
+          - page: Comparing Marvin
+            path: docs/comparisons/marvin.mdx
+          - page: Comparing Pydantic
+            path: docs/comparisons/pydantic.mdx
+      - section: Reference
+        contents:
+          - page: Contact Us
+            path: docs/contact.mdx
+          - page: Environment Variables
+            path: docs/reference/env-vars.mdx
+          - section: Incidents
+            contents:
+              - page: SSRF Issue in fiddle-proxy (July 2024)
+                path: docs/incidents/2024-07-10-ssrf-issue-in-fiddle-proxy.mdx
+  - tab: boundary-extraction-api
+    layout:
+      - section: Overview
+        contents:
+          - api: API Reference
+            slug: docs/api
+            summary: docs/api/summary.mdx
 
 navbar-links:
   - type: github
@@ -228,7 +242,9 @@ layout:
   page-width: full
   disable-header: false
   searchbar-placement: header
-  header-height: 73px
+  header-height: 54px
+  tabs-placement: header
+
 typography:
   bodyFont:
     name: OpenSans

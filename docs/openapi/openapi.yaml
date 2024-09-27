@@ -1,207 +1,158 @@
 openapi: 3.1.0
 info:
-  title: File Upload and JSON Conversion API
-  description: |
-    This API allows users to upload one or multiple files of various types and receive their contents as JSON blobs.
-    Optionally, users can include a prompt to customize the processing.
-  version: 1.5.0
-servers:
-  - url: https://api.example.com/v1
-    description: Production server
-
+  title: PyBackend API
+  version: 0.1.0
 paths:
-  /upload:
+  /api/extract:
     post:
-      summary: Upload one or multiple files and receive their JSON representations
-      description: |
-        Uploads one or multiple supported file types and returns their contents as JSON blobs along with metadata and usage information.
+      tags:
+        - Extraction
+      summary: Extract Files
+      description: Upload one or more files to receive their JSON representations along with metadata and usage information.
+      operationId: extract
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
-              type: object
-              properties:
-                uploaded_files:
-                  type: array
-                  items:
-                    type: string
-                    format: binary
-                  description: |
-                    The files to be uploaded. Supported formats include:
-                    .bmp, .csv, .doc, .docx, .eml, .epub, .heic, .html, .jpeg, .png, .md, .msg,
-                    .odt, .org, .p7s, .pdf, .ppt, .pptx, .rst, .rtf, .tiff, .txt, .tsv,
-                    .xls, .xlsx, and .xml.
-                prompt:
-                  type: string
-                  description: An optional prompt to guide the processing of the uploaded files.
-              required:
-                - uploaded_files
+              $ref: "#/components/schemas/ExtractRequest"
       responses:
-        '200':
-          description: Successful file upload and conversion
+        "200":
+          description: Successful Response
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  results:
-                    type: array
-                    description: An array of processed file results.
-                    items:
-                      type: object
-                      properties:
-                        file_name:
-                          type: string
-                          description: The original name of the uploaded file.
-                        extracted_content:
-                          oneOf:
-                            - type: object
-                              description: The JSON representation of the uploaded file's content.
-                            - type: array
-                              items:
-                                type: object
-                              description: An array of JSON representations if the file contains multiple JSON blobs.
-                          description: The JSON representation(s) of the uploaded file's content.
-                        metadata:
-                          oneOf:
-                            - $ref: '#/components/schemas/PDFMetadata'
-                            - $ref: '#/components/schemas/XMLMetadata'
-                            - $ref: '#/components/schemas/CSVMetadata'
-                            - $ref: '#/components/schemas/DocMetadata'
-                            - $ref: '#/components/schemas/ImageMetadata'
-                            # Add other metadata schemas as needed
-                          description: Metadata extracted from the uploaded file.
-                      required:
-                        - file_name
-                        - extracted_content
-                        - metadata
-                  usage:
-                    $ref: '#/components/schemas/Usage'
-                required:
-                  - results
-                  - usage
-        '400':
-          description: Invalid request parameters
+                $ref: "#/components/schemas/ExtractResponse"
+        "400":
+          description: Invalid Request Parameters
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '415':
-          description: Unsupported media type
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: Unsupported Media Type
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Internal server error
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
+                $ref: "#/components/schemas/HTTPValidationError"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
-    Usage:
+    ExtractRequest:
       type: object
-      properties:
-        consumed_credits:
-          type: integer
-          format: int32
-          description: The number of credits consumed for processing the request.
+      title: Extract Request
       required:
-        - consumed_credits
-
-    PDFMetadata:
-      type: object
+        - files
       properties:
-        title:
+        files:
+          type: array
+          title: Files
+          description: The files to be uploaded.
+          items:
+            type: string
+            format: binary
+        prompt:
           type: string
-          description: The title of the PDF document.
-        author:
-          type: string
-          description: The author of the PDF document.
-        number_of_pages:
-          type: integer
-          description: The total number of pages in the PDF document.
-      required:
-        - title
-        - author
-        - number_of_pages
-      description: Metadata specific to PDF files.
-
-    XMLMetadata:
-      type: object
-      properties:
-        root_element:
-          type: string
-          description: The root element of the XML document.
-        namespace:
-          type: string
-          description: The XML namespace used in the document.
-      required:
-        - root_element
-      description: Metadata specific to XML files.
-
-    CSVMetadata:
-      type: object
-      properties:
-        delimiter:
-          type: string
-          description: The delimiter used in the CSV file.
-        number_of_rows:
-          type: integer
-          description: The total number of rows in the CSV file.
-        number_of_columns:
-          type: integer
-          description: The total number of columns in the CSV file.
-      required:
-        - delimiter
-        - number_of_rows
-        - number_of_columns
-      description: Metadata specific to CSV files.
-
-    DocMetadata:
-      type: object
-      properties:
-        word_count:
-          type: integer
-          description: The total number of words in the document.
-        character_count:
-          type: integer
-          description: The total number of characters in the document.
-      required:
-        - word_count
-        - character_count
-      description: Metadata specific to DOC/DOCX files.
-
-    ImageMetadata:
-      type: object
-      properties:
-        format:
-          type: string
-          description: The image format (e.g., PNG, JPEG, BMP).
-        width:
-          type: integer
-          description: The width of the image in pixels.
-        height:
-          type: integer
-          description: The height of the image in pixels.
-      required:
-        - format
-        - width
-        - height
-      description: Metadata specific to image files like PNG, JPEG, BMP, etc.
-
+          title: Prompt
+          description: Optional prompt to guide the processing.
+          nullable: true
+        stream:
+          type: boolean
+          title: Stream
+          description: Enable streaming of the response.
+          default: false
+          nullable: true
     ErrorResponse:
       type: object
-      properties:
-        error:
-          type: string
-          description: A descriptive error message.
-        code:
-          type: integer
-          description: The HTTP status code applicable to this error.
+      title: Error Response
       required:
         - error
         - code
+      properties:
+        error:
+          type: string
+          title: Error Message
+        code:
+          type: integer
+          title: Error Code
+    ExtractResponse:
+      type: object
+      title: Extract Response
+      required:
+        - extracted_files
+        - input_char_count
+        - output_char_count
+        - input_megapixels
+      properties:
+        extracted_files:
+          type: array
+          title: Extracted Files
+          items:
+            $ref: "#/components/schemas/ExtractedContent"
+        input_char_count:
+          type: integer
+          title: Input Character Count
+        output_char_count:
+          type: integer
+          title: Output Character Count
+        input_megapixels:
+          type: number
+          title: Input Megapixels
+    ExtractedContent:
+      type: object
+      title: Extracted Content
+      required:
+        - file_name
+        - extracted_content
+      properties:
+        file_name:
+          type: string
+          title: File Name
+        extracted_content:
+          title: Extracted Content
+          anyOf:
+            - type: object
+            - type: array
+              items:
+                type: object
+    HTTPValidationError:
+      type: object
+      title: HTTP Validation Error
+      properties:
+        detail:
+          type: array
+          title: Detail
+          items:
+            $ref: "#/components/schemas/ValidationError"
+    ValidationError:
+      type: object
+      title: Validation Error
+      required:
+        - loc
+        - msg
+        - type
+      properties:
+        loc:
+          type: array
+          title: Location
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
