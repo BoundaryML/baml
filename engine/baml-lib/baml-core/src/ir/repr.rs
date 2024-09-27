@@ -563,7 +563,6 @@ type ClassId = String;
 pub struct Class {
     pub name: ClassId,
     pub static_fields: Vec<Node<Field>>,
-    pub dynamic_fields: Vec<Node<Field>>,
     pub inputs: Vec<(String, FieldType)>,
 }
 
@@ -585,11 +584,6 @@ impl WithRepr<Class> for ClassWalker<'_> {
                 .static_fields()
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
-            dynamic_fields: vec![],
-            // dynamic_fields: self
-            //     .dynamic_fields()
-            //     .map(|e| e.node(db))
-            //     .collect::<Result<Vec<_>>>()?,
             inputs: match self.ast_type_block().input() {
                 Some(input) => input
                     .args
