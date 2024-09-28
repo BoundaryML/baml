@@ -2,17 +2,36 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.57.0](https://github.com/boundaryml/baml/compare/0.56.1..0.57.0) - 2024-09-27
+
+### Documentation
+
+- Fix Python dynamic types example (#979) - ([eade116](https://github.com/boundaryml/baml/commit/eade116de14bcc15d738fec911d8653685c13706)) - lorenzoh
+
+### Features
+
+- teach vscode/fiddle to explain when we drop information (#897) - ([93e2b9b](https://github.com/boundaryml/baml/commit/93e2b9b8d54a4ced0853ce72596d0b0a9896a0da)) - Samuel Lijin
+- Add ability for users to reset env vars to their desire. (#984) - ([69e6c29](https://github.com/boundaryml/baml/commit/69e6c29c82ccc06f8939b9ece75dd7797c8f6b98)) - hellovai
+
+### Bug
+
+- Fixed panic during logging for splitting on UTF-8 strings. (#987) - ([c27a64f](https://github.com/boundaryml/baml/commit/c27a64f6320515cd5ab6385ab93013d3d7ba88b8)) - hellovai
+- Improve SAP for triple quoted strings along with unions (#977) - ([44202ab](https://github.com/boundaryml/baml/commit/44202ab63aa3d2881485b9b32fa744797c908e33)) - hellovai
+- Add more unit tests for parsing logic inspired by user (#980) - ([48dd09f](https://github.com/boundaryml/baml/commit/48dd09f89b6447cbc1a539ecade66ab4da87b8dc)) - hellovai
+- Improve syntax errors e.g. class / enum parsing and also update pestmodel to handle traling comments (#981) - ([adbb6ae](https://github.com/boundaryml/baml/commit/adbb6ae38833d700bfe0123ac712cd90d7e4d970)) - hellovai
+- Updating docs for env vars (#985) - ([305d6b3](https://github.com/boundaryml/baml/commit/305d6b3e5a57513adc43c8ab9068c523dfc2e69c)) - hellovai
+- When using openai-generic, use a string as the content type in the api request if theres no media (#988) - ([e8fa739](https://github.com/boundaryml/baml/commit/e8fa739838cc124a8eed49103871b1b971063821)) - aaronvg
+
 ## [0.56.1](https://github.com/boundaryml/baml/compare/0.56.0..0.56.1) - 2024-09-21
 
-
 ### Bug Fixes
+
 - Improved parser for unions (#975) - ([b390521](https://github.com/boundaryml/baml/commit/b39052111529f217762b3271846006bec4a604de)) - hellovai
 - [syntax] Allow lists to contain trailing comma (#974) - ([9e3dc6c](https://github.com/boundaryml/baml/commit/9e3dc6c90954905a96b599ef28c40094fe48a43e)) - Greg Hale
 
 ## [0.56.0](https://github.com/boundaryml/baml/compare/0.55.3..0.56.0) - 2024-09-20
 
 Shout outs to Nico for fixing some internal Rust dependencies, and to Lorenz for correcting our documentation! We really appreciate it :)
-
 
 ### Features
 
@@ -44,7 +63,6 @@ Shout outs to Nico for fixing some internal Rust dependencies, and to Lorenz for
 ### Documentation
 
 - add reference docs about env vars (#945) - ([dd43bc5](https://github.com/boundaryml/baml/commit/dd43bc59087e809e09ca7d3caf628e179a28fc3e)) - Samuel Lijin
-
 
 ## [0.55.2](https://github.com/boundaryml/baml/compare/0.55.1..0.55.2) - 2024-09-11
 
@@ -89,16 +107,17 @@ Start here to learn more: https://docs.boundaryml.com/docs/get-started/quickstar
 ## [0.54.2](https://github.com/boundaryml/baml/compare/0.54.1..0.54.2) - 2024-09-05
 
 ### Features
+
 - Add a setting to disable restarting TS server in VSCode (#920) - ([628f236](https://github.com/boundaryml/baml/commit/628f2360c415fa8a7b0cd90d7249733ff06acaa9)) - aaronvg
 - Add prompt prefix for map types in ctx.output_format and add more type validation for map params (#919) - ([4d304c5](https://github.com/boundaryml/baml/commit/4d304c583b9188c1963a34e2a153baaf003e36ac)) - hellovai
 
 ### Bug fixes
+
 - Fix glibC issues for python linux-x86_64 (#922) - ([9161bec](https://github.com/boundaryml/baml/commit/9161becccf626f8d13a15626481720f29e0f992c)) - Samuel Lijin
 
-
 ### Documentation
-- Add nextjs hooks (#921) - ([fe14f5a](https://github.com/boundaryml/baml/commit/fe14f5a4ef95c9ccda916ff80ce852d3855554a3)) - aaronvg
 
+- Add nextjs hooks (#921) - ([fe14f5a](https://github.com/boundaryml/baml/commit/fe14f5a4ef95c9ccda916ff80ce852d3855554a3)) - aaronvg
 
 ## [0.54.1](https://github.com/boundaryml/baml/compare/0.54.0..0.54.1) - 2024-09-03
 
@@ -107,7 +126,6 @@ Start here to learn more: https://docs.boundaryml.com/docs/get-started/quickstar
 - Fix escape characters in quoted strings (#905) - ([9ba6eb8](https://github.com/boundaryml/baml/commit/9ba6eb834e0145f4c57e582b63730d3d0ac9b2e9)) - hellovai
 
 Prior `"\n"` was interpreted as `"\\n"` in quoted strings. This has been fixed to interpret `"\n"` as newline characters and true for other escape characters.
-
 
 ### Documentation
 
@@ -122,10 +140,10 @@ Prior `"\n"` was interpreted as `"\\n"` in quoted strings. This has been fixed t
 - BAML_LOG will truncate messages to 1000 characters (modify using env var BOUNDARY_MAX_LOG_CHUNK_SIZE) (#907) - ([d266e5c](https://github.com/boundaryml/baml/commit/d266e5c4157f3b28d2f6454a7ea265dda7296bb2)) - hellovai
 
 ### Bug Fixes
+
 - Improve parsing parsing when there are initial closing `]` or `}` (#903) - ([46b0cde](https://github.com/boundaryml/baml/commit/46b0cdeffb15bbab20a43728f52ad2a05623e6f7)) - hellovai
 - Update build script for ruby to build all platforms (#915) - ([df2f51e](https://github.com/boundaryml/baml/commit/df2f51e52615451b3643cc124e7262f11965f3ef)) - hellovai
 - Add unit-test for openai-generic provider and ensure it compiles (#916) - ([fde7c50](https://github.com/boundaryml/baml/commit/fde7c50c939c505906417596d16c7c4607173339)) - hellovai
-
 
 ## [0.54.0](https://github.com/boundaryml/baml/compare/0.53.1..0.54.0) - 2024-08-27
 
@@ -150,11 +168,11 @@ The default base URL for the Gemini provider has been updated to v1beta. This ch
 - Allow local filepaths to be used in tests in BAML files (image and audio) (#871) - ([fa6dc03](https://github.com/boundaryml/baml/commit/fa6dc03fcdd3255dd83e25d0bfb3b0e740991408)) - Samuel Lijin
 - Add support for absolute file paths in the file specifier (#881) - ([fcd189e](https://github.com/boundaryml/baml/commit/fcd189ed7eb81712bf3b641eb3dde158fc6a62af)) - hellovai
 - Implement shorthand clients (You can now use "openai/gpt-4o" as short for creating a complete client.) (#879) - ([ddd15c9](https://github.com/boundaryml/baml/commit/ddd15c92c3e8d81c24cb7305c9fcbb36b819900f)) - Samuel Lijin
-- Add support for arbritrary metadata (e.g. cache_policy for anthropic)  (#893) - ([0d63a70](https://github.com/boundaryml/baml/commit/0d63a70332477761a97783e203c98fd0bf67f151)) - hellovai
+- Add support for arbritrary metadata (e.g. cache_policy for anthropic) (#893) - ([0d63a70](https://github.com/boundaryml/baml/commit/0d63a70332477761a97783e203c98fd0bf67f151)) - hellovai
 - Expose Exceptions to user code: BamlError, BamlInvalidArgumentError, BamlClientError, BamlClientHttpError, BamlValidationError (#770) - ([7da14c4](https://github.com/boundaryml/baml/commit/7da14c480506e9791b3f4ce52ac73836a042d38a)) - hellovai
 
-
 ### Internal
+
 - AST Restructuring (#857) - ([75b51cb](https://github.com/boundaryml/baml/commit/75b51cbf80a0c8ba19ae05b021ef3c94dacb4e30)) - Anish Palakurthi
 
 ## [0.53.1](https://github.com/boundaryml/baml/compare/0.53.0..0.53.1) - 2024-08-11

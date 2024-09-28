@@ -597,10 +597,43 @@ impl ToProviderMessage for OpenAIClient {
     ) -> Result<serde_json::Map<String, serde_json::Value>> {
         let mut message = serde_json::Map::new();
         message.insert("role".into(), json!(content.role));
-        message.insert(
-            "content".into(),
-            json!(self.parts_to_message(&content.parts)?),
-        );
+        if self.provider == "openai-generic" {
+            // Check if all parts are text
+            let all_text = content
+                .parts
+                .iter()
+                .all(|part| matches!(part, ChatMessagePart::Text(_)));
+            if all_text {
+                // Concatenate all text parts into a single string
+                let combined_text = content
+                    .parts
+                    .iter()
+                    .map(|part| {
+                        if let ChatMessagePart::Text(text) = part {
+                            Ok(text.clone())
+                        } else {
+                            Err(anyhow::anyhow!("Non-text part encountered"))
+                        }
+                    })
+                    .collect::<Result<Vec<String>>>()?
+                    .join(" ");
+
+                message.insert("content".into(), json!(combined_text));
+            } else {
+                // If there are media parts, use the existing structure
+                message.insert(
+                    "content".into(),
+                    json!(self.parts_to_message(&content.parts)?),
+                );
+            }
+        } else {
+            // For other providers, use the existing structure
+            message.insert(
+                "content".into(),
+                json!(self.parts_to_message(&content.parts)?),
+            );
+        }
+
         Ok(message)
     }
 }
