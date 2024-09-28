@@ -14,7 +14,6 @@ use internal_baml_schema_ast::ast::{
 
 mod configurations;
 mod prompt;
-mod to_string_attributes;
 mod types;
 
 pub use crate::attributes::Attributes;
