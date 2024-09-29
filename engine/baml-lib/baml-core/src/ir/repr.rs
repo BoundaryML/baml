@@ -214,20 +214,29 @@ fn to_ir_attributes(
 ) -> IndexMap<String, Expression> {
     let mut attributes = IndexMap::new();
 
-    if let Some(ast_attrs) = maybe_ast_attributes {
-        if let Some(true) = ast_attrs.dynamic_type() {
+    if let Some(Attributes {
+        description,
+        alias,
+        dynamic_type,
+        skip,
+    }) = maybe_ast_attributes
+    {
+        if let Some(true) = dynamic_type {
             attributes.insert("dynamic_type".to_string(), Expression::Bool(true));
         }
-        if let Some(v) = ast_attrs.alias() {
+        if let Some(v) = alias {
             attributes.insert("alias".to_string(), Expression::String(db[*v].to_string()));
         }
-        if let Some(d) = ast_attrs.description() {
+        if let Some(d) = description {
             let ir_expr = match d {
                 ast::Expression::StringValue(s, _) => Expression::String(s.clone()),
                 ast::Expression::RawStringValue(s) => Expression::RawString(s.value().to_string()),
                 _ => panic!("Couldn't deal with description: {:?}", d),
             };
             attributes.insert("description".to_string(), ir_expr);
+        }
+        if let Some(true) = skip {
+            attributes.insert("skip".to_string(), Expression::Bool(true));
         }
     }
 

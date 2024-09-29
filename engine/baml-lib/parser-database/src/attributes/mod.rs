@@ -10,9 +10,17 @@ use internal_baml_schema_ast::ast::{Expression, SubType};
 ///
 #[derive(Debug, Default)]
 pub struct Attributes {
-    description: Option<Expression>,
-    alias: Option<StringId>, // TODO: This should be a LazyExpression.
-    dynamic_type: Option<bool>,
+    /// Description of the node, used in describing the node to the LLM.
+    pub description: Option<Expression>,
+
+    /// Alias for the node used when communicating with the LLM.
+    pub alias: Option<StringId>,
+
+    /// Whether the node is a dynamic type.
+    pub dynamic_type: Option<bool>,
+
+    /// Whether the node should be skipped during prompt rendering and parsing.
+    pub skip: Option<bool>,
 }
 
 impl Attributes {
@@ -45,6 +53,17 @@ impl Attributes {
     pub fn set_dynamic_type(&mut self) {
         self.dynamic_type.replace(true);
     }
+
+    /// Get skip.
+    pub fn skip(&self) -> &Option<bool> {
+        &self.skip
+    }
+
+    /// Set dynamism of type.
+    pub fn set_skip(&mut self) {
+        self.skip.replace(true);
+    }
+
 }
 pub(super) fn resolve_attributes(ctx: &mut Context<'_>) {
     for top in ctx.ast.iter_tops() {

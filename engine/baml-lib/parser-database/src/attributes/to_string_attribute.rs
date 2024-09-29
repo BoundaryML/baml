@@ -20,6 +20,12 @@ pub(super) fn visit(ctx: &mut Context<'_>, as_block: bool) -> Option<Attributes>
         ctx.validate_visited_arguments();
     }
 
+    if ctx.visit_optional_single_attr("skip") {
+        attributes.set_skip();
+        modified = true;
+        ctx.validate_visited_arguments();
+    }
+
     if as_block {
         if ctx.visit_optional_single_attr("dynamic") {
             attributes.set_dynamic_type();
