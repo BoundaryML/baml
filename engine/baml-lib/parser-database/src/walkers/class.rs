@@ -31,28 +31,9 @@ impl<'db> ClassWalker<'db> {
             .into_iter()
     }
 
-    // /// Iterate all the scalar fields in a given class in the order they were defined.
-    // pub fn dynamic_fields(self) -> impl ExactSizeIterator<Item = FieldWalker<'db>> {
-    //     self.ast_type_block()
-    //         .iter_fields()
-    //         .filter_map(move |(field_id, _)| {
-    //             self.db
-    //                 .types
-    //                 .refine_class_field((self.id, field_id))
-    //                 .right()
-    //                 .map(|_id| self.walk((self.id, field_id, true)))
-    //         })
-    //         .collect::<Vec<_>>()
-    //         .into_iter()
-    // }
-
     /// Iterate all the scalar fields in a given class in the order they were defined.
     pub fn dependencies(self) -> &'db HashSet<String> {
-        {
-            let dependencies = &self.db.types.class_dependencies[&self.id];
-
-            dependencies
-        }
+        &self.db.types.class_dependencies[&self.id]
     }
 
     /// Find all enums used by this class and any of its fields.
