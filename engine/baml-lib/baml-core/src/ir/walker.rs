@@ -166,7 +166,14 @@ impl Expression {
         }
     }
 
-    pub fn resolve(&self, env_values: &HashMap<String, String>) -> Result<BamlValue> {
+    /// Normalize an `Expression` into a `BamlValue` in a given context.
+    ///
+    /// TODO: Modify the context, rename it to `env` and make it a map
+    /// from `String` to `BamlValue`. This generalizes the context from
+    /// known environment variables to variables set by other means. For
+    /// example, we will eventually want to normalize `JinjaExpressions` found
+    /// inside an `assert` by augmenting the context with the LLM response.
+    pub fn normalize(&self, env_values: &HashMap<String, String>) -> Result<BamlValue> {
         match self {
             Expression::Identifier(idn) => match idn {
                 repr::Identifier::ENV(s) => match env_values.get(s) {
@@ -186,14 +193,14 @@ impl Expression {
             Expression::Map(m) => {
                 let mut map = baml_types::BamlMap::new();
                 for (k, v) in m {
-                    map.insert(k.as_string_value(env_values)?, v.resolve(env_values)?);
+                    map.insert(k.as_string_value(env_values)?, v.normalize(env_values)?);
                 }
                 Ok(BamlValue::Map(map))
             }
             Expression::List(l) => {
                 let mut list = Vec::new();
                 for v in l {
-                    list.push(v.resolve(env_values)?);
+                    list.push(v.normalize(env_values)?);
                 }
                 Ok(BamlValue::List(list))
             }
@@ -252,7 +259,7 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
     ) -> Result<IndexMap<String, Result<BamlValue>>> {
         self.args()
             .iter()
-            .map(|(k, v)| Ok((k.clone(), v.resolve(env_values))))
+            .map(|(k, v)| Ok((k.clone(), v.normalize(env_values))))
             .collect()
     }
 
