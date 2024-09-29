@@ -59,7 +59,7 @@ impl Attributes {
         &self.skip
     }
 
-    /// Set dynamism of type.
+    /// Set skip.
     pub fn set_skip(&mut self) {
         self.skip.replace(true);
     }
