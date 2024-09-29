@@ -1,5 +1,3 @@
-use baml_types::{BamlMediaType, TypeValue};
-
 use super::{Span, WithName, WithSpan};
 use std::fmt::Display;
 
@@ -65,6 +63,22 @@ impl Identifier {
             Identifier::Ref(_, _) => false,
 
             Identifier::Invalid(_, _) => false,
+        }
+    }
+
+    pub fn assert_eq_up_to_span(&self, other: &Identifier) {
+        use Identifier::*;
+        match (self, other) {
+            (ENV(e1,_), ENV(e2, _)) => assert_eq!(e1, e2),
+            (ENV(_,_), _) => panic!("Mismatched identifiers: {:?}, {:?}", self, other),
+            (Local(l1,_), Local(l2,_)) => assert_eq!(l1, l2),
+            (Local(_,_), _) => panic!("Mismatched identifiers: {:?}, {:?}", self, other),
+            (Ref(r1,_), Ref(r2,_)) => assert_eq!(r1, r2),
+            (Ref(_,_), _) => panic!("Mismatched identifiers: {:?}, {:?}", self, other),
+            (Identifier::String(s1,_), Identifier::String(s2,_)) => assert_eq!(s1,s2),
+            (Identifier::String(_,_), _) => panic!("Mismatched identifiers: {:?}, {:?}", self, other),
+            (Invalid(i1,_), Invalid(i2,_)) => assert_eq!(i1,i2),
+            (Invalid(_,_), _) => panic!("Mismatched identifiers: {:?}, {:?}", self, other),
         }
     }
 }

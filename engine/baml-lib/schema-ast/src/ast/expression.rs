@@ -9,15 +9,15 @@ use super::{Identifier, WithName, WithSpan};
 pub struct RawString {
     raw_span: Span,
     #[allow(dead_code)]
-    raw_value: String,
-    inner_value: String,
+    pub raw_value: String,
+    pub inner_value: String,
 
     /// If set indicates the language of the raw string.
     /// By default it is a text string.
     pub language: Option<(String, Span)>,
 
     // This is useful for getting the final offset.
-    indent: usize,
+    pub indent: usize,
     inner_span_start: usize,
 }
 
@@ -133,6 +133,13 @@ impl RawString {
                 + span.end(),
         }
     }
+
+    pub fn assert_eq_up_to_span(&self, other: &RawString) {
+        assert_eq!(self.inner_value, other.inner_value);
+        assert_eq!(self.raw_value, other.inner_value);
+        assert_eq!(self.language, other.language);
+        assert_eq!(self.indent, other.indent);
+    }
 }
 
 /// Represents arbitrary, even nested, expressions.
@@ -152,36 +159,6 @@ pub enum Expression {
     Array(Vec<Expression>, Span),
     /// A mapping function.
     Map(Vec<(Expression, Expression)>, Span),
-}
-
-impl Expression {
-    pub fn from_json(value: serde_json::Value, span: Span, empty_span: Span) -> Expression {
-        match value {
-            serde_json::Value::Null => Expression::StringValue("Null".to_string(), empty_span),
-            serde_json::Value::Bool(b) => Expression::BoolValue(b, span),
-            serde_json::Value::Number(n) => Expression::NumericValue(n.to_string(), span),
-            serde_json::Value::String(s) => Expression::StringValue(s, span),
-            serde_json::Value::Array(arr) => {
-                let arr = arr
-                    .into_iter()
-                    .map(|v| Expression::from_json(v, empty_span.clone(), empty_span.clone()))
-                    .collect();
-                Expression::Array(arr, span)
-            }
-            serde_json::Value::Object(obj) => {
-                let obj = obj
-                    .into_iter()
-                    .map(|(k, v)| {
-                        (
-                            Expression::StringValue(k, empty_span.clone()),
-                            Expression::from_json(v, empty_span.clone(), empty_span.clone()),
-                        )
-                    })
-                    .collect();
-                Expression::Map(obj, span)
-            }
-        }
-    }
 }
 
 impl fmt::Display for Expression {
@@ -215,6 +192,34 @@ impl fmt::Display for Expression {
 }
 
 impl Expression {
+
+    pub fn from_json(value: serde_json::Value, span: Span, empty_span: Span) -> Expression {
+        match value {
+            serde_json::Value::Null => Expression::StringValue("Null".to_string(), empty_span),
+            serde_json::Value::Bool(b) => Expression::BoolValue(b, span),
+            serde_json::Value::Number(n) => Expression::NumericValue(n.to_string(), span),
+            serde_json::Value::String(s) => Expression::StringValue(s, span),
+            serde_json::Value::Array(arr) => {
+                let arr = arr
+                    .into_iter()
+                    .map(|v| Expression::from_json(v, empty_span.clone(), empty_span.clone()))
+                    .collect();
+                Expression::Array(arr, span)
+            }
+            serde_json::Value::Object(obj) => {
+                let obj = obj
+                    .into_iter()
+                    .map(|(k, v)| {
+                        (
+                            Expression::StringValue(k, empty_span.clone()),
+                            Expression::from_json(v, empty_span.clone(), empty_span.clone()),
+                        )
+                    })
+                    .collect();
+                Expression::Map(obj, span)
+            }
+        }
+    }
     pub fn as_array(&self) -> Option<(&[Expression], &Span)> {
         match self {
             Expression::Array(arr, span) => Some((arr, span)),
@@ -334,5 +339,35 @@ impl Expression {
                 | Expression::Identifier(Identifier::Invalid(_, _))
                 | Expression::Identifier(Identifier::Local(_, _))
         )
+    }
+
+    pub fn assert_eq_up_to_span(&self, other: &Expression) {
+        use Expression::*;
+        match (self, other) {
+            (BoolValue(v1,_), BoolValue(v2,_)) => assert_eq!(v1,v2),
+            (BoolValue(_,_), _) => panic!("Types do not match: {:?} and {:?}", self, other),
+            (NumericValue(n1,_), NumericValue(n2,_)) => assert_eq!(n1, n2),
+            (NumericValue(_,_), _) => panic!("Types do not match: {:?} and {:?}", self, other),
+            (Identifier(i1), Identifier(i2)) => assert_eq!(i1,i2),
+            (Identifier(_), _) => panic!("Types do not match: {:?} and {:?}", self, other),
+            (StringValue(s1,_), StringValue(s2,_)) => assert_eq!(s1, s2),
+            (StringValue(_,_), _) => panic!("Types do not match: {:?} and {:?}", self, other),
+            (RawStringValue(s1), RawStringValue(s2)) => s1.assert_eq_up_to_span(s2),
+            (RawStringValue(_), _) => panic!("Types do not match: {:?} and {:?}", self, other),
+            (Array(xs,_), Array(ys,_)) => {
+                assert_eq!(xs.len(), ys.len());
+                xs.iter().zip(ys).for_each(|(x,y)| { x.assert_eq_up_to_span(y); })
+            },
+            (Array(_,_), _) => panic!("Types do not match: {:?} and {:?}", self, other),
+            (Map(m1,_), Map(m2,_)) => {
+                assert_eq!(m1.len(), m2.len());
+                m1.iter().zip(m2).for_each(|((k1, v1), (k2, v2))| {
+                    k1.assert_eq_up_to_span(k2);
+                    v1.assert_eq_up_to_span(v2);
+                });
+            },
+            (Map(_,_), _) => panic!("Types do not match: {:?} and {:?}", self, other),
+
+        }
     }
 }

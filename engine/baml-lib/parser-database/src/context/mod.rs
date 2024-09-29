@@ -83,8 +83,6 @@ impl<'db> Context<'db> {
     ///
     /// - When you are done validating an attribute, you must call `discard_arguments()` or
     ///   `validate_visited_arguments()`. Otherwise, Context will helpfully panic.
-    /// - When you are done validating an attribute set, you must call
-    ///   `validate_visited_attributes()`. Otherwise, Context will helpfully panic.
     pub(super) fn visit_attributes(&mut self, ast_attributes: ast::AttributeContainer) {
         if self.attributes.attributes.is_some() || !self.attributes.unused_attributes.is_empty() {
             panic!(
