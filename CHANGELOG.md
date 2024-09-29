@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.57.1](https://github.com/boundaryml/baml/compare/0.57.0..0.57.1) - 2024-09-29
+
+### Bugfixes
+
+- [BUGFIX] Parser should require a space between class keyword and class name (#990) - ([7528247](https://github.com/boundaryml/baml/commit/752824723404a4ed4c4b1e31c43d140e9346dca2)) - Greg Hale
+- Remove dynamic string attributes (#991) - ([0960ab2](https://github.com/boundaryml/baml/commit/0960ab2e0d16c50fef58772336b91297ddac6919)) - Greg Hale
+- ts fixes (#992) - ([36af43f](https://github.com/boundaryml/baml/commit/36af43f4f773e1565527916eff7d7837d9f8a983)) - aaronvg
+- Bump version to 0.57.1 - ([0aa71dd](https://github.com/boundaryml/baml/commit/0aa71dd4d3aa7082db6a19f0a3a976ff55789d83)) - Aaron Villalpando
+
 ## [0.57.0](https://github.com/boundaryml/baml/compare/0.56.1..0.57.0) - 2024-09-27
 
 ### Documentation
