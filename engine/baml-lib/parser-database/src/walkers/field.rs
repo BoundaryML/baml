@@ -28,11 +28,6 @@ impl<'db> FieldWalker<'db> {
         &self.db.types.class_attributes[&self.id.0].field_serilizers[&self.id.1]
     }
 
-    /// Attributes for the field.
-    pub fn static_attributes(self) -> &'db Attributes {
-        self.attributes()
-    }
-
     /// The field's default attributes.
     pub fn get_default_attributes(&self) -> Option<&'db Attributes> {
         let result = self
