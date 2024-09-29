@@ -25,8 +25,8 @@ export declare class BamlRuntime {
   createContextManager(): RuntimeContextManager
   callFunction(functionName: string, args: { [string]: any }, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, cb?: ClientRegistry | undefined | null): Promise<FunctionResult>
   callFunctionSync(functionName: string, args: { [string]: any }, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, cb?: ClientRegistry | undefined | null): FunctionResult
-  streamFunction(functionName: string, args: { [string]: any }, cb: (err: any, param: FunctionResult) => void, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, clientRegistry?: ClientRegistry | undefined | null): FunctionResultStream
-  streamFunctionSync(functionName: string, args: { [string]: any }, cb: (err: any, param: FunctionResult) => void, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, clientRegistry?: ClientRegistry | undefined | null): FunctionResultStream
+  streamFunction(functionName: string, args: { [string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, clientRegistry?: ClientRegistry | undefined | null): FunctionResultStream
+  streamFunctionSync(functionName: string, args: { [string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, clientRegistry?: ClientRegistry | undefined | null): FunctionResultStream
   setLogEventCallback(func?: undefined | ((err: any, param: BamlLogEvent) => void)): void
   flush(): void
   drainStats(): TraceStats

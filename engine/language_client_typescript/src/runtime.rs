@@ -171,7 +171,9 @@ impl BamlRuntime {
         env: Env,
         function_name: String,
         #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
-        #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] cb: Option<JsFunction>,
+        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<
+            JsFunction,
+        >,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
@@ -213,7 +215,9 @@ impl BamlRuntime {
         env: Env,
         function_name: String,
         #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
-        #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] cb: Option<JsFunction>,
+        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<
+            JsFunction,
+        >,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
