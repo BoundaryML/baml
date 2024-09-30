@@ -186,10 +186,6 @@ navigation:
             path: docs/observability/overview.mdx
           - page: Tracing and tagging functions
             path: docs/observability/tracing-tagging.mdx
-      - section: Extraction API
-        contents:
-          - page: Extraction API
-            path: docs/dashboard/extraction-api.mdx
 
       - section: Comparisons
         contents:
@@ -212,8 +208,13 @@ navigation:
       - section: Overview
         contents:
           - api: API Reference
+            layout:
+              - POST /extract
+              - page: Extraction Examples
+                path: docs/api/examples.mdx
             slug: docs/api
             summary: docs/api/summary.mdx
+            display-errors: true
 
 navbar-links:
   - type: github

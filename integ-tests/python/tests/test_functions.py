@@ -1044,8 +1044,9 @@ async def test_map_as_param():
             {"a": "b"}
         )  # intentionally passing the wrong type
 
-<<<<<<< HEAD
+
 import os
+
 
 @pytest.mark.asyncio
 async def test_env_vars_reset():
@@ -1057,7 +1058,6 @@ async def test_env_vars_reset():
     @trace
     def top_level_async_tracing():
         reset_baml_env_vars(env_vars)
-
 
     @trace
     async def atop_level_async_tracing():
@@ -1075,29 +1075,9 @@ async def test_env_vars_reset():
         _ = await b.ExtractPeople(
             "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
         )
-    
+
     reset_baml_env_vars(os.environ.copy())
     people = await b.ExtractPeople(
         "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
     )
     assert len(people) > 0
-
-    
-=======
-
-@pytest.mark.asyncio
-async def test_azure():
-    res = await b.TestAzure("Mt Rainier is tall")
-    assert len(res) > 0, "Expected non-empty result but got empty."
-
-
-@pytest.mark.asyncio
-async def test_azure_streaming():
-    res = b.stream.TestAzure("Mt Rainier is tall")
-    async for msg in res:
-        print(msg)
-
-    final = await res.get_final_response()
-
-    assert len(final) > 0, "Expected non-empty result but got empty."
->>>>>>> 22604ae5 (Docs)
