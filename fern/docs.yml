@@ -11,235 +11,316 @@ instances:
 title: Boundary Documentation
 
 tabs:
+  home:
+    display-name: Home
+    icon: fa-regular fa-home
+    slug: home
   guides:
     display-name: Guide
+    icon: fa-regular fa-book
+    slug: guide
   examples:
     display-name: Examples
   reference:
-    display-name: Reference
+    display-name: BAML Reference
+    icon: fa-regular fa-code
+    slug: ref
   boundary-extraction-api:
     display-name: Document Extraction API
-  observability:
-    display-name: Observability
+  # observability:
+  #   display-name: Observability
+  # playground:
+  #   display-name: Playground
+  #   icon: fa-brands fa-codepen
+  #   slug: sdks
 
 navigation:
-  - tab: baml-docs
+  - tab: home
     layout:
-      - section: Get started
-        contents:
-          - page: What is BAML?
-            path: docs/get-started/what-is-baml.mdx
-          - page: Interactive Demos
-            path: docs/get-started/interactive-demos.mdx
-          - section: Quickstart
-            collapsed: false
-            contents:
-              - page: Python
-                path: docs/get-started/quickstart/python.mdx
-              - page: TypeScript
-                path: docs/get-started/quickstart/typescript.mdx
-              - page: Ruby
-                path: docs/get-started/quickstart/ruby.mdx
-              - page: Any Language (OpenAPI)
-                path: docs/get-started/quickstart/openapi.mdx
-              - page: VSCode
-                path: docs/get-started/quickstart/editors-vscode.mdx
-              - page: Other Editors
-                path: docs/get-started/quickstart/editors-other.mdx
-          - section: Debugging
-            collapsed: false
-            contents:
-              - page: VSCode Playground
-                path: docs/get-started/debugging/vscode-playground.mdx
-              - page: Enable Logging
-                path: docs/get-started/debugging/enable-logging.mdx
-              - page: Exception Handling
-                path: docs/calling-baml/exceptions.mdx
-          - section: Deploying BAML Projects
-            contents:
-              - page: Docker
-                path: docs/get-started/deploying/docker.mdx
-              - page: Nextjs
-                path: docs/get-started/deploying/nextjs.mdx
-              - page: AWS
-                path: docs/get-started/deploying/aws.mdx
-              - page: Docker (OpenAPI)
-                path: docs/get-started/deploying/openapi.mdx
-      - section: BAML Snippets
-        contents:
-          - section: General BAML Syntax
-            contents:
-              - page: comments
-                path: docs/snippets/syntax/comments.mdx
-              - page: strings
-                path: docs/snippets/syntax/strings.mdx
-              - page: Lists
-                path: docs/snippets/syntax/lists.mdx
-              - page: Dictionaries
-                path: docs/snippets/syntax/dictionaries.mdx
-          - page: Supported Types
-            path: docs/snippets/supported-types.mdx
-          - section: LLM Clients
-            contents:
-              - page: Overview
-                path: docs/snippets/clients/overview.mdx
-              - section: providers
-                contents:
-                  - page: anthropic
-                    path: docs/snippets/clients/providers/anthropic.mdx
-                  - page: aws-bedrock
-                    path: docs/snippets/clients/providers/aws-bedrock.mdx
-                  - page: azure-openai
-                    path: docs/snippets/clients/providers/azure.mdx
-                  - page: google-ai
-                    path: docs/snippets/clients/providers/gemini.mdx
-                  - page: groq
-                    path: docs/snippets/clients/providers/groq.mdx
-                  - page: huggingface
-                    path: docs/snippets/clients/providers/huggingface.mdx
-                  - page: ollama
-                    path: docs/snippets/clients/providers/ollama.mdx
-                  - page: openai
-                    path: docs/snippets/clients/providers/openai.mdx
-                  - page: openai-generic
-                    path: docs/snippets/clients/providers/openai-generic.mdx
-                  - page: openrouter
-                    path: docs/snippets/clients/providers/openrouter.mdx
-                  - page: together-ai
-                    path: docs/snippets/clients/providers/together.mdx
-                  - page: vertex-ai
-                    path: docs/snippets/clients/providers/vertex.mdx
-                  - page: vllm
-                    path: docs/snippets/clients/providers/vllm.mdx
-                  - page: LMStudio
-                    path: docs/snippets/clients/providers/lmstudio.mdx
-                  - page: KeywordsAI
-                    path: docs/snippets/clients/providers/keywordsai.mdx
-              - section: provider strategies
-                contents:
-                  - page: fallback
-                    path: docs/snippets/clients/fallback.mdx
-                  - page: round-robin
-                    path: docs/snippets/clients/round-robin.mdx
-                  - page: retry_policy
-                    path: docs/snippets/clients/retry.mdx
-          - section: Functions
-            contents:
-              - page: Overview
-                path: docs/snippets/functions/overview.mdx
-              - page: Classification
-                path: docs/snippets/functions/classification.mdx
-              - page: Extraction
-                path: docs/snippets/functions/extraction.mdx
-              - page: Function Calling / Tools
-                path: docs/snippets/functions/function-calling.mdx
-          - page: class
-            path: docs/snippets/class.mdx
-          - page: enum
-            path: docs/snippets/enum.mdx
-          - section: Prompt Syntax
-            contents:
-              - page: What is Jinja / Cookbook
-                path: docs/snippets/prompt-syntax/what-is-jinja.mdx
-              - page: ctx.output_format
-                path: docs/snippets/prompt-syntax/output-format.mdx
-              - page: _.role
-                path: docs/snippets/prompt-syntax/roles.mdx
-              - page: Variables
-                path: docs/snippets/prompt-syntax/variables.mdx
-              - page: Conditionals
-                path: docs/snippets/prompt-syntax/conditionals.mdx
-              - page: Loops
-                path: docs/snippets/prompt-syntax/loops.mdx
-              - page: Comments
-                path: docs/snippets/prompt-syntax/comments.mdx
-              - page: ctx (accessing metadata)
-                path: docs/snippets/prompt-syntax/ctx.mdx
-          - page: Template String
-            path: docs/snippets/template-string.mdx
-          - page: Test Cases
-            path: docs/snippets/test-cases.mdx
-      - section: Advanced BAML Features
-        contents:
-          - page: Dynamic Types
-            path: docs/calling-baml/dynamic-types.mdx
-          - page: Client Registry
-            path: docs/calling-baml/client-registry.mdx
-      - section: BAML with Python/TS/Ruby
-        contents:
-          - page: Generate the BAML Client
-            path: docs/calling-baml/generate-baml-client.mdx
-          - page: Set Environment Variables
-            path: docs/calling-baml/set-env-vars.mdx
-          - page: Calling BAML Functions
-            path: docs/calling-baml/calling-functions.mdx
-          - page: Streaming BAML Functions
-            path: docs/calling-baml/streaming.mdx
-          - page: Concurrent function calls
-            path: docs/calling-baml/concurrent-calls.mdx
-          - page: Multimodal
-            path: docs/calling-baml/multi-modal.mdx
-      - section: NextJS
-        contents:
-          - page: NextJS Integration
-            path: docs/baml-nextjs/baml-nextjs.mdx
+      - page: Welcome
+        path: pages/welcome.mdx
+  - tab: guides
+    layout:
+      - page: Changelog
+        icon: fa-regular fa-history
+        path: guide/introduction.mdx
 
-      - section: Observability [Paid]
+      - section: Introduction
         contents:
-          - page: Enabling
-            path: docs/observability/overview.mdx
-          - page: Tracing and tagging functions
-            path: docs/observability/tracing-tagging.mdx
-
-      - section: Comparisons
+          - page: What are function defintions
+            icon: fa-regular fa-question-circle
+            path: guide/introduction.mdx
+          - page: What's the baml_src folder
+            icon: fa-regular fa-folder
+            path: guide/introduction.mdx
+            slug: baml_src
+          - page: What's baml_client
+            icon: fa-regular fa-folder-gear
+            path: guide/introduction.mdx
+            slug: baml_client
+      - section: "Installation: Editors"
         contents:
-          - page: Comparing Marvin
-            path: docs/comparisons/marvin.mdx
-          - page: Comparing Pydantic
-            path: docs/comparisons/pydantic.mdx
-      - section: Reference
+          - page: VSCode Extension
+            icon: fa-brands fa-microsoft
+            path: guide/introduction.mdx
+          - page: Cursor Extension
+            icon: fa-brands fa-microsoft
+            path: guide/introduction.mdx
+          - page: Others
+            icon: fa-brands fa-microsoft
+            path: guide/introduction.mdx
+      - section: "Installation: Language"
         contents:
-          - page: Contact Us
-            path: docs/contact.mdx
+          - page: Python
+            icon: fa-brands fa-python
+            path: guide/introduction.mdx
+          - page: Typescript
+            icon: fa-brands fa-typescript
+            path: guide/introduction.mdx
+          - page: Ruby
+            icon: fa-brands fa-ruby
+            path: guide/introduction.mdx
+          - page: REST API (other languages)
+            icon: fa-regular fa-network-wired
+            path: guide/introduction.mdx
+      - section: Development
+        contents:
           - page: Environment Variables
-            path: docs/reference/env-vars.mdx
-          - section: Incidents
+            icon: fa-regular fa-cogs
+            path: guide/introduction.mdx
+          - page: Terminal Logs
+            icon: fa-regular fa-file-alt
+            path: guide/introduction.mdx
+          - page: Switching BAML versions
+            icon: fa-regular
+            path: guide/introduction.mdx
+          - section: Deploying
+            icon: fa-regular fa-check
             contents:
-              - page: SSRF Issue in fiddle-proxy (July 2024)
-                path: docs/incidents/2024-07-10-ssrf-issue-in-fiddle-proxy.mdx
+              - page: AWS
+                icon: fa-brands fa-aws
+                path: guide/introduction.mdx
+              - page: NextJs
+                icon: fa-brands fa-react
+                path: guide/introduction.mdx
+              - page: Docker
+                icon: fa-brands fa-docker
+                path: guide/introduction.mdx
+              - page: Docker (REST API)
+                icon: fa-brands fa-docker
+                path: guide/introduction.mdx
+      - section: BAML Basics
+        contents:
+          - page: My first function
+            icon: fa-solid fa-terminal
+            path: guide/introduction.mdx
+          - page: Switching LLMs
+            icon: fa-regular fa-random
+            path: guide/introduction.mdx
+          - page: Testing functions
+            icon: fa-regular fa-vial
+            path: guide/introduction.mdx
+          - page: Streaming
+            icon: fa-regular fa-wave-square
+            path: guide/introduction.mdx
+          - page: Multi-Modal (Images / Audio)
+            icon: fa-regular fa-image
+            path: guide/introduction.mdx
+          - page: Error Handling
+            icon: fa-regular fa-bug
+            path: guide/introduction.mdx
+          - section: Advanced
+            contents:
+              - page: Re-using Prompts
+                icon: fa-regular
+                path: guide/introduction.mdx
+              - page: Prompt Caching
+                icon: fa-regular
+                path: guide/introduction.mdx
+      - section: Prompt Engineering
+        contents:
+          - page: Zero shot prompting
+            icon: fa-regular fa-bullseye
+            path: guide/introduction.mdx
+          - page: Few shot prompting
+            icon: fa-regular fa-dice-three
+            path: guide/introduction.mdx
+          - page: Chain of Thought
+            icon: fa-solid fa-brain
+            path: guide/introduction.mdx
+          - page: Symbol Tuning
+            icon: fa-regular fa-adjust
+            path: guide/introduction.mdx
+          - page: Self-Consistency Prompting
+            icon: fa-regular fa-sync-alt
+            path: guide/introduction.mdx
+          - page: Prompt Chaining
+            icon: fa-regular fa-link
+            path: guide/introduction.mdx
+          - page: Retrieval Augmented Generation
+            icon: fa-regular fa-database
+            path: guide/introduction.mdx
+          - page: Tool Use
+            icon: fa-regular fa-wrench
+            path: guide/introduction.mdx
+          - page: Chat History
+            icon: fa-regular fa-comments
+            path: guide/introduction.mdx
+  - tab: examples
+    layout:
+      - page: Changelog
+        icon: fa-regular fa-history
+        path: guide/introduction.mdx
+
+      - section: Python
+        contents:
+          - page: Hello World
+            icon: fa-brands fa-python
+            path: guide/introduction.mdx
+          - page: FastAPI + RAG + streaming
+            icon: fa-brands fa-python
+            path: guide/introduction.mdx
+          - page: Flask + ChatBot
+            icon: fa-brands fa-python
+            path: guide/introduction.mdx
+          - page: Reflex + Reciept Parsing
+            icon: fa-brands fa-python
+            path: guide/introduction.mdx
+          - page: Parsing PDFs
+            icon: fa-brands fa-python
+            path: guide/introduction.mdx
+      - section: Typescript
+        contents:
+          - page: Hello World
+            icon: fa-brands fa-typescript
+            path: guide/introduction.mdx
+          - page: NextJS + RAG + streaming
+            icon: fa-brands fa-typescript
+            path: guide/introduction.mdx
+          - page: React + Express + ChatBot
+            icon: fa-brands fa-typescript
+            path: guide/introduction.mdx
+          - page: NextJS parsing PDFs
+            icon: fa-brands fa-typescript
+            path: guide/introduction.mdx
+          - page: Scraping with Playwright
+            icon: fa-brands fa-typescript
+            path: guide/introduction.mdx
+      - section: Ruby
+        contents:
+          - page: Hello world
+            icon: fa-brands fa-ruby
+            path: guide/introduction.mdx
+          - page: Rails + RAG + streaming
+            icon: fa-brands fa-ruby
+            path: guide/introduction.mdx
+      - section: Rest API Hello World
+        contents:
+          - page: Ruby
+            icon: fa-brands fa-ruby
+            path: guide/introduction.mdx
+          - page: Java
+            icon: fa-brands fa-java
+            path: guide/introduction.mdx
+          - page: Go
+            icon: fa-brands fa-java
+            path: guide/introduction.mdx
+          - page: C++
+            icon: fa-brands fa-java
+            path: guide/introduction.mdx
+          - page: Rust
+            icon: fa-brands fa-java
+            path: guide/introduction.mdx
+          - page: PHP
+            icon: fa-brands fa-java
+            path: guide/introduction.mdx
+  - tab: reference
+    layout:
+      - section: Editor Extension Settings
+        contents:
+          - page: baml.cliPath
+            path: guide/introduction.mdx
+          - page: baml.generateCodeOnSave
+            path: guide/introduction.mdx
+          - page: baml.restartTSServerOnSave
+            path: guide/introduction.mdx
+      - section: baml-cli
+        contents:
+          - page: init
+            path: guide/introduction.mdx
+          - page: generate
+            path: guide/introduction.mdx
+          - page: dev
+            path: guide/introduction.mdx
+          - page: serve
+            path: guide/introduction.mdx
+      - section: Language Reference
+        slug: baml
+        contents:
+          - page: Supported Types
+            path: guide/introduction.mdx
+          - page: function
+            path: guide/introduction.mdx
+          - page: test
+            path: guide/introduction.mdx
+          - page: template_string
+            path: guide/introduction.mdx
+          - page: "client<llm>"
+            path: guide/introduction.mdx
+          - page: class
+            path: guide/introduction.mdx
+          - page: enum
+            path: guide/introduction.mdx
+          - page: generator
+            path: guide/introduction.mdx
+
+      - section: Prompt Syntax
+        contents:
+          - page: What is jinja?
+            path: guide/introduction.mdx
+          - page: "ctx.output_format"
+            path: guide/introduction.mdx
+          - page: Message roles
+            path: guide/introduction.mdx
+          - page: Variables
+            path: guide/introduction.mdx
+          - page: Conditionals
+            path: guide/introduction.mdx
+          - page: Loops
+            path: guide/introduction.mdx
+          - page: Advanced
+            path: guide/introduction.mdx
+
   - tab: boundary-extraction-api
     layout:
-      - section: Overview
+      - section: Extract API
         contents:
           - api: API Reference
+            slug: reference/extract
+            summary: reference/extract/summary.mdx
+            display-errors: true
             layout:
               - POST /extract
               - page: Extraction Examples
-                path: docs/api/examples.mdx
-            slug: docs/api
-            summary: docs/api/summary.mdx
-            display-errors: true
+                path: reference/extract/examples.mdx
+                slug: examples
 
 navbar-links:
   - type: github
     value: https://github.com/boundaryml/baml
   - type: filled
-    text: Discord Community
+    text: Help on Discord
     url: https://discord.gg/BTNBeXGuaS
 
 colors:
   accentPrimary:
     light: "#a78bfa"
-    # dark: "#ff8e00"
   background:
     light: "#ffffff"
-    # dark: "#0f141a"
   sidebar-background:
     light: "#fefefe"
-    # dark: "#14191f"
 logo:
   light: assets/favicon.ico
-  # dark: assets/favicon.png
   height: 40
 favicon: assets/favicon.ico
 css: assets/styles.css
