@@ -1,0 +1,2 @@
+api:
+  path: ./openapi/openapi.yaml

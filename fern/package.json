@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "dev": "npx fern docs dev",
+    "preview": "npx fern generate --preview --docs"
+  },
+  "devDependencies": {
+    "fern-api": "^0.31.24"
+  }
+}
