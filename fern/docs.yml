@@ -13,26 +13,23 @@ title: Boundary Documentation
 tabs:
   home:
     display-name: Home
-    icon: fa-regular fa-home
+    icon: fa-solid fa-house
     slug: home
   guides:
     display-name: Guide
-    icon: fa-regular fa-book
+    icon: fa-solid fa-book
     slug: guide
   examples:
     display-name: Examples
+    icon: fa-solid fa-code
   reference:
     display-name: BAML Reference
-    icon: fa-regular fa-code
+    icon: fa-solid fa-code-branch
     slug: ref
-  boundary-extraction-api:
-    display-name: Document Extraction API
-  # observability:
-  #   display-name: Observability
-  # playground:
-  #   display-name: Playground
-  #   icon: fa-brands fa-codepen
-  #   slug: sdks
+  paid-tooling:
+    display-name: Paid Offerings
+    icon: fa-solid fa-dollar-sign
+    slug: paid-tooling
 
 navigation:
   - tab: home
@@ -75,10 +72,10 @@ navigation:
             icon: fa-brands fa-python
             path: guide/introduction.mdx
           - page: Typescript
-            icon: fa-brands fa-typescript
+            icon: fa-brands fa-js
             path: guide/introduction.mdx
           - page: Ruby
-            icon: fa-brands fa-ruby
+            icon: fa-regular fa-gem
             path: guide/introduction.mdx
           - page: REST API (other languages)
             icon: fa-regular fa-network-wired
@@ -89,13 +86,13 @@ navigation:
             icon: fa-regular fa-cogs
             path: guide/introduction.mdx
           - page: Terminal Logs
-            icon: fa-regular fa-file-alt
+            icon: fa-regular fa-file-lines
             path: guide/introduction.mdx
-          - page: Switching BAML versions
-            icon: fa-regular
+          - page: Upgrade BAML versions
+            icon: fa-regular fa-circle-arrow-up
             path: guide/introduction.mdx
           - section: Deploying
-            icon: fa-regular fa-check
+            icon: fa-regular fa-rocket
             contents:
               - page: AWS
                 icon: fa-brands fa-aws
@@ -130,12 +127,13 @@ navigation:
             icon: fa-regular fa-bug
             path: guide/introduction.mdx
           - section: Advanced
+            icon: fa-regular fa-rectangle-pro
             contents:
               - page: Re-using Prompts
-                icon: fa-regular
+                icon: fa-regular fa-repeat
                 path: guide/introduction.mdx
               - page: Prompt Caching
-                icon: fa-regular
+                icon: fa-regular fa-save
                 path: guide/introduction.mdx
       - section: Prompt Engineering
         contents:
@@ -173,69 +171,92 @@ navigation:
         path: guide/introduction.mdx
 
       - section: Python
+        icon: fa-brands fa-python
         contents:
           - page: Hello World
-            icon: fa-brands fa-python
+            icon: fa-regular fa-rocket
             path: guide/introduction.mdx
           - page: FastAPI + RAG + streaming
-            icon: fa-brands fa-python
+            icon: fa-regular fa-database
             path: guide/introduction.mdx
           - page: Flask + ChatBot
-            icon: fa-brands fa-python
+            icon: fa-regular fa-comments
             path: guide/introduction.mdx
           - page: Reflex + Reciept Parsing
-            icon: fa-brands fa-python
+            icon: fa-regular fa-receipt
             path: guide/introduction.mdx
           - page: Parsing PDFs
-            icon: fa-brands fa-python
+            icon: fa-regular fa-file-pdf
+            path: guide/introduction.mdx
+          - page: Web scraping with Selenium
+            icon: fa-regular fa-server
             path: guide/introduction.mdx
       - section: Typescript
+        icon: fa-brands fa-js
         contents:
           - page: Hello World
-            icon: fa-brands fa-typescript
+            icon: fa-regular fa-rocket
             path: guide/introduction.mdx
           - page: NextJS + RAG + streaming
-            icon: fa-brands fa-typescript
+            icon: fa-regular fa-database
             path: guide/introduction.mdx
           - page: React + Express + ChatBot
-            icon: fa-brands fa-typescript
+            icon: fa-regular fa-comments
             path: guide/introduction.mdx
           - page: NextJS parsing PDFs
-            icon: fa-brands fa-typescript
+            icon: fa-regular fa-file-pdf
             path: guide/introduction.mdx
-          - page: Scraping with Playwright
-            icon: fa-brands fa-typescript
+          - page: Web scraping with Playwright
+            icon: fa-regular fa-server
             path: guide/introduction.mdx
       - section: Ruby
+        icon: fa-solid fa-gem
         contents:
           - page: Hello world
-            icon: fa-brands fa-ruby
+            icon: fa-regular fa-rocket
             path: guide/introduction.mdx
           - page: Rails + RAG + streaming
-            icon: fa-brands fa-ruby
+            icon: fa-regular fa-database
             path: guide/introduction.mdx
       - section: Rest API Hello World
+        icon: fa-regular fa-network-wired
         contents:
           - page: Ruby
-            icon: fa-brands fa-ruby
+            icon: fa-solid fa-gem
             path: guide/introduction.mdx
           - page: Java
             icon: fa-brands fa-java
             path: guide/introduction.mdx
           - page: Go
-            icon: fa-brands fa-java
+            icon: fa-brands fa-golang
             path: guide/introduction.mdx
           - page: C++
-            icon: fa-brands fa-java
+            icon: fa-brands fa-cuttlefish
             path: guide/introduction.mdx
           - page: Rust
-            icon: fa-brands fa-java
+            icon: fa-brands fa-rust
             path: guide/introduction.mdx
           - page: PHP
-            icon: fa-brands fa-java
+            icon: fa-brands fa-php
             path: guide/introduction.mdx
   - tab: reference
     layout:
+      - page: Changelog
+        icon: fa-regular fa-history
+        path: ./Changelog.mdx
+
+      - section: Boundary Tools
+        contents:
+          - api: Document Extraction API
+            icon: fa-regular fa-dollar-sign
+            slug: reference/extract
+            summary: reference/extract/summary.mdx
+            display-errors: true
+            layout:
+              - POST /extract
+              - page: Extraction Examples
+                path: reference/extract/examples.mdx
+                slug: examples
       - section: Editor Extension Settings
         contents:
           - page: baml.cliPath
@@ -259,6 +280,22 @@ navigation:
         contents:
           - page: Supported Types
             path: guide/introduction.mdx
+          - page: comments
+            path: guide/introduction.mdx
+          - section: values
+            contents:
+              - page: Enviornment Variables
+                path: guide/introduction.mdx
+              - page: strings
+                path: guide/introduction.mdx
+              - page: numbers
+                path: guide/introduction.mdx
+              - page: bool
+                path: guide/introduction.mdx
+              - page: array / list
+                path: guide/introduction.mdx
+              - page: dictionary / map
+                path: guide/introduction.mdx
           - page: function
             path: guide/introduction.mdx
           - page: test
@@ -291,7 +328,58 @@ navigation:
           - page: Advanced
             path: guide/introduction.mdx
 
-  - tab: boundary-extraction-api
+      - section: "baml_client: Python"
+        contents:
+          - page: TypeBuilder
+            path: guide/introduction.mdx
+          - page: ClientRegistry
+            path: guide/introduction.mdx
+          - page: BamlError
+            path: guide/introduction.mdx
+          - page: BamlImagePy
+            path: guide/introduction.mdx
+          - page: BamlAudioPy
+            path: guide/introduction.mdx
+          - page: b
+            path: guide/introduction.mdx
+          - page: async_client
+            path: guide/introduction.mdx
+          - page: sync_client
+            path: guide/introduction.mdx
+          - page: reset_baml_env_vars
+            path: guide/introduction.mdx
+          - page: trace
+            path: guide/introduction.mdx
+          - page: set_tags
+            path: guide/introduction.mdx
+      - section: "baml_client: Typescript"
+        contents:
+          - page: TypeBuilder
+            path: guide/introduction.mdx
+          - page: ClientRegistry
+            path: guide/introduction.mdx
+          - page: BamlError
+            path: guide/introduction.mdx
+          - page: BamlImageTs
+            path: guide/introduction.mdx
+          - page: BamlAudioTs
+            path: guide/introduction.mdx
+          - page: b
+            path: guide/introduction.mdx
+          - page: async_client
+            path: guide/introduction.mdx
+          - page: sync_client
+            path: guide/introduction.mdx
+          - page: resetBamlEnvVars
+            path: guide/introduction.mdx
+          - page: trace_async
+            path: guide/introduction.mdx
+          - page: trace_sync
+            path: guide/introduction.mdx
+          - page: set_tags
+            path: guide/introduction.mdx
+
+  - tab: paid-tooling
     layout:
       - section: Extract API
         contents:
