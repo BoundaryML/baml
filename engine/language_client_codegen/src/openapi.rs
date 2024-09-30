@@ -223,6 +223,62 @@ impl Serialize for OpenApiSchema<'_> {
                             ],
                         }),
                     ),
+                    (
+                        "BamlOptions",
+                        json!({
+                            "type": "object",
+                            "properties": {
+                                "client_registry": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                        "clients": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/ClientProperty"
+                                            }
+                                        },
+                                        "primary": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "required": ["clients"]
+                                }
+                            }
+                        })
+                    ),
+                    (
+                        "ClientProperty",
+                        json!({
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "provider": {
+                                    "type": "string"
+                                },
+                                "retry_policy": {
+                                    "type": "string",
+                                    "nullable": true
+                                },
+                                "options": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "oneOf": [
+                                            { "type": "string" },
+                                            { "type": "number" },
+                                            { "type": "boolean" },
+                                            { "type": "object" },
+                                            { "type": "array" }
+                                        ]
+                                    }
+                                }
+                            },
+                            "required": ["name", "provider", "options"]
+                        })
+                    )
                 ]
                 .into_iter()
                 .chain(schemas.into_iter())
