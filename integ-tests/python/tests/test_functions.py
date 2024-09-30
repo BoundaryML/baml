@@ -1044,7 +1044,9 @@ async def test_map_as_param():
             {"a": "b"}
         )  # intentionally passing the wrong type
 
+
 import os
+
 
 @pytest.mark.asyncio
 async def test_env_vars_reset():
@@ -1056,7 +1058,6 @@ async def test_env_vars_reset():
     @trace
     def top_level_async_tracing():
         reset_baml_env_vars(env_vars)
-
 
     @trace
     async def atop_level_async_tracing():
@@ -1074,11 +1075,9 @@ async def test_env_vars_reset():
         _ = await b.ExtractPeople(
             "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
         )
-    
+
     reset_baml_env_vars(os.environ.copy())
     people = await b.ExtractPeople(
         "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
     )
     assert len(people) > 0
-
-    

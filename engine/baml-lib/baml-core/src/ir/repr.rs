@@ -9,7 +9,7 @@ use internal_baml_parser_database::{
         ClassWalker, ClientSpec as AstClientSpec, ClientWalker, ConfigurationWalker,
         EnumValueWalker, EnumWalker, FieldWalker, FunctionWalker, TemplateStringWalker,
     },
-    ParserDatabase, PromptAst, RetryPolicyStrategy, ToStringAttributes,
+    Attributes, ParserDatabase, PromptAst, RetryPolicyStrategy,
 };
 use internal_baml_schema_ast::ast::SubType;
 
@@ -194,7 +194,6 @@ pub struct NodeAttributes {
     ///
     ///   - @skip becomes ("skip", bool)
     ///   - @alias(...) becomes ("alias", ...)
-    ///   - @get(python code) becomes ("get/python", python code)
     #[serde(with = "indexmap::map::serde_seq")]
     meta: IndexMap<String, Expression>,
 
@@ -211,35 +210,33 @@ impl NodeAttributes {
 
 fn to_ir_attributes(
     db: &ParserDatabase,
-    maybe_ast_attributes: Option<&ToStringAttributes>,
+    maybe_ast_attributes: Option<&Attributes>,
 ) -> IndexMap<String, Expression> {
     let mut attributes = IndexMap::new();
 
-    if let Some(ast_attributes) = maybe_ast_attributes {
-        match ast_attributes {
-            ToStringAttributes::Static(s) => {
-                if let Some(true) = s.dynamic_type() {
-                    attributes.insert("dynamic_type".to_string(), Expression::Bool(true));
-                }
-
-                if let Some(skip) = s.skip() {
-                    attributes.insert("skip".to_string(), Expression::Bool(*skip));
-                }
-                if let Some(v) = s.alias() {
-                    attributes.insert("alias".to_string(), Expression::String(db[*v].to_string()));
-                }
-                for (&k, &v) in s.meta().into_iter() {
-                    attributes.insert(db[k].to_string(), Expression::String(db[v].to_string()));
-                }
-            }
-            ToStringAttributes::Dynamic(d) => {
-                for (&lang, &lang_code) in d.code.iter() {
-                    attributes.insert(
-                        format!("get/{}", db[lang].to_string()),
-                        Expression::String(db[lang_code].to_string()),
-                    );
-                }
-            }
+    if let Some(Attributes {
+        description,
+        alias,
+        dynamic_type,
+        skip,
+    }) = maybe_ast_attributes
+    {
+        if let Some(true) = dynamic_type {
+            attributes.insert("dynamic_type".to_string(), Expression::Bool(true));
+        }
+        if let Some(v) = alias {
+            attributes.insert("alias".to_string(), Expression::String(db[*v].to_string()));
+        }
+        if let Some(d) = description {
+            let ir_expr = match d {
+                ast::Expression::StringValue(s, _) => Expression::String(s.clone()),
+                ast::Expression::RawStringValue(s) => Expression::RawString(s.value().to_string()),
+                _ => panic!("Couldn't deal with description: {:?}", d),
+            };
+            attributes.insert("description".to_string(), ir_expr);
+        }
+        if let Some(true) = skip {
+            attributes.insert("skip".to_string(), Expression::Bool(true));
         }
     }
 
@@ -569,7 +566,6 @@ type ClassId = String;
 pub struct Class {
     pub name: ClassId,
     pub static_fields: Vec<Node<Field>>,
-    pub dynamic_fields: Vec<Node<Field>>,
     pub inputs: Vec<(String, FieldType)>,
 }
 
@@ -589,10 +585,6 @@ impl WithRepr<Class> for ClassWalker<'_> {
             name: self.name().to_string(),
             static_fields: self
                 .static_fields()
-                .map(|e| e.node(db))
-                .collect::<Result<Vec<_>>>()?,
-            dynamic_fields: self
-                .dynamic_fields()
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
             inputs: match self.ast_type_block().input() {

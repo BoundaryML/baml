@@ -25,6 +25,8 @@ in
     buildInputs = with pkgs; [
       cargo
       rustc
+      rustfmt
+      maturin
       nodePackages.pnpm
       python3
       poetry

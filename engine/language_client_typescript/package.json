@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.57.0",
+  "version": "0.57.1",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
@@ -67,7 +67,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",
-    "@napi-rs/cli": "3.0.0-alpha.56",
+    "@napi-rs/cli": "3.0.0-alpha.62",
     "@types/node": "^20.12.11",
     "npm-run-all2": "^6.1.2",
     "ts-node": "^10.9.2",

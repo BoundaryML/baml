@@ -2,12 +2,69 @@ use internal_baml_schema_ast::ast::{Top, TopId, TypeExpId, TypeExpressionBlock};
 
 mod alias;
 mod description;
-mod get;
-mod meta;
 mod to_string_attribute;
+use crate::interner::StringId;
 use crate::{context::Context, types::ClassAttributes, types::EnumAttributes};
-use internal_baml_schema_ast::ast::SubType;
+use internal_baml_schema_ast::ast::{Expression, SubType};
 
+///
+#[derive(Debug, Default)]
+pub struct Attributes {
+    /// Description of the node, used in describing the node to the LLM.
+    pub description: Option<Expression>,
+
+    /// Alias for the node used when communicating with the LLM.
+    pub alias: Option<StringId>,
+
+    /// Whether the node is a dynamic type.
+    pub dynamic_type: Option<bool>,
+
+    /// Whether the node should be skipped during prompt rendering and parsing.
+    pub skip: Option<bool>,
+}
+
+impl Attributes {
+    /// Set a description.
+    pub fn add_description(&mut self, description: Expression) {
+        self.description.replace(description);
+    }
+
+    /// Get the description.
+    pub fn description(&self) -> &Option<Expression> {
+        &self.description
+    }
+
+    /// Set an alias.
+    pub fn add_alias(&mut self, alias: StringId) {
+        self.alias.replace(alias);
+    }
+
+    /// Get the alias.
+    pub fn alias(&self) -> &Option<StringId> {
+        &self.alias
+    }
+
+    /// Get dynamism of type.
+    pub fn dynamic_type(&self) -> &Option<bool> {
+        &self.dynamic_type
+    }
+
+    /// Set dynamism of type.
+    pub fn set_dynamic_type(&mut self) {
+        self.dynamic_type.replace(true);
+    }
+
+    /// Get skip.
+    pub fn skip(&self) -> &Option<bool> {
+        &self.skip
+    }
+
+    /// Set skip.
+    pub fn set_skip(&mut self) {
+        self.skip.replace(true);
+    }
+
+}
 pub(super) fn resolve_attributes(ctx: &mut Context<'_>) {
     for top in ctx.ast.iter_tops() {
         match top {
