@@ -1,0 +1,182 @@
+openapi: 3.0.3
+info:
+  title: BoundaryML Extract API
+  version: "1.0"
+servers:
+  - url: https://api2.boundaryml.com/v3
+paths:
+  /extract:
+    post:
+      summary: Extract
+      description: |
+        Upload one or more files along with a prompt to extract data. The API processes the files based on the prompt and returns the extracted information.
+
+        A PDF may generate an array of many extracted JSON blobs, 1 per page for example.
+
+      operationId: extractData
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: One or more files to be processed.
+                prompt:
+                  type: string
+                  description: Instruction for data extraction. Like "focus on the colors of the images in this document" or "only focus on extracting addresses"
+              required:
+                - files
+              encoding:
+            files:
+              style: form
+              explode: true
+            examples:
+              ExampleRequest:
+                summary: Example request with files and prompt
+                value:
+                  files:
+                    - "@path/to/your/file1.pdf"
+                    - "@path/to/your/file2.png"
+                  prompt: "Please extract the text content."
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractResponse"
+        "400":
+          description: Invalid Request Parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ExtractResponse:
+      type: object
+      properties:
+        extractions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Extraction"
+        usage:
+          $ref: "#/components/schemas/Usage"
+        request_id:
+          type: string
+          description: Unique identifier for the request.
+      required:
+        - extractions
+        - usage
+        - request_id
+    Extraction:
+      type: object
+      properties:
+        source:
+          $ref: "#/components/schemas/Source"
+        output:
+          type: object
+          description: Extracted data from the file, in JSON format.
+      required:
+        - source
+        - output
+    Source:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Media type of the file.
+        name:
+          type: string
+          description: Name of the file.
+        page:
+          type: integer
+          description: Page number if applicable.
+      required:
+        - type
+    Usage:
+      type: object
+      description: Usage statistics for the request. A request goes through the BoundaryML pipeline, where documents can be converted into images. In the process, the number of characters consumed, produced, and the number of megapixels consumed are tracked.
+      properties:
+        consumed_chars:
+          type: integer
+          description: Number of characters processed.
+        produced_chars:
+          type: integer
+          description: Number of characters produced.
+        consumed_megapixels:
+          type: number
+          description: Number of megapixels processed.
+      required:
+        - consumed_chars
+        - produced_chars
+        - consumed_megapixels
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message detailing the issue.
+      required:
+        - error
+    HTTPValidationError:
+      type: object
+      title: HTTP Validation Error
+      properties:
+        detail:
+          type: array
+          title: Detail
+          items:
+            $ref: "#/components/schemas/ValidationError"
+    ValidationError:
+      type: object
+      title: Validation Error
+      required:
+        - loc
+        - msg
+        - type
+      properties:
+        loc:
+          type: array
+          title: Location
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type

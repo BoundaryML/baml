@@ -1,8 +1,8 @@
-use crate::types::{DynamicStringAttributes, StaticStringAttributes, ToStringAttributes};
+use crate::types::Attributes;
 
 use super::{ClassWalker, Walker};
 
-use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{self, FieldType, WithName, WithSpan};
 
 /// A model field, scalar or relation.
 pub type FieldWalker<'db> = Walker<'db, (ast::TypeExpId, ast::FieldId, bool)>;
@@ -24,45 +24,12 @@ impl<'db> FieldWalker<'db> {
     }
 
     /// Traverse the field's attributes.
-    pub fn attributes(self) -> &'db ToStringAttributes {
+    pub fn attributes(self) -> &'db Attributes {
         &self.db.types.class_attributes[&self.id.0].field_serilizers[&self.id.1]
     }
 
-    /// Whether the field is dynamic.
-    pub fn is_dynamic(self) -> bool {
-        self.id.2
-    }
-
-    /// Attributes for the field.
-    pub fn static_attributes(self) -> &'db StaticStringAttributes {
-        match self.attributes() {
-            ToStringAttributes::Static(d) => d,
-            _ => panic!("Expected static attributes"),
-        }
-    }
-
-    /// Attributes for the field.
-    pub fn dynamic_attributes(self) -> &'db DynamicStringAttributes {
-        match self.attributes() {
-            ToStringAttributes::Dynamic(d) => d,
-            _ => panic!("Expected dynamic attributes"),
-        }
-    }
-
-    /// The field's alias.
-    pub fn code_for_language(self, language: &str) -> Option<&'db str> {
-        match self.db.interner.lookup(language) {
-            Some(language) => self
-                .dynamic_attributes()
-                .code
-                .get(&language)
-                .and_then(|&s| self.db.interner.get(s)),
-            None => None,
-        }
-    }
-
     /// The field's default attributes.
-    pub fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
+    pub fn get_default_attributes(&self) -> Option<&'db Attributes> {
         let result = self
             .db
             .types

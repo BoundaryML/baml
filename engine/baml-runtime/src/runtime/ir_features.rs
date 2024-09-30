@@ -11,23 +11,7 @@ impl WithInternal for InternalBamlRuntime {
     fn features(&self) -> IrFeatures {
         let ir = self.ir();
 
-        IrFeatures::from(
-            vec![],
-            ir.walk_functions().any(|f| f.is_v2()),
-            ir.walk_classes()
-                .filter(|c| !c.elem().dynamic_fields.is_empty())
-                .map(|c| {
-                    (
-                        c.name().to_string(),
-                        c.elem()
-                            .dynamic_fields
-                            .iter()
-                            .map(|f| f.elem.name.to_string())
-                            .collect(),
-                    )
-                })
-                .collect(),
-        )
+        IrFeatures::from(vec![], ir.walk_functions().any(|f| f.is_v2()), vec![])
     }
 
     fn walk_functions(&self) -> impl ExactSizeIterator<Item = FunctionWalker> {

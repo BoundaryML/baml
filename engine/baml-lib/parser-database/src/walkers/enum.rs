@@ -1,4 +1,4 @@
-use crate::{ast, types::ToStringAttributes, walkers::Walker};
+use crate::{ast, types::Attributes, walkers::Walker};
 
 use internal_baml_schema_ast::ast::{WithDocumentation, WithName, WithSpan};
 /// An `enum` declaration in the schema.
@@ -13,13 +13,7 @@ impl<'db> EnumWalker<'db> {
     pub fn values(self) -> impl ExactSizeIterator<Item = EnumValueWalker<'db>> {
         self.ast_type_block()
             .iter_fields()
-            .filter_map(move |(valid_id, _)| {
-                self.db
-                    .types
-                    .refine_enum_value((self.id, valid_id))
-                    .left()
-                    .map(|_id| self.walk((self.id, valid_id)))
-            })
+            .map(move |(valid_id, _)| self.walk((self.id, valid_id)))
             .collect::<Vec<_>>()
             .into_iter()
     }
@@ -51,7 +45,7 @@ impl<'db> EnumValueWalker<'db> {
     }
 
     /// The enum value attributes.
-    pub fn get_default_attributes(&self) -> Option<&'db ToStringAttributes> {
+    pub fn get_default_attributes(&self) -> Option<&'db Attributes> {
         let result = self
             .db
             .types

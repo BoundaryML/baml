@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use super::{field::FieldWalker, EnumWalker};
-use crate::types::ToStringAttributes;
+use crate::types::Attributes;
 use either::Either;
 use internal_baml_schema_ast::ast::Identifier;
 use internal_baml_schema_ast::ast::SubType;
@@ -26,39 +26,14 @@ impl<'db> ClassWalker<'db> {
     pub fn static_fields(self) -> impl ExactSizeIterator<Item = FieldWalker<'db>> {
         self.ast_type_block()
             .iter_fields()
-            .filter_map(move |(field_id, _)| {
-                self.db
-                    .types
-                    .refine_class_field((self.id, field_id))
-                    .left()
-                    .map(|_id| self.walk((self.id, field_id, false)))
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
-    }
-
-    /// Iterate all the scalar fields in a given class in the order they were defined.
-    pub fn dynamic_fields(self) -> impl ExactSizeIterator<Item = FieldWalker<'db>> {
-        self.ast_type_block()
-            .iter_fields()
-            .filter_map(move |(field_id, _)| {
-                self.db
-                    .types
-                    .refine_class_field((self.id, field_id))
-                    .right()
-                    .map(|_id| self.walk((self.id, field_id, true)))
-            })
+            .map(move |(field_id, _)| self.walk((self.id, field_id.into(), false)))
             .collect::<Vec<_>>()
             .into_iter()
     }
 
     /// Iterate all the scalar fields in a given class in the order they were defined.
     pub fn dependencies(self) -> &'db HashSet<String> {
-        {
-            let dependencies = &self.db.types.class_dependencies[&self.id];
-
-            dependencies
-        }
+        &self.db.types.class_dependencies[&self.id]
     }
 
     /// Find all enums used by this class and any of its fields.
@@ -97,7 +72,7 @@ impl<'db> ClassWalker<'db> {
         )
     }
     /// Getter for default attributes
-    pub fn get_default_attributes(&self, sub_type: SubType) -> Option<&'db ToStringAttributes> {
+    pub fn get_default_attributes(&self, sub_type: SubType) -> Option<&'db Attributes> {
         match sub_type {
             SubType::Enum => self
                 .db
