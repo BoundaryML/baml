@@ -15,6 +15,23 @@
 .fern-sidebar-link-container[data-state="active"] .fern-sidebar-link {
   font-weight: 600;
 }
+.fern-header {
+  border: 0px;
+}
+.fern-header-tabs-list {
+  height: 28px;
+  font-size: 12px;
+}
+.fern-header-tabs {
+  height: 32px;
+  max-height: 36px;
+}
+
+.fern-header-tab-button > * {
+  font-size: 12px;
+  /* color */
+  color: #333333;
+}
 
 /* .fern-sidebar-container {
   color: #000000;

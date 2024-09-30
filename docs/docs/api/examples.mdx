@@ -1,0 +1,240 @@
+---
+title: Examples
+---
+
+### Upload a File (PDF, images)
+
+
+<CodeBlocks>
+
+```python title="Python"
+import requests
+from typing import List, Dict, Any
+
+def extract_data(api_key: str, file_paths: List[str], prompt: str) -> Dict[str, Any]:
+    url = "https://api2.boundaryml.com/v3/extract"
+    headers = {
+        "Authorization": f"Bearer {api_key}"
+    }
+    files = [('files', open(file_path, 'rb')) for file_path in file_paths]
+    data = {
+        'prompt': prompt
+    }
+    response = requests.post(url, headers=headers, files=files, data=data)
+    response.raise_for_status()
+    return response.json()
+
+# Usage example
+api_key = 'your_api_key_here'
+file_paths = ['path/to/file1.pdf', 'path/to/file2.png']
+prompt = 'Please extract the text content.'
+
+result = extract_data(api_key, file_paths, prompt)
+print(result)
+```
+
+```typescript title="TypeScript"
+import axios, { AxiosResponse } from 'axios';
+import * as FormData from 'form-data';
+import * as fs from 'fs';
+
+interface ExtractResponse {
+  extractions: Extraction[];
+  usage: Usage;
+  request_id: string;
+}
+
+interface Extraction {
+  source: Source;
+  output: any;
+}
+
+interface Source {
+  type: string;
+  name?: string;
+  page?: number;
+}
+
+interface Usage {
+  consumed_chars: number;
+  produced_chars: number;
+  consumed_megapixels: number;
+}
+
+async function extractData(apiKey: string, filePaths: string[], prompt: string): Promise<ExtractResponse> {
+  const url = 'https://api2.boundaryml.com/v3/extract';
+  const formData = new FormData();
+
+  filePaths.forEach(filePath => {
+    formData.append('files', fs.createReadStream(filePath));
+  });
+  formData.append('prompt', prompt);
+
+  const headers = {
+    ...formData.getHeaders(),
+    'Authorization': `Bearer ${apiKey}`,
+  };
+
+  const response: AxiosResponse<ExtractResponse> = await axios.post(url, formData, { headers });
+  return response.data;
+}
+
+// Usage example
+const apiKey = 'your_api_key_here';
+const filePaths = ['path/to/file1.pdf', 'path/to/file2.png'];
+const prompt = 'Please extract the text content.';
+
+extractData(apiKey, filePaths, prompt)
+  .then(result => console.log(result))
+  .catch(error => console.error(error));
+```
+
+```ruby title="Ruby"
+require 'net/http'
+require 'uri'
+require 'json'
+
+def extract_data(api_key, file_paths, prompt)
+  uri = URI.parse('https://api2.boundaryml.com/v3/extract')
+  request = Net::HTTP::Post.new(uri)
+  request['Authorization'] = "Bearer #{api_key}"
+
+  form_data = [['prompt', prompt]]
+  file_paths.each do |file_path|
+    form_data << ['files', File.open(file_path)]
+  end
+
+  request.set_form(form_data, 'multipart/form-data')
+
+  req_options = {
+    use_ssl: uri.scheme == 'https',
+  }
+
+  response = Net::HTTP.start(uri.hostname, uri.port, req_options) do |http|
+    http.request(request)
+  end
+
+  if response.is_a?(Net::HTTPSuccess)
+    JSON.parse(response.body)
+  else
+    raise "Request failed: #{response.code} #{response.message}"
+  end
+end
+
+# Usage example
+api_key = 'your_api_key_here'
+file_paths = ['path/to/file1.pdf', 'path/to/file2.png']
+prompt = 'Please extract the text content.'
+
+result = extract_data(api_key, file_paths, prompt)
+puts result
+```
+
+```go title="Go"
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"os"
+)
+
+type ExtractResponse struct {
+	Extractions []Extraction `json:"extractions"`
+	Usage       Usage        `json:"usage"`
+	RequestID   string       `json:"request_id"`
+}
+
+type Extraction struct {
+	Source Source      `json:"source"`
+	Output interface{} `json:"output"`
+}
+
+type Source struct {
+	Type string `json:"type"`
+	Name string `json:"name,omitempty"`
+	Page int    `json:"page,omitempty"`
+}
+
+type Usage struct {
+	ConsumedChars      int     `json:"consumed_chars"`
+	ProducedChars      int     `json:"produced_chars"`
+	ConsumedMegapixels float64 `json:"consumed_megapixels"`
+}
+
+func extractData(apiKey string, filePaths []string, prompt string) (ExtractResponse, error) {
+	url := "https://api2.boundaryml.com/v3/extract"
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	for _, filePath := range filePaths {
+		file, err := os.Open(filePath)
+		if err != nil {
+			return ExtractResponse{}, err
+		}
+		defer file.Close()
+
+		part, err := writer.CreateFormFile("files", file.Name())
+		if err != nil {
+			return ExtractResponse{}, err
+		}
+		_, err = io.Copy(part, file)
+		if err != nil {
+			return ExtractResponse{}, err
+		}
+	}
+
+	_ = writer.WriteField("prompt", prompt)
+	err := writer.Close()
+	if err != nil {
+		return ExtractResponse{}, err
+	}
+
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return ExtractResponse{}, err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ExtractResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return ExtractResponse{}, fmt.Errorf("Request failed with status %s", resp.Status)
+	}
+
+	var extractResponse ExtractResponse
+	err = json.NewDecoder(resp.Body).Decode(&extractResponse)
+	if err != nil {
+		return ExtractResponse{}, err
+	}
+
+	return extractResponse, nil
+}
+
+func main() {
+	apiKey := "your_api_key_here"
+	filePaths := []string{"path/to/file1.pdf", "path/to/file2.png"}
+	prompt := "Please extract the text content."
+
+	result, err := extractData(apiKey, filePaths, prompt)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Printf("Result: %+v\n", result)
+}
+
+```
+
+</CodeBlocks>
