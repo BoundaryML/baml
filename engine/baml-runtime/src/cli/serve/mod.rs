@@ -392,9 +392,6 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 }
             }
         }
-
-        log::info!("Received client registry: {:?}", b_options);
-
         self.baml_call(b_fn, b_args, b_options).await
     }
 
