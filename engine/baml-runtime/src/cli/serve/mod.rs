@@ -380,21 +380,30 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         extract::Path(b_fn): extract::Path<String>,
         extract::Json(b_args): extract::Json<serde_json::Value>,
     ) -> Response {
-        let b_options = b_args.get("__baml_options__").and_then(|options_value| {
-            serde_json::from_value::<BamlOptions>(options_value.clone()).ok()
-        });
-
-        if b_options.is_none() {
-            return BamlError::InvalidArgument("Failed to parse __baml_options__".to_string())
-                .into_response();
+        let mut b_options = None;
+        if let Some(options_value) = b_args.get("__baml_options__") {
+            match serde_json::from_value::<BamlOptions>(options_value.clone()) {
+                Ok(opts) => b_options = Some(opts),
+                Err(_) => {
+                    return BamlError::InvalidArgument(
+                        "Failed to parse __baml_options__".to_string(),
+                    )
+                    .into_response()
+                }
+            }
         }
-        // XXX
+
         log::info!("Received client registry: {:?}", b_options);
 
         self.baml_call(b_fn, b_args, b_options).await
     }
 
-    fn baml_stream(self: Arc<Self>, b_fn: String, b_args: serde_json::Value) -> Response {
+    fn baml_stream(
+        self: Arc<Self>,
+        b_fn: String,
+        b_args: serde_json::Value,
+        b_options: Option<BamlOptions>,
+    ) -> Response {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
         let args = match parse_args(&b_fn, b_args) {
@@ -402,15 +411,19 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             Err(e) => return e.into_response(),
         };
 
+        let client_registry = b_options.and_then(|options| options.client_registry);
+
         tokio::spawn(async move {
             let ctx_mgr =
                 RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None);
 
-            let result_stream = self
-                .b
-                .read()
-                .await
-                .stream_function(b_fn, &args, &ctx_mgr, None, None);
+            let result_stream = self.b.read().await.stream_function(
+                b_fn,
+                &args,
+                &ctx_mgr,
+                None,
+                client_registry.as_ref(),
+            );
 
             match result_stream {
                 Ok(mut result_stream) => {
@@ -481,7 +494,19 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         extract::Path(path): extract::Path<String>,
         extract::Json(body): extract::Json<serde_json::Value>,
     ) -> Response {
-        self.baml_stream(path, body)
+        let mut b_options = None;
+        if let Some(options_value) = body.get("__baml_options__") {
+            match serde_json::from_value::<BamlOptions>(options_value.clone()) {
+                Ok(opts) => b_options = Some(opts),
+                Err(_) => {
+                    return BamlError::InvalidArgument(
+                        "Failed to parse __baml_options__".to_string(),
+                    )
+                    .into_response()
+                }
+            }
+        }
+        self.baml_stream(path, body, b_options)
     }
 }
 
