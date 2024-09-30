@@ -380,12 +380,12 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         extract::Path(b_fn): extract::Path<String>,
         extract::Json(b_args): extract::Json<serde_json::Value>,
     ) -> Response {
-        let b_options = b_args.get("__baml_options").and_then(|options_value| {
+        let b_options = b_args.get("__baml_options__").and_then(|options_value| {
             serde_json::from_value::<BamlOptions>(options_value.clone()).ok()
         });
 
         if b_options.is_none() {
-            return BamlError::InvalidArgument("Failed to parse __baml_options".to_string())
+            return BamlError::InvalidArgument("Failed to parse __baml_options__".to_string())
                 .into_response();
         }
         // XXX
