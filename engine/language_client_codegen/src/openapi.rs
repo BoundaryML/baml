@@ -21,7 +21,7 @@ impl LanguageFeatures for OpenApiLanguageFeatures {
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ openapi-generator generate -c openapi.yaml -g <language> -o <output_dir>
+#  $ openapi-generator generate -i openapi.yaml -g <language> -o <output_dir>
 #
 ###############################################################################
 
@@ -227,10 +227,11 @@ impl Serialize for OpenApiSchema<'_> {
                         "BamlOptions",
                         json!({
                             "type": "object",
+                            "nullable": false,
                             "properties": {
                                 "client_registry": {
                                     "type": "object",
-                                    "nullable": true,
+                                    "nullable": false,
                                     "properties": {
                                         "clients": {
                                             "type": "array",
@@ -240,7 +241,7 @@ impl Serialize for OpenApiSchema<'_> {
                                         },
                                         "primary": {
                                             "type": "string",
-                                            "nullable": true
+                                            "nullable": false
                                         }
                                     },
                                     "required": ["clients"]
@@ -261,19 +262,11 @@ impl Serialize for OpenApiSchema<'_> {
                                 },
                                 "retry_policy": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": false
                                 },
                                 "options": {
                                     "type": "object",
-                                    "additionalProperties": {
-                                        "oneOf": [
-                                            { "type": "string" },
-                                            { "type": "number" },
-                                            { "type": "boolean" },
-                                            { "type": "object" },
-                                            { "type": "array" }
-                                        ]
-                                    }
+                                    "additionalProperties": true
                                 }
                             },
                             "required": ["name", "provider", "options"]
@@ -385,6 +378,32 @@ impl<'ir> TryFrom<Walker<'ir, &'ir Node<Function>>> for OpenApiMethodDef<'ir> {
 
     fn try_from(value: Walker<'ir, &'ir Node<Function>>) -> Result<Self> {
         let function_name = value.item.elem.name();
+        let mut properties: IndexMap<String, TypeSpecWithMeta> = value
+                        .item
+                        .elem
+                        .inputs()
+                        .iter()
+                        .map(|(name, t)| {
+                            Ok((
+                                name.to_string(),
+                                t.to_type_spec(value.db).context(format!(
+                                    "Failed to convert arg {name} (for function {function_name}) to OpenAPI type",
+                                ))?,
+                            ))
+                        })
+                        .collect::<Result<_>>()?;
+        properties.insert(
+            "__baml_options__".to_string(),
+            TypeSpecWithMeta {
+                meta: TypeMetadata {
+                    title: None,
+                    r#enum: None,
+                    r#const: None,
+                    nullable: true,
+                },
+                type_spec: TypeSpec::Ref { r#ref: "#/components/schemas/BamlOptions".into() }
+            }
+        );
         Ok(Self {
             function_name,
             request_body: TypeSpecWithMeta {
@@ -404,20 +423,7 @@ impl<'ir> TryFrom<Walker<'ir, &'ir Node<Function>>> for OpenApiMethodDef<'ir> {
                     nullable: false,
                 },
                 type_spec: TypeSpec::Inline(TypeDef::Class {
-                    properties: value
-                        .item
-                        .elem
-                        .inputs()
-                        .iter()
-                        .map(|(name, t)| {
-                            Ok((
-                                name.to_string(),
-                                t.to_type_spec(value.db).context(format!(
-                                    "Failed to convert arg {name} (for function {function_name}) to OpenAPI type",
-                                ))?,
-                            ))
-                        })
-                        .collect::<Result<_>>()?,
+                    properties,
                     required: value
                         .item
                         .elem

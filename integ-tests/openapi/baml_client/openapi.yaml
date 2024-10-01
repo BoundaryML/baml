@@ -2,7 +2,7 @@
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ openapi-generator generate -c openapi.yaml -g <language> -o <output_dir>
+#  $ openapi-generator generate -i openapi.yaml -g <language> -o <output_dir>
 #
 ###############################################################################
 
@@ -1070,6 +1070,9 @@ components:
             properties:
               recipe:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - recipe
             additionalProperties: false
@@ -1083,6 +1086,9 @@ components:
             properties:
               aud:
                 $ref: '#/components/schemas/BamlAudio'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - aud
             additionalProperties: false
@@ -1096,6 +1102,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1109,6 +1118,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1122,6 +1134,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1135,6 +1150,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1148,6 +1166,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1161,6 +1182,9 @@ components:
             properties:
               img:
                 $ref: '#/components/schemas/BamlImage'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - img
             additionalProperties: false
@@ -1176,6 +1200,9 @@ components:
                 $ref: '#/components/schemas/ClassWithImage'
               img2:
                 $ref: '#/components/schemas/BamlImage'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - classWithImage
             - img2
@@ -1192,6 +1219,9 @@ components:
                 $ref: '#/components/schemas/ClassWithImage'
               img2:
                 $ref: '#/components/schemas/BamlImage'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - classWithImage
             - img2
@@ -1208,6 +1238,9 @@ components:
                 $ref: '#/components/schemas/ClassWithImage'
               img2:
                 $ref: '#/components/schemas/BamlImage'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - classWithImage
             - img2
@@ -1222,6 +1255,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1235,6 +1271,9 @@ components:
             properties:
               input:
                 $ref: '#/components/schemas/DynamicClassOne'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1248,6 +1287,9 @@ components:
             properties:
               input:
                 $ref: '#/components/schemas/DynInputOutput'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1263,6 +1305,9 @@ components:
                 type: array
                 items:
                   $ref: '#/components/schemas/DynInputOutput'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1273,7 +1318,10 @@ components:
           schema:
             title: ExpectFailureRequest
             type: object
-            properties: {}
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
     ExtractNames:
@@ -1286,6 +1334,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1299,6 +1350,9 @@ components:
             properties:
               text:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - text
             additionalProperties: false
@@ -1312,6 +1366,9 @@ components:
             properties:
               email:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - email
             additionalProperties: false
@@ -1327,6 +1384,9 @@ components:
                 type: string
               img:
                 $ref: '#/components/schemas/BamlImage'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - resume
             additionalProperties: false
@@ -1340,6 +1400,9 @@ components:
             properties:
               resume:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - resume
             additionalProperties: false
@@ -1353,6 +1416,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1366,6 +1432,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1379,6 +1448,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1392,6 +1464,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1405,6 +1480,9 @@ components:
             properties:
               myString:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
     FnOutputBool:
@@ -1417,6 +1495,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1430,6 +1511,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1443,6 +1527,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1456,6 +1543,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1469,6 +1559,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1482,6 +1575,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1495,6 +1591,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1508,6 +1607,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1521,6 +1623,9 @@ components:
             properties:
               myArg:
                 $ref: '#/components/schemas/NamedArgsSingleEnum'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myArg
             additionalProperties: false
@@ -1534,6 +1639,9 @@ components:
             properties:
               text:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - text
             additionalProperties: false
@@ -1547,6 +1655,9 @@ components:
             properties:
               email:
                 $ref: '#/components/schemas/Email'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - email
             additionalProperties: false
@@ -1560,6 +1671,9 @@ components:
             properties:
               query:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - query
             additionalProperties: false
@@ -1573,6 +1687,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1586,6 +1703,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1599,6 +1719,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1612,6 +1735,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1625,6 +1751,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1638,6 +1767,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1651,6 +1783,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1664,6 +1799,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1677,6 +1815,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1690,6 +1831,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1703,6 +1847,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1716,6 +1863,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1729,6 +1879,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1742,6 +1895,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1755,6 +1911,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1765,7 +1924,10 @@ components:
           schema:
             title: TestFallbackClientRequest
             type: object
-            properties: {}
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
     TestFallbackToShorthand:
@@ -1778,6 +1940,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1791,6 +1956,9 @@ components:
             properties:
               myBool:
                 type: boolean
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myBool
             additionalProperties: false
@@ -1804,6 +1972,9 @@ components:
             properties:
               myArg:
                 $ref: '#/components/schemas/NamedArgsSingleClass'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myArg
             additionalProperties: false
@@ -1819,6 +1990,9 @@ components:
                 type: array
                 items:
                   $ref: '#/components/schemas/NamedArgsSingleEnumList'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myArg
             additionalProperties: false
@@ -1832,6 +2006,9 @@ components:
             properties:
               myFloat:
                 type: number
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myFloat
             additionalProperties: false
@@ -1845,6 +2022,9 @@ components:
             properties:
               myInt:
                 type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myInt
             additionalProperties: false
@@ -1860,6 +2040,9 @@ components:
                 type: object
                 additionalProperties:
                   $ref: '#/components/schemas/StringToClassEntry'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myMap
             additionalProperties: false
@@ -1877,6 +2060,9 @@ components:
                   type: object
                   additionalProperties:
                     type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myMap
             additionalProperties: false
@@ -1892,6 +2078,9 @@ components:
                 type: object
                 additionalProperties:
                   type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myMap
             additionalProperties: false
@@ -1905,6 +2094,9 @@ components:
             properties:
               myString:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myString
             additionalProperties: false
@@ -1920,6 +2112,9 @@ components:
                 type: array
                 items:
                   type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myStringArray
             additionalProperties: false
@@ -1935,6 +2130,9 @@ components:
                 type: array
                 items:
                   type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myArg
             additionalProperties: false
@@ -1948,6 +2146,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -1961,6 +2162,9 @@ components:
             properties:
               img:
                 $ref: '#/components/schemas/BamlImage'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - img
             additionalProperties: false
@@ -1974,6 +2178,9 @@ components:
             properties:
               img:
                 $ref: '#/components/schemas/BamlImage'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - img
             additionalProperties: false
@@ -1989,6 +2196,9 @@ components:
                 type: array
                 items:
                   $ref: '#/components/schemas/BamlImage'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - imgs
             additionalProperties: false
@@ -2004,6 +2214,9 @@ components:
                 $ref: '#/components/schemas/NamedArgsSingleClass'
               myArg2:
                 $ref: '#/components/schemas/NamedArgsSingleClass'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - myArg
             - myArg2
@@ -2018,6 +2231,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -2031,6 +2247,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -2044,6 +2263,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -2054,7 +2276,10 @@ components:
           schema:
             title: TestRetryConstantRequest
             type: object
-            properties: {}
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
     TestRetryExponential:
@@ -2064,7 +2289,10 @@ components:
           schema:
             title: TestRetryExponentialRequest
             type: object
-            properties: {}
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
     TestVertex:
@@ -2077,6 +2305,9 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -2092,6 +2323,9 @@ components:
                 oneOf:
                 - type: string
                 - type: boolean
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
             required:
             - input
             additionalProperties: false
@@ -2136,6 +2370,40 @@ components:
             type: string
         required:
         - url
+    BamlOptions:
+      type: object
+      nullable: false
+      properties:
+        client_registry:
+          type: object
+          nullable: false
+          properties:
+            clients:
+              type: array
+              items:
+                $ref: '#/components/schemas/ClientProperty'
+            primary:
+              type: string
+              nullable: false
+          required:
+          - clients
+    ClientProperty:
+      type: object
+      properties:
+        name:
+          type: string
+        provider:
+          type: string
+        retry_policy:
+          type: string
+          nullable: false
+        options:
+          type: object
+          additionalProperties: true
+      required:
+      - name
+      - provider
+      - options
     Category:
       enum:
       - Refund
