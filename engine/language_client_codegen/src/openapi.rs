@@ -21,7 +21,7 @@ impl LanguageFeatures for OpenApiLanguageFeatures {
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ openapi-generator generate -c openapi.yaml -g <language> -o <output_dir>
+#  $ openapi-generator generate -i openapi.yaml -g <language> -o <output_dir>
 #
 ###############################################################################
 
@@ -227,11 +227,11 @@ impl Serialize for OpenApiSchema<'_> {
                         "BamlOptions",
                         json!({
                             "type": "object",
-                            "nullable": "true",
+                            "nullable": false,
                             "properties": {
                                 "client_registry": {
                                     "type": "object",
-                                    "nullable": true,
+                                    "nullable": false,
                                     "properties": {
                                         "clients": {
                                             "type": "array",
@@ -241,7 +241,7 @@ impl Serialize for OpenApiSchema<'_> {
                                         },
                                         "primary": {
                                             "type": "string",
-                                            "nullable": true
+                                            "nullable": false
                                         }
                                     },
                                     "required": ["clients"]
@@ -262,7 +262,7 @@ impl Serialize for OpenApiSchema<'_> {
                                 },
                                 "retry_policy": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": false
                                 },
                                 "options": {
                                     "type": "object",
@@ -399,7 +399,7 @@ impl<'ir> TryFrom<Walker<'ir, &'ir Node<Function>>> for OpenApiMethodDef<'ir> {
                     title: None,
                     r#enum: None,
                     r#const: None,
-                    nullable: false,
+                    nullable: true,
                 },
                 type_spec: TypeSpec::Ref { r#ref: "#/components/schemas/BamlOptions".into() }
             }
