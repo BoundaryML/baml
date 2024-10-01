@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use baml_types::{BamlMap, BamlValue};
-use serde::Serialize;
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{internal::llm_client::llm_provider::LLMProvider, RuntimeContext};
 
@@ -16,7 +16,7 @@ pub enum PrimitiveClient {
     Vertex,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct ClientProperty {
     pub name: String,
     pub provider: String,
@@ -24,8 +24,9 @@ pub struct ClientProperty {
     pub options: BamlMap<String, BamlValue>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ClientRegistry {
+    #[serde(deserialize_with = "deserialize_clients")]
     clients: HashMap<String, ClientProperty>,
     primary: Option<String>,
 }
@@ -59,4 +60,14 @@ impl ClientRegistry {
         // TODO: Also do validation here
         Ok((self.primary.clone(), clients))
     }
+}
+
+fn deserialize_clients<'de, D>(deserializer: D) -> Result<HashMap<String, ClientProperty>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Vec::deserialize(deserializer)?
+        .into_iter()
+        .map(|client: ClientProperty| (client.name.clone(), client))
+        .collect())
 }
