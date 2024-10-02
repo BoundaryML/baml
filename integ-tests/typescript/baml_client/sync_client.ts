@@ -46,6 +46,7 @@ export class BamlSyncClient {
       recipe: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Recipe {
+    try {
     const raw = this.runtime.callFunctionSync(
       "AaaSamOutputFormat",
       {
@@ -56,12 +57,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Recipe
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   AudioInput(
       aud: Audio,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "AudioInput",
       {
@@ -72,12 +82,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   ClassifyDynEnumTwo(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (string | DynEnumTwo) {
+    try {
     const raw = this.runtime.callFunctionSync(
       "ClassifyDynEnumTwo",
       {
@@ -88,12 +107,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as (string | DynEnumTwo)
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   ClassifyMessage(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Category {
+    try {
     const raw = this.runtime.callFunctionSync(
       "ClassifyMessage",
       {
@@ -104,12 +132,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Category
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   ClassifyMessage2(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Category {
+    try {
     const raw = this.runtime.callFunctionSync(
       "ClassifyMessage2",
       {
@@ -120,12 +157,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Category
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   ClassifyMessage3(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Category {
+    try {
     const raw = this.runtime.callFunctionSync(
       "ClassifyMessage3",
       {
@@ -136,12 +182,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Category
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   CustomTask(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BookOrder | FlightConfirmation | GroceryReceipt {
+    try {
     const raw = this.runtime.callFunctionSync(
       "CustomTask",
       {
@@ -152,12 +207,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as BookOrder | FlightConfirmation | GroceryReceipt
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   DescribeImage(
       img: Image,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "DescribeImage",
       {
@@ -168,12 +232,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   DescribeImage2(
       classWithImage: ClassWithImage,img2: Image,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "DescribeImage2",
       {
@@ -184,12 +257,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   DescribeImage3(
       classWithImage: ClassWithImage,img2: Image,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "DescribeImage3",
       {
@@ -200,12 +282,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   DescribeImage4(
       classWithImage: ClassWithImage,img2: Image,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "DescribeImage4",
       {
@@ -216,12 +307,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   DummyOutputFunction(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): DummyOutput {
+    try {
     const raw = this.runtime.callFunctionSync(
       "DummyOutputFunction",
       {
@@ -232,12 +332,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as DummyOutput
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   DynamicFunc(
       input: DynamicClassOne,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): DynamicClassTwo {
+    try {
     const raw = this.runtime.callFunctionSync(
       "DynamicFunc",
       {
@@ -248,12 +357,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as DynamicClassTwo
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   DynamicInputOutput(
       input: DynInputOutput,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): DynInputOutput {
+    try {
     const raw = this.runtime.callFunctionSync(
       "DynamicInputOutput",
       {
@@ -264,12 +382,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as DynInputOutput
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   DynamicListInputOutput(
       input: DynInputOutput[],
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): DynInputOutput[] {
+    try {
     const raw = this.runtime.callFunctionSync(
       "DynamicListInputOutput",
       {
@@ -280,12 +407,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as DynInputOutput[]
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   ExpectFailure(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "ExpectFailure",
       {
@@ -296,12 +432,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   ExtractNames(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string[] {
+    try {
     const raw = this.runtime.callFunctionSync(
       "ExtractNames",
       {
@@ -312,12 +457,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string[]
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   ExtractPeople(
       text: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Person[] {
+    try {
     const raw = this.runtime.callFunctionSync(
       "ExtractPeople",
       {
@@ -328,12 +482,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Person[]
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   ExtractReceiptInfo(
       email: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ReceiptInfo {
+    try {
     const raw = this.runtime.callFunctionSync(
       "ExtractReceiptInfo",
       {
@@ -344,12 +507,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as ReceiptInfo
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   ExtractResume(
       resume: string,img?: Image | null,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Resume {
+    try {
     const raw = this.runtime.callFunctionSync(
       "ExtractResume",
       {
@@ -360,12 +532,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Resume
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   ExtractResume2(
       resume: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Resume {
+    try {
     const raw = this.runtime.callFunctionSync(
       "ExtractResume2",
       {
@@ -376,12 +557,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Resume
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnClassOptionalOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ClassOptionalOutput | null {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnClassOptionalOutput",
       {
@@ -392,12 +582,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as ClassOptionalOutput | null
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnClassOptionalOutput2(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ClassOptionalOutput2 | null {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnClassOptionalOutput2",
       {
@@ -408,12 +607,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as ClassOptionalOutput2 | null
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnEnumListOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): EnumOutput[] {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnEnumListOutput",
       {
@@ -424,12 +632,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as EnumOutput[]
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnEnumOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): EnumOutput {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnEnumOutput",
       {
@@ -440,12 +657,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as EnumOutput
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnNamedArgsSingleStringOptional(
       myString?: string | null,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnNamedArgsSingleStringOptional",
       {
@@ -456,12 +682,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnOutputBool(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): boolean {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnOutputBool",
       {
@@ -472,12 +707,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as boolean
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnOutputClass(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestOutputClass {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnOutputClass",
       {
@@ -488,12 +732,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as TestOutputClass
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnOutputClassList(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestOutputClass[] {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnOutputClassList",
       {
@@ -504,12 +757,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as TestOutputClass[]
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnOutputClassNested(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestClassNested {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnOutputClassNested",
       {
@@ -520,12 +782,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as TestClassNested
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnOutputClassWithEnum(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestClassWithEnum {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnOutputClassWithEnum",
       {
@@ -536,12 +807,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as TestClassWithEnum
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnOutputStringList(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string[] {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnOutputStringList",
       {
@@ -552,12 +832,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string[]
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnTestAliasedEnumOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestEnum {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnTestAliasedEnumOutput",
       {
@@ -568,12 +857,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as TestEnum
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnTestClassAlias(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestClassAlias {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnTestClassAlias",
       {
@@ -584,12 +882,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as TestClassAlias
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   FnTestNamedArgsSingleEnum(
       myArg: NamedArgsSingleEnum,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "FnTestNamedArgsSingleEnum",
       {
@@ -600,12 +907,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   GetDataType(
       text: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): RaysData {
+    try {
     const raw = this.runtime.callFunctionSync(
       "GetDataType",
       {
@@ -616,12 +932,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as RaysData
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   GetOrderInfo(
       email: Email,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): OrderInfo {
+    try {
     const raw = this.runtime.callFunctionSync(
       "GetOrderInfo",
       {
@@ -632,12 +957,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as OrderInfo
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   GetQuery(
       query: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): SearchParams {
+    try {
     const raw = this.runtime.callFunctionSync(
       "GetQuery",
       {
@@ -648,12 +982,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as SearchParams
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   MyFunc(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): DynamicOutput {
+    try {
     const raw = this.runtime.callFunctionSync(
       "MyFunc",
       {
@@ -664,12 +1007,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as DynamicOutput
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   OptionalTest_Function(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (OptionalTest_ReturnType | null)[] {
+    try {
     const raw = this.runtime.callFunctionSync(
       "OptionalTest_Function",
       {
@@ -680,12 +1032,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as (OptionalTest_ReturnType | null)[]
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   PromptTestClaude(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "PromptTestClaude",
       {
@@ -696,12 +1057,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   PromptTestClaudeChat(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "PromptTestClaudeChat",
       {
@@ -712,12 +1082,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   PromptTestClaudeChatNoSystem(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "PromptTestClaudeChatNoSystem",
       {
@@ -728,12 +1107,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   PromptTestOpenAI(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "PromptTestOpenAI",
       {
@@ -744,12 +1132,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   PromptTestOpenAIChat(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "PromptTestOpenAIChat",
       {
@@ -760,12 +1157,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   PromptTestOpenAIChatNoSystem(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "PromptTestOpenAIChatNoSystem",
       {
@@ -776,12 +1182,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   PromptTestStreaming(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "PromptTestStreaming",
       {
@@ -792,12 +1207,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   SchemaDescriptions(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Schema {
+    try {
     const raw = this.runtime.callFunctionSync(
       "SchemaDescriptions",
       {
@@ -808,12 +1232,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Schema
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestAnthropic(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestAnthropic",
       {
@@ -824,12 +1257,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestAnthropicShorthand(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestAnthropicShorthand",
       {
@@ -840,12 +1282,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestAws(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestAws",
       {
@@ -856,12 +1307,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestAzure(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestAzure",
       {
@@ -872,12 +1332,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestCaching(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestCaching",
       {
@@ -888,12 +1357,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFallbackClient(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFallbackClient",
       {
@@ -904,12 +1382,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFallbackToShorthand(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFallbackToShorthand",
       {
@@ -920,12 +1407,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFnNamedArgsSingleBool(
       myBool: boolean,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFnNamedArgsSingleBool",
       {
@@ -936,12 +1432,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFnNamedArgsSingleClass(
       myArg: NamedArgsSingleClass,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFnNamedArgsSingleClass",
       {
@@ -952,12 +1457,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFnNamedArgsSingleEnumList(
       myArg: NamedArgsSingleEnumList[],
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFnNamedArgsSingleEnumList",
       {
@@ -968,12 +1482,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFnNamedArgsSingleFloat(
       myFloat: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFnNamedArgsSingleFloat",
       {
@@ -984,12 +1507,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFnNamedArgsSingleInt(
       myInt: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFnNamedArgsSingleInt",
       {
@@ -1000,12 +1532,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFnNamedArgsSingleMapStringToClass(
       myMap: Record<string, StringToClassEntry>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Record<string, StringToClassEntry> {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFnNamedArgsSingleMapStringToClass",
       {
@@ -1016,12 +1557,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Record<string, StringToClassEntry>
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFnNamedArgsSingleMapStringToMap(
       myMap: Record<string, Record<string, string>>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Record<string, Record<string, string>> {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFnNamedArgsSingleMapStringToMap",
       {
@@ -1032,12 +1582,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Record<string, Record<string, string>>
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Record<string, string> {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFnNamedArgsSingleMapStringToString",
       {
@@ -1048,12 +1607,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Record<string, string>
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFnNamedArgsSingleString(
       myString: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFnNamedArgsSingleString",
       {
@@ -1064,12 +1632,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFnNamedArgsSingleStringArray",
       {
@@ -1080,12 +1657,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestFnNamedArgsSingleStringList(
       myArg: string[],
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestFnNamedArgsSingleStringList",
       {
@@ -1096,12 +1682,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestGemini(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestGemini",
       {
@@ -1112,12 +1707,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestImageInput(
       img: Image,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestImageInput",
       {
@@ -1128,12 +1732,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestImageInputAnthropic(
       img: Image,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestImageInputAnthropic",
       {
@@ -1144,12 +1757,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestImageListInput(
       imgs: Image[],
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestImageListInput",
       {
@@ -1160,12 +1782,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestMulticlassNamedArgs",
       {
@@ -1176,12 +1807,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestOllama(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestOllama",
       {
@@ -1192,12 +1832,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestOpenAILegacyProvider(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestOpenAILegacyProvider",
       {
@@ -1208,12 +1857,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestOpenAIShorthand(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestOpenAIShorthand",
       {
@@ -1224,12 +1882,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestRetryConstant(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestRetryConstant",
       {
@@ -1240,12 +1907,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestRetryExponential(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestRetryExponential",
       {
@@ -1256,12 +1932,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   TestVertex(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
+    try {
     const raw = this.runtime.callFunctionSync(
       "TestVertex",
       {
@@ -1272,12 +1957,21 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
   UnionTest_Function(
       input: string | boolean,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): UnionTest_ReturnType {
+    try {
     const raw = this.runtime.callFunctionSync(
       "UnionTest_Function",
       {
@@ -1288,6 +1982,14 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as UnionTest_ReturnType
+    } catch (error: Error) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   
 }

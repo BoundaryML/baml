@@ -1,6 +1,6 @@
 // Learn more about clients at https://docs.boundaryml.com/docs/snippets/clients/overview
 
-client<llm> GPT4o {
+client<llm> CustomGPT4o {
   provider openai
   options {
     model "gpt-4o"
@@ -8,7 +8,7 @@ client<llm> GPT4o {
   }
 }
 
-client<llm> GPT4oMini {
+client<llm> CustomGPT4oMini {
   provider openai
   options {
     model "gpt-4o-mini"
@@ -16,7 +16,7 @@ client<llm> GPT4oMini {
   }
 }
 
-client<llm> Sonnet {
+client<llm> CustomSonnet {
   provider anthropic
   options {
     model "claude-3-5-sonnet-20240620"
@@ -25,7 +25,7 @@ client<llm> Sonnet {
 }
 
 
-client<llm> Haiku {
+client<llm> CustomHaiku {
   provider anthropic
   options {
     model "claude-3-haiku-20240307"
@@ -33,7 +33,7 @@ client<llm> Haiku {
   }
 }
 
-client<llm> Fast {
+client<llm> CustomFast {
   provider round-robin
   options {
     // This will alternate between the two clients
@@ -41,7 +41,7 @@ client<llm> Fast {
   }
 }
 
-client<llm> Openai {
+client<llm> OpenaiFallback {
   provider fallback
   options {
     // This will try the clients in order until one succeeds

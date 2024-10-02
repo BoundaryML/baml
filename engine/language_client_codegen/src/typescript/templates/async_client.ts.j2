@@ -1,4 +1,4 @@
-import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image, ClientRegistry } from "@boundaryml/baml"
+import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image, ClientRegistry, BamlValidationError, createBamlValidationError } from "@boundaryml/baml"
 import { 
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%} 
 } from "./types"
@@ -33,18 +33,27 @@ export class BamlAsyncClient {
       {%- endfor %}
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<{{fn.return_type}}> {
-    const raw = await this.runtime.callFunction(
-      "{{fn.name}}",
-      {
-        {% for (name, optional, type) in fn.args -%}
-        "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
-        {%- endfor %}
-      },
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-      __baml_options__?.clientRegistry,
-    )
-    return raw.parsed() as {{fn.return_type}}
+    try {
+      const raw = await this.runtime.callFunction(
+        "{{fn.name}}",
+        {
+          {% for (name, optional, type) in fn.args -%}
+          "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          {%- endfor %}
+        },
+        this.ctx_manager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      )
+      return raw.parsed() as {{fn.return_type}}
+    } catch (error: any) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   {% endfor %}
 }
@@ -59,25 +68,35 @@ class BamlStreamClient {
       {%- endfor %}
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<{{ fn.return_type }}>, {{ fn.return_type }}> {
-    const raw = this.runtime.streamFunction(
-      "{{fn.name}}",
-      {
-        {% for (name, optional, type) in fn.args -%}
-        "{{name}}": {{name}}{% if optional %} ?? null{% endif %}{% if !loop.last %},{% endif %}
-        {%- endfor %}
-      },
-      undefined,
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-      __baml_options__?.clientRegistry,
-    )
-    return new BamlStream<RecursivePartialNull<{{ fn.return_type }}>, {{ fn.return_type }}>(
-      raw,
-      (a): a is RecursivePartialNull<{{ fn.return_type }}> => a,
-      (a): a is {{ fn.return_type }} => a,
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-    )
+    try {
+      const raw = this.runtime.streamFunction(
+        "{{fn.name}}",
+        {
+          {% for (name, optional, type) in fn.args -%}
+          "{{name}}": {{name}}{% if optional %} ?? null{% endif %}{% if !loop.last %},{% endif %}
+          {%- endfor %}
+        },
+        undefined,
+        this.ctx_manager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      )
+      return new BamlStream<RecursivePartialNull<{{ fn.return_type }}>, {{ fn.return_type }}>(
+        raw,
+        (a): a is RecursivePartialNull<{{ fn.return_type }}> => a,
+        (a): a is {{ fn.return_type }} => a,
+        this.ctx_manager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+      )
+    } catch (error) {
+      if (error instanceof Error) {
+        const bamlError = createBamlValidationError(error);
+        if (bamlError instanceof BamlValidationError) {
+          throw bamlError;
+        }
+      }
+      throw error;
+    }
   }
   {% endfor %}
 }

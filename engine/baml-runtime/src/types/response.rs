@@ -102,6 +102,8 @@ impl FunctionResult {
                 if let Ok(val) = res {
                     Ok(val)
                 } else {
+                    // Capture the actual error to preserve its details
+                    let actual_error = res.as_ref().err().unwrap().to_string();
                     Err(anyhow::anyhow!(ExposedError::ValidationError {
                         prompt: match self.llm_response() {
                             LLMResponse::Success(resp) => resp.prompt.to_string(),
@@ -113,14 +115,21 @@ impl FunctionResult {
                             .content()
                             .unwrap_or_default()
                             .to_string(),
+                        // The only branch that should be hit is LLMResponse::Success(_) since we
+                        // only call this function when we have a successful response.
                         message: match self.llm_response() {
                             LLMResponse::Success(_) =>
-                                "Parsing failed for successful LLM response".to_string(),
-                            LLMResponse::LLMFailure(err) =>
-                                format!("LLM Failure: {} ({})", err.message, err.code.to_string()),
-                            LLMResponse::UserFailure(err) => format!("User Failure: {}", err),
+                                format!("Failed to parse LLM response: {}", actual_error),
+                            LLMResponse::LLMFailure(err) => format!(
+                                "LLM Failure: {} ({}) - {}",
+                                err.message,
+                                err.code.to_string(),
+                                actual_error
+                            ),
+                            LLMResponse::UserFailure(err) =>
+                                format!("User Failure: {} - {}", err, actual_error),
                             LLMResponse::InternalFailure(err) =>
-                                format!("Internal Failure: {}", err),
+                                format!("Internal Failure: {} - {}", err, actual_error),
                         },
                     }))
                 }

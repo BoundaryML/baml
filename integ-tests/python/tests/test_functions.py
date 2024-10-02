@@ -8,6 +8,9 @@ from .base64_test_data import image_b64, audio_b64
 load_dotenv()
 import baml_py
 from baml_py import errors
+
+# also test importing the error from the baml_py submodules
+from baml_py.errors import BamlValidationError, BamlClientError
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
 from ..baml_client.globals import (
@@ -28,9 +31,6 @@ import datetime
 import concurrent.futures
 import asyncio
 import random
-
-# print the contents of the errors module
-print(errors.__doc__)
 
 
 def test_sync():
@@ -918,7 +918,7 @@ async def test_serialization_exception():
     with pytest.raises(Exception) as excinfo:
         await b.DummyOutputFunction("dummy input")
 
-    print("Exception message: ", excinfo)
+    print("Exception message from test: ", excinfo)
     assert "Failed to coerce" in str(excinfo)
 
 

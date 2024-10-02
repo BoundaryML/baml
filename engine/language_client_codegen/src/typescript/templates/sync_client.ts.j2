@@ -33,6 +33,7 @@ export class BamlSyncClient {
       {%- endfor %}
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): {{fn.return_type}} {
+    try {
     const raw = this.runtime.callFunctionSync(
       "{{fn.name}}",
       {
@@ -45,6 +46,14 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as {{fn.return_type}}
+    } catch (error: any) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
   }
   {% endfor %}
 }
