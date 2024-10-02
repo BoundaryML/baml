@@ -35,7 +35,12 @@ fn load_test_ir(file_content: &str) -> IntermediateRepr {
             file_content.to_string(),
         ))],
     );
-    schema.diagnostics.to_result().unwrap();
+    match schema.diagnostics.to_result() {
+        Ok(_) => {}
+        Err(e) => {
+            panic!("Failed to validate schema: {}", e);
+        }
+    }
 
     IntermediateRepr::from_parser_database(&schema.db, schema.configuration).unwrap()
 }

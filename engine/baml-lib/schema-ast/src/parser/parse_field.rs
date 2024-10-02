@@ -81,9 +81,7 @@ pub(crate) fn parse_type_expr(
                 comment = merge_comments(comment, parse_trailing_comment(current));
             }
             Rule::field_type_chain => {
-                if !is_enum {
-                    field_type = parse_field_type_chain(current, diagnostics);
-                }
+                field_type = parse_field_type_chain(current, diagnostics);
             }
             Rule::field_attribute => enum_attributes.push(parse_attribute(current, diagnostics)),
             _ => parsing_catch_all(current, "field"),

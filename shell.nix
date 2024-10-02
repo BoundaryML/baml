@@ -13,17 +13,35 @@ let
     dependencies = [];
   };
 
+  appleDeps = with pkgs.darwin.apple_sdk.frameworks; [
+    CoreServices
+    SystemConfiguration
+    pkgs.libiconv-darwin
+  ];
+
 in
   pkgs.mkShell {
+
     buildInputs = with pkgs; [
       cargo
       rustc
+      rustfmt
+      maturin
       nodePackages.pnpm
       python3
       poetry
       rust-analyzer
       fern
-    ];
+      ruby
+    ] ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
+
+    LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
+    BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin
+      then
+        "-I${pkgs.llvmPackages_18.libclang.lib}/lib/clang/18/headers "
+      else
+        "-isystem ${pkgs.llvmPackages_18.libclang.lib}/lib/clang/18/include -isystem ${pkgs.glibc.dev}/include";
+
     shellHook = ''
       export PROJECT_ROOT=/$(pwd)
       export PATH=/$PROJECT_ROOT/tools:$PATH

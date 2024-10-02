@@ -14,12 +14,9 @@ use internal_baml_schema_ast::ast::{
 
 mod configurations;
 mod prompt;
-mod to_string_attributes;
 mod types;
 
-pub use to_string_attributes::{
-    DynamicStringAttributes, StaticStringAttributes, ToStringAttributes,
-};
+pub use crate::attributes::Attributes;
 pub(crate) use types::EnumAttributes;
 pub(crate) use types::*;
 
@@ -237,34 +234,6 @@ pub(super) struct Types {
         HashMap<either::Either<ast::TemplateStringId, ast::ValExpId>, TemplateStringProperties>,
 }
 
-impl Types {
-    pub(super) fn refine_class_field(
-        &self,
-        (class_id, field_id): (TypeExpId, FieldId),
-    ) -> either::Either<StaticFieldId, DynamicFieldId> {
-        match self.class_attributes.get(&class_id) {
-            Some(attrs) => match attrs.field_serilizers.get(&field_id) {
-                Some(ToStringAttributes::Dynamic(_attrs)) => either::Either::Right(field_id.into()),
-                _ => either::Either::Left(field_id.into()),
-            },
-            None => either::Either::Left(field_id.into()),
-        }
-    }
-
-    pub(super) fn refine_enum_value(
-        &self,
-        (enum_id, value_id): (TypeExpId, FieldId),
-    ) -> either::Either<StaticFieldId, DynamicFieldId> {
-        match self.enum_attributes.get(&enum_id) {
-            Some(attrs) => match attrs.value_serilizers.get(&value_id) {
-                Some(ToStringAttributes::Dynamic(_attrs)) => either::Either::Right(value_id.into()),
-                _ => either::Either::Left(value_id.into()),
-            },
-            None => either::Either::Left(value_id.into()),
-        }
-    }
-}
-
 fn visit_template_string<'db>(
     idx: ast::TemplateStringId,
     template_string: &'db ast::TemplateString,
@@ -295,6 +264,23 @@ fn visit_enum<'db>(
     enm: &'db ast::TypeExpressionBlock,
     ctx: &mut Context<'db>,
 ) {
+    // Ensure that every value in the enum does not have an expression.
+    enm.fields
+        .iter()
+        .filter_map(|field| {
+            if field.expr.is_some() {
+                Some((field.span(), field.name()))
+            } else {
+                None
+            }
+        })
+        .for_each(|(span, field)| {
+            ctx.push_error(DatamodelError::new_validation_error(
+                format!("Unexpected type specified for value `{}`", field).as_str(),
+                span.clone(),
+            ));
+        });
+
     let input_deps = enm.input().map(|f| f.flat_idns()).unwrap_or_default();
     ctx.types.enum_dependencies.insert(
         enm_id,
@@ -307,6 +293,24 @@ fn visit_class<'db>(
     class: &'db ast::TypeExpressionBlock,
     ctx: &mut Context<'db>,
 ) {
+    // Ensure that every value in the class is actually a name: type.
+    class
+        .fields
+        .iter()
+        .filter_map(|field| {
+            if field.expr.is_none() {
+                Some((field.span(), field.name()))
+            } else {
+                None
+            }
+        })
+        .for_each(|(span, field)| {
+            ctx.push_error(DatamodelError::new_validation_error(
+                format!("No type specified for field `{}`", field).as_str(),
+                span.clone(),
+            ));
+        });
+
     let mut used_types = class
         .iter_fields()
         .flat_map(|(_, f)| f.expr.iter().flat_map(|e| e.flat_idns()))
@@ -518,16 +522,6 @@ impl StaticType {
             "Bytes" => Some(StaticType::Bytes),
             _ => None,
         }
-    }
-}
-
-/// An opaque identifier for a class field in a schema that is dynamic.
-#[derive(Copy, Clone, PartialEq, Debug, Hash, Eq, PartialOrd, Ord)]
-pub struct DynamicFieldId(u32);
-
-impl From<FieldId> for DynamicFieldId {
-    fn from(id: FieldId) -> Self {
-        DynamicFieldId(id.0)
     }
 }
 

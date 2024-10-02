@@ -120,12 +120,10 @@ impl ParsingContext<'_> {
 
     pub(crate) fn error_missing_required_field(
         &self,
-        unparsed_or_missing: Vec<(String, Option<ParsingError>)>,
+        unparsed: Vec<(String, &ParsingError)>,
+        missing: Vec<String>,
         item: Option<&crate::jsonish::Value>,
     ) -> ParsingError {
-        let (missing, unparsed): (Vec<_>, Vec<_>) =
-            unparsed_or_missing.iter().partition(|(_, f)| f.is_none());
-
         ParsingError {
             reason: format!(
                 "Failed while parsing required fields: missing={}, unparsed={}",
@@ -133,18 +131,18 @@ impl ParsingContext<'_> {
                 unparsed.len()
             ),
             scope: self.scope.clone(),
-            causes: unparsed_or_missing
+            causes: missing
                 .into_iter()
-                .map(|(k, f)| match f {
-                    // Failed while parsing required field
-                    Some(e) => e,
-                    // Missing required field
-                    None => ParsingError {
-                        scope: self.scope.clone(),
-                        reason: format!("Missing required field: {}", k),
-                        causes: vec![],
-                    },
+                .map(|(k)| ParsingError {
+                    scope: self.scope.clone(),
+                    reason: format!("Missing required field: {}", k),
+                    causes: vec![],
                 })
+                .chain(unparsed.into_iter().map(|(k, e)| ParsingError {
+                    scope: self.scope.clone(),
+                    reason: format!("Failed to parse field {}: {}", k, e),
+                    causes: vec![e.clone()],
+                }))
                 .collect(),
         }
     }

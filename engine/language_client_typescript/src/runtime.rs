@@ -71,6 +71,19 @@ impl BamlRuntime {
     }
 
     #[napi]
+    pub fn reset(
+        &mut self,
+        root_path: String,
+        files: HashMap<String, String>,
+        env_vars: HashMap<String, String>,
+    ) -> napi::Result<()> {
+        self.inner = CoreRuntime::from_file_content(&root_path, &files, env_vars)
+            .map_err(from_anyhow_error)?
+            .into();
+        Ok(())
+    }
+
+    #[napi]
     pub fn create_context_manager(&self) -> RuntimeContextManager {
         self.inner
             .create_ctx_manager(BamlValue::String("typescript".to_string()), None)
@@ -158,7 +171,9 @@ impl BamlRuntime {
         env: Env,
         function_name: String,
         #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
-        #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] cb: Option<JsFunction>,
+        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<
+            JsFunction,
+        >,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
@@ -200,7 +215,9 @@ impl BamlRuntime {
         env: Env,
         function_name: String,
         #[napi(ts_arg_type = "{ [string]: any }")] args: JsObject,
-        #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] cb: Option<JsFunction>,
+        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")] cb: Option<
+            JsFunction,
+        >,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,

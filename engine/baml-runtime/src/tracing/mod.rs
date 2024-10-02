@@ -5,7 +5,7 @@ use crate::InnerTraceStats;
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlMediaType, BamlValue};
 use cfg_if::cfg_if;
-use colored::Colorize;
+use colored::{ColoredString, Colorize};
 use internal_baml_jinja::RenderedPrompt;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -46,7 +46,6 @@ pub struct TracingSpan {
 
 pub struct BamlTracer {
     options: APIWrapper,
-    enabled: bool,
     tracer: Option<TracerImpl>,
     trace_stats: TraceStats,
 }
@@ -59,17 +58,53 @@ pub trait Visualize {
     fn visualize(&self, max_chunk_size: usize) -> String;
 }
 
+fn log_str() -> ColoredString {
+    "...[log trimmed]...".yellow().dimmed()
+}
+
 pub fn truncate_string(s: &str, max_size: usize) -> String {
     if max_size > 0 && s.len() > max_size {
         let half_size = max_size / 2;
-        format!(
-            "{}{}{}",
-            &s[..half_size],
-            "...[log trimmed]...".yellow().dimmed(),
-            &s[s.len() - half_size..]
-        )
+        // We use UTF-8 aware char_indices to get the correct byte index (can't just do s[..half_size])
+        let start = s
+            .char_indices()
+            .take(half_size)
+            .map(|(i, _)| i)
+            .last()
+            .unwrap_or(0);
+        let end = s
+            .char_indices()
+            .rev()
+            .take(half_size)
+            .map(|(i, _)| i)
+            .last()
+            .unwrap_or(s.len());
+        format!("{}{}{}", &s[..start], log_str(), &s[end..])
     } else {
         s.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_truncate_string() {
+        assert_eq!(truncate_string("1234567890", 10), "1234567890".to_string());
+        assert_eq!(
+            truncate_string("12345678901", 10),
+            format!("1234{}78901", log_str())
+        );
+        assert_eq!(truncate_string("12345678901", 0), "12345678901".to_string());
+    }
+
+    #[test]
+    fn test_unicode_truncate_string() {
+        assert_eq!(
+            truncate_string(r#"👍👍👍👍👍👍👍"#, 4),
+            format!(r#"👍{}👍👍"#, log_str())
+        );
     }
 }
 
@@ -127,7 +162,6 @@ impl BamlTracer {
             } else {
                 None
             },
-            enabled: options.enabled(),
             options,
             trace_stats,
         };
@@ -162,9 +196,6 @@ impl BamlTracer {
         self.trace_stats.guard().start();
         let span_id = ctx.enter(function_name);
         log::trace!("Entering span {:#?} in {:?}", span_id, function_name);
-        if !self.enabled {
-            return None;
-        }
         let span = TracingSpan {
             span_id,
             params: params.clone(),

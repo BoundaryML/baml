@@ -340,3 +340,32 @@ fn relevant_data_models<'a>(
 
     Ok((enums, classes))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use crate::BamlRuntime;
+    use super::*;
+
+    #[test]
+    fn skipped_variants_are_not_rendered() {
+        let files = vec![("test-file.baml",r#"
+          enum Foo {
+            Bar
+            Baz @skip
+          }"#
+        )].into_iter().collect();
+        let env_vars: HashMap<&str, &str> = HashMap::new();
+        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars).unwrap();
+        let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
+        let ctx: RuntimeContext = ctx_manager.create_ctx(None, None).unwrap();
+
+        let field_type = FieldType::Enum("Foo".to_string());
+        let render_output = render_output_format( baml_runtime.inner.ir.as_ref(), &ctx, &field_type ).unwrap();
+
+        let foo_enum = render_output.find_enum("Foo").unwrap();
+        assert_eq!(foo_enum.values[0].0.real_name(),  "Bar".to_string());
+        assert_eq!(foo_enum.values.len(), 1);
+    }
+
+}

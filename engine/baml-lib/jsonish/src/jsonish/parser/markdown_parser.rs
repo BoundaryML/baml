@@ -6,7 +6,13 @@ use crate::jsonish::{
 use super::ParseOptions;
 use anyhow::Result;
 
-pub fn parse<'a>(str: &'a str, options: &ParseOptions) -> Result<Vec<(String, Value)>> {
+#[derive(Debug)]
+pub enum MarkdownResult {
+    CodeBlock(String, Value),
+    String(String),
+}
+
+pub fn parse<'a>(str: &'a str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
     let mut values = vec![];
 
     let mut remaining = str;
@@ -41,7 +47,8 @@ pub fn parse<'a>(str: &'a str, options: &ParseOptions) -> Result<Vec<(String, Va
 
         match res {
             Ok(v) => {
-                values.push((
+                // TODO: Add any more additional strings here.
+                values.push(MarkdownResult::CodeBlock(
                     if tag.len() > 3 {
                         tag[3..].trim()
                     } else {
@@ -64,6 +71,9 @@ pub fn parse<'a>(str: &'a str, options: &ParseOptions) -> Result<Vec<(String, Va
     if values.is_empty() {
         anyhow::bail!("No markdown blocks found")
     } else {
+        if !remaining.trim().is_empty() {
+            values.push(MarkdownResult::String(remaining.to_string()));
+        }
         Ok(values)
     }
 }
@@ -97,7 +107,11 @@ print("Hello, world!")
         let res = res?;
         assert_eq!(res.len(), 2);
         {
-            let (tag, value) = &res[0];
+            let (tag, value) = if let MarkdownResult::CodeBlock(tag, value) = &res[0] {
+                (tag, value)
+            } else {
+                panic!("Expected CodeBlock, got {:#?}", res[0]);
+            };
             assert_eq!(tag, "json");
 
             let Value::AnyOf(value, _) = value else {
@@ -110,7 +124,11 @@ print("Hello, world!")
             )));
         }
         {
-            let (tag, value) = &res[1];
+            let (tag, value) = if let MarkdownResult::CodeBlock(tag, value) = &res[1] {
+                (tag, value)
+            } else {
+                panic!("Expected CodeBlock, got {:#?}", res[0]);
+            };
             assert_eq!(tag, "test json");
 
             let Value::AnyOf(value, _) = value else {
@@ -171,7 +189,15 @@ dolor sit amet
         );
 
         let res = res?;
-        assert_eq!(res.len(), 2);
+        assert_eq!(res.len(), 3);
+
+        // Ensure the types of each.
+        assert!(matches!(&res[0], MarkdownResult::CodeBlock(tag, _) if tag == "json"));
+        assert!(matches!(&res[1], MarkdownResult::CodeBlock(tag, _) if tag == "json"));
+        match &res[2] {
+            MarkdownResult::String(s) => assert_eq!(s.trim(), "dolor sit amet"),
+            _ => panic!("Expected String, got {:#?}", res[2]),
+        }
 
         Ok(())
     }

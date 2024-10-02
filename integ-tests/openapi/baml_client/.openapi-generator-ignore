@@ -2,7 +2,7 @@
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ openapi-generator generate -c openapi.yaml -g <language> -o <output_dir>
+#  $ openapi-generator generate -i openapi.yaml -g <language> -o <output_dir>
 #
 ###############################################################################
 
