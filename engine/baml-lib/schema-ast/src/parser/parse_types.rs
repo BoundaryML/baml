@@ -15,12 +15,12 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
 
     let mut arity = FieldArity::Required;
     let mut ftype = None;
+    let mut attributes = Vec::new();
 
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::union => {
                 let result = parse_union(current, diagnostics);
-
                 ftype = result;
             }
             Rule::non_union => {
@@ -28,9 +28,10 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
 
                 ftype = result;
             }
-            Rule::optional_token => {
-                arity = FieldArity::Optional;
+            Rule::field_attribute => {
+                attributes.push(parse_attribute(current, false, diagnostics));
             }
+            Rule::optional_token => arity = FieldArity::Optional,
             _ => {
                 unreachable_rule!(current, Rule::field_type)
             }
@@ -46,8 +47,7 @@ pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
             }
         }
         None => {
-            log::error!("Ftype should always be defined");
-            None
+            unreachable!("Ftype should always be defined")
         }
     }
 }
@@ -75,11 +75,13 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         }
     }
 
-    match types.len() {
+    let mut union = match types.len() {
         0 => unreachable!("A union must have atleast 1 type"),
         1 => Some(types[0].to_owned()),
         _ => Some(FieldType::Union(FieldArity::Required, types, span, None)),
-    }
+    };
+    union.as_mut().map(|ft| reassociate_union_attributes(ft));
+    union
 }
 
 fn parse_base_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
@@ -92,7 +94,7 @@ fn parse_base_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> O
                 base_type = parse_base_type(current, diagnostics);
             }
             Rule::field_attribute => {
-                let att = parse_attribute(current, diagnostics);
+                let att = parse_attribute(current, false, diagnostics);
                 attributes.push(att);
             }
             _ => unreachable_rule!(current, Rule::base_type_with_attr),
@@ -101,7 +103,7 @@ fn parse_base_type_with_attr(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> O
 
     match base_type {
         Some(mut ft) => {
-            ft.set_attributes(attributes);
+            ft.extend_attributes(attributes);
             Some(ft)
         }
         None => None,
@@ -166,7 +168,7 @@ fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
         match current.as_rule() {
             Rule::openParan | Rule::closeParan => continue,
             Rule::field_type_with_attr => {
-                return parse_field_type_with_attr(current, diagnostics);
+                return parse_field_type_with_attr(current, true, diagnostics);
             }
             _ => unreachable_rule!(current, Rule::parenthesized_type),
         }
@@ -259,18 +261,27 @@ fn parse_map(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType>
 
 fn parse_group(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     assert_correct_parser!(pair, Rule::group);
+    let mut attributes = Vec::new();
+    let mut field_type = None;
 
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::openParan | Rule::closeParan => continue,
             Rule::field_type => {
-                return parse_field_type(current, diagnostics);
+                field_type = parse_field_type(current, diagnostics);
+            }
+            Rule::field_attribute => {
+                let attr = parse_attribute(current, true, diagnostics);
+                attributes.push(attr);
             }
             _ => unreachable_rule!(current, Rule::group),
         }
     }
 
-    unreachable!("impossible group parsing");
+    field_type
+        .as_mut()
+        .map(|ft| ft.extend_attributes(attributes));
+    field_type
 }
 
 fn parse_tuple(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
@@ -284,6 +295,11 @@ fn parse_tuple(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         match current.as_rule() {
             Rule::openParan | Rule::closeParan => continue,
 
+            Rule::field_type_with_attr => {
+                if let Some(f) = parse_field_type_with_attr(current, false, diagnostics) {
+                    fields.push(f)
+                }
+            }
             Rule::field_type => {
                 if let Some(f) = parse_field_type(current, diagnostics) {
                     fields.push(f)
@@ -297,5 +313,67 @@ fn parse_tuple(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         0 => None,
         1 => Some(fields[0].to_owned()),
         _ => Some(FieldType::Tuple(FieldArity::Required, fields, span, None)),
+    }
+}
+
+/// For the last variant of a Union, remove the attributes from that variant
+/// and attach them to the union, unless the attribute was tagged with the
+/// `parenthesized` field.
+///
+/// This is done because `field_foo int | string @description("d")`
+/// is naturally parsed as a field with a union whose secord variant has
+/// a description. But the correct BAML interpretation is a union with a
+/// description.
+pub fn reassociate_union_attributes(field_type: &mut FieldType) {
+    match field_type {
+        FieldType::Union(_arity, ref mut variants, _, _) => {
+            if let Some(last_variant) = variants.last_mut() {
+                let last_variant_attributes = last_variant.attributes().to_owned();
+                let (attrs_for_variant, attrs_for_union): (Vec<Attribute>, Vec<Attribute>) =
+                    last_variant_attributes
+                        .into_iter()
+                        .partition(|attr| attr.parenthesized);
+                last_variant.set_attributes(attrs_for_variant);
+                field_type.extend_attributes(attrs_for_union);
+            }
+        }
+        _ => {
+            panic!("Unexpected: `reassociate_union_attributes` should only be called when parsing a union.");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{BAMLParser, Rule};
+    use pest::{consumes_to, parses_to};
+
+    #[test]
+    fn type_attributes() {
+        parses_to! {
+            parser: BAMLParser,
+            input: r#"int @description("hi")"#,
+            rule: Rule::type_expression,
+            tokens: [type_expression(0,22,[
+                identifier(0,3, [
+                    single_word(0, 3)
+                ]),
+                field_attribute(4,22,[
+                    identifier(5,16,[
+                        single_word(5,16)
+                    ]),
+                    arguments_list(16, 22, [
+                        expression(17,21, [
+                            string_literal(17,21,[
+                                quoted_string_literal(17,21,[
+                                  quoted_string_content(18,20)
+                                ])
+                            ])
+                        ])
+                    ])
+                ])
+              ])
+            ]
+        }
     }
 }

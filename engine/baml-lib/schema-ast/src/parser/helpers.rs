@@ -51,3 +51,26 @@ macro_rules! unreachable_rule {
         )
     };
 }
+
+#[macro_export]
+macro_rules! test_parse_baml_type {
+    ( source: $source:expr, target: $target:expr, $(,)* ) => {
+        use crate::parser::{BAMLParser, Rule};
+        use internal_baml_diagnostics::{Diagnostics, SourceFile};
+        use pest::Parser;
+
+        let root_path = "test_file.baml";
+        let source = SourceFile::new_static(root_path.into(), $source);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+
+        let parsed = BAMLParser::parse(Rule::field_type_chain, $source)
+            .expect("Pest parsing should succeed")
+            .next()
+            .unwrap();
+        let type_ =
+            parse_field_type_chain(parsed, &mut diagnostics).expect("Type parsing should succeed");
+
+        type_.assert_eq_up_to_span(&$target);
+    };
+}

@@ -1,7 +1,8 @@
 use internal_baml_diagnostics::Diagnostics;
 
 use super::{
-    helpers::parsing_catch_all, parse_identifier::parse_identifier, parse_types::parse_field_type,
+    helpers::parsing_catch_all, parse_field::parse_field_type_chain,
+    parse_identifier::parse_identifier,
 };
 use crate::{
     assert_correct_parser,
@@ -46,7 +47,7 @@ pub(crate) fn parse_named_argument_list(
                     name = Some(parse_identifier(arg, diagnostics));
                 }
                 Rule::colon => {}
-                Rule::field_type => {
+                Rule::field_type | Rule::field_type_chain => {
                     r#type = Some(parse_function_arg(arg, diagnostics)?);
                 }
                 _ => parsing_catch_all(arg, "named_argument_list"),
@@ -80,13 +81,13 @@ pub fn parse_function_arg(
     diagnostics: &mut Diagnostics,
 ) -> Result<BlockArg, DatamodelError> {
     assert!(
-        pair.as_rule() == Rule::field_type,
+        [Rule::field_type, Rule::field_type_chain].contains(&pair.as_rule()),
         "parse_function_arg called on the wrong rule: {:?}",
         pair.as_rule()
     );
     let span = diagnostics.span(pair.as_span());
 
-    match parse_field_type(pair, diagnostics) {
+    match parse_field_type_chain(pair, diagnostics) {
         Some(ftype) => Ok(BlockArg {
             span,
             field_type: ftype,

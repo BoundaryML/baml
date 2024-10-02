@@ -4,7 +4,7 @@ use super::{
     parse_comments::*,
     parse_expression::parse_expression,
     parse_identifier::parse_identifier,
-    parse_types::parse_field_type,
+    parse_types::{parse_field_type, reassociate_union_attributes},
     Rule,
 };
 use crate::ast::*;
@@ -27,7 +27,7 @@ pub(crate) fn parse_value_expr(
         match current.as_rule() {
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
             Rule::field_attribute => {
-                attributes.push(parse_attribute(current, diagnostics));
+                attributes.push(parse_attribute(current, false, diagnostics));
             }
             Rule::trailing_comment => {
                 comment = match (comment, parse_trailing_comment(current)) {
@@ -70,36 +70,38 @@ pub(crate) fn parse_type_expr(
 ) -> Result<Field<FieldType>, DatamodelError> {
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
-    let mut enum_attributes = Vec::<Attribute>::new();
+    let mut field_attributes = Vec::<Attribute>::new();
     let mut field_type = None;
     let mut comment: Option<Comment> = block_comment.and_then(parse_comment_block);
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
+            Rule::identifier => {
+                name = Some(parse_identifier(current, diagnostics));
+            },
             Rule::trailing_comment => {
                 comment = merge_comments(comment, parse_trailing_comment(current));
             }
             Rule::field_type_chain => {
-                field_type = parse_field_type_chain(current, diagnostics);
+                    field_type = parse_field_type_chain(current, diagnostics);
             }
-            Rule::field_attribute => enum_attributes.push(parse_attribute(current, diagnostics)),
+            Rule::field_attribute => field_attributes.push(parse_attribute(current, false, diagnostics)),
             _ => parsing_catch_all(current, "field"),
         }
     }
 
-    match (name, field_type) {
+    match (name, &field_type) {
         (Some(name), Some(field_type)) => Ok(Field {
             expr: Some(field_type.clone()),
             name,
-            attributes: field_type.attributes().to_vec(),
+            attributes: field_type.clone().attributes().to_vec(),
             documentation: comment,
             span: diagnostics.span(pair_span),
         }),
         (Some(name), None) => Ok(Field {
             expr: None,
             name,
-            attributes: enum_attributes,
+            attributes: field_attributes,
             documentation: comment,
             span: diagnostics.span(pair_span),
         }),
@@ -121,14 +123,14 @@ fn merge_comments(existing: Option<Comment>, new: Option<Comment>) -> Option<Com
     }
 }
 
-fn parse_field_type_chain(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
+pub fn parse_field_type_chain(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     let mut types = Vec::new();
     let mut operators = Vec::new();
 
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::field_type_with_attr => {
-                if let Some(field_type) = parse_field_type_with_attr(current, diagnostics) {
+                if let Some(field_type) = parse_field_type_with_attr(current, false, diagnostics) {
                     types.push(field_type);
                 }
             }
@@ -143,6 +145,7 @@ fn parse_field_type_chain(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Opti
 
 pub(crate) fn parse_field_type_with_attr(
     pair: Pair<'_>,
+    parenthesized: bool,
     diagnostics: &mut Diagnostics,
 ) -> Option<FieldType> {
     let mut field_type = None;
@@ -150,10 +153,16 @@ pub(crate) fn parse_field_type_with_attr(
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::field_type => field_type = parse_field_type(current, diagnostics),
-            Rule::field_attribute => field_attributes.push(parse_attribute(current, diagnostics)),
+            Rule::field_type => {
+                field_type = parse_field_type(current, diagnostics);
+            }
+            Rule::field_type_with_attr => {}
+            Rule::field_attribute => {
+                field_attributes.push(parse_attribute(current, parenthesized, diagnostics));
+            }
+            Rule::trailing_comment => {}
             _ => {
-                parsing_catch_all(current, "field_type_with_attr");
+                parsing_catch_all(current, "field_type_with_attr!");
             }
         }
     }
@@ -162,30 +171,24 @@ pub(crate) fn parse_field_type_with_attr(
         Some(mut ft) => {
             // ft.set_attributes(field_attributes);
             match &mut ft {
-                FieldType::Union(_, ref mut types, _, _) => {
-                    if let Some(last_type) = types.last_mut() {
-                        // last_type.reset_attributes();
-                        // log::info!("last_type: {:#?}", last_type);
-                        let last_type_attributes = last_type.attributes().to_owned();
-                        let mut new_attributes = last_type_attributes.clone();
-                        new_attributes.extend(field_attributes);
-                        ft.set_attributes(new_attributes);
-                    }
+                FieldType::Union(_arity, ref mut _variants, _, _) => {
+                    reassociate_union_attributes(&mut ft);
 
                     // if let Some(attributes) = attributes.as_ref() {
                     //     ft.set_attributes(attributes.clone()); // Clone the borrowed `Vec<Attribute>`
                     // }
                 }
                 _ => {
-                    ft.set_attributes(field_attributes);
                 }
             }
+            ft.extend_attributes(field_attributes);
 
             Some(ft) // Return the field type with attributes
         }
         None => None,
     }
 }
+
 fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
     if types.is_empty() {
         return None;
@@ -222,4 +225,266 @@ fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
     }
 
     Some(combined_type)
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::super::{BAMLParser, Rule};
+    use super::*;
+    use crate::test_parse_baml_type;
+    use baml_types::TypeValue;
+    use internal_baml_diagnostics::{Diagnostics, SourceFile};
+    use pest::Parser;
+
+    #[test]
+    fn type_union_association() {
+        let root_path = "test_file.baml";
+
+        let input = r#"int | (string @description("hi"))"#;
+        let source = SourceFile::new_static(root_path.into(), input);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+        let parsed = BAMLParser::parse(Rule::field_type_chain, input)
+            .unwrap()
+            .next()
+            .unwrap();
+        let result = parse_field_type_chain(parsed, &mut diagnostics).unwrap();
+        if let FieldType::Union(_, types, _, _) = &result {
+            assert_eq!(types[1].clone().attributes().len(), 1);
+            assert_eq!(types[1].clone().attributes()[0].name.to_string().as_str(), "description");
+        } else {
+            panic!("Expected union");
+        }
+    }
+
+    #[test]
+    fn field_union_association() {
+        let root_path = "test_file.baml";
+
+        let input = r#"bar int | (string @description("hi")) @description("hi")"#;
+        let source = SourceFile::new_static(root_path.into(), input);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+        let parsed = BAMLParser::parse(Rule::type_expression, input)
+            .unwrap()
+            .next()
+            .unwrap();
+        let result =
+            parse_type_expr(&None, "class", parsed, None, &mut diagnostics, false).unwrap();
+        assert_eq!(result.name.to_string().as_str(), "bar");
+        assert_eq!(result.attributes().len(), 1);
+        assert_eq!(
+            result.attributes()[0].name.to_string().as_str(),
+            "description"
+        );
+    }
+
+    #[test]
+    fn test_primitive() {
+        test_parse_baml_type! {
+            source: r#"int"#,
+            target: FieldType::Primitive(
+                FieldArity::Required,
+                TypeValue::Int,
+                Span::fake(),
+                Some(vec![])
+            ),
+        }
+    }
+
+    #[test]
+    fn int_with_attribute() {
+        test_parse_baml_type! {
+            source: r#"int @description("hi")"#,
+            target: mk_int(Some(vec![mk_description("hi", false)])),
+        }
+    }
+
+    #[test]
+    fn parenthesized_int_with_attribute() {
+        test_parse_baml_type! {
+            source: r#"(int @description("hi")) | string @description("there")"#,
+            target: FieldType::Union(
+                FieldArity::Required,
+                vec![
+                    mk_int(Some(vec![mk_description("hi", true)])),
+                    mk_string(Some(vec![])),
+                ],
+                Span::fake(),
+                Some(vec![mk_description("there", false)]),
+            ),
+        }
+    }
+
+    #[test]
+    fn parenthesized_int_or_string_with_attribute() {
+        test_parse_baml_type! {
+            source: r#"(int @description("hi")) | (string @description("there")) @description("everyone")"#,
+            target: FieldType::Union(
+                FieldArity::Required,
+                vec![
+                    mk_int(Some(vec![mk_description("hi", true)])),
+                    mk_string(Some(vec![mk_description("there", true)])),
+                ],
+                Span::fake(),
+                Some(vec![mk_description("everyone", false)]),
+            ),
+        }
+    }
+
+    #[test]
+    fn nested_parentheses() {
+        test_parse_baml_type! {
+            source: r#"(int | (bool | string)) @description("hi")"#,
+            target: FieldType::Union(
+                FieldArity::Required,
+                vec![
+                    mk_int(Some(vec![])),
+                    FieldType::Union(
+                        FieldArity::Required,
+                        vec![
+                            mk_bool(Some(vec![])),
+                            mk_string(Some(vec![])),
+                        ],
+                        Span::fake(),
+                        Some(vec![])
+                    )
+                ],
+                Span::fake(),
+                Some(vec![mk_description("hi", false)])
+            ),
+        }
+    }
+
+    #[test]
+    fn union_array() {
+        test_parse_baml_type! {
+            source: r#"(int | string)[] @description("hi")"#,
+            target: FieldType::List(
+                FieldArity::Required,
+                Box::new(FieldType::Union(
+                    FieldArity::Required,
+                    vec![
+                        mk_int(Some(vec![])),
+                        mk_string(Some(vec![]))
+                    ],
+                    Span::fake(),
+                    Some(vec![])
+                )),
+                1,
+                Span::fake(),
+                Some(vec![mk_description("hi", false)])
+            ),
+        }
+    }
+
+    #[test]
+    fn optional_union() {
+        test_parse_baml_type! {
+            source: r#"(int | string)? @description("hi")"#,
+            target: FieldType::Union(
+                    FieldArity::Optional,
+                    vec![
+                        mk_int(Some(vec![])),
+                        mk_string(Some(vec![])),
+                    ],
+                    Span::fake(),
+                    Some(vec![mk_description("hi", false)])
+                ),
+        }
+    }
+
+    #[test]
+    fn optional_union_inner_attribute() {
+        test_parse_baml_type! {
+            source: r#"(int | (string @description("stringdesc")))? @description("hi")"#,
+            target: FieldType::Union(
+                    FieldArity::Optional,
+                    vec![
+                        mk_int(Some(vec![])),
+                        mk_string(Some(vec![mk_description("stringdesc", true)])),
+                    ],
+                    Span::fake(),
+                    Some(vec![mk_description("hi", false)])
+                ),
+        }
+    }
+
+    #[test]
+    fn union_list_inner_attribute() {
+        test_parse_baml_type! {
+            source: r#"(int | (string @description("stringdesc")))[] @description("hi")"#,
+            target: FieldType::List(
+                    FieldArity::Required,
+                    Box::new(
+                        FieldType::Union(
+                            FieldArity::Required,
+                            vec![
+                                mk_int(Some(vec![])),
+                                mk_string(Some(vec![mk_description("stringdesc", true)])),
+                            ],
+                            Span::fake(),
+                            Some(vec![])
+                        )
+                    ),
+                    1,
+                    Span::fake(),
+                    Some(vec![mk_description("hi", false)])
+                ),
+        }
+    }
+
+    #[test]
+    fn union_list_inner_attribute_union_descr() {
+        test_parse_baml_type! {
+            source: r#"(int | (string @description("stringdesc")) @description("union"))[] @description("hi")"#,
+            target: FieldType::List(
+                FieldArity::Required,
+                Box::new(
+                    FieldType::Union(
+                        FieldArity::Required,
+                        vec![
+                            mk_int(Some(vec![])),
+                            mk_string(Some(vec![mk_description("stringdesc", true)])),
+                        ],
+                        Span::fake(),
+                        Some(vec![mk_description("union", false)])
+                    )
+                ),
+                1,
+                Span::fake(),
+                Some(vec![mk_description("hi", false)])
+            ),
+        }
+    }
+
+    // Convenience functions.
+
+    fn mk_int(attrs: Option<Vec<Attribute>>) -> FieldType {
+        FieldType::Primitive(FieldArity::Required, TypeValue::Int, Span::fake(), attrs)
+    }
+    fn mk_bool(attrs: Option<Vec<Attribute>>) -> FieldType {
+        FieldType::Primitive(FieldArity::Required, TypeValue::Bool, Span::fake(), attrs)
+    }
+    fn mk_string(attrs: Option<Vec<Attribute>>) -> FieldType {
+        FieldType::Primitive(FieldArity::Required, TypeValue::String, Span::fake(), attrs)
+    }
+    fn mk_null(attrs: Option<Vec<Attribute>>) -> FieldType {
+        FieldType::Primitive(FieldArity::Required, TypeValue::Null, Span::fake(), attrs)
+    }
+
+    fn mk_description(value: &'static str, parenthesized: bool) -> Attribute {
+        Attribute {
+            name: ("description", Span::fake()).into(),
+            parenthesized,
+            arguments: ArgumentsList {
+                arguments: vec![Argument {
+                    value: Expression::StringValue(value.to_string(), Span::fake()),
+                    span: Span::fake(),
+                }],
+            },
+            span: Span::fake(),
+        }
+    }
 }
