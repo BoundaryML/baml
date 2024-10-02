@@ -28,7 +28,8 @@ pub(crate) fn parse_type_expression_block(
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            // There are two identifiers in the children of type_expression_block.
+            // There are two identifiers in the children of type_expression_block:
+            // class Foo {}  <- identifier "class", identifier "Foo", the rest.
             // So we do different things with an `identifier` as we incrementally
             // build the `TypeExpressionBlock`.
             Rule::identifier => {
@@ -56,21 +57,23 @@ pub(crate) fn parse_type_expression_block(
                 for item in current.into_inner() {
                     match item.as_rule() {
                         Rule::block_attribute => {
-                            attributes.push(parse_attribute(item, diagnostics));
+                            attributes.push(parse_attribute(item, false, diagnostics));
                         }
                         Rule::type_expression =>{
-                            match parse_type_expr(
-                                    &name,
-                                    sub_type.clone().map(|st| match st {
-                                        SubType::Enum => "Enum",
-                                        SubType::Class => "Class",
-                                        SubType::Other(_) => "Other",
-                                    }).unwrap_or(""),
-                                    item,
-                                    pending_field_comment.take(),
-                                    diagnostics,
-                                matches!(sub_type, Some(SubType::Enum))
-                                ) {
+                            let sub_type_is_enum = matches!(sub_type, Some(SubType::Enum));
+                            let sub_type_expression = parse_type_expr(
+                                &name,
+                                sub_type.clone().map(|st| match st {
+                                    SubType::Enum => "Enum",
+                                    SubType::Class => "Class",
+                                    SubType::Other(_) => "Other",
+                                }).unwrap_or(""),
+                                item,
+                                pending_field_comment.take(),
+                                diagnostics,
+                                sub_type_is_enum,
+                            );
+                            match sub_type_expression {
                                     Ok(field) => {
                                         fields.push(field);
                                     },
@@ -114,8 +117,10 @@ pub(crate) fn parse_type_expression_block(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::parser::{BAMLParser, Rule};
-    use pest::{consumes_to, fails_with, parses_to};
+    use internal_baml_diagnostics::{Diagnostics, SourceFile};
+    use pest::{Parser, consumes_to, fails_with, parses_to};
 
     #[test]
     fn keyword_name_mandatory_whitespace() {
@@ -145,5 +150,28 @@ mod tests {
             negatives: [],
             pos: 9
         }
+    }
+
+    #[test]
+    // This test checks that parsing a particular malformed Enum produces
+    // a field that is an enum variant with a data payload. This is not
+    // a valid BAML enum. But a later validation phase
+    // (parser_database::visit_enum) expects this parse result, in order to
+    // produce a good error message.
+    fn enum_invalid_value_expr() {
+        let root_path = "test_file.baml";
+
+        let input = r#"enum Test { A int | string }"#;
+        let source = SourceFile::new_static(root_path.into(), input);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+        let parsed = BAMLParser::parse(Rule::type_expression_block, input)
+            .unwrap()
+            .next()
+            .unwrap();
+        let result = parse_type_expression_block(parsed, None, &mut diagnostics);
+        let TypeExpressionBlock { name, fields, .. } = result;
+        assert_eq!(name.to_string(), "Test");
+        assert!(fields[0].expr.is_some());
     }
 }

@@ -7,6 +7,7 @@ use crate::{assert_correct_parser, ast::*, parser::parse_arguments::parse_argume
 
 pub(crate) fn parse_attribute(
     pair: Pair<'_>,
+    parenthesized: bool,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
 ) -> Attribute {
     assert_correct_parser!(pair, Rule::block_attribute, Rule::field_attribute);
@@ -29,6 +30,7 @@ pub(crate) fn parse_attribute(
         Some(name) => Attribute {
             name,
             arguments,
+            parenthesized,
             span,
         },
         // This is suspicious, can probably cause a panic

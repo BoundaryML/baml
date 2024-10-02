@@ -189,7 +189,7 @@ impl FieldType {
                 vec![&idn]
             }
 
-            FieldType::Union(_, f, ..) => f.iter().flat_map(|t| t.flat_idns()).collect(),
+            FieldType::Union(_, f, _, _) => f.iter().flat_map(|t| t.flat_idns()).collect(),
             FieldType::Tuple(_, f, ..) => f.iter().flat_map(|t| t.flat_idns()).collect(),
             FieldType::Map(_, kv, ..) => {
                 let mut idns = kv.1.flat_idns();
@@ -233,6 +233,122 @@ impl FieldType {
             | FieldType::List(.., attr) => *attr = Some(attributes),
         }
     }
+
+    pub fn extend_attributes(&mut self, attributes: Vec<Attribute>) {
+        match self {
+            FieldType::Symbol(.., attr)
+            | FieldType::Primitive(.., attr)
+            | FieldType::Union(.., attr)
+            | FieldType::Tuple(.., attr)
+            | FieldType::Map(.., attr)
+            | FieldType::List(.., attr) => match attr.as_mut() {
+                Some(ats) => ats.extend(attributes),
+                None => { *attr = Some(attributes) }
+            },
+        }
+    }
+
+    pub fn assert_eq_up_to_span(&self, other: &Self) {
+        use FieldType::*;
+
+        fn attrs_eq(attrs1: &Option<Vec<Attribute>>, attrs2: &Option<Vec<Attribute>>) {
+            let attrs1 = attrs1.clone().unwrap_or(vec![]);
+            let attrs2 = attrs2.clone().unwrap_or(vec![]);
+            assert_eq!(
+                attrs1.len(),
+                attrs2.len(),
+                "Attribute lengths are different"
+            );
+            for (x, y) in attrs1.iter().zip(attrs2) {
+                x.assert_eq_up_to_span(&y);
+            }
+        }
+        match (self, other) {
+            (Symbol(arity1, ident1, attrs1), Symbol(arity2, ident2, attrs2)) => {
+                assert_eq!(arity1, arity2);
+                ident1.assert_eq_up_to_span(ident2);
+                attrs_eq(attrs1, attrs2);
+            }
+            (Symbol(..), _) => {
+                panic!(
+                    "Different types:\n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+            (Primitive(arity1, prim_ty1, _, attrs1), Primitive(arity2, prim_ty2, _, attrs2)) => {
+                assert_eq!(arity1, arity2);
+                assert_eq!(prim_ty1, prim_ty2);
+                attrs_eq(attrs1, attrs2);
+            }
+            (Primitive(..), _) => {
+                panic!(
+                    "Different types: \n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+            (List(arity1, inner1, dims1, _, attrs1), List(arity2, inner2, dims2, _, attrs2)) => {
+                assert_eq!(arity1, arity2);
+                inner1.assert_eq_up_to_span(inner2);
+                assert_eq!(dims1, dims2);
+                attrs_eq(attrs1, attrs2);
+            }
+            (List(..), _) => {
+                panic!(
+                    "Different types: \n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+            (Tuple(arity1, inner1, _, attrs1), Tuple(arity2, inner2, _, attrs2)) => {
+                assert_eq!(arity1, arity2);
+                for (t1, t2) in inner1.iter().zip(inner2) {
+                    t1.assert_eq_up_to_span(t2);
+                }
+                attrs_eq(attrs1, attrs2);
+            }
+            (Tuple(..), _) => {
+                panic!(
+                    "Different types: \n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+            (Union(arity1, variants1, _, attrs1), Union(arity2, variants2, _, attrs2)) => {
+                assert_eq!(arity1, arity2);
+                assert_eq!(
+                    variants1.len(),
+                    variants2.len(),
+                    "Unions have the same number of variants"
+                );
+                for (v1, v2) in variants1.iter().zip(variants2) {
+                    v1.assert_eq_up_to_span(v2);
+                }
+                attrs_eq(attrs1, attrs2);
+            }
+            (Union(..), _) => {
+                panic!(
+                    "Different types: \n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+            (Map(arity1, kv1, _, attrs1), Map(arity2, kv2, _, attrs2)) => {
+                assert_eq!(arity1, arity2);
+                kv1.0.assert_eq_up_to_span(&kv2.0);
+                kv1.1.assert_eq_up_to_span(&kv2.1);
+                attrs_eq(attrs1, attrs2);
+            }
+            (Map(..), _) => {
+                panic!(
+                    "Different types: \n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+        }
+    }
 }
 
 // Impl display for FieldType
@@ -248,8 +364,7 @@ impl std::fmt::Display for FieldType {
                 )
             }
             FieldType::Union(arity, ft, ..) => {
-                let mut ft = ft.iter().map(|t| t.to_string()).collect::<Vec<_>>();
-                ft.sort();
+                let ft = ft.iter().map(|t| t.to_string()).collect::<Vec<_>>();
                 write!(
                     f,
                     "({}){}",

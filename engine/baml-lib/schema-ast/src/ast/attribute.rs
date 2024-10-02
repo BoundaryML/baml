@@ -19,6 +19,10 @@ pub struct Attribute {
     ///         ^^^^^^^^^^^^^^^^^^^^^^^^
     /// ```
     pub arguments: ArgumentsList,
+    /// Whether the Attribute was closely associated to a type, via parentheses.
+    /// This flag protects attributes from being lifted away from a union variant
+    /// up to the level of the union.
+    pub parenthesized: bool,
     /// The AST span of the node.
     pub span: Span,
 }
@@ -27,6 +31,19 @@ impl Attribute {
     /// Try to find the argument and return its span.
     pub fn span_for_argument(&self, argument: ArguementId) -> Span {
         self.arguments[argument].span.clone()
+    }
+
+    pub fn assert_eq_up_to_span(&self, other: &Attribute) {
+        assert_eq!(self.name.to_string(), other.name.to_string());
+        assert_eq!(self.parenthesized, other.parenthesized);
+        self
+            .arguments
+            .iter()
+            .zip(other.arguments.iter())
+            .for_each(|(arg1, arg2)| {
+                assert_eq!(arg1.0, arg2.0);
+                arg1.1.assert_eq_up_to_span(arg2.1);
+            })
     }
 }
 
