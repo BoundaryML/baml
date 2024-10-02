@@ -222,12 +222,12 @@ type WriteFileParams = {
   | {
       renames?: { from: string; to: string }[]
     }
-)
+) 
 
 export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => {
   const { reason, root_path, files } = params
   const replace_all = 'replace_all' in params
-  const renames = 'renames' in params ? params.renames ?? [] : []
+  const renames = 'renames' in params ? (params.renames ?? []) : []
   console.debug(
     `updateFile: Updating files due to ${reason}: ${files.length} files (${replace_all ? 'replace all' : 'update'})`,
   )
@@ -710,7 +710,7 @@ function createStackGroup(scopePath: any[]): TypeCount[] {
     stackGroup.push({
       type: getTypeLetter(scope.type),
       index: indexVal,
-      scope_name: scope.type === 'RoundRobin' ? scope.strategy_name : scope.name ?? 'SOME_NAME',
+      scope_name: scope.type === 'RoundRobin' ? scope.strategy_name : (scope.name ?? 'SOME_NAME'),
     })
 
     if (scope.type === 'Retry') {

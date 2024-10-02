@@ -57,7 +57,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Recipe
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -82,7 +82,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -107,7 +107,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as (string | DynEnumTwo)
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -132,7 +132,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Category
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -157,7 +157,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Category
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -182,7 +182,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Category
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -207,7 +207,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as BookOrder | FlightConfirmation | GroceryReceipt
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -232,7 +232,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -257,7 +257,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -282,7 +282,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -307,7 +307,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -332,7 +332,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as DummyOutput
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -357,7 +357,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as DynamicClassTwo
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -382,7 +382,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as DynInputOutput
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -407,7 +407,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as DynInputOutput[]
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -432,7 +432,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -457,7 +457,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string[]
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -482,7 +482,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Person[]
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -507,7 +507,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as ReceiptInfo
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -532,7 +532,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Resume
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -557,7 +557,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Resume
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -582,7 +582,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as ClassOptionalOutput | null
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -607,7 +607,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as ClassOptionalOutput2 | null
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -632,7 +632,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as EnumOutput[]
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -657,7 +657,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as EnumOutput
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -682,7 +682,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -707,7 +707,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as boolean
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -732,7 +732,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as TestOutputClass
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -757,7 +757,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as TestOutputClass[]
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -782,7 +782,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as TestClassNested
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -807,7 +807,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as TestClassWithEnum
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -832,7 +832,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string[]
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -857,7 +857,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as TestEnum
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -882,7 +882,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as TestClassAlias
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -907,7 +907,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -932,7 +932,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as RaysData
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -957,7 +957,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as OrderInfo
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -982,7 +982,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as SearchParams
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1007,7 +1007,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as DynamicOutput
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1032,7 +1032,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as (OptionalTest_ReturnType | null)[]
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1057,7 +1057,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1082,7 +1082,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1107,7 +1107,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1132,7 +1132,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1157,7 +1157,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1182,7 +1182,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1207,7 +1207,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1232,7 +1232,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Schema
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1257,7 +1257,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1282,7 +1282,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1307,7 +1307,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1332,7 +1332,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1357,7 +1357,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1382,7 +1382,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1407,7 +1407,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1432,7 +1432,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1457,7 +1457,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1482,7 +1482,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1507,7 +1507,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1532,7 +1532,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1557,7 +1557,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Record<string, StringToClassEntry>
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1582,7 +1582,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Record<string, Record<string, string>>
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1607,7 +1607,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as Record<string, string>
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1632,7 +1632,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1657,7 +1657,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1682,7 +1682,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1707,7 +1707,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1732,7 +1732,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1757,7 +1757,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1782,7 +1782,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1807,7 +1807,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1832,7 +1832,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1857,7 +1857,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1882,7 +1882,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1907,7 +1907,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1932,7 +1932,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1957,7 +1957,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as string
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
@@ -1982,7 +1982,7 @@ export class BamlSyncClient {
       __baml_options__?.clientRegistry,
     )
     return raw.parsed() as UnionTest_ReturnType
-    } catch (error: Error) {
+    } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
         throw bamlError;
