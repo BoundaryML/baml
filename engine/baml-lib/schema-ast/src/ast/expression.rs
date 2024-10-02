@@ -136,7 +136,7 @@ impl RawString {
 
     pub fn assert_eq_up_to_span(&self, other: &RawString) {
         assert_eq!(self.inner_value, other.inner_value);
-        assert_eq!(self.raw_value, other.inner_value);
+        assert_eq!(self.raw_value, other.raw_value);
         assert_eq!(self.language, other.language);
         assert_eq!(self.indent, other.indent);
     }
