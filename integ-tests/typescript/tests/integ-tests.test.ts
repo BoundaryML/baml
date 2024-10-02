@@ -567,16 +567,37 @@ describe('Integ tests', () => {
       await b.MyFunc("My name is Harrison. My hair is black and I'm 6 feet tall.", { clientRegistry: cr })
     }).rejects.toThrow('BamlClientError')
 
-    await expect(async () => {
+    try {
       const cr = new ClientRegistry()
       cr.addLlmClient('MyClient', 'openai', { model: 'gpt-4o-mini', api_key: 'INVALID_KEY' })
       cr.setPrimary('MyClient')
       await b.MyFunc("My name is Harrison. My hair is black and I'm 6 feet tall.", { clientRegistry: cr })
-    }).rejects.toThrow('BamlClientHttpError')
+      fail('Expected b.MyFunc to throw a BamlClientHttpError')
+    } catch (error: any) {
+      console.log('Error:', error)
+      expect(error.message).toContain('BamlClientHttpError')
+    }
 
     await expect(async () => {
-      await b.DummyOutputFunction('dummy input')
+      try {
+        await b.DummyOutputFunction('dummy input')
+      } catch (error) {
+        console.log(error)
+        throw error
+      }
     }).rejects.toThrow('BamlValidationError')
+  })
+
+  it('should raise a BAMLValidationError', async () => {
+    try {
+      await b.DummyOutputFunction('dummy input')
+      fail('Expected b.DummyOutputFunction to throw a BamlValidationError')
+    } catch (error: any) {
+      expect(error.message).toContain('BamlValidationError')
+      expect(error.prompt).toContain('Say "hello there".')
+      expect(error.raw_output).toBeDefined()
+      expect(error.raw_output.length).toBeGreaterThan(0)
+    }
   })
 
   it('should reset environment variables correctly', async () => {

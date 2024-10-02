@@ -50,23 +50,13 @@ fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<runtime::LogEventMetadata>()?;
 
     m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;
-    m.add("BamlError", m.py().get_type_bound::<errors::BamlError>())?;
-    m.add(
-        "BamlInvalidArgumentError",
-        m.py().get_type_bound::<errors::BamlInvalidArgumentError>(),
-    )?;
-    m.add(
-        "BamlClientError",
-        m.py().get_type_bound::<errors::BamlClientError>(),
-    )?;
-    m.add(
-        "BamlClientHttpError",
-        m.py().get_type_bound::<errors::BamlClientHttpError>(),
-    )?;
-    m.add(
-        "BamlValidationError",
-        m.py().get_type_bound::<errors::BamlValidationError>(),
-    )?;
+
+    // m.add(
+    //     "BamlValidationError",
+    //     m.py().get_type_bound::<errors::BamlValidationError>(),
+    // )?;
+    // m.add_class::<errors::BamlValidationError>()?;
+    errors::errors(&m)?;
 
     Ok(())
 }

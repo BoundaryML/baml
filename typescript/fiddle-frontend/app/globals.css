@@ -1,4 +1,4 @@
-@import './colors.css';
+@import "./colors.css";
 
 @tailwind base;
 @tailwind components;
@@ -296,7 +296,7 @@ button.woot-elements--right:nth-child(2) {
   @apply decoration-wavy stroke-blue-500 !important;
 }
 
-[class*='cm-lintRange-error'] {
+[class*="cm-lintRange-error"] {
   background-image: none !important;
   @apply underline underline-offset-2 decoration-wavy  stroke-2 decoration-red-500 decoration-[1.2px] !important;
 }
