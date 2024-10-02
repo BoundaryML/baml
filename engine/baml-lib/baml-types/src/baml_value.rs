@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::{collections::HashSet, fmt};
 
-use serde::{de::Visitor, Deserialize, Deserializer};
+use serde::ser::{SerializeMap, SerializeSeq};
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::media::BamlMediaType;
-use crate::{BamlMap, BamlMedia};
+use crate::{BamlMap, BamlMedia, ResponseCheck};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BamlValue {
@@ -138,6 +140,13 @@ impl BamlValue {
     pub fn as_map_owned(self) -> Option<BamlMap<String, BamlValue>> {
         match self {
             BamlValue::Map(m) => Some(m),
+            _ => None,
+        }
+    }
+
+    pub fn as_list_owned(self) -> Option<Vec<BamlValue>> {
+        match self {
+            BamlValue::List(vals) => Some(vals),
             _ => None,
         }
     }
@@ -335,4 +344,192 @@ impl<'de> Visitor<'de> for BamlValueVisitor {
         }
         Ok(BamlValue::Map(values))
     }
+}
+
+/// A BamlValue with associated metadata.
+/// This type is used to flexibly carry additional information.
+/// It is used as a base type for situations where we want to represent
+/// a BamlValue with additional information per node, such as a score,
+/// or a constraint result.
+#[derive(Clone, Debug, PartialEq)]
+pub enum BamlValueWithMeta<T> {
+    String(String, T),
+    Int(i64, T),
+    Float(f64, T),
+    Bool(bool, T),
+    Map(BamlMap<String, BamlValueWithMeta<T>>, T),
+    List(Vec<BamlValueWithMeta<T>>, T),
+    Media(BamlMedia, T),
+    Enum(String, String, T),
+    Class(String, BamlMap<String, BamlValueWithMeta<T>>, T),
+    Null(T),
+}
+
+impl<T> BamlValueWithMeta<T> {
+
+    pub fn r#type(&self) -> String {
+        let plain_value: BamlValue = self.into();
+        plain_value.r#type()
+    }
+
+    pub fn value(self) -> BamlValue {
+        match self {
+            BamlValueWithMeta::String(v, _) => BamlValue::String(v),
+            BamlValueWithMeta::Int(v, _) => BamlValue::Int(v),
+            BamlValueWithMeta::Float(v, _) => BamlValue::Float(v),
+            BamlValueWithMeta::Bool(v, _) => BamlValue::Bool(v),
+            BamlValueWithMeta::Map(v, _) => {
+                BamlValue::Map(v.into_iter().map(|(k, v)| (k, v.value())).collect())
+            }
+            BamlValueWithMeta::List(v, _) => {
+                BamlValue::List(v.into_iter().map(|v| v.value()).collect())
+            }
+            BamlValueWithMeta::Media(v, _) => BamlValue::Media(v),
+            BamlValueWithMeta::Enum(v, w, _) => BamlValue::Enum(v, w),
+            BamlValueWithMeta::Class(n, fs, _) => {
+                BamlValue::Class(n, fs.into_iter().map(|(k, v)| (k, v.value())).collect())
+            }
+            BamlValueWithMeta::Null(_) => BamlValue::Null,
+        }
+    }
+
+    pub fn meta(&self) -> &T {
+        match self {
+            BamlValueWithMeta::String(_, m) => m,
+            BamlValueWithMeta::Int(_, m) => m,
+            BamlValueWithMeta::Float(_, m) => m,
+            BamlValueWithMeta::Bool(_, m) => m,
+            BamlValueWithMeta::Map(_, m) => m,
+            BamlValueWithMeta::List(_, m) => m,
+            BamlValueWithMeta::Media(_, m) => m,
+            BamlValueWithMeta::Enum(_, _, m) => m,
+            BamlValueWithMeta::Class(_, _, m) => m,
+            BamlValueWithMeta::Null(m) => m,
+        }
+    }
+
+    pub fn map_meta<F, U>(self, f: F) -> BamlValueWithMeta<U>
+    where
+        F: Fn(T) -> U + Copy,
+    {
+        match self {
+            BamlValueWithMeta::String(v, m) => BamlValueWithMeta::String(v, f(m)),
+            BamlValueWithMeta::Int(v, m) => BamlValueWithMeta::Int(v, f(m)),
+            BamlValueWithMeta::Float(v, m) => BamlValueWithMeta::Float(v, f(m)),
+            BamlValueWithMeta::Bool(v, m) => BamlValueWithMeta::Bool(v, f(m)),
+            BamlValueWithMeta::Map(v, m) => BamlValueWithMeta::Map(
+                v.into_iter().map(|(k, v)| (k, v.map_meta(f))).collect(),
+                f(m),
+            ),
+            BamlValueWithMeta::List(v, m) => {
+                BamlValueWithMeta::List(v.into_iter().map(|v| v.map_meta(f)).collect(), f(m))
+            }
+            BamlValueWithMeta::Media(v, m) => BamlValueWithMeta::Media(v, f(m)),
+            BamlValueWithMeta::Enum(v, e, m) => BamlValueWithMeta::Enum(v, e, f(m)),
+            BamlValueWithMeta::Class(n, fs, m) => BamlValueWithMeta::Class(
+                n,
+                fs.into_iter().map(|(k, v)| (k, v.map_meta(f))).collect(),
+                f(m),
+            ),
+            BamlValueWithMeta::Null(m) => BamlValueWithMeta::Null(f(m)),
+        }
+    }
+}
+
+impl <T> From<&BamlValueWithMeta<T>> for BamlValue {
+    fn from(baml_value: &BamlValueWithMeta<T>) -> BamlValue {
+        use BamlValueWithMeta::*;
+        match baml_value {
+            String(v, _) => BamlValue::String(v.clone()),
+            Int(v, _) => BamlValue::Int(v.clone()),
+            Float(v, _) => BamlValue::Float(v.clone()),
+            Bool(v, _) => BamlValue::Bool(v.clone()),
+            Map(v, _) => BamlValue::Map(v.into_iter().map(|(k,v)| (k.clone(), v.into())).collect()),
+            List(v, _) => BamlValue::List(v.into_iter().map(|v| v.into()).collect()),
+            Media(v, _) => BamlValue::Media(v.clone()),
+            Enum(enum_name, v, _) => BamlValue::Enum(enum_name.clone(), v.clone()),
+            Class(class_name, v, _) => BamlValue::Class(class_name.clone(), v.into_iter().map(|(k,v)| (k.clone(), v.into())).collect()),
+            Null(_) => BamlValue::Null,
+        }
+    }
+}
+
+impl <T> From<BamlValueWithMeta<T>> for BamlValue {
+    fn from(baml_value: BamlValueWithMeta<T>) -> BamlValue {
+        use BamlValueWithMeta::*;
+        match baml_value {
+            String(v, _) => BamlValue::String(v),
+            Int(v, _) => BamlValue::Int(v),
+            Float(v, _) => BamlValue::Float(v),
+            Bool(v, _) => BamlValue::Bool(v),
+            Map(v, _) => BamlValue::Map(v.into_iter().map(|(k,v)| (k, v.into())).collect()),
+            List(v, _) => BamlValue::List(v.into_iter().map(|v| v.into()).collect()),
+            Media(v, _) => BamlValue::Media(v),
+            Enum(enum_name, v, _) => BamlValue::Enum(enum_name, v),
+            Class(class_name, v, _) => BamlValue::Class(class_name, v.into_iter().map(|(k,v)| (k, v.into())).collect()),
+            Null(_) => BamlValue::Null,
+        }
+    }
+}
+
+impl Serialize for BamlValueWithMeta<Vec<ResponseCheck>> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer,
+    {
+        match self {
+            BamlValueWithMeta::String(v, cr) => serialize_with_checks(v, cr, serializer),
+            BamlValueWithMeta::Int(v, cr) => serialize_with_checks(v, cr, serializer),
+            BamlValueWithMeta::Float(v, cr) => serialize_with_checks(v, cr, serializer),
+            BamlValueWithMeta::Bool(v, cr) => serialize_with_checks(v, cr, serializer),
+            BamlValueWithMeta::Map(v, cr) => {
+                let mut map = serializer.serialize_map(None)?;
+                for (key, value) in v {
+                    map.serialize_entry(key, value)?;
+                }
+                add_checks(&mut map, cr)?;
+                map.end()
+            },
+            BamlValueWithMeta::List(v, cr) => serialize_with_checks(v, cr, serializer),
+            BamlValueWithMeta::Media(v, cr) => serialize_with_checks(v, cr, serializer),
+            BamlValueWithMeta::Enum(_enum_name, v, cr) => serialize_with_checks(v, cr, serializer),
+            BamlValueWithMeta::Class(_class_name, v, cr) => {
+                let mut map = serializer.serialize_map(None)?;
+                for (key, value) in v {
+                    map.serialize_entry(key, value)?;
+                }
+                add_checks(&mut map, cr)?;
+                map.end()
+            },
+            BamlValueWithMeta::Null(cr) => serialize_with_checks(&(), cr, serializer),
+        }
+    }
+}
+
+fn serialize_with_checks<S, T: Serialize>(
+    value: &T,
+    checks: &Vec<ResponseCheck>,
+    serializer:S,
+
+) -> Result<S::Ok, S::Error>
+    where S: Serializer,
+{
+    if !checks.is_empty() {
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("value", value)?;
+        add_checks(&mut map, checks)?;
+        map.end()
+    } else {
+        value.serialize(serializer)
+    }
+}
+
+fn add_checks<'a, S: SerializeMap>(
+    map: &'a mut S,
+    checks: &'a Vec<ResponseCheck>,
+) -> Result<(), S::Error> {
+    if !checks.is_empty() {
+        let checks_map: HashMap<_,_> = checks.iter().map(|check| (check.name.clone(), check)).collect();
+        map.serialize_entry("checks", &checks_map)?;
+    }
+    Ok(())
 }

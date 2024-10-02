@@ -1,4 +1,5 @@
 use crate::BamlMediaType;
+use crate::Constraint;
 
 mod builder;
 
@@ -69,7 +70,7 @@ impl std::fmt::Display for LiteralValue {
 }
 
 /// FieldType represents the type of either a class field or a function arg.
-#[derive(serde::Serialize, Debug, Clone)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
 pub enum FieldType {
     Primitive(TypeValue),
     Enum(String),
@@ -80,6 +81,7 @@ pub enum FieldType {
     Union(Vec<FieldType>),
     Tuple(Vec<FieldType>),
     Optional(Box<FieldType>),
+    Constrained{ base: Box<FieldType>, constraints: Vec<Constraint> },
 }
 
 // Impl display for FieldType
@@ -116,6 +118,7 @@ impl std::fmt::Display for FieldType {
             FieldType::Map(k, v) => write!(f, "map<{}, {}>", k.to_string(), v.to_string()),
             FieldType::List(t) => write!(f, "{}[]", t.to_string()),
             FieldType::Optional(t) => write!(f, "{}?", t.to_string()),
+            FieldType::Constrained{base,..} => base.fmt(f),
         }
     }
 }
@@ -126,6 +129,7 @@ impl FieldType {
             FieldType::Primitive(_) => true,
             FieldType::Optional(t) => t.is_primitive(),
             FieldType::List(t) => t.is_primitive(),
+            FieldType::Constrained{base,..} => base.is_primitive(),
             _ => false,
         }
     }
@@ -134,8 +138,8 @@ impl FieldType {
         match self {
             FieldType::Optional(_) => true,
             FieldType::Primitive(TypeValue::Null) => true,
-
             FieldType::Union(types) => types.iter().any(FieldType::is_optional),
+            FieldType::Constrained{base,..} => base.is_optional(),
             _ => false,
         }
     }
@@ -144,6 +148,7 @@ impl FieldType {
         match self {
             FieldType::Primitive(TypeValue::Null) => true,
             FieldType::Optional(t) => t.is_null(),
+            FieldType::Constrained{base,..} => base.is_null(),
             _ => false,
         }
     }

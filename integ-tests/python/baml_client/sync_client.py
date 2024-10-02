@@ -441,6 +441,30 @@ class BamlSyncClient:
       mdl = create_model("ExpectFailureReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    def ExtractContactInfo(
+        self,
+        document: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.ContactInfo:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "ExtractContactInfo",
+        {
+          "document": document,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("ExtractContactInfoReturnType", inner=(types.ContactInfo, ...))
+      return coerce(mdl, raw.parsed())
+    
     def ExtractNames(
         self,
         input: str,
@@ -1015,6 +1039,78 @@ class BamlSyncClient:
         __cr__,
       )
       mdl = create_model("OptionalTest_FunctionReturnType", inner=(List[Optional[types.OptionalTest_ReturnType]], ...))
+      return coerce(mdl, raw.parsed())
+    
+    def PredictAge(
+        self,
+        name: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.FooAny:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "PredictAge",
+        {
+          "name": name,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("PredictAgeReturnType", inner=(types.FooAny, ...))
+      return coerce(mdl, raw.parsed())
+    
+    def PredictAgeBare(
+        self,
+        inp: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.Checked[int,types.Checks__too_big]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "PredictAgeBare",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("PredictAgeBareReturnType", inner=(baml_py.Checked[int,types.Checks__too_big], ...))
+      return coerce(mdl, raw.parsed())
+    
+    def PredictAgeComplex(
+        self,
+        inp: types.InputWithConstraint,
+        baml_options: BamlCallOptions = {},
+    ) -> types.InputWithConstraint:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "PredictAgeComplex",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("PredictAgeComplexReturnType", inner=(types.InputWithConstraint, ...))
       return coerce(mdl, raw.parsed())
     
     def PromptTestClaude(
@@ -2567,6 +2663,39 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def ExtractContactInfo(
+        self,
+        document: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.ContactInfo, types.ContactInfo]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "ExtractContactInfo",
+        {
+          "document": document,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("ExtractContactInfoReturnType", inner=(types.ContactInfo, ...))
+      partial_mdl = create_model("ExtractContactInfoPartialReturnType", inner=(partial_types.ContactInfo, ...))
+
+      return baml_py.BamlSyncStream[partial_types.ContactInfo, types.ContactInfo](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
     def ExtractNames(
         self,
         input: str,
@@ -3355,6 +3484,105 @@ class BamlStreamClient:
       partial_mdl = create_model("OptionalTest_FunctionPartialReturnType", inner=(List[partial_types.OptionalTest_ReturnType], ...))
 
       return baml_py.BamlSyncStream[List[partial_types.OptionalTest_ReturnType], List[Optional[types.OptionalTest_ReturnType]]](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def PredictAge(
+        self,
+        name: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.FooAny, types.FooAny]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "PredictAge",
+        {
+          "name": name,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("PredictAgeReturnType", inner=(types.FooAny, ...))
+      partial_mdl = create_model("PredictAgePartialReturnType", inner=(partial_types.FooAny, ...))
+
+      return baml_py.BamlSyncStream[partial_types.FooAny, types.FooAny](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def PredictAgeBare(
+        self,
+        inp: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[baml_py.Checked[Optional[int],types.Checks__too_big], baml_py.Checked[int,types.Checks__too_big]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "PredictAgeBare",
+        {
+          "inp": inp,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("PredictAgeBareReturnType", inner=(baml_py.Checked[int,types.Checks__too_big], ...))
+      partial_mdl = create_model("PredictAgeBarePartialReturnType", inner=(baml_py.Checked[Optional[int],types.Checks__too_big], ...))
+
+      return baml_py.BamlSyncStream[baml_py.Checked[Optional[int],types.Checks__too_big], baml_py.Checked[int,types.Checks__too_big]](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def PredictAgeComplex(
+        self,
+        inp: types.InputWithConstraint,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.InputWithConstraint, types.InputWithConstraint]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "PredictAgeComplex",
+        {
+          "inp": inp,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("PredictAgeComplexReturnType", inner=(types.InputWithConstraint, ...))
+      partial_mdl = create_model("PredictAgeComplexPartialReturnType", inner=(partial_types.InputWithConstraint, ...))
+
+      return baml_py.BamlSyncStream[partial_types.InputWithConstraint, types.InputWithConstraint](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

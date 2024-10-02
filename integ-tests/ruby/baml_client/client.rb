@@ -565,6 +565,38 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
+        document: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Types::ContactInfo)
+    }
+    def ExtractContactInfo(
+        *varargs,
+        document:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("ExtractContactInfo may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "ExtractContactInfo",
+        {
+          document: document,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[String])
@@ -1322,6 +1354,102 @@ module Baml
         "OptionalTest_Function",
         {
           input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        name: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Types::FooAny)
+    }
+    def PredictAge(
+        *varargs,
+        name:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("PredictAge may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "PredictAge",
+        {
+          name: name,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        inp: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Integer)
+    }
+    def PredictAgeBare(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("PredictAgeBare may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "PredictAgeBare",
+        {
+          inp: inp,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        inp: Baml::Types::InputWithConstraint,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Types::InputWithConstraint)
+    }
+    def PredictAgeComplex(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("PredictAgeComplex may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "PredictAgeComplex",
+        {
+          inp: inp,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -3250,6 +3378,41 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
+        document: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[Baml::Types::ContactInfo])
+    }
+    def ExtractContactInfo(
+        *varargs,
+        document:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("ExtractContactInfo may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "ExtractContactInfo",
+        {
+          document: document,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[Baml::PartialTypes::ContactInfo, Baml::Types::ContactInfo].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[String]])
@@ -4082,6 +4245,111 @@ module Baml
         baml_options[:client_registry],
       )
       Baml::BamlStream[T::Array[Baml::PartialTypes::OptionalTest_ReturnType], T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)]].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        name: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[Baml::Types::FooAny])
+    }
+    def PredictAge(
+        *varargs,
+        name:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("PredictAge may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "PredictAge",
+        {
+          name: name,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[Baml::PartialTypes::FooAny, Baml::Types::FooAny].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        inp: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[Integer])
+    }
+    def PredictAgeBare(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("PredictAgeBare may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "PredictAgeBare",
+        {
+          inp: inp,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[T.nilable(Integer), Integer].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        inp: Baml::Types::InputWithConstraint,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[Baml::Types::InputWithConstraint])
+    }
+    def PredictAgeComplex(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("PredictAgeComplex may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "PredictAgeComplex",
+        {
+          inp: inp,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[Baml::PartialTypes::InputWithConstraint, Baml::Types::InputWithConstraint].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

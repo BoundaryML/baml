@@ -4,7 +4,6 @@ mod typescript_language_features;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use either::Either;
 use indexmap::IndexMap;
 use internal_baml_core::{
     configuration::GeneratorDefaultClientMode,
@@ -295,6 +294,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => format!("{} | null", inner.to_type_ref(ir)),
+            FieldType::Constrained{base,..} => base.to_type_ref(ir),
         }
     }
 }

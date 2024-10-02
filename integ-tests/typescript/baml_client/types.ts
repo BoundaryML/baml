@@ -162,6 +162,11 @@ export interface CompoundBigNumbers {
   
 }
 
+export interface ContactInfo {
+  primary: PhoneNumber | EmailAddress
+  
+}
+
 export interface CustomTaskResult {
   bookOrder?: BookOrder | null | null
   flightConfirmation?: FlightConfirmation | null | null
@@ -200,6 +205,11 @@ export interface DynamicOutput {
   [key: string]: any;
 }
 
+export interface Earthling {
+  age: number
+  
+}
+
 export interface Education {
   institution: string
   location: string
@@ -213,6 +223,11 @@ export interface Email {
   subject: string
   body: string
   from_address: string
+  
+}
+
+export interface EmailAddress {
+  value: string
   
 }
 
@@ -238,6 +253,13 @@ export interface FlightConfirmation {
   
 }
 
+export interface FooAny {
+  planetary_age: Martian | Earthling
+  certainty: number
+  species: string
+  
+}
+
 export interface GroceryReceipt {
   receiptId: string
   storeName: string
@@ -256,6 +278,17 @@ export interface InnerClass {
 export interface InnerClass2 {
   prop2: number
   prop3: number
+  
+}
+
+export interface InputWithConstraint {
+  name: string
+  amount: number
+  
+}
+
+export interface Martian {
+  age: number
   
 }
 
@@ -304,6 +337,11 @@ export interface Person {
   hair_color?: (string | Color) | null
   
   [key: string]: any;
+}
+
+export interface PhoneNumber {
+  value: string
+  
 }
 
 export interface Quantity {

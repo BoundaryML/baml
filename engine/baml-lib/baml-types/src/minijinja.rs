@@ -1,4 +1,18 @@
+use std::fmt;
 use crate::{BamlMedia, BamlValue};
+
+/// A wrapper around a jinja expression. The inner `String` should not contain
+/// the interpolation brackets `{{ }}`; it should be a bare expression like
+/// `"this|length < something"`.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct JinjaExpression(pub String);
+
+
+impl fmt::Display for JinjaExpression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
 
 impl From<BamlValue> for minijinja::Value {
     fn from(arg: BamlValue) -> minijinja::Value {
