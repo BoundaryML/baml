@@ -2,9 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.58.0](https://github.com/boundaryml/baml/compare/0.57.1..0.58.0) - 2024-10-02
+
+### Features
+
+- Add client registry support for BAML over Rest (OpenAPI) (#1000) - ([abe70bf](https://github.com/boundaryml/baml/commit/abe70bf368c9361a3ab32643735f68e0fafd8425)) - Lorenz Ohly
+
+### Bug Fixes
+- Improve performance of parsing escaped characters in strings during streaming. (#1002) - ([b35ae2c](https://github.com/boundaryml/baml/commit/b35ae2c4777572206a79af5c2943f5bdd6ada081)) - hellovai
+
+### Documentation
+- Add Docs for Document Extraction API (#996) - ([da1a5e8](https://github.com/boundaryml/baml/commit/da1a5e876368074235f4474673a1ebfe632e11ed)) - aaronvg
+
 ## [0.57.1](https://github.com/boundaryml/baml/compare/0.57.0..0.57.1) - 2024-09-29
 
-### Bugfixes
+### Bug Fixes
 
 - [BUGFIX] Parser should require a space between class keyword and class name (#990) - ([7528247](https://github.com/boundaryml/baml/commit/752824723404a4ed4c4b1e31c43d140e9346dca2)) - Greg Hale
 - Remove dynamic string attributes (#991) - ([0960ab2](https://github.com/boundaryml/baml/commit/0960ab2e0d16c50fef58772336b91297ddac6919)) - Greg Hale
@@ -22,7 +34,7 @@ All notable changes to this project will be documented in this file. See [conven
 - teach vscode/fiddle to explain when we drop information (#897) - ([93e2b9b](https://github.com/boundaryml/baml/commit/93e2b9b8d54a4ced0853ce72596d0b0a9896a0da)) - Samuel Lijin
 - Add ability for users to reset env vars to their desire. (#984) - ([69e6c29](https://github.com/boundaryml/baml/commit/69e6c29c82ccc06f8939b9ece75dd7797c8f6b98)) - hellovai
 
-### Bug
+### Bug Fixes
 
 - Fixed panic during logging for splitting on UTF-8 strings. (#987) - ([c27a64f](https://github.com/boundaryml/baml/commit/c27a64f6320515cd5ab6385ab93013d3d7ba88b8)) - hellovai
 - Improve SAP for triple quoted strings along with unions (#977) - ([44202ab](https://github.com/boundaryml/baml/commit/44202ab63aa3d2881485b9b32fa744797c908e33)) - hellovai
