@@ -29,6 +29,9 @@ import concurrent.futures
 import asyncio
 import random
 
+# print the contents of the errors module
+print(errors.__doc__)
+
 
 def test_sync():
     res = sync_b.TestFnNamedArgsSingleClass(

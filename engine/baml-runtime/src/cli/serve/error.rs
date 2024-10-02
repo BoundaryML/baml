@@ -29,7 +29,11 @@ impl BamlError {
     pub(crate) fn from_anyhow(err: anyhow::Error) -> Self {
         if let Some(er) = err.downcast_ref::<ExposedError>() {
             match er {
-                ExposedError::ValidationError(_) => Self::ValidationFailure(format!("{:?}", err)),
+                ExposedError::ValidationError {
+                    prompt,
+                    raw_response,
+                    message,
+                } => Self::ValidationFailure(format!("{:?}", err)),
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
             Self::InvalidArgument(format!("{:?}", er))

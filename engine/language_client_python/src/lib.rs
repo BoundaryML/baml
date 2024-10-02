@@ -63,10 +63,13 @@ fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
         "BamlClientHttpError",
         m.py().get_type_bound::<errors::BamlClientHttpError>(),
     )?;
-    m.add(
-        "BamlValidationError",
-        m.py().get_type_bound::<errors::BamlValidationError>(),
-    )?;
+
+    // m.add(
+    //     "BamlValidationError",
+    //     m.py().get_type_bound::<errors::BamlValidationError>(),
+    // )?;
+    // m.add_class::<errors::BamlValidationError>()?;
+    errors::errors_module(&m)?;
 
     Ok(())
 }

@@ -102,9 +102,27 @@ impl FunctionResult {
                 if let Ok(val) = res {
                     Ok(val)
                 } else {
-                    Err(anyhow::anyhow!(
-                        crate::errors::ExposedError::ValidationError(format!("{}", self))
-                    ))
+                    Err(anyhow::anyhow!(ExposedError::ValidationError {
+                        prompt: match self.llm_response() {
+                            LLMResponse::Success(resp) => resp.prompt.to_string(),
+                            LLMResponse::LLMFailure(err) => err.prompt.to_string(),
+                            _ => "N/A".to_string(),
+                        },
+                        raw_response: self
+                            .llm_response()
+                            .content()
+                            .unwrap_or_default()
+                            .to_string(),
+                        message: match self.llm_response() {
+                            LLMResponse::Success(_) =>
+                                "Parsing failed for successful LLM response".to_string(),
+                            LLMResponse::LLMFailure(err) =>
+                                format!("LLM Failure: {} ({})", err.message, err.code.to_string()),
+                            LLMResponse::UserFailure(err) => format!("User Failure: {}", err),
+                            LLMResponse::InternalFailure(err) =>
+                                format!("Internal Failure: {}", err),
+                        },
+                    }))
                 }
             })
             .unwrap_or_else(|| Err(anyhow::anyhow!(self.llm_response().clone())))
