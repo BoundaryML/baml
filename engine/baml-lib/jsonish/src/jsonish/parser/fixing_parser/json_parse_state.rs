@@ -28,11 +28,6 @@ impl JsonParseState {
 
         let name = collection.name();
 
-        log::debug!("Completing collection: {:?}", name);
-        if name == "TripleQuotedString" {
-            log::debug!("TripleQuotedString: {:?}", collection);
-        }
-
         let value: Value = match collection.into() {
             Some(value) => value,
             None => return,
@@ -433,6 +428,56 @@ impl JsonParseState {
                                 Ok(0)
                             } else {
                                 self.consume(token)
+                            }
+                        }
+                        '\\' => {
+                            // Capture escaped characters
+                            match next.peek() {
+                                Some((_, 'n')) => {
+                                    self.consume('\n')?;
+                                    Ok(1)
+                                }
+                                Some((_, 't')) => {
+                                    self.consume('\t')?;
+                                    Ok(1)
+                                }
+                                Some((_, 'r')) => {
+                                    self.consume('\r')?;
+                                    Ok(1)
+                                }
+                                Some((_, 'b')) => {
+                                    self.consume('\x08')?;
+                                    Ok(1)
+                                }
+                                Some((_, 'f')) => {
+                                    self.consume('\x0C')?;
+                                    Ok(1)
+                                }
+                                Some((_, '\\')) => {
+                                    self.consume('\\')?;
+                                    Ok(1)
+                                }
+                                Some((_, '"')) => {
+                                    self.consume('"')?;
+                                    Ok(1)
+                                }
+                                Some((_, 'u')) => {
+                                    // We'll consume the 'u' and the next 4 characters
+                                    let mut buffer = String::new();
+                                    buffer.push(token);
+                                    for _ in 0..4 {
+                                        if let Some((_, c)) = next.next() {
+                                            buffer.push(c);
+                                        } else {
+                                            break;
+                                        }
+                                    }
+                                    for c in buffer.chars() {
+                                        let _ = self.consume(c);
+                                    }
+                                    Ok(5)
+                                }
+                                _ => self.consume(token),
                             }
                         }
                         _ => self.consume(token),
