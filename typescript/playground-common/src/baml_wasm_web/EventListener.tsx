@@ -222,7 +222,7 @@ type WriteFileParams = {
   | {
       renames?: { from: string; to: string }[]
     }
-) 
+)
 
 export const updateFileAtom = atom(null, (get, set, params: WriteFileParams) => {
   const { reason, root_path, files } = params
