@@ -78,7 +78,7 @@ fn coerce_string(
     }
 }
 
-fn coerce_int(
+pub(super) fn coerce_int(
     ctx: &ParsingContext,
     target: &FieldType,
     value: Option<&crate::jsonish::Value>,
@@ -190,7 +190,7 @@ fn coerce_float(
     }
 }
 
-fn coerce_bool(
+pub(super) fn coerce_bool(
     ctx: &ParsingContext,
     target: &FieldType,
     value: Option<&crate::jsonish::Value>,

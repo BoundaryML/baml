@@ -233,6 +233,12 @@ pub struct ValueWithFlags<T> {
     pub(super) flags: DeserializerConditions,
 }
 
+impl<T> ValueWithFlags<T> {
+    pub fn value(&self) -> &T {
+        &self.value
+    }
+}
+
 impl<T> From<T> for ValueWithFlags<T> {
     fn from(item: T) -> Self {
         ValueWithFlags {

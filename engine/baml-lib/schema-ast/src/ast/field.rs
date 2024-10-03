@@ -246,12 +246,13 @@ impl FieldType {
         match self {
             FieldType::Symbol(.., attr)
             | FieldType::Primitive(.., attr)
+            | FieldType::Literal(.., attr)
             | FieldType::Union(.., attr)
             | FieldType::Tuple(.., attr)
             | FieldType::Map(.., attr)
             | FieldType::List(.., attr) => match attr.as_mut() {
                 Some(ats) => ats.extend(attributes),
-                None => { *attr = Some(attributes) }
+                None => *attr = Some(attributes),
             },
         }
     }
@@ -290,6 +291,18 @@ impl FieldType {
                 attrs_eq(attrs1, attrs2);
             }
             (Primitive(..), _) => {
+                panic!(
+                    "Different types: \n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+            (Literal(arity1, val1, _, attrs1), Literal(arity2, val2, _, attrs2)) => {
+                assert_eq!(arity1, arity2);
+                assert_eq!(val1, val2);
+                attrs_eq(attrs1, attrs2);
+            }
+            (Literal(_, _, _, _), _) => {
                 panic!(
                     "Different types: \n{}\n---\n{}",
                     self.to_string(),

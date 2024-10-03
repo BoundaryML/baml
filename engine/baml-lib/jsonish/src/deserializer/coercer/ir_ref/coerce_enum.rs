@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use anyhow::Result;
 use baml_types::FieldType;
 use internal_baml_jinja::types::Enum;
@@ -42,6 +44,7 @@ impl TypeCoercer for Enum {
             scope = ctx.display_scope(),
             current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
         );
+
         let value = match value {
             None | Some(crate::jsonish::Value::Null) => {
                 // If the value is None, we can't parse it.
@@ -68,7 +71,7 @@ impl TypeCoercer for Enum {
 
         let context = context.trim();
 
-        if let Some(e) = enum_match_strategy(&context, &candidates, &mut flags) {
+        if let Some(variant) = enum_match_strategy(&context, &candidates, &mut flags) {
             if let Some(mismatch) = flags.flags.iter().find_map(|f| match f {
                 Flag::EnumOneFromMany(options) => Some(options),
                 _ => None,
@@ -83,7 +86,7 @@ impl TypeCoercer for Enum {
 
             return Ok(BamlValueWithFlags::Enum(
                 self.name.real_name().into(),
-                (e.to_string(), flags).into(),
+                (variant.to_string(), flags).into(),
             ));
         }
 
@@ -91,15 +94,15 @@ impl TypeCoercer for Enum {
         let context = strip_punctuation(context);
         let candidates = candidates
             .iter()
-            .map(|(e, valid_values)| {
+            .map(|(variant, valid_values)| {
                 (
-                    *e,
+                    *variant,
                     valid_values.iter().map(|v| strip_punctuation(v)).collect(),
                 )
             })
             .collect::<Vec<_>>();
 
-        if let Some(e) = enum_match_strategy(&context, &candidates, &mut flags) {
+        if let Some(variant) = enum_match_strategy(&context, &candidates, &mut flags) {
             if let Some(mismatch) = flags.flags.iter().find_map(|f| match f {
                 Flag::EnumOneFromMany(options) => Some(options),
                 _ => None,
@@ -108,7 +111,7 @@ impl TypeCoercer for Enum {
             }
             return Ok(BamlValueWithFlags::Enum(
                 self.name.real_name().into(),
-                (e.to_string(), flags).into(),
+                (variant.to_string(), flags).into(),
             ));
         }
 
@@ -116,39 +119,38 @@ impl TypeCoercer for Enum {
     }
 }
 
-fn strip_punctuation(s: &str) -> String {
+pub fn strip_punctuation(s: &str) -> String {
     s.chars()
         .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
         .collect::<String>()
 }
 
-fn enum_match_strategy<'a>(
+pub fn enum_match_strategy<'a>(
     value_str: &str,
     candidates: &'a Vec<(&'a str, Vec<String>)>,
     flags: &mut DeserializerConditions,
 ) -> Option<&'a str> {
-    // Try and look for a value that matches the value.
-    // First search for exact matches
-    for (e, valid_values) in candidates {
+    // Try and look for an exact match against valid values of the enum variants.
+    for (variant, valid_values) in candidates {
         // Consider adding a flag for case insensitive match.
         if valid_values
             .iter()
             .any(|v| v.eq_ignore_ascii_case(value_str))
         {
             // We did nothing fancy, so no extra flags.
-            return Some(e);
+            return Some(variant);
         }
     }
 
-    // Now find all the enums which occur in the value, by frequency.
+    // Now find all the enum variants which occur in the value, by frequency.
     let mut result = candidates
         .iter()
-        .filter_map(|(e, valid_names)| {
-            // Check how many counts of the enum are in the value.
+        .filter_map(|(variant, valid_names)| {
+            // Check how many counts of the variant are in the value.
             let match_count_pos = valid_names
                 .iter()
-                .filter_map(|v| {
-                    let matches = value_str.match_indices(v);
+                .filter_map(|valid_name| {
+                    let matches = value_str.match_indices(valid_name);
                     // Return (count, first_idx)
                     matches.fold(None, |acc, (idx, _)| match acc {
                         Some((count, prev_idx)) => Some((count + 1, prev_idx)),
@@ -157,23 +159,23 @@ fn enum_match_strategy<'a>(
                 })
                 .reduce(|a, b| match a.0.cmp(&b.0) {
                     // Return the one with more matches.
-                    std::cmp::Ordering::Less => b,
-                    std::cmp::Ordering::Greater => a,
+                    Ordering::Less => b,
+                    Ordering::Greater => a,
                     // Return the one that matches earlier
-                    std::cmp::Ordering::Equal => match a.1.cmp(&b.1) {
-                        std::cmp::Ordering::Less => a,
+                    Ordering::Equal => match a.1.cmp(&b.1) {
+                        Ordering::Less => a,
                         _ => b,
                     },
                 });
-            match_count_pos.map(|(count, pos)| (count, pos, e))
+            match_count_pos.map(|(count, pos)| (count, pos, variant))
         })
         .collect::<Vec<_>>();
 
     // Sort by max count, then min pos.
     result.sort_by(|a, b| match a.0.cmp(&b.0) {
-        std::cmp::Ordering::Less => std::cmp::Ordering::Greater,
-        std::cmp::Ordering::Greater => std::cmp::Ordering::Less,
-        std::cmp::Ordering::Equal => a.1.cmp(&b.1),
+        Ordering::Less => Ordering::Greater,
+        Ordering::Greater => Ordering::Less,
+        Ordering::Equal => a.1.cmp(&b.1),
     });
 
     // Filter for max count.

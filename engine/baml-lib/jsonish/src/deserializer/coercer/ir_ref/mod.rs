@@ -1,5 +1,5 @@
 mod coerce_class;
-mod coerce_enum;
+pub mod coerce_enum;
 
 use anyhow::Result;
 use internal_baml_core::ir::FieldType;

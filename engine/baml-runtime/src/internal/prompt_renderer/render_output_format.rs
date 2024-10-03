@@ -249,7 +249,6 @@ fn relevant_data_models<'a>(
                     });
                 }
             }
-            FieldType::Literal(_) => todo!(),
             FieldType::List(inner) | FieldType::Optional(inner) => {
                 if !checked_types.contains(&inner.to_string()) {
                     start.push(inner.as_ref().clone());
@@ -335,6 +334,7 @@ fn relevant_data_models<'a>(
                 }
             }
             FieldType::Primitive(_) => {}
+            FieldType::Literal(_) => {}
         }
     }
 
