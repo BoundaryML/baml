@@ -102,9 +102,36 @@ impl FunctionResult {
                 if let Ok(val) = res {
                     Ok(val)
                 } else {
-                    Err(anyhow::anyhow!(
-                        crate::errors::ExposedError::ValidationError(format!("{}", self))
-                    ))
+                    // Capture the actual error to preserve its details
+                    let actual_error = res.as_ref().err().unwrap().to_string();
+                    Err(anyhow::anyhow!(ExposedError::ValidationError {
+                        prompt: match self.llm_response() {
+                            LLMResponse::Success(resp) => resp.prompt.to_string(),
+                            LLMResponse::LLMFailure(err) => err.prompt.to_string(),
+                            _ => "N/A".to_string(),
+                        },
+                        raw_response: self
+                            .llm_response()
+                            .content()
+                            .unwrap_or_default()
+                            .to_string(),
+                        // The only branch that should be hit is LLMResponse::Success(_) since we
+                        // only call this function when we have a successful response.
+                        message: match self.llm_response() {
+                            LLMResponse::Success(_) =>
+                                format!("Failed to parse LLM response: {}", actual_error),
+                            LLMResponse::LLMFailure(err) => format!(
+                                "LLM Failure: {} ({}) - {}",
+                                err.message,
+                                err.code.to_string(),
+                                actual_error
+                            ),
+                            LLMResponse::UserFailure(err) =>
+                                format!("User Failure: {} - {}", err, actual_error),
+                            LLMResponse::InternalFailure(err) =>
+                                format!("Internal Failure: {} - {}", err, actual_error),
+                        },
+                    }))
                 }
             })
             .unwrap_or_else(|| Err(anyhow::anyhow!(self.llm_response().clone())))

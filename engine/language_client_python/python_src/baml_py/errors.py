@@ -1,4 +1,13 @@
-from .baml_py import BamlError, BamlClientError, BamlClientHttpError, BamlInvalidArgumentError, BamlValidationError
+from .baml_py import (
+    BamlError,
+    BamlClientError,
+    BamlClientHttpError,
+    BamlInvalidArgumentError,
+)
+
+# hack to get the BamlValidationError class which is a custom error
+from .baml_py.errors import BamlValidationError
+
 
 __all__ = [
     "BamlError",

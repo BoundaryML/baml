@@ -290,7 +290,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis; /* Ensures text is truncated with ellipsis if it overflows */
-  
 }
 
 /* TextComponent.css */
@@ -308,9 +307,9 @@
   border-radius: 8px;
 }
 
-
 /* Ensure arrows and icons have appropriate spacing */
-.tree-container .arrow, .tree-container .icon {
+.tree-container .arrow,
+.tree-container .icon {
   margin-right: 8px;
 }
 
@@ -335,8 +334,6 @@
 .arrow {
   margin-right: 8px;
 }
-
-
 
 /* .json-view {
   color: var(--vscode-terminal-background);
