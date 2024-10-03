@@ -55,7 +55,7 @@ import os
 import dotenv
 
 dotenv.load_dotenv()
-reset_baml_env_vars(os.environ)
+reset_baml_env_vars(dict(os.environ))
 ```
 
 ```typescript TypeScript

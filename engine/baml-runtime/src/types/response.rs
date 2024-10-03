@@ -110,7 +110,7 @@ impl FunctionResult {
                             LLMResponse::LLMFailure(err) => err.prompt.to_string(),
                             _ => "N/A".to_string(),
                         },
-                        raw_response: self
+                        raw_output: self
                             .llm_response()
                             .content()
                             .unwrap_or_default()
