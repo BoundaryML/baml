@@ -18,7 +18,7 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
             ExposedError::ValidationError {
                 prompt,
                 message,
-                raw_response,
+                raw_output: raw_response,
             } => throw_baml_validation_error(prompt, raw_response, message),
         }
     } else if let Some(er) = err.downcast_ref::<ScopeStack>() {

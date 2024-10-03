@@ -32,8 +32,8 @@ use tokio::{net::TcpListener, sync::RwLock};
 use tokio_stream::StreamExt;
 
 use crate::{
-    client_registry::ClientRegistry, internal::llm_client::LLMResponse, BamlRuntime,
-    FunctionResult, RuntimeContextManager,
+    client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
+    BamlRuntime, FunctionResult, RuntimeContextManager,
 };
 
 #[derive(clap::Args, Clone, Debug)]
@@ -359,17 +359,39 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                     Ok(parsed) => {
                         (StatusCode::OK, Json::<BamlValue>(parsed.into())).into_response()
                     }
-                    Err(e) => BamlError::ValidationFailure(format!("{:?}", e)).into_response(),
+                    Err(e) => {
+                        if let Some(ExposedError::ValidationError {
+                            prompt,
+                            raw_output: raw_response,
+                            message,
+                        }) = e.downcast_ref::<ExposedError>()
+                        {
+                            BamlError::ValidationFailure {
+                                message: message.clone(),
+                                prompt: prompt.clone(),
+                                raw_output: raw_response.clone(),
+                            }
+                            .into_response()
+                        } else {
+                            BamlError::InternalError {
+                                message: format!("Error parsing: {:?}", e),
+                            }
+                            .into_response()
+                        }
+                    }
                 },
-                LLMResponse::LLMFailure(failure) => {
-                    BamlError::ClientError(format!("{:?}", failure.message)).into_response()
+                LLMResponse::LLMFailure(failure) => BamlError::ClientError {
+                    message: format!("{:?}", failure.message),
                 }
-                LLMResponse::UserFailure(message) => {
-                    BamlError::InvalidArgument(message.clone()).into_response()
+                .into_response(),
+                LLMResponse::UserFailure(message) => BamlError::InvalidArgument {
+                    message: message.clone(),
                 }
-                LLMResponse::InternalFailure(message) => {
-                    BamlError::InternalError(message.clone()).into_response()
+                .into_response(),
+                LLMResponse::InternalFailure(message) => BamlError::InternalError {
+                    message: message.clone(),
                 }
+                .into_response(),
             },
             Err(e) => BamlError::from_anyhow(e).into_response(),
         }
@@ -385,9 +407,9 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             match serde_json::from_value::<BamlOptions>(options_value.clone()) {
                 Ok(opts) => b_options = Some(opts),
                 Err(_) => {
-                    return BamlError::InvalidArgument(
-                        "Failed to parse __baml_options__".to_string(),
-                    )
+                    return BamlError::InvalidArgument {
+                        message: "Failed to parse __baml_options__".to_string(),
+                    }
                     .into_response()
                 }
             }
@@ -446,34 +468,54 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                         Ok(function_result) => match function_result.llm_response() {
                             LLMResponse::Success(_) => match function_result.parsed_content() {
                                 // Just because the LLM returned 2xx doesn't mean that it returned parse-able content!
-                                Ok(parsed) => {
-                                    dbg!(parsed);
-                                    (StatusCode::OK, Json::<BamlValue>(parsed.into()))
-                                        .into_response()
-                                }
+                                Ok(parsed) => (StatusCode::OK, Json::<BamlValue>(parsed.into()))
+                                    .into_response(),
 
                                 Err(e) => {
                                     log::debug!("Error parsing content: {:?}", e);
-                                    BamlError::ValidationFailure(format!("{:?}", e)).into_response()
+                                    if let Some(ExposedError::ValidationError {
+                                        prompt,
+                                        raw_output: raw_response,
+                                        message,
+                                    }) = e.downcast_ref::<ExposedError>()
+                                    {
+                                        BamlError::ValidationFailure {
+                                            message: message.clone(),
+                                            prompt: prompt.clone(),
+                                            raw_output: raw_response.clone(),
+                                        }
+                                        .into_response()
+                                    } else {
+                                        BamlError::InternalError {
+                                            message: format!("Error parsing: {:?}", e),
+                                        }
+                                        .into_response()
+                                    }
                                 }
                             },
                             LLMResponse::LLMFailure(failure) => {
                                 log::debug!("LLMResponse::LLMFailure: {:?}", failure);
-                                BamlError::ClientError(format!("{:?}", failure.message))
-                                    .into_response()
+                                BamlError::ClientError {
+                                    message: format!("{:?}", failure.message),
+                                }
+                                .into_response()
                             }
-                            LLMResponse::UserFailure(message) => {
-                                BamlError::InvalidArgument(message.clone()).into_response()
+                            LLMResponse::UserFailure(message) => BamlError::InvalidArgument {
+                                message: message.clone(),
                             }
-                            LLMResponse::InternalFailure(message) => {
-                                BamlError::InternalError(message.clone()).into_response()
+                            .into_response(),
+                            LLMResponse::InternalFailure(message) => BamlError::InternalError {
+                                message: message.clone(),
                             }
+                            .into_response(),
                         },
                         Err(e) => BamlError::from_anyhow(e).into_response(),
                     }
                 }
-                Err(e) => BamlError::InternalError(format!("Error starting stream: {:?}", e))
-                    .into_response(),
+                Err(e) => BamlError::InternalError {
+                    message: format!("Error starting stream: {:?}", e),
+                }
+                .into_response(),
             }
         });
 
@@ -496,9 +538,9 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             match serde_json::from_value::<BamlOptions>(options_value.clone()) {
                 Ok(opts) => b_options = Some(opts),
                 Err(_) => {
-                    return BamlError::InvalidArgument(
-                        "Failed to parse __baml_options__".to_string(),
-                    )
+                    return BamlError::InvalidArgument {
+                        message: "Failed to parse __baml_options__".to_string(),
+                    }
                     .into_response()
                 }
             }
@@ -541,18 +583,20 @@ fn parse_args(
     let args: serde_json::Value = match serde_json::from_value(b_args) {
         Ok(v) => v,
         Err(e) => {
-            return Err(BamlError::InvalidArgument(
-                format!("POST data must be valid JSON: {:?}", e).into(),
-            ));
+            return Err(BamlError::InvalidArgument {
+                message: format!("POST data must be valid JSON: {:?}", e),
+            });
         }
     };
 
     let args = match args {
         serde_json::Value::Object(v) => v,
         _ => {
-            return Err(BamlError::InvalidArgument(
-                format!("POST data must be a JSON map of the arguments for BAML function {b_fn}, from arg name to value").into()
-            ));
+            return Err(BamlError::InvalidArgument {
+                message: format!(
+                    "POST data must be a JSON map of the arguments for BAML function {b_fn}, from arg name to value"
+                ),
+            });
         }
     };
 
@@ -563,13 +607,12 @@ fn parse_args(
     {
         Ok(v) => v,
         Err(e) => {
-            return Err(BamlError::InvalidArgument(
-                format!(
+            return Err(BamlError::InvalidArgument {
+                message: format!(
                     "Arguments must be convertible from JSON to BamlValue: {:?}",
                     e
-                )
-                .into(),
-            ));
+                ),
+            });
         }
     };
 

@@ -115,7 +115,7 @@ impl BamlError {
             match er {
                 ExposedError::ValidationError {
                     prompt,
-                    raw_response,
+                    raw_output,
                     message,
                 } => {
                     // Assuming ValidationError has fields that correspond to prompt, message, and raw_output
@@ -124,7 +124,7 @@ impl BamlError {
                         raise_baml_validation_error(
                             prompt.clone(),
                             message.clone(),
-                            raw_response.clone(),
+                            raw_output.clone(),
                         )
                     })
                 }
