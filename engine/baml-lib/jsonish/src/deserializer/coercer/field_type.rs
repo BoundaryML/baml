@@ -77,7 +77,7 @@ impl TypeCoercer for FieldType {
             _ => match self {
                 FieldType::Primitive(p) => p.coerce(ctx, target, value),
                 FieldType::Enum(e) => IrRef::Enum(e).coerce(ctx, target, value),
-                FieldType::Literal(l) => todo!(),
+                FieldType::Literal(l) => l.coerce(ctx, target, value),
                 FieldType::Class(c) => IrRef::Class(c).coerce(ctx, target, value),
                 FieldType::List(_) => coerce_array(ctx, self, value),
                 FieldType::Union(_) => coerce_union(ctx, self, value),

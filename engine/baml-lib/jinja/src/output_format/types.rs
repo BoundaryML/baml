@@ -233,7 +233,7 @@ impl OutputFormatContent {
             RenderSetting::Auto => match &self.target {
                 FieldType::Primitive(TypeValue::String) => None,
                 FieldType::Primitive(_) => Some("Answer as a: "),
-                FieldType::Literal(_) => Some("Answer with the literal value:\n"),
+                FieldType::Literal(_) => Some("Answer using this specific value:\n"),
                 FieldType::Enum(_) => Some("Answer with any of the categories:\n"),
                 FieldType::Class(_) => Some("Answer in JSON using this schema:\n"),
                 FieldType::List(_) => Some("Answer with a JSON Array using this schema:\n"),

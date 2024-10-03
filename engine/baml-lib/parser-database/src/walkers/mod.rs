@@ -307,8 +307,13 @@ impl<'db> crate::ParserDatabase {
                 }
                 t
             }
-            // TODO: Arity
-            FieldType::Literal(arity, literal_value, ..) => Type::Literal(literal_value.clone()),
+            FieldType::Literal(arity, literal_value, ..) => {
+                let mut t = Type::Literal(literal_value.clone());
+                if arity.is_optional() {
+                    t = Type::None | t;
+                }
+                t
+            }
         };
 
         r
