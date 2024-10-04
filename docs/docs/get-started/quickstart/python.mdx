@@ -98,3 +98,42 @@ To set up BAML in python do the following:
     </CodeBlocks>
   
 </Steps>
+
+
+## BAML with Jupyter Notebooks
+
+You can use the baml_client in a Jupyter notebook. 
+
+One of the common problems is making sure your code changes are picked up by the notebook without having to restart the whole kernel (and re-run all the cells)
+
+**To make sure your changes in .baml files are reflected in your notebook you must do these steps:**
+
+<Steps>
+### Setup the autoreload extension
+
+```python cell0
+%load_ext autoreload
+%autoreload 2
+```
+This will make sure to reload imports, such as baml_client's "b" object before every cell runs.
+
+### Import baml_client module in your notebook
+
+Note it's different from how we import in python.
+```python cell1
+import app.baml_client as client # you can name this "llm" or "baml" or whatever you want
+```
+
+Usually we import things as 
+`from baml_client import b`, and we can call our functions using `b`, but the `%autoreload` notebook extension does not work well with `from...import` statements.
+
+
+### Call BAML functions using the module name as a prefix
+
+```python cell2
+client.b.ExtractResume(resume: raw_resume)
+```
+Now your changes in .baml files are reflected in your notebook automatically, without needing to restart the Jupyter kernel.
+
+
+</Steps>
