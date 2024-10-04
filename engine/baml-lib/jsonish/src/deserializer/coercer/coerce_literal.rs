@@ -1,26 +1,18 @@
 use std::vec;
 
 use anyhow::Result;
-use baml_types::{BamlMediaType, LiteralValue};
-use internal_baml_core::ir::{FieldType, TypeValue};
+use baml_types::LiteralValue;
+use internal_baml_core::ir::FieldType;
 
 use crate::{
     deserializer::{
-        coercer::{
-            coerce_primitive::coerce_bool,
-            ir_ref::coerce_enum::{enum_match_strategy, strip_punctuation},
-            TypeCoercer,
-        },
-        deserialize_flags::{DeserializerConditions, Flag},
-        types::{BamlValueWithFlags, ValueWithFlags},
+        coercer::{coerce_primitive::coerce_bool, match_string::match_string, TypeCoercer},
+        types::BamlValueWithFlags,
     },
     jsonish,
 };
 
-use super::{
-    array_helper::coerce_array_to_singular, coerce_primitive::coerce_int, ParsingContext,
-    ParsingError,
-};
+use super::{coerce_primitive::coerce_int, ParsingContext, ParsingError};
 
 impl TypeCoercer for LiteralValue {
     fn coerce(
@@ -80,68 +72,12 @@ impl TypeCoercer for LiteralValue {
             }
 
             LiteralValue::String(literal_str) => {
-                let mut flags = DeserializerConditions::new();
-
-                let context = match value {
-                    crate::jsonish::Value::String(s) => s.clone(),
-                    crate::jsonish::Value::AnyOf(_, s) => {
-                        flags.add_flag(Flag::ObjectToString(value.clone()));
-                        s.clone()
-                    }
-                    v => {
-                        flags.add_flag(Flag::ObjectToString(v.clone()));
-                        format!("{}", v)
-                    }
-                };
-
-                // TODO: Description or alias.
+                // TODO: Description and alias (same as enum_match_candidates).
                 let candidates = vec![(literal_str.as_str(), vec![literal_str.clone()])];
 
-                if let Some(variant) = enum_match_strategy(&context, &candidates, &mut flags) {
-                    if let Some(mismatch) = flags.flags.iter().find_map(|f| match f {
-                        Flag::EnumOneFromMany(options) => Some(options),
-                        _ => None,
-                    }) {
-                        return Err(ctx.error_too_many_matches(
-                            target,
-                            mismatch
-                                .iter()
-                                .map(|(count, e)| format!("{} ({} times)", e, count)),
-                        ));
-                    }
+                let literal_match = match_string(ctx, target, Some(value), &candidates)?;
 
-                    return Ok(BamlValueWithFlags::String(
-                        (variant.to_string(), flags).into(),
-                    ));
-                }
-
-                // Try to strip punctuation and try again.
-                let context = strip_punctuation(&context);
-                let candidates = candidates
-                    .iter()
-                    .map(|(variant, valid_values)| {
-                        (
-                            *variant,
-                            valid_values.iter().map(|v| strip_punctuation(v)).collect(),
-                        )
-                    })
-                    .collect::<Vec<_>>();
-
-                if let Some(variant) = enum_match_strategy(&context, &candidates, &mut flags) {
-                    if let Some(mismatch) = flags.flags.iter().find_map(|f| match f {
-                        Flag::EnumOneFromMany(options) => Some(options),
-                        _ => None,
-                    }) {
-                        return Err(
-                            ctx.error_too_many_matches(target, mismatch.iter().map(|(_, e)| e))
-                        );
-                    }
-                    return Ok(BamlValueWithFlags::String(
-                        (variant.to_string(), flags).into(),
-                    ));
-                }
-
-                Err(ctx.error_unexpected_type(target, &value))
+                Ok(BamlValueWithFlags::String(literal_match))
             }
         }
     }
