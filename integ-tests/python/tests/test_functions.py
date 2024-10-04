@@ -874,7 +874,7 @@ async def test_nested_class_streaming():
 @pytest.mark.asyncio
 async def test_dynamic_client_with_openai():
     cb = baml_py.ClientRegistry()
-    # cb.add_llm_client("MyClient", "openai", {"model": "gpt-3.5-turbo"})
+    cb.add_llm_client("MyClient", "openai", {"model": "gpt-3.5-turbo"})
     cb.set_primary("MyClient")
 
     capitol = await b.ExpectFailure(
