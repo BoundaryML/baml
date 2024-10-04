@@ -121,6 +121,7 @@ This will make sure to reload imports, such as baml_client's "b" object before e
 
 Note it's different from how we import in python.
 ```python cell1
+# Assuming your baml_client is inside a dir called app/
 import app.baml_client as client # you can name this "llm" or "baml" or whatever you want
 ```
 
@@ -135,5 +136,8 @@ client.b.ExtractResume(resume: raw_resume)
 ```
 Now your changes in .baml files are reflected in your notebook automatically, without needing to restart the Jupyter kernel.
 
+<Note>
+If you want to keep using the `from baml_client import b` style, you'll just need to re-import it everytime you regenerate the baml_client.
+</Note>
 
 </Steps>
