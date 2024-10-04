@@ -3,28 +3,30 @@ mod error;
 mod json_response;
 mod ping;
 use error::BamlError;
+use http::Uri;
 use indexmap::IndexMap;
+use internal_baml_codegen::GeneratorArgs;
 use json_response::Json;
 
 use anyhow::{Context, Result};
 use arg_validation::BamlServeValidate;
 use axum::{
     extract::{self},
-    http::{HeaderName, HeaderValue, StatusCode},
+    http::{HeaderName, HeaderValue, StatusCode, header},
     middleware::Next,
     response::{
-        sse::{Event, KeepAlive, Sse},
-        IntoResponse, Response,
+        sse::{Event, KeepAlive, Sse}, Html, IntoResponse, Response
     },
-    routing::{any, post},
+    routing::{any, get, post},
 };
 use axum_extra::{
     headers::{self, authorization::Basic, Authorization, Header},
     TypedHeader,
 };
-use baml_types::BamlValue;
+use baml_types::{BamlValue, GeneratorDefaultClientMode};
 use core::pin::Pin;
 use futures::Stream;
+use rust_embed;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{path::PathBuf, sync::Arc, task::Poll};
@@ -35,6 +37,7 @@ use crate::{
     client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
     BamlRuntime, FunctionResult, RuntimeContextManager,
 };
+use internal_baml_codegen::openapi::OpenApiSchema;
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct ServeArgs {
@@ -296,6 +299,13 @@ impl Server {
             "/stream/:msg",
             post(move |b_fn, b_args| s.clone().baml_stream_axum2(b_fn, b_args)),
         );
+        let s = self.clone();
+        let app = app.route("/docs", get(move || s.clone().docs_handler()));
+
+        let app = app.route("/*file", get(static_handler));
+
+        let s = self.clone();
+        let app = app.route("/openapi.json", get(move || s.clone().openapi_json_handler()));
 
         let service = axum::serve(
             tcp_listener,
@@ -332,6 +342,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
 
         Ok(())
     }
+
 
     async fn baml_call(
         self: Arc<Self>,
@@ -547,6 +558,44 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         }
         self.baml_stream(path, body, b_options)
     }
+
+
+    async fn docs_handler(
+        self: Arc<Self>,
+    ) -> Html<String> {
+        let page = r#"
+<html>
+    <head>
+        <title>
+            My Second Webpage
+        </title>
+        <link rel="stylesheet" type="text/css" href="./swagger-ui.css" />
+        <link rel="stylesheet" type="text/css" href="index.css" />
+        <link rel="icon" type="image/png" href="./favicon-32x32.png" sizes="32x32" />
+        <link rel="icon" type="image/png" href="./favicon-16x16.png" sizes="16x16" />
+    </head>
+    <body>
+        <div id="swagger-ui"></div>
+        <script src="./swagger-ui-bundle.js" charset="UTF-8"> </script>
+        <script src="./swagger-ui-standalone-preset.js" charset="UTF-8"> </script>
+        <script src="./swagger-initializer.js" charset="UTF-8"> </script>
+    </body>
+</html>
+"#;
+        Html(page.to_string())
+        // let locked = self.b.read().await;
+        // Html(docs::Docs::infer(&locked).render_html())
+    }
+
+    async fn openapi_json_handler(
+        self: Arc<Self>,
+    ) -> String {
+        let locked = self.b.read().await;
+        let generator = GeneratorArgs::new("fake_directory", "fake_directory", Vec::new(), "fake-version".to_string(), true, GeneratorDefaultClientMode::Sync, Vec::new()).expect("TODO");
+        let schema: OpenApiSchema = (locked.inner.ir.as_ref(), &generator).try_into().expect("TODO");
+        serde_json::to_string(&schema).expect("TODO")
+    }
+
 }
 
 struct EventStream {
@@ -621,4 +670,37 @@ fn parse_args(
     }
 
     Ok(args)
+}
+
+#[derive(rust_embed::Embed)]
+#[folder = "src/cli/serve/swagger-dist"]
+pub struct Asset;
+
+pub struct StaticFile<T>(pub T);
+
+impl<T> IntoResponse for StaticFile<T>
+where
+  T: Into<String>,
+{
+  fn into_response(self) -> Response {
+    let path = self.0.into();
+
+    match Asset::get(path.as_str()) {
+      Some(content) => {
+        let mime = mime_guess::from_path(path).first_or_octet_stream();
+        ([(header::CONTENT_TYPE, mime.as_ref())], content.data).into_response()
+      }
+      None => (StatusCode::NOT_FOUND, "404 Not Found").into_response(),
+    }
+  }
+}
+
+async fn static_handler(uri: Uri) -> impl IntoResponse {
+  let mut path = uri.path().trim_start_matches('/').to_string();
+
+  if path.starts_with("/") {
+    path = path.replace("/", "");
+  }
+
+  StaticFile(path)
 }
