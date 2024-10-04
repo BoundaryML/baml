@@ -566,7 +566,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
 <html>
     <head>
         <title>
-            My Second Webpage
+            BAML Function Docs
         </title>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui.css" integrity="sha512-MvYROlKG3cDBPskMQgPmkNgZh85LIf68y7SZ34TIppaIHQz1M/3S/yYqzIfufdKDJjzB9Qu1BV63SZjimJkPvw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
         <script language="javascript">
