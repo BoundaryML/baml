@@ -336,7 +336,7 @@ if (!nativeBinding || process.env.NAPI_RS_FORCE_WASI) {
     nativeBinding = require('./baml.wasi.cjs')
   } catch (err) {
     if (process.env.NAPI_RS_FORCE_WASI) {
-      loadErrors.push(err)
+      console.error(err)
     }
   }
   if (!nativeBinding) {
@@ -344,7 +344,7 @@ if (!nativeBinding || process.env.NAPI_RS_FORCE_WASI) {
       nativeBinding = require('@boundaryml/baml-wasm32-wasi')
     } catch (err) {
       if (process.env.NAPI_RS_FORCE_WASI) {
-        loadErrors.push(err)
+        console.error(err)
       }
     }
   }
