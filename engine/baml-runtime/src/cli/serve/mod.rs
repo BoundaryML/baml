@@ -12,10 +12,11 @@ use anyhow::{Context, Result};
 use arg_validation::BamlServeValidate;
 use axum::{
     extract::{self},
-    http::{HeaderName, HeaderValue, StatusCode, header},
+    http::{header, HeaderName, HeaderValue, StatusCode},
     middleware::Next,
     response::{
-        sse::{Event, KeepAlive, Sse}, Html, IntoResponse, Response
+        sse::{Event, KeepAlive, Sse},
+        Html, IntoResponse, Response,
     },
     routing::{any, get, post},
 };
@@ -305,7 +306,10 @@ impl Server {
         let app = app.route("/*file", get(static_handler));
 
         let s = self.clone();
-        let app = app.route("/openapi.json", get(move || s.clone().openapi_json_handler()));
+        let app = app.route(
+            "/openapi.json",
+            get(move || s.clone().openapi_json_handler()),
+        );
 
         let service = axum::serve(
             tcp_listener,
@@ -342,7 +346,6 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
 
         Ok(())
     }
-
 
     async fn baml_call(
         self: Arc<Self>,
@@ -559,10 +562,10 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         self.baml_stream(path, body, b_options)
     }
 
-
-    async fn docs_handler(
-        self: Arc<Self>,
-    ) -> Html<String> {
+    /// Serve an HTML page that loads swagger-ui from local static files.
+    /// This page will in turn fetch `/openapi.json`, and use the results
+    /// to build interactive documentation.
+    async fn docs_handler(self: Arc<Self>) -> Response {
         let page = r#"
 <html>
     <head>
@@ -582,20 +585,32 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
     </body>
 </html>
 "#;
-        Html(page.to_string())
-        // let locked = self.b.read().await;
-        // Html(docs::Docs::infer(&locked).render_html())
+        Html(page.to_string()).into_response()
     }
 
-    async fn openapi_json_handler(
-        self: Arc<Self>,
-    ) -> String {
+    /// Render the openapi spec. This endpoint is used by the swagger ui.
+    async fn openapi_json_handler(self: Arc<Self>) -> Result<String, BamlError> {
         let locked = self.b.read().await;
-        let generator = GeneratorArgs::new("fake_directory", "fake_directory", Vec::new(), "fake-version".to_string(), true, GeneratorDefaultClientMode::Sync, Vec::new()).expect("TODO");
-        let schema: OpenApiSchema = (locked.inner.ir.as_ref(), &generator).try_into().expect("TODO");
-        serde_json::to_string(&schema).expect("TODO")
+        let fake_generator = GeneratorArgs::new(
+            "fake_directory",
+            "fake_directory",
+            Vec::new(),
+            "fake-version".to_string(),
+            true,
+            GeneratorDefaultClientMode::Sync,
+            Vec::new(),
+        ).map_err(|_| BamlError::InternalError{ message: "Failed to make placeholder generator".to_string()})?;
+        let schema: OpenApiSchema = (locked.inner.ir.as_ref(), &fake_generator)
+            .try_into()
+            .map_err(|e| {
+                log::warn!("Failed to generate openapi schema: {}", e);
+                BamlError::InternalError{ message: format!("Failed to generate openapi schema")}
+            })?;
+        serde_json::to_string(&schema).map_err(|e| {
+            log::warn!("Failed to serialize openapi schema: {}", e);
+            BamlError::InternalError{ message: format!("Failed to serialize openapi schema") }
+        })
     }
-
 }
 
 struct EventStream {
@@ -672,6 +687,8 @@ fn parse_args(
     Ok(args)
 }
 
+// *** Static serving for swagger-ui files. ***
+
 #[derive(rust_embed::Embed)]
 #[folder = "src/cli/serve/swagger-dist"]
 pub struct Asset;
@@ -680,27 +697,27 @@ pub struct StaticFile<T>(pub T);
 
 impl<T> IntoResponse for StaticFile<T>
 where
-  T: Into<String>,
+    T: Into<String>,
 {
-  fn into_response(self) -> Response {
-    let path = self.0.into();
+    fn into_response(self) -> Response {
+        let path = self.0.into();
 
-    match Asset::get(path.as_str()) {
-      Some(content) => {
-        let mime = mime_guess::from_path(path).first_or_octet_stream();
-        ([(header::CONTENT_TYPE, mime.as_ref())], content.data).into_response()
-      }
-      None => (StatusCode::NOT_FOUND, "404 Not Found").into_response(),
+        match Asset::get(path.as_str()) {
+            Some(content) => {
+                let mime = mime_guess::from_path(path).first_or_octet_stream();
+                ([(header::CONTENT_TYPE, mime.as_ref())], content.data).into_response()
+            }
+            None => (StatusCode::NOT_FOUND, "404 Not Found").into_response(),
+        }
     }
-  }
 }
 
 async fn static_handler(uri: Uri) -> impl IntoResponse {
-  let mut path = uri.path().trim_start_matches('/').to_string();
+    let mut path = uri.path().trim_start_matches('/').to_string();
 
-  if path.starts_with("/") {
-    path = path.replace("/", "");
-  }
+    if path.starts_with("/") {
+        path = path.replace("/", "");
+    }
 
-  StaticFile(path)
+    StaticFile(path)
 }
