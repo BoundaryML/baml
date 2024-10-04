@@ -132,7 +132,8 @@ Usually we import things as
 ### Call BAML functions using the module name as a prefix
 
 ```python cell2
-client.b.ExtractResume(resume: raw_resume)
+raw_resume = "Here's some resume text"
+client.b.ExtractResume(raw_resume)
 ```
 Now your changes in .baml files are reflected in your notebook automatically, without needing to restart the Jupyter kernel.
 
