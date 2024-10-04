@@ -111,7 +111,6 @@ fn resolve_properties(
         let authz = properties.remove("authorization");
         let creds = properties.remove("credentials");
         let creds_content = properties.remove("credentials_content");
-        // TODO: GOOGLE_APPLICATION_CREDENTIALS_CONTENT works from playground?
 
         match (authz, creds, creds_content) {
             (Some(authz), _, _) => match authz {
@@ -119,9 +118,12 @@ fn resolve_properties(
                 _ => anyhow::bail!("authorization must be a string"),
             },
             (_, Some(creds), _) => match creds {
-                serde_json::Value::String(s) => ServiceAccountDetails::FilePath(s.to_string()),
+                serde_json::Value::String(s) => match serde_json::from_str(&s) {
+                    Ok(service_account) => ServiceAccountDetails::Json(service_account),
+                    Err(_) => ServiceAccountDetails::FilePath(s),
+                },
                 serde_json::Value::Object(o) => ServiceAccountDetails::Json(o),
-                _ => anyhow::bail!("credentials must be a string or object"),
+                _ => anyhow::bail!("credentials must be a string or JSON object"),
             },
             (_, _, Some(creds_content)) => match creds_content {
                 serde_json::Value::String(s) => ServiceAccountDetails::Json(
@@ -130,9 +132,16 @@ fn resolve_properties(
                 ),
                 _ => anyhow::bail!("credentials_content must be a string"),
             },
-            (None, None, None) => match ctx.env.get("GOOGLE_APPLICATION_CREDENTIALS") {
-                Some(path) => ServiceAccountDetails::FilePath(path.to_string()),
-                None => ServiceAccountDetails::None,
+            (None, None, None) => match (
+                ctx.env.get("GOOGLE_APPLICATION_CREDENTIALS"),
+                ctx.env.get("GOOGLE_APPLICATION_CREDENTIALS_CONTENT"),
+            ) {
+                (Some(path), _) => ServiceAccountDetails::FilePath(path.to_string()),
+                (_, Some(creds_content)) => ServiceAccountDetails::Json(
+                    serde_json::from_str(&creds_content)
+                        .context("Failed to parse credentials_content as a JSON object")?,
+                ),
+                _ => ServiceAccountDetails::None,
             },
         }
     };
@@ -383,6 +392,45 @@ impl VertexClient {
     }
 }
 
+async fn get_access_token(service_account: &ServiceAccount) -> Result<String> {
+    let now = Utc::now();
+    let claims = Claims {
+        iss: service_account.client_email.clone(),
+        scope: "https://www.googleapis.com/auth/cloud-platform".to_string(),
+        aud: "https://oauth2.googleapis.com/token".to_string(),
+        exp: (now + Duration::hours(1)).timestamp(),
+        iat: now.timestamp(),
+    };
+
+    // Create the JWT
+    let header = Header::new(Algorithm::RS256);
+    let key = EncodingKey::from_rsa_pem(service_account.private_key.as_bytes())?;
+    let jwt = encode(&header, &claims, &key)?;
+
+    // Make the token request
+    let client = reqwest::Client::new();
+    let params = [
+        ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+        ("assertion", &jwt),
+    ];
+    let res: Value = client
+        .post("https://oauth2.googleapis.com/token")
+        .form(&params)
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    Ok(res
+        .as_object()
+        .context("Token exchange did not return a JSON object")?
+        .get("access_token")
+        .context("Access token not found in response")?
+        .as_str()
+        .context("Access token is not a string")?
+        .to_string())
+}
+
 impl RequestBuilder for VertexClient {
     fn http_client(&self) -> &reqwest::Client {
         &self.client
@@ -455,87 +503,20 @@ impl RequestBuilder for VertexClient {
                     let file = File::open(path)?;
                     let reader = BufReader::new(file);
                     let service_account: ServiceAccount = serde_json::from_reader(reader)?;
-                    let now = Utc::now();
-                    let claims = Claims {
-                        iss: service_account.client_email,
-                        scope: "https://www.googleapis.com/auth/cloud-platform".to_string(),
-                        aud: "https://oauth2.googleapis.com/token".to_string(),
-                        exp: (now + Duration::hours(1)).timestamp(),
-                        iat: now.timestamp(),
-                    };
 
-                    // Create the JWT
-                    let header = Header::new(Algorithm::RS256);
-                    let key = EncodingKey::from_rsa_pem(service_account.private_key.as_bytes())?;
-                    let jwt = encode(&header, &claims, &key)?;
-
-                    // Make the token request
-                    let client = reqwest::Client::new();
-                    let params = [
-                        ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
-                        ("assertion", &jwt),
-                    ];
-                    let res: Value = client
-                        .post("https://oauth2.googleapis.com/token")
-                        .form(&params)
-                        .send()
-                        .await?
-                        .json()
-                        .await?;
-
-                    // Extract and print the access token
-                    if let Some(access_token) = res["access_token"].as_str() {
-                        access_token.to_string()
-                    } else {
-                        println!("Failed to get access token. Response: {:?}", res);
-                        return Err(anyhow::anyhow!("Failed to get access token"));
-                    }
+                    get_access_token(&service_account).await?
                 }
                 #[cfg(target_arch = "wasm32")]
                 {
-                    return Err(anyhow::anyhow!(
+                    anyhow::bail!(
                         "Reading from files not supported in BAML playground. Pass in your credentials file as a string to the 'GOOGLE_APPLICATION_CREDENTIALS_CONTENT' environment variable."
-                    ));
+                    );
                 }
             }
             ServiceAccountDetails::Json(token) => {
                 let service_account: ServiceAccount =
                     serde_json::from_value(serde_json::Value::Object(token.clone()))?;
-                let now = Utc::now();
-                let claims = Claims {
-                    iss: service_account.client_email,
-                    scope: "https://www.googleapis.com/auth/cloud-platform".to_string(),
-                    aud: "https://oauth2.googleapis.com/token".to_string(),
-                    exp: (now + Duration::hours(1)).timestamp(),
-                    iat: now.timestamp(),
-                };
-
-                // Create the JWT
-                let header = Header::new(Algorithm::RS256);
-                let key = EncodingKey::from_rsa_pem(service_account.private_key.as_bytes())?;
-                let jwt = encode(&header, &claims, &key)?;
-
-                // Make the token request
-                let client = reqwest::Client::new();
-                let params = [
-                    ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
-                    ("assertion", &jwt),
-                ];
-                let res: Value = client
-                    .post("https://oauth2.googleapis.com/token")
-                    .form(&params)
-                    .send()
-                    .await?
-                    .json()
-                    .await?;
-
-                // Extract and print the access token
-                if let Some(access_token) = res["access_token"].as_str() {
-                    access_token.to_string()
-                } else {
-                    println!("Failed to get access token. Response: {:?}", res);
-                    return Err(anyhow::anyhow!("Failed to get access token"));
-                }
+                get_access_token(&service_account).await?
             }
         };
 

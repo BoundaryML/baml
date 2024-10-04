@@ -94,6 +94,7 @@ client<llm> Vertex {
     model gemini-1.5-pro
     project_id sam-project-vertex-1
     location us-central1
+    credentials env.INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS
 
   }
 }
