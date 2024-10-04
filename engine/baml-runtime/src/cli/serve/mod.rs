@@ -3,7 +3,6 @@ mod error;
 mod json_response;
 mod ping;
 use error::BamlError;
-use http::Uri;
 use indexmap::IndexMap;
 use internal_baml_codegen::GeneratorArgs;
 use json_response::Json;
@@ -12,7 +11,7 @@ use anyhow::{Context, Result};
 use arg_validation::BamlServeValidate;
 use axum::{
     extract::{self},
-    http::{header, HeaderName, HeaderValue, StatusCode},
+    http::{HeaderName, HeaderValue, StatusCode},
     middleware::Next,
     response::{
         sse::{Event, KeepAlive, Sse},
@@ -27,7 +26,6 @@ use axum_extra::{
 use baml_types::{BamlValue, GeneratorDefaultClientMode};
 use core::pin::Pin;
 use futures::Stream;
-use rust_embed;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{path::PathBuf, sync::Arc, task::Poll};
@@ -303,8 +301,6 @@ impl Server {
         let s = self.clone();
         let app = app.route("/docs", get(move || s.clone().docs_handler()));
 
-        let app = app.route("/*file", get(static_handler));
-
         let s = self.clone();
         let app = app.route(
             "/openapi.json",
@@ -572,15 +568,35 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         <title>
             My Second Webpage
         </title>
-        <link rel="stylesheet" type="text/css" href="./swagger-ui.css" />
-        <link rel="stylesheet" type="text/css" href="index.css" />
-        <link rel="icon" type="image/png" href="./favicon-32x32.png" sizes="32x32" />
-        <link rel="icon" type="image/png" href="./favicon-16x16.png" sizes="16x16" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui.css" integrity="sha512-MvYROlKG3cDBPskMQgPmkNgZh85LIf68y7SZ34TIppaIHQz1M/3S/yYqzIfufdKDJjzB9Qu1BV63SZjimJkPvw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <script language="javascript">
+
+            window.onload = function() {
+              //<editor-fold desc="Changeable Configuration Block">
+
+              // the following lines will be replaced by docker/configurator, when it runs in a docker-container
+              window.ui = SwaggerUIBundle({
+                url: "/openapi.json",
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                  SwaggerUIBundle.presets.apis,
+                  SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                  SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout"
+              });
+
+              //</editor-fold>
+            };
+        </script>
     </head>
     <body>
         <div id="swagger-ui"></div>
-        <script src="./swagger-ui-bundle.js" charset="UTF-8"> </script>
-        <script src="./swagger-ui-standalone-preset.js" charset="UTF-8"> </script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-bundle.js" integrity="sha512-mVvFSCxt0sK0FeL8C7n8BcHh10quzdwfxQbjRaw9pRdKNNep3YQusJS5e2/q4GYt4Ma5yWXSJraoQzXPgZd2EQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-standalone-preset.js" integrity="sha512-DgicCd4AI/d7/OdgaHqES3hA+xJ289Kb5NmMEegbN8w/Dxn5mvvqr9szOR6TQC+wjTTMeqPscKE4vj6bmAQn6g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
         <script src="./swagger-initializer.js" charset="UTF-8"> </script>
     </body>
 </html>
@@ -685,39 +701,4 @@ fn parse_args(
     }
 
     Ok(args)
-}
-
-// *** Static serving for swagger-ui files. ***
-
-#[derive(rust_embed::Embed)]
-#[folder = "src/cli/serve/swagger-dist"]
-pub struct Asset;
-
-pub struct StaticFile<T>(pub T);
-
-impl<T> IntoResponse for StaticFile<T>
-where
-    T: Into<String>,
-{
-    fn into_response(self) -> Response {
-        let path = self.0.into();
-
-        match Asset::get(path.as_str()) {
-            Some(content) => {
-                let mime = mime_guess::from_path(path).first_or_octet_stream();
-                ([(header::CONTENT_TYPE, mime.as_ref())], content.data).into_response()
-            }
-            None => (StatusCode::NOT_FOUND, "404 Not Found").into_response(),
-        }
-    }
-}
-
-async fn static_handler(uri: Uri) -> impl IntoResponse {
-    let mut path = uri.path().trim_start_matches('/').to_string();
-
-    if path.starts_with("/") {
-        path = path.replace("/", "");
-    }
-
-    StaticFile(path)
 }
