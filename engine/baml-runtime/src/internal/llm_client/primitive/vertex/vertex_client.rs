@@ -30,17 +30,31 @@ use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::BufReader;
 
-use baml_types::{BamlMedia, BamlMediaContent};
+use baml_types::BamlMediaContent;
 use eventsource_stream::Eventsource;
 use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
+use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage};
 
 use serde_json::json;
 use std::collections::HashMap;
-struct PostRequestProperities {
+
+enum ServiceAccountDetails {
+    None,
+    RawAuthorizationHeader(String),
+    FilePath(String),
+    Json(serde_json::Map<String, serde_json::Value>),
+}
+
+impl Default for ServiceAccountDetails {
+    fn default() -> Self {
+        ServiceAccountDetails::None
+    }
+}
+
+struct PostRequestProperties {
     default_role: String,
     base_url: Option<String>,
-    service_account_details: Option<(String, String)>,
+    service_account_details: ServiceAccountDetails,
     headers: HashMap<String, String>,
     proxy_url: Option<String>,
     properties: HashMap<String, serde_json::Value>,
@@ -56,7 +70,7 @@ pub struct VertexClient {
     pub retry_policy: Option<String>,
     pub context: RenderContext_Client,
     pub features: ModelFeatures,
-    properties: PostRequestProperities,
+    properties: PostRequestProperties,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -77,7 +91,7 @@ struct ServiceAccount {
 fn resolve_properties(
     mut properties: HashMap<String, serde_json::Value>,
     ctx: &RuntimeContext,
-) -> Result<PostRequestProperities, anyhow::Error> {
+) -> Result<PostRequestProperties, anyhow::Error> {
     let default_role = properties
         .remove("default_role")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
@@ -93,52 +107,44 @@ fn resolve_properties(
         )?,
         None => AllowedMetadata::None,
     };
-    let mut service_key: Option<(String, String)> = None;
+    let service_account_details = {
+        let authz = properties.remove("authorization");
+        let creds = properties.remove("credentials");
+        let creds_content = properties.remove("credentials_content");
 
-    service_key = properties
-        .remove("authorization")
-        .map(|v| ("GOOGLE_TOKEN".to_string(), v.as_str().unwrap().to_string()))
-        .or_else(|| {
-            #[cfg(target_arch = "wasm32")]
-            {
-                properties
-                    .remove("credentials_content")
-                    .and_then(|v| {
-                        v.as_str().map(|s| {
-                            (
-                                "GOOGLE_APPLICATION_CREDENTIALS_CONTENT".to_string(),
-                                s.to_string(),
-                            )
-                        })
-                    })
-                    .or_else(|| {
-                        ctx.env
-                            .get("GOOGLE_APPLICATION_CREDENTIALS_CONTENT")
-                            .map(|s| {
-                                (
-                                    "GOOGLE_APPLICATION_CREDENTIALS_CONTENT".to_string(),
-                                    s.to_string(),
-                                )
-                            })
-                    })
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                properties
-                    .remove("credentials")
-                    .and_then(|v| {
-                        v.as_str()
-                            .map(|s| ("GOOGLE_APPLICATION_CREDENTIALS".to_string(), s.to_string()))
-                    })
-                    .or_else(|| {
-                        ctx.env
-                            .get("GOOGLE_APPLICATION_CREDENTIALS")
-                            .map(|s| ("GOOGLE_APPLICATION_CREDENTIALS".to_string(), s.to_string()))
-                    })
-            }
-        });
-    properties.remove("credentials");
-    properties.remove("credentials_content");
+        match (authz, creds, creds_content) {
+            (Some(authz), _, _) => match authz {
+                serde_json::Value::String(s) => ServiceAccountDetails::RawAuthorizationHeader(s),
+                _ => anyhow::bail!("authorization must be a string"),
+            },
+            (_, Some(creds), _) => match creds {
+                serde_json::Value::String(s) => match serde_json::from_str(&s) {
+                    Ok(service_account) => ServiceAccountDetails::Json(service_account),
+                    Err(_) => ServiceAccountDetails::FilePath(s),
+                },
+                serde_json::Value::Object(o) => ServiceAccountDetails::Json(o),
+                _ => anyhow::bail!("credentials must be a string or JSON object"),
+            },
+            (_, _, Some(creds_content)) => match creds_content {
+                serde_json::Value::String(s) => ServiceAccountDetails::Json(
+                    serde_json::from_str(&s)
+                        .context("Failed to parse credentials_content as a JSON object")?,
+                ),
+                _ => anyhow::bail!("credentials_content must be a string"),
+            },
+            (None, None, None) => match (
+                ctx.env.get("GOOGLE_APPLICATION_CREDENTIALS"),
+                ctx.env.get("GOOGLE_APPLICATION_CREDENTIALS_CONTENT"),
+            ) {
+                (Some(path), _) => ServiceAccountDetails::FilePath(path.to_string()),
+                (_, Some(creds_content)) => ServiceAccountDetails::Json(
+                    serde_json::from_str(&creds_content)
+                        .context("Failed to parse credentials_content as a JSON object")?,
+                ),
+                _ => ServiceAccountDetails::None,
+            },
+        }
+    };
 
     let project_id = properties
         .remove("project_id")
@@ -178,10 +184,10 @@ fn resolve_properties(
         None => Default::default(),
     };
 
-    Ok(PostRequestProperities {
+    Ok(PostRequestProperties {
         default_role,
         base_url: Some(base_url),
-        service_account_details: service_key,
+        service_account_details,
         headers,
         properties,
         project_id: Some(project_id),
@@ -386,6 +392,45 @@ impl VertexClient {
     }
 }
 
+async fn get_access_token(service_account: &ServiceAccount) -> Result<String> {
+    let now = Utc::now();
+    let claims = Claims {
+        iss: service_account.client_email.clone(),
+        scope: "https://www.googleapis.com/auth/cloud-platform".to_string(),
+        aud: "https://oauth2.googleapis.com/token".to_string(),
+        exp: (now + Duration::hours(1)).timestamp(),
+        iat: now.timestamp(),
+    };
+
+    // Create the JWT
+    let header = Header::new(Algorithm::RS256);
+    let key = EncodingKey::from_rsa_pem(service_account.private_key.as_bytes())?;
+    let jwt = encode(&header, &claims, &key)?;
+
+    // Make the token request
+    let client = reqwest::Client::new();
+    let params = [
+        ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+        ("assertion", &jwt),
+    ];
+    let res: Value = client
+        .post("https://oauth2.googleapis.com/token")
+        .form(&params)
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    Ok(res
+        .as_object()
+        .context("Token exchange did not return a JSON object")?
+        .get("access_token")
+        .context("Access token not found in response")?
+        .as_str()
+        .context("Access token is not a string")?
+        .to_string())
+}
+
 impl RequestBuilder for VertexClient {
     fn http_client(&self) -> &reqwest::Client {
         &self.client
@@ -447,99 +492,32 @@ impl RequestBuilder for VertexClient {
             _ => self.client.post(baml_original_url),
         };
 
-        let credentials = self.properties.service_account_details.clone();
-
-        let access_token = if let Some((key, value)) = &credentials {
-            if key == "GOOGLE_TOKEN" {
-                value.clone()
-            } else if key == "GOOGLE_APPLICATION_CREDENTIALS_CONTENT" {
-                let service_account: ServiceAccount = serde_json::from_str(value).unwrap();
-                let now = Utc::now();
-                let claims = Claims {
-                    iss: service_account.client_email,
-                    scope: "https://www.googleapis.com/auth/cloud-platform".to_string(),
-                    aud: "https://oauth2.googleapis.com/token".to_string(),
-                    exp: (now + Duration::hours(1)).timestamp(),
-                    iat: now.timestamp(),
-                };
-
-                // Create the JWT
-                let header = Header::new(Algorithm::RS256);
-                let key = EncodingKey::from_rsa_pem(service_account.private_key.as_bytes())?;
-                let jwt = encode(&header, &claims, &key)?;
-
-                // Make the token request
-                let client = reqwest::Client::new();
-                let params = [
-                    ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
-                    ("assertion", &jwt),
-                ];
-                let res: Value = client
-                    .post("https://oauth2.googleapis.com/token")
-                    .form(&params)
-                    .send()
-                    .await?
-                    .json()
-                    .await?;
-
-                // Extract and print the access token
-                if let Some(access_token) = res["access_token"].as_str() {
-                    access_token.to_string()
-                } else {
-                    println!("Failed to get access token. Response: {:?}", res);
-                    return Err(anyhow::anyhow!("Failed to get access token"));
-                }
-            } else {
+        let access_token = match &self.properties.service_account_details {
+            ServiceAccountDetails::None => {
+                anyhow::bail!("No service account was specified.");
+            }
+            ServiceAccountDetails::RawAuthorizationHeader(token) => token.to_string(),
+            ServiceAccountDetails::FilePath(path) => {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                    let file = File::open(value)?;
+                    let file = File::open(path)?;
                     let reader = BufReader::new(file);
                     let service_account: ServiceAccount = serde_json::from_reader(reader)?;
-                    let now = Utc::now();
-                    let claims = Claims {
-                        iss: service_account.client_email,
-                        scope: "https://www.googleapis.com/auth/cloud-platform".to_string(),
-                        aud: "https://oauth2.googleapis.com/token".to_string(),
-                        exp: (now + Duration::hours(1)).timestamp(),
-                        iat: now.timestamp(),
-                    };
 
-                    // Create the JWT
-                    let header = Header::new(Algorithm::RS256);
-                    let key = EncodingKey::from_rsa_pem(service_account.private_key.as_bytes())?;
-                    let jwt = encode(&header, &claims, &key)?;
-
-                    // Make the token request
-                    let client = reqwest::Client::new();
-                    let params = [
-                        ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
-                        ("assertion", &jwt),
-                    ];
-                    let res: Value = client
-                        .post("https://oauth2.googleapis.com/token")
-                        .form(&params)
-                        .send()
-                        .await?
-                        .json()
-                        .await?;
-
-                    // Extract and print the access token
-                    if let Some(access_token) = res["access_token"].as_str() {
-                        access_token.to_string()
-                    } else {
-                        println!("Failed to get access token. Response: {:?}", res);
-                        return Err(anyhow::anyhow!("Failed to get access token"));
-                    }
+                    get_access_token(&service_account).await?
                 }
                 #[cfg(target_arch = "wasm32")]
                 {
-                    return Err(anyhow::anyhow!(
+                    anyhow::bail!(
                         "Reading from files not supported in BAML playground. Pass in your credentials file as a string to the 'GOOGLE_APPLICATION_CREDENTIALS_CONTENT' environment variable."
-                    ));
+                    );
                 }
             }
-        } else {
-            return Err(anyhow::anyhow!("Service account not found"));
+            ServiceAccountDetails::Json(token) => {
+                let service_account: ServiceAccount =
+                    serde_json::from_value(serde_json::Value::Object(token.clone()))?;
+                get_access_token(&service_account).await?
+            }
         };
 
         req = req.header("Authorization", format!("Bearer {}", access_token));

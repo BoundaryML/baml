@@ -92,8 +92,9 @@ client<llm> Vertex {
   provider vertex-ai  
   options {
     model gemini-1.5-pro
-    project_id anish-testing-426119
+    project_id sam-project-vertex-1
     location us-central1
+    credentials env.INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS
 
   }
 }
