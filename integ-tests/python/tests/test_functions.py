@@ -872,7 +872,20 @@ async def test_nested_class_streaming():
 @pytest.mark.asyncio
 async def test_dynamic_clients():
     cb = baml_py.ClientRegistry()
-    cb.add_llm_client("MyClient", "openai", {"model": "gpt-3.5-turbo"})
+    # cb.add_llm_client("MyClient", "openai", {"model": "gpt-3.5-turbo"})
+    cb.add_llm_client(
+        "MyClient",
+        "vertex-ai",
+        {
+            "model": "gemini-1.5-pro",
+            "project_id": "sam-project-vertex-1",
+            "location": "us-central1",
+            "credentials": {
+                "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCj3sEG0WsdfrSn\nXL8kIXsAl2wEd5gC/uTOuyc69c8Bco+BAdgRv5LMtIcp5QSfFilhg0IoIAcm3Mz+\n41cTluuI+5nWNq3DWR+VdVlQ7Rs/BfubrR3Cob0Y41H9wRgGNmicouretUZf//7v\nfaZ7hFd6hfDlwFajuzISTefptejFtmaYhsl62K/G5CBfsnRjINwSTFtidfTaAvWe\nY1x4j5dgGF/hve+Fc8VhvpoojmJhKieb39ZbXwiZatS8cgwdue1l5ZG0BU+6aQ7c\nvbQQm+JziwcHrhTeLBB8G2GC5fE/4Y5hNopGvGpCZkCQEOoEQTVy5uG1PgQsgazb\ncCUa3bLHAgMBAAECggEAJZ4amJqVaNFv3iWb2Ur4RhP8n2/mzPU/iDeNU2sfKJlo\nWPiX5cchB23/wz3IGE8Jk9GCa9yiV6kDRBXjJOOV0T3UvEiUDg6VAgXMyZeMlCSm\n9D9C4C2pz59LcKGVhsORszdxDEv3ykzldIvXHm6seDtsKAnFudNctLf+n3d7ZntR\nAbQeh+ekA7N46ppNHhZc0/bEyStnPLTLcjyLlxlJfqzFSRQKHdf/vBAkK3eSECOL\n1nDbPK6GkTI4t9ftlJQ4C4IwC4x2W9tCd7aT9JKMofzIBlGnx2oWnpr931HscQqb\nW5CAspzfJDa2dn3VeQpkmDxV9VzM5pC7Q8k/3KqWCQKBgQDbhaC7UbwK6xYxcYPm\nxQ62cUKh7X2f19maj5NVTsNFH952JdSA6ltXOCwZwbUhzNl00u3C2iuqszyGzaJl\n0hp3e7iq4UX+OUlAYGTn6obW12UGUSo5rpu9hLqxyOL0x5giBp0PYKCs/b9BKkvt\nF6J6PV8B68XvbDk9rGIQmSWoOQKBgQC/GbhSAPNl6x6FHS1F8nriD4xG4SWwtx6f\n2GLwrrSDmTU1bt/BShrcv+DbbZDhxSZan9KcOHgQvnXO0iLpPKkbTuYUUguYUgEh\nIBNpPVffeCb0mq6ZZDsqf5/XplgsXM4KZbamXV+lh3XaFgj8OpChjhWMMQz6Cbj5\nR0Khz4Ay/wKBgQCKlETve52V1upftCVsXSH4km9aAa64ZW79X33G8L3cuU2akC8i\nYs/es5tDd0F9YPA2C6IEy+2dCSFAiDfox0Xl/7iIR0YEQu23MiMBNNCCd99SqZJa\nb5vpfAzPht2fYRDtCffEaV+FVXqTDLx5o93yBSQg9lIx3sQT5urRR5y6IQKBgBfR\nNM/DnpJNQ3iDsmjNV9Nk7K7I0NG9gOubJHmqzIS6S49lSi3k9oQcxgGTHkOFNsqE\nsNMXlp8/nZ8xQXigPtNQegx+TUOmtM1UGhc7tf/8EZ7ayHgFrfoV/e36pXKh/mv9\nUU5axNj0kROlO2l0QyJfewAF/QAMxikLYJqaKfgxAoGAKVwLyFq14rq2rZFhXAQU\nA5lklIGbL6qQ76njaXlxrihq07A1n21/8y0fv5LYN6gKfv3HsmWlBVwOyz7Z1Igz\nLEyyKa50jy5dqY1QAEF2A1u8YAXmPAiMcqv+hwLp1i+bK9Z8aC4tLG/+Kwh72diX\nWT6Qgr8S3EK65uGdu8423Jg=\n-----END PRIVATE KEY-----\n",
+                "client_email": "sam-boundary-vertex-1@sam-project-vertex-1.iam.gserviceaccount.com",
+            },
+        },
+    )
     cb.set_primary("MyClient")
 
     capitol = await b.ExpectFailure(
