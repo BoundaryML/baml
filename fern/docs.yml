@@ -46,40 +46,40 @@ navigation:
         contents:
           - page: What are function defintions
             icon: fa-regular fa-question-circle
-            path: guide/introduction.mdx
+            path: guide/what-are-function-definitions.mdx
           - page: What's the baml_src folder
             icon: fa-regular fa-folder
-            path: guide/introduction.mdx
+            path: guide/what-is-baml_src.mdx
             slug: baml_src
           - page: What's baml_client
             icon: fa-regular fa-folder-gear
-            path: guide/introduction.mdx
+            path: guide/what-is-baml_client.mdx
             slug: baml_client
       - section: "Installation: Editors"
         contents:
           - page: VSCode Extension
             icon: fa-brands fa-microsoft
-            path: guide/introduction.mdx
+            path: guide/01-editors/vscode.mdx
           - page: Cursor Extension
             icon: fa-brands fa-microsoft
-            path: guide/introduction.mdx
+            path: guide/01-editors/cursor.mdx
           - page: Others
             icon: fa-brands fa-microsoft
-            path: guide/introduction.mdx
+            path: guide/01-editors/others.mdx
       - section: "Installation: Language"
         contents:
           - page: Python
             icon: fa-brands fa-python
-            path: guide/introduction.mdx
+            path: guide/02-languages/python.mdx
           - page: Typescript
             icon: fa-brands fa-js
-            path: guide/introduction.mdx
+            path: guide/02-languages/typescript.mdx
           - page: Ruby
             icon: fa-regular fa-gem
-            path: guide/introduction.mdx
+            path: guide/02-languages/ruby.mdx
           - page: REST API (other languages)
             icon: fa-regular fa-network-wired
-            path: guide/introduction.mdx
+            path: guide/02-languages/rest.mdx
       - section: Development
         contents:
           - page: Environment Variables
