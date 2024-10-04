@@ -31,12 +31,12 @@ Not available yet
 
 Base class for all BAML exceptions.  
 
-<ResponseField
-  name="message"
+<ParamField
+  path="message"
   type="string"
 >
   A human-readable error message.
-</ResponseField>
+</ParamField>
 
 ### BamlInvalidArgumentError
 
@@ -60,8 +60,8 @@ Subclass of `BamlClientError`.
 
 Raised when the HTTP request made by a client fails with a non-200 status code.
 
-<ResponseField
-  name="status_code"
+<ParamField
+  path="status_code"
   type="int"
 >
   The status code of the response.
@@ -76,7 +76,7 @@ Common status codes are:
 - 404: Not Found
 - 429: Too Many Requests
 - 500: Internal Server Error
-</ResponseField>
+</ParamField>
 
 ### BamlValidationError
 
@@ -84,9 +84,23 @@ Subclass of `BamlError`.
 
 Raised when BAML fails to parse a string from the LLM into the specified object.
 
-<ResponseField
-  name="raw_llm_response"
+<ParamField
+  path="raw_output"
   type="string"
 >
   The raw text from the LLM that failed to parse into the expected return type of a function.
-</ResponseField>
+</ParamField>
+
+<ParamField
+  path="message"
+  type="string"
+>
+  The parsing-related error message.
+</ParamField>
+
+<ParamField
+  path="prompt"
+  type="string"
+>
+  The original prompt that was sent to the LLM, formatted as a plain string. Images sent as base64-encoded strings are not serialized into this field.
+</ParamField>

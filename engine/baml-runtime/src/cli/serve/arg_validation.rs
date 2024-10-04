@@ -12,9 +12,9 @@ impl BamlServeValidate for BamlValue {
         match &self {
           BamlValue::Media(m) => {
             match m.content {
-              BamlMediaContent::File(_) => Err(BamlError::InvalidArgument(
-                format!("BAML-over-HTTP only supports URLs and base64-encoded {} media (file is invalid)", m.media_type)
-              )),
+              BamlMediaContent::File(_) => Err(BamlError::InvalidArgument {
+                message: format!("BAML-over-HTTP only supports URLs and base64-encoded {} media (file is invalid)", m.media_type)
+              }),
               BamlMediaContent::Url(_) => Ok(()),
               BamlMediaContent::Base64(_) => Ok(()),
             }

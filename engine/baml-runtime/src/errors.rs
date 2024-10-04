@@ -2,7 +2,7 @@ pub enum ExposedError {
     /// Error in parsing post calling the LLM
     ValidationError {
         prompt: String,
-        raw_response: String,
+        raw_output: String,
         message: String,
     },
 }
@@ -14,13 +14,13 @@ impl std::fmt::Display for ExposedError {
         match self {
             ExposedError::ValidationError {
                 prompt,
-                raw_response,
+                raw_output,
                 message,
             } => {
                 write!(
                     f,
                     "Parsing error: {}\nPrompt: {}\nRaw Response: {}",
-                    message, prompt, raw_response
+                    message, prompt, raw_output
                 )
             }
         }

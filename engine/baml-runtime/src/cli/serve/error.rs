@@ -15,14 +15,22 @@ use super::json_response::Json;
 /// Variant names are deliberately redundant with the name of this enum: the variant
 /// names are what we show to users, so it's important that they're self-evident.
 #[derive(Debug, Serialize)]
-#[serde(tag = "error", content = "message", rename_all = "snake_case")]
+#[serde(tag = "error", rename_all = "snake_case")]
 pub enum BamlError {
-    InvalidArgument(String),
-    ClientError(String),
-    ValidationFailure(String),
+    #[serde(rename_all = "snake_case")]
+    InvalidArgument { message: String },
+    #[serde(rename_all = "snake_case")]
+    ClientError { message: String },
+    #[serde(rename_all = "snake_case")]
+    ValidationFailure {
+        prompt: String,
+        raw_output: String,
+        message: String,
+    },
     /// This is the only variant not documented at the aforementioned link:
     /// this is the catch-all for unclassified errors.
-    InternalError(String),
+    #[serde(rename_all = "snake_case")]
+    InternalError { message: String },
 }
 
 impl BamlError {
@@ -31,21 +39,27 @@ impl BamlError {
             match er {
                 ExposedError::ValidationError {
                     prompt,
-                    raw_response,
+                    raw_output,
                     message,
-                } => Self::ValidationFailure(format!("{:?}", err)),
+                } => Self::ValidationFailure {
+                    prompt: prompt.to_string(),
+                    raw_output: raw_output.to_string(),
+                    message: message.to_string(),
+                },
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
-            Self::InvalidArgument(format!("{:?}", er))
+            Self::InvalidArgument {
+                message: format!("{:?}", er),
+            }
         } else if let Some(er) = err.downcast_ref::<LLMResponse>() {
             match er {
-                LLMResponse::Success(_) => {
-                    Self::InternalError(format!("Unexpected error from BAML: {:?}", err))
-                }
+                LLMResponse::Success(_) => Self::InternalError {
+                    message: format!("Unexpected error from BAML: {:?}", err),
+                },
                 LLMResponse::LLMFailure(failed) => match &failed.code {
-                    crate::internal::llm_client::ErrorCode::Other(2) => Self::InternalError(
-                        format!("Something went wrong with the LLM client: {:?}", err),
-                    ),
+                    crate::internal::llm_client::ErrorCode::Other(2) => Self::InternalError {
+                        message: format!("Something went wrong with the LLM client: {:?}", err),
+                    },
                     crate::internal::llm_client::ErrorCode::Other(_)
                     | crate::internal::llm_client::ErrorCode::InvalidAuthentication
                     | crate::internal::llm_client::ErrorCode::NotSupported
@@ -53,19 +67,22 @@ impl BamlError {
                     | crate::internal::llm_client::ErrorCode::ServerError
                     | crate::internal::llm_client::ErrorCode::ServiceUnavailable
                     | crate::internal::llm_client::ErrorCode::UnsupportedResponse(_) => {
-                        Self::ClientError(format!("{:?}", err))
+                        Self::ClientError {
+                            message: format!("{:?}", err),
+                        }
                     }
                 },
-                LLMResponse::UserFailure(msg) => {
-                    Self::InvalidArgument(format!("Invalid argument: {}", msg))
-                }
-                LLMResponse::InternalFailure(_) => Self::InternalError(format!(
-                    "Something went wrong with the LLM client: {}",
-                    err
-                )),
+                LLMResponse::UserFailure(msg) => Self::InvalidArgument {
+                    message: format!("Invalid argument: {}", msg),
+                },
+                LLMResponse::InternalFailure(_) => Self::InternalError {
+                    message: format!("Something went wrong with the LLM client: {}", err),
+                },
             }
         } else {
-            Self::InternalError(format!("{:?}", err))
+            Self::InternalError {
+                message: format!("{:?}", err),
+            }
         }
     }
 }
@@ -74,10 +91,10 @@ impl IntoResponse for BamlError {
     fn into_response(self) -> Response {
         (
             match &self {
-                BamlError::InvalidArgument(_) => StatusCode::BAD_REQUEST,
-                BamlError::ClientError(_) => StatusCode::BAD_GATEWAY,
-                BamlError::ValidationFailure(_) => StatusCode::INTERNAL_SERVER_ERROR, // ??? - FIXME
-                BamlError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                BamlError::InvalidArgument { .. } => StatusCode::BAD_REQUEST,
+                BamlError::ClientError { .. } => StatusCode::BAD_GATEWAY,
+                BamlError::ValidationFailure { .. } => StatusCode::INTERNAL_SERVER_ERROR, // ??? - FIXME
+                BamlError::InternalError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             },
             Json(match serde_json::to_value(&self) {
                 Ok(serde_json::Value::Object(mut v)) => {
