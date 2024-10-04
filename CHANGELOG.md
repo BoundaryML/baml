@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file. See [conven
 - **(vertex)** allow specifying creds as JSON object (#1009) - ([98868da](https://github.com/boundaryml/baml/commit/98868da4e75dde3a00178cbf60afebc501d37b0c)) - Samuel Lijin
 - Add prompt, raw_output and error message to BamlValidationError in TS and Python (#1005) - ([447dbf4](https://github.com/boundaryml/baml/commit/447dbf4e0d0cf0744307ef50f89050752334d982)) - aaronvg
 - Add BamlValidationError to `baml-cli serve` (#1007) - ([3b8cf16](https://github.com/boundaryml/baml/commit/3b8cf1636594c1a7245a733556efa690da40e139)) - aaronvg
-- Include a WYSIWYG UI (Swagger UI) to `baml-cli dev` (#1010) - () - imalsogreg
+- Include a WYSIWYG UI (Swagger UI) to `baml-cli dev` (#1011) - ([fe9dde4](https://github.com/BoundaryML/baml/commit/fe9dde4f3a7ff0503fd13087da50e4da9d97c3a0)) - imalsogreg
 
 ## [0.58.0](https://github.com/boundaryml/baml/compare/0.57.1..0.58.0) - 2024-10-02
 
