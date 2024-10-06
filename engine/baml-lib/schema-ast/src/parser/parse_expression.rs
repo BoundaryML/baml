@@ -48,6 +48,14 @@ fn parse_array(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
                     elements.push(expr);
                 }
             }
+            Rule::ARRAY_CATCH_ALL => {
+                diagnostics.push_error(
+                    internal_baml_diagnostics::DatamodelError::new_validation_error(
+                        "Invalid array syntax detected.",
+                        diagnostics.span(current.as_span()),
+                    ),
+                );
+            }
             _ => parsing_catch_all(current, "array"),
         }
     }
@@ -240,12 +248,11 @@ fn unescape_string(val: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::super::{BAMLParser, Rule};
-    use pest::{parses_to, consumes_to};
+    use pest::{consumes_to, parses_to};
 
     #[test]
     fn array_trailing_comma() {
-
-        parses_to!{
+        parses_to! {
             parser: BAMLParser,
             input: "[1,2],",
             rule: Rule::expression,
@@ -256,7 +263,7 @@ mod tests {
             ])])]
         };
 
-        parses_to!{
+        parses_to! {
             parser: BAMLParser,
             input: r##"[#"foo"#, #"bar"#]"##,
             rule: Rule::expression,
@@ -279,7 +286,5 @@ mod tests {
                 ])
             ])]
         };
-
     }
-
 }
