@@ -13,7 +13,7 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-from typing import Any, Dict, List, Optional, TypeVar, Union, TypedDict, Type
+from typing import Any, Dict, List, Optional, TypeVar, Union, TypedDict, Type, Literal
 from typing_extensions import NotRequired
 import pprint
 
@@ -491,7 +491,7 @@ class BamlSyncClient:
     
     def ExtractReceiptInfo(
         self,
-        email: str,
+        email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
         baml_options: BamlCallOptions = {},
     ) -> types.ReceiptInfo:
       __tb__ = baml_options.get("tb", None)
@@ -504,7 +504,7 @@ class BamlSyncClient:
       raw = self.__runtime.call_function_sync(
         "ExtractReceiptInfo",
         {
-          "email": email,
+          "email": email,"reason": reason,
         },
         self.__ctx_manager.get(),
         tb,
@@ -2539,7 +2539,7 @@ class BamlStreamClient:
     
     def ExtractReceiptInfo(
         self,
-        email: str,
+        email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ReceiptInfo, types.ReceiptInfo]:
       __tb__ = baml_options.get("tb", None)
@@ -2553,6 +2553,7 @@ class BamlStreamClient:
         "ExtractReceiptInfo",
         {
           "email": email,
+          "reason": reason,
         },
         None,
         self.__ctx_manager.get(),

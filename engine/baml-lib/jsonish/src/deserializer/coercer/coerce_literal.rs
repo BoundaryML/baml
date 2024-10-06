@@ -21,7 +21,8 @@ impl TypeCoercer for LiteralValue {
         target: &FieldType,
         value: Option<&jsonish::Value>,
     ) -> Result<BamlValueWithFlags, ParsingError> {
-        log::debug!(
+        assert!(matches!(target, FieldType::Literal(_)));
+        eprintln!(
             "scope: {scope} :: coercing to: {name:?} (current: {current})",
             name = self,
             scope = ctx.display_scope(),
@@ -32,9 +33,13 @@ impl TypeCoercer for LiteralValue {
             FieldType::Literal(literal) if literal == self => literal,
             // Received non-literal type or literal value doesn't match expected value.
             _ => {
+                eprintln!("Within coerce_literal field mismatch block");
+                dbg!(&value);
+                dbg!(&target);
                 return Err(ctx.error_unexpected_type(&FieldType::Literal(self.clone()), target));
             }
         };
+
 
         // Get rid of nulls.
         let value = match value {

@@ -493,14 +493,14 @@ export class BamlSyncClient {
   }
   
   ExtractReceiptInfo(
-      email: string,
+      email: string,reason: "curiosity" | "personal_finance",
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ReceiptInfo {
     try {
     const raw = this.runtime.callFunctionSync(
       "ExtractReceiptInfo",
       {
-        "email": email
+        "email": email,"reason": reason
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),

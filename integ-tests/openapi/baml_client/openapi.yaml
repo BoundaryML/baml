@@ -1366,11 +1366,18 @@ components:
             properties:
               email:
                 type: string
+              reason:
+                oneOf:
+                - const: curiosity
+                  type: string
+                - const: personal_finance
+                  type: string
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - email
+            - reason
             additionalProperties: false
     ExtractResume:
       required: true
@@ -2867,8 +2874,15 @@ components:
             $ref: '#/components/schemas/ReceiptItem'
         total_cost:
           type: number
+        venue:
+          oneOf:
+          - const: barisa
+            type: string
+          - const: ox_burger
+            type: string
       required:
       - items
+      - venue
       additionalProperties: false
     ReceiptItem:
       type: object
@@ -2893,8 +2907,15 @@ components:
           type: object
           additionalProperties:
             $ref: '#/components/schemas/Quantity'
+        recipe_type:
+          oneOf:
+          - const: breakfast
+            type: string
+          - const: dinner
+            type: string
       required:
       - ingredients
+      - recipe_type
       additionalProperties: false
     Resume:
       type: object

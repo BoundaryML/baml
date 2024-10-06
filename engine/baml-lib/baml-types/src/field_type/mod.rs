@@ -48,6 +48,17 @@ pub enum LiteralValue {
     Bool(bool),
 }
 
+impl LiteralValue {
+    pub fn literal_base_type(&self) -> FieldType {
+        use LiteralValue::*;
+        match self {
+            String(_) => FieldType::Primitive(TypeValue::String),
+            Int(_) => FieldType::Primitive(TypeValue::Int),
+            Bool(_) => FieldType::Primitive(TypeValue::Bool),
+        }
+    }
+}
+
 impl std::fmt::Display for LiteralValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -59,7 +70,7 @@ impl std::fmt::Display for LiteralValue {
 }
 
 /// FieldType represents the type of either a class field or a function arg.
-#[derive(serde::Serialize, Debug, Clone)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
 pub enum FieldType {
     Primitive(TypeValue),
     Enum(String),
