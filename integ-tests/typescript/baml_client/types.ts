@@ -308,6 +308,7 @@ export interface RaysData {
 export interface ReceiptInfo {
   items: ReceiptItem[]
   total_cost?: number | null
+  venue: "barisa" | "ox_burger"
   
 }
 
@@ -321,6 +322,7 @@ export interface ReceiptItem {
 
 export interface Recipe {
   ingredients: Record<string, Quantity>
+  recipe_type: "breakfast" | "dinner"
   
 }
 

@@ -5,7 +5,7 @@ from .baml_py import (
     SyncFunctionResultStream,
     RuntimeContextManager,
 )
-from typing import Callable, Generic, Optional, TypeVar
+from typing import Callable, Generic, Optional, TypeVar, Literal
 import threading
 import asyncio
 import concurrent.futures

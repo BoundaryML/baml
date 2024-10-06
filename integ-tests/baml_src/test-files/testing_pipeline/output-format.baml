@@ -1,5 +1,6 @@
 class Recipe {
     ingredients map<string, Quantity>
+    recipe_type "breakfast" | "dinner"
 }
 
 class Quantity {
