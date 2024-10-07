@@ -9,11 +9,9 @@
         { "include": "#interface_declaration" },
         { "include": "#template_string_declaration" },
         { "include": "#function_declaration" },
-        { "include": "#function_declaration_old" },
         { "include": "#config_block" },
         { "include": "#type_alias" },
         { "include": "#function" },
-        { "include": "#impl_declaration" },
         { "include": "#language_block_python" },
         { "include": "#language_block_ts" },
         { "include": "#language_block_jinja" }
@@ -71,7 +69,7 @@
           "comment": "Property + Type",
           "begin": "(\\w+)",
           "beginCaptures": {
-            "1": { "name": "variable.other.readwrite" }
+            "1": { "name": "variable.other.readwrite.interface" }
           },
           "end": "(?=$|\\n|@|\\}|/)",
           "patterns": [{ "include": "#type_definition" }]
@@ -126,7 +124,7 @@
         {
           "match": "(\\w+)\\s*:",
           "captures": {
-            "1": { "name": "variable.other.readwrite" }
+            "1": { "name": "variable.other.readwrite.function_name" }
           }
         },
         {
@@ -242,7 +240,7 @@
     "key_value_pair": {
       "begin": "(\\w+)\\s*",
       "beginCaptures": {
-        "1": { "name": "variable.other.readwrite" }
+        "1": { "name": "variable.other.readwrite.key_value_pair" }
       },
       "end": "(?=\\n)",
       "patterns": [{ "include": "#string_literal" }]
@@ -291,20 +289,7 @@
         { "include": "#block_attribute" }
       ]
     },
-    "function_declaration_old": {
-      "begin": "(function)\\s+(\\w+)\\s*\\{",
-      "beginCaptures": {
-        "1": { "name": "storage.type.declaration.function" },
-        "2": { "name": "entity.name.function" }
-      },
-      "end": "\\}",
-      "patterns": [
-        { "include": "#field_declaration_type" },
-        { "include": "#property_assignment_expression" },
-        { "include": "#block_attribute" },
-        { "include": "#comment" }
-      ]
-    },
+
     "keyword": {
       "patterns": [
         {
@@ -313,28 +298,9 @@
         }
       ]
     },
-    "field_declaration_type": {
-      "begin": "\\s*((input)|(output))\\s+",
-      "end": "(?=$|\\n)",
-      "beginCaptures": {
-        "1": { "name": "keyword.special.input-output" }
-      },
-      "patterns": [
-        {
-          "match": "(\\w+)\\s*:",
-          "captures": {
-            "1": { "name": "variable.other.readwrite" }
-          }
-        },
-        {
-          "match": "\\w+",
-          "name": "support.type"
-        }
-      ]
-    },
     "single_variable_no_assignment": {
       "match": "^\\s*\\w+\\b",
-      "name": "variable.other.readwrite"
+      "name": "variable.other.readwrite.single_var"
     },
     "config_block": {
       "begin": "(client|generator|retry_policy|printer|test)\\s*(<([^>]+)>)?\\s+(\\w+)\\s*\\{",
@@ -350,43 +316,138 @@
         { "include": "#property_assignment_expression" }
       ]
     },
-    "impl_declaration": {
-      "begin": "(impl)\\s*(<([^,>]+),\\s*([^>]+)>)?\\s+(\\w+)\\s*\\{",
-      "beginCaptures": {
-        "1": { "name": "storage.type.declaration" },
-        "3": { "name": "support.type.templateparam" },
-        "4": { "name": "entity.name.function" },
-        "5": { "name": "support.type.variant.name" }
-      },
-      "end": "\\}",
+    "block_attribute": {
       "patterns": [
         {
-          "match": "(client)\\s+(\\w+)",
-          "captures": {
-            "1": { "name": "variable.other.readwrite.client" },
-            "2": { "name": "support.type.client.name" }
-          }
+          "begin": "(@{1,2}\\w+)\\(#\"",
+          "beginCaptures": {
+            "1": { "name": "entity.name.function.attribute" }
+          },
+          "end": "\"#\\)",
+          "name": "string.quoted.block.baml",
+          "patterns": [
+            { "include": "#comment" },
+            { "include": "#language_block_python" },
+            { "include": "#language_block_ts" },
+            { "include": "#key_value" },
+            { "include": "#block_string_pair" },
+            { "include": "#string_literal" },
+            {
+              "match": "\\(",
+              "name": "punctuation.section.parens.open"
+            },
+            {
+              "match": "\\)",
+              "name": "punctuation.section.parens.close"
+            }
+          ]
         },
-        { "include": "#comment" },
-        { "include": "#interface_declaration" },
-        { "include": "#block_attribute" },
-        { "include": "#property_assignment_expression" }
-      ]
-    },
-    "block_attribute": {
-      "begin": "(@{1,2}\\w+)\\(",
-      "end": "\\)",
-      "captures": {
-        "1": { "name": "entity.name.function.attribute" }
-      },
-      "patterns": [
-        { "include": "#comment" },
-        { "include": "#language_block_python" },
-        { "include": "#language_block_ts" },
-        { "include": "#key_value" },
-        { "include": "#string_unquoted" },
-        { "include": "#block_string_pair" },
-        { "include": "#string_literal" }
+        {
+          "begin": "(@{1,2}\\w+)\\(#\"",
+          "beginCaptures": {
+            "1": { "name": "entity.name.function.attribute" }
+          },
+          "end": "\"#\\)",
+          "name": "string.quoted.block.baml",
+          "patterns": [
+            { "include": "#comment" },
+            { "include": "#language_block_python" },
+            { "include": "#language_block_ts" },
+            { "include": "#key_value" },
+            { "include": "#block_string_pair" },
+            { "include": "#string_literal" },
+            {
+              "match": "\\(",
+              "name": "punctuation.section.parens.open"
+            },
+            {
+              "match": "\\)",
+              "name": "punctuation.section.parens.close"
+            }
+          ]
+        },
+        {
+          "begin": "(@{1,2}\\w+)\\(",
+          "beginCaptures": {
+            "1": { "name": "entity.name.function.attribute" }
+          },
+          "end": "\\)",
+          "patterns": [
+            { "include": "#string_unquoted" },
+            { "include": "#comment" },
+            { "include": "#language_block_python" },
+            { "include": "#language_block_ts" },
+            { "include": "#key_value" },
+            { "include": "#block_string_pair" },
+            {
+              "include": "#string_literal",
+              "name": "string.quoted.double"
+            },
+            {
+              "match": "\\(",
+              "name": "punctuation.section.parens.open"
+            },
+            {
+              "match": "\\)",
+              "name": "punctuation.section.parens.close"
+            }
+          ]
+        },
+        {
+          "begin": "(@{1,2}\\w+)\\(\"",
+          "beginCaptures": {
+            "1": { "name": "entity.name.function.attribute" }
+          },
+          "end": "\"\\)",
+          "patterns": [
+            {
+              "include": "#string_literal",
+              "name": "string.quoted.double"
+            }
+          ]
+        },
+        {
+          "begin": "(@{1,2}\\w+)\\(",
+          "beginCaptures": {
+            "1": { "name": "entity.name.function.attribute" }
+          },
+          "end": "\\)",
+          "patterns": [
+            {
+              "match": "\\w+",
+              "name": "string.unquoted"
+            }
+          ]
+        },
+        {
+          "begin": "(@{1,2}\\w+)\\(#",
+          "beginCaptures": {
+            "1": { "name": "entity.name.function.attribute" }
+          },
+          "end": "#\\)",
+          "name": "string.quoted.block.baml",
+          "patterns": [
+            {
+              "name": "constant.character.escape",
+              "match": "\\\\."
+            },
+            {
+              "name": "meta.embedded.block_attribute",
+              "begin": "\\(",
+              "end": "\\)"
+            },
+            { "include": "#comment" },
+            { "include": "#language_block_python" },
+            { "include": "#language_block_ts" },
+            { "include": "#key_value" },
+            { "include": "#block_string_pair" },
+            { "include": "#string_literal" },
+            {
+              "match": ".",
+              "name": "text.plain"
+            }
+          ]
+        }
       ]
     },
     "key_value": {
@@ -419,7 +480,7 @@
       "begin": "(\"\\w+\"|\\b\\w+\\b)\\s+\\{",
       "end": "\\}",
       "captures": {
-        "1": { "name": "variable.other.readwrite" }
+        "1": { "name": "variable.other.readwrite.nested_key" }
       },
       "contentName": "variable.other.readwrite.nested",
       "patterns": [
@@ -492,7 +553,7 @@
     "block_string_pair": {
       "begin": "(\\w+)?\\s+(#(\"){1,3})",
       "beginCaptures": {
-        "1": { "name": "variable.other.readwrite" },
+        "1": { "name": "variable.other.readwrite.block_string_pair" },
         "2": { "name": "string.quoted.block.baml.startquote" }
       },
       "end": "((\"){1,3}#)",
@@ -539,7 +600,7 @@
     "key_string_pair": {
       "begin": "(\"\\w+\"|\\b\\w+\\b)\\s+(\")",
       "beginCaptures": {
-        "1": { "name": "variable.other.readwrite" },
+        "1": { "name": "variable.other.readwrite.key_string_pair" },
         "2": { "name": "string.quoted.double" }
       },
       "end": "\"",
@@ -560,14 +621,14 @@
     "key_custom_string_pair": {
       "match": "(\"\\w+\"|\\b\\w+\\b)\\s+((?!null)[^\\s\\[\\{]+)",
       "captures": {
-        "1": { "name": "variable.other.readwrite" },
+        "1": { "name": "variable.other.readwrite.custom_string" },
         "2": { "name": "string.unquoted" }
       }
     },
     "key_number_pair": {
       "match": "(\"\\w+\"|\\b\\w+\\b)\\s+(\\b\\d+\\b)",
       "captures": {
-        "1": { "name": "variable.other.readwrite" },
+        "1": { "name": "variable.other.readwrite.number_pair" },
         "2": { "name": "constant.numeric" }
       }
     },
@@ -610,7 +671,7 @@
       ]
     },
     "string_unquoted": {
-      "match": "\\b\\w+\\b",
+      "match": "\\b[\\w-]+\\b",
       "name": "string.unquoted"
     },
     "constant_numeric": {

@@ -191,16 +191,18 @@ impl<'a> JsonishValue<'a> {
             return Err(JsonParseError::EmptyString);
         }
 
-        match trimmed.chars().next().unwrap() {
-            // Detect simple values and structures
-            '"' => parse_quoted_string(trimmed, state),
-            '[' => parse_array(trimmed, state),
-            '{' => parse_object(trimmed, state),
+        match trimmed.chars().next() {
+            Some('"') => parse_quoted_string(trimmed, state),
+            Some('[') => parse_array(trimmed, state),
+            Some('{') => parse_object(trimmed, state),
             // Number detection could be refined
-            '-' => parse_unquoted_single_word(trimmed, state),
-            x if x.is_alphanumeric() => parse_unquoted_single_word(trimmed, state),
-            _ => Err(JsonParseError::InvalidSyntax(
+            Some('-') => parse_unquoted_single_word(trimmed, state),
+            Some(x) if x.is_alphanumeric() => parse_unquoted_single_word(trimmed, state),
+            Some(_) => Err(JsonParseError::InvalidSyntax(
                 "JSON is not parseable".into(),
+            )),
+            None => Err(JsonParseError::InvalidSyntax(
+                "JSON has empty content".into(),
             )),
         }
     }
@@ -374,7 +376,11 @@ fn parse_array<'a>(
 ) -> Result<&'a JsonishValue<'a>, JsonParseError> {
     let mut elements = Vec::new();
     let mut chars = s.char_indices().peekable();
-    assert_eq!(chars.peek().unwrap().1, '[');
+    if chars.peek().map(|&(_, c)| c) != Some('[') {
+        return Err(JsonParseError::InvalidSyntax(
+            "Invalid JSON array: Expected a '['".into(),
+        ));
+    }
     // Skip the opening bracket
     chars.next();
 
