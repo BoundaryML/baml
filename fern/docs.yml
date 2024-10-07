@@ -137,6 +137,12 @@ navigation:
                 path: guide/introduction.mdx
       - section: Prompt Engineering
         contents:
+          - page: Chat History
+            icon: fa-regular fa-comments
+            path: guide/introduction.mdx
+          - page: Tools / Function Calling
+            icon: fa-regular fa-wrench
+            path: guide/introduction.mdx
           - page: Zero shot prompting
             icon: fa-regular fa-bullseye
             path: guide/introduction.mdx
@@ -157,12 +163,6 @@ navigation:
             path: guide/introduction.mdx
           - page: Retrieval Augmented Generation
             icon: fa-regular fa-database
-            path: guide/introduction.mdx
-          - page: Tool Use
-            icon: fa-regular fa-wrench
-            path: guide/introduction.mdx
-          - page: Chat History
-            icon: fa-regular fa-comments
             path: guide/introduction.mdx
   - tab: examples
     layout:
