@@ -60,7 +60,7 @@ impl LanguageFeatures for OpenApiLanguageFeatures {
     );
 }
 
-struct OpenApiSchema<'ir> {
+pub struct OpenApiSchema<'ir> {
     paths: Vec<OpenApiMethodDef<'ir>>,
     schemas: IndexMap<&'ir str, TypeSpecWithMeta>,
 }

@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use version_check::{check_version, GeneratorType, VersionCheckMode};
 
 mod dir_writer;
-mod openapi;
+pub mod openapi;
 mod python;
 mod ruby;
 mod typescript;

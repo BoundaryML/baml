@@ -4,6 +4,7 @@ mod json_response;
 mod ping;
 use error::BamlError;
 use indexmap::IndexMap;
+use internal_baml_codegen::GeneratorArgs;
 use json_response::Json;
 
 use anyhow::{Context, Result};
@@ -14,15 +15,15 @@ use axum::{
     middleware::Next,
     response::{
         sse::{Event, KeepAlive, Sse},
-        IntoResponse, Response,
+        Html, IntoResponse, Response,
     },
-    routing::{any, post},
+    routing::{any, get, post},
 };
 use axum_extra::{
     headers::{self, authorization::Basic, Authorization, Header},
     TypedHeader,
 };
-use baml_types::BamlValue;
+use baml_types::{BamlValue, GeneratorDefaultClientMode};
 use core::pin::Pin;
 use futures::Stream;
 use serde::{Deserialize, Serialize};
@@ -35,6 +36,7 @@ use crate::{
     client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
     BamlRuntime, FunctionResult, RuntimeContextManager,
 };
+use internal_baml_codegen::openapi::OpenApiSchema;
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct ServeArgs {
@@ -296,6 +298,14 @@ impl Server {
             "/stream/:msg",
             post(move |b_fn, b_args| s.clone().baml_stream_axum2(b_fn, b_args)),
         );
+        let s = self.clone();
+        let app = app.route("/docs", get(move || s.clone().docs_handler()));
+
+        let s = self.clone();
+        let app = app.route(
+            "/openapi.json",
+            get(move || s.clone().openapi_json_handler()),
+        );
 
         let service = axum::serve(
             tcp_listener,
@@ -546,6 +556,76 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             }
         }
         self.baml_stream(path, body, b_options)
+    }
+
+    /// Serve an HTML page that loads swagger-ui from local static files.
+    /// This page will in turn fetch `/openapi.json`, and use the results
+    /// to build interactive documentation.
+    async fn docs_handler(self: Arc<Self>) -> Response {
+        let page = r#"
+<html>
+    <head>
+        <title>
+            BAML Function Docs
+        </title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui.css" integrity="sha512-MvYROlKG3cDBPskMQgPmkNgZh85LIf68y7SZ34TIppaIHQz1M/3S/yYqzIfufdKDJjzB9Qu1BV63SZjimJkPvw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <script language="javascript">
+
+            window.onload = function() {
+              //<editor-fold desc="Changeable Configuration Block">
+
+              // the following lines will be replaced by docker/configurator, when it runs in a docker-container
+              window.ui = SwaggerUIBundle({
+                url: "/openapi.json",
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                  SwaggerUIBundle.presets.apis,
+                  SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                  SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout"
+              });
+
+              //</editor-fold>
+            };
+        </script>
+    </head>
+    <body>
+        <div id="swagger-ui"></div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-bundle.js" integrity="sha512-mVvFSCxt0sK0FeL8C7n8BcHh10quzdwfxQbjRaw9pRdKNNep3YQusJS5e2/q4GYt4Ma5yWXSJraoQzXPgZd2EQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-standalone-preset.js" integrity="sha512-DgicCd4AI/d7/OdgaHqES3hA+xJ289Kb5NmMEegbN8w/Dxn5mvvqr9szOR6TQC+wjTTMeqPscKE4vj6bmAQn6g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script src="./swagger-initializer.js" charset="UTF-8"> </script>
+    </body>
+</html>
+"#;
+        Html(page.to_string()).into_response()
+    }
+
+    /// Render the openapi spec. This endpoint is used by the swagger ui.
+    async fn openapi_json_handler(self: Arc<Self>) -> Result<String, BamlError> {
+        let locked = self.b.read().await;
+        let fake_generator = GeneratorArgs::new(
+            "fake_directory",
+            "fake_directory",
+            Vec::new(),
+            "fake-version".to_string(),
+            true,
+            GeneratorDefaultClientMode::Sync,
+            Vec::new(),
+        ).map_err(|_| BamlError::InternalError{ message: "Failed to make placeholder generator".to_string()})?;
+        let schema: OpenApiSchema = (locked.inner.ir.as_ref(), &fake_generator)
+            .try_into()
+            .map_err(|e| {
+                log::warn!("Failed to generate openapi schema: {}", e);
+                BamlError::InternalError{ message: format!("Failed to generate openapi schema")}
+            })?;
+        serde_json::to_string(&schema).map_err(|e| {
+            log::warn!("Failed to serialize openapi schema: {}", e);
+            BamlError::InternalError{ message: format!("Failed to serialize openapi schema") }
+        })
     }
 }
 
