@@ -98,3 +98,52 @@ To set up BAML in python do the following:
     </CodeBlocks>
   
 </Steps>
+
+
+## BAML with Jupyter Notebooks
+
+You can use the baml_client in a Jupyter notebook. 
+
+One of the common problems is making sure your code changes are picked up by the notebook without having to restart the whole kernel (and re-run all the cells)
+
+**To make sure your changes in .baml files are reflected in your notebook you must do these steps:**
+
+<Steps>
+### Setup the autoreload extension
+
+```python cell0
+%load_ext autoreload
+%autoreload 2
+```
+This will make sure to reload imports, such as baml_client's "b" object before every cell runs.
+
+### Import baml_client module in your notebook
+
+Note it's different from how we import in python.
+```python cell1
+# Assuming your baml_client is inside a dir called app/
+import app.baml_client as client # you can name this "llm" or "baml" or whatever you want
+```
+
+Usually we import things as 
+`from baml_client import b`, and we can call our functions using `b`, but the `%autoreload` notebook extension does not work well with `from...import` statements.
+
+
+### Call BAML functions using the module name as a prefix
+
+```python cell2
+raw_resume = "Here's some resume text"
+client.b.ExtractResume(raw_resume)
+```
+Now your changes in .baml files are reflected in your notebook automatically, without needing to restart the Jupyter kernel.
+
+<Note>
+If you want to keep using the `from baml_client import b` style, you'll just need to re-import it everytime you regenerate the baml_client.
+</Note>
+
+<Warning>
+Pylance will complain about any schema changes you make in .baml files. You can ignore these errors. If you want it to pick up your new types, you'll need to restart the kernel.
+This auto-reload approach works best if you're only making changes to the prompts.
+</Warning>
+
+</Steps>
