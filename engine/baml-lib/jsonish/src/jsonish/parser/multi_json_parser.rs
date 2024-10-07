@@ -52,15 +52,22 @@ pub fn parse<'a>(str: &'a str, options: &ParseOptions) -> Result<Vec<Value>> {
 
     if !stack.is_empty() {
         // We reached the end but the stack is not empty
-        let json_str = &str[json_str_start.unwrap()..];
-        match entry::parse(
-            json_str,
-            options.next_from_mode(super::ParsingMode::AllJsonObjects),
-        ) {
-            Ok(json) => json_objects.push(json),
-            Err(e) => {
-                // Ignore errors
-                log::error!("Failed to parse JSON object: {:?}", e);
+        match json_str_start {
+            Some(start) => {
+                let json_str = &str[start..];
+                match entry::parse(
+                    json_str,
+                    options.next_from_mode(super::ParsingMode::AllJsonObjects),
+                ) {
+                    Ok(json) => json_objects.push(json),
+                    Err(e) => {
+                        // Ignore errors
+                        log::error!("Failed to parse JSON object: {:?}", e);
+                    }
+                }
+            }
+            None => {
+                log::error!("Unexpected state: stack is not empty but no JSON start was found");
             }
         }
     }
