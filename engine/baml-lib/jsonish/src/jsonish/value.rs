@@ -118,7 +118,8 @@ impl<'de> serde::Deserialize<'de> for Value {
     where
         D: serde::Deserializer<'de>,
     {
-        match serde_json::Value::deserialize(deserializer)? {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        match value {
             serde_json::Value::String(s) => Ok(Value::String(s)),
             serde_json::Value::Number(n) => Ok(Value::Number(n)),
             serde_json::Value::Bool(b) => Ok(Value::Boolean(b)),
@@ -126,14 +127,18 @@ impl<'de> serde::Deserialize<'de> for Value {
             serde_json::Value::Object(o) => {
                 let mut map = BamlMap::new();
                 for (k, v) in o {
-                    map.insert(k, serde_json::from_value(v).unwrap());
+                    let parsed_value =
+                        serde_json::from_value(v).map_err(serde::de::Error::custom)?;
+                    map.insert(k, parsed_value);
                 }
                 Ok(Value::Object(map))
             }
             serde_json::Value::Array(a) => {
                 let mut vec = Vec::new();
                 for v in a {
-                    vec.push(serde_json::from_value(v).unwrap());
+                    let parsed_value =
+                        serde_json::from_value(v).map_err(serde::de::Error::custom)?;
+                    vec.push(parsed_value);
                 }
                 Ok(Value::Array(vec))
             }

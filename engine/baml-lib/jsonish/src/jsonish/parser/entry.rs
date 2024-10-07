@@ -109,7 +109,11 @@ pub fn parse<'a>(str: &'a str, mut options: ParseOptions) -> Result<Value> {
                 1 => {
                     return Ok(Value::AnyOf(
                         vec![Value::FixedJson(
-                            items.into_iter().next().unwrap().into(),
+                            items
+                                .into_iter()
+                                .next()
+                                .ok_or_else(|| anyhow::anyhow!("Expected 1 item"))?
+                                .into(),
                             vec![Fixes::GreppedForJSON],
                         )],
                         str.to_string(),
@@ -137,7 +141,9 @@ pub fn parse<'a>(str: &'a str, mut options: ParseOptions) -> Result<Value> {
                 match items.len() {
                     0 => {}
                     1 => {
-                        let (v, fixes) = items.into_iter().next().unwrap();
+                        let (v, fixes) = items.into_iter().next().ok_or_else(|| {
+                            anyhow::anyhow!("Expected 1 item when performing fixes")
+                        })?;
                         return Ok(Value::AnyOf(
                             vec![Value::FixedJson(v.into(), fixes)],
                             str.to_string(),
