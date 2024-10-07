@@ -71,7 +71,7 @@ pub use internal_baml_core::ir::{scope_diagnostics, FieldType, IRHelper, TypeVal
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
 
 pub struct BamlRuntime {
-    pub(crate) inner: InternalBamlRuntime,
+    pub (crate) inner: InternalBamlRuntime,
     tracer: Arc<BamlTracer>,
     env_vars: HashMap<String, String>,
     #[cfg(not(target_arch = "wasm32"))]
