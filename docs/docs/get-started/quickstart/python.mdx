@@ -141,4 +141,9 @@ Now your changes in .baml files are reflected in your notebook automatically, wi
 If you want to keep using the `from baml_client import b` style, you'll just need to re-import it everytime you regenerate the baml_client.
 </Note>
 
+<Warning>
+Pylance will complain about any schema changes you make in .baml files. You can ignore these errors. If you want it to pick up your new types, you'll need to restart the kernel.
+This auto-reload approach works best if you're only making changes to the prompts.
+</Warning>
+
 </Steps>

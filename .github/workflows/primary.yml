@@ -4,16 +4,12 @@ on:
   pull_request:
     branches:
       - canary
-    paths-ignore:
-      - "docs/**"
   push:
     paths:
       - "engine/**"
       - ".github/workflows/primary.yml"
     branches:
       - canary
-    paths-ignore:
-      - "docs/**"
   merge_group:
     types: [checks_requested]
   workflow_dispatch: {}
