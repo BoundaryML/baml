@@ -1132,3 +1132,21 @@ async def test_env_vars_reset():
         "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
     )
     assert len(people) > 0
+
+
+@pytest.mark.asyncio
+async def test_baml_validation_error_format():
+    with pytest.raises(errors.BamlValidationError) as excinfo:
+        try:
+            await b.DummyOutputFunction("blah")
+        except errors.BamlValidationError as e:
+            print("Error: ", e)
+            assert hasattr(e, "prompt"), "Error object should have 'prompt' attribute"
+            assert hasattr(
+                e, "raw_output"
+            ), "Error object should have 'raw_output' attribute"
+            assert hasattr(e, "message"), "Error object should have 'message' attribute"
+            assert 'Say "hello there"' in e.prompt
+
+            raise e
+    assert "Failed to parse" in str(excinfo)
