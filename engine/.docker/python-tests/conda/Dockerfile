@@ -2,7 +2,7 @@
 FROM continuumio/miniconda3
 WORKDIR /myapp
 
-# Initalize a conda environment
+# Initialize a conda environment
 RUN conda create -n envbaml
 
 RUN conda init
