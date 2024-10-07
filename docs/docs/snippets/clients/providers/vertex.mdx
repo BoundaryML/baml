@@ -5,11 +5,11 @@ slug: docs/snippets/clients/providers/vertex
 
 The `vertex-ai` provider is used to interact with the Google Vertex AI services, specifically the following endpoints:
 
-`
+```
+https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${MODEL_ID}:generateContent
 https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${MODEL_ID}:streamGenerateContent
-`
+```
 
-`https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${MODEL_ID}:generateContent`
 
 
 
@@ -35,8 +35,6 @@ The `vertex-ai` provider uses the Google Cloud SDK to authenticate with a tempor
 6. Click on the service account and select `Add Key`.
 7. Choose the JSON key type and click `Create`.
 9. Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the path of the file.
-10. Set the `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` environment variable to the contents of the file in the BAML Playground, as it does not have access to the file system.
-
 
 
 See the [Google Cloud Application Default Credentials Docs](https://cloud.google.com/docs/authentication/application-default-credentials) for more information.
@@ -88,13 +86,46 @@ The options are passed through directly to the API, barring a few. Here's a shor
 
 <ParamField
   path="credentials"
-  type="string"
+  type="string | object"
 >
-  Overrides the path to JSON credentials file. **Default: `env.GOOGLE_APPLICATION_CREDENTIALS`**
+  Path to a JSON credentials file or a JSON object containing the credentials.
+  
+  **Default: `env.GOOGLE_APPLICATION_CREDENTIALS`**
 
-  Example:
-  `'path/to/credentials.json'`
+  <Accordion title='Example: file path'>
+  In this case, the path is resolved relative to the CWD of your process.
 
+  ```baml BAML
+  client<llm> Vertex {
+    provider vertex-ai
+    options {
+      model gemini-1.5-pro
+      project_id jane-doe-test-1
+      location us-central1
+      credentials 'path/to/credentials.json'
+    }
+  }
+  ```
+  </Accordion>
+
+  <Accordion title='Example: JSON object'>
+  ```baml BAML
+  client<llm> Vertex {
+    provider vertex-ai
+    options {
+      model gemini-1.5-pro
+      project_id jane-doe-mycompany-1
+      location us-central1
+      credentials {
+        ...
+        private_key "-----BEGIN PRIVATE KEY-----super-duper-secret-string\n-----END PRIVATE KEY-----\n"
+        client_email "jane_doe@mycompany.com"
+        ...
+      }
+    }
+  }
+  ```
+  </Accordion>
   <Warning>
    This field cannot be used in the BAML Playground. Use **`credentials_content`** instead.
   </Warning>

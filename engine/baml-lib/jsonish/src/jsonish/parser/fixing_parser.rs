@@ -53,10 +53,11 @@ pub fn parse<'a>(str: &'a str, _options: &ParseOptions) -> Result<Vec<(Value, Ve
 
     match state.completed_values.len() {
         0 => Err(anyhow::anyhow!("No JSON objects found")),
-        1 => {
-            let (_name, value, fixes) = state.completed_values.pop().unwrap();
-            Ok(vec![(value, fixes)])
-        }
+        1 => state
+            .completed_values
+            .pop()
+            .map(|(_name, value, fixes)| Ok(vec![(value, fixes)]))
+            .unwrap_or(Err(anyhow::anyhow!("Failed to pop completed value"))),
         _ => {
             if state.completed_values.iter().all(|f| f.0 == "string") {
                 // If all the values are strings, return them as an array of strings
