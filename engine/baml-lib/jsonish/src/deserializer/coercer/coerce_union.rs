@@ -23,13 +23,6 @@ pub(super) fn coerce_union(
         _ => unreachable!(),
     };
 
-    // let contains_literals = options.into_iter().any(|ft| matches!(ft, FieldType::Literal(_)));
-    // if contains_literals {
-    //     dbg!(&options);
-    //     dbg!(&value);
-    //     panic!("TESTING");
-    // }
-
     let parsed = options
         .iter()
         .map(|option| option.coerce(ctx, option, value))

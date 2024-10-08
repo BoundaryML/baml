@@ -80,7 +80,7 @@ impl Type {
             Type::Number => "number".into(),
             Type::String => "string".into(),
             Type::Bool => "bool".into(),
-            Type::Literal(value) => format!("literal[{value}]"), // TODO: This one's probably wrong.
+            Type::Literal(value) => format!("literal[{value}]"),
             Type::List(l) => format!("list[{}]", l.name()),
             Type::Map(k, v) => format!("map[{}, {}]", k.name(), v.name()),
             Type::Tuple(v) => format!(

@@ -18,11 +18,11 @@ use crate::{
 
 use super::ParsingContext;
 
-pub(super) fn match_string<'a>(
+pub(super) fn match_string(
     parsing_context: &ParsingContext,
     target: &FieldType,
     value: Option<&jsonish::Value>,
-    candidates: &'a Vec<(&'a str, Vec<String>)>,
+    candidates: &[(&str, Vec<String>)],
 ) -> Result<ValueWithFlags<String>, ParsingError> {
     // Get rid of nulls.
     let value = match value {
@@ -99,11 +99,11 @@ fn try_match_only_once(
     Ok((string_match.to_string(), flags).into())
 }
 
-fn string_match_strategy<'a>(
+fn string_match_strategy<'c>(
     value_str: &str,
-    candidates: &'a Vec<(&'a str, Vec<String>)>,
+    candidates: &'c [(&'c str, Vec<String>)],
     flags: &mut DeserializerConditions,
-) -> Option<&'a str> {
+) -> Option<&'c str> {
     // Try and look for an exact match against valid values.
     for (candidate, valid_values) in candidates {
         // Consider adding a flag for case insensitive match.
