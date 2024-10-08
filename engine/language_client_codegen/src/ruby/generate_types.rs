@@ -1,4 +1,5 @@
 use anyhow::Result;
+use baml_types::LiteralValue;
 
 use super::ruby_language_features::ToRuby;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType};
@@ -130,7 +131,16 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         match self {
             FieldType::Class(name) => format!("Baml::PartialTypes::{}", name.clone()),
             FieldType::Enum(name) => format!("T.nilable(Baml::Types::{})", name.clone()),
-            FieldType::Literal(value) => todo!(),
+            FieldType::Literal(value) => {
+                let field_type = match value {
+                    LiteralValue::Int(_) => FieldType::int(),
+                    LiteralValue::String(_) => FieldType::string(),
+                    LiteralValue::Bool(_) => FieldType::bool(),
+                };
+
+                // TODO: Temporary solution until we figure out Ruby literals.
+                field_type.to_partial_type_ref()
+            }
             // https://sorbet.org/docs/stdlib-generics
             FieldType::List(inner) => format!("T::Array[{}]", inner.to_partial_type_ref()),
             FieldType::Map(key, value) => {
