@@ -45,6 +45,7 @@ fn load_test_ir(file_content: &str) -> IntermediateRepr {
     IntermediateRepr::from_parser_database(&schema.db, schema.configuration).unwrap()
 }
 
+// TODO, delete this. There is too much logic here only for the urpose of testing maps that seems to be repeated from baml-runtime/../render_output_format.rs
 fn render_output_format(
     ir: &IntermediateRepr,
     output: &FieldType,
@@ -194,6 +195,7 @@ fn relevant_data_models<'a>(
                     });
                 }
             }
+
             FieldType::Primitive(_) => {}
         }
     }

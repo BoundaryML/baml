@@ -20,6 +20,7 @@ import { config } from 'dotenv'
 import { BamlLogEvent, BamlRuntime } from '@boundaryml/baml/native'
 import { AsyncLocalStorage } from 'async_hooks'
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, resetBamlEnvVars } from '../baml_client/globals'
+import { AliasedEnum, InputClass} from "../baml_client/types"
 config()
 
 describe('Integ tests', () => {
@@ -641,6 +642,27 @@ describe('Integ tests', () => {
     )
     expect(people.length).toBeGreaterThan(0)
   })
+
+  it("should use aliases when serializing input objects - classes", async () => {
+     const res = await b.AliasedInputClass({key: "hello", key2: "world"})
+     expect(res).toContain("color")
+
+     const res2 = await b.AliasedInputClassNested({key: "hello", nested: {key: "nested-hello", key2: "nested-world"}})
+     expect(res2).toContain("interesting-key")
+  })
+
+  it("should use aliases when serializing input objects - enums", async () => {
+    const res = await b.AliasedInputEnum(AliasedEnum.KEY_ONE)
+    expect(res).toContain("color")
+  })
+
+  it("should use aliases when serializing input objects - lists", async () => {
+    const res = await b.AliasedInputList([AliasedEnum.KEY_ONE, AliasedEnum.KEY_TWO])
+    expect(res).toContain("color")
+  })
+
+  // TODO: one more with typebuilder
+
 })
 
 interface MyInterface {

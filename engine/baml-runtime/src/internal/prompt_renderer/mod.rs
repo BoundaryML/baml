@@ -1,4 +1,5 @@
 mod render_output_format;
+
 use jsonish::BamlValueWithFlags;
 use render_output_format::render_output_format;
 

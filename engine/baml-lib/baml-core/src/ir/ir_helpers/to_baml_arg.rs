@@ -1,6 +1,6 @@
 use baml_types::{BamlMap, BamlMediaType, BamlValue, FieldType, TypeValue};
 use core::result::Result;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::ir::IntermediateRepr;
 
@@ -29,6 +29,7 @@ impl ParameterError {
 pub struct ArgCoercer {
     pub span_path: Option<PathBuf>,
     pub allow_implicit_cast_to_string: bool,
+    pub env_values: HashMap<String, String>,
 }
 
 impl ArgCoercer {
@@ -207,7 +208,12 @@ impl ArgCoercer {
                         for f in c.walk_fields() {
                             if let Some(v) = obj.get(f.name()) {
                                 if let Ok(v) = self.coerce_arg(ir, f.r#type(), v, scope) {
-                                    fields.insert(f.name().to_string(), v);
+                                    let key = f
+                                        .alias(&self.env_values)
+                                        .ok()
+                                        .and_then(|a| a)
+                                        .unwrap_or_else(|| f.name().to_string());
+                                    fields.insert(key, v);
                                 }
                             } else if !f.r#type().is_optional() {
                                 scope.push_error(format!(

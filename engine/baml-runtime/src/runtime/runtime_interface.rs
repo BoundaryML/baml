@@ -163,6 +163,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             ArgCoercer {
                 span_path: None,
                 allow_implicit_cast_to_string: false,
+                env_values: ctx.env.clone(),
             },
         )?;
 
@@ -277,6 +278,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
                     ArgCoercer {
                         span_path: test.span().map(|s| s.file.path_buf().clone()),
                         allow_implicit_cast_to_string: true,
+                        env_values: ctx.env.clone(),
                     },
                 )?;
                 baml_args
@@ -402,6 +404,7 @@ impl RuntimeInterface for InternalBamlRuntime {
             ArgCoercer {
                 span_path: None,
                 allow_implicit_cast_to_string: false,
+                env_values: ctx.env.clone(),
             },
         )?;
         // let baml_args = match self.ir().check_function_params(
@@ -457,6 +460,7 @@ impl RuntimeInterface for InternalBamlRuntime {
                 ArgCoercer {
                     span_path: None,
                     allow_implicit_cast_to_string: false,
+                    env_values: ctx.env.clone(),
                 },
             )?
             .as_map_owned()

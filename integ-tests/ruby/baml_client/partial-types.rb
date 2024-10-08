@@ -39,6 +39,8 @@ module Baml
     class GroceryReceipt < T::Struct; end
     class InnerClass < T::Struct; end
     class InnerClass2 < T::Struct; end
+    class InputClass < T::Struct; end
+    class InputClassNested < T::Struct; end
     class NamedArgsSingleClass < T::Struct; end
     class Nested < T::Struct; end
     class Nested2 < T::Struct; end
@@ -345,6 +347,34 @@ module Baml
         super(
           prop2: props[:prop2],
           prop3: props[:prop3],
+        )
+
+        @props = props
+      end
+    end
+    class InputClass < T::Struct
+      include Baml::Sorbet::Struct
+      const :key, T.nilable(String)
+      const :key2, T.nilable(String)
+
+      def initialize(props)
+        super(
+          key: props[:key],
+          key2: props[:key2],
+        )
+
+        @props = props
+      end
+    end
+    class InputClassNested < T::Struct
+      include Baml::Sorbet::Struct
+      const :key, T.nilable(String)
+      const :nested, Baml::PartialTypes::InputClass
+
+      def initialize(props)
+        super(
+          key: props[:key],
+          nested: props[:nested],
         )
 
         @props = props

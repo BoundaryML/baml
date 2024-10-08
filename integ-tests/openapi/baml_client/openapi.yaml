@@ -32,6 +32,58 @@ paths:
                 title: AaaSamOutputFormatResponse
                 $ref: '#/components/schemas/Recipe'
       operationId: AaaSamOutputFormat
+  /call/AliasedInputClass:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AliasedInputClass'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AliasedInputClassResponse
+                type: string
+      operationId: AliasedInputClass
+  /call/AliasedInputClassNested:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AliasedInputClassNested'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AliasedInputClassNestedResponse
+                type: string
+      operationId: AliasedInputClassNested
+  /call/AliasedInputEnum:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AliasedInputEnum'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AliasedInputEnumResponse
+                type: string
+      operationId: AliasedInputEnum
+  /call/AliasedInputList:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AliasedInputList'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AliasedInputListResponse
+                type: string
+      operationId: AliasedInputList
   /call/AudioInput:
     post:
       requestBody:
@@ -1075,6 +1127,72 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - recipe
+            additionalProperties: false
+    AliasedInputClass:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AliasedInputClassRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/InputClass'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    AliasedInputClassNested:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AliasedInputClassNestedRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/InputClassNested'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    AliasedInputEnum:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AliasedInputEnumRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/AliasedEnum'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    AliasedInputList:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AliasedInputListRequest
+            type: object
+            properties:
+              input:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AliasedEnum'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     AudioInput:
       required: true
@@ -2404,6 +2522,11 @@ components:
       - name
       - provider
       - options
+    AliasedEnum:
+      enum:
+      - KEY_ONE
+      - KEY_TWO
+      type: string
     Category:
       enum:
       - Refund
@@ -2747,6 +2870,28 @@ components:
       required:
       - prop2
       - prop3
+      additionalProperties: false
+    InputClass:
+      type: object
+      properties:
+        key:
+          type: string
+        key2:
+          type: string
+      required:
+      - key
+      - key2
+      additionalProperties: false
+    InputClassNested:
+      type: object
+      properties:
+        key:
+          type: string
+        nested:
+          $ref: '#/components/schemas/InputClass'
+      required:
+      - key
+      - nested
       additionalProperties: false
     NamedArgsSingleClass:
       type: object

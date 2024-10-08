@@ -19,6 +19,11 @@ from pydantic import BaseModel, ConfigDict
 from typing import Dict, List, Optional, Union
 
 
+class AliasedEnum(str, Enum):
+    
+    KEY_ONE = "KEY_ONE"
+    KEY_TWO = "KEY_TWO"
+
 class Category(str, Enum):
     
     Refund = "Refund"
@@ -248,6 +253,18 @@ class InnerClass2(BaseModel):
     
     prop2: int
     prop3: float
+
+class InputClass(BaseModel):
+    
+    
+    key: str
+    key2: str
+
+class InputClassNested(BaseModel):
+    
+    
+    key: str
+    nested: "InputClass"
 
 class NamedArgsSingleClass(BaseModel):
     
