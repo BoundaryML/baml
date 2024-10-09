@@ -247,7 +247,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(Baml::Types::BookOrder, Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt))
+      ).returns(T.any(Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt, Baml::Types::BookOrder))
     }
     def CustomTask(
         *varargs,
@@ -629,7 +629,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        email: String,reason: T.any(String, String),
+        email: String,reason: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::ReceiptInfo)
     }
@@ -2774,7 +2774,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::BamlStream[T.any(Baml::Types::BookOrder, Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt)])
+      ).returns(Baml::BamlStream[T.any(Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt, Baml::Types::BookOrder)])
     }
     def CustomTask(
         *varargs,
@@ -2798,7 +2798,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
       )
-      Baml::BamlStream[T.nilable(T.any(Baml::PartialTypes::BookOrder, Baml::PartialTypes::FlightConfirmation, Baml::PartialTypes::GroceryReceipt)), T.any(Baml::Types::BookOrder, Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt)].new(
+      Baml::BamlStream[T.nilable(T.any(Baml::PartialTypes::BookOrder, Baml::PartialTypes::GroceryReceipt, Baml::PartialTypes::FlightConfirmation)), T.any(Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt, Baml::Types::BookOrder)].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -3192,7 +3192,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        email: String,reason: T.any(String, String),
+        email: String,reason: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::ReceiptInfo])
     }

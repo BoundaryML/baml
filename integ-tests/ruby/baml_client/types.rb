@@ -251,7 +251,7 @@ module Baml
     class CustomTaskResult < T::Struct
       include Baml::Sorbet::Struct
       const :bookOrder, T.any(Baml::Types::BookOrder, T.nilable(NilClass))
-      const :flightConfirmation, T.any(Baml::Types::FlightConfirmation, T.nilable(NilClass))
+      const :flightConfirmation, T.any(T.nilable(NilClass), Baml::Types::FlightConfirmation)
       const :groceryReceipt, T.any(Baml::Types::GroceryReceipt, T.nilable(NilClass))
 
       def initialize(props)
@@ -598,7 +598,7 @@ module Baml
       include Baml::Sorbet::Struct
       const :items, T::Array[Baml::Types::ReceiptItem]
       const :total_cost, T.nilable(Float)
-      const :venue, T.any(String, String)
+      const :venue, String
 
       def initialize(props)
         super(
@@ -631,7 +631,7 @@ module Baml
     class Recipe < T::Struct
       include Baml::Sorbet::Struct
       const :ingredients, T::Hash[String, Baml::Types::Quantity]
-      const :recipe_type, T.any(String, String)
+      const :recipe_type, String
 
       def initialize(props)
         super(
@@ -667,8 +667,8 @@ module Baml
     class Schema < T::Struct
       include Baml::Sorbet::Struct
       const :prop1, T.any(String, T.nilable(NilClass))
-      const :prop2, T.any(Baml::Types::Nested, String)
-      const :prop5, T::Array[T.any(String, T.nilable(NilClass))]
+      const :prop2, T.any(String, Baml::Types::Nested)
+      const :prop5, T::Array[T.any(T.nilable(NilClass), String)]
       const :prop6, T.any(String, T::Array[Baml::Types::Nested])
       const :nested_attrs, T::Array[T.any(String, T.nilable(NilClass), Baml::Types::Nested)]
       const :parens, T.any(String, T.nilable(NilClass))
@@ -799,8 +799,8 @@ module Baml
     class UnionTest_ReturnType < T::Struct
       include Baml::Sorbet::Struct
       const :prop1, T.any(String, T::Boolean)
-      const :prop2, T::Array[T.any(Float, T::Boolean)]
-      const :prop3, T.any(T::Array[T::Boolean], T::Array[Integer])
+      const :prop2, T::Array[T.any(T::Boolean, Float)]
+      const :prop3, T.any(T::Array[Integer], T::Array[T::Boolean])
 
       def initialize(props)
         super(

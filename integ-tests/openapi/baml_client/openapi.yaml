@@ -1367,11 +1367,7 @@ components:
               email:
                 type: string
               reason:
-                oneOf:
-                - const: curiosity
-                  type: string
-                - const: personal_finance
-                  type: string
+                type: string
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -2328,8 +2324,8 @@ components:
             properties:
               input:
                 oneOf:
-                - type: string
                 - type: boolean
+                - type: string
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -2575,14 +2571,11 @@ components:
       type: object
       properties:
         bookOrder:
-          oneOf:
-          - $ref: '#/components/schemas/BookOrder'
+          $ref: '#/components/schemas/BookOrder'
         flightConfirmation:
-          oneOf:
-          - $ref: '#/components/schemas/FlightConfirmation'
+          $ref: '#/components/schemas/FlightConfirmation'
         groceryReceipt:
-          oneOf:
-          - $ref: '#/components/schemas/GroceryReceipt'
+          $ref: '#/components/schemas/GroceryReceipt'
       required: []
       additionalProperties: false
     DummyOutput:
@@ -2719,9 +2712,9 @@ components:
           type: array
           items:
             oneOf:
-            - type: string
-            - type: integer
             - type: number
+            - type: integer
+            - type: string
         totalAmount:
           type: number
       required:
@@ -2773,11 +2766,9 @@ components:
       type: object
       properties:
         prop3:
-          oneOf:
-          - type: string
+          type: string
         prop4:
-          oneOf:
-          - type: string
+          type: string
         prop20:
           $ref: '#/components/schemas/Nested2'
       required:
@@ -2787,11 +2778,9 @@ components:
       type: object
       properties:
         prop11:
-          oneOf:
-          - type: string
+          type: string
         prop12:
-          oneOf:
-          - type: string
+          type: string
       required: []
       additionalProperties: false
     OptionalTest_Prop1:
@@ -2845,8 +2834,8 @@ components:
       properties:
         amount:
           oneOf:
-          - type: integer
           - type: number
+          - type: integer
         unit:
           type: string
       required:
@@ -2859,8 +2848,8 @@ components:
           $ref: '#/components/schemas/DataType'
         value:
           oneOf:
-          - $ref: '#/components/schemas/Resume'
           - $ref: '#/components/schemas/Event'
+          - $ref: '#/components/schemas/Resume'
       required:
       - dataType
       - value
@@ -2875,11 +2864,7 @@ components:
         total_cost:
           type: number
         venue:
-          oneOf:
-          - const: barisa
-            type: string
-          - const: ox_burger
-            type: string
+          type: string
       required:
       - items
       - venue
@@ -2908,11 +2893,7 @@ components:
           additionalProperties:
             $ref: '#/components/schemas/Quantity'
         recipe_type:
-          oneOf:
-          - const: breakfast
-            type: string
-          - const: dinner
-            type: string
+          type: string
       required:
       - ingredients
       - recipe_type
@@ -2950,8 +2931,7 @@ components:
       type: object
       properties:
         prop1:
-          oneOf:
-          - type: string
+          type: string
         prop2:
           oneOf:
           - $ref: '#/components/schemas/Nested'
@@ -2959,29 +2939,27 @@ components:
         prop5:
           type: array
           items:
-            oneOf:
-            - type: string
+            type: string
         prop6:
           oneOf:
-          - type: string
           - type: array
             items:
               $ref: '#/components/schemas/Nested'
+          - type: string
         nested_attrs:
           type: array
           items:
             oneOf:
-            - type: string
             - $ref: '#/components/schemas/Nested'
+            - type: string
         parens:
-          oneOf:
-          - type: string
+          type: string
         other_group:
           oneOf:
-          - type: string
           - oneOf:
             - type: integer
             - type: string
+          - type: string
       required:
       - prop2
       - prop5
@@ -3091,14 +3069,14 @@ components:
       properties:
         prop1:
           oneOf:
-          - type: string
           - type: boolean
+          - type: string
         prop2:
           type: array
           items:
             oneOf:
-            - type: number
             - type: boolean
+            - type: number
         prop3:
           oneOf:
           - type: array

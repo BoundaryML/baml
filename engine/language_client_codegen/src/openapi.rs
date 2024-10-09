@@ -541,26 +541,17 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                     r#ref: format!("#/components/schemas/{}", name),
                 },
             },
-            FieldType::Literal(LiteralValue::String(string_value)) => TypeSpecWithMeta {
-                meta: TypeMetadata {
-                    title: None,
-                    r#enum: None,
-                    r#const: Some(string_value.to_owned()),
-                    nullable: false,
-                },
-                type_spec: TypeSpec::Inline(TypeDef::String),
-            },
-            FieldType::Literal(x) => TypeSpecWithMeta {
+            FieldType::Literal(v) => TypeSpecWithMeta {
                 meta: TypeMetadata {
                     title: None,
                     r#enum: None,
                     r#const: None,
                     nullable: false,
                 },
-                type_spec: match x {
+                type_spec: match v {
                     LiteralValue::Int(_) => TypeSpec::Inline(TypeDef::Int),
                     LiteralValue::Bool(_) => TypeSpec::Inline(TypeDef::Bool),
-                    _ => unreachable!("Impossible case"),
+                    LiteralValue::String(_) => TypeSpec::Inline(TypeDef::String),
                 },
             },
             FieldType::List(inner) => TypeSpecWithMeta {
@@ -615,18 +606,49 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                     },
                 },
             },
-            // FieldType::Union(_) => reassociate_type_literals(self.clone(), ir),
-            FieldType::Union(inner) => {
-                let (_nulls, nonnull_types): (Vec<_>, Vec<_>) =
-                    inner.into_iter().partition(|t| t.is_null());
+            FieldType::Union(union) => {
+                let (_nulls, mut nonnull_types): (Vec<_>, Vec<_>) =
+                    union.into_iter().partition(|t| t.is_null());
 
-                let one_of = nonnull_types
+                // Sort non nulls by some made up key so that same types end up
+                // being consecutive, that way we can remove them in the dedup call
+                // below. Could also use a HashSet but there's no Hash impl for
+                // FieldType and literals need to be treated differently for this
+                // openapi case.
+                let dedup = |f: &FieldType| match f {
+                    FieldType::Literal(v) => v.literal_base_type().to_string(),
+                    // Class, Enum or Primitive.
+                    // TODO: Could this be something other than the above types?
+                    // Union of unions? Is it necessary to recurse here?
+                    other => other.to_string(),
+                };
+
+                // TODO: Store str key and FieldType ref in a tuple to avoid
+                // constructing the string twice (sorting + deduping).
+                nonnull_types.sort_by_cached_key(|t| dedup(*t));
+
+                // Remove duplicate types. For example union of string literals
+                // should become just a string type.
+                nonnull_types.dedup_by_key(|t| dedup(*t));
+
+                println!("NON NULLS {:?}", nonnull_types);
+
+                let mut one_of = nonnull_types
                     .iter()
                     .map(|t| t.to_type_spec(ir))
                     .collect::<Result<Vec<_>>>()?;
+
                 if one_of.is_empty() {
                     anyhow::bail!("BAML<->OpenAPI unions must have at least one non-null type")
                 }
+
+                // Reduced to only one concrete type.
+                if one_of.len() == 1 {
+                    return Ok(one_of.remove(0));
+                }
+
+                // Deduped types. A literal union like "a" | 2 | "b" | 4
+                // becomes one of [string, int]
                 TypeSpecWithMeta {
                     meta: TypeMetadata {
                         title: None,
@@ -730,141 +752,4 @@ enum TypeDef {
 
     #[serde(rename = "boolean")]
     Bool,
-}
-
-/// A union of literals is more appropriately viewed as an enum in openapi (as
-/// long as all literals in the union have the same base type. If there are
-/// multiple base types, openapi can represent this as an `anyOf` several enums,
-/// one enum for each occurring base type).
-fn reassociate_type_literals<'ir>(
-    field_type: FieldType,
-    ir: &'ir IntermediateRepr,
-) -> TypeSpecWithMeta {
-    eprintln!("reassociate_type_literals");
-
-    // For a given type, return Some(base_type) if the type is a Literal.
-    // This will be used to group items with a common base type.
-    fn literal_base_type(ft: &FieldType) -> Option<String> {
-        eprintln!("literal_base_type");
-        match ft {
-            FieldType::Literal(literal_value) => {
-                Some(literal_value.literal_base_type().to_string())
-            }
-            _ => None,
-        }
-    }
-
-    fn group_to_type<'ir>(
-        (base_type, mut field_types): (Option<String>, Vec<FieldType>),
-        ir: &'ir IntermediateRepr,
-    ) -> TypeSpecWithMeta {
-        eprintln!("group_to_type");
-        dbg!((&base_type, &field_types));
-        field_types.dedup();
-
-        let mut is_optional = false;
-        let field_types = field_types
-            .into_iter()
-            .filter(|ft| match ft {
-                FieldType::Optional(inner) => match inner.as_ref() {
-                    FieldType::Primitive(TypeValue::Null) => {
-                        is_optional = true;
-                        false
-                    }
-                    _ => true,
-                },
-                _ => true,
-            })
-            .collect::<Vec<_>>();
-
-        match field_types.len() {
-            0 => panic!("Impossible case"),
-            1 => field_types[0].clone().to_type_spec(ir).expect("TODO"),
-            _ => match base_type.as_ref() {
-                None => {
-                    let field_specs = field_types
-                        .into_iter()
-                        .map(|ft| ft.to_type_spec(ir).expect("TODO"))
-                        .collect();
-                    TypeSpecWithMeta {
-                        meta: TypeMetadata {
-                            title: None,
-                            r#enum: None,
-                            r#const: None,
-                            nullable: false,
-                        },
-                        type_spec: TypeSpec::Union {
-                            one_of: field_specs,
-                        },
-                    }
-                }
-                Some(ty) => match ty.as_str() {
-                    "int" => FieldType::Primitive(TypeValue::Int)
-                        .to_type_spec(ir)
-                        .expect("TODO"),
-                    "bool" => FieldType::Primitive(TypeValue::Bool)
-                        .to_type_spec(ir)
-                        .expect("TODO"),
-                    "string" => {
-                        let mut enum_spec = FieldType::Primitive(TypeValue::String)
-                            .to_type_spec(ir)
-                            .expect("TODO");
-                        let variants = field_types.into_iter().filter_map(|ft| match ft {
-                            FieldType::Literal(LiteralValue::String(s)) => Some(s),
-                            t => {
-                                log::warn!("Impossible case, encountered non-string literal type after filtering: {:?}", t); 
-                                None
-                            },
-                        }).collect();
-                        enum_spec.meta.r#enum = Some(variants);
-                        enum_spec
-                    }
-                    other => {
-                        log::warn!("Encountered unknown literal type base: {}", other);
-                        FieldType::Union(field_types)
-                            .to_type_spec(ir)
-                            .expect("TODO")
-                    }
-                },
-            },
-        }
-    }
-
-    match &field_type {
-        FieldType::Union(items) => {
-            // Group union items by (a) whether they are literals and (b) if so,
-            // the literal base type.
-            let mut base_type_groups: HashMap<Option<String>, Vec<FieldType>> = HashMap::new();
-            for item in items.iter() {
-                base_type_groups
-                    .entry(literal_base_type(item))
-                    .and_modify(|xs| (xs.push(item.clone())))
-                    .or_insert(vec![item.clone()]);
-            }
-
-            // Make a Union or Enum for each of the above groups.
-            let homogeneous_unions: Vec<TypeSpecWithMeta> = base_type_groups
-                .into_iter()
-                .map(|ft| group_to_type(ft, ir))
-                .collect();
-
-            eprintln!("about to return");
-            match homogeneous_unions.len() {
-                0 => todo!(),
-                1 => homogeneous_unions[0].clone(),
-                _ => TypeSpecWithMeta {
-                    meta: TypeMetadata {
-                        title: None,
-                        r#enum: None,
-                        r#const: None,
-                        nullable: false,
-                    },
-                    type_spec: TypeSpec::Union {
-                        one_of: homogeneous_unions,
-                    },
-                },
-            }
-        }
-        _ => panic!("Unexpected case"),
-    }
 }

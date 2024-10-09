@@ -1,5 +1,6 @@
+use std::collections::HashSet;
+
 use anyhow::Result;
-use baml_types::LiteralValue;
 
 use super::ruby_language_features::ToRuby;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType};
@@ -131,16 +132,8 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         match self {
             FieldType::Class(name) => format!("Baml::PartialTypes::{}", name.clone()),
             FieldType::Enum(name) => format!("T.nilable(Baml::Types::{})", name.clone()),
-            FieldType::Literal(value) => {
-                let field_type = match value {
-                    LiteralValue::Int(_) => FieldType::int(),
-                    LiteralValue::String(_) => FieldType::string(),
-                    LiteralValue::Bool(_) => FieldType::bool(),
-                };
-
-                // TODO: Temporary solution until we figure out Ruby literals.
-                field_type.to_partial_type_ref()
-            }
+            // TODO: Temporary solution until we figure out Ruby literals.
+            FieldType::Literal(value) => value.literal_base_type().to_partial_type_ref(),
             // https://sorbet.org/docs/stdlib-generics
             FieldType::List(inner) => format!("T::Array[{}]", inner.to_partial_type_ref()),
             FieldType::Map(key, value) => {
@@ -151,15 +144,20 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 )
             }
             FieldType::Primitive(_) => format!("T.nilable({})", self.to_type_ref()),
-            FieldType::Union(inner) => format!(
-                // https://sorbet.org/docs/union-types
-                "T.nilable(T.any({}))",
-                inner
-                    .iter()
-                    .map(|t| t.to_partial_type_ref())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
+            FieldType::Union(union) => {
+                // Dedup types for unions. `string | int | string | int` is just `string | int`.
+                let mut deduped =
+                    HashSet::<String>::from_iter(union.iter().map(FieldType::to_partial_type_ref))
+                        .into_iter()
+                        .collect::<Vec<_>>();
+
+                if deduped.len() == 1 {
+                    deduped.remove(0)
+                } else {
+                    // https://sorbet.org/docs/union-types
+                    format!("T.nilable(T.any({}))", deduped.join(", "))
+                }
+            }
             FieldType::Tuple(inner) => format!(
                 // https://sorbet.org/docs/tuples
                 "T.nilable([{}])",

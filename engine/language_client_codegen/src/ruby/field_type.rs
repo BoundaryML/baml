@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use baml_types::{BamlMediaType, FieldType, LiteralValue, TypeValue};
 
 use super::ruby_language_features::ToRuby;
@@ -7,16 +9,8 @@ impl ToRuby for FieldType {
         match self {
             FieldType::Class(name) => format!("Baml::Types::{}", name.clone()),
             FieldType::Enum(name) => format!("T.any(Baml::Types::{}, String)", name.clone()),
-            FieldType::Literal(value) => {
-                let field_type = match value {
-                    LiteralValue::Int(_) => FieldType::int(),
-                    LiteralValue::String(_) => FieldType::string(),
-                    LiteralValue::Bool(_) => FieldType::bool(),
-                };
-
-                // TODO: Temporary solution until we figure out Ruby literals.
-                field_type.to_ruby()
-            }
+            // TODO: Temporary solution until we figure out Ruby literals.
+            FieldType::Literal(value) => value.literal_base_type().to_ruby(),
             // https://sorbet.org/docs/stdlib-generics
             FieldType::List(inner) => format!("T::Array[{}]", inner.to_ruby()),
             FieldType::Map(key, value) => {
@@ -34,15 +28,19 @@ impl ToRuby for FieldType {
                 TypeValue::Media(BamlMediaType::Audio) => "Baml::Audio",
             }
             .to_string(),
-            FieldType::Union(inner) => format!(
-                // https://sorbet.org/docs/union-types
-                "T.any({})",
-                inner
-                    .iter()
-                    .map(|t| t.to_ruby())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
+            FieldType::Union(union) => {
+                let mut deduped =
+                    HashSet::<String>::from_iter(union.iter().map(FieldType::to_ruby))
+                        .into_iter()
+                        .collect::<Vec<_>>();
+
+                if deduped.len() == 1 {
+                    deduped.remove(0)
+                } else {
+                    // https://sorbet.org/docs/union-types
+                    format!("T.any({})", deduped.join(", "))
+                }
+            }
             FieldType::Tuple(inner) => format!(
                 // https://sorbet.org/docs/tuples
                 "[{}]",
