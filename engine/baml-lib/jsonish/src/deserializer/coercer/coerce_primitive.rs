@@ -316,6 +316,9 @@ mod tests {
             ("Increase of 5% and a profit of $1,000", None),
             ("Loss of -€500 and a gain of 1,200.50", None),
             ("Targets: 2,000 units and €3.000,75 revenue", None),
+            // trailing periods and commas
+            ("12,111,123.", Some(12111123.0)),
+            ("12,111,123,", Some(12111123.0)),
         ];
 
         for &(input, expected) in &test_cases {
