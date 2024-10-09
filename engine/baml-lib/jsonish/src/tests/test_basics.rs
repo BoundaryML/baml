@@ -27,7 +27,7 @@ test_deserializer!(
 );
 
 test_deserializer!(test_number, EMPTY_FILE, "12111", FieldType::int(), 12111);
-
+test_deserializer!(test_number_2, EMPTY_FILE, "12,111", FieldType::int(), 12111);
 test_deserializer!(
     test_string,
     EMPTY_FILE,
@@ -47,6 +47,31 @@ test_deserializer!(
     "12111.123",
     FieldType::float(),
     12111.123
+);
+
+test_deserializer!(
+    test_float_comma_us,
+    EMPTY_FILE,
+    "12,111.123",
+    FieldType::float(),
+    12111.123
+);
+
+// uncomment when we support european formatting.
+// test_deserializer!(
+//     test_float_comma_german,
+//     EMPTY_FILE,
+//     "12.111,123",
+//     FieldType::float(),
+
+// );
+
+test_deserializer!(
+    test_float_comma_german2,
+    EMPTY_FILE,
+    "12.11.",
+    FieldType::float(),
+    12.11
 );
 
 test_deserializer!(test_float_1, EMPTY_FILE, "1/5", FieldType::float(), 0.2);
