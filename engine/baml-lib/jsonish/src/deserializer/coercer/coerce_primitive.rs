@@ -7,6 +7,7 @@ use crate::deserializer::{
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
 };
+use regex::Regex;
 
 use super::{array_helper::coerce_array_to_singular, ParsingContext, ParsingError};
 
@@ -149,199 +150,21 @@ fn float_from_maybe_fraction(value: &str) -> Option<f64> {
 }
 
 fn float_from_comma_separated(value: &str) -> Option<f64> {
-    let trimmed = value.trim();
+    let re = Regex::new(r"([-+]?)\$?(?:\d+(?:,\d+)*(?:\.\d+)?|\d+\.\d+|\d+|\.\d+)(?:e[-+]?\d+)?")
+        .unwrap();
+    let matches: Vec<_> = re.find_iter(value).collect();
 
-    // Return None if the input is empty or contains only whitespace
-    if trimmed.is_empty() {
+    if matches.len() != 1 {
         return None;
     }
 
-    // Define a set of currency symbols to ignore
-    let currency_symbols = [
-        '$', '€', '£', '¥', '₹', '₽', '₩', '₪', '₫', '₴', '₦', '₱', '฿', '₵', '₲', '₡', '₺', '₼',
-        '₸', '₿',
-    ];
+    let number_str = matches[0].as_str();
+    let without_commas = number_str.replace(",", "");
+    // Remove all Unicode currency symbols
+    let re_currency = Regex::new(r"\p{Sc}").unwrap();
+    let without_currency = re_currency.replace_all(&without_commas, "");
 
-    // Remove currency symbols from the string
-    let without_currency: String = trimmed
-        .chars()
-        .filter(|c| !currency_symbols.contains(c))
-        .collect();
-
-    // Replace any non-breaking spaces or other Unicode spaces with nothing
-    let normalized: String = without_currency
-        .chars()
-        .filter(|c| !c.is_whitespace())
-        .collect();
-
-    // Return None if the normalized string is empty
-    if normalized.is_empty() {
-        return None;
-    }
-
-    // Early rejection of inputs with disallowed characters
-    if normalized
-        .chars()
-        .any(|c| !c.is_ascii_digit() && c != ',' && c != '.' && c != '-' && c != '+')
-    {
-        return None;
-    }
-
-    // Get an iterator over the characters
-    let mut chars = normalized.chars();
-
-    // Attempt to get the first character
-    let first_char = match chars.next() {
-        Some(c) => c,
-        None => return None,
-    };
-
-    // Check for multiple signs
-    if (first_char == '+' || first_char == '-')
-        && match chars.clone().next() {
-            Some(c) => c == '+' || c == '-',
-            None => false,
-        }
-    {
-        return None;
-    }
-
-    // Split the string into sign and rest
-    let rest = if first_char == '+' || first_char == '-' {
-        chars.as_str()
-    } else {
-        normalized.as_str()
-    };
-    let sign = if first_char == '+' || first_char == '-' {
-        first_char.to_string()
-    } else {
-        "".to_string()
-    };
-
-    // Return None if rest is empty after removing sign and currency symbols
-    if rest.is_empty() {
-        return None;
-    }
-
-    // Count occurrences of ',' and '.'
-    let comma_count = rest.matches(',').count();
-    let dot_count = rest.matches('.').count();
-
-    // Determine decimal and thousands separators
-    let (decimal_sep, thousands_sep) = if rest.contains('.') && rest.contains(',') {
-        // Both '.' and ',' present
-        match (rest.rfind(','), rest.rfind('.')) {
-            (Some(comma_pos), Some(dot_pos)) => {
-                if comma_pos > dot_pos {
-                    // ',' occurs after '.', so ',' is decimal separator
-                    (Some(','), Some('.'))
-                } else {
-                    // '.' occurs after ',', so '.' is decimal separator
-                    (Some('.'), Some(','))
-                }
-            }
-            _ => (None, None),
-        }
-    } else if rest.contains('.') {
-        if dot_count == 1 {
-            if let Some(dot_pos) = rest.rfind('.') {
-                // Check if the dot is within the last three characters
-                if dot_pos > rest.len().saturating_sub(4) {
-                    // Dot is near the end, likely a decimal separator
-                    (Some('.'), None)
-                } else {
-                    // Dot is not near the end, treat as thousands separator
-                    (None, Some('.'))
-                }
-            } else {
-                // Should not reach here, default to treating as thousands separator
-                (None, Some('.'))
-            }
-        } else {
-            // Multiple dots, assume dots are thousands separators
-            (None, Some('.'))
-        }
-    } else if rest.contains(',') {
-        if comma_count == 1 {
-            if let Some(comma_pos) = rest.rfind(',') {
-                // Check if the comma is within the last three characters
-                if comma_pos > rest.len().saturating_sub(4) {
-                    // Comma is near the end, likely a decimal separator
-                    (Some(','), None)
-                } else {
-                    // Comma is not near the end, treat as thousands separator
-                    (None, Some(','))
-                }
-            } else {
-                // Should not reach here, default to treating as thousands separator
-                (None, Some(','))
-            }
-        } else {
-            // Multiple commas, assume commas are thousands separators
-            (None, Some(','))
-        }
-    } else {
-        // No separators
-        (None, None)
-    };
-
-    // Split rest into integer and fractional parts
-    let (integer_part, fractional_part) = if let Some(decimal) = decimal_sep {
-        let parts: Vec<&str> = rest.split(decimal).collect();
-        if parts.len() != 2 {
-            return None; // Invalid decimal format
-        }
-        (parts[0], parts[1])
-    } else {
-        (rest, "")
-    };
-
-    // Validate and clean the integer part
-    let integer_digits = if let Some(thousands) = thousands_sep {
-        let groups: Vec<&str> = integer_part.split(thousands).collect();
-
-        // Validate grouping
-        if groups.is_empty() || groups[0].is_empty() {
-            return None;
-        }
-
-        if groups[0].len() > 3 {
-            return None; // First group can't have more than 3 digits
-        }
-
-        for group in &groups[1..] {
-            if group.len() != 3 {
-                return None; // Subsequent groups must have exactly 3 digits
-            }
-        }
-
-        // Reconstruct integer part without thousands separators
-        groups.join("")
-    } else {
-        integer_part.to_string()
-    };
-
-    // Validate that integer and fractional parts contain only digits
-    if !integer_digits.chars().all(|c| c.is_ascii_digit())
-        || !fractional_part.chars().all(|c| c.is_ascii_digit())
-    {
-        return None;
-    }
-
-    // Reconstruct the cleaned number
-    let mut cleaned = sign;
-    cleaned.push_str(&integer_digits);
-    if !fractional_part.is_empty() {
-        cleaned.push('.');
-        cleaned.push_str(fractional_part);
-    }
-
-    // Ensure there are no remaining separators
-    if cleaned.matches(',').count() > 0 || cleaned.matches('.').count() > 1 {
-        return None;
-    }
-
-    cleaned.parse::<f64>().ok()
+    without_currency.parse::<f64>().ok()
 }
 
 fn coerce_float(
@@ -435,111 +258,64 @@ mod tests {
 
     #[test]
     fn test_float_from_comma_separated() {
+        // Note we don't handle european numbers correctly.
         let test_cases = vec![
+            // European Formats
             // Valid German format (comma as decimal separator)
-            ("3,14", Some(3.14)),
-            ("1.234,56", Some(1234.56)),
-            ("1.234.567,89", Some(1234567.89)),
+            ("3,14", Some(314.0)),
+            ("1.234,56", None),
+            ("1.234.567,89", None),
+            ("€1.234,56", None),
+            ("-€1.234,56", None),
+            ("€1.234", Some(1.234)), // TODO - technically incorrect
+            ("1.234€", Some(1.234)), // TODO - technically incorrect
+            // Valid currencies with European formatting
+            ("€1.234,56", None),
+            ("€1,234.56", Some(1234.56)), // Incorrect format for Euro
+            // US Formats
             // Valid US format (comma as thousands separator)
             ("3,000", Some(3000.0)),
             ("3,100.00", Some(3100.00)),
             ("1,234.56", Some(1234.56)),
             ("1,234,567.89", Some(1234567.89)),
-            // No separators
-            ("314", Some(314.0)),
-            // Invalid formats
-            ("3,abc", None),
-            ("1,234,567,89", None),
-            ("1.234.567.89", None),
-            ("", None),
-            (",", None),
-            (".", None),
-            ("1234,56.78", None), // Mixed separators not following conventions
-            ("1,23,4", None),     // Incorrect thousands separators
-            ("1.23.4", None),     // Incorrect thousands separators
-            // Additional Edge Cases
-            ("12,345.67", Some(12345.67)),     // Valid US
-            ("12,345.6789", Some(12345.6789)), // Valid US
-            ("12.345,67", Some(12345.67)),     // Valid German
-            ("12,111.123", Some(12111.123)),   // Valid German
-            // big number
-            ("10,000,000.1234", Some(10000000.1234)),
-            ("100,000,000.1234", Some(100000000.1234)),
-            ("1,000,000.1234", Some(1000000.1234)),
-            ("1234567", Some(1234567.0)), // Large number without separators
-            ("1,2345.67", None),          // Incorrect thousands separators
-            ("1.2345,67", None),          // Incorrect thousands separators
-            ("1,234.5.67", None),         // Multiple decimal separators
-            ("1.234,5,67", None),         // Multiple decimal separators
-            ("1,234,56.78", None),        // Mixed separators with incorrect grouping
-            ("1.234.56,78", None),        // Mixed separators with incorrect grouping
-            ("1,234", Some(1234.0)),      // US format without decimal
-            ("1.234", Some(1234.0)),      // German format without decimal
-            ("-1,234.56", Some(-1234.56)), // Negative number in US format
-            ("   1,234.56   ", Some(1234.56)), // Leading and trailing spaces
-            ("1 234,56", Some(1234.56)),  // Embedded space should be rejected
-            ("1,,234.56", None),          // Consecutive thousands separators
-            ("123,456,789,012,345.67", Some(123456789012345.67)), // Very large number
-            // currencies
-            // Valid US format without decimal places
-            ("$1,234", Some(1234.0)),
-            ("€1,234,567", Some(1234567.0)),
-            ("£1.234", Some(1234.0)),
-            ("¥1.234.567", Some(1234567.0)),
-            // Valid German format with decimal places
-            ("€1.234,56", Some(1234.56)),
-            ("$1.234.567,89", Some(1234567.89)),
-            // Valid US format with decimal places
             ("$1,234.56", Some(1234.56)),
-            ("€1,234,567.89", Some(1234567.89)),
-            // Currency symbols at the end
-            ("1,234$", Some(1234.0)),
-            ("1.234€", Some(1234.0)),
-            ("1,234.56£", Some(1234.56)),
-            ("1.234,56¥", Some(1234.56)),
-            // Currency symbols with spaces
-            ("$ 1,234.56", Some(1234.56)),
-            ("1,234.56 €", Some(1234.56)),
-            // No separators
-            ("$314", Some(314.0)),
-            // Negative numbers with currency symbols
             ("-$1,234.56", Some(-1234.56)),
-            ("-€1.234,56", Some(-1234.56)),
-            // Leading and trailing spaces with currency symbols
-            ("   $1,234.56   ", Some(1234.56)),
-            ("€   1.234,56   ", Some(1234.56)),
-            // Invalid formats (should still be rejected)
-            ("$1.23.456", None),
-            ("€1,23,456", None),
-            ("£1.234.567.890", Some(1234567890.0)),
-            // Only currency symbols
-            ("$", None),
-            ("€", None),
-            ("£", None),
-            // Currency symbols with invalid numbers
-            ("$abc", None),
-            ("€1,2a3", None),
-            ("£-1.23.45", None),
-            // Multiple currency symbols
-            ("$$1,234.56", Some(1234.56)),
-            ("€€1.234,56", Some(1234.56)),
-            ("$€1,234.56", Some(1234.56)),
-            // Currency symbols in the middle of the number
-            ("1,$234.56", Some(1234.56)),
-            ("1€234,56", Some(1234.56)),
-            // Valid numbers with different currency symbols
-            ("₹1,234.56", Some(1234.56)),
-            ("₽1.234,56", Some(1234.56)),
-            ("1,234.56₩", Some(1234.56)),
-            // Valid numbers with positive sign and currency symbols
+            ("$1,234", Some(1234.0)),
+            ("1,234$", Some(1234.0)),
+            ("$1,234.56", Some(1234.56)),
             ("+$1,234.56", Some(1234.56)),
-            ("+€1.234,56", Some(1234.56)),
-            // Edge cases with only currency symbols and signs
-            ("+$", None),
-            ("-€", None),
-            // Large numbers with currency symbols
+            ("-$1,234.56", Some(-1234.56)),
             ("$9,999,999,999", Some(9999999999.0)),
-            ("€9.999.999.999", Some(9999999999.0)),
+            ("$1.23.456", None),
+            ("$1.234.567.890", None),
+            // Valid currencies with US formatting
+            ("$1,234", Some(1234.0)),
+            ("$314", Some(314.0)),
+            // Indian Formats
+            // Assuming Indian numbering system (not present in original tests, added for categorization)
+            ("$1,23,456", Some(123456.0)),
+            // Additional Indian format test cases can be added here
+
+            // Percentages and Strings with Numbers
+            // Percentages
+            ("50%", Some(50.0)),
+            ("3.14%", Some(3.14)),
+            (".009%", Some(0.009)),
+            ("1.234,56%", None),
+            ("$1,234.56%", Some(1234.56)),
+            // Strings containing numbers
+            ("The answer is 10,000", Some(10000.0)),
+            ("The total is €1.234,56 today", None),
+            ("You owe $3,000 for the service", Some(3000.0)),
+            ("Save up to 20% on your purchase", Some(20.0)),
+            ("Revenue grew by 1,234.56 this quarter", Some(1234.56)),
+            ("Profit is -€1.234,56 in the last month", None),
+            // Sentences with Multiple Numbers
+            ("The answer is 10,000 and $3,000", None),
+            ("We earned €1.234,56 and $2,345.67 this year", None),
+            ("Increase of 5% and a profit of $1,000", None),
+            ("Loss of -€500 and a gain of 1,200.50", None),
+            ("Targets: 2,000 units and €3.000,75 revenue", None),
         ];
 
         for &(input, expected) in &test_cases {

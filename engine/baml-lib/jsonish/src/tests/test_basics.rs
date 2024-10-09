@@ -65,6 +65,14 @@ test_deserializer!(
     12111.123
 );
 
+test_deserializer!(
+    test_float_comma_german2,
+    EMPTY_FILE,
+    "12.11.",
+    FieldType::float(),
+    12.11
+);
+
 test_deserializer!(test_float_1, EMPTY_FILE, "1/5", FieldType::float(), 0.2);
 
 test_deserializer!(
