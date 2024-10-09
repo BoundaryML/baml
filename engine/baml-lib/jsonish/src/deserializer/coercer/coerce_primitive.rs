@@ -341,7 +341,6 @@ fn float_from_comma_separated(value: &str) -> Option<f64> {
         return None;
     }
 
-    // Parse the cleaned string into f64
     cleaned.parse::<f64>().ok()
 }
 
