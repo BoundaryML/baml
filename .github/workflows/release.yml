@@ -10,6 +10,8 @@ on:
     tags:
       - "test-release/*.*"
       - "*.*"
+    branches:
+      - win32-arm64-build
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -144,6 +146,12 @@ jobs:
             container: null
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
             mise: true
+
+          - target: aarch64-pc-windows-msvc
+            host: windows-latest
+            container: null
+            node_build: pnpm build:napi-release --target aarch64-pc-windows-msvc
+            baml_build_help: "off"
 
     name: Build ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
