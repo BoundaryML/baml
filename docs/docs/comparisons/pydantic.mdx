@@ -191,7 +191,7 @@ and sometimes even GPT-4 outputs incorrect stuff like this, even though it's tec
 ```
 (this is an actual result from GPT-4 before some more prompt engineering)
 
-when all you really want is a prompt that looks like the one below -- with way less tokens (and less likelyhood of confusion). :
+when all you really want is a prompt that looks like the one below -- with way less tokens (and less likelihood of confusion). :
 ```diff
 Parse the following resume and return a structured representation of the data in the schema below.
 Resume:
@@ -220,8 +220,8 @@ Ahh, much better. **That's 80% less tokens** with a simpler prompt, for the same
 But we digress, let's get back to the point. You can see how this can get out of hand quickly, and how Pydantic wasn't really made with LLMs in mind.  We haven't gotten around to adding resilience like **retries, or falling back to a different model in the event of an outage**. There's still a lot of wrapper code to write.
 
 ### Pydantic and Enums
-There's other core limitations.
-Say you want to do a classification task using Pydantic. An Enum is a great fit for modeling this.
+There are other core limitations.
+Say you want to do a classification task using Pydantic. An Enum is a great fit for modelling this.
 
 Assume this is our prompt:
 ```text
@@ -375,7 +375,7 @@ function ExtractResume(resume_text: string) -> Resume {
   "#
 }
 ``` */}
-The BAML compiler generates a python client that import and call the function:
+The BAML compiler generates a python client that imports and calls the function:
 ```python
 from baml_client import baml as b
 

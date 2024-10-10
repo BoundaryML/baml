@@ -8,7 +8,7 @@
 
 # BAML
 
-BAML is a domain-specific-language to write and test LLM functions.
+BAML is a domain-specific language to write and test LLM functions.
 
 An LLM function is a prompt template with some defined input variables, and a specific output type like a class, enum, union, optional string, etc.
 
