@@ -140,7 +140,7 @@ impl<'db> crate::ParserDatabase {
         names.extend(self.walk_enums().map(|e| e.name().to_string()));
         // Add primitive types
         names.extend(
-            vec!["string", "int", "float", "bool"]
+            vec!["string", "int", "float", "bool", "true", "false"]
                 .into_iter()
                 .map(String::from),
         );

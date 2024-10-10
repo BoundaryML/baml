@@ -1,5 +1,3 @@
-use core::str;
-
 use super::{helpers::Pair, parse_attribute::parse_attribute, Rule};
 use crate::{
     assert_correct_parser,
@@ -140,6 +138,18 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
                     "null" => FieldType::Primitive(
                         FieldArity::Optional,
                         TypeValue::Null,
+                        diagnostics.span(current.as_span()),
+                        None,
+                    ),
+                    "true" => FieldType::Literal(
+                        FieldArity::Required,
+                        LiteralValue::Bool(true),
+                        diagnostics.span(current.as_span()),
+                        None,
+                    ),
+                    "false" => FieldType::Literal(
+                        FieldArity::Required,
+                        LiteralValue::Bool(false),
                         diagnostics.span(current.as_span()),
                         None,
                     ),

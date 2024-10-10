@@ -5,4 +5,5 @@ class TestLiterals {
   d 2 | 3
   e "Optional"?
   f 2 | "SomeString"
+  g "boolean" | true | false
 }
