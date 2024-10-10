@@ -730,6 +730,7 @@ fn get_dummy_value(
 
             Some(dummy)
         }
+        baml_runtime::FieldType::Literal(_) => None,
         baml_runtime::FieldType::Enum(_) => None,
         baml_runtime::FieldType::Class(_) => None,
         baml_runtime::FieldType::List(item) => {
