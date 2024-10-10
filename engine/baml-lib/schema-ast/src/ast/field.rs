@@ -421,7 +421,7 @@ impl std::fmt::Display for FieldType {
                     f,
                     "{}{}",
                     literal_value,
-                    if arity.is_optional() { "?" } else { "" } // TODO: Can this actually be optional?
+                    if arity.is_optional() { "?" } else { "" }
                 )
             }
         }

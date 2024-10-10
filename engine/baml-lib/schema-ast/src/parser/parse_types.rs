@@ -8,7 +8,7 @@ use crate::{
     unreachable_rule,
 };
 use baml_types::{LiteralValue, TypeValue};
-use internal_baml_diagnostics::Diagnostics;
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     assert_correct_parser!(pair, Rule::field_type, Rule::openParan, Rule::closeParan);
@@ -80,7 +80,13 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         1 => Some(types[0].to_owned()),
         _ => Some(FieldType::Union(FieldArity::Required, types, span, None)),
     };
-    union.as_mut().map(|ft| reassociate_union_attributes(ft));
+
+    // Match statement above gets rid of the union if there's only one type.
+    // In that case attributes should already be associated to that type.
+    if matches!(union, Some(FieldType::Union(_, _, _, _))) {
+        union.as_mut().map(reassociate_union_attributes);
+    }
+
     union
 }
 
@@ -191,7 +197,24 @@ fn parse_literal_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<F
             Some(string_content) => LiteralValue::String(string_content.as_str().into()),
             None => unreachable!("quoted string literal has no string content"),
         },
-        Rule::numeric_literal => LiteralValue::Int(literal_type.as_str().parse().unwrap()), // TODO: Floats
+
+        Rule::numeric_literal => match literal_type.as_str().parse::<i64>() {
+            Ok(int) => LiteralValue::Int(int),
+
+            // This should only be a float because of how the pest grammar is defined.
+            Err(_e) => {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    format!(
+                        "Float literal values are not supported: {}",
+                        literal_type.as_str()
+                    )
+                    .as_str(),
+                    span,
+                ));
+
+                return None;
+            }
+        },
         _ => unreachable_rule!(literal_type, Rule::literal_type),
     };
 
