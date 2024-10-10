@@ -48,11 +48,6 @@ pub enum LiteralValue {
     Bool(bool),
 }
 
-enum LiteralTypeStrRepr {
-    BaseType,
-    LiteralValue,
-}
-
 impl LiteralValue {
     pub fn literal_base_type(&self) -> FieldType {
         match self {
@@ -150,68 +145,6 @@ impl FieldType {
             FieldType::Primitive(TypeValue::Null) => true,
             FieldType::Optional(t) => t.is_null(),
             _ => false,
-        }
-    }
-
-    /// Returns the base type string representation if `self` is [`FieldType::Literal`].
-    ///
-    /// For the rest of variants it works like `.to_string()`.
-    pub fn to_string_ignoring_literal_value(&self) -> String {
-        match self {
-            FieldType::Literal(v) => v.literal_base_type().to_string(),
-            FieldType::Union(types) => {
-                format!(
-                    "({})",
-                    types
-                        .iter()
-                        .map(Self::to_string_ignoring_literal_value)
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                )
-            }
-            _ => self.to_string(),
-        }
-    }
-
-    fn fmt_with_literal_repr(
-        &self,
-        repr: LiteralTypeStrRepr,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
-        match self {
-            FieldType::Enum(name) | FieldType::Class(name) => {
-                write!(f, "{}", name)
-            }
-            FieldType::Primitive(t) => write!(f, "{}", t),
-            FieldType::Literal(v) => match repr {
-                LiteralTypeStrRepr::BaseType => write!(f, "{}", v.literal_base_type()),
-                LiteralTypeStrRepr::LiteralValue => write!(f, "{}", v),
-            },
-            FieldType::Union(choices) => {
-                write!(
-                    f,
-                    "({})",
-                    choices
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                )
-            }
-            FieldType::Tuple(choices) => {
-                write!(
-                    f,
-                    "({})",
-                    choices
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            FieldType::Map(k, v) => write!(f, "map<{}, {}>", k.to_string(), v.to_string()),
-            FieldType::List(t) => write!(f, "{}[]", t.to_string()),
-            FieldType::Optional(t) => write!(f, "{}?", t.to_string()),
         }
     }
 }

@@ -28,19 +28,15 @@ impl ToRuby for FieldType {
                 TypeValue::Media(BamlMediaType::Audio) => "Baml::Audio",
             }
             .to_string(),
-            FieldType::Union(union) => {
-                let mut deduped =
-                    HashSet::<String>::from_iter(union.iter().map(FieldType::to_ruby))
-                        .into_iter()
-                        .collect::<Vec<_>>();
-
-                if deduped.len() == 1 {
-                    deduped.remove(0)
-                } else {
-                    // https://sorbet.org/docs/union-types
-                    format!("T.any({})", deduped.join(", "))
-                }
-            }
+            FieldType::Union(inner) => format!(
+                // https://sorbet.org/docs/union-types
+                "T.any({})",
+                inner
+                    .iter()
+                    .map(|t| t.to_ruby())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             FieldType::Tuple(inner) => format!(
                 // https://sorbet.org/docs/tuples
                 "[{}]",

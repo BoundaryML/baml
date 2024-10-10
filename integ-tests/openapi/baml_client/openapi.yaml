@@ -1367,7 +1367,9 @@ components:
               email:
                 type: string
               reason:
-                type: string
+                oneOf:
+                - type: string
+                - type: string
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -2324,8 +2326,8 @@ components:
             properties:
               input:
                 oneOf:
-                - type: boolean
                 - type: string
+                - type: boolean
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -2571,11 +2573,14 @@ components:
       type: object
       properties:
         bookOrder:
-          $ref: '#/components/schemas/BookOrder'
+          oneOf:
+          - $ref: '#/components/schemas/BookOrder'
         flightConfirmation:
-          $ref: '#/components/schemas/FlightConfirmation'
+          oneOf:
+          - $ref: '#/components/schemas/FlightConfirmation'
         groceryReceipt:
-          $ref: '#/components/schemas/GroceryReceipt'
+          oneOf:
+          - $ref: '#/components/schemas/GroceryReceipt'
       required: []
       additionalProperties: false
     DummyOutput:
@@ -2712,9 +2717,9 @@ components:
           type: array
           items:
             oneOf:
-            - type: number
-            - type: integer
             - type: string
+            - type: integer
+            - type: number
         totalAmount:
           type: number
       required:
@@ -2766,9 +2771,11 @@ components:
       type: object
       properties:
         prop3:
-          type: string
+          oneOf:
+          - type: string
         prop4:
-          type: string
+          oneOf:
+          - type: string
         prop20:
           $ref: '#/components/schemas/Nested2'
       required:
@@ -2778,9 +2785,11 @@ components:
       type: object
       properties:
         prop11:
-          type: string
+          oneOf:
+          - type: string
         prop12:
-          type: string
+          oneOf:
+          - type: string
       required: []
       additionalProperties: false
     OptionalTest_Prop1:
@@ -2834,8 +2843,8 @@ components:
       properties:
         amount:
           oneOf:
-          - type: number
           - type: integer
+          - type: number
         unit:
           type: string
       required:
@@ -2848,8 +2857,8 @@ components:
           $ref: '#/components/schemas/DataType'
         value:
           oneOf:
-          - $ref: '#/components/schemas/Event'
           - $ref: '#/components/schemas/Resume'
+          - $ref: '#/components/schemas/Event'
       required:
       - dataType
       - value
@@ -2864,7 +2873,9 @@ components:
         total_cost:
           type: number
         venue:
-          type: string
+          oneOf:
+          - type: string
+          - type: string
       required:
       - items
       - venue
@@ -2893,7 +2904,9 @@ components:
           additionalProperties:
             $ref: '#/components/schemas/Quantity'
         recipe_type:
-          type: string
+          oneOf:
+          - type: string
+          - type: string
       required:
       - ingredients
       - recipe_type
@@ -2931,7 +2944,8 @@ components:
       type: object
       properties:
         prop1:
-          type: string
+          oneOf:
+          - type: string
         prop2:
           oneOf:
           - $ref: '#/components/schemas/Nested'
@@ -2939,27 +2953,29 @@ components:
         prop5:
           type: array
           items:
-            type: string
+            oneOf:
+            - type: string
         prop6:
           oneOf:
+          - type: string
           - type: array
             items:
               $ref: '#/components/schemas/Nested'
-          - type: string
         nested_attrs:
           type: array
           items:
             oneOf:
-            - $ref: '#/components/schemas/Nested'
             - type: string
+            - $ref: '#/components/schemas/Nested'
         parens:
-          type: string
+          oneOf:
+          - type: string
         other_group:
           oneOf:
+          - type: string
           - oneOf:
             - type: integer
             - type: string
-          - type: string
       required:
       - prop2
       - prop5
@@ -3069,14 +3085,14 @@ components:
       properties:
         prop1:
           oneOf:
-          - type: boolean
           - type: string
+          - type: boolean
         prop2:
           type: array
           items:
             oneOf:
-            - type: boolean
             - type: number
+            - type: boolean
         prop3:
           oneOf:
           - type: array

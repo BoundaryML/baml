@@ -142,7 +142,7 @@ module Baml
       include Baml::Sorbet::Struct
       const :bookOrder, T.nilable(T.any(Baml::PartialTypes::BookOrder, T.nilable(NilClass)))
       const :flightConfirmation, T.nilable(T.any(Baml::PartialTypes::FlightConfirmation, T.nilable(NilClass)))
-      const :groceryReceipt, T.nilable(T.any(T.nilable(NilClass), Baml::PartialTypes::GroceryReceipt))
+      const :groceryReceipt, T.nilable(T.any(Baml::PartialTypes::GroceryReceipt, T.nilable(NilClass)))
 
       def initialize(props)
         super(
@@ -306,7 +306,7 @@ module Baml
       include Baml::Sorbet::Struct
       const :receiptId, T.nilable(String)
       const :storeName, T.nilable(String)
-      const :items, T::Array[T.nilable(T.any(T.nilable(String), T.nilable(Float), T.nilable(Integer)))]
+      const :items, T::Array[T.nilable(T.any(T.nilable(String), T.nilable(Integer), T.nilable(Float)))]
       const :totalAmount, T.nilable(Float)
 
       def initialize(props)
@@ -368,8 +368,8 @@ module Baml
     end
     class Nested < T::Struct
       include Baml::Sorbet::Struct
-      const :prop3, T.nilable(T.any(T.nilable(NilClass), T.nilable(String)))
-      const :prop4, T.nilable(T.any(T.nilable(NilClass), T.nilable(String)))
+      const :prop3, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
+      const :prop4, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
       const :prop20, Baml::PartialTypes::Nested2
 
       def initialize(props)
@@ -385,7 +385,7 @@ module Baml
     class Nested2 < T::Struct
       include Baml::Sorbet::Struct
       const :prop11, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
-      const :prop12, T.nilable(T.any(T.nilable(NilClass), T.nilable(String)))
+      const :prop12, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
 
       def initialize(props)
         super(
@@ -473,7 +473,7 @@ module Baml
     class RaysData < T::Struct
       include Baml::Sorbet::Struct
       const :dataType, T.nilable(Baml::Types::DataType)
-      const :value, T.nilable(T.any(Baml::PartialTypes::Event, Baml::PartialTypes::Resume))
+      const :value, T.nilable(T.any(Baml::PartialTypes::Resume, Baml::PartialTypes::Event))
 
       def initialize(props)
         super(
@@ -488,7 +488,7 @@ module Baml
       include Baml::Sorbet::Struct
       const :items, T::Array[Baml::PartialTypes::ReceiptItem]
       const :total_cost, T.nilable(Float)
-      const :venue, T.nilable(String)
+      const :venue, T.nilable(T.any(T.nilable(String), T.nilable(String)))
 
       def initialize(props)
         super(
@@ -521,7 +521,7 @@ module Baml
     class Recipe < T::Struct
       include Baml::Sorbet::Struct
       const :ingredients, T::Hash[String, Baml::PartialTypes::Quantity]
-      const :recipe_type, T.nilable(String)
+      const :recipe_type, T.nilable(T.any(T.nilable(String), T.nilable(String)))
 
       def initialize(props)
         super(
@@ -557,11 +557,11 @@ module Baml
     class Schema < T::Struct
       include Baml::Sorbet::Struct
       const :prop1, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
-      const :prop2, T.nilable(T.any(T.nilable(String), Baml::PartialTypes::Nested))
-      const :prop5, T::Array[T.nilable(T.any(T.nilable(NilClass), T.nilable(String)))]
+      const :prop2, T.nilable(T.any(Baml::PartialTypes::Nested, T.nilable(String)))
+      const :prop5, T::Array[T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))]
       const :prop6, T.nilable(T.any(T.nilable(String), T::Array[Baml::PartialTypes::Nested]))
-      const :nested_attrs, T::Array[T.nilable(T.any(T.nilable(String), Baml::PartialTypes::Nested, T.nilable(NilClass)))]
-      const :parens, T.nilable(T.any(T.nilable(NilClass), T.nilable(String)))
+      const :nested_attrs, T::Array[T.nilable(T.any(T.nilable(String), T.nilable(NilClass), Baml::PartialTypes::Nested))]
+      const :parens, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
       const :other_group, T.nilable(T.any(T.nilable(String), T.nilable(T.any(T.nilable(Integer), T.nilable(String)))))
 
       def initialize(props)

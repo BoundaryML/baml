@@ -607,33 +607,10 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                 },
             },
             FieldType::Union(union) => {
-                let (_nulls, mut nonnull_types): (Vec<_>, Vec<_>) =
+                let (_nulls, nonnull_types): (Vec<_>, Vec<_>) =
                     union.into_iter().partition(|t| t.is_null());
 
-                // Sort non nulls by some made up key so that same types end up
-                // being consecutive, that way we can remove them in the dedup call
-                // below. Could also use a HashSet but there's no Hash impl for
-                // FieldType and literals need to be treated differently for this
-                // openapi case.
-                let dedup = |f: &FieldType| match f {
-                    FieldType::Literal(v) => v.literal_base_type().to_string(),
-                    // Class, Enum or Primitive.
-                    // TODO: Could this be something other than the above types?
-                    // Union of unions? Is it necessary to recurse here?
-                    other => other.to_string(),
-                };
-
-                // TODO: Store str key and FieldType ref in a tuple to avoid
-                // constructing the string twice (sorting + deduping).
-                nonnull_types.sort_by_cached_key(|t| dedup(*t));
-
-                // Remove duplicate types. For example union of string literals
-                // should become just a string type.
-                nonnull_types.dedup_by_key(|t| dedup(*t));
-
-                println!("NON NULLS {:?}", nonnull_types);
-
-                let mut one_of = nonnull_types
+                let one_of = nonnull_types
                     .iter()
                     .map(|t| t.to_type_spec(ir))
                     .collect::<Result<Vec<_>>>()?;
@@ -642,13 +619,6 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                     anyhow::bail!("BAML<->OpenAPI unions must have at least one non-null type")
                 }
 
-                // Reduced to only one concrete type.
-                if one_of.len() == 1 {
-                    return Ok(one_of.remove(0));
-                }
-
-                // Deduped types. A literal union like "a" | 2 | "b" | 4
-                // becomes one of [string, int]
                 TypeSpecWithMeta {
                     meta: TypeMetadata {
                         title: None,

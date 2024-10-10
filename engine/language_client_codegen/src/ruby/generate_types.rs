@@ -144,20 +144,15 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 )
             }
             FieldType::Primitive(_) => format!("T.nilable({})", self.to_type_ref()),
-            FieldType::Union(union) => {
-                // Dedup types for unions. `string | int | string | int` is just `string | int`.
-                let mut deduped =
-                    HashSet::<String>::from_iter(union.iter().map(FieldType::to_partial_type_ref))
-                        .into_iter()
-                        .collect::<Vec<_>>();
-
-                if deduped.len() == 1 {
-                    deduped.remove(0)
-                } else {
-                    // https://sorbet.org/docs/union-types
-                    format!("T.nilable(T.any({}))", deduped.join(", "))
-                }
-            }
+            FieldType::Union(inner) => format!(
+                // https://sorbet.org/docs/union-types
+                "T.nilable(T.any({}))",
+                inner
+                    .iter()
+                    .map(|t| t.to_partial_type_ref())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             FieldType::Tuple(inner) => format!(
                 // https://sorbet.org/docs/tuples
                 "T.nilable([{}])",
