@@ -1,5 +1,5 @@
 import assert from 'assert'
-import { Image, ClientRegistry } from '@boundaryml/baml'
+import { Image, ClientRegistry, BamlValidationError } from '@boundaryml/baml'
 import TypeBuilder from '../baml_client/type_builder'
 import { scheduler } from 'node:timers/promises'
 import { image_b64, audio_b64 } from './base64_test_data'
@@ -593,10 +593,15 @@ describe('Integ tests', () => {
       await b.DummyOutputFunction('dummy input')
       fail('Expected b.DummyOutputFunction to throw a BamlValidationError')
     } catch (error: any) {
-      expect(error.message).toContain('BamlValidationError')
-      expect(error.prompt).toContain('Say "hello there".')
-      expect(error.raw_output).toBeDefined()
-      expect(error.raw_output.length).toBeGreaterThan(0)
+      if (error instanceof BamlValidationError) {
+        console.log('error', error)
+        expect(error.message).toContain('BamlValidationError')
+        expect(error.prompt).toContain('Say "hello there".')
+        expect(error.raw_output).toBeDefined()
+        expect(error.raw_output.length).toBeGreaterThan(0)
+      } else {
+        fail('Expected error to be an instance of BamlValidationError')
+      }
     }
   })
 

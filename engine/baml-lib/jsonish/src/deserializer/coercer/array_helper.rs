@@ -22,11 +22,9 @@ pub(super) fn pick_best(
     target: &FieldType,
     res: &[Result<BamlValueWithFlags, ParsingError>],
 ) -> Result<BamlValueWithFlags, ParsingError> {
-    if res.is_empty() {
+    let Some(first) = res.first() else {
         return Err(ctx.error_unexpected_empty_array(target));
-    }
-
-    let first = res.first().unwrap();
+    };
     if res.len() == 1 {
         return first.clone();
     }

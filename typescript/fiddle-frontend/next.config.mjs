@@ -2,6 +2,9 @@
 const nextConfig = {
   transpilePackages: ['jotai-devtools', '@baml/playground-common', '@gloo-ai/baml-schema-wasm-web', '@baml/common'],
   productionBrowserSourceMaps: true,
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   webpack(config, { isServer, dev }) {
     config.experiments = {
       ...config.experiments,

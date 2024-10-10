@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.60.0](https://github.com/boundaryml/baml/compare/0.59.0..0.60.0) - 2024-10-09
+
+### Miscellaneous Chores
+
+- update Dockerfile (#1017) - ([51539b7](https://github.com/boundaryml/baml/commit/51539b7b5778d6a3e6619698d2033d4f66f15d27)) - Ikko Eltociear Ashimine
+- Revert "feat: add a WYSIWYG UI (Swagger UI) to `baml-cli dev` (#1011)" (#1018) - ([f235050](https://github.com/boundaryml/baml/commit/f235050a57916116aff8359236b819ac69011a21)) - Greg Hale
+
+### Bug fixes
+
+- Fix python types for BamlValidationError (#1020) - ([520a09c](https://github.com/boundaryml/baml/commit/520a09c478ea8c5eb811447ce9b36689692aa01d)) - aaronvg
+- coerce floats and ints with commas and other special cases (#1023) - ([904492e](https://github.com/boundaryml/baml/commit/904492ee298727085e00a391beb628c8d999083e)) - aaronvg
+
+### Docs
+
+- Add Docs for Jupyter notebook usage (#1008) - ([c51d918](https://github.com/boundaryml/baml/commit/c51d918f76f63ce55b353661459ba3b27b9a0ea7)) - aaronvg
+
+## [0.59.0](https://github.com/boundaryml/baml/compare/0.58.0..0.59.0) - 2024-10-04
+
+### Features
+
+- **(vertex)** allow specifying creds as JSON object (#1009) - ([98868da](https://github.com/boundaryml/baml/commit/98868da4e75dde3a00178cbf60afebc501d37b0c)) - Samuel Lijin
+- Add prompt, raw_output and error message to BamlValidationError in TS and Python (#1005) - ([447dbf4](https://github.com/boundaryml/baml/commit/447dbf4e0d0cf0744307ef50f89050752334d982)) - aaronvg
+- Add BamlValidationError to `baml-cli serve` (#1007) - ([3b8cf16](https://github.com/boundaryml/baml/commit/3b8cf1636594c1a7245a733556efa690da40e139)) - aaronvg
+- Include a WYSIWYG UI (Swagger UI) to `baml-cli dev` (#1011) - ([fe9dde4](https://github.com/BoundaryML/baml/commit/fe9dde4f3a7ff0503fd13087da50e4da9d97c3a0)) - imalsogreg
+
 ## [0.58.0](https://github.com/boundaryml/baml/compare/0.57.1..0.58.0) - 2024-10-02
 
 ### Features
@@ -9,9 +34,11 @@ All notable changes to this project will be documented in this file. See [conven
 - Add client registry support for BAML over Rest (OpenAPI) (#1000) - ([abe70bf](https://github.com/boundaryml/baml/commit/abe70bf368c9361a3ab32643735f68e0fafd8425)) - Lorenz Ohly
 
 ### Bug Fixes
+
 - Improve performance of parsing escaped characters in strings during streaming. (#1002) - ([b35ae2c](https://github.com/boundaryml/baml/commit/b35ae2c4777572206a79af5c2943f5bdd6ada081)) - hellovai
 
 ### Documentation
+
 - Add Docs for Document Extraction API (#996) - ([da1a5e8](https://github.com/boundaryml/baml/commit/da1a5e876368074235f4474673a1ebfe632e11ed)) - aaronvg
 
 ## [0.57.1](https://github.com/boundaryml/baml/compare/0.57.0..0.57.1) - 2024-09-29

@@ -34,9 +34,9 @@ pub fn parse<'a>(str: &'a str, mut options: ParseOptions) -> Result<Value> {
             Ok(items) => match items.len() {
                 0 => {}
                 1 => {
-                    let res = items.into_iter().next().unwrap();
+                    let res = items.into_iter().next();
                     match res {
-                        MarkdownResult::CodeBlock(s, v) => {
+                        Some(MarkdownResult::CodeBlock(s, v)) => {
                             return Ok(Value::AnyOf(
                                 vec![Value::Markdown(s.to_string(), Box::new(v))],
                                 str.to_string(),
@@ -79,8 +79,6 @@ pub fn parse<'a>(str: &'a str, mut options: ParseOptions) -> Result<Value> {
                         })
                         .collect::<Vec<_>>();
 
-                    println!("Found: {}", others.len());
-
                     let items = items
                         .into_iter()
                         .filter_map(|res| match res {
@@ -106,37 +104,31 @@ pub fn parse<'a>(str: &'a str, mut options: ParseOptions) -> Result<Value> {
 
     if options.all_finding_all_json_objects {
         match multi_json_parser::parse(str, &options) {
-            Ok(items) => {
-                match items.len() {
-                    0 => {}
-                    1 => {
-                        return Ok(Value::AnyOf(
-                            vec![Value::FixedJson(
-                                items.into_iter().next().unwrap().into(),
-                                vec![Fixes::GreppedForJSON],
-                            )],
-                            str.to_string(),
-                        ))
-                    }
-                    _ => {
-                        // In the case of multiple JSON objects:
-                        // Consider it as:
-                        // [item1, item2, ..., itemN, [item1, item2, ..., itemN], str]
-                        // AKA:
-                        //  - All the items individually
-                        //  - All the items as a list
-                        //  - The original string
-
-                        let items_clone = Value::Array(items.clone());
-                        let items = items
-                            .into_iter()
-                            .chain(std::iter::once(items_clone))
-                            .map(|v| Value::FixedJson(v.into(), vec![Fixes::GreppedForJSON]))
-                            .collect::<Vec<_>>();
-                        return Ok(Value::AnyOf(items, str.to_string()));
-                    }
+            Ok(items) => match items.len() {
+                0 => {}
+                1 => {
+                    return Ok(Value::AnyOf(
+                        vec![Value::FixedJson(
+                            items
+                                .into_iter()
+                                .next()
+                                .ok_or_else(|| anyhow::anyhow!("Expected 1 item"))?
+                                .into(),
+                            vec![Fixes::GreppedForJSON],
+                        )],
+                        str.to_string(),
+                    ))
                 }
-            }
+                _ => {
+                    let items_clone = Value::Array(items.clone());
+                    let items = items
+                        .into_iter()
+                        .chain(std::iter::once(items_clone))
+                        .map(|v| Value::FixedJson(v.into(), vec![Fixes::GreppedForJSON]))
+                        .collect::<Vec<_>>();
+                    return Ok(Value::AnyOf(items, str.to_string()));
+                }
+            },
             Err(e) => {
                 log::debug!("Error parsing multiple JSON objects: {:?}", e);
             }
@@ -149,7 +141,9 @@ pub fn parse<'a>(str: &'a str, mut options: ParseOptions) -> Result<Value> {
                 match items.len() {
                     0 => {}
                     1 => {
-                        let (v, fixes) = items.into_iter().next().unwrap();
+                        let (v, fixes) = items.into_iter().next().ok_or_else(|| {
+                            anyhow::anyhow!("Expected 1 item when performing fixes")
+                        })?;
                         return Ok(Value::AnyOf(
                             vec![Value::FixedJson(v.into(), fixes)],
                             str.to_string(),

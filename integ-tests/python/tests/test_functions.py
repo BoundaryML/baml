@@ -1,3 +1,5 @@
+import json
+import os
 import time
 from typing import List
 import pytest
@@ -870,9 +872,55 @@ async def test_nested_class_streaming():
 
 
 @pytest.mark.asyncio
-async def test_dynamic_clients():
+async def test_dynamic_client_with_openai():
     cb = baml_py.ClientRegistry()
     cb.add_llm_client("MyClient", "openai", {"model": "gpt-3.5-turbo"})
+    cb.set_primary("MyClient")
+
+    capitol = await b.ExpectFailure(
+        baml_options={"client_registry": cb},
+    )
+    assert_that(capitol.lower()).contains("london")
+
+
+@pytest.mark.asyncio
+async def test_dynamic_client_with_vertex_json_str_creds():
+    cb = baml_py.ClientRegistry()
+    cb.add_llm_client(
+        "MyClient",
+        "vertex-ai",
+        {
+            "model": "gemini-1.5-pro",
+            "project_id": "sam-project-vertex-1",
+            "location": "us-central1",
+            "credentials": os.environ[
+                "INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"
+            ],
+        },
+    )
+    cb.set_primary("MyClient")
+
+    capitol = await b.ExpectFailure(
+        baml_options={"client_registry": cb},
+    )
+    assert_that(capitol.lower()).contains("london")
+
+
+@pytest.mark.asyncio
+async def test_dynamic_client_with_vertex_json_object_creds():
+    cb = baml_py.ClientRegistry()
+    cb.add_llm_client(
+        "MyClient",
+        "vertex-ai",
+        {
+            "model": "gemini-1.5-pro",
+            "project_id": "sam-project-vertex-1",
+            "location": "us-central1",
+            "credentials": json.loads(
+                os.environ["INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"]
+            ),
+        },
+    )
     cb.set_primary("MyClient")
 
     capitol = await b.ExpectFailure(
@@ -1084,3 +1132,21 @@ async def test_env_vars_reset():
         "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
     )
     assert len(people) > 0
+
+
+@pytest.mark.asyncio
+async def test_baml_validation_error_format():
+    with pytest.raises(errors.BamlValidationError) as excinfo:
+        try:
+            await b.DummyOutputFunction("blah")
+        except errors.BamlValidationError as e:
+            print("Error: ", e)
+            assert hasattr(e, "prompt"), "Error object should have 'prompt' attribute"
+            assert hasattr(
+                e, "raw_output"
+            ), "Error object should have 'raw_output' attribute"
+            assert hasattr(e, "message"), "Error object should have 'message' attribute"
+            assert 'Say "hello there"' in e.prompt
+
+            raise e
+    assert "Failed to parse" in str(excinfo)
