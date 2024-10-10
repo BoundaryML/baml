@@ -69,7 +69,7 @@ impl std::fmt::Display for LiteralValue {
 }
 
 /// FieldType represents the type of either a class field or a function arg.
-#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, Debug, Clone)]
 pub enum FieldType {
     Primitive(TypeValue),
     Enum(String),
