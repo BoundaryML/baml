@@ -14,6 +14,11 @@ fn builder() -> reqwest::ClientBuilder {
                 .connect_timeout(Duration::from_secs(10))
                 .danger_accept_invalid_certs(danger_accept_invalid_certs)
                 .http2_keep_alive_interval(Some(Duration::from_secs(10)))
+                // We don't want to keep idle connections around due to sometimes
+                // causing a stall in the connection pool across FFI boundaries
+                // https://github.com/seanmonstar/reqwest/issues/600
+                .pool_max_idle_per_host(0)
+
         }
     }
 }
@@ -29,11 +34,8 @@ pub(crate) fn create_tracing_client() -> Result<reqwest::Client> {
         } else {
             let cb = builder()
                 // Wait up to 30s to send traces to the backend
-                .read_timeout(Duration::from_secs(30))
-                // We don't want to keep idle connections around due to sometimes
-                // causing a stall in the connection pool across FFI boundaries
-                // https://github.com/seanmonstar/reqwest/issues/600
-                .pool_max_idle_per_host(0);
+                .read_timeout(Duration::from_secs(30));
+
         }
     }
 
