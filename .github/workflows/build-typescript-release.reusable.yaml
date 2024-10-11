@@ -31,7 +31,6 @@ jobs:
           #   host: ubuntu-latest
           #   # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
           #   # need a new version of manylinux to build crates on arm64-linux
-          #   container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
           #   node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
           #   cargo_args: -p baml-typescript-ffi -p baml-python-ffi
           #   baml_build_help: "off"
@@ -51,19 +50,17 @@ jobs:
 
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-latest
-            # Using any of the manylinux containers breaks a bunch of stuff: actions/checkout here, pnpm build there - not worth it.
-            container: null
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
             mise: true
 
           - target: x86_64-unknown-linux-musl
-            runs_on: ubuntu-latest
+            host: ubuntu-latest
+            node_build: pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
             # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
             manylinux: musllinux_1_1
 
     name: Build ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
-    container: ${{ matrix._.container }}
     env:
       BAML_BUILD_HELP: ${{ matrix._.baml_build_help }}
     steps:
