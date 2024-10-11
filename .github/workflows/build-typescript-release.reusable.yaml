@@ -56,7 +56,7 @@ jobs:
           - target: x86_64-unknown-linux-musl
             host: ubuntu-latest
             before: |
-              curl -LO https://musl.cc/x86_64-linux-musl-cross.tgz
+              curl -LO https://musl.cc/x86_64-linux-musl-native.tgz
               tar -xzf x86_64-linux-musl-native.tgz
               echo "$PWD/x86_64-linux-musl-native/bin" >> $GITHUB_PATH
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
