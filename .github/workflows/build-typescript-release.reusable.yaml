@@ -54,10 +54,8 @@ jobs:
             mise: true
 
           - target: x86_64-unknown-linux-musl
-            host: ubuntu-latest
-            node_build: pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
-            # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
-            manylinux: musllinux_1_1
+            host: node-alpine
+            node_build: apk add musl-dev gcc build-base && CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-alpine-linux-musl-gcc pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
 
     name: Build ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
@@ -98,11 +96,7 @@ jobs:
           workspaces: engine
           shared-key: engine-${{ github.job }}-${{ matrix._.target }}
           cache-on-failure: true
-
-      - name: Build Rust
-        run: cargo build --release --target ${{ matrix._.target }} ${{ matrix._.cargo_args }}
-        working-directory: engine
-
+      
       # Build NAPI release
       - name: PNPM Build
         run: ${{ matrix._.node_build }}
