@@ -55,7 +55,7 @@ jobs:
 
           - target: x86_64-unknown-linux-musl
             host: node-alpine
-            node_build: apk add musl-dev gcc build-base && CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-alpine-linux-musl-gcc pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
+            node_build: apk add musl-dev gcc build-base && CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-alpine-linux-musl-gcc pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
 
     name: Build ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
