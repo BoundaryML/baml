@@ -1150,7 +1150,7 @@ async def test_baml_validation_error_format():
 @pytest.mark.asyncio
 async def test_baml_finish_reason():
     cr = baml_py.ClientRegistry()
-    cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini", "max_tokens": 1, "finish_reason_whitelist": ["stop"]})
+    cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini", "max_tokens": 1, "finish_reason_allowlist": ["stop"]})
     cr.set_primary("MyClient")
 
     with pytest.raises(errors.BamlValidationError) as excinfo:
@@ -1163,7 +1163,7 @@ async def test_baml_finish_reason():
 @pytest.mark.asyncio
 async def test_baml_finish_reason_streaming():
     cr = baml_py.ClientRegistry()
-    cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini", "max_tokens": 1, "finish_reason_whitelist": ["stop"]})
+    cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini", "max_tokens": 1, "finish_reason_allowlist": ["stop"]})
     cr.set_primary("MyClient")
 
     with pytest.raises(errors.BamlValidationError) as excinfo:

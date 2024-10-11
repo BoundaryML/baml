@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use super::AllowedMetadata;
 
 pub enum FinishReasonOptions {
-    WhiteListed(Vec<String>),
-    BlackListed(Vec<String>),
+    AllowList(Vec<String>),
+    DenyList(Vec<String>),
 }
 
 impl FinishReasonOptions {
@@ -14,10 +14,10 @@ impl FinishReasonOptions {
             return true;
         }
         match self {
-            FinishReasonOptions::WhiteListed(allow_list) => allow_list
+            FinishReasonOptions::AllowList(allowlist) => allowlist
                 .iter()
                 .any(|allowed| allowed.eq_ignore_ascii_case(finish_reason)),
-            FinishReasonOptions::BlackListed(deny_list) => !deny_list
+            FinishReasonOptions::DenyList(deny_list) => !deny_list
                 .iter()
                 .any(|denied| denied.eq_ignore_ascii_case(finish_reason)),
         }
@@ -44,8 +44,8 @@ impl PropertiesHandler {
     pub fn remove(&mut self, key: &str) -> Result<Option<serde_json::Value>> {
         // Ban certain keys
         match key {
-            "finish_reason_whitelist"
-            | "finish_reason_blacklist"
+            "finish_reason_allowlist"
+            | "finish_reason_denylist"
             | "allowed_role_metadata"
             | "base_url"
             | "api_key"
@@ -69,33 +69,33 @@ impl PropertiesHandler {
     }
 
     pub fn pull_finish_reason_options(&mut self) -> Result<Option<FinishReasonOptions>> {
-        let whitelist = match self.get("finish_reason_whitelist")? {
+        let allowlist = match self.get("finish_reason_allowlist")? {
             Some(value) => match value.as_array() {
                 Some(array) => array
                     .iter()
                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                     .collect::<Vec<String>>(),
-                None => anyhow::bail!("finish_reason_whitelist must be an array of strings"),
+                None => anyhow::bail!("finish_reason_allowlist must be an array of strings"),
             },
             None => vec![],
         };
 
-        let blacklist = match self.get("finish_reason_blacklist")? {
+        let denylist = match self.get("finish_reason_denylist")? {
             Some(value) => match value.as_array() {
                 Some(array) => array
                     .iter()
                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                     .collect::<Vec<String>>(),
-                None => anyhow::bail!("finish_reason_blacklist must be an array of strings"),
+                None => anyhow::bail!("finish_reason_denylist must be an array of strings"),
             },
             None => vec![],
         };
 
-        Ok(match (whitelist.is_empty(), blacklist.is_empty()) {
-            (false, true) => Some(FinishReasonOptions::WhiteListed(whitelist)),
-            (true, false) => Some(FinishReasonOptions::BlackListed(blacklist)),
+        Ok(match (allowlist.is_empty(), denylist.is_empty()) {
+            (false, true) => Some(FinishReasonOptions::AllowList(allowlist)),
+            (true, false) => Some(FinishReasonOptions::DenyList(denylist)),
             (false, false) => anyhow::bail!(
-                "Only one of finish_reason_whitelist or finish_reason_blacklist can be specified"
+                "Only one of finish_reason_allowlist or finish_reason_denylist can be specified"
             ),
             (true, true) => None,
         })

@@ -644,7 +644,7 @@ describe('Integ tests', () => {
 
   it('should handle non-terminal finish reason', async () => {
     const cr = new ClientRegistry()
-    cr.addLlmClient('MyClient', 'openai', { model: 'gpt-4o-mini', max_tokens: 1, finish_reason_whitelist: ['stop'] })
+    cr.addLlmClient('MyClient', 'openai', { model: 'gpt-4o-mini', max_tokens: 1, finish_reason_allowlist: ['stop'] })
     cr.setPrimary('MyClient')
 
     try {
@@ -664,7 +664,7 @@ describe('Integ tests', () => {
 
   it('should handle non-terminal finish reason in streaming', async () => {
     const cr = new ClientRegistry()
-    cr.addLlmClient('MyClient', 'openai', { model: 'gpt-4o-mini', max_tokens: 1, finish_reason_whitelist: ['stop'] })
+    cr.addLlmClient('MyClient', 'openai', { model: 'gpt-4o-mini', max_tokens: 1, finish_reason_allowlist: ['stop'] })
     cr.setPrimary('MyClient')
 
     try {
