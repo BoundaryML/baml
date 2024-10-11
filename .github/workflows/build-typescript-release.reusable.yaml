@@ -60,21 +60,21 @@ jobs:
               tar -xzf x86_64-linux-musl-cross.tgz
               echo "$PWD/x86_64-linux-musl-cross/bin" >> $GITHUB_PATH
 
-              cat >>$GITHUB_ENV <<EOF
-              CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc
-              CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++
-              AR_x86_64_unknown_linux_musl=x86_64-linux-musl-ar
-              CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-cc
-              EOF
-            node_build: pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
+              # cat >>$GITHUB_ENV <<EOF
+              # CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc
+              # CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++
+              # AR_x86_64_unknown_linux_musl=x86_64-linux-musl-ar
+              # CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-cc
+              # EOF
+            node_build: env && pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
 
-          # - target: aarch64-unknown-linux-musl
-          #   host: ubuntu-latest
-          #   before: |
-          #     curl -LO https://musl.cc/aarch64-linux-musl-cross.tgz
-          #     tar -xzf aarch64-linux-musl-cross.tgz
-          #     echo "$PWD/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
-          #   node_build: pnpm build:napi-release --target aarch64-unknown-linux-musl --use-napi-cross
+          - target: aarch64-unknown-linux-musl
+            host: ubuntu-latest
+            before: |
+              curl -LO https://musl.cc/aarch64-linux-musl-cross.tgz
+              tar -xzf aarch64-linux-musl-cross.tgz
+              echo "$PWD/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
+            node_build: pnpm build:napi-release --target aarch64-unknown-linux-musl --use-napi-cross
 
     name: Build ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
