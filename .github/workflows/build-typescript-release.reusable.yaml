@@ -21,37 +21,34 @@ jobs:
       fail-fast: false
       matrix:
         _:
-          # - target: aarch64-apple-darwin
-          #   host: macos-14
-          #   node_build: pnpm build:napi-release --target aarch64-apple-darwin
-          #   baml_build_help: "off"
-          #   # mise: true
+          - target: aarch64-apple-darwin
+            host: macos-14
+            node_build: pnpm build:napi-release --target aarch64-apple-darwin
+            baml_build_help: "off"
 
-          # - target: aarch64-unknown-linux-gnu
-          #   host: ubuntu-latest
-          #   # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
-          #   # need a new version of manylinux to build crates on arm64-linux
-          #   node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
-          #   cargo_args: -p baml-typescript-ffi -p baml-python-ffi
-          #   baml_build_help: "off"
+          - target: aarch64-unknown-linux-gnu
+            host: ubuntu-latest
+            # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
+            # need a new version of manylinux to build crates on arm64-linux
+            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+            baml_build_help: "off"
 
-          # - target: x86_64-apple-darwin
-          #   host: macos-latest
-          #   node_build: pnpm build:napi-release --target x86_64-apple-darwin
-          #   baml_build_help: "off"
-          #   # mise: true
+          - target: x86_64-apple-darwin
+            host: macos-latest
+            node_build: pnpm build:napi-release --target x86_64-apple-darwin
+            baml_build_help: "off"
 
-          # - target: x86_64-pc-windows-msvc
-          #   host: windows-latest
-          #   node_build: pnpm build:napi-release --target x86_64-pc-windows-msvc
-          #   setup-python-architecture: x64
-          #   cargo_args: -p baml-typescript-ffi -p baml-python-ffi
-          #   baml_build_help: "off"
+          - target: x86_64-pc-windows-msvc
+            host: windows-latest
+            node_build: pnpm build:napi-release --target x86_64-pc-windows-msvc
+            setup-python-architecture: x64
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+            baml_build_help: "off"
 
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-latest
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
-            mise: true
 
           - target: x86_64-unknown-linux-musl
             host: ubuntu-latest
@@ -60,12 +57,11 @@ jobs:
               tar -xzf x86_64-linux-musl-cross.tgz
               echo "$PWD/x86_64-linux-musl-cross/bin" >> $GITHUB_PATH
 
-              # cat >>$GITHUB_ENV <<EOF
-              # CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc
-              # CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++
-              # AR_x86_64_unknown_linux_musl=x86_64-linux-musl-ar
-              # CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-cc
-              # EOF
+              cat >>$GITHUB_ENV <<EOF
+              CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc
+              CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++
+              AR_x86_64_unknown_linux_musl=x86_64-linux-musl-ar
+              EOF
             node_build: env && pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
 
           - target: aarch64-unknown-linux-musl
@@ -84,19 +80,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: jdx/mise-action@v2
-        if: ${{ matrix._.mise }}
-
-      - uses: pnpm/action-setup@v3
         with:
-          version: 9.0.6
-          run_install: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: |
-            engine/language_client_typescript/pnpm-lock.yaml
+          install_args: node pnpm
 
       # Install rust
       - uses: dtolnay/rust-toolchain@stable
@@ -118,6 +103,7 @@ jobs:
       
       - name: Build tools setup
         run: ${{ matrix._.before }}
+
       # Build NAPI release
       - name: PNPM Build
         run: ${{ matrix._.node_build }}
