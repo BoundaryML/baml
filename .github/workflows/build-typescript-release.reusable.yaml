@@ -57,17 +57,17 @@ jobs:
             host: ubuntu-latest
             before: |
               curl -LO https://musl.cc/x86_64-linux-musl-cross.tgz
-              tar -xzf x86_64-linux-musl-cross.tgz
-              echo "$PWD/x86_64-linux-musl-cross/bin" >> $GITHUB_PATH
+              tar -xzf x86_64-linux-musl-native.tgz
+              echo "$PWD/x86_64-linux-musl-native/bin" >> $GITHUB_PATH
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
 
-          - target: aarch64-unknown-linux-musl
-            host: ubuntu-latest
-            before: |
-              curl -LO https://musl.cc/aarch64-linux-musl-cross.tgz
-              tar -xzf aarch64-linux-musl-cross.tgz
-              echo "$PWD/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
-            node_build: pnpm build:napi-release --target aarch64-unknown-linux-musl --use-napi-cross
+          # - target: aarch64-unknown-linux-musl
+          #   host: ubuntu-latest
+          #   before: |
+          #     curl -LO https://musl.cc/aarch64-linux-musl-cross.tgz
+          #     tar -xzf aarch64-linux-musl-cross.tgz
+          #     echo "$PWD/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
+          #   node_build: pnpm build:napi-release --target aarch64-unknown-linux-musl --use-napi-cross
 
     name: Build ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
