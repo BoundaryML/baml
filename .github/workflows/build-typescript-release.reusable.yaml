@@ -7,7 +7,7 @@ on:
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
-  group: ${{ github.workflow }}-${{ github.ref }}-build-python
+  group: ${{ github.workflow }}-${{ github.ref }}-build-typescript
   cancel-in-progress: true
 
 env:
