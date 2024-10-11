@@ -14,13 +14,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: write
-  id-token: write
-env:
-  DEBUG: napi:*
-  APP_NAME: baml
-  MACOSX_DEPLOYMENT_TARGET: "10.13"
 jobs:
   build-wasm:
     runs-on: ubuntu-latest
@@ -99,114 +92,8 @@ jobs:
   build-ruby-release:
     uses: ./.github/workflows/build-ruby-release.reusable.yaml
 
-  # NB(sam): we should bring back release_language_client_typescript.yaml and make it another reusable workflow
   build-typescript-release:
-    strategy:
-      fail-fast: false
-      matrix:
-        _:
-          - target: aarch64-apple-darwin
-            host: macos-14
-            node_build: pnpm build:napi-release --target aarch64-apple-darwin
-            baml_build_help: "off"
-            # mise: true
-
-          # Disabled as python is not supported on aarch64 windows
-          # - target: aarch64-pc-windows-msvc
-          #   host: windows-latest
-          #   node_build: pnpm build --target aarch64-pc-windows-msvc
-
-          - target: aarch64-unknown-linux-gnu
-            host: ubuntu-latest
-            # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
-            # need a new version of manylinux to build crates on arm64-linux
-            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
-            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
-            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
-            baml_build_help: "off"
-
-          - target: x86_64-apple-darwin
-            host: macos-latest
-            node_build: pnpm build:napi-release --target x86_64-apple-darwin
-            baml_build_help: "off"
-            # mise: true
-
-          - target: x86_64-pc-windows-msvc
-            host: windows-latest
-            node_build: pnpm build:napi-release --target x86_64-pc-windows-msvc
-            setup-python-architecture: x64
-            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
-            baml_build_help: "off"
-
-          - target: x86_64-unknown-linux-gnu
-            host: ubuntu-latest
-            # Using any of the manylinux containers breaks a bunch of stuff: actions/checkout here, pnpm build there - not worth it.
-            container: null
-            node_build: pnpm build:napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
-            mise: true
-
-    name: Build ${{ matrix._.target }}
-    runs-on: ${{ matrix._.host }}
-    container: ${{ matrix._.container }}
-    env:
-      BAML_BUILD_HELP: ${{ matrix._.baml_build_help }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: jdx/mise-action@v2
-        if: ${{ matrix._.mise }}
-
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.0.6
-          run_install: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: |
-            engine/language_client_typescript/pnpm-lock.yaml
-
-      # Install rust
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: ${{ matrix._.target }}
-
-      # Install steps
-      - name: PNPM Install
-        run: pnpm install --frozen-lockfile
-        working-directory: engine/language_client_typescript
-
-      # Rust caching
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
-          shared-key: engine-${{ github.job }}-${{ matrix._.target }}
-          cache-on-failure: true
-
-      - name: Build Rust
-        run: cargo build --release --target ${{ matrix._.target }} ${{ matrix._.cargo_args }}
-        working-directory: engine
-
-      # Build NAPI release
-      - name: PNPM Build
-        run: ${{ matrix._.node_build }}
-        working-directory: engine/language_client_typescript
-      
-      # Build TS wrapper code and helpers as well
-      - name: Build TS
-        run: pnpm build:ts_build
-        working-directory: engine/language_client_typescript
-      
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bindings-${{ matrix._.target }}
-          path: engine/language_client_typescript/*.node
-          if-no-files-found: error
+    uses: ./.github/workflows/build-typescript-release.reusable.yaml
 
   # placeholder fan-in step
   assert-all-builds-passed:
