@@ -12,7 +12,7 @@ fn builder() -> reqwest::ClientBuilder {
                 // regularly have requests that take multiple minutes, due to how
                 // long LLMs take
                 .connect_timeout(Duration::from_secs(10))
-                .danger_accept_invalid_certs(danger_accept_invalid_certs) 
+                .danger_accept_invalid_certs(danger_accept_invalid_certs)
                 .http2_keep_alive_interval(Some(Duration::from_secs(10)))
         }
     }
@@ -27,9 +27,13 @@ pub(crate) fn create_tracing_client() -> Result<reqwest::Client> {
         if #[cfg(target_arch = "wasm32")] {
             let cb = builder();
         } else {
-            let cb =builder()
+            let cb = builder()
                 // Wait up to 30s to send traces to the backend
-                .read_timeout(Duration::from_secs(30));
+                .read_timeout(Duration::from_secs(30))
+                // We don't want to keep idle connections around due to sometimes
+                // causing a stall in the connection pool across FFI boundaries
+                // https://github.com/seanmonstar/reqwest/issues/600
+                .pool_max_idle_per_host(0);
         }
     }
 
