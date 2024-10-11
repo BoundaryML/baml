@@ -24,8 +24,6 @@ jobs:
           - target: aarch64-apple-darwin
             host: macos-14
             node_build: pnpm build:napi-release --target aarch64-apple-darwin
-            baml_build_help: "off"
-            # mise: true
 
           - target: aarch64-unknown-linux-gnu
             host: ubuntu-latest
@@ -33,25 +31,20 @@ jobs:
             # need a new version of manylinux to build crates on arm64-linux
             node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
-            baml_build_help: "off"
 
           - target: x86_64-apple-darwin
             host: macos-latest
             node_build: pnpm build:napi-release --target x86_64-apple-darwin
-            baml_build_help: "off"
-            # mise: true
 
           - target: x86_64-pc-windows-msvc
             host: windows-latest
             node_build: pnpm build:napi-release --target x86_64-pc-windows-msvc
             setup-python-architecture: x64
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
-            baml_build_help: "off"
 
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-latest
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
-            mise: true
 
           - target: x86_64-unknown-linux-musl
             host: ubuntu-latest
@@ -77,56 +70,49 @@ jobs:
 
     name: Build ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
-    env:
-      BAML_BUILD_HELP: ${{ matrix._.baml_build_help }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: jdx/mise-action@v2
-        if: ${{ matrix._.mise }}
-
+      # Install common toolchain dependencies
+      # NOTE: we can't use mise here because it doesn't support Windows
       - uses: pnpm/action-setup@v3
         with:
           version: 9.0.6
           run_install: false
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
           cache-dependency-path: |
             engine/language_client_typescript/pnpm-lock.yaml
-
-      # Install rust
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           targets: ${{ matrix._.target }}
 
-      # Install steps
-      - name: PNPM Install
-        run: pnpm install --frozen-lockfile
-        working-directory: engine/language_client_typescript
-
-      # Rust caching
+      # Set up build cache and dependencies
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
           shared-key: engine-${{ github.job }}-${{ matrix._.target }}
           cache-on-failure: true
+
+      - name: PNPM Install
+        run: pnpm install --frozen-lockfile
+        working-directory: engine/language_client_typescript
       
+      # per-matrix-entry dependency setup
       - name: Build tools setup
         run: ${{ matrix._.before }}
-      # Build NAPI release
+
+      # Build the NAPI library and bindings
       - name: PNPM Build
         run: ${{ matrix._.node_build }}
         working-directory: engine/language_client_typescript
       
-      # Build TS wrapper code and helpers as well
       - name: Build TS
         run: pnpm build:ts_build
         working-directory: engine/language_client_typescript
-      
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
