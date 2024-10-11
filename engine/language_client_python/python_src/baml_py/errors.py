@@ -3,10 +3,11 @@ from .baml_py import (
     BamlClientError,
     BamlClientHttpError,
     BamlInvalidArgumentError,
+    BamlValidationError,
 )
 
 # hack to get the BamlValidationError class which is a custom error
-from .baml_py.errors import BamlValidationError
+# from .baml_py.errors import BamlValidationError
 
 
 __all__ = [

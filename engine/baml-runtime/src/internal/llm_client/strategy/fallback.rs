@@ -6,8 +6,9 @@ use internal_baml_core::ir::{repr::ClientSpec, ClientWalker};
 
 use crate::{
     client_registry::ClientProperty,
-    internal::llm_client::orchestrator::{
-        ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState,
+    internal::llm_client::{
+        orchestrator::{ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState},
+        properties_hander::PropertiesHandler,
     },
     runtime_interface::InternalClientLookup,
     RuntimeContext,
@@ -21,11 +22,11 @@ pub struct FallbackStrategy {
 }
 
 fn resolve_strategy(
-    mut properties: HashMap<String, serde_json::Value>,
+    mut properties: PropertiesHandler,
     _ctx: &RuntimeContext,
 ) -> Result<Vec<ClientSpec>> {
     let strategy = properties
-        .remove("strategy")
+        .remove("strategy")?
         .map(|v| serde_json::from_value::<Vec<String>>(v))
         .transpose()
         .context("Failed to resolve strategy into string[]")?;
@@ -39,6 +40,7 @@ fn resolve_strategy(
         anyhow::bail!("Missing a strategy field");
     };
 
+    let properties = properties.finalize();
     if !properties.is_empty() {
         let supported_keys = ["strategy"];
         let unknown_keys = properties.keys().map(String::from).collect::<Vec<_>>();
@@ -58,14 +60,7 @@ impl TryFrom<(&ClientProperty, &RuntimeContext)> for FallbackStrategy {
     fn try_from(
         (client, ctx): (&ClientProperty, &RuntimeContext),
     ) -> std::result::Result<Self, Self::Error> {
-        let strategy = resolve_strategy(
-            client
-                .options
-                .iter()
-                .map(|(k, v)| Ok((k.clone(), serde_json::json!(v))))
-                .collect::<Result<HashMap<_, _>>>()?,
-            ctx,
-        )?;
+        let strategy = resolve_strategy(client.property_handler()?, ctx)?;
         Ok(Self {
             name: client.name.clone(),
             retry_policy: client.retry_policy.clone(),

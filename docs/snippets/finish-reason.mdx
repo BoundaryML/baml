@@ -1,0 +1,13 @@
+<ParamField path="finish_reason_whitelist" type="string[]">
+  A list of finish reasons to allow. If set, any response with a finish reason not in this list will be rejected.
+  Empty finish reasons are always allowed.
+
+  **Default: `[]`**
+</ParamField>
+
+<ParamField path="finish_reason_blacklist" type="string[]">
+  A list of finish reasons to reject. If set, any response with a finish reason in this list will be rejected.
+  Empty finish reasons are always allowed.
+
+  **Default: `[]`**
+</ParamField>

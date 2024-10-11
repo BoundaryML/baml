@@ -1,56 +1,35 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, default};
 
 use anyhow::{Context, Result};
 
-use crate::{internal::llm_client::AllowedMetadata, RuntimeContext};
+use crate::{
+    internal::llm_client::{properties_hander::PropertiesHandler, AllowedMetadata},
+    RuntimeContext,
+};
 
 use super::PostRequestProperties;
 
 pub fn resolve_properties(
-    mut properties: HashMap<String, serde_json::Value>,
+    mut properties: PropertiesHandler,
     ctx: &RuntimeContext,
 ) -> Result<PostRequestProperties> {
-    let default_role = properties
-        .remove("default_role")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "system".to_string());
+    let default_role = properties.pull_default_role("system")?;
 
-    let base_url = properties
-        .remove("base_url")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .context("When using 'openai-generic', you must specify a base_url")?;
-    let allowed_metadata = match properties.remove("allowed_role_metadata") {
-        Some(allowed_metadata) => serde_json::from_value(allowed_metadata).context(
-            "allowed_role_metadata must be an array of keys. For example: ['key1', 'key2']",
-        )?,
-        None => AllowedMetadata::None,
+    let base_url = properties.pull_base_url()?;
+    let base_url = match base_url {
+        Some(base_url) => base_url,
+        None => anyhow::bail!("When using 'openai-generic', you must specify a base_url"),
     };
-    let headers = properties.remove("headers").map(|v| {
-        if let Some(v) = v.as_object() {
-            v.iter()
-                .map(|(k, v)| {
-                    Ok((
-                        k.to_string(),
-                        match v {
-                            serde_json::Value::String(s) => s.to_string(),
-                            _ => anyhow::bail!("Header '{k}' must be a string"),
-                        },
-                    ))
-                })
-                .collect::<Result<HashMap<String, String>>>()
-        } else {
-            Ok(Default::default())
-        }
-    });
-    let headers = match headers {
-        Some(h) => h?,
-        None => Default::default(),
-    };
+    let allowed_metadata = properties.pull_allowed_role_metadata()?;
 
-    let api_key = properties
-        .remove("api_key")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .filter(|s| !s.is_empty());
+    let headers = properties.pull_headers()?;
+    let api_key = match properties.pull_api_key()? {
+        Some(api_key) if !api_key.is_empty() => Some(api_key),
+        _ => None,
+    };
+    let finish_reason = properties.pull_finish_reason_options()?;
+
+    let properties = properties.finalize();
 
     Ok(PostRequestProperties {
         default_role,
@@ -58,6 +37,7 @@ pub fn resolve_properties(
         api_key,
         headers,
         properties,
+        finish_reason,
         proxy_url: ctx
             .env
             .get("BOUNDARY_PROXY_URL")

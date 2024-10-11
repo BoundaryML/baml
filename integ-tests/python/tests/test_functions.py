@@ -12,7 +12,6 @@ import baml_py
 from baml_py import errors
 
 # also test importing the error from the baml_py submodules
-from baml_py.errors import BamlValidationError, BamlClientError
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
 from ..baml_client.globals import (
@@ -617,7 +616,7 @@ async def test_dynamic_class_output():
         baml_options={"tb": tb},
     )
     print(output.model_dump_json())
-    assert output.hair_color == "black"
+    assert output.hair_color == "black" # type: ignore (dynamic property)
 
 
 @pytest.mark.asyncio
@@ -703,7 +702,7 @@ async def test_stream_dynamic_class_output():
     print("final ", final)
     print("final ", final.model_dump())
     print("final ", final.model_dump_json())
-    assert final.hair_color == "black"
+    assert final.hair_color == "black" # type: ignore (dynamic property)
 
 
 @pytest.mark.asyncio
@@ -737,12 +736,12 @@ async def test_dynamic_inputs_list2():
         ],
         {"tb": tb},
     )
-    assert res[0].new_key == "hi1"
+    assert res[0].new_key == "hi1" # type: ignore (dynamic property)
     assert res[0].testKey == "myTest"
-    assert res[0].blah["nestedKey1"] == "nestedVal"
-    assert res[1].new_key == "hi"
+    assert res[0].blah["nestedKey1"] == "nestedVal" # type: ignore (dynamic property)
+    assert res[1].new_key == "hi" # type: ignore (dynamic property)
     assert res[1].testKey == "myTest"
-    assert res[1].blah["nestedKey1"] == "nestedVal"
+    assert res[1].blah["nestedKey1"] == "nestedVal" # type: ignore (dynamic property)
 
 
 @pytest.mark.asyncio
@@ -776,12 +775,12 @@ async def test_dynamic_inputs_list():
         ],
         {"tb": tb},
     )
-    assert res[0].new_key == "hi"
+    assert res[0].new_key == "hi" # type: ignore (dynamic property)
     assert res[0].testKey == "myTest"
-    assert res[0].blah["nestedKey1"] == "nestedVal"
-    assert res[1].new_key == "hi"
+    assert res[0].blah["nestedKey1"] == "nestedVal" # type: ignore (dynamic property)
+    assert res[1].new_key == "hi" # type: ignore (dynamic property)
     assert res[1].testKey == "myTest"
-    assert res[1].blah["nestedKey1"] == "nestedVal"
+    assert res[1].blah["nestedKey1"] == "nestedVal" # type: ignore (dynamic property)
 
 
 @pytest.mark.asyncio
@@ -803,9 +802,9 @@ async def test_dynamic_output_map():
     print("final ", res)
     print("final ", res.model_dump())
     print("final ", res.model_dump_json())
-    assert res.hair_color == "black"
-    assert res.attributes["eye_color"] == "blue"
-    assert res.attributes["facial_hair"] == "beard"
+    assert res.hair_color == "black" # type: ignore (dynamic property)
+    assert res.attributes["eye_color"] == "blue" # type: ignore (dynamic property)
+    assert res.attributes["facial_hair"] == "beard" # type: ignore (dynamic property)
 
 
 @pytest.mark.asyncio
@@ -837,10 +836,10 @@ async def test_dynamic_output_union():
     print("final ", res)
     print("final ", res.model_dump())
     print("final ", res.model_dump_json())
-    assert res.hair_color == "black"
-    assert res.attributes["eye_color"] == "blue"
-    assert res.attributes["facial_hair"] == "beard"
-    assert res.height["feet"] == 6
+    assert res.hair_color == "black" # type: ignore (dynamic property)
+    assert res.attributes["eye_color"] == "blue" # type: ignore (dynamic property)
+    assert res.attributes["facial_hair"] == "beard" # type: ignore (dynamic property)
+    assert res.height["feet"] == 6 # type: ignore (dynamic property)
 
     res = await b.MyFunc(
         input="My name is Harrison. My hair is black and I'm 1.8 meters tall. I have blue eyes and a beard. I am 30 years old.",
@@ -850,10 +849,10 @@ async def test_dynamic_output_union():
     print("final ", res)
     print("final ", res.model_dump())
     print("final ", res.model_dump_json())
-    assert res.hair_color == "black"
-    assert res.attributes["eye_color"] == "blue"
-    assert res.attributes["facial_hair"] == "beard"
-    assert res.height["meters"] == 1.8
+    assert res.hair_color == "black" # type: ignore (dynamic property)
+    assert res.attributes["eye_color"] == "blue" # type: ignore (dynamic property)
+    assert res.attributes["facial_hair"] == "beard" # type: ignore (dynamic property)
+    assert res.height["meters"] == 1.8 # type: ignore (dynamic property)
 
 
 @pytest.mark.asyncio
@@ -1008,6 +1007,7 @@ async def test_descriptions():
     )  # Assuming this returns a Pydantic model
 
     # Check Nested2 values
+    assert not isinstance(res.prop2, str)
     assert res.prop2.prop20.prop11 == "three"
     assert res.prop2.prop20.prop12 == "four"
 
@@ -1037,11 +1037,11 @@ The story explores themes of identity, the subconscious mind, the ethics of tech
     rand = random.randint(0, 26)
     story_idea += " " + rand * "a"
     start = time.time()
-    res = await b.TestCaching(story_idea)
+    _ = await b.TestCaching(story_idea)
     duration = time.time() - start
 
     start = time.time()
-    res2 = await b.TestCaching(story_idea)
+    _ = await b.TestCaching(story_idea)
     duration2 = time.time() - start
 
     print("Duration no caching: ", duration)
@@ -1059,8 +1059,8 @@ async def test_arg_exceptions():
 
     with pytest.raises(errors.BamlInvalidArgumentError):
         _ = await b.TestCaching(
-            111
-        )  # ldintentionally passing an int instead of a string
+            111 # type: ignore (intentionally passing an int instead of a string)
+        )
 
     with pytest.raises(errors.BamlClientError):
         cr = baml_py.ClientRegistry()
@@ -1092,12 +1092,8 @@ async def test_arg_exceptions():
 async def test_map_as_param():
     with pytest.raises(errors.BamlInvalidArgumentError):
         _ = await b.TestFnNamedArgsSingleMapStringToMap(
-            {"a": "b"}
-        )  # intentionally passing the wrong type
-
-
-import os
-
+            {"a": "b"} # type: ignore (intentionally passing the wrong type)
+        )
 
 @pytest.mark.asyncio
 async def test_env_vars_reset():
@@ -1150,3 +1146,34 @@ async def test_baml_validation_error_format():
 
             raise e
     assert "Failed to parse" in str(excinfo)
+
+@pytest.mark.asyncio
+async def test_baml_finish_reason():
+    cr = baml_py.ClientRegistry()
+    cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini", "max_tokens": 1, "finish_reason_whitelist": ["stop"]})
+    cr.set_primary("MyClient")
+
+    with pytest.raises(errors.BamlValidationError) as excinfo:
+        _ = await b.TestCaching("Tell me a story about food!", {
+            "client_registry": cr
+        })
+    print("Exception message: ", excinfo)
+    assert "Non-terminal finish reason" in str(excinfo)
+
+@pytest.mark.asyncio
+async def test_baml_finish_reason_streaming():
+    cr = baml_py.ClientRegistry()
+    cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini", "max_tokens": 1, "finish_reason_whitelist": ["stop"]})
+    cr.set_primary("MyClient")
+
+    with pytest.raises(errors.BamlValidationError) as excinfo:
+        stream = b.stream.TestCaching("Tell me a story about food!", {
+            "client_registry": cr
+        })
+        async for msg in stream:
+            print("streamed ", msg)
+        
+        _ = await stream.get_final_response()
+
+    print("Exception message: ", excinfo)
+    assert "Non-terminal finish reason" in str(excinfo)

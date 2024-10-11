@@ -39,13 +39,26 @@ pub async fn orchestrate(
         let prompt = match node.render_prompt(ir, prompt, ctx, params).await {
             Ok(p) => p,
             Err(e) => {
-                results.push((node.scope, LLMResponse::InternalFailure(e.to_string()), None));
+                results.push((
+                    node.scope,
+                    LLMResponse::InternalFailure(e.to_string()),
+                    None,
+                ));
                 continue;
             }
         };
         let response = node.single_call(&ctx, &prompt).await;
         let parsed_response = match &response {
-            LLMResponse::Success(s) => Some(parse_fn(&s.content)),
+            LLMResponse::Success(s) => {
+                if node.is_valid_finish_reason(s) {
+                    Some(parse_fn(&s.content))
+                } else {
+                    Some(Err(anyhow::anyhow!(
+                        "Non-terminal finish reason: {}",
+                        s.metadata.finish_reason.as_deref().unwrap_or("<empty>")
+                    )))
+                }
+            }
             _ => None,
         };
 

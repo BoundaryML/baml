@@ -144,6 +144,7 @@ impl BamlError {
                         ))
                     }
                     baml_runtime::internal::llm_client::ErrorCode::Other(_)
+                    | baml_runtime::internal::llm_client::ErrorCode::BadRequest
                     | baml_runtime::internal::llm_client::ErrorCode::InvalidAuthentication
                     | baml_runtime::internal::llm_client::ErrorCode::NotSupported
                     | baml_runtime::internal::llm_client::ErrorCode::RateLimited

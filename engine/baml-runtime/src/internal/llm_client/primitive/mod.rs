@@ -93,6 +93,9 @@ impl WithClientProperties for LLMPrimitiveProvider {
     fn allowed_metadata(&self) -> &super::AllowedMetadata {
         match_llm_provider!(self, allowed_metadata)
     }
+    fn finish_reason_handling(&self) -> Option<&super::properties_hander::FinishReasonOptions> {
+        match_llm_provider!(self, finish_reason_handling)
+    }
 }
 
 impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
