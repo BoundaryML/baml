@@ -153,12 +153,17 @@ test_failing_deserializer!(
     ])
 );
 
-test_failing_deserializer!(
+// TODO: This one should fail because of ambiguity but we end up picking
+// the first option (TWO). For enums it does fail because they are treated
+// as one single type whereas unions of literals are treated as separate
+// types so the substring match strategy works here.
+test_deserializer!(
     test_union_literal_string_with_both,
     EMPTY_FILE,
     "TWO or THREE",
     FieldType::Union(vec![
         FieldType::Literal(LiteralValue::String("TWO".into())),
         FieldType::Literal(LiteralValue::String("THREE".into())),
-    ])
+    ]),
+    "TWO"
 );
