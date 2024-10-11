@@ -34,7 +34,7 @@ pub(crate) fn create_tracing_client() -> Result<reqwest::Client> {
         } else {
             let cb = builder()
                 // Wait up to 30s to send traces to the backend
-                .read_timeout(Duration::from_secs(30))
+                .read_timeout(Duration::from_secs(30));
 
         }
     }
