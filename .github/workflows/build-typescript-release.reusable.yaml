@@ -25,6 +25,7 @@ jobs:
             host: macos-14
             node_build: pnpm build:napi-release --target aarch64-apple-darwin
             baml_build_help: "off"
+            # mise: true
 
           - target: aarch64-unknown-linux-gnu
             host: ubuntu-latest
@@ -38,6 +39,7 @@ jobs:
             host: macos-latest
             node_build: pnpm build:napi-release --target x86_64-apple-darwin
             baml_build_help: "off"
+            # mise: true
 
           - target: x86_64-pc-windows-msvc
             host: windows-latest
@@ -49,6 +51,7 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-latest
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
+            mise: true
 
           - target: x86_64-unknown-linux-musl
             host: ubuntu-latest
@@ -80,8 +83,19 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: jdx/mise-action@v2
+        if: ${{ matrix._.mise }}
+
+      - uses: pnpm/action-setup@v3
         with:
-          install_args: node pnpm
+          version: 9.0.6
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: |
+            engine/language_client_typescript/pnpm-lock.yaml
 
       # Install rust
       - uses: dtolnay/rust-toolchain@stable
@@ -103,7 +117,6 @@ jobs:
       
       - name: Build tools setup
         run: ${{ matrix._.before }}
-
       # Build NAPI release
       - name: PNPM Build
         run: ${{ matrix._.node_build }}
