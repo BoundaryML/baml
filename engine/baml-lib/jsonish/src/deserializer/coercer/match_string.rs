@@ -22,6 +22,7 @@ pub(super) fn match_string(
     parsing_context: &ParsingContext,
     target: &FieldType,
     value: Option<&jsonish::Value>,
+    // List of (name, [aliases]) tuples.
     candidates: &[(&str, Vec<String>)],
 ) -> Result<ValueWithFlags<String>, ParsingError> {
     // Get rid of nulls.

@@ -230,15 +230,28 @@ pub(super) fn coerce_bool(
                 "false" => Ok(BamlValueWithFlags::Bool(
                     (true, Flag::StringToBool(s.clone())).into(),
                 )),
-                _ => match s.to_ascii_lowercase().trim() {
-                    "true" => Ok(BamlValueWithFlags::Bool(
-                        (true, Flag::StringToBool(s.clone())).into(),
-                    )),
-                    "false" => Ok(BamlValueWithFlags::Bool(
-                        (false, Flag::StringToBool(s.clone())).into(),
-                    )),
-                    _ => Err(ctx.error_unexpected_type(target, value)),
-                },
+                _ => {
+                    match super::match_string::match_string(
+                        ctx,
+                        target,
+                        Some(value),
+                        &[
+                            ("true", vec!["true".into()]),
+                            ("false", vec!["false".into()]),
+                        ],
+                    ) {
+                        Ok(val) => match val.value().as_str() {
+                            "true" => Ok(BamlValueWithFlags::Bool(
+                                (true, Flag::StringToBool(val.value().clone())).into(),
+                            )),
+                            "false" => Ok(BamlValueWithFlags::Bool(
+                                (false, Flag::StringToBool(val.value().clone())).into(),
+                            )),
+                            _ => Err(ctx.error_unexpected_type(target, value)),
+                        },
+                        Err(_) => Err(ctx.error_unexpected_type(target, value)),
+                    }
+                }
             },
             crate::jsonish::Value::Array(items) => {
                 coerce_array_to_singular(ctx, target, &items.iter().collect::<Vec<_>>(), &|value| {

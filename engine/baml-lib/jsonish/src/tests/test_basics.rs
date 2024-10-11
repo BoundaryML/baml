@@ -42,6 +42,21 @@ test_deserializer!(test_bool_3, EMPTY_FILE, "false", FieldType::bool(), false);
 test_deserializer!(test_bool_4, EMPTY_FILE, "False", FieldType::bool(), false);
 
 test_deserializer!(
+    test_bool_wrapped,
+    EMPTY_FILE,
+    "The answer is true",
+    FieldType::bool().as_list(),
+    [true]
+);
+
+test_failing_deserializer!(
+    test_ambiguous_bool,
+    EMPTY_FILE,
+    "The answer is true or false",
+    FieldType::bool()
+);
+
+test_deserializer!(
     test_float,
     EMPTY_FILE,
     "12111.123",
