@@ -64,7 +64,7 @@ jobs:
               CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc
               CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++
               AR_x86_64_unknown_linux_musl=x86_64-linux-musl-ar
-              CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-cc 
+              CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-cc
               EOF
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
 
