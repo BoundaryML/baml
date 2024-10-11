@@ -1,4 +1,4 @@
 [tools]
-node = "latest"
+node = "20.14"
 ruby = "3.1"
 pnpm = "9.9"

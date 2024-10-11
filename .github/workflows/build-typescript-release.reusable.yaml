@@ -1,0 +1,123 @@
+name: Release language_client_typescript
+
+on:
+  workflow_call: {}
+  push:
+    branches: [sam/alpine-builds]
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-typescript
+  cancel-in-progress: true
+
+env:
+  DEBUG: napi:*
+  APP_NAME: baml
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        _:
+          - target: aarch64-apple-darwin
+            host: macos-14
+            node_build: pnpm build:napi-release --target aarch64-apple-darwin
+
+          - target: aarch64-unknown-linux-gnu
+            host: ubuntu-latest
+            # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
+            # need a new version of manylinux to build crates on arm64-linux
+            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
+            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+
+          - target: x86_64-apple-darwin
+            host: macos-latest
+            node_build: pnpm build:napi-release --target x86_64-apple-darwin
+
+          - target: x86_64-pc-windows-msvc
+            host: windows-latest
+            node_build: pnpm build:napi-release --target x86_64-pc-windows-msvc
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+
+          - target: x86_64-unknown-linux-gnu
+            host: ubuntu-latest
+            node_build: pnpm build:napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
+
+          - target: x86_64-unknown-linux-musl
+            host: ubuntu-latest
+            before: |
+              curl -LO https://musl.cc/x86_64-linux-musl-cross.tgz
+              tar -xzf x86_64-linux-musl-cross.tgz
+              echo "$PWD/x86_64-linux-musl-cross/bin" >> $GITHUB_PATH
+
+              cat >>$GITHUB_ENV <<EOF
+              CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc
+              CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++
+              AR_x86_64_unknown_linux_musl=x86_64-linux-musl-ar
+              EOF
+            node_build: pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
+
+          - target: aarch64-unknown-linux-musl
+            host: ubuntu-latest
+            before: |
+              curl -LO https://musl.cc/aarch64-linux-musl-cross.tgz
+              tar -xzf aarch64-linux-musl-cross.tgz
+              echo "$PWD/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
+            node_build: pnpm build:napi-release --target aarch64-unknown-linux-musl --use-napi-cross
+
+    name: Build ${{ matrix._.target }}
+    runs-on: ${{ matrix._.host }}
+    container: ${{ matrix._.container }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Install common toolchain dependencies
+      # NOTE: we can't use mise here because it doesn't support Windows
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.6
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: |
+            engine/language_client_typescript/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix._.target }}
+
+      # Set up build cache and dependencies
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+          shared-key: engine-${{ github.job }}-${{ matrix._.target }}
+          cache-on-failure: true
+
+      - name: PNPM Install
+        run: pnpm install --frozen-lockfile
+        working-directory: engine/language_client_typescript
+      
+      # per-matrix-entry dependency setup
+      - name: Build tools setup
+        run: ${{ matrix._.before }}
+
+      # Build the NAPI library and bindings
+      - name: PNPM Build
+        run: ${{ matrix._.node_build }}
+        working-directory: engine/language_client_typescript
+      
+      - name: Build TS
+        run: pnpm build:ts_build
+        working-directory: engine/language_client_typescript
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix._.target }}
+          path: engine/language_client_typescript/*.node
+          if-no-files-found: error
