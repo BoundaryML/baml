@@ -21,38 +21,33 @@ jobs:
       fail-fast: false
       matrix:
         _:
-          - target: aarch64-apple-darwin
-            host: macos-14
-            node_build: pnpm build:napi-release --target aarch64-apple-darwin
-            baml_build_help: "off"
-            # mise: true
+          # - target: aarch64-apple-darwin
+          #   host: macos-14
+          #   node_build: pnpm build:napi-release --target aarch64-apple-darwin
+          #   baml_build_help: "off"
+          #   # mise: true
 
-          # Disabled as python is not supported on aarch64 windows
-          # - target: aarch64-pc-windows-msvc
+          # - target: aarch64-unknown-linux-gnu
+          #   host: ubuntu-latest
+          #   # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
+          #   # need a new version of manylinux to build crates on arm64-linux
+          #   container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
+          #   node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
+          #   cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+          #   baml_build_help: "off"
+
+          # - target: x86_64-apple-darwin
+          #   host: macos-latest
+          #   node_build: pnpm build:napi-release --target x86_64-apple-darwin
+          #   baml_build_help: "off"
+          #   # mise: true
+
+          # - target: x86_64-pc-windows-msvc
           #   host: windows-latest
-          #   node_build: pnpm build --target aarch64-pc-windows-msvc
-
-          - target: aarch64-unknown-linux-gnu
-            host: ubuntu-latest
-            # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
-            # need a new version of manylinux to build crates on arm64-linux
-            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
-            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
-            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
-            baml_build_help: "off"
-
-          - target: x86_64-apple-darwin
-            host: macos-latest
-            node_build: pnpm build:napi-release --target x86_64-apple-darwin
-            baml_build_help: "off"
-            # mise: true
-
-          - target: x86_64-pc-windows-msvc
-            host: windows-latest
-            node_build: pnpm build:napi-release --target x86_64-pc-windows-msvc
-            setup-python-architecture: x64
-            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
-            baml_build_help: "off"
+          #   node_build: pnpm build:napi-release --target x86_64-pc-windows-msvc
+          #   setup-python-architecture: x64
+          #   cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+          #   baml_build_help: "off"
 
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-latest
@@ -60,6 +55,11 @@ jobs:
             container: null
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
             mise: true
+
+          - target: x86_64-unknown-linux-musl
+            runs_on: ubuntu-latest
+            # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
+            manylinux: musllinux_1_1
 
     name: Build ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
