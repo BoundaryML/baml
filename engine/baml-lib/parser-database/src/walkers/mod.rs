@@ -140,7 +140,7 @@ impl<'db> crate::ParserDatabase {
         names.extend(self.walk_enums().map(|e| e.name().to_string()));
         // Add primitive types
         names.extend(
-            vec!["string", "int", "float", "bool"]
+            vec!["string", "int", "float", "bool", "true", "false"]
                 .into_iter()
                 .map(String::from),
         );
@@ -303,6 +303,13 @@ impl<'db> crate::ParserDatabase {
                     TypeValue::Media(_) => Type::Unknown,
                 };
                 if arity.is_optional() || matches!(t, Type::None) {
+                    t = Type::None | t;
+                }
+                t
+            }
+            FieldType::Literal(arity, literal_value, ..) => {
+                let mut t = Type::Literal(literal_value.clone());
+                if arity.is_optional() {
                     t = Type::None | t;
                 }
                 t

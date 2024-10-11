@@ -1,11 +1,14 @@
 mod array_helper;
 mod coerce_array;
+mod coerce_literal;
 mod coerce_map;
 mod coerce_optional;
 mod coerce_primitive;
 mod coerce_union;
 mod field_type;
 mod ir_ref;
+mod match_string;
+
 use anyhow::Result;
 use internal_baml_jinja::types::OutputFormatContent;
 

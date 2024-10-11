@@ -16,7 +16,7 @@
 import baml_py
 from enum import Enum
 from pydantic import BaseModel, ConfigDict
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Literal
 
 
 class Category(str, Enum):
@@ -313,6 +313,7 @@ class ReceiptInfo(BaseModel):
     
     items: List["ReceiptItem"]
     total_cost: Optional[float] = None
+    venue: Union[Literal["barisa"], Literal["ox_burger"]]
 
 class ReceiptItem(BaseModel):
     
@@ -326,6 +327,7 @@ class Recipe(BaseModel):
     
     
     ingredients: Dict[str, "Quantity"]
+    recipe_type: Union[Literal["breakfast"], Literal["dinner"]]
 
 class Resume(BaseModel):
     

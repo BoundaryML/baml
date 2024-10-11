@@ -334,6 +334,7 @@ fn relevant_data_models<'a>(
                 }
             }
             FieldType::Primitive(_) => {}
+            FieldType::Literal(_) => {}
         }
     }
 

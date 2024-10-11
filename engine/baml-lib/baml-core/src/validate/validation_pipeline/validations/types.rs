@@ -66,6 +66,7 @@ fn validate_type_allowed(ctx: &mut Context<'_>, field_type: &FieldType) {
         }
 
         FieldType::Primitive(..) => {}
+        FieldType::Literal(..) => {}
         FieldType::Symbol(..) => {}
 
         FieldType::List(arity, field_type, ..) => {

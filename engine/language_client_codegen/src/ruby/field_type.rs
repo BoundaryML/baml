@@ -1,4 +1,6 @@
-use baml_types::{BamlMediaType, FieldType, TypeValue};
+use std::collections::HashSet;
+
+use baml_types::{BamlMediaType, FieldType, LiteralValue, TypeValue};
 
 use super::ruby_language_features::ToRuby;
 
@@ -7,6 +9,8 @@ impl ToRuby for FieldType {
         match self {
             FieldType::Class(name) => format!("Baml::Types::{}", name.clone()),
             FieldType::Enum(name) => format!("T.any(Baml::Types::{}, String)", name.clone()),
+            // TODO: Temporary solution until we figure out Ruby literals.
+            FieldType::Literal(value) => value.literal_base_type().to_ruby(),
             // https://sorbet.org/docs/stdlib-generics
             FieldType::List(inner) => format!("T::Array[{}]", inner.to_ruby()),
             FieldType::Map(key, value) => {

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use baml_types::{FieldType, TypeValue};
+use baml_types::{FieldType, LiteralValue, TypeValue};
 use indexmap::{IndexMap, IndexSet};
 
 #[derive(Debug)]
@@ -233,6 +233,7 @@ impl OutputFormatContent {
             RenderSetting::Auto => match &self.target {
                 FieldType::Primitive(TypeValue::String) => None,
                 FieldType::Primitive(_) => Some("Answer as a: "),
+                FieldType::Literal(_) => Some("Answer using this specific value:\n"),
                 FieldType::Enum(_) => Some("Answer with any of the categories:\n"),
                 FieldType::Class(_) => Some("Answer in JSON using this schema:\n"),
                 FieldType::List(_) => Some("Answer with a JSON Array using this schema:\n"),
@@ -280,6 +281,11 @@ impl OutputFormatContent {
                         format!("type '{media_type}' is not supported in outputs"),
                     ))
                 }
+            },
+            FieldType::Literal(v) => match v {
+                LiteralValue::String(s) => format!("\"{}\"", s),
+                LiteralValue::Int(i) => i.to_string(),
+                LiteralValue::Bool(b) => b.to_string(),
             },
             FieldType::Enum(e) => {
                 let Some(enm) = self.enums.get(e) else {

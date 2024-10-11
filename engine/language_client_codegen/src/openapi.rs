@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::{path::PathBuf, process::Command};
 
 use anyhow::{Context, Result};
-use baml_types::{BamlMediaType, FieldType, TypeValue};
+use baml_types::{BamlMediaType, FieldType, LiteralValue, TypeValue};
 use indexmap::IndexMap;
 use internal_baml_core::ir::{
     repr::{Function, IntermediateRepr, Node, Walker},
@@ -401,8 +402,10 @@ impl<'ir> TryFrom<Walker<'ir, &'ir Node<Function>>> for OpenApiMethodDef<'ir> {
                     r#const: None,
                     nullable: true,
                 },
-                type_spec: TypeSpec::Ref { r#ref: "#/components/schemas/BamlOptions".into() }
-            }
+                type_spec: TypeSpec::Ref {
+                    r#ref: "#/components/schemas/BamlOptions".into(),
+                },
+            },
         );
         Ok(Self {
             function_name,
@@ -538,6 +541,19 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                     r#ref: format!("#/components/schemas/{}", name),
                 },
             },
+            FieldType::Literal(v) => TypeSpecWithMeta {
+                meta: TypeMetadata {
+                    title: None,
+                    r#enum: None,
+                    r#const: None,
+                    nullable: false,
+                },
+                type_spec: match v {
+                    LiteralValue::Int(_) => TypeSpec::Inline(TypeDef::Int),
+                    LiteralValue::Bool(_) => TypeSpec::Inline(TypeDef::Bool),
+                    LiteralValue::String(_) => TypeSpec::Inline(TypeDef::String),
+                },
+            },
             FieldType::List(inner) => TypeSpecWithMeta {
                 meta: TypeMetadata {
                     title: None,
@@ -590,19 +606,19 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                     },
                 },
             },
-            FieldType::Union(inner) => {
+            FieldType::Union(union) => {
                 let (_nulls, nonnull_types): (Vec<_>, Vec<_>) =
-                    inner.into_iter().partition(|t| t.is_null());
-
-                // dbg!(&null_types);
+                    union.into_iter().partition(|t| t.is_null());
 
                 let one_of = nonnull_types
                     .iter()
                     .map(|t| t.to_type_spec(ir))
                     .collect::<Result<Vec<_>>>()?;
+
                 if one_of.is_empty() {
                     anyhow::bail!("BAML<->OpenAPI unions must have at least one non-null type")
                 }
+
                 TypeSpecWithMeta {
                     meta: TypeMetadata {
                         title: None,
@@ -617,7 +633,7 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                 anyhow::bail!("BAML<->OpenAPI tuple support is not implemented")
             }
             FieldType::Optional(inner) => {
-                let mut type_spec = inner.to_type_spec(ir)?;
+                let type_spec = inner.to_type_spec(ir)?;
                 // TODO: if type_spec is of an enum, consider adding "null" to the list of values
                 // something i saw suggested doing this
                 type_spec
@@ -626,7 +642,7 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 struct TypeSpecWithMeta {
     #[serde(flatten)]
     meta: TypeMetadata,
@@ -656,7 +672,7 @@ struct TypeMetadata {
     nullable: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(untagged)]
 enum TypeSpec {
     Ref {
@@ -673,7 +689,7 @@ enum TypeSpec {
     },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(tag = "type")]
 enum TypeDef {
     #[serde(rename = "string")]

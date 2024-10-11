@@ -629,13 +629,13 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        email: String,
+        email: String,reason: T.any(String, String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::ReceiptInfo)
     }
     def ExtractReceiptInfo(
         *varargs,
-        email:,
+        email:,reason:,
         baml_options: {}
     )
       if varargs.any?
@@ -649,7 +649,7 @@ module Baml
       raw = @runtime.call_function(
         "ExtractReceiptInfo",
         {
-          email: email,
+          email: email,reason: reason,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -3192,13 +3192,13 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        email: String,
+        email: String,reason: T.any(String, String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[Baml::Types::ReceiptInfo])
     }
     def ExtractReceiptInfo(
         *varargs,
-        email:,
+        email:,reason:,
         baml_options: {}
     )
       if varargs.any?
@@ -3212,7 +3212,7 @@ module Baml
       raw = @runtime.stream_function(
         "ExtractReceiptInfo",
         {
-          email: email,
+          email: email,reason: reason,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
