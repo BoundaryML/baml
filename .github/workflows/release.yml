@@ -2,6 +2,8 @@ name: BAML Release
 
 on:
   workflow_dispatch: {}
+  push:
+    branches: [sam/alpine-builds]
   # need to run this periodically on the default branch to populate the build cache
   schedule:
     # daily at 2am PST
