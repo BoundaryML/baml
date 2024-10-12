@@ -62,8 +62,9 @@ macro_rules! test_partial_deserializer {
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
 
             let value = result.unwrap();
+            log::trace!("Score: {}", value.score());
             let value: BamlValue = value.into();
-            println!("{:#?}", value);
+            log::info!("{}", value);
             let json_value = json!(value);
 
             let expected = serde_json::json!($($json)+);

@@ -232,3 +232,68 @@ test_partial_deserializer!(
     "wordCounts": []
   }
 );
+
+const CHOPPY_BAML_FILE: &str = r##"
+class GraphJson {
+  vertices Vertex[]
+  edges Edge[]
+}
+
+class Vertex {
+  id string @description(#"
+    A unique human-readable identifier for the vertex, like 'peter'
+  "#)
+  metadata map<string, string> @description(#"
+    Arbitrary metadata for the vertex, like 'name' or 'age'
+  "#)
+}
+
+class Edge {
+  source_id string
+  target_id string
+  // note, you could use an enum here if you know what rthe relationships are
+  relationship string @description(#"
+    A human-readable label for the edge, like 'knows' or "works_with", etc..
+  "#)
+}
+  "##;
+
+const TRIMMED_CHOPPY_RESULT: &str = r#"
+```json
+{
+  "vertices": [
+    {
+      "id": "stephanie_morales",
+      "metadata": {
+        "name": "Stephanie Morales",
+        "affiliation": "Made Space"
+      }
+    },
+    {
+      "id": 
+  "#;
+
+test_partial_deserializer!(
+  test_partial_choppy,
+  CHOPPY_BAML_FILE,
+  TRIMMED_CHOPPY_RESULT,
+  FieldType::Class("GraphJson".to_string()),
+  {
+    "vertices": [
+      {
+        "id": "stephanie_morales",
+        "metadata": {
+          "name": "Stephanie Morales",
+          "affiliation": "Made Space"
+        }
+      },
+      {
+        "id": null,
+        "metadata": {
+        }
+      }
+    ],
+    "edges": [
+    ]
+  }
+);

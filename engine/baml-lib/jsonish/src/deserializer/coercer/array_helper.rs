@@ -61,24 +61,60 @@ pub(super) fn pick_best(
     // Sort by (false, score, index)
     all_valid_scores.sort_by(
         |&(a, a_score, a_default, a_val), &(b, b_score, b_default, b_val)| {
-            if a_val.r#type() == b_val.r#type() && matches!(a_val, BamlValueWithFlags::List(_, _)) {
-                let a_is_single = a_val
-                    .conditions()
-                    .flags
-                    .iter()
-                    .any(|f| matches!(f, Flag::SingleToArray));
-                let b_is_single = b_val
-                    .conditions()
-                    .flags
-                    .iter()
-                    .any(|f| matches!(f, Flag::SingleToArray));
+            if a_val.r#type() == b_val.r#type() {
+                if matches!(a_val, BamlValueWithFlags::List(_, _)) {
+                    let a_is_single = a_val
+                        .conditions()
+                        .flags
+                        .iter()
+                        .any(|f| matches!(f, Flag::SingleToArray));
+                    let b_is_single = b_val
+                        .conditions()
+                        .flags
+                        .iter()
+                        .any(|f| matches!(f, Flag::SingleToArray));
 
-                match (a_is_single, b_is_single) {
-                    // Return B
-                    (true, false) => return std::cmp::Ordering::Greater,
-                    // Return A
-                    (false, true) => return std::cmp::Ordering::Less,
-                    _ => {}
+                    match (a_is_single, b_is_single) {
+                        // Return B
+                        (true, false) => return std::cmp::Ordering::Greater,
+                        // Return A
+                        (false, true) => return std::cmp::Ordering::Less,
+                        _ => {}
+                    }
+                }
+                if matches!(a_val, BamlValueWithFlags::Class(..)) {
+                    match (a_val, b_val) {
+                        (
+                            BamlValueWithFlags::Class(_, _, a_props),
+                            BamlValueWithFlags::Class(_, _, b_props),
+                        ) => {
+                            let a_is_default = a_props.iter().all(|(k, cond)| {
+                                cond.conditions().flags.iter().any(|f| {
+                                    matches!(
+                                        f,
+                                        Flag::OptionalDefaultFromNoValue | Flag::DefaultFromNoValue
+                                    )
+                                })
+                            });
+                            let b_is_default = b_props.iter().all(|(k, cond)| {
+                                cond.conditions().flags.iter().any(|f| {
+                                    matches!(
+                                        f,
+                                        Flag::OptionalDefaultFromNoValue | Flag::DefaultFromNoValue
+                                    )
+                                })
+                            });
+
+                            match (a_is_default, b_is_default) {
+                                // Return B
+                                (true, false) => return std::cmp::Ordering::Greater,
+                                // Return A
+                                (false, true) => return std::cmp::Ordering::Less,
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
 
