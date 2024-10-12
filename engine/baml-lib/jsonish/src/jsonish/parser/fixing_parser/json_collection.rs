@@ -39,9 +39,9 @@ impl From<JsonCollection> for Option<Value> {
             JsonCollection::TrailingComment(_) | JsonCollection::BlockComment(_) => return None,
             JsonCollection::Object(keys, values) => {
                 // log::debug!("keys: {:?}", keys);
-                let mut object = BamlMap::new();
+                let mut object = Vec::new();
                 for (key, value) in keys.into_iter().zip(values.into_iter()) {
-                    object.insert(key, value);
+                    object.push((key, value));
                 }
                 Value::Object(object)
             }

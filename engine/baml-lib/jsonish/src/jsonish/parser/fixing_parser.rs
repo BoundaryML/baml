@@ -92,3 +92,75 @@ pub fn parse<'a>(str: &'a str, _options: &ParseOptions) -> Result<Vec<(Value, Ve
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::jsonish::{Value, ParseOptions};
+
+    #[test]
+    fn test_partial_array() {
+        let opts = ParseOptions::default();
+        let vals = parse("[12", &opts).unwrap();
+        dbg!(&vals);
+
+        match vals[0].0.clone() {
+            Value::Array(xs) => {
+                assert_eq!(xs.len(), 1);
+                match &xs[0] {
+                    Value::Number(n) => {
+                        dbg!(&n);
+                        assert_eq!(n, &serde_json::Number::from(12));
+                    }
+                    _ => panic!("Expected number"),
+                }
+            }
+            _ => panic!("Expected array"),
+        }
+
+    }
+
+    #[test]
+    fn test_partial_object() {
+        let opts = ParseOptions::default();
+        let vals = parse(r#"{"a": 11, "b": 22"#, &opts).unwrap();
+        dbg!(&vals);
+        match &vals[0].0 {
+            Value::Object(fields) => {
+                assert_eq!(fields.len(), 2);
+                match (&fields[0], &fields[1]) {
+                    ((key_a, Value::Number(a)), (key_b, Value::Number(b))) => {
+                        assert_eq!(key_a.as_str(), "a");
+                        assert_eq!(key_b.as_str(), "b");
+                        assert_eq!(a, &serde_json::Number::from(11));
+                        assert_eq!(b, &serde_json::Number::from(22));
+                    }
+                    _ => panic!("Expected two numbers.")
+                }
+            }
+            _ => panic!("Expected object")
+        }
+    }
+
+    #[test]
+    fn test_partial_object_newlines() {
+        let opts = ParseOptions::default();
+        let vals = parse("{\n \"a\": 11, \n \"b\": 22", &opts).unwrap();
+        dbg!(&vals);
+        match &vals[0].0 {
+            Value::Object(fields) => {
+                assert_eq!(fields.len(), 2);
+                match (&fields[0], &fields[1]) {
+                    ((key_a, Value::Number(a)), (key_b, Value::Number(b))) => {
+                        assert_eq!(key_a.as_str(), "a");
+                        assert_eq!(key_b.as_str(), "b");
+                        assert_eq!(a, &serde_json::Number::from(11));
+                        assert_eq!(b, &serde_json::Number::from(22));
+                    }
+                    _ => panic!("Expected two numbers.")
+                }
+            }
+            _ => panic!("Expected object")
+        }
+    }
+}

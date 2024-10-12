@@ -254,6 +254,7 @@ impl JsonParseState {
                         }
                     }
                 }
+                counter += 1; // Indicate that we called next() one time after the final `Some`.
                 Some(counter)
             }
             _ => unreachable!("Invalid position"),

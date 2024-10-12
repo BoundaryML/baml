@@ -688,3 +688,65 @@ test_deserializer!(
       "four": "four"
     })
 );
+
+#[test]
+/// Test that when partial parsing, if we encounter an int in a context
+/// where it could possibly be extended further, it must be returned
+/// as Null.
+fn singleton_list_int_deleted() {
+    let target = FieldType::List(Box::new(FieldType::Primitive(TypeValue::Int)));
+    let output_format = OutputFormatContent::new(Vec::new(), Vec::new(), target.clone());
+    let res = from_str(&output_format, &target, "[123", true).expect("Can parse");
+    let baml_value: BamlValue = res.into();
+    assert_eq!(baml_value, BamlValue::List( vec![] ));
+}
+
+#[test]
+/// Test that when partial parsing, if we encounter an int in a context
+/// where it could possibly be extended further, it must be returned
+/// as Null.
+fn list_int_deleted() {
+    let target = FieldType::List(Box::new(FieldType::Primitive(TypeValue::Int)));
+    let output_format = OutputFormatContent::new(Vec::new(), Vec::new(), target.clone());
+    let res = from_str(&output_format, &target, "[123, 456", true).expect("Can parse");
+    let baml_value: BamlValue = res.into();
+    assert_eq!(baml_value, BamlValue::List( vec![ BamlValue::Int(123)] ));
+}
+
+#[test]
+/// Test that when partial parsing, if we encounter an int in a context
+/// where it could possibly be extended further, it must be returned
+/// as Null.
+fn list_int_not_deleted() {
+    let target = FieldType::List(Box::new(FieldType::Primitive(TypeValue::Int)));
+    let output_format = OutputFormatContent::new(Vec::new(), Vec::new(), target.clone());
+    let res = from_str(&output_format, &target, "[123, 456 // Done", true).expect("Can parse");
+    let baml_value: BamlValue = res.into();
+    assert_eq!(baml_value, BamlValue::List( vec![ BamlValue::Int(123), BamlValue::Int(456)] ));
+}
+
+#[test]
+/// Test that when partial parsing, if we encounter an int in a context
+/// where it could possibly be extended further, it must be returned
+/// as Null.
+fn partial_int_deleted() {
+    let target = FieldType::Optional(Box::new(FieldType::Primitive(TypeValue::Int)));
+    let output_format = OutputFormatContent::new(Vec::new(), Vec::new(), target.clone());
+    let res = from_str(&output_format, &target, "123", true).expect("Can parse");
+    let baml_value: BamlValue = res.into();
+    // Note: This happens to parse as a List, but Null also seems appropriate.
+    assert_eq!(baml_value, BamlValue::Null);
+}
+
+#[test]
+/// Test that when partial parsing, if we encounter an int in a context
+/// where it could possibly be extended further, it must be returned
+/// as Null.
+fn partial_int_not_deleted() {
+    let target = FieldType::List(Box::new(FieldType::Primitive(TypeValue::Int)));
+    let output_format = OutputFormatContent::new(Vec::new(), Vec::new(), target.clone());
+    let res = from_str(&output_format, &target, "123", true).expect("Can parse");
+    let baml_value: BamlValue = res.into();
+    // Note: This happens to parse as a List, but Null also seems appropriate.
+    assert_eq!(baml_value, BamlValue::List(vec![]));
+}

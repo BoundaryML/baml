@@ -130,11 +130,13 @@ module Baml
         G = new("G")
       end
     end
+    class BigNumbers < T::Struct; end
     class Blah < T::Struct; end
     class BookOrder < T::Struct; end
     class ClassOptionalOutput < T::Struct; end
     class ClassOptionalOutput2 < T::Struct; end
     class ClassWithImage < T::Struct; end
+    class CompoundBigNumbers < T::Struct; end
     class CustomTaskResult < T::Struct; end
     class DummyOutput < T::Struct; end
     class DynInputOutput < T::Struct; end
@@ -172,6 +174,20 @@ module Baml
     class TestOutputClass < T::Struct; end
     class UnionTest_ReturnType < T::Struct; end
     class WithReasoning < T::Struct; end
+    class BigNumbers < T::Struct
+      include Baml::Sorbet::Struct
+      const :a, Integer
+      const :b, Float
+
+      def initialize(props)
+        super(
+          a: props[:a],
+          b: props[:b],
+        )
+
+        @props = props
+      end
+    end
     class Blah < T::Struct
       include Baml::Sorbet::Struct
       const :prop4, T.nilable(String)
@@ -243,6 +259,22 @@ module Baml
           myImage: props[:myImage],
           param2: props[:param2],
           fake_image: props[:fake_image],
+        )
+
+        @props = props
+      end
+    end
+    class CompoundBigNumbers < T::Struct
+      include Baml::Sorbet::Struct
+      const :big, Baml::Types::BigNumbers
+      const :big_nums, T::Array[Baml::Types::BigNumbers]
+      const :another, Baml::Types::BigNumbers
+
+      def initialize(props)
+        super(
+          big: props[:big],
+          big_nums: props[:big_nums],
+          another: props[:another],
         )
 
         @props = props

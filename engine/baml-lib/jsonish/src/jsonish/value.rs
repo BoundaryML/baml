@@ -17,7 +17,7 @@ pub enum Value {
     Null,
 
     // Complex Types
-    Object(BamlMap<String, Value>),
+    Object(Vec<(String, Value)>),
     Array(Vec<Value>),
 
     // Fixed types
@@ -125,11 +125,11 @@ impl<'de> serde::Deserialize<'de> for Value {
             serde_json::Value::Bool(b) => Ok(Value::Boolean(b)),
             serde_json::Value::Null => Ok(Value::Null),
             serde_json::Value::Object(o) => {
-                let mut map = BamlMap::new();
+                let mut map = Vec::new();
                 for (k, v) in o {
                     let parsed_value =
                         serde_json::from_value(v).map_err(serde::de::Error::custom)?;
-                    map.insert(k, parsed_value);
+                    map.push((k, parsed_value));
                 }
                 Ok(Value::Object(map))
             }

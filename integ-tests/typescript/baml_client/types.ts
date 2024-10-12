@@ -116,6 +116,12 @@ export enum TestEnum {
   G = "G",
 }
 
+export interface BigNumbers {
+  a: number
+  b: number
+  
+}
+
 export interface Blah {
   prop4?: string | null
   
@@ -146,6 +152,13 @@ export interface ClassWithImage {
   myImage: Image
   param2: string
   fake_image: FakeImage
+  
+}
+
+export interface CompoundBigNumbers {
+  big: BigNumbers
+  big_nums: BigNumbers[]
+  another: BigNumbers
   
 }
 

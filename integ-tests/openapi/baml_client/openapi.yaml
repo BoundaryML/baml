@@ -660,6 +660,62 @@ paths:
                 title: SchemaDescriptionsResponse
                 $ref: '#/components/schemas/Schema'
       operationId: SchemaDescriptions
+  /call/StreamBigNumbers:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/StreamBigNumbers'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: StreamBigNumbersResponse
+                $ref: '#/components/schemas/BigNumbers'
+      operationId: StreamBigNumbers
+  /call/StreamOneBigNumber:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/StreamOneBigNumber'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: StreamOneBigNumberResponse
+                type: integer
+      operationId: StreamOneBigNumber
+  /call/StreamUnionIntegers:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/StreamUnionIntegers'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: StreamUnionIntegersResponse
+                type: array
+                items:
+                  oneOf:
+                  - type: integer
+                  - type: string
+      operationId: StreamUnionIntegers
+  /call/StreamingCompoundNumbers:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/StreamingCompoundNumbers'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: StreamingCompoundNumbersResponse
+                $ref: '#/components/schemas/CompoundBigNumbers'
+      operationId: StreamingCompoundNumbers
   /call/TestAnthropic:
     post:
       requestBody:
@@ -1842,6 +1898,73 @@ components:
             required:
             - input
             additionalProperties: false
+    StreamBigNumbers:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: StreamBigNumbersRequest
+            type: object
+            properties:
+              digits:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - digits
+            additionalProperties: false
+    StreamOneBigNumber:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: StreamOneBigNumberRequest
+            type: object
+            properties:
+              digits:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - digits
+            additionalProperties: false
+    StreamUnionIntegers:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: StreamUnionIntegersRequest
+            type: object
+            properties:
+              digits:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - digits
+            additionalProperties: false
+    StreamingCompoundNumbers:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: StreamingCompoundNumbersRequest
+            type: object
+            properties:
+              digits:
+                type: integer
+              yapping:
+                type: boolean
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - digits
+            - yapping
+            additionalProperties: false
     TestAnthropic:
       required: true
       content:
@@ -2509,6 +2632,17 @@ components:
       - F
       - G
       type: string
+    BigNumbers:
+      type: object
+      properties:
+        a:
+          type: integer
+        b:
+          type: number
+      required:
+      - a
+      - b
+      additionalProperties: false
     Blah:
       type: object
       properties:
@@ -2568,6 +2702,22 @@ components:
       - myImage
       - param2
       - fake_image
+      additionalProperties: false
+    CompoundBigNumbers:
+      type: object
+      properties:
+        big:
+          $ref: '#/components/schemas/BigNumbers'
+        big_nums:
+          type: array
+          items:
+            $ref: '#/components/schemas/BigNumbers'
+        another:
+          $ref: '#/components/schemas/BigNumbers'
+      required:
+      - big
+      - big_nums
+      - another
       additionalProperties: false
     CustomTaskResult:
       type: object

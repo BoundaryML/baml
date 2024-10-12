@@ -1069,3 +1069,94 @@ Here's the redesigned code with these changes:
     ]
   }
 );
+
+const OBJECT_STREAM_TEST: &str = r#"
+class Foo {
+  a int
+  c int
+  b int
+}
+
+class Bar {
+  foo Foo
+  a int
+}
+"#;
+
+test_partial_deserializer!(
+  test_object_streaming_ints,
+  OBJECT_STREAM_TEST,
+  r#"{"a": 11, "b": 22"#,
+  FieldType::Class("Foo".to_string()),
+  {"a": 11, "b": null, "c": null}
+);
+
+test_partial_deserializer!(
+  test_object_streaming_ints_newlines,
+  OBJECT_STREAM_TEST,
+  "{\n\"a\":11,\n\"b\": 22",
+  FieldType::Class("Foo".to_string()),
+  {"a": 11, "b": null, "c": null}
+);
+
+test_partial_deserializer!(
+  test_object_finished_ints,
+  OBJECT_STREAM_TEST,
+  r#"{"a": 1234,"b": 1234, "c": 1234}"#,
+  FieldType::Class("Foo".to_string()),
+  {"a": 1234, "b": 1234, "c": 1234}
+);
+
+test_partial_deserializer!(
+  test_nested_object_streaming,
+  OBJECT_STREAM_TEST,
+  r#"{"a": 1234, "foo": { "c": 33, "a": 11"#,
+  FieldType::Class("Bar".to_string()),
+  {"a": 1234, "foo": { "a": null, "b": null, "c": 33}}
+);
+
+const BIG_OBJECT_STREAM_TEST: &str = r#"
+class BigNumbers {
+  a int
+  b float
+}
+
+class CompoundBigNumbers {
+  big BigNumbers
+  big_nums BigNumbers[]
+  another BigNumbers
+}
+"#;
+
+test_partial_deserializer!(
+  test_big_object_empty,
+  BIG_OBJECT_STREAM_TEST,
+  "{",
+  FieldType::Class("CompoundBigNumbers".to_string()),
+  {"big": null, "big_nums": [], "another": null}
+);
+
+test_partial_deserializer!(
+  test_big_object_start_big,
+  BIG_OBJECT_STREAM_TEST,
+  r#"{"big": {"a": 11, "b": 12"#,
+  FieldType::Class("CompoundBigNumbers".to_string()),
+  {"big": {"a": 11, "b": null}, "big_nums": [], "another": null}
+);
+
+test_partial_deserializer!(
+  test_big_object_start_big_into_list,
+  BIG_OBJECT_STREAM_TEST,
+  r#"json```{"big": {"a": 11, "b": 12}, "big_nums": [{"a": 22, "b": 33"#,
+  FieldType::Class("CompoundBigNumbers".to_string()),
+  {"big": {"a": 11, "b": 12.0}, "big_nums": [{"a": 22, "b": null}], "another": null}
+);
+
+
+test_partial_deserializer!(
+  test_big_object_start_big_into_list2,
+  BIG_OBJECT_STREAM_TEST,
+  r#"json```{"big": {"a": 11, "b": 12.2}, "big_nums": [{"a": 22, "b": 33}, {"a": 1, "b": 2.2}], "another": {"a": 45, "b": 0.1"#,
+  FieldType::Class("CompoundBigNumbers".to_string()),
+  {"big": {"a": 11, "b": 12.2}, "big_nums": [{"a": 22, "b": 33.0}, {"a": 1, "b": 2.2}], "another": {"a": 45, "b": null}}
+);

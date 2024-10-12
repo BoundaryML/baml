@@ -119,6 +119,12 @@ class TestEnum(str, Enum):
     F = "F"
     G = "G"
 
+class BigNumbers(BaseModel):
+    
+    
+    a: int
+    b: float
+
 class Blah(BaseModel):
     
     
@@ -151,6 +157,13 @@ class ClassWithImage(BaseModel):
     myImage: baml_py.Image
     param2: str
     fake_image: "FakeImage"
+
+class CompoundBigNumbers(BaseModel):
+    
+    
+    big: "BigNumbers"
+    big_nums: List["BigNumbers"]
+    another: "BigNumbers"
 
 class CustomTaskResult(BaseModel):
     
