@@ -232,3 +232,128 @@ test_partial_deserializer!(
     "wordCounts": []
   }
 );
+
+const CHOPPY_BAML_FILE: &str = r##"
+class Error {
+  code int
+  message string
+}
+
+// Technically, everything can cast to this object.
+class ErrorBasic {
+  message string
+}
+
+class GraphJson {
+  vertices Vertex[]
+  edges Edge[]
+}
+
+class Vertex {
+  id string @description(#"
+    A unique human-readable identifier for the vertex, like 'peter'
+  "#)
+  metadata map<string, string> @description(#"
+    Arbitrary metadata for the vertex, like 'name' or 'age'
+  "#)
+}
+
+class Edge {
+  source_id string
+  target_id string
+  // note, you could use an enum here if you know what rthe relationships are
+  relationship string @description(#"
+    A human-readable label for the edge, like 'knows' or "works_with", etc..
+  "#)
+}
+  "##;
+
+const TRIMMED_CHOPPY_RESULT: &str = r#"
+```json
+{
+  "vertices": [
+    {
+      "id": "stephanie_morales",
+      "metadata": {
+        "name": "Stephanie Morales",
+        "affiliation": "Made Space"
+      }
+    },
+    {
+      "id": 
+  "#;
+
+test_partial_deserializer!(
+  test_partial_choppy,
+  CHOPPY_BAML_FILE,
+  TRIMMED_CHOPPY_RESULT,
+  FieldType::Class("GraphJson".to_string()),
+  {
+    "vertices": [
+      {
+        "id": "stephanie_morales",
+        "metadata": {
+          "name": "Stephanie Morales",
+          "affiliation": "Made Space"
+        }
+      },
+      {
+        "id": null,
+        "metadata": {
+        }
+      }
+    ],
+    "edges": [
+    ]
+  }
+);
+
+test_partial_deserializer!(
+  test_partial_choppy_union,
+  CHOPPY_BAML_FILE,
+  TRIMMED_CHOPPY_RESULT,
+  FieldType::union(vec![FieldType::Class("GraphJson".to_string()), FieldType::Class("GraphJson".to_string()).as_list(), FieldType::Class("Error".to_string())]),
+  {
+    "vertices": [
+      {
+        "id": "stephanie_morales",
+        "metadata": {
+          "name": "Stephanie Morales",
+          "affiliation": "Made Space"
+        }
+      },
+      {
+        "id": null,
+        "metadata": {
+        }
+      }
+    ],
+    "edges": [
+    ]
+  }
+);
+
+test_partial_deserializer!(
+  test_partial_choppy_union_2,
+  CHOPPY_BAML_FILE,
+  TRIMMED_CHOPPY_RESULT,
+  FieldType::union(vec![FieldType::Class("GraphJson".to_string()), FieldType::Class("ErrorBasic".to_string())]),
+  {
+    "vertices": [
+      {
+        "id": "stephanie_morales",
+        "metadata": {
+          "name": "Stephanie Morales",
+          "affiliation": "Made Space"
+        }
+      },
+      {
+        "id": null,
+        "metadata": {
+        }
+      }
+    ],
+    "edges": [
+    ]
+  }
+);
