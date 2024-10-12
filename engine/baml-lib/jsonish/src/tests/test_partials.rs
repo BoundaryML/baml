@@ -234,6 +234,16 @@ test_partial_deserializer!(
 );
 
 const CHOPPY_BAML_FILE: &str = r##"
+class Error {
+  code int
+  message string
+}
+
+// Technically, everything can cast to this object.
+class ErrorBasic {
+  message string
+}
+
 class GraphJson {
   vertices Vertex[]
   edges Edge[]
@@ -278,6 +288,56 @@ test_partial_deserializer!(
   CHOPPY_BAML_FILE,
   TRIMMED_CHOPPY_RESULT,
   FieldType::Class("GraphJson".to_string()),
+  {
+    "vertices": [
+      {
+        "id": "stephanie_morales",
+        "metadata": {
+          "name": "Stephanie Morales",
+          "affiliation": "Made Space"
+        }
+      },
+      {
+        "id": null,
+        "metadata": {
+        }
+      }
+    ],
+    "edges": [
+    ]
+  }
+);
+
+test_partial_deserializer!(
+  test_partial_choppy_union,
+  CHOPPY_BAML_FILE,
+  TRIMMED_CHOPPY_RESULT,
+  FieldType::union(vec![FieldType::Class("GraphJson".to_string()), FieldType::Class("GraphJson".to_string()).as_list(), FieldType::Class("Error".to_string())]),
+  {
+    "vertices": [
+      {
+        "id": "stephanie_morales",
+        "metadata": {
+          "name": "Stephanie Morales",
+          "affiliation": "Made Space"
+        }
+      },
+      {
+        "id": null,
+        "metadata": {
+        }
+      }
+    ],
+    "edges": [
+    ]
+  }
+);
+
+test_partial_deserializer!(
+  test_partial_choppy_union_2,
+  CHOPPY_BAML_FILE,
+  TRIMMED_CHOPPY_RESULT,
+  FieldType::union(vec![FieldType::Class("GraphJson".to_string()), FieldType::Class("ErrorBasic".to_string())]),
   {
     "vertices": [
       {
