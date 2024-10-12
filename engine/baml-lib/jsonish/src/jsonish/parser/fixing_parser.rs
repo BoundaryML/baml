@@ -32,6 +32,7 @@ pub fn parse<'a>(str: &'a str, _options: &ParseOptions) -> Result<Vec<(Value, Ve
     let mut chars = str.char_indices().peekable();
     while let Some((count, c)) = chars.next() {
         let peekable = str[count + c.len_utf8()..].char_indices().peekable();
+        eprintln!("main loop about to process_token {:?}", c);
         match state.process_token(c, peekable) {
             Ok(increments) => {
                 for _ in 0..increments {
@@ -89,6 +90,39 @@ pub fn parse<'a>(str: &'a str, _options: &ParseOptions) -> Result<Vec<(Value, Ve
                     _ => Ok(values),
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::jsonish::{Value, ParseOptions, Fixes};
+
+    #[test]
+    fn test_number() {
+        let opts = ParseOptions::default();
+        let vals = parse("12", &opts).unwrap();
+        assert_eq!(vals.len(), 1);
+        match vals[0].0.clone() {
+            Value::Number(n) => {
+                assert_eq!(n, 12.into())
+            }
+            _ => panic!("Expected number"),
+        }
+    }
+
+    #[test]
+    fn test_partial_array() {
+        let opts = ParseOptions::default();
+        let vals = parse("[12", &opts).unwrap();
+        dbg!(&vals);
+        assert_eq!(vals.len(), 1);
+        match vals[0].0.clone() {
+            Value::Number(n) => {
+                assert_eq!(n, 1.into())
+            }
+            _ => panic!("Expected number"),
         }
     }
 }
