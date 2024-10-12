@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use anyhow::Result;
 
 use super::ruby_language_features::ToRuby;
@@ -130,6 +132,8 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         match self {
             FieldType::Class(name) => format!("Baml::PartialTypes::{}", name.clone()),
             FieldType::Enum(name) => format!("T.nilable(Baml::Types::{})", name.clone()),
+            // TODO: Temporary solution until we figure out Ruby literals.
+            FieldType::Literal(value) => value.literal_base_type().to_partial_type_ref(),
             // https://sorbet.org/docs/stdlib-generics
             FieldType::List(inner) => format!("T::Array[{}]", inner.to_partial_type_ref()),
             FieldType::Map(key, value) => {

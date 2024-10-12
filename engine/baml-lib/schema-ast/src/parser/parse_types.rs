@@ -5,8 +5,8 @@ use crate::{
     parser::{parse_field::parse_field_type_with_attr, parse_identifier::parse_identifier},
     unreachable_rule,
 };
-use baml_types::TypeValue;
-use internal_baml_diagnostics::Diagnostics;
+use baml_types::{LiteralValue, TypeValue};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     assert_correct_parser!(pair, Rule::field_type, Rule::openParan, Rule::closeParan);
@@ -78,7 +78,13 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
         1 => Some(types[0].to_owned()),
         _ => Some(FieldType::Union(FieldArity::Required, types, span, None)),
     };
-    union.as_mut().map(|ft| reassociate_union_attributes(ft));
+
+    // Match statement above gets rid of the union if there's only one type.
+    // In that case attributes should already be associated to that type.
+    if matches!(union, Some(FieldType::Union(_, _, _, _))) {
+        union.as_mut().map(reassociate_union_attributes);
+    }
+
     union
 }
 
@@ -135,6 +141,18 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
                         diagnostics.span(current.as_span()),
                         None,
                     ),
+                    "true" => FieldType::Literal(
+                        FieldArity::Required,
+                        LiteralValue::Bool(true),
+                        diagnostics.span(current.as_span()),
+                        None,
+                    ),
+                    "false" => FieldType::Literal(
+                        FieldArity::Required,
+                        LiteralValue::Bool(false),
+                        diagnostics.span(current.as_span()),
+                        None,
+                    ),
                     _ => FieldType::Symbol(
                         FieldArity::Required,
                         Identifier::Local(
@@ -151,6 +169,7 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
             Rule::group => parse_group(current, diagnostics),
             Rule::tuple => parse_tuple(current, diagnostics),
             Rule::parenthesized_type => parse_parenthesized_type(current, diagnostics),
+            Rule::literal_type => parse_literal_type(current, diagnostics),
             _ => unreachable_rule!(current, Rule::base_type),
         };
     }
@@ -172,6 +191,49 @@ fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
     }
 
     unreachable!("impossible parenthesized parsing");
+}
+
+fn parse_literal_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
+    assert_correct_parser!(pair, Rule::literal_type);
+
+    let span = diagnostics.span(pair.as_span());
+
+    let Some(literal_type) = pair.into_inner().next() else {
+        unreachable!("impossible literal parsing");
+    };
+
+    let literal_value = match literal_type.as_rule() {
+        Rule::quoted_string_literal => match literal_type.into_inner().next() {
+            Some(string_content) => LiteralValue::String(string_content.as_str().into()),
+            None => unreachable!("quoted string literal has no string content"),
+        },
+
+        Rule::numeric_literal => match literal_type.as_str().parse::<i64>() {
+            Ok(int) => LiteralValue::Int(int),
+
+            // This should only be a float because of how the pest grammar is defined.
+            Err(_e) => {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    format!(
+                        "Float literal values are not supported: {}",
+                        literal_type.as_str()
+                    )
+                    .as_str(),
+                    span,
+                ));
+
+                return None;
+            }
+        },
+        _ => unreachable_rule!(literal_type, Rule::literal_type),
+    };
+
+    Some(FieldType::Literal(
+        FieldArity::Required,
+        literal_value,
+        span,
+        None,
+    ))
 }
 
 fn parse_array(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {

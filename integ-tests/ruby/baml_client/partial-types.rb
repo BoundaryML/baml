@@ -488,11 +488,13 @@ module Baml
       include Baml::Sorbet::Struct
       const :items, T::Array[Baml::PartialTypes::ReceiptItem]
       const :total_cost, T.nilable(Float)
+      const :venue, T.nilable(T.any(T.nilable(String), T.nilable(String)))
 
       def initialize(props)
         super(
           items: props[:items],
           total_cost: props[:total_cost],
+          venue: props[:venue],
         )
 
         @props = props
@@ -519,10 +521,12 @@ module Baml
     class Recipe < T::Struct
       include Baml::Sorbet::Struct
       const :ingredients, T::Hash[String, Baml::PartialTypes::Quantity]
+      const :recipe_type, T.nilable(T.any(T.nilable(String), T.nilable(String)))
 
       def initialize(props)
         super(
           ingredients: props[:ingredients],
+          recipe_type: props[:recipe_type],
         )
 
         @props = props

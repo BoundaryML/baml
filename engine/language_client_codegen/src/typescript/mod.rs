@@ -230,6 +230,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
     //                 value.to_partial_type_ref(ir)
     //             )
     //         }
+    //         FieldType::Literal(value) => value.to_string(),
     //         FieldType::Primitive(r#type) => format!("({} | null)", r#type.to_typescript()),
     //         FieldType::Union(inner) => format!(
     //             "({} | null)",
@@ -275,6 +276,8 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 format!("Record<{}, {}>", key.to_type_ref(ir), value.to_type_ref(ir))
             }
             FieldType::Primitive(r#type) => r#type.to_typescript(),
+            // In typescript we can just use literal values as type defs.
+            FieldType::Literal(value) => value.to_string(),
             FieldType::Union(inner) => format!(
                 "{}",
                 inner

@@ -3,7 +3,7 @@ class InterfaceTwo {
   prop2 Bar
 }
 
-// error: Type `Bar` does not exist. Did you mean one of these: `int`, `bool`, `float`, `string`, `InterfaceTwo`?
+// error: Type `Bar` does not exist. Did you mean one of these: `int`, `bool`, `float`, `true`, `false`, `string`, `InterfaceTwo`?
 //   -->  class/unknown_type.baml:3
 //    | 
 //  2 |   interface string

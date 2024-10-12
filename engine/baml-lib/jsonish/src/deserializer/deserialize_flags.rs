@@ -26,7 +26,7 @@ pub enum Flag {
     FirstMatch(usize, Vec<Result<BamlValueWithFlags, ParsingError>>),
     UnionMatch(usize, Vec<Result<BamlValueWithFlags, ParsingError>>),
 
-    EnumOneFromMany(Vec<(usize, String)>),
+    StrMatchOneFromMany(Vec<(usize, String)>),
 
     DefaultFromNoValue,
     DefaultButHadValue(crate::jsonish::Value),
@@ -79,7 +79,7 @@ impl DeserializerConditions {
                 Flag::ImpliedKey(_) => None,
                 Flag::InferedObject(_) => None,
                 Flag::FirstMatch(_idx, _) => None,
-                Flag::EnumOneFromMany(_matches) => None,
+                Flag::StrMatchOneFromMany(_matches) => None,
                 Flag::DefaultFromNoValue => None,
                 Flag::DefaultButHadValue(_) => None,
                 Flag::OptionalDefaultFromNoValue => None,
@@ -159,7 +159,7 @@ impl std::fmt::Display for Flag {
                 writeln!(f, "{:#?}", value)?;
                 writeln!(f, "-----------")?;
             }
-            Flag::EnumOneFromMany(values) => {
+            Flag::StrMatchOneFromMany(values) => {
                 write!(f, "Enum one from many: ")?;
                 for (idx, value) in values {
                     writeln!(f, "Item {}: {}", idx, value)?;

@@ -8,9 +8,10 @@ class ReceiptItem {
 class ReceiptInfo {
     items ReceiptItem[]
     total_cost float?
+    venue "barisa" | "ox_burger"
 }
 
-function ExtractReceiptInfo(email: string) -> ReceiptInfo {
+function ExtractReceiptInfo(email: string, reason: "curiosity" | "personal_finance") -> ReceiptInfo {
   client GPT4o
   prompt #"
     Given the receipt below:

@@ -237,6 +237,4 @@ class BamlClientHttpError(BamlClientError):
 class BamlValidationError(BamlError):
     """Raised when validation fails."""
 
-    prompt: str
-    raw_output: str
-    message: str
+    ...

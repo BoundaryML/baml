@@ -13,10 +13,8 @@ pub fn coerce_array_to_singular(
     coercion: &dyn (Fn(&crate::jsonish::Value) -> Result<BamlValueWithFlags, ParsingError>),
 ) -> Result<BamlValueWithFlags, ParsingError> {
     let parsed = items.iter().map(|item| coercion(item)).collect::<Vec<_>>();
-    match pick_best(ctx, target, &parsed) {
-        Ok(v) => Ok(v),
-        Err(e) => Err(e),
-    }
+
+    pick_best(ctx, target, &parsed)
 }
 
 pub(super) fn pick_best(
@@ -31,7 +29,7 @@ pub(super) fn pick_best(
         return first.clone();
     }
 
-    let mut res_index = (0..res.len())
+    let res_index = (0..res.len())
         .map(|i| match res[i] {
             Ok(ref v) => (i, v.score()),
             Err(_) => (i, i32::max_value()),

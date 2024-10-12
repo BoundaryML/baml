@@ -1,4 +1,4 @@
-use baml_types::TypeValue;
+use baml_types::{LiteralValue, TypeValue};
 use internal_baml_diagnostics::DatamodelError;
 
 use super::{
@@ -113,6 +113,7 @@ impl FieldArity {
 pub enum FieldType {
     Symbol(FieldArity, Identifier, Option<Vec<Attribute>>),
     Primitive(FieldArity, TypeValue, Span, Option<Vec<Attribute>>),
+    Literal(FieldArity, LiteralValue, Span, Option<Vec<Attribute>>),
     // The second field is the number of dims for the list
     List(
         FieldArity,
@@ -144,6 +145,7 @@ impl FieldType {
     pub fn span(&self) -> &Span {
         match self {
             FieldType::Primitive(.., span, _) => span,
+            FieldType::Literal(.., span, _) => span,
             FieldType::Symbol(.., idn, _) => idn.span(),
             FieldType::Union(.., span, _) => span,
             FieldType::Tuple(.., span, _) => span,
@@ -160,6 +162,7 @@ impl FieldType {
         match &mut as_nullable {
             FieldType::Symbol(ref mut arity, ..) => *arity = FieldArity::Optional,
             FieldType::Primitive(ref mut arity, ..) => *arity = FieldArity::Optional,
+            FieldType::Literal(ref mut arity, ..) => *arity = FieldArity::Optional,
             FieldType::Union(ref mut arity, ..) => *arity = FieldArity::Optional,
             FieldType::Tuple(ref mut arity, ..) => *arity = FieldArity::Optional,
             FieldType::Map(ref mut arity, ..) => *arity = FieldArity::Optional,
@@ -177,6 +180,7 @@ impl FieldType {
             }
             FieldType::Tuple(arity, _, _, _) => arity.is_optional(),
             FieldType::Primitive(arity, _, _, _) => arity.is_optional(),
+            FieldType::Literal(arity, _, _, _) => arity.is_optional(),
             FieldType::Map(arity, _kv, _, _) => arity.is_optional(),
             FieldType::List(arity, _t, _, _, _) => arity.is_optional(),
         }
@@ -198,6 +202,7 @@ impl FieldType {
             }
             FieldType::List(_, t, ..) => t.flat_idns(),
             FieldType::Primitive(..) => vec![],
+            FieldType::Literal(..) => vec![],
         }
     }
 
@@ -205,6 +210,7 @@ impl FieldType {
         match self {
             FieldType::Symbol(.., attr)
             | FieldType::Primitive(.., attr)
+            | FieldType::Literal(.., attr)
             | FieldType::Union(.., attr)
             | FieldType::Tuple(.., attr)
             | FieldType::Map(.., attr)
@@ -216,6 +222,7 @@ impl FieldType {
         match self {
             FieldType::Symbol(.., attr)
             | FieldType::Primitive(.., attr)
+            | FieldType::Literal(.., attr)
             | FieldType::Union(.., attr)
             | FieldType::Tuple(.., attr)
             | FieldType::Map(.., attr)
@@ -227,6 +234,7 @@ impl FieldType {
         match self {
             FieldType::Symbol(.., attr)
             | FieldType::Primitive(.., attr)
+            | FieldType::Literal(.., attr)
             | FieldType::Union(.., attr)
             | FieldType::Tuple(.., attr)
             | FieldType::Map(.., attr)
@@ -238,12 +246,13 @@ impl FieldType {
         match self {
             FieldType::Symbol(.., attr)
             | FieldType::Primitive(.., attr)
+            | FieldType::Literal(.., attr)
             | FieldType::Union(.., attr)
             | FieldType::Tuple(.., attr)
             | FieldType::Map(.., attr)
             | FieldType::List(.., attr) => match attr.as_mut() {
                 Some(ats) => ats.extend(attributes),
-                None => { *attr = Some(attributes) }
+                None => *attr = Some(attributes),
             },
         }
     }
@@ -282,6 +291,18 @@ impl FieldType {
                 attrs_eq(attrs1, attrs2);
             }
             (Primitive(..), _) => {
+                panic!(
+                    "Different types: \n{}\n---\n{}",
+                    self.to_string(),
+                    other.to_string()
+                )
+            }
+            (Literal(arity1, val1, _, attrs1), Literal(arity2, val2, _, attrs2)) => {
+                assert_eq!(arity1, arity2);
+                assert_eq!(val1, val2);
+                attrs_eq(attrs1, attrs2);
+            }
+            (Literal(_, _, _, _), _) => {
                 panic!(
                     "Different types: \n{}\n---\n{}",
                     self.to_string(),
@@ -394,6 +415,14 @@ impl std::fmt::Display for FieldType {
             }
             FieldType::Primitive(arity, t, ..) => {
                 write!(f, "{}{}", t, if arity.is_optional() { "?" } else { "" })
+            }
+            FieldType::Literal(arity, literal_value, ..) => {
+                write!(
+                    f,
+                    "{}{}",
+                    literal_value,
+                    if arity.is_optional() { "?" } else { "" }
+                )
             }
         }
     }

@@ -25,7 +25,7 @@ pub(super) fn coerce_union(
 
     let parsed = options
         .iter()
-        .map(|option| option.coerce(ctx, union_target, value))
+        .map(|option| option.coerce(ctx, option, value))
         .collect::<Vec<_>>();
 
     array_helper::pick_best(ctx, union_target, &parsed)
