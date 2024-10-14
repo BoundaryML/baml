@@ -75,6 +75,12 @@ class TestAllInputs:
         res = await b.ExtractContactInfo("Reach me at help@boundaryml.com")
         assert res.primary.value is not None
         assert res.primary.value.checks.valid_email.status == "succeeded"
+        assert res.secondary is None
+
+        res = await b.ExtractContactInfo("Reach me at help@boundaryml.com, or 111-222-3333 if needed.")
+        assert res.primary.value is not None
+        assert res.primary.value.checks.valid_email.status == "succeeded"
+        assert res.secondary.value.checks.valid_phone_number.status == "succeeded"
 
     @pytest.mark.asyncio
     async def test_single_class(self):

@@ -8,12 +8,14 @@ class EmailAddress {
 
 class ContactInfo {
   primary PhoneNumber | EmailAddress
+  secondary (PhoneNumber | EmailAddress)?
 }
 
 function ExtractContactInfo(document: string) -> ContactInfo {
   client GPT35
   prompt #"
-         Extract a primary contact info from this document:
+         Extract a primary contact info, and if possible a secondary contact
+         info, from this document:
 
          {{ document }}
 

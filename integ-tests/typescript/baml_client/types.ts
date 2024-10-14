@@ -164,6 +164,7 @@ export interface CompoundBigNumbers {
 
 export interface ContactInfo {
   primary: PhoneNumber | EmailAddress
+  secondary?: PhoneNumber | EmailAddress | null
   
 }
 

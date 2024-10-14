@@ -290,10 +290,12 @@ module Baml
     class ContactInfo < T::Struct
       include Baml::Sorbet::Struct
       const :primary, T.any(Baml::Types::PhoneNumber, Baml::Types::EmailAddress)
+      const :secondary, T.any(Baml::Types::PhoneNumber, Baml::Types::EmailAddress, NilClass)
 
       def initialize(props)
         super(
           primary: props[:primary],
+          secondary: props[:secondary],
         )
 
         @props = props

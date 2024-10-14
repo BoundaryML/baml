@@ -2842,6 +2842,10 @@ components:
           oneOf:
           - $ref: '#/components/schemas/PhoneNumber'
           - $ref: '#/components/schemas/EmailAddress'
+        secondary:
+          oneOf:
+          - $ref: '#/components/schemas/PhoneNumber'
+          - $ref: '#/components/schemas/EmailAddress'
       required:
       - primary
       additionalProperties: false
