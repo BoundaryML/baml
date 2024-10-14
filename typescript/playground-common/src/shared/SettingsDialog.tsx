@@ -112,6 +112,7 @@ const requiredButUnsetAtom = atom((get) => {
   )
 })
 
+
 const requiredAndSetCountAtom = atom((get) => {
   const envvars = get(envvarsAtom)
   return get(runtimeRequiredEnvVarsAtom).filter((k) =>
@@ -181,18 +182,24 @@ export const ShowSettingsButton: React.FC<{ iconClassName: string }> = ({ iconCl
   const setShowSettings = useSetAtom(showSettingsAtom)
   const requiredButUnset = useAtomValue(requiredButUnsetAtom)
   const requiredAndSetCount = useAtomValue(requiredAndSetCountAtom)
+  const requiredEnvVars = useAtomValue(runtimeRequiredEnvVarsAtom)
   const requiredButUnsetCount = requiredButUnset.length
+  useEffect(() => {
+    if ((window as any).next?.version) {
+      // dont run in nextjs
+      return
+    }
+    if (requiredAndSetCount === 0 && requiredEnvVars.length > 0) {
+      // no env vars have been set at all pop up the dialog
+      setShowSettings(true)
+    }
+  }, [requiredAndSetCount, requiredEnvVars, setShowSettings])
+
   if ((window as any).next?.version) {
     // dont run in nextjs
     return null
   }
 
-  useEffect(() => {
-    if (requiredAndSetCount === 0) {
-      // no env vars have been set at all pop up the dialog
-      setShowSettings(true)
-    }
-  }, [requiredAndSetCount])
 
   const button = (
     <Button
@@ -263,7 +270,7 @@ export const SettingsDialog: React.FC = () => {
               <>
                 <p className='text-xs italic text-vscode-descriptionForeground'>
                   You can get these from{' '}
-                  <a className='text-blue-400 underline' target='_blank' href='https://app.boundaryml.com'>
+                  <a className='text-blue-400 underline' target='_blank' href='https://app.boundaryml.com' rel="noreferrer">
                     Boundary Studio
                   </a>
                 </p>
