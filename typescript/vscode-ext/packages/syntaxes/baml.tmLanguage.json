@@ -147,6 +147,14 @@
           "end": ">"
         },
         {
+          "match": "\"[^\"]*\"",
+          "name": "string.quoted.double"
+        },
+        {
+          "match": "\\b(true|false)\\b",
+          "name": "constant.language.boolean"
+        },
+        {
           "match": "\\w+",
           "name": "support.type"
         },
