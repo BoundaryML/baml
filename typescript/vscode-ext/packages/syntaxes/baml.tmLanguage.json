@@ -147,8 +147,15 @@
           "end": ">"
         },
         {
+          "match": "\\b(true|false)\\b",
+          "name": "constant.language.boolean"
+        },
+        {
           "match": "\\w+",
           "name": "support.type"
+        },
+        {
+          "include": "#string_literal"
         },
         {
           "match": "\\[\\]",
