@@ -233,8 +233,3 @@ class BamlClientHttpError(BamlClientError):
     """Raised for HTTP-related client errors."""
 
     ...
-
-class BamlValidationError(BamlError):
-    """Raised when validation fails."""
-
-    ...
