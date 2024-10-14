@@ -24,6 +24,7 @@ from ..baml_client.types import (
     NamedArgsSingleEnumList,
     NamedArgsSingleClass,
     StringToClassEntry,
+    CompoundBigNumbers,
 )
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
@@ -1150,3 +1151,63 @@ async def test_baml_validation_error_format():
 
             raise e
     assert "Failed to parse" in str(excinfo)
+
+@pytest.mark.asyncio
+async def test_no_stream_big_integer():
+    stream = b.stream.StreamOneBigNumber(digits=12)
+    msgs = []
+    async for msg in stream:
+        msgs.append(msg)
+    res = await stream.get_final_response()
+    for msg in msgs:
+        assert True if msg is None else msg == res
+
+@pytest.mark.asyncio
+async def test_no_stream_object_with_numbers():
+    stream = b.stream.StreamBigNumbers(digits=12)
+    msgs = []
+    async for msg in stream:
+        msgs.append(msg)
+    res = await stream.get_final_response()
+
+    # If Numbers aren't being streamed, then for every message, the partial
+    # field should either be None, or exactly the value in the final result.
+    for msg in msgs:
+        assert True if msg.a is None else msg.a == res.a
+        assert True if msg.b is None else msg.b == res.b
+
+@pytest.mark.asyncio
+async def test_no_stream_compound_object():
+    stream = b.stream.StreamingCompoundNumbers(digits = 12, yapping=False)
+    msgs: List[CompoundBigNumbers] = []
+    async for msg in stream:
+        msgs.append(msg)
+    res = await stream.get_final_response()
+    for msg in msgs:
+        if msg.big is not None:
+            assert True if msg.big.a is None else msg.big.a == res.big.a
+            assert True if msg.big.b is None else msg.big.b == res.big.b
+        for (msgEntry, resEntry) in zip(msg.big_nums, res.big_nums):
+            assert True if msgEntry.a is None else msgEntry.a == resEntry.a
+            assert True if msgEntry.b is None else msgEntry.b == resEntry.b
+        if msg.another is not None:
+            assert True if msg.another.a is None else msg.another.a == res.another.a
+            assert True if msg.another.b is None else msg.another.b == res.another.b
+
+@pytest.mark.asyncio
+async def test_no_stream_compound_object_with_yapping():
+    stream = b.stream.StreamingCompoundNumbers(digits = 12, yapping=True)
+    msgs: List[CompoundBigNumbers] = []
+    async for msg in stream:
+        msgs.append(msg)
+    res = await stream.get_final_response()
+    for msg in msgs:
+        if msg.big is not None:
+            assert True if msg.big.a is None else msg.big.a == res.big.a
+            assert True if msg.big.b is None else msg.big.b == res.big.b
+        for (msgEntry, resEntry) in zip(msg.big_nums, res.big_nums):
+            assert True if msgEntry.a is None else msgEntry.a == resEntry.a
+            assert True if msgEntry.b is None else msgEntry.b == resEntry.b
+        if msg.another is not None:
+            assert True if msg.another.a is None else msg.another.a == res.another.a
+            assert True if msg.another.b is None else msg.another.b == res.another.b

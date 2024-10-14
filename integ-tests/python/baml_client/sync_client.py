@@ -1209,6 +1209,102 @@ class BamlSyncClient:
       mdl = create_model("SchemaDescriptionsReturnType", inner=(types.Schema, ...))
       return coerce(mdl, raw.parsed())
     
+    def StreamBigNumbers(
+        self,
+        digits: int,
+        baml_options: BamlCallOptions = {},
+    ) -> types.BigNumbers:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "StreamBigNumbers",
+        {
+          "digits": digits,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("StreamBigNumbersReturnType", inner=(types.BigNumbers, ...))
+      return coerce(mdl, raw.parsed())
+    
+    def StreamOneBigNumber(
+        self,
+        digits: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "StreamOneBigNumber",
+        {
+          "digits": digits,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("StreamOneBigNumberReturnType", inner=(int, ...))
+      return coerce(mdl, raw.parsed())
+    
+    def StreamUnionIntegers(
+        self,
+        digits: int,
+        baml_options: BamlCallOptions = {},
+    ) -> List[Union[int, str]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "StreamUnionIntegers",
+        {
+          "digits": digits,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("StreamUnionIntegersReturnType", inner=(List[Union[int, str]], ...))
+      return coerce(mdl, raw.parsed())
+    
+    def StreamingCompoundNumbers(
+        self,
+        digits: int,yapping: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> types.CompoundBigNumbers:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "StreamingCompoundNumbers",
+        {
+          "digits": digits,"yapping": yapping,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("StreamingCompoundNumbersReturnType", inner=(types.CompoundBigNumbers, ...))
+      return coerce(mdl, raw.parsed())
+    
     def TestAnthropic(
         self,
         input: str,
@@ -3523,6 +3619,139 @@ class BamlStreamClient:
       partial_mdl = create_model("SchemaDescriptionsPartialReturnType", inner=(partial_types.Schema, ...))
 
       return baml_py.BamlSyncStream[partial_types.Schema, types.Schema](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def StreamBigNumbers(
+        self,
+        digits: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.BigNumbers, types.BigNumbers]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "StreamBigNumbers",
+        {
+          "digits": digits,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("StreamBigNumbersReturnType", inner=(types.BigNumbers, ...))
+      partial_mdl = create_model("StreamBigNumbersPartialReturnType", inner=(partial_types.BigNumbers, ...))
+
+      return baml_py.BamlSyncStream[partial_types.BigNumbers, types.BigNumbers](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def StreamOneBigNumber(
+        self,
+        digits: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[int], int]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "StreamOneBigNumber",
+        {
+          "digits": digits,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("StreamOneBigNumberReturnType", inner=(int, ...))
+      partial_mdl = create_model("StreamOneBigNumberPartialReturnType", inner=(Optional[int], ...))
+
+      return baml_py.BamlSyncStream[Optional[int], int](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def StreamUnionIntegers(
+        self,
+        digits: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[List[Optional[Union[Optional[int], Optional[str]]]], List[Union[int, str]]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "StreamUnionIntegers",
+        {
+          "digits": digits,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("StreamUnionIntegersReturnType", inner=(List[Union[int, str]], ...))
+      partial_mdl = create_model("StreamUnionIntegersPartialReturnType", inner=(List[Optional[Union[Optional[int], Optional[str]]]], ...))
+
+      return baml_py.BamlSyncStream[List[Optional[Union[Optional[int], Optional[str]]]], List[Union[int, str]]](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def StreamingCompoundNumbers(
+        self,
+        digits: int,yapping: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.CompoundBigNumbers, types.CompoundBigNumbers]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "StreamingCompoundNumbers",
+        {
+          "digits": digits,
+          "yapping": yapping,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("StreamingCompoundNumbersReturnType", inner=(types.CompoundBigNumbers, ...))
+      partial_mdl = create_model("StreamingCompoundNumbersPartialReturnType", inner=(partial_types.CompoundBigNumbers, ...))
+
+      return baml_py.BamlSyncStream[partial_types.CompoundBigNumbers, types.CompoundBigNumbers](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

@@ -122,3 +122,27 @@ test_deserializer!(
       }
     ]
 );
+
+test_deserializer!(
+    test_list_streaming,
+    "",
+    r#"[1234, 5678"#,
+    FieldType::List(FieldType::Primitive(TypeValue::Int).into()),
+    [1234, 5678]
+);
+
+test_deserializer!(
+    test_list_streaming_2,
+    "",
+    r#"[1234"#,
+    FieldType::List(FieldType::Primitive(TypeValue::Int).into()),
+    [1234]
+);
+
+test_partial_deserializer!(
+    test_list_streaming_partial,
+    "",
+    r#"[1234, 5678"#,
+    FieldType::List(FieldType::Primitive(TypeValue::Int).into()),
+    [1234]
+);

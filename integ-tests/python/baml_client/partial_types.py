@@ -28,6 +28,12 @@ from . import types
 ###############################################################################
 
 
+class BigNumbers(BaseModel):
+    
+    
+    a: Optional[int] = None
+    b: Optional[float] = None
+
 class Blah(BaseModel):
     
     
@@ -60,6 +66,13 @@ class ClassWithImage(BaseModel):
     myImage: Optional[baml_py.Image] = None
     param2: Optional[str] = None
     fake_image: Optional["FakeImage"] = None
+
+class CompoundBigNumbers(BaseModel):
+    
+    
+    big: Optional["BigNumbers"] = None
+    big_nums: List["BigNumbers"]
+    another: Optional["BigNumbers"] = None
 
 class CustomTaskResult(BaseModel):
     
