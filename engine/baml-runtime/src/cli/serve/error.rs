@@ -61,6 +61,7 @@ impl BamlError {
                         message: format!("Something went wrong with the LLM client: {:?}", err),
                     },
                     crate::internal::llm_client::ErrorCode::Other(_)
+                    | crate::internal::llm_client::ErrorCode::BadRequest
                     | crate::internal::llm_client::ErrorCode::InvalidAuthentication
                     | crate::internal::llm_client::ErrorCode::NotSupported
                     | crate::internal::llm_client::ErrorCode::RateLimited

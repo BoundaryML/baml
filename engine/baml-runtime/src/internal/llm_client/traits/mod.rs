@@ -10,7 +10,10 @@ pub use self::{
     chat::{WithChat, WithStreamChat},
     completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
 };
-use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
+use super::{
+    primitive::request::RequestBuilder, properties_hander::FinishReasonOptions, LLMResponse,
+    ModelFeatures,
+};
 use crate::{internal::llm_client::ResolveMediaUrls, RenderCurlSettings};
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, MediaBase64, MediaUrl};
@@ -35,6 +38,7 @@ pub trait WithRetryPolicy {
 pub trait WithClientProperties {
     fn client_properties(&self) -> &HashMap<String, serde_json::Value>;
     fn allowed_metadata(&self) -> &super::AllowedMetadata;
+    fn finish_reason_handling(&self) -> Option<&FinishReasonOptions>;
 }
 
 pub trait WithSingleCallable {

@@ -1,4 +1,5 @@
 use crate::internal::llm_client::{
+    properties_hander::PropertiesHandler,
     traits::{ToProviderMessage, ToProviderMessageExt, WithClientProperties},
     AllowedMetadata, ResolveMediaUrls,
 };
@@ -43,6 +44,7 @@ struct PostRequestProperities {
     headers: HashMap<String, String>,
     proxy_url: Option<String>,
     allowed_metadata: AllowedMetadata,
+    finish_reason: Option<crate::internal::llm_client::properties_hander::FinishReasonOptions>,
     // These are passed directly to the Anthropic API.
     properties: HashMap<String, serde_json::Value>,
 }
@@ -62,56 +64,32 @@ pub struct AnthropicClient {
 // resolves/constructs PostRequestProperties from the client's options and runtime context, fleshing out the needed headers and parameters
 // basically just reads the client's options and matches them to needed properties or defaults them
 fn resolve_properties(
-    mut properties: HashMap<String, serde_json::Value>,
+    mut properties: PropertiesHandler,
     ctx: &RuntimeContext,
 ) -> Result<PostRequestProperities> {
     // this is a required field
-    properties
-        .entry("max_tokens".into())
-        .or_insert_with(|| 4096.into());
 
-    let default_role = properties
-        .remove("default_role")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "system".to_string());
-
+    let default_role = properties.pull_default_role("system")?;
     let base_url = properties
-        .remove("base_url")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "https://api.anthropic.com".to_string());
-
+        .pull_base_url()?
+        .unwrap_or_else(|| "https://api.anthropic.com".into());
     let api_key = properties
-        .remove("api_key")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .pull_api_key()?
         .or_else(|| ctx.env.get("ANTHROPIC_API_KEY").map(|s| s.to_string()));
 
-    let allowed_metadata = match properties.remove("allowed_role_metadata") {
-        Some(allowed_metadata) => serde_json::from_value(allowed_metadata).context(
-            "allowed_role_metadata must be an array of keys. For example: ['key1', 'key2']",
-        )?,
-        None => AllowedMetadata::None,
-    };
-
-    let mut headers = match properties.remove("headers") {
-        Some(headers) => headers
-            .as_object()
-            .context("headers must be a map of strings to strings")?
-            .iter()
-            .map(|(k, v)| {
-                Ok((
-                    k.to_string(),
-                    v.as_str()
-                        .context(format!("Header '{}' must be a string", k))?
-                        .to_string(),
-                ))
-            })
-            .collect::<Result<HashMap<_, _>>>()?,
-        None => Default::default(),
-    };
-
+    let allowed_metadata = properties.pull_allowed_role_metadata()?;
+    let mut headers = properties.pull_headers()?;
     headers
         .entry("anthropic-version".to_string())
         .or_insert("2023-06-01".to_string());
+    let finish_reason = properties.pull_finish_reason_options()?;
+
+    let mut properties = properties.finalize();
+    // Anthropic has a very low max_tokens by default, so we increase it to 4096.
+    properties
+        .entry("max_tokens".into())
+        .or_insert_with(|| 4096.into());
+    let properties = properties;
 
     Ok(PostRequestProperities {
         default_role,
@@ -119,6 +97,7 @@ fn resolve_properties(
         api_key,
         headers,
         allowed_metadata,
+        finish_reason,
         properties,
         proxy_url: ctx.env.get("BOUNDARY_PROXY_URL").map(|s| s.to_string()),
     })
@@ -137,6 +116,12 @@ impl WithClientProperties for AnthropicClient {
     }
     fn client_properties(&self) -> &HashMap<String, serde_json::Value> {
         &self.properties.properties
+    }
+
+    fn finish_reason_handling(
+        &self,
+    ) -> Option<&crate::internal::llm_client::properties_hander::FinishReasonOptions> {
+        self.properties.finish_reason.as_ref()
     }
 }
 
@@ -308,14 +293,7 @@ impl WithStreamChat for AnthropicClient {
 // constructs base client and resolves properties based on context
 impl AnthropicClient {
     pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<Self> {
-        let properties = resolve_properties(
-            client
-                .options
-                .iter()
-                .map(|(k, v)| Ok((k.clone(), json!(v))))
-                .collect::<Result<HashMap<_, _>>>()?,
-            ctx,
-        )?;
+        let properties = resolve_properties(client.property_handler()?, ctx)?;
         let default_role = properties.default_role.clone();
         Ok(Self {
             name: client.name.clone(),

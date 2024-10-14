@@ -3,9 +3,9 @@ pub(crate) mod generic;
 pub(crate) mod ollama;
 pub(crate) mod openai;
 
-use std::collections::HashMap;
-
+use crate::internal::llm_client::properties_hander::FinishReasonOptions;
 use crate::internal::llm_client::AllowedMetadata;
+use std::collections::HashMap;
 
 pub struct PostRequestProperties {
     pub default_role: String,
@@ -14,6 +14,7 @@ pub struct PostRequestProperties {
     pub headers: HashMap<String, String>,
     pub query_params: HashMap<String, String>,
     pub proxy_url: Option<String>,
+    pub finish_reason: Option<FinishReasonOptions>,
     // These are passed directly to the OpenAI API.
     pub properties: HashMap<String, serde_json::Value>,
     pub allowed_metadata: AllowedMetadata,

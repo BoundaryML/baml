@@ -1,4 +1,5 @@
 use crate::client_registry::ClientProperty;
+use crate::internal::llm_client::properties_hander::{FinishReasonOptions, PropertiesHandler};
 use crate::internal::llm_client::traits::{
     ToProviderMessage, ToProviderMessageExt, WithClientProperties,
 };
@@ -62,6 +63,7 @@ struct PostRequestProperties {
     model_id: Option<String>,
     location: Option<String>,
     allowed_metadata: AllowedMetadata,
+    finish_reason: Option<FinishReasonOptions>,
 }
 
 pub struct VertexClient {
@@ -89,107 +91,86 @@ struct ServiceAccount {
 }
 
 fn resolve_properties(
-    mut properties: HashMap<String, serde_json::Value>,
+    mut properties: PropertiesHandler,
     ctx: &RuntimeContext,
 ) -> Result<PostRequestProperties, anyhow::Error> {
-    let default_role = properties
-        .remove("default_role")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "user".to_string());
+    let default_role = properties.pull_default_role("user")?;
 
-    let base_url = properties
-        .remove("base_url")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or("".to_string());
-    let allowed_metadata = match properties.remove("allowed_role_metadata") {
-        Some(allowed_metadata) => serde_json::from_value(allowed_metadata).context(
-            "allowed_role_metadata must be an array of keys. For example: ['key1', 'key2']",
-        )?,
-        None => AllowedMetadata::None,
-    };
+    let base_url = properties.pull_base_url()?;
+    let allowed_metadata = properties.pull_allowed_role_metadata()?;
+
     let service_account_details = {
-        let authz = properties.remove("authorization");
-        let creds = properties.remove("credentials");
-        let creds_content = properties.remove("credentials_content");
+        let authz = properties.remove_str("authorization")?;
+        let creds = properties.remove("credentials")?;
+        let creds_content = properties.remove_str("credentials_content")?;
 
-        match (authz, creds, creds_content) {
-            (Some(authz), _, _) => match authz {
-                serde_json::Value::String(s) => ServiceAccountDetails::RawAuthorizationHeader(s),
-                _ => anyhow::bail!("authorization must be a string"),
-            },
-            (_, Some(creds), _) => match creds {
+        // Ensure that at most one of authz, creds, and creds_content is provided
+        if [authz.is_some(), creds.is_some(), creds_content.is_some()]
+            .iter()
+            .filter(|&&b| b)
+            .count()
+            > 1
+        {
+            anyhow::bail!(
+                "Only one of authorization, credentials, and credentials_content can be provided"
+            );
+        }
+
+        if let Some(authz) = authz {
+            ServiceAccountDetails::RawAuthorizationHeader(authz)
+        } else if let Some(creds) = creds {
+            match creds {
                 serde_json::Value::String(s) => match serde_json::from_str(&s) {
                     Ok(service_account) => ServiceAccountDetails::Json(service_account),
                     Err(_) => ServiceAccountDetails::FilePath(s),
                 },
                 serde_json::Value::Object(o) => ServiceAccountDetails::Json(o),
                 _ => anyhow::bail!("credentials must be a string or JSON object"),
-            },
-            (_, _, Some(creds_content)) => match creds_content {
-                serde_json::Value::String(s) => ServiceAccountDetails::Json(
-                    serde_json::from_str(&s)
-                        .context("Failed to parse credentials_content as a JSON object")?,
-                ),
-                _ => anyhow::bail!("credentials_content must be a string"),
-            },
-            (None, None, None) => match (
-                ctx.env.get("GOOGLE_APPLICATION_CREDENTIALS"),
-                ctx.env.get("GOOGLE_APPLICATION_CREDENTIALS_CONTENT"),
-            ) {
-                (Some(path), _) => ServiceAccountDetails::FilePath(path.to_string()),
-                (_, Some(creds_content)) => ServiceAccountDetails::Json(
-                    serde_json::from_str(&creds_content)
-                        .context("Failed to parse credentials_content as a JSON object")?,
-                ),
-                _ => ServiceAccountDetails::None,
-            },
+            }
+        } else if let Some(creds_content) = creds_content {
+            ServiceAccountDetails::Json(
+                serde_json::from_str(&creds_content)
+                    .context("Failed to parse credentials_content as a JSON object")?,
+            )
+        } else if let Some(path) = ctx.env.get("GOOGLE_APPLICATION_CREDENTIALS") {
+            ServiceAccountDetails::FilePath(path.to_string())
+        } else if let Some(creds_content) = ctx.env.get("GOOGLE_APPLICATION_CREDENTIALS_CONTENT") {
+            ServiceAccountDetails::Json(
+                serde_json::from_str(&creds_content)
+                    .context("Failed to parse credentials_content as a JSON object")?,
+            )
+        } else {
+            ServiceAccountDetails::None
         }
     };
+    let headers = properties.pull_headers()?;
+    let finish_reason = properties.pull_finish_reason_options()?;
 
-    let project_id = properties
-        .remove("project_id")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or("".to_string());
+    let project_id = properties.remove_str("project_id")?;
+    let model_id = properties.remove_str("model")?;
+    let location = properties.remove_str("location")?;
 
-    let model_id = properties
-        .remove("model")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or("".to_string());
-
-    let location = properties
-        .remove("location")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or("".to_string());
-
-    let headers = properties.remove("headers").map(|v| {
-        if let Some(v) = v.as_object() {
-            v.iter()
-                .map(|(k, v)| {
-                    Ok((
-                        k.to_string(),
-                        match v {
-                            serde_json::Value::String(s) => s.to_string(),
-                            _ => anyhow::bail!("Header '{k}' must be a string"),
-                        },
-                    ))
-                })
-                .collect::<Result<HashMap<String, String>>>()
-        } else {
-            Ok(Default::default())
-        }
-    });
-
-    let headers = match headers {
-        Some(h) => h?,
-        None => Default::default(),
+    // Ensure that project_id, model_id, and location are provided
+    let project_id = match project_id {
+        Some(project_id) => project_id,
+        None => anyhow::bail!("project_id must be provided"),
+    };
+    let model_id = match model_id {
+        Some(model_id) => model_id,
+        None => anyhow::bail!("model must be provided"),
+    };
+    let location = match location {
+        Some(location) => location,
+        None => anyhow::bail!("location must be provided"),
     };
 
     Ok(PostRequestProperties {
         default_role,
-        base_url: Some(base_url),
+        base_url,
         service_account_details,
         headers,
-        properties,
+        properties: properties.finalize(),
+        finish_reason,
         project_id: Some(project_id),
         model_id: Some(model_id),
         location: Some(location),
@@ -210,6 +191,9 @@ impl WithClientProperties for VertexClient {
     }
     fn allowed_metadata(&self) -> &crate::internal::llm_client::AllowedMetadata {
         &self.properties.allowed_metadata
+    }
+    fn finish_reason_handling(&self) -> Option<&FinishReasonOptions> {
+        self.properties.finish_reason.as_ref()
     }
 }
 
@@ -361,14 +345,7 @@ impl VertexClient {
     }
 
     pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<Self> {
-        let properties = resolve_properties(
-            client
-                .options
-                .iter()
-                .map(|(k, v)| Ok((k.clone(), json!(v))))
-                .collect::<Result<HashMap<_, _>>>()?,
-            ctx,
-        )?;
+        let properties = resolve_properties(client.property_handler()?, ctx)?;
         let default_role = properties.default_role.clone();
 
         Ok(Self {

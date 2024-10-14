@@ -17,6 +17,7 @@ use serde_json::Map;
 use web_time::Instant;
 use web_time::SystemTime;
 
+use crate::internal::llm_client::properties_hander::FinishReasonOptions;
 use crate::internal::llm_client::traits::{ToProviderMessageExt, WithClientProperties};
 use crate::internal::llm_client::AllowedMetadata;
 use crate::internal::llm_client::{
@@ -38,6 +39,7 @@ struct RequestProperties {
     default_role: String,
     inference_config: Option<bedrock::types::InferenceConfiguration>,
     allowed_metadata: AllowedMetadata,
+    finish_reason: Option<FinishReasonOptions>,
 
     request_options: HashMap<String, serde_json::Value>,
     ctx_env: HashMap<String, String>,
@@ -53,38 +55,18 @@ pub struct AwsClient {
 }
 
 fn resolve_properties(client: &ClientWalker, ctx: &RuntimeContext) -> Result<RequestProperties> {
-    let mut properties = (&client.item.elem.options)
-        .iter()
-        .map(|(k, v)| {
-            Ok((
-                k.into(),
-                ctx.resolve_expression::<serde_json::Value>(v)
-                    .context(format!(
-                        "client {} could not resolve options.{}",
-                        client.name(),
-                        k
-                    ))?,
-            ))
-        })
-        .collect::<Result<HashMap<_, _>>>()?;
+    let mut properties = super::super::resolve_properties_walker(client, ctx)?;
 
-    let model_id = properties
-        .remove("model_id")
-        .context("model_id is required")?
-        .as_str()
-        .context("model_id should be a string")?
-        .to_string();
-
-    let default_role = properties
-        .remove("default_role")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "user".to_string());
-    let allowed_metadata = match properties.remove("allowed_role_metadata") {
-        Some(allowed_metadata) => serde_json::from_value(allowed_metadata)
-            .context("allowed_role_metadata must be an array of keys. For example: ['key1', 'key2']")?,
-        None => AllowedMetadata::None,
+    let model_id = match properties.remove_str("model_id")? {
+        Some(model_id) => model_id,
+        None => {
+            anyhow::bail!("model_id is required for AWS Bedrock client");
+        }
     };
-    let inference_config = match properties.remove("inference_configuration") {
+    let default_role = properties.pull_default_role("user")?;
+    let allowed_metadata = properties.pull_allowed_role_metadata()?;
+
+    let inference_config = match properties.remove("inference_configuration")? {
         Some(v) => Some(
             super::types::InferenceConfiguration::deserialize(v)
                 .context("Failed to parse inference_configuration")?
@@ -92,13 +74,15 @@ fn resolve_properties(client: &ClientWalker, ctx: &RuntimeContext) -> Result<Req
         ),
         None => None,
     };
+    let finish_reason = properties.pull_finish_reason_options()?;
 
     Ok(RequestProperties {
         model_id,
         default_role,
         inference_config,
         allowed_metadata,
-        request_options: properties,
+        finish_reason,
+        request_options: properties.finalize(),
         ctx_env: ctx.env.clone(),
     })
 }
@@ -300,6 +284,9 @@ impl WithClientProperties for AwsClient {
     }
     fn allowed_metadata(&self) -> &crate::internal::llm_client::AllowedMetadata {
         &self.properties.allowed_metadata
+    }
+    fn finish_reason_handling(&self) -> Option<&FinishReasonOptions> {
+        self.properties.finish_reason.as_ref()
     }
 }
 
