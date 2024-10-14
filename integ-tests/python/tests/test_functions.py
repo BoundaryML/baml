@@ -67,7 +67,7 @@ class TestAllInputs:
         assert res.certainty.checks.unreasonably_certain.status == "failed"
 
     @pytest.mark.asyncio
-    async def test_union_variant_checking(self):
+    async def test_constraint_union_variant_checking(self):
         res = await b.ExtractContactInfo("Reach me at 123-456-7890")
         assert res.primary.value is not None
         assert res.primary.value.checks.valid_phone_number.status == "succeeded"

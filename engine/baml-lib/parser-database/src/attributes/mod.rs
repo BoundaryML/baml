@@ -111,11 +111,9 @@ fn resolve_type_exp_block_attributes<'db>(
         SubType::Class => {
             let mut class_attributes = ClassAttributes::default();
 
-            dbg!(&ast_typexpr);
             for (field_idx, _field) in ast_typexpr.iter_fields() {
                 ctx.assert_all_attributes_processed((type_id, field_idx).into());
                 if let Some(attrs) = to_string_attribute::visit(ctx, false) {
-                    dbg!(&attrs);
                     class_attributes.field_serilizers.insert(field_idx, attrs);
                 }
                 ctx.validate_visited_attributes();

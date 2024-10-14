@@ -327,7 +327,7 @@ impl WithRepr<FieldType> for ast::FieldType {
                 }?;
                 let (expression, label) = match attr.arguments.arguments.as_slice() {
                     [arg1, arg2] => match (arg1.clone().value, arg2.clone().value) {
-                        (ast::Expression::JinjaExpressionValue(j,_), ast::Expression::StringValue(s,_)) => Some((j,Some(s))),
+                        (ast::Expression::JinjaExpressionValue(j,_), ast::Expression::Identifier(ast::Identifier::Local(s, _))) => Some((j,Some(s))),
                         _ => None
                     },
                     [arg1] => match arg1.clone().value {

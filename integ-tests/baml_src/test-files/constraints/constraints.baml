@@ -8,24 +8,24 @@
 
 
 class Martian {
-  age int @check({{ this < 30 }}, "young_enough")
+  age int @check({{ this < 30 }}, young_enough)
 }
 
 class Earthling {
-  age int @check({{this < 200 and this > 0}}, "earth_aged") @check({{this >1}}, "no_infants")
+  age int @check({{this < 200 and this > 0}}, earth_aged) @check({{this >1}}, no_infants)
 }
 
 
 class FooAny {
   planetary_age Martian | Earthling
-  certainty int @check({{this == 102931}}, "unreasonably_certain")
-  species string @check({{this == "Homo sapiens"}}, "trivial") @check({{this|regex_match("Homo")}}, "regex_good") @check({{this|regex_match("neanderthalensis")}}, "regex_bad")
+  certainty int @check({{this == 102931}}, unreasonably_certain)
+  species string @check({{this == "Homo sapiens"}}, trivial) @check({{this|regex_match("Homo")}}, regex_good) @check({{this|regex_match("neanderthalensis")}}, regex_bad)
 }
 
 
 class InputWithConstraint {
-  name string @assert({{this|length > 1}}, "nonempty")
-  amount int @check({{ this < 1 }}, "small")
+  name string @assert({{this|length > 1}}, nonempty)
+  amount int @check({{ this < 1 }}, small)
 }
 
 function PredictAge(name: string) -> FooAny {
@@ -55,7 +55,7 @@ function PredictAgeComplex(inp: InputWithConstraint) -> InputWithConstraint {
   "#
 }
 
-function PredictAgeBare(inp: string @assert({{this|length > 1}}, "big_enough")) -> int @check({{this == 10102}}, "too_big") {
+function PredictAgeBare(inp: string @assert({{this|length > 1}}, big_enough)) -> int @check({{this == 10102}}, too_big) {
   client GPT35
   prompt #"
     Using your understanding of the historical popularity

@@ -93,14 +93,8 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
         let arg_expressions = arguments.arguments.iter().map(|Argument{value,..}| value).collect::<Vec<_>>();
 
             match arg_expressions.as_slice() {
-                [Expression::JinjaExpressionValue(_, _), Expression::StringValue(s,_)] => {
-                    // TODO: (Greg) use a real identifier parser. This is a temporary hack.
-                    if !s.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                        ctx.push_error(DatamodelError::new_validation_error(
-                            "Constraint names must be valid identifiers - only alphanumeric characters and underscores",
-                            span.clone()
-                        ))
-                    }
+                [Expression::JinjaExpressionValue(_, _), Expression::Identifier(Identifier::Local(s,_))] => {
+                    // Ok.
                 },
                 [Expression::JinjaExpressionValue(_, _)] => {
                     if name.to_string() == "check" {
