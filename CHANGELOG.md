@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.61.0](https://github.com/boundaryml/baml/compare/0.60.0..0.61.0) - 2024-10-14
+
+### Features
+
+- Implement literal types (#978) - ([9e7431f](https://github.com/boundaryml/baml/commit/9e7431f43b74d4428e6a20b9aa3a1e93768ff905)) - Antonio Sarosi
+- allow installing the TS library on node-alpine (#1029) - ([1c37a0d](https://github.com/boundaryml/baml/commit/1c37a0d71d921d13f05340ff6727255ba6074152)) - Samuel Lijin
+- Add WYSIWYG UI (Swagger UI) to baml-cli dev (#1019) - ([0c73cab](https://github.com/boundaryml/baml/commit/0c73cab3d6ac3bbb04cc898ac102900ca9b17f86)) - Greg Hale
+- Suppress streaming for Numbers (#1032) - ([3f4621b](https://github.com/boundaryml/baml/commit/3f4621b36555062312aabd9ba8435b965ba8fd92)) - Greg Hale
+
+### Bug Fixes
+
+- Add limit on connection pool to prevent stalling issues in pyo3 and other ffi boundaries (#1027) - ([eb90e62](https://github.com/boundaryml/baml/commit/eb90e62ffe21109e0da1bd74439d36bb37246ec3)) - hellovai
+- Update docs (#1025) - ([2dd1bb6](https://github.com/boundaryml/baml/commit/2dd1bb6cf743c20af53d7147db8a4573de9cdbe0)) - Farookh Zaheer Siddiqui
+- Fix parsing for streaming of objects more stable (#1031) - ([8aa9c00](https://github.com/boundaryml/baml/commit/8aa9c00b8f26a8c30178ff25aecc1c3b47b6696e)) - hellovai
+- Fix python BamlValidationError type (#1036) - ([59a9510](https://github.com/boundaryml/baml/commit/59a9510c9d2c1216df01b0701cc23afb02e3f700)) - aaronvg
+
+### Miscellaneous
+
+- Popup settings dialog when no env vars set (#1033) - ([b9fa52a](https://github.com/boundaryml/baml/commit/b9fa52aea8686f8095878e7f210c2d937b533c63)) - aaronvg
+- Bump version to 0.61.0 - ([ca2242b](https://github.com/boundaryml/baml/commit/ca2242b26214699268fda9e9ac07338c6491026d)) - Aaron Villalpando
+
 ## [0.60.0](https://github.com/boundaryml/baml/compare/0.59.0..0.60.0) - 2024-10-09
 
 ### Miscellaneous Chores
