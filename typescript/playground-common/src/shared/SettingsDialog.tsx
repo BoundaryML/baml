@@ -112,7 +112,6 @@ const requiredButUnsetAtom = atom((get) => {
   )
 })
 
-
 const requiredAndSetCountAtom = atom((get) => {
   const envvars = get(envvarsAtom)
   return get(runtimeRequiredEnvVarsAtom).filter((k) =>
@@ -200,7 +199,6 @@ export const ShowSettingsButton: React.FC<{ iconClassName: string }> = ({ iconCl
     return null
   }
 
-
   const button = (
     <Button
       className='relative px-2 py-1 bg-transparent h-fit text-vscode-editor-foreground hover:text-vscode-button-foreground hover:bg-vscode-button-hoverBackground'
@@ -270,7 +268,12 @@ export const SettingsDialog: React.FC = () => {
               <>
                 <p className='text-xs italic text-vscode-descriptionForeground'>
                   You can get these from{' '}
-                  <a className='text-blue-400 underline' target='_blank' href='https://app.boundaryml.com' rel="noreferrer">
+                  <a
+                    className='text-blue-400 underline'
+                    target='_blank'
+                    href='https://app.boundaryml.com'
+                    rel='noreferrer'
+                  >
                     Boundary Studio
                   </a>
                 </p>
