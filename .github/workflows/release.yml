@@ -7,12 +7,17 @@ on:
     # daily at 2am PST
     - cron: 0 10 * * *
   push:
+    branches: [sam/fix-release]
     tags:
       - "test-release/*.*"
       - "*.*"
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   build-wasm:
