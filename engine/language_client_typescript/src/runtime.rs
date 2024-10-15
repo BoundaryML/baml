@@ -346,7 +346,7 @@ impl BamlRuntime {
     }
 
     #[napi]
-    pub fn flush(&mut self, env: Env) -> napi::Result<()> {
+    pub fn flush(&mut self, _env: Env) -> napi::Result<()> {
         self.inner.flush().map_err(|e| from_anyhow_error(e))
     }
 

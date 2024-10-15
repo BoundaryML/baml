@@ -1,4 +1,8 @@
 use anyhow::Result;
+use itertools::join;
+use std::borrow::Cow;
+
+use crate::{field_type_attributes, type_check_attributes, TypeCheckAttributes};
 
 use super::python_language_features::ToPython;
 use internal_baml_core::ir::{
@@ -10,6 +14,7 @@ use internal_baml_core::ir::{
 pub(crate) struct PythonTypes<'ir> {
     enums: Vec<PythonEnum<'ir>>,
     classes: Vec<PythonClass<'ir>>,
+    checks_classes: Vec<PythonClass<'ir>>
 }
 
 #[derive(askama::Template)]
@@ -17,6 +22,7 @@ pub(crate) struct PythonTypes<'ir> {
 pub(crate) struct TypeBuilder<'ir> {
     enums: Vec<PythonEnum<'ir>>,
     classes: Vec<PythonClass<'ir>>,
+    checks_classes: Vec<PythonClass<'ir>>,
 }
 
 struct PythonEnum<'ir> {
@@ -26,15 +32,16 @@ struct PythonEnum<'ir> {
 }
 
 struct PythonClass<'ir> {
-    name: &'ir str,
+    name: Cow<'ir, str>,
     // the name, and the type of the field
-    fields: Vec<(&'ir str, String)>,
+    fields: Vec<(Cow<'ir, str>, String)>,
     dynamic: bool,
 }
 
 #[derive(askama::Template)]
 #[template(path = "partial_types.py.j2", escape = "none")]
 pub(crate) struct PythonStreamTypes<'ir> {
+    check_type_names: String,
     partial_classes: Vec<PartialPythonClass<'ir>>,
 }
 
@@ -52,9 +59,15 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonT
     fn try_from(
         (ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs),
     ) -> Result<PythonTypes<'ir>> {
+        let checks_classes =
+            type_check_attributes(ir)
+            .into_iter()
+            .map(|checks| type_def_for_checks(checks))
+            .collect::<Vec<_>>();
         Ok(PythonTypes {
             enums: ir.walk_enums().map(PythonEnum::from).collect::<Vec<_>>(),
             classes: ir.walk_classes().map(PythonClass::from).collect::<Vec<_>>(),
+            checks_classes,
         })
     }
 }
@@ -65,9 +78,15 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for TypeBui
     fn try_from(
         (ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs),
     ) -> Result<TypeBuilder<'ir>> {
+        let checks_classes =
+            type_check_attributes(ir)
+            .into_iter()
+            .map(|checks| type_def_for_checks(checks))
+            .collect::<Vec<_>>();
         Ok(TypeBuilder {
             enums: ir.walk_enums().map(PythonEnum::from).collect::<Vec<_>>(),
             classes: ir.walk_classes().map(PythonClass::from).collect::<Vec<_>>(),
+            checks_classes,
         })
     }
 }
@@ -91,7 +110,7 @@ impl<'ir> From<EnumWalker<'ir>> for PythonEnum<'ir> {
 impl<'ir> From<ClassWalker<'ir>> for PythonClass<'ir> {
     fn from(c: ClassWalker<'ir>) -> Self {
         PythonClass {
-            name: c.name(),
+            name: Cow::Borrowed(c.name()),
             dynamic: c.item.attributes.get("dynamic_type").is_some(),
             fields: c
                 .item
@@ -100,7 +119,7 @@ impl<'ir> From<ClassWalker<'ir>> for PythonClass<'ir> {
                 .iter()
                 .map(|f| {
                     (
-                        f.elem.name.as_str(),
+                        Cow::Borrowed(f.elem.name.as_str()),
                         add_default_value(
                             &f.elem.r#type.elem,
                             &f.elem.r#type.elem.to_type_ref(&c.db),
@@ -116,7 +135,13 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonS
     type Error = anyhow::Error;
 
     fn try_from((ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let check_type_names =
+            join(type_check_attributes(ir)
+            .into_iter()
+            .map(|checks| type_name_for_checks(&checks)),
+            ", ");
         Ok(Self {
+            check_type_names,
             partial_classes: ir
                 .walk_classes()
                 .map(PartialPythonClass::from)
@@ -154,6 +179,25 @@ pub fn add_default_value(node: &FieldType, type_str: &String) -> String {
         return format!("{} = None", type_str);
     } else {
         return type_str.clone();
+    }
+}
+
+pub fn type_name_for_checks(checks: &TypeCheckAttributes) -> String {
+    let mut name = "Checks".to_string();
+    let mut names: Vec<&String> = checks.0.iter().collect();
+    names.sort();
+    for check_name in names.iter() {
+        name.push_str("__");
+        name.push_str(check_name);
+    }
+    name
+}
+
+fn type_def_for_checks(checks: TypeCheckAttributes) -> PythonClass<'static> {
+    PythonClass {
+        name: Cow::Owned(type_name_for_checks(&checks)),
+        fields: checks.0.into_iter().map(|check_name| (Cow::Owned(check_name), "baml_py.Check".to_string())).collect(),
+        dynamic: false
     }
 }
 
@@ -200,6 +244,18 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_ref(ir)),
+            FieldType::Constrained{base, ..} => {
+                match field_type_attributes(self) {
+                    Some(checks) => {
+                        let base_type_ref = base.to_type_ref(ir);
+                        let checks_type_ref = type_name_for_checks(&checks);
+                        format!("baml_py.Checked[{base_type_ref},{checks_type_ref}]")
+                    }
+                    None => {
+                        base.to_type_ref(ir)
+                    }
+                }
+            },
         }
     }
 
@@ -250,6 +306,17 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => inner.to_partial_type_ref(ir, false),
+            FieldType::Constrained{base,..} => {
+                let base_type_ref = base.to_partial_type_ref(ir, false);
+                match field_type_attributes(self) {
+                    Some(checks) => {
+                        let base_type_ref = base.to_partial_type_ref(ir, false);
+                        let checks_type_ref = type_name_for_checks(&checks);
+                        format!("baml_py.Checked[{base_type_ref},{checks_type_ref}]")
+                    }
+                    None => base_type_ref
+                }
+            },
         }
     }
 }

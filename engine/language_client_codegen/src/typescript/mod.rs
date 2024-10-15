@@ -4,7 +4,6 @@ mod typescript_language_features;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use either::Either;
 use indexmap::IndexMap;
 use internal_baml_core::{
     configuration::GeneratorDefaultClientMode,
@@ -12,12 +11,13 @@ use internal_baml_core::{
 };
 
 use self::typescript_language_features::{ToTypescript, TypescriptLanguageFeatures};
-use crate::dir_writer::FileCollector;
+use crate::{dir_writer::FileCollector, field_type_attributes, TypeCheckAttributes};
 
 #[derive(askama::Template)]
 #[template(path = "async_client.ts.j2", escape = "none")]
 struct AsyncTypescriptClient {
     funcs: Vec<TypescriptFunction>,
+    check_types: Vec<String>,
     types: Vec<String>,
 }
 
@@ -25,11 +25,13 @@ struct AsyncTypescriptClient {
 #[template(path = "sync_client.ts.j2", escape = "none")]
 struct SyncTypescriptClient {
     funcs: Vec<TypescriptFunction>,
+    check_types: Vec<String>,
     types: Vec<String>,
 }
 
 struct TypescriptClient {
     funcs: Vec<TypescriptFunction>,
+    check_types: Vec<String>,
     types: Vec<String>,
 }
 
@@ -37,6 +39,7 @@ impl From<TypescriptClient> for AsyncTypescriptClient {
     fn from(value: TypescriptClient) -> Self {
         Self {
             funcs: value.funcs,
+            check_types: value.check_types,
             types: value.types,
         }
     }
@@ -46,6 +49,7 @@ impl From<TypescriptClient> for SyncTypescriptClient {
     fn from(value: TypescriptClient) -> Self {
         Self {
             funcs: value.funcs,
+            check_types: value.check_types,
             types: value.types,
         }
     }
@@ -153,6 +157,8 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
             .flatten()
             .collect();
 
+        let check_types = unimplemented!();
+
         let types = ir
             .walk_classes()
             .map(|c| c.name().to_string())
@@ -160,6 +166,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
             .collect();
         Ok(TypescriptClient {
             funcs: functions,
+            check_types,
             types,
         })
     }
@@ -295,6 +302,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => format!("{} | null", inner.to_type_ref(ir)),
+            FieldType::Constrained{base,..} => base.to_type_ref(ir),
         }
     }
 }

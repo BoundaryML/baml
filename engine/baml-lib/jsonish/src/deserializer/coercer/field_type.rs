@@ -3,7 +3,7 @@ use baml_types::BamlMap;
 use internal_baml_core::{ir::FieldType, ir::TypeValue};
 
 use crate::deserializer::{
-    coercer::{DefaultValue, TypeCoercer},
+    coercer::{run_user_checks, DefaultValue, TypeCoercer},
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
 };
@@ -84,6 +84,19 @@ impl TypeCoercer for FieldType {
                 FieldType::Optional(_) => coerce_optional(ctx, self, value),
                 FieldType::Map(_, _) => coerce_map(ctx, self, value),
                 FieldType::Tuple(_) => Err(ctx.error_internal("Tuple not supported")),
+                FieldType::Constrained { base, .. } => {
+                    let mut coerced_value = base.coerce(ctx, base, value)?;
+                    let constraint_results =
+                        run_user_checks(&coerced_value.clone().into(), &self).map_err(
+                            |e| ParsingError {
+                                reason: format!("Failed to evaluate constraints: {:?}", e),
+                                scope: ctx.scope.clone(),
+                                causes: Vec::new(),
+                            },
+                        )?;
+                    coerced_value.add_flag(Flag::ConstraintResults(constraint_results));
+                    Ok(coerced_value)
+                }
             },
         }
     }
@@ -100,7 +113,7 @@ impl DefaultValue for FieldType {
         match self {
             FieldType::Enum(e) => None,
             FieldType::Literal(_) => None,
-            FieldType::Class(c) => None,
+            FieldType::Class(_) => None,
             FieldType::List(_) => Some(BamlValueWithFlags::List(get_flags(), Vec::new())),
             FieldType::Union(items) => items.iter().find_map(|i| i.default_value(error)),
             FieldType::Primitive(TypeValue::Null) | FieldType::Optional(_) => {
@@ -119,6 +132,8 @@ impl DefaultValue for FieldType {
                 }
             }
             FieldType::Primitive(_) => None,
+            // If it has constraints, we can't assume our defaults meet them.
+            FieldType::Constrained { .. } => None,
         }
     }
 }

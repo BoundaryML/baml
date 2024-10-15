@@ -7,8 +7,7 @@ use web_time::Duration;
 use crate::{
     internal::{
         llm_client::{
-            traits::{WithPrompt, WithSingleCallable},
-            LLMResponse,
+            parsed_value_to_response, traits::{WithPrompt, WithSingleCallable}, LLMResponse, ResponseBamlValue
         },
         prompt_renderer::PromptRenderer,
     },
@@ -28,7 +27,7 @@ pub async fn orchestrate(
     Vec<(
         OrchestrationScope,
         LLMResponse,
-        Option<Result<BamlValueWithFlags>>,
+        Option<Result<ResponseBamlValue>>,
     )>,
     Duration,
 ) {
@@ -50,7 +49,13 @@ pub async fn orchestrate(
         };
 
         let sleep_duration = node.error_sleep_duration().cloned();
-        results.push((node.scope, response, parsed_response));
+        let response_with_constraints: Option<Result<ResponseBamlValue, _>> =
+            parsed_response.map(
+                |r| r.and_then(
+                    |v| parsed_value_to_response(v)
+                )
+            );
+        results.push((node.scope, response, response_with_constraints));
 
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results

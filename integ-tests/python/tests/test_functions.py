@@ -21,11 +21,13 @@ from ..baml_client.globals import (
 from ..baml_client import partial_types
 from ..baml_client.types import (
     DynInputOutput,
+    FooAny,
     NamedArgsSingleEnumList,
     NamedArgsSingleClass,
     StringToClassEntry,
     CompoundBigNumbers,
 )
+import baml_client.types as types
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
 from ..baml_client import reset_baml_env_vars
@@ -58,6 +60,27 @@ class TestAllInputs:
     async def test_single_string_list(self):
         res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
         assert "a" in res and "b" in res and "c" in res
+
+    @pytest.mark.asyncio
+    async def test_constraints(self):
+        res = await b.PredictAge("Greg")
+        assert res.certainty.checks.unreasonably_certain.status == "failed"
+
+    @pytest.mark.asyncio
+    async def test_constraint_union_variant_checking(self):
+        res = await b.ExtractContactInfo("Reach me at 123-456-7890")
+        assert res.primary.value is not None
+        assert res.primary.value.checks.valid_phone_number.status == "succeeded"
+
+        res = await b.ExtractContactInfo("Reach me at help@boundaryml.com")
+        assert res.primary.value is not None
+        assert res.primary.value.checks.valid_email.status == "succeeded"
+        assert res.secondary is None
+
+        res = await b.ExtractContactInfo("Reach me at help@boundaryml.com, or 111-222-3333 if needed.")
+        assert res.primary.value is not None
+        assert res.primary.value.checks.valid_email.status == "succeeded"
+        assert res.secondary.value.checks.valid_phone_number.status == "succeeded"
 
     @pytest.mark.asyncio
     async def test_single_class(self):

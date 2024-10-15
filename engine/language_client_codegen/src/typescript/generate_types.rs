@@ -17,6 +17,7 @@ pub(crate) struct TypeBuilder<'ir> {
 #[template(path = "types.ts.j2", escape = "none")]
 pub(crate) struct TypescriptTypes<'ir> {
     enums: Vec<TypescriptEnum<'ir>>,
+    check_classes: Vec<TypescriptClass<'ir>>,
     classes: Vec<TypescriptClass<'ir>>,
 }
 

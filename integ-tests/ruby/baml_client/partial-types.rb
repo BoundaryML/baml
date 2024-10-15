@@ -27,20 +27,26 @@ module Baml
     class ClassOptionalOutput2 < T::Struct; end
     class ClassWithImage < T::Struct; end
     class CompoundBigNumbers < T::Struct; end
+    class ContactInfo < T::Struct; end
     class CustomTaskResult < T::Struct; end
     class DummyOutput < T::Struct; end
     class DynInputOutput < T::Struct; end
     class DynamicClassOne < T::Struct; end
     class DynamicClassTwo < T::Struct; end
     class DynamicOutput < T::Struct; end
+    class Earthling < T::Struct; end
     class Education < T::Struct; end
     class Email < T::Struct; end
+    class EmailAddress < T::Struct; end
     class Event < T::Struct; end
     class FakeImage < T::Struct; end
     class FlightConfirmation < T::Struct; end
+    class FooAny < T::Struct; end
     class GroceryReceipt < T::Struct; end
     class InnerClass < T::Struct; end
     class InnerClass2 < T::Struct; end
+    class InputWithConstraint < T::Struct; end
+    class Martian < T::Struct; end
     class NamedArgsSingleClass < T::Struct; end
     class Nested < T::Struct; end
     class Nested2 < T::Struct; end
@@ -48,6 +54,7 @@ module Baml
     class OptionalTest_ReturnType < T::Struct; end
     class OrderInfo < T::Struct; end
     class Person < T::Struct; end
+    class PhoneNumber < T::Struct; end
     class Quantity < T::Struct; end
     class RaysData < T::Struct; end
     class ReceiptInfo < T::Struct; end
@@ -170,6 +177,20 @@ module Baml
         @props = props
       end
     end
+    class ContactInfo < T::Struct
+      include Baml::Sorbet::Struct
+      const :primary, T.nilable(T.any(Baml::PartialTypes::PhoneNumber, Baml::PartialTypes::EmailAddress))
+      const :secondary, T.nilable(T.any(Baml::PartialTypes::PhoneNumber, Baml::PartialTypes::EmailAddress, T.nilable(NilClass)))
+
+      def initialize(props)
+        super(
+          primary: props[:primary],
+          secondary: props[:secondary],
+        )
+
+        @props = props
+      end
+    end
     class CustomTaskResult < T::Struct
       include Baml::Sorbet::Struct
       const :bookOrder, T.nilable(T.any(Baml::PartialTypes::BookOrder, T.nilable(NilClass)))
@@ -248,6 +269,18 @@ module Baml
         @props = props
       end
     end
+    class Earthling < T::Struct
+      include Baml::Sorbet::Struct
+      const :age, T.nilable(Integer)
+
+      def initialize(props)
+        super(
+          age: props[:age],
+        )
+
+        @props = props
+      end
+    end
     class Education < T::Struct
       include Baml::Sorbet::Struct
       const :institution, T.nilable(String)
@@ -279,6 +312,18 @@ module Baml
           subject: props[:subject],
           body: props[:body],
           from_address: props[:from_address],
+        )
+
+        @props = props
+      end
+    end
+    class EmailAddress < T::Struct
+      include Baml::Sorbet::Struct
+      const :value, T.nilable(String)
+
+      def initialize(props)
+        super(
+          value: props[:value],
         )
 
         @props = props
@@ -334,6 +379,22 @@ module Baml
         @props = props
       end
     end
+    class FooAny < T::Struct
+      include Baml::Sorbet::Struct
+      const :planetary_age, T.nilable(T.any(Baml::PartialTypes::Martian, Baml::PartialTypes::Earthling))
+      const :certainty, T.nilable(Integer)
+      const :species, T.nilable(String)
+
+      def initialize(props)
+        super(
+          planetary_age: props[:planetary_age],
+          certainty: props[:certainty],
+          species: props[:species],
+        )
+
+        @props = props
+      end
+    end
     class GroceryReceipt < T::Struct
       include Baml::Sorbet::Struct
       const :receiptId, T.nilable(String)
@@ -377,6 +438,32 @@ module Baml
         super(
           prop2: props[:prop2],
           prop3: props[:prop3],
+        )
+
+        @props = props
+      end
+    end
+    class InputWithConstraint < T::Struct
+      include Baml::Sorbet::Struct
+      const :name, T.nilable(String)
+      const :amount, T.nilable(Integer)
+
+      def initialize(props)
+        super(
+          name: props[:name],
+          amount: props[:amount],
+        )
+
+        @props = props
+      end
+    end
+    class Martian < T::Struct
+      include Baml::Sorbet::Struct
+      const :age, T.nilable(Integer)
+
+      def initialize(props)
+        super(
+          age: props[:age],
         )
 
         @props = props
@@ -483,6 +570,18 @@ module Baml
         super(
           name: props[:name],
           hair_color: props[:hair_color],
+        )
+
+        @props = props
+      end
+    end
+    class PhoneNumber < T::Struct
+      include Baml::Sorbet::Struct
+      const :value, T.nilable(String)
+
+      def initialize(props)
+        super(
+          value: props[:value],
         )
 
         @props = props

@@ -23,6 +23,6 @@ impl FunctionResult {
             .parsed_content()
             .map_err(BamlError::from_anyhow)?;
 
-        Ok(pythonize(py, &BamlValue::from(parsed))?)
+        Ok(pythonize(py, &parsed)?)
     }
 }

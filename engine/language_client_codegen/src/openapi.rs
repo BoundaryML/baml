@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::{path::PathBuf, process::Command};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use baml_types::{BamlMediaType, FieldType, LiteralValue, TypeValue};
@@ -8,7 +7,7 @@ use internal_baml_core::ir::{
     repr::{Function, IntermediateRepr, Node, Walker},
     ClassWalker, EnumWalker,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::json;
 
 use crate::dir_writer::{FileCollector, LanguageFeatures, RemoveDirBehavior};
@@ -71,46 +70,6 @@ impl Serialize for OpenApiSchema<'_> {
         &self,
         serializer: S,
     ) -> core::result::Result<S::Ok, S::Error> {
-        let baml_image_schema = TypeSpecWithMeta {
-            meta: TypeMetadata {
-                title: Some("BamlImage".to_string()),
-                r#enum: None,
-                r#const: None,
-                nullable: false,
-            },
-            type_spec: TypeSpec::Inline(TypeDef::Class {
-                properties: vec![
-                    (
-                        "base64".to_string(),
-                        TypeSpecWithMeta {
-                            meta: TypeMetadata {
-                                title: None,
-                                r#enum: None,
-                                r#const: None,
-                                nullable: false,
-                            },
-                            type_spec: TypeSpec::Inline(TypeDef::String),
-                        },
-                    ),
-                    (
-                        "media_type".to_string(),
-                        TypeSpecWithMeta {
-                            meta: TypeMetadata {
-                                title: None,
-                                r#enum: None,
-                                r#const: None,
-                                nullable: true,
-                            },
-                            type_spec: TypeSpec::Inline(TypeDef::String),
-                        },
-                    ),
-                ]
-                .into_iter()
-                .collect(),
-                required: vec!["base64".to_string()],
-                additional_properties: false,
-            }),
-        };
         let schemas = match self
             .schemas
             .iter()
@@ -638,6 +597,7 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                 // something i saw suggested doing this
                 type_spec
             }
+            FieldType::Constrained{base,..} => base.to_type_spec(ir)?,
         })
     }
 }

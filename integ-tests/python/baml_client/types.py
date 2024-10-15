@@ -119,6 +119,33 @@ class TestEnum(str, Enum):
     F = "F"
     G = "G"
 
+class Checks__earth_aged__no_infants(BaseModel):
+    earth_aged: baml_py.Check
+    no_infants: baml_py.Check
+
+class Checks__too_big(BaseModel):
+    too_big: baml_py.Check
+
+class Checks__valid_phone_number(BaseModel):
+    valid_phone_number: baml_py.Check
+
+class Checks__young_enough(BaseModel):
+    young_enough: baml_py.Check
+
+class Checks__regex_bad__regex_good__trivial(BaseModel):
+    regex_bad: baml_py.Check
+    trivial: baml_py.Check
+    regex_good: baml_py.Check
+
+class Checks__small(BaseModel):
+    small: baml_py.Check
+
+class Checks__unreasonably_certain(BaseModel):
+    unreasonably_certain: baml_py.Check
+
+class Checks__valid_email(BaseModel):
+    valid_email: baml_py.Check
+
 class BigNumbers(BaseModel):
     
     
@@ -165,6 +192,12 @@ class CompoundBigNumbers(BaseModel):
     big_nums: List["BigNumbers"]
     another: "BigNumbers"
 
+class ContactInfo(BaseModel):
+    
+    
+    primary: Union["PhoneNumber", "EmailAddress"]
+    secondary: Union["PhoneNumber", "EmailAddress", None]
+
 class CustomTaskResult(BaseModel):
     
     
@@ -203,6 +236,11 @@ class DynamicOutput(BaseModel):
     model_config = ConfigDict(extra='allow')
     
 
+class Earthling(BaseModel):
+    
+    
+    age: baml_py.Checked[int,Checks__earth_aged__no_infants]
+
 class Education(BaseModel):
     
     
@@ -218,6 +256,11 @@ class Email(BaseModel):
     subject: str
     body: str
     from_address: str
+
+class EmailAddress(BaseModel):
+    
+    
+    value: baml_py.Checked[str,Checks__valid_email]
 
 class Event(BaseModel):
     
@@ -241,6 +284,13 @@ class FlightConfirmation(BaseModel):
     arrivalTime: str
     seatNumber: str
 
+class FooAny(BaseModel):
+    
+    
+    planetary_age: Union["Martian", "Earthling"]
+    certainty: baml_py.Checked[int,Checks__unreasonably_certain]
+    species: baml_py.Checked[str,Checks__regex_bad__regex_good__trivial]
+
 class GroceryReceipt(BaseModel):
     
     
@@ -261,6 +311,17 @@ class InnerClass2(BaseModel):
     
     prop2: int
     prop3: float
+
+class InputWithConstraint(BaseModel):
+    
+    
+    name: str
+    amount: baml_py.Checked[int,Checks__small]
+
+class Martian(BaseModel):
+    
+    
+    age: baml_py.Checked[int,Checks__young_enough]
 
 class NamedArgsSingleClass(BaseModel):
     
@@ -308,6 +369,11 @@ class Person(BaseModel):
     
     name: Optional[str] = None
     hair_color: Optional[Union["Color", str]] = None
+
+class PhoneNumber(BaseModel):
+    
+    
+    value: baml_py.Checked[str,Checks__valid_phone_number]
 
 class Quantity(BaseModel):
     

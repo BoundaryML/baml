@@ -1,4 +1,5 @@
 use super::{coercer::ParsingError, types::BamlValueWithFlags};
+use baml_types::Constraint;
 
 #[derive(Debug, Clone)]
 pub enum Flag {
@@ -42,6 +43,9 @@ pub enum Flag {
 
     // X -> Object convertions.
     NoFields(Option<crate::jsonish::Value>),
+
+    // Constraint results.
+    ConstraintResults(Vec<(Constraint, bool)>),
 }
 
 #[derive(Clone)]
@@ -90,9 +94,18 @@ impl DeserializerConditions {
                 Flag::NoFields(_) => None,
                 Flag::UnionMatch(_idx, _) => None,
                 Flag::DefaultButHadUnparseableValue(e) => Some(e.clone()),
+                Flag::ConstraintResults(_) => None,
             })
             .collect::<Vec<_>>()
     }
+
+    pub fn constraint_results(&self) -> Vec<(Constraint, bool)> {
+        self.flags.iter().filter_map(|flag| match flag {
+            Flag::ConstraintResults(cs) => Some(cs.clone()),
+            _ => None,
+        }).flatten().collect()
+    }
+
 }
 
 impl std::fmt::Debug for DeserializerConditions {
@@ -227,6 +240,13 @@ impl std::fmt::Display for Flag {
                     writeln!(f, "{:#?}", value)?;
                 } else {
                     writeln!(f, "<empty>")?;
+                }
+            }
+            Flag::ConstraintResults(cs) => {
+                for (Constraint{ label, level, expression }, succeeded) in cs.iter() {
+                    let msg = label.as_ref().unwrap_or(&expression.0);
+                    let f_result = if *succeeded { "Succeeded" } else { "Failed" };
+                    writeln!(f, "{level:?} {msg} {f_result}")?;
                 }
             }
         }
