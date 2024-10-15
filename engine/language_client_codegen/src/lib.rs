@@ -225,14 +225,22 @@ impl GenerateClient for GeneratorOutputType {
 /// way name of a Python Class or TypeScript Interface that holds
 /// the results of running these checks. See TODO (Docs) for details on
 /// the support types generated from checks.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq)]
 pub struct TypeCheckAttributes(pub HashSet<String>);
+
+impl PartialEq for TypeCheckAttributes {
+   fn eq(&self, other: &Self) -> bool {
+       self.0.len() == other.0.len() && self.0.iter().all(|x| other.0.contains(x))
+   }
+}
 
 impl <'a> std::hash::Hash for TypeCheckAttributes {
     fn hash<H>(&self, state: &mut H)
         where H: std::hash::Hasher
     {
-        self.0.iter().for_each(|s| s.hash(state))
+        let mut strings: Vec<_> = self.0.iter().collect();
+        strings.sort();
+        strings.into_iter().for_each(|s| s.hash(state))
     }
 
 }
@@ -327,9 +335,20 @@ mod tests {
     use internal_baml_core::ir::repr::make_test_ir;
     use super::*;
 
+
     /// Utility function for creating test fixtures.
     fn mk_tc_attrs(names: &[&str]) -> TypeCheckAttributes {
         TypeCheckAttributes(names.into_iter().map(|s| s.to_string()).collect())
+    }
+
+    #[test]
+    fn type_check_attributes_eq() {
+        assert_eq!(mk_tc_attrs(&["a", "b"]), mk_tc_attrs(&["b", "a"]));
+
+        let attrs: HashSet<TypeCheckAttributes> = vec![mk_tc_attrs(&["a", "b"])].into_iter().collect();
+        assert!(attrs.contains( &mk_tc_attrs(&["a", "b"]) ));
+        assert!(attrs.contains( &mk_tc_attrs(&["b", "a"]) ));
+
     }
 
     #[test]
@@ -344,29 +363,29 @@ client<llm> GPT4 {
   }
 }
 
-function Go(a: int @check({{ this < 0 }}, "c")) -> Foo {
+function Go(a: int @assert({{ this < 0 }}, c)) -> Foo {
   client GPT4
   prompt #""#
 }
 
 class Foo {
-  ab int @check({{this}}, "a") @check({{this}}, "b")
-  a int @check({{this}}, "a")
+  ab int @check({{this}}, a) @check({{this}}, b)
+  a int @check({{this}}, a)
 }
 
 class Bar {
-  cb int @check({{this}}, "c") @check({{this}}, "b")
-  nil int @description("no checks") @assert({{this}}, "a") @assert({{this}}, "d")
+  cb int @check({{this}}, c) @check({{this}}, b)
+  nil int @description("no checks") @assert({{this}}, a) @assert({{this}}, d)
 }
 
         "##).expect("Valid source");
 
         let attrs = type_check_attributes(&ir);
-        assert_eq!(attrs.len(), 4);
-        assert!(attrs.contains( &mk_tc_attrs(&["c"]) ));
+        dbg!(&attrs);
+        assert_eq!(attrs.len(), 3);
         assert!(attrs.contains( &mk_tc_attrs(&["a","b"]) ));
         assert!(attrs.contains( &mk_tc_attrs(&["a"]) ));
-        assert!(attrs.contains( &mk_tc_attrs(&["c", "b"]) ));
+        assert!(attrs.contains( &mk_tc_attrs(&["b", "c"]) ));
         assert!(!attrs.contains( &mk_tc_attrs(&["a", "d"]) ));
     }
 }
