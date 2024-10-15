@@ -2411,6 +2411,7 @@ dependencies = [
  "env_logger",
  "indexmap 2.2.6",
  "internal-baml-core",
+ "internal-baml-diagnostics",
  "internal-baml-jinja-types",
  "log",
  "minijinja",

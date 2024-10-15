@@ -443,622 +443,848 @@ pub fn render_prompt(
     }
 }
 
-// #[cfg(test)]
-// mod render_tests {
-
-//     use super::*;
-
-//     use baml_types::{BamlMap, BamlMediaType};
-//     use env_logger;
-//     use std::sync::Once;
-
-//     static INIT: Once = Once::new();
-
-//     pub fn setup_logging() {
-//         INIT.call_once(|| {
-//             env_logger::init();
-//         });
-//     }
-
-//     #[test]
-//     fn render_image() -> anyhow::Result<()> {
-//         setup_logging();
-
-//         let args = BamlValue::Map(BamlMap::from([(
-//             "img".to_string(),
-//             BamlValue::Media(BamlMedia::url(
-//                 BamlMediaType::Image,
-//                 "https://example.com/image.jpg".to_string(),
-//                 None,
-//             )),
-//         )]));
-
-//         let rendered = render_prompt(
-//             "{{ _.chat(\"system\") }}
-//             Here is an image: {{ img }}",
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
-//             },
-//             &vec![],
-//         )?;
-
-//         assert_eq!(
-//             rendered,
-//             RenderedPrompt::Chat(vec![RenderedChatMessage {
-//                 role: "system".to_string(),
-//                 allow_duplicate_role: false,
-//                 parts: vec![
-//                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-//                     ChatMessagePart::Media(BamlMedia::url(
-//                         BamlMediaType::Image,
-//                         "https://example.com/image.jpg".to_string(),
-//                         None
-//                     )),
-//                 ]
-//             },])
-//         );
-
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn render_image_nested() -> anyhow::Result<()> {
-//         setup_logging();
-
-//         let args: BamlValue = BamlValue::Map(BamlMap::from([(
-//             "myObject".to_string(),
-//             BamlValue::Map(BamlMap::from([(
-//                 "img".to_string(),
-//                 BamlValue::Media(BamlMedia::url(
-//                     BamlMediaType::Image,
-//                     "https://example.com/image.jpg".to_string(),
-//                     None,
-//                 )),
-//             )])),
-//         )]));
-
-//         let rendered = render_prompt(
-//             "{{ _.chat(\"system\") }}
-//             Here is an image: {{ myObject.img }}",
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
-//             },
-//             &vec![],
-//         )?;
-
-//         assert_eq!(
-//             rendered,
-//             RenderedPrompt::Chat(vec![RenderedChatMessage {
-//                 role: "system".to_string(),
-//                 allow_duplicate_role: false,
-//                 parts: vec![
-//                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-//                     ChatMessagePart::Media(BamlMedia::url(
-//                         BamlMediaType::Image,
-//                         "https://example.com/image.jpg".to_string(),
-//                         None
-//                     )),
-//                 ]
-//             },])
-//         );
-
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn render_image_suffix() -> anyhow::Result<()> {
-//         setup_logging();
-
-//         let args: BamlValue = BamlValue::Map(BamlMap::from([(
-//             "img".to_string(),
-//             BamlValue::Media(BamlMedia::url(
-//                 BamlMediaType::Image,
-//                 "https://example.com/image.jpg".to_string(),
-//                 None,
-//             )),
-//         )]));
-
-//         let rendered = render_prompt(
-//             "{{ _.chat(\"system\") }}
-//             Here is an image: {{ img }}. Please help me.",
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
-//             },
-//             &vec![],
-//         )?;
-
-//         assert_eq!(
-//             rendered,
-//             RenderedPrompt::Chat(vec![RenderedChatMessage {
-//                 role: "system".to_string(),
-//                 allow_duplicate_role: false,
-//                 parts: vec![
-//                     ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
-//                     ChatMessagePart::Media(BamlMedia::url(
-//                         BamlMediaType::Image,
-//                         "https://example.com/image.jpg".to_string(),
-//                         None
-//                     )),
-//                     ChatMessagePart::Text(vec![". Please help me.",].join("\n")),
-//                 ]
-//             },])
-//         );
-
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn render_chat() -> anyhow::Result<()> {
-//         setup_logging();
-
-//         let args = BamlValue::Map(BamlMap::from([(
-//             "haiku_subject".to_string(),
-//             BamlValue::String("sakura".to_string()),
-//         )]));
-
-//         let rendered = render_prompt(
-//             "
-
-//                     You are an assistant that always responds
-//                     in a very excited way with emojis
-//                     and also outputs this word 4 times
-//                     after giving a response: {{ haiku_subject }}
-
-//                     {{ _.chat(ctx.tags['ROLE']) }}
-
-//                     Tell me a haiku about {{ haiku_subject }}. {{ ctx.output_format }}
-
-//                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
-
-//             ",
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
-//             },
-//             &vec![],
-//         )?;
-
-//         assert_eq!(
-//             rendered,
-//             RenderedPrompt::Chat(vec![
-//                 RenderedChatMessage {
-//                     role: "system".to_string(),
-//                     allow_duplicate_role: false,
-//                     parts: vec![ChatMessagePart::Text(
-//                         vec![
-//                             "You are an assistant that always responds",
-//                             "in a very excited way with emojis",
-//                             "and also outputs this word 4 times",
-//                             "after giving a response: sakura",
-//                         ]
-//                         .join("\n")
-//                     )]
-//                 },
-//                 RenderedChatMessage {
-//                     role: "john doe".to_string(),
-//                     allow_duplicate_role: false,
-//                     parts: vec![ChatMessagePart::Text(
-//                         vec![
-//                             "Tell me a haiku about sakura. ",
-//                             "",
-//                             "End the haiku with a line about your maker, openai.",
-//                         ]
-//                         .join("\n")
-//                     )]
-//                 }
-//             ])
-//         );
-
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn render_completion() -> anyhow::Result<()> {
-//         setup_logging();
-
-//         let _args = context! {
-//             haiku_subject => "sakura"
-//         };
-
-//         let args: BamlValue = BamlValue::Map(BamlMap::from([(
-//             "haiku_subject".to_string(),
-//             BamlValue::String("sakura".to_string()),
-//         )]));
-
-//         let rendered = render_prompt(
-//             "
-//                 You are an assistant that always responds
-//                 in a very excited way with emojis
-//                 and also outputs this word 4 times
-//                 after giving a response: {{ haiku_subject }}
-//             ",
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
-//             },
-//             &vec![],
-//         )?;
-
-//         assert_eq!(
-//             rendered,
-//             RenderedPrompt::Completion(
-//                 vec![
-//                     "You are an assistant that always responds",
-//                     "in a very excited way with emojis",
-//                     "and also outputs this word 4 times",
-//                     "after giving a response: sakura",
-//                 ]
-//                 .join("\n")
-//             )
-//         );
-
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn render_output_format_directly() -> anyhow::Result<()> {
-//         setup_logging();
-
-//         let args: BamlValue = BamlValue::Map(BamlMap::from([(
-//             "haiku_subject".to_string(),
-//             BamlValue::String("sakura".to_string()),
-//         )]));
-
-//         let rendered = render_prompt(
-//             "{{ ctx.output_format }}",
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
-//             },
-//             &vec![],
-//         )?;
-
-//         assert_eq!(rendered, RenderedPrompt::Completion("".to_string()));
-
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn render_output_format_prefix_unspecified() -> anyhow::Result<()> {
-//         setup_logging();
-
-//         let args: BamlValue = BamlValue::Map(BamlMap::from([(
-//             "haiku_subject".to_string(),
-//             BamlValue::String("sakura".to_string()),
-//         )]));
-
-//         let rendered = render_prompt(
-//             "HI! {{ ctx.output_format }}",
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
-//             },
-//             &vec![],
-//         )?;
-
-//         assert_eq!(rendered, RenderedPrompt::Completion("HI! ".to_string()));
-
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn render_output_format_prefix_null() -> anyhow::Result<()> {
-//         setup_logging();
-
-//         let args: BamlValue = BamlValue::Map(BamlMap::from([(
-//             "haiku_subject".to_string(),
-//             BamlValue::String("sakura".to_string()),
-//         )]));
-
-//         let rendered = render_prompt(
-//             "{{ ctx.output_format(prefix=null) }}",
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
-//             },
-//             &vec![],
-//         )?;
-
-//         assert_eq!(rendered, RenderedPrompt::Completion("".into()));
-
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn render_output_format_prefix_str() -> anyhow::Result<()> {
-//         setup_logging();
-
-//         let args: BamlValue = BamlValue::Map(BamlMap::from([(
-//             "haiku_subject".to_string(),
-//             BamlValue::String("sakura".to_string()),
-//         )]));
-
-//         let rendered = render_prompt(
-//             "{{ ctx.output_format(prefix='custom format:') }}",
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
-//             },
-//             &vec![],
-//         )?;
-
-//         assert_eq!(
-//             rendered,
-//             RenderedPrompt::Completion("custom format:string".to_string())
-//         );
-
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn render_chat_param_failures() -> anyhow::Result<()> {
-//         setup_logging();
-
-//         let args: BamlValue = BamlValue::Map(BamlMap::from([(
-//             "name".to_string(),
-//             BamlValue::String("world".to_string()),
-//         )]));
-
-//         // rendering should fail: template contains '{{ name }' (missing '}' at the end)
-//         let rendered = render_prompt(
-//             r#"
-//                     You are an assistant that always responds
-//                     in a very excited way with emojis
-//                     and also outputs this word 4 times
-//                     after giving a response: {{ haiku_subject }}
-
-//                     {{ _.role(role=ctx.tags.ROLE) }}
-
-//                     Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_format }}.
-
-//                     {{ _.role(ctx.tags.ROLE) }}
-//                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
-
-//                     {{ _.role("a", role="aa") }}
-//                     hi!
-
-//                     {{ _.role() }}
-//                     hi!
-//             "#,
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
-//             },
-//             &vec![],
-//         );
-
-//         match rendered {
-//             Ok(_) => {
-//                 anyhow::bail!("Expected template rendering to fail, but it succeeded");
-//             }
-//             Err(e) => assert!(e
-//                 .to_string()
-//                 .contains("role() called with two roles: 'aa' and 'a'")),
-//         }
-
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn render_with_kwargs() -> anyhow::Result<()> {
-//         setup_logging();
-
-//         let args: BamlValue = BamlValue::Map(BamlMap::from([(
-//             "haiku_subject".to_string(),
-//             BamlValue::String("sakura".to_string()),
-//         )]));
-
-//         let rendered = render_prompt(
-//             r#"
-
-//                     You are an assistant that always responds
-//                     in a very excited way with emojis
-//                     and also outputs this word 4 times
-//                     after giving a response: {{ haiku_subject }}
-
-//                     {{ _.chat(role=ctx.tags.ROLE) }}
-
-//                     Tell me a haiku about {{ haiku_subject }}. {{ ctx.output_format }}
-
-//                     {{ _.chat(ctx.tags.ROLE) }}
-//                     End the haiku with a line about your maker, {{ ctx.client.provider }}.
-//             "#,
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
-//             },
-//             &vec![],
-//         )?;
-
-//         assert_eq!(
-//             rendered,
-//             RenderedPrompt::Chat(vec![
-//                 RenderedChatMessage {
-//                     role: "system".to_string(),
-//                     allow_duplicate_role: false,
-//                     parts: vec![ChatMessagePart::Text(
-//                         vec![
-//                             "You are an assistant that always responds",
-//                             "in a very excited way with emojis",
-//                             "and also outputs this word 4 times",
-//                             "after giving a response: sakura",
-//                         ]
-//                         .join("\n")
-//                     )]
-//                 },
-//                 RenderedChatMessage {
-//                     role: "john doe".to_string(),
-//                     allow_duplicate_role: false,
-//                     parts: vec![ChatMessagePart::Text(
-//                         "Tell me a haiku about sakura.".to_string()
-//                     )]
-//                 },
-//                 RenderedChatMessage {
-//                     role: "john doe".to_string(),
-//                     allow_duplicate_role: false,
-//                     parts: vec![ChatMessagePart::Text(
-//                         "End the haiku with a line about your maker, openai.".to_string()
-//                     )]
-//                 }
-//             ])
-//         );
-
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn render_chat_starts_with_system() -> anyhow::Result<()> {
-//         setup_logging();
-
-//         let args: BamlValue = BamlValue::Map(BamlMap::from([(
-//             "haiku_subject".to_string(),
-//             BamlValue::String("sakura".to_string()),
-//         )]));
-
-//         let rendered = render_prompt(
-//             "
-//                 {{ _.chat(\"system\") }}
-
-//                 You are an assistant that always responds
-//                 in a very excited way with emojis
-//                 and also outputs this word 4 times
-//                 after giving a response: {{ haiku_subject }}
-//             ",
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
-//             },
-//             &vec![],
-//         )?;
-
-//         assert_eq!(
-//             rendered,
-//             RenderedPrompt::Chat(vec![RenderedChatMessage {
-//                 role: "system".to_string(),
-//                 allow_duplicate_role: false,
-//                 parts: vec![ChatMessagePart::Text(
-//                     vec![
-//                         "You are an assistant that always responds",
-//                         "in a very excited way with emojis",
-//                         "and also outputs this word 4 times",
-//                         "after giving a response: sakura",
-//                     ]
-//                     .join("\n")
-//                 )]
-//             },])
-//         );
-
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn render_malformed_jinja() -> anyhow::Result<()> {
-//         setup_logging();
-//         let args: BamlValue = BamlValue::Map(BamlMap::from([(
-//             "name".to_string(),
-//             BamlValue::String("world".to_string()),
-//         )]));
-
-//         // rendering should fail: template contains '{{ name }' (missing '}' at the end)
-//         let rendered = render_prompt(
-//             "Hello, {{ name }!",
-//             &args,
-//             RenderContext {
-//                 client: RenderContext_Client {
-//                     name: "gpt4".to_string(),
-//                     provider: "openai".to_string(),
-//                     default_role: "system".to_string(),
-//                 },
-//                 output_format: OutputFormatContent::new_string(),
-//                 tags: HashMap::new(),
-//             },
-//             &vec![],
-//         );
-
-//         match rendered {
-//             Ok(_) => {
-//                 anyhow::bail!("Expected template rendering to fail, but it succeeded");
-//             }
-//             Err(e) => assert!(e
-//                 .to_string()
-//                 .contains("Error occurred while rendering prompt:")),
-//         }
-
-//         Ok(())
-//     }
-// }
+#[cfg(test)]
+mod render_tests {
+
+    use super::*;
+
+    use baml_types::{BamlMap, BamlMediaType};
+    use env_logger;
+    use indexmap::IndexMap;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
+    pub fn setup_logging() {
+        INIT.call_once(|| {
+            env_logger::init();
+        });
+    }
+
+    pub fn make_test_ir(source_code: &str) -> anyhow::Result<IntermediateRepr> {
+        use internal_baml_core::validate;
+        use internal_baml_core::{Configuration, ValidatedSchema};
+        use internal_baml_diagnostics::SourceFile;
+        use std::path::PathBuf;
+        let path: PathBuf = "fake_file.baml".into();
+        let source_file: SourceFile = (path.clone(), source_code).into();
+        let validated_schema: ValidatedSchema = validate(&path, vec![source_file]);
+        let diagnostics = &validated_schema.diagnostics;
+        if diagnostics.has_errors() {
+            return Err(anyhow::anyhow!(
+                "Source code was invalid: \n{:?}",
+                diagnostics.errors()
+            ));
+        }
+        let ir = IntermediateRepr::from_parser_database(
+            &validated_schema.db,
+            validated_schema.configuration,
+        )?;
+        Ok(ir)
+    }
+
+    #[test]
+    fn render_image() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "img".to_string(),
+            BamlValue::Media(BamlMedia::url(
+                BamlMediaType::Image,
+                "https://example.com/image.jpg".to_string(),
+                None,
+            )),
+        )]));
+
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        let rendered = render_prompt(
+            "{{ _.chat(\"system\") }}
+            Here is an image: {{ img }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                allow_duplicate_role: false,
+                parts: vec![
+                    ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
+                    ChatMessagePart::Media(BamlMedia::url(
+                        BamlMediaType::Image,
+                        "https://example.com/image.jpg".to_string(),
+                        None
+                    )),
+                ]
+            },])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_image_nested() -> anyhow::Result<()> {
+        setup_logging();
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "myObject".to_string(),
+            BamlValue::Map(BamlMap::from([(
+                "img".to_string(),
+                BamlValue::Media(BamlMedia::url(
+                    BamlMediaType::Image,
+                    "https://example.com/image.jpg".to_string(),
+                    None,
+                )),
+            )])),
+        )]));
+
+        let rendered = render_prompt(
+            "{{ _.chat(\"system\") }}
+            Here is an image: {{ myObject.img }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                allow_duplicate_role: false,
+                parts: vec![
+                    ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
+                    ChatMessagePart::Media(BamlMedia::url(
+                        BamlMediaType::Image,
+                        "https://example.com/image.jpg".to_string(),
+                        None
+                    )),
+                ]
+            },])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_image_suffix() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "img".to_string(),
+            BamlValue::Media(BamlMedia::url(
+                BamlMediaType::Image,
+                "https://example.com/image.jpg".to_string(),
+                None,
+            )),
+        )]));
+
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        let rendered = render_prompt(
+            "{{ _.chat(\"system\") }}
+            Here is an image: {{ img }}. Please help me.",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                allow_duplicate_role: false,
+                parts: vec![
+                    ChatMessagePart::Text(vec!["Here is an image:",].join("\n")),
+                    ChatMessagePart::Media(BamlMedia::url(
+                        BamlMediaType::Image,
+                        "https://example.com/image.jpg".to_string(),
+                        None
+                    )),
+                    ChatMessagePart::Text(vec![". Please help me.",].join("\n")),
+                ]
+            },])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_chat() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        let rendered = render_prompt(
+            "
+
+                    You are an assistant that always responds
+                    in a very excited way with emojis
+                    and also outputs this word 4 times
+                    after giving a response: {{ haiku_subject }}
+
+                    {{ _.chat(ctx.tags['ROLE']) }}
+
+                    Tell me a haiku about {{ haiku_subject }}. {{ ctx.output_format }}
+
+                    End the haiku with a line about your maker, {{ ctx.client.provider }}.
+
+            ",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![
+                RenderedChatMessage {
+                    role: "system".to_string(),
+                    allow_duplicate_role: false,
+                    parts: vec![ChatMessagePart::Text(
+                        vec![
+                            "You are an assistant that always responds",
+                            "in a very excited way with emojis",
+                            "and also outputs this word 4 times",
+                            "after giving a response: sakura",
+                        ]
+                        .join("\n")
+                    )]
+                },
+                RenderedChatMessage {
+                    role: "john doe".to_string(),
+                    allow_duplicate_role: false,
+                    parts: vec![ChatMessagePart::Text(
+                        vec![
+                            "Tell me a haiku about sakura. ",
+                            "",
+                            "End the haiku with a line about your maker, openai.",
+                        ]
+                        .join("\n")
+                    )]
+                }
+            ])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_completion() -> anyhow::Result<()> {
+        setup_logging();
+
+        let _args = context! {
+            haiku_subject => "sakura"
+        };
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        let rendered = render_prompt(
+            "
+                You are an assistant that always responds
+                in a very excited way with emojis
+                and also outputs this word 4 times
+                after giving a response: {{ haiku_subject }}
+            ",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion(
+                vec![
+                    "You are an assistant that always responds",
+                    "in a very excited way with emojis",
+                    "and also outputs this word 4 times",
+                    "after giving a response: sakura",
+                ]
+                .join("\n")
+            )
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_output_format_directly() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        let rendered = render_prompt(
+            "{{ ctx.output_format }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(rendered, RenderedPrompt::Completion("".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_output_format_prefix_unspecified() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        let rendered = render_prompt(
+            "HI! {{ ctx.output_format }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(rendered, RenderedPrompt::Completion("HI! ".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_output_format_prefix_null() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        let rendered = render_prompt(
+            "{{ ctx.output_format(prefix=null) }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(rendered, RenderedPrompt::Completion("".into()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_output_format_prefix_str() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        let rendered = render_prompt(
+            "{{ ctx.output_format(prefix='custom format:') }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion("custom format:string".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_chat_param_failures() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "name".to_string(),
+            BamlValue::String("world".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        // rendering should fail: template contains '{{ name }' (missing '}' at the end)
+        let rendered = render_prompt(
+            r#"
+                    You are an assistant that always responds
+                    in a very excited way with emojis
+                    and also outputs this word 4 times
+                    after giving a response: {{ haiku_subject }}
+
+                    {{ _.role(role=ctx.tags.ROLE) }}
+
+                    Tell me a haiku about {{ haiku_subject }} in {{ ctx.output_format }}.
+
+                    {{ _.role(ctx.tags.ROLE) }}
+                    End the haiku with a line about your maker, {{ ctx.client.provider }}.
+
+                    {{ _.role("a", role="aa") }}
+                    hi!
+
+                    {{ _.role() }}
+                    hi!
+            "#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+            &ir,
+        );
+
+        match rendered {
+            Ok(_) => {
+                anyhow::bail!("Expected template rendering to fail, but it succeeded");
+            }
+            Err(e) => assert!(e
+                .to_string()
+                .contains("role() called with two roles: 'aa' and 'a'")),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_with_kwargs() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        let rendered = render_prompt(
+            r#"
+
+                    You are an assistant that always responds
+                    in a very excited way with emojis
+                    and also outputs this word 4 times
+                    after giving a response: {{ haiku_subject }}
+
+                    {{ _.chat(role=ctx.tags.ROLE) }}
+
+                    Tell me a haiku about {{ haiku_subject }}. {{ ctx.output_format }}
+
+                    {{ _.chat(ctx.tags.ROLE) }}
+                    End the haiku with a line about your maker, {{ ctx.client.provider }}.
+            "#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![
+                RenderedChatMessage {
+                    role: "system".to_string(),
+                    allow_duplicate_role: false,
+                    parts: vec![ChatMessagePart::Text(
+                        vec![
+                            "You are an assistant that always responds",
+                            "in a very excited way with emojis",
+                            "and also outputs this word 4 times",
+                            "after giving a response: sakura",
+                        ]
+                        .join("\n")
+                    )]
+                },
+                RenderedChatMessage {
+                    role: "john doe".to_string(),
+                    allow_duplicate_role: false,
+                    parts: vec![ChatMessagePart::Text(
+                        "Tell me a haiku about sakura.".to_string()
+                    )]
+                },
+                RenderedChatMessage {
+                    role: "john doe".to_string(),
+                    allow_duplicate_role: false,
+                    parts: vec![ChatMessagePart::Text(
+                        "End the haiku with a line about your maker, openai.".to_string()
+                    )]
+                }
+            ])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_chat_starts_with_system() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "haiku_subject".to_string(),
+            BamlValue::String("sakura".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        let rendered = render_prompt(
+            "
+                {{ _.chat(\"system\") }}
+
+                You are an assistant that always responds
+                in a very excited way with emojis
+                and also outputs this word 4 times
+                after giving a response: {{ haiku_subject }}
+            ",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::from([("ROLE".to_string(), BamlValue::String("john doe".into()))]),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                allow_duplicate_role: false,
+                parts: vec![ChatMessagePart::Text(
+                    vec![
+                        "You are an assistant that always responds",
+                        "in a very excited way with emojis",
+                        "and also outputs this word 4 times",
+                        "after giving a response: sakura",
+                    ]
+                    .join("\n")
+                )]
+            },])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_malformed_jinja() -> anyhow::Result<()> {
+        setup_logging();
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "name".to_string(),
+            BamlValue::String("world".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            "
+            class C {
+                
+            }
+            ",
+        )?;
+
+        // rendering should fail: template contains '{{ name }' (missing '}' at the end)
+        let rendered = render_prompt(
+            "Hello, {{ name }!",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+        );
+
+        match rendered {
+            Ok(_) => {
+                anyhow::bail!("Expected template rendering to fail, but it succeeded");
+            }
+            Err(e) => assert!(e
+                .to_string()
+                .contains("Error occurred while rendering prompt:")),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_class_with_aliases() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "class_arg".to_string(),
+            // class args are not aliased yet when passed in to jinja
+            BamlValue::Class(
+                "C".to_string(),
+                IndexMap::from([("prop1".to_string(), BamlValue::String("value".to_string()))]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class C {
+                prop1 string @alias("key1")
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            " {{ class_arg }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion("{\"key1\": \"value\"}".to_string())
+        );
+
+        Ok(())
+    }
+
+    // render class with if condition on class property test
+    #[test]
+    fn render_class_with_if_condition() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "class_arg".to_string(),
+            BamlValue::Class(
+                "C".to_string(),
+                IndexMap::from([("prop1".to_string(), BamlValue::String("value".to_string()))]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class C {
+                prop1 string @alias("key1")
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{% if class_arg.prop1 == 'value' %}true{% else %}false{% endif %}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+        )?;
+
+        assert_eq!(rendered, RenderedPrompt::Completion("true".to_string()));
+
+        Ok(())
+    }
+}
