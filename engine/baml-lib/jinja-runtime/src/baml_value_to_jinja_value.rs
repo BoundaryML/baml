@@ -1,3 +1,5 @@
+use internal_baml_core::ir::repr::IntermediateRepr;
+
 use crate::{BamlMedia, BamlValue};
 // use internal_baml_core::ir::repr::IntermediateRepr;
 
@@ -27,8 +29,12 @@ use crate::{BamlMedia, BamlValue};
 //     }
 // }
 
-impl BamlValue {
-    pub fn into_minijinja_value(&self, ir: IntermediateRepr) -> minijinja::Value {
+pub trait IntoMiniJinjaValue {
+    fn into_minijinja_value(&self, ir: &IntermediateRepr) -> minijinja::Value;
+}
+
+impl IntoMiniJinjaValue for BamlValue {
+    fn into_minijinja_value(&self, ir: &IntermediateRepr) -> minijinja::Value {
         match self {
             BamlValue::String(s) => minijinja::Value::from(s.clone()),
             BamlValue::Int(n) => minijinja::Value::from(n.clone()),
@@ -37,22 +43,20 @@ impl BamlValue {
             BamlValue::Map(m) => {
                 let map = m
                     .into_iter()
-                    .map(|(k, v)| (k.as_str(), v.into_minijinja_value(ir.clone())));
+                    .map(|(k, v)| (k.as_str(), v.into_minijinja_value(ir)));
                 minijinja::Value::from_iter(map)
             }
             BamlValue::List(l) => {
-                let list: Vec<minijinja::Value> = l
-                    .into_iter()
-                    .map(|v| v.into_minijinja_value(ir.clone()))
-                    .collect();
+                let list: Vec<minijinja::Value> =
+                    l.into_iter().map(|v| v.into_minijinja_value(ir)).collect();
                 minijinja::Value::from(list)
             }
-            BamlValue::Media(i) => i.clone().into(),
+            BamlValue::Media(i) => i.into_minijinja_value(ir),
             BamlValue::Enum(_, v) => minijinja::Value::from(v.clone()),
             BamlValue::Class(_, m) => {
                 let map = m
                     .into_iter()
-                    .map(|(k, v)| (k.as_str(), v.into_minijinja_value(ir.clone())));
+                    .map(|(k, v)| (k.as_str(), v.into_minijinja_value(ir)));
                 minijinja::Value::from_iter(map)
             }
             BamlValue::Null => minijinja::Value::from(()),
@@ -70,9 +74,9 @@ impl From<BamlMedia> for MinijinjaBamlMedia {
     }
 }
 
-impl From<BamlMedia> for minijinja::Value {
-    fn from(arg: BamlMedia) -> minijinja::Value {
-        minijinja::Value::from_object(MinijinjaBamlMedia::from(arg))
+impl IntoMiniJinjaValue for BamlMedia {
+    fn into_minijinja_value(&self, ir: &IntermediateRepr) -> minijinja::Value {
+        minijinja::Value::from_object(MinijinjaBamlMedia::from(self.clone()))
     }
 }
 
@@ -116,11 +120,5 @@ struct MinijinjaBamlClass {
 impl From<BamlValue> for MinijinjaBamlClass {
     fn from(class: BamlValue) -> MinijinjaBamlClass {
         MinijinjaBamlClass { class }
-    }
-}
-
-impl From<BamlValue> for minijinja::Value {
-    fn from(arg: BamlValue) -> minijinja::Value {
-        minijinja::Value::from_object(MinijinjaBamlClass::from(arg))
     }
 }

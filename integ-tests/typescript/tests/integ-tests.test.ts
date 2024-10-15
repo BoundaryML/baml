@@ -641,6 +641,33 @@ describe('Integ tests', () => {
     )
     expect(people.length).toBeGreaterThan(0)
   })
+
+
+  it("should use aliases when serializing input objects - classes", async () => {
+    const res = await b.AliasedInputClass({key: "hello", key2: "world"})
+    expect(res).toContain("color")
+
+    const res2 = await b.AliasedInputClassNested({key: "hello", nested: {key: "nested-hello", key2: "nested-world"}})
+    expect(res2).toContain("interesting-key")
+ })
+
+ it("should use aliases when serializing, but still have original keys in jinja", async () => {
+   const res = await b.AliasedInputClass2({key: "tiger", key2: "world"})
+   expect(res).toContain("tiger")
+
+   const res2 = await b.AliasedInputClassNested({key: "hello", nested: {key: "nested-hello", key2: "nested-world"}})
+   expect(res2).toContain("interesting-key")
+})
+
+ it("should use aliases when serializing input objects - enums", async () => {
+   const res = await b.AliasedInputEnum(AliasedEnum.KEY_ONE)
+   expect(res).toContain("color")
+ })
+
+ it("should use aliases when serializing input objects - lists", async () => {
+   const res = await b.AliasedInputList([AliasedEnum.KEY_ONE, AliasedEnum.KEY_TWO])
+   expect(res).toContain("color")
+ })
 })
 
 interface MyInterface {

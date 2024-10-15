@@ -797,7 +797,6 @@ dependencies = [
  "futures",
  "indexmap 2.2.6",
  "internal-baml-codegen",
- "internal-baml-jinja",
  "log",
  "pyo3",
  "pyo3-asyncio",
@@ -2371,7 +2370,7 @@ dependencies = [
  "indexmap 2.2.6",
  "indoc",
  "internal-baml-diagnostics",
- "internal-baml-jinja",
+ "internal-baml-jinja-types",
  "internal-baml-parser-database",
  "internal-baml-prompt-parser",
  "internal-baml-schema-ast",
@@ -2411,6 +2410,26 @@ dependencies = [
  "colored",
  "env_logger",
  "indexmap 2.2.6",
+ "internal-baml-core",
+ "internal-baml-jinja-types",
+ "log",
+ "minijinja",
+ "serde",
+ "serde_json",
+ "strsim 0.11.1",
+ "strum",
+]
+
+[[package]]
+name = "internal-baml-jinja-types"
+version = "0.61.1"
+dependencies = [
+ "anyhow",
+ "askama",
+ "baml-types",
+ "colored",
+ "env_logger",
+ "indexmap 2.2.6",
  "log",
  "minijinja",
  "serde",
@@ -2430,7 +2449,7 @@ dependencies = [
  "enumflags2",
  "indexmap 1.9.3",
  "internal-baml-diagnostics",
- "internal-baml-jinja",
+ "internal-baml-jinja-types",
  "internal-baml-prompt-parser",
  "internal-baml-schema-ast",
  "log",

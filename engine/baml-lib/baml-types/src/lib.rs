@@ -1,7 +1,7 @@
 mod map;
 mod media;
-#[cfg(feature = "mini-jinja")]
-mod minijinja;
+// #[cfg(feature = "mini-jinja")]
+// mod minijinja;
 
 mod baml_value;
 mod field_type;
