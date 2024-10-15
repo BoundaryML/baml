@@ -1,3 +1,5 @@
+# TODO: Package jest
+
 let
   pkgs = import <nixpkgs> { };
 
@@ -30,12 +32,14 @@ in pkgs.mkShell {
       rustfmt
       maturin
       nodePackages.pnpm
+      nodePackages.nodejs
       python3
       poetry
       rust-analyzer
       fern
       ruby
       nixfmt-classic
+      swc
     ] ++ (if pkgs.stdenv.isDarwin then appleDeps else [ ]);
 
   LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
@@ -46,6 +50,6 @@ in pkgs.mkShell {
 
   shellHook = ''
     export PROJECT_ROOT=/$(pwd)
-    export PATH=/$PROJECT_ROOT/tools:$PATH
+    export PATH=/$PROJECT_ROOT/tools:$PROJECT_ROOT/integ-tests/typescript/node_modules/.bin:$PATH
   '';
 }

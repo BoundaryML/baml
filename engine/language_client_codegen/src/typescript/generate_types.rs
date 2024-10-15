@@ -29,10 +29,10 @@ struct TypescriptEnum<'ir> {
     pub dynamic: bool,
 }
 
-struct TypescriptClass<'ir> {
-    name: Cow<'ir, str>,
-    fields: Vec<(Cow<'ir, str>, bool, String)>,
-    dynamic: bool,
+pub struct TypescriptClass<'ir> {
+    pub name: Cow<'ir, str>,
+    pub fields: Vec<(Cow<'ir, str>, bool, String)>,
+    pub dynamic: bool,
 }
 
 impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypescriptTypes<'ir> {
@@ -48,7 +48,7 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypescriptTyp
                 .collect::<Vec<_>>(),
             check_classes: type_check_attributes(ir)
                 .iter()
-                .map(|check_class| type_def_for_checks(check_class))
+                .map(|checks| type_def_for_checks(checks))
                 .collect::<Vec<_>>(),
             classes: ir
                 .walk_classes()
@@ -113,7 +113,7 @@ impl<'ir> From<&ClassWalker<'ir>> for TypescriptClass<'ir> {
     }
 }
 
-fn type_def_for_checks(checks: &TypeCheckAttributes) -> TypescriptClass<'static> {
+pub fn type_def_for_checks(checks: &TypeCheckAttributes) -> TypescriptClass<'static> {
     TypescriptClass {
         name: Cow::Owned(type_name_for_checks(checks)),
         dynamic: false,

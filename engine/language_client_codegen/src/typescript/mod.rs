@@ -11,13 +11,14 @@ use internal_baml_core::{
 };
 
 use self::typescript_language_features::{ToTypescript, TypescriptLanguageFeatures};
-use crate::{dir_writer::FileCollector, field_type_attributes, TypeCheckAttributes};
+use crate::{dir_writer::FileCollector, field_type_attributes, type_check_attributes, TypeCheckAttributes};
+use self::generate_types::{TypescriptClass, type_def_for_checks};
 
 #[derive(askama::Template)]
 #[template(path = "async_client.ts.j2", escape = "none")]
 struct AsyncTypescriptClient {
     funcs: Vec<TypescriptFunction>,
-    check_types: Vec<String>,
+    check_types: Vec<TypescriptClass<'static>>,
     types: Vec<String>,
 }
 
@@ -25,13 +26,13 @@ struct AsyncTypescriptClient {
 #[template(path = "sync_client.ts.j2", escape = "none")]
 struct SyncTypescriptClient {
     funcs: Vec<TypescriptFunction>,
-    check_types: Vec<String>,
+    check_types: Vec<TypescriptClass<'static>>,
     types: Vec<String>,
 }
 
 struct TypescriptClient {
     funcs: Vec<TypescriptFunction>,
-    check_types: Vec<String>,
+    check_types: Vec<TypescriptClass<'static>>,
     types: Vec<String>,
 }
 
@@ -157,7 +158,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
             .flatten()
             .collect();
 
-        let check_types = unimplemented!();
+        let check_types = type_check_attributes(ir).iter().map(|checks| type_def_for_checks(checks)).collect();
 
         let types = ir
             .walk_classes()

@@ -25,7 +25,7 @@ class FooAny {
 
 class InputWithConstraint {
   name string @assert({{this|length > 1}}, nonempty)
-  amount int @check({{ this < 1 }}, small)
+  amount int @assert({{ this < 1 }}, small)
 }
 
 function PredictAge(name: string) -> FooAny {
