@@ -8,7 +8,7 @@ use pyo3::{wrap_pyfunction, Bound, Python};
 
 #[pyfunction]
 fn invoke_runtime_cli(py: Python) -> PyResult<()> {
-    Ok(baml_runtime::BamlRuntime::run_cli(
+    Ok(baml_cli::run_cli(
         py.import_bound("sys")?
             .getattr("argv")?
             .extract::<Vec<String>>()?,

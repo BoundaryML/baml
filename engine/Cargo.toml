@@ -17,6 +17,7 @@ default-members = [
   # and it's OK to not build this by default because we have to build ts separately (this may
   # also have something to do with resolver=2 and how duplicate dep builds are handled)
   # "baml-schema-wasm",
+  "cli",
   "language_client_codegen",
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
@@ -26,13 +27,14 @@ default-members = [
 [workspace.dependencies]
 anyhow = "1.0"
 askama = "0.12.1"
+baml-cli = { path = "cli" }
 base64 = "0.22.1"
 bytes = "1.6.0"
 cfg-if = "1.0.0"
 clap = { version = "4.4.6", features = ["cargo", "derive"] }
 dashmap = "5.5.3"
 derive_builder = "0.20.0"
-derive_more = "0.99.18"
+derive_more = { version = "0.99.18", features = ["constructor"] }
 either = "1.8.1"
 env_logger = "0.11.3"
 futures = { version = "0.3.30", features = ["executor"] }
@@ -41,7 +43,13 @@ http-body = "1.0.0"
 indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.5"
 log = "0.4.20"
+rand = "0.8.5"
 regex = "1.10.4"
+reqwest = { version = "0.12.5", features = [
+  "json",
+  "native-tls-vendored",
+  "stream",
+] }
 scopeguard = "1.2.0"
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }

@@ -7,6 +7,10 @@ version = "0.0.1"
 name = "baml"
 crate-type = ["cdylib"]
 
+[lints.rust]
+unused_imports = "allow"
+unused_variables = "allow"
+
 [target.x86_64-unknown-linux-musl]
 linker = "x86_64-linux-musl-gcc"
 
@@ -15,6 +19,7 @@ linker = "aarch64-linux-musl-gcc"
 
 [dependencies]
 anyhow.workspace = true
+baml-cli.workspace = true
 baml-types = { path = "../baml-lib/baml-types" }
 baml-runtime = { path = "../baml-runtime", features = ["internal"] }
 env_logger.workspace = true

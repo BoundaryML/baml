@@ -11,7 +11,7 @@ use super::serve::Server;
 #[derive(clap::Args, Clone, Debug)]
 pub struct DevArgs {
     #[arg(long, help = "path/to/baml_src", default_value = "./baml_src")]
-    pub(super) from: PathBuf,
+    pub from: PathBuf,
     #[arg(long, help = "port to expose BAML on", default_value = "2024")]
     port: u16,
     #[arg(long, help = "turn on preview features", default_value = "false")]

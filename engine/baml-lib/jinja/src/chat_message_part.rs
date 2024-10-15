@@ -3,8 +3,6 @@ use std::collections::{HashMap, HashSet};
 use baml_types::{BamlMedia, BamlMediaContent};
 use serde::Serialize;
 
-use crate::RenderedChatMessage;
-
 #[derive(Debug, PartialEq, Serialize, Clone)]
 pub enum ChatMessagePart {
     // raw user-provided text

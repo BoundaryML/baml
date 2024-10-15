@@ -1,4 +1,4 @@
-use crate::{runtime::runtime_interface::baml_src_files, BamlRuntime};
+use crate::{baml_src_files, BamlRuntime};
 use anyhow::{Context, Result};
 use internal_baml_core::configuration::GeneratorDefaultClientMode;
 use std::path::PathBuf;
@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[derive(clap::Args, Debug)]
 pub struct GenerateArgs {
     #[arg(long, help = "path/to/baml_src", default_value = "./baml_src")]
-    pub(super) from: PathBuf,
+    pub from: PathBuf,
     #[arg(
         long,
         help = "Generate baml_client without checking for version mismatch",
@@ -38,7 +38,7 @@ impl GenerateArgs {
             .collect::<Result<_>>()
             .context("Failed while reading .baml files in baml_src/")?;
         let generated = runtime
-            .run_generators(&all_files, self.no_version_check)
+            .run_codegen(&all_files, self.no_version_check)
             .context("Client generation failed")?;
 
         // give the user a working config to copy-paste (so we need to run it through generator again)

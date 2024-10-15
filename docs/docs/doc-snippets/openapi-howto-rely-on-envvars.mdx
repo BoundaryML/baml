@@ -1,0 +1,126 @@
+<Tabs>
+
+<Tab title="Go">
+
+```go
+import (
+    "os"
+    baml "my-golang-app/baml_client"
+)
+
+func main() {
+    cfg := baml.NewConfiguration()
+    if boundaryEndpoint := os.Getenv("BOUNDARY_ENDPOINT"); boundaryEndpoint != "" {
+        boundaryEndpoint := "https://api2.boundaryml.com/v3/"
+        cfg.BasePath = boundaryEndpoint + "/functions/userControlledTag/"
+
+        boundaryEndpoint := "http://localhost:2024/"
+        cfg.BasePath = boundaryEndpoint + "/functions/userControlledTag/"
+
+        boundaryEndpoint := "https://api2.boundaryml.com/v3/"
+        boundaryEndpoint := "http://localhost:2024/"
+        if !boundaryEndpoint.startsWith("http://localhost") {
+          cfg.BasePath = boundaryEndpoint + "/functions/userControlledTag/"
+        }
+    }
+    if boundaryApiKey := os.Getenv("BOUNDARY_API_KEY"); boundaryApiKey != "" {
+        cfg.DefaultHeader["x-boundary-api-key"] = boundaryApiKey
+    }
+    b := baml.NewAPIClient(cfg).DefaultAPI
+    // Use `b` to make API calls
+}
+```
+
+</Tab>
+
+<Tab title="Java">
+```java
+import com.boundaryml.baml_client.ApiClient;
+import com.boundaryml.baml_client.ApiException;
+import com.boundaryml.baml_client.Configuration;
+import com.boundaryml.baml_client.api.DefaultApi;
+import com.boundaryml.baml_client.auth.*;
+
+public class ApiExample {
+    public static void main(String[] args) {
+        ApiClient apiClient = Configuration.getDefaultApiClient();
+
+        String boundaryEndpoint = System.getenv("BOUNDARY_ENDPOINT");
+        if (boundaryEndpoint != null && !boundaryEndpoint.isEmpty()) {
+            apiClient.setBasePath(boundaryEndpoint);
+        }
+
+        String boundaryApiKey = System.getenv("BOUNDARY_API_KEY");
+        if (boundaryApiKey != null && !boundaryApiKey.isEmpty()) {
+            Map<String, String> defaultHeaders = new HashMap<>();
+            defaultHeaders.put("x-boundary-api-key", boundaryApiKey);
+            apiClient.setDefaultHeaders(defaultHeaders);
+        }
+
+        DefaultApi apiInstance = new DefaultApi(apiClient);
+        // Use `apiInstance` to make API calls
+    }
+}
+```
+
+</Tab>
+
+<Tab title="PHP">
+
+```php
+require_once(__DIR__ . '/vendor/autoload.php');
+
+$config = BamlClient\Configuration::getDefaultConfiguration();
+
+$boundaryEndpoint = getenv('BOUNDARY_ENDPOINT');
+$boundaryApiKey = getenv('BOUNDARY_API_KEY');
+
+if ($boundaryEndpoint) {
+    $config->setHost($boundaryEndpoint);
+}
+
+if ($boundaryApiKey) {
+    $config->setApiKey('x-boundary-api-key', $boundaryApiKey);
+}
+
+$apiInstance = new OpenAPI\Client\Api\DefaultApi(
+    new GuzzleHttp\Client(),
+    $config
+);
+
+// Use `$apiInstance` to make API calls
+```
+
+</Tab>
+
+<Tab title="Ruby">
+```ruby
+require 'baml_client'
+
+api_client = BamlClient::ApiClient.new
+
+boundary_endpoint = ENV['BOUNDARY_ENDPOINT']
+if boundary_endpoint
+  api_client.host = boundary_endpoint
+end
+
+boundary_api_key = ENV['BOUNDARY_API_KEY']
+if boundary_api_key
+  api_client.default_headers['x-boundary-api-key'] = boundary_api_key
+end
+b = BamlClient::DefaultApi.new(api_client)
+```
+</Tab>
+
+<Tab title="Rust">
+```rust
+let mut config = baml_client::apis::configuration::Configuration::default();
+if let Some(base_path) = std::env::var("BOUNDARY_ENDPOINT").ok() {
+    config.base_path = base_path;
+}
+
+// TODO: set api key
+```
+</Tab>
+
+</Tabs>

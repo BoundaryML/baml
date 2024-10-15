@@ -480,7 +480,6 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
                             .ok()
                     })
                     .collect::<Vec<_>>(),
-                _ => vec![],
             }),
             content: self.template_string().to_string(),
         })

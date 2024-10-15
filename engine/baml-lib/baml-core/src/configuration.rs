@@ -1,11 +1,13 @@
-use crate::{lockfile::LockFileWrapper, PreviewFeature};
+use crate::PreviewFeature;
 pub use baml_types::{GeneratorDefaultClientMode, GeneratorOutputType};
+use derive_builder::Builder;
 use enumflags2::BitFlags;
 use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct Configuration {
-    pub generators: Vec<(Generator, LockFileWrapper)>,
+    // pub generators: Vec<(Generator, LockFileWrapper)>,
+    pub generators: Vec<Generator>,
 }
 
 impl Configuration {
@@ -20,12 +22,18 @@ impl Configuration {
     }
 }
 
+#[derive(Debug)]
+pub enum Generator {
+    Codegen(CodegenGenerator),
+    BoundaryCloud(CloudProject),
+}
+
 // TODO: we should figure out how to model generator fields using serde, since
 // the generator blocks are essentially a serde_json parse
 // problem is that serde_json has atrocious error messages and we need to provide
 // good error messages to the user
-#[derive(derive_builder::Builder, Debug, Clone)]
-pub struct Generator {
+#[derive(Builder, Debug, Clone)]
+pub struct CodegenGenerator {
     pub name: String,
     pub baml_src: PathBuf,
     pub output_type: GeneratorOutputType,
@@ -37,7 +45,7 @@ pub struct Generator {
     pub span: crate::ast::Span,
 }
 
-impl Generator {
+impl CodegenGenerator {
     pub fn as_baml(&self) -> String {
         format!(
             r#"generator {} {{
@@ -68,4 +76,14 @@ impl Generator {
     pub fn output_dir(&self) -> PathBuf {
         self.output_dir.join("baml_client")
     }
+}
+
+#[derive(Builder, Debug, Clone)]
+pub struct CloudProject {
+    pub name: String,
+    pub baml_src: PathBuf,
+    pub project_id: String,
+    pub version: String,
+
+    pub span: crate::ast::Span,
 }
