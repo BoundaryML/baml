@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.61.1](https://github.com/boundaryml/baml/compare/0.61.0..0.61.1) - 2024-10-15
+
+### Bug Fixes
+
+- add musl to the ts release artifacts (#1042) - ([e74f3e9](https://github.com/boundaryml/baml/commit/e74f3e90489a403e38b39cc694d30d038ad38b8d)) - Samuel Lijin
+
 ## [0.61.0](https://github.com/boundaryml/baml/compare/0.60.0..0.61.0) - 2024-10-14
 
 ### Features
