@@ -13,6 +13,29 @@ Here's a list of all the types that can be represented in BAML:
 * `string`
 * `null`
 
+## Literal Types
+
+The primitive types `string`, `int` and `bool` can be constrained to a specific value.
+For example, you can use literal values as return types:
+
+```rust
+function ClassifyIssue(issue_description: string) -> "bug" | "enhancement" {
+  client GPT4Turbo
+  prompt #"
+    {{ _.role("user")}}
+    Classify the issue based on the following description:
+    {{ issue_description }}
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+See [Union(|)](#union-) for more details.
+
+<Info>
+  This feature was added in: v0.61.0.
+</Info>
+
 ## Multimodal Types
 See [calling a function with multimodal types](/docs/snippets/calling-baml/multi-modal)
 and [testing image inputs](/docs/snippets/test-cases#images)
@@ -331,6 +354,23 @@ Optional[List[Union[Optional[int], List[str], MyClass]]]
 
 ```typescript TypeScript Equivalent
 ((number | null) | string[] | MyClass)[]
+```
+
+</CodeBlocks>
+
+### Example 5
+
+<CodeBlocks>
+```baml BAML
+"str" | 1 | false
+```
+
+```python Python Equivalent
+Union[Literal["str"], Literal[1], Literal[False]]
+```
+
+```typescript TypeScript Equivalent
+"str" | 1 | false
 ```
 
 </CodeBlocks>
