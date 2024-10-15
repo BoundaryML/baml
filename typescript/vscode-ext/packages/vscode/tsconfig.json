@@ -1,6 +1,7 @@
 {
   "extends": "../../../tsconfig.json",
   "compilerOptions": {
+    "resolveJsonModule": true,
     "module": "commonjs",
     "noUnusedLocals": false,
     "target": "es6",
