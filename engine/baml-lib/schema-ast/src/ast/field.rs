@@ -2,8 +2,7 @@ use baml_types::{LiteralValue, TypeValue};
 use internal_baml_diagnostics::DatamodelError;
 
 use super::{
-    traits::WithAttributes, Attribute, Comment, Identifier, Span, WithDocumentation,
-    WithIdentifier, WithName, WithSpan,
+    traits::WithAttributes, Attribute, Comment, Identifier, SchemaAst, Span, WithDocumentation, WithIdentifier, WithName, WithSpan
 };
 
 /// A field definition in a model or a composite type.
@@ -255,6 +254,10 @@ impl FieldType {
                 None => *attr = Some(attributes),
             },
         }
+    }
+
+    pub fn has_checks(&self) -> bool {
+        self.attributes().iter().any(|Attribute{name,..}| name.to_string().as_str() == "check")
     }
 
     pub fn assert_eq_up_to_span(&self, other: &Self) {

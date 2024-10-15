@@ -194,37 +194,6 @@ fn find_enum_value(
     Ok(Some((name, desc)))
 }
 
-/// Eliminate the `FieldType::Constrained` variant by searching for it, and stripping
-/// it off of its base type, returning a tulpe of the base type and any constraints found
-/// (if called on an argument that is not Constrained, the returned constraints Vec is
-/// empty).
-///
-/// If the function encounters directly nested Constrained types,
-/// (i.e. `FieldType::Constrained { base: FieldType::Constrained { .. }, .. } `)
-/// then the constraints of the two levels will be combined into a single vector.
-/// So, we always return a base type that is not FieldType::Constrained.
-fn distribute_constraints(field_type: &FieldType) -> (&FieldType, Vec<Constraint>) {
-
-    match field_type {
-        // Check the first level to see if it's constrained.
-        FieldType::Constrained { base, constraints } => {
-            match base.as_ref() {
-                // If so, we must check the second level to see if we need to combine
-                // constraints across levels.
-                // The recursion here means that arbitrarily nested `FieldType::Constrained`s
-                // will be collapsed before the function returns.
-                FieldType::Constrained{..} => {
-                    let (sub_base, sub_constraints) = distribute_constraints(base);
-                    let combined_constraints = vec![constraints.clone(), sub_constraints].into_iter().flatten().collect();
-                    (sub_base, combined_constraints)
-                },
-                _ => (base, constraints.clone()),
-            }
-        },
-        _ => (field_type, Vec::new()),
-    }
-}
-
 fn relevant_data_models<'a>(
     ir: &'a IntermediateRepr,
     output: &'a FieldType,
@@ -236,7 +205,7 @@ fn relevant_data_models<'a>(
     let mut start: Vec<baml_types::FieldType> = vec![output.clone()];
 
     while let Some(output) = start.pop() {
-        match distribute_constraints(&output) {
+        match output.distribute_constraints() {
             (FieldType::Enum(enm), constraints) => {
                 if checked_types.insert(output.to_string()) {
                     let overrides = ctx.enum_overrides.get(enm);
@@ -380,12 +349,9 @@ fn relevant_data_models<'a>(
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use baml_types::{ConstraintLevel, JinjaExpression, TypeValue};
 
-    use crate::BamlRuntime;
     use super::*;
     use crate::BamlRuntime;
-    use std::collections::HashMap;
 
     #[test]
     fn skipped_variants_are_not_rendered() {
@@ -413,29 +379,4 @@ mod tests {
         assert_eq!(foo_enum.values.len(), 1);
     }
 
-    #[test]
-    fn test_nested_constraint_distribution() {
-        fn mk_constraint(s: &str) -> Constraint {
-            Constraint { level: ConstraintLevel::Assert, expression: JinjaExpression(s.to_string()), label: Some(s.to_string()) }
-        }
-
-        let input = FieldType::Constrained {
-            constraints: vec![mk_constraint("a")],
-            base: Box::new(FieldType::Constrained {
-                constraints: vec![mk_constraint("b")],
-                base: Box::new(FieldType::Constrained {
-                    constraints: vec![mk_constraint("c")],
-                    base: Box::new(FieldType::Primitive(TypeValue::Int)),
-                })
-            })
-        };
-
-        let expected_base = FieldType::Primitive(TypeValue::Int);
-        let expected_constraints = vec![mk_constraint("a"),mk_constraint("b"), mk_constraint("c")];
-
-        let (base, constraints) = distribute_constraints(&input);
-
-        assert_eq!(base, &expected_base);
-        assert_eq!(constraints, expected_constraints);
-    }
 }

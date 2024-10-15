@@ -15,10 +15,11 @@ fn errors_with_names<'a>(ctx: &'a mut Context<'_>, idn: &Identifier) {
 
 /// Called for each type in the baml_src tree, validates that it is well-formed.
 ///
-/// Operates in two passes:
+/// Operates in three passes:
 ///
-///   1. Verify that the type is resolveable (for REF types)
-///   2. Verify that the type is well-formed/allowed in the language
+///   1. Verify that the type is resolveable (for REF types).
+///   2. Verify that the type is well-formed/allowed in the language.
+///   3. Verify that constraints on the type are well-formed.
 pub(crate) fn validate_type(ctx: &mut Context<'_>, field_type: &FieldType) {
     validate_type_exists(ctx, field_type);
     validate_type_allowed(ctx, field_type);

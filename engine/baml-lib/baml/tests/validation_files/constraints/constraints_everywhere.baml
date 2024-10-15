@@ -3,7 +3,7 @@ client<llm> Bar {
 }
 
 class Foo {
-  age int @check({{this > 10}}, old_enough)
+  age int @assert({{this > 10}}, old_enough)
 }
 
 function FooToInt(foo: Foo, a: Foo @assert({{this.age > 20}}, really_old)) -> int @check({{ this < 10 }}, small_int) {

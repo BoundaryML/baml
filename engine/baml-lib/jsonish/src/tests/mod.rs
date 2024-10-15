@@ -788,29 +788,4 @@ fn partial_int_not_deleted() {
     let baml_value: BamlValue = res.into();
     // Note: This happens to parse as a List, but Null also seems appropriate.
     assert_eq!(baml_value, BamlValue::List(vec![]));
-
-#[test]
-fn test_nested_constraint_distribution() {
-    fn mk_constraint(s: &str) -> Constraint {
-        Constraint { level: ConstraintLevel::Assert, expression: JinjaExpression(s.to_string()), label: Some(s.to_string()) }
-    }
-
-    let input = FieldType::Constrained {
-        constraints: vec![mk_constraint("a")],
-        base: Box::new(FieldType::Constrained {
-            constraints: vec![mk_constraint("b")],
-            base: Box::new(FieldType::Constrained {
-                constraints: vec![mk_constraint("c")],
-                base: Box::new(FieldType::Primitive(TypeValue::Int)),
-            })
-        })
-    };
-
-    let expected_base = FieldType::Primitive(TypeValue::Int);
-    let expected_constraints = vec![mk_constraint("a"),mk_constraint("b"), mk_constraint("c")];
-
-    let (base, constraints) = distribute_constraints(&input);
-
-    assert_eq!(base, &expected_base);
-    assert_eq!(constraints, expected_constraints);
 }
