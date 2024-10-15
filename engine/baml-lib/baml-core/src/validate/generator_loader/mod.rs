@@ -1,5 +1,3 @@
-mod v0;
-mod v1;
 mod v2;
 
 use crate::{configuration::Generator, internal_baml_diagnostics::*};
@@ -31,32 +29,6 @@ fn parse_generator(
             return Some(gen);
         }
         Err(errors) => errors,
-    };
-
-    log::trace!("Failed to parse generator as v2 generator, moving on to v1 and v0.");
-
-    if let Ok(gen) = v1::parse_generator(ast_generator, &diagnostics.root_path) {
-        diagnostics.push_warning(DatamodelWarning::new(
-            format!(
-                "This generator format is deprecated. Please use the new format.\n\n{}",
-                gen.as_baml(),
-            ),
-            ast_generator.span().clone(),
-        ));
-        return None;
-    };
-
-    log::trace!("Failed to parse generator as v1 generator, moving on to v0.");
-
-    if let Ok(gen) = v0::parse_generator(ast_generator, &diagnostics.root_path) {
-        diagnostics.push_warning(DatamodelWarning::new(
-            format!(
-                "This generator format is deprecated. Please use the new format.\n{}",
-                gen.as_baml(),
-            ),
-            ast_generator.span().clone(),
-        ));
-        return None;
     };
 
     for error in errors {

@@ -12,7 +12,7 @@ pub mod internal;
 pub(crate) mod internal;
 
 #[cfg(not(target_arch = "wasm32"))]
-mod cli;
+pub mod cli;
 pub mod client_registry;
 pub mod errors;
 mod macros;
@@ -35,6 +35,8 @@ use baml_types::BamlValue;
 use cfg_if::cfg_if;
 use client_registry::ClientRegistry;
 use indexmap::IndexMap;
+use internal_baml_core::configuration::CloudProject;
+use internal_baml_core::configuration::CodegenGenerator;
 use internal_baml_core::configuration::Generator;
 use internal_baml_core::configuration::GeneratorOutputType;
 use on_log_event::LogEventCallbackSync;
@@ -166,11 +168,6 @@ impl BamlRuntime {
     #[cfg(feature = "internal")]
     pub fn internal(&self) -> &impl InternalRuntimeInterface {
         &self.inner
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn run_cli(argv: Vec<String>, caller_type: cli::RuntimeCliDefaults) -> Result<()> {
-        cli::RuntimeCli::parse_from(argv.into_iter()).run(caller_type)
     }
 
     pub fn create_ctx_manager(
@@ -337,21 +334,64 @@ impl BamlRuntime {
 
         client_type.generate_client(self.inner.ir(), args)
     }
+}
 
-    pub fn run_generators(
+// Interfaces for generators
+impl BamlRuntime {
+    /// Determine the file containing the generators.
+    pub fn generator_path(&self) -> Option<PathBuf> {
+        let path_counts: HashMap<&PathBuf, u32> = self
+            .inner
+            .ir()
+            .configuration()
+            .generators
+            .iter()
+            .filter_map(|generator| match generator {
+                Generator::BoundaryCloud(generator) => Some(generator.span.file.path_buf()),
+                Generator::Codegen(generator) => Some(generator.span.file.path_buf()),
+            })
+            .fold(HashMap::new(), |mut acc, path| {
+                *acc.entry(path).or_default() += 1;
+                acc
+            });
+
+        path_counts
+            .into_iter()
+            .max_by_key(|&(_, count)| count)
+            .map(|(path, _)| path.clone())
+    }
+
+    pub fn cloud_projects(&self) -> Vec<&CloudProject> {
+        self.inner
+            .ir()
+            .configuration()
+            .generators
+            .iter()
+            .filter_map(|generator| match generator {
+                Generator::BoundaryCloud(generator) => Some(generator),
+                Generator::Codegen(_) => None,
+            })
+            .collect()
+    }
+
+    pub fn run_codegen(
         &self,
         input_files: &IndexMap<PathBuf, String>,
         no_version_check: bool,
     ) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
         use internal_baml_codegen::GenerateClient;
 
-        let client_types: Vec<(&Generator, internal_baml_codegen::GeneratorArgs)> = self
+        let client_types: Vec<(&CodegenGenerator, internal_baml_codegen::GeneratorArgs)> = self
             .inner
             .ir()
             .configuration()
             .generators
             .iter()
-            .map(|(generator, _)| {
+            .filter_map(|generator| match generator {
+                Generator::Codegen(generator) => Some(generator),
+                Generator::BoundaryCloud(_) => None,
+            })
+            .map(|generator| {
                 Ok((
                     generator,
                     internal_baml_codegen::GeneratorArgs::new(
@@ -488,4 +528,56 @@ impl ExperimentalTracingInterface for BamlRuntime {
         self.tracer.set_log_event_callback(log_event_callback);
         Ok(())
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn baml_src_files(dir: &std::path::PathBuf) -> Result<Vec<PathBuf>> {
+    static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
+
+    log::trace!("Reading files from {:#}", dir.to_string_lossy());
+
+    if !dir.exists() {
+        anyhow::bail!("{dir:#?} does not exist (expected a directory containing BAML files)",);
+    }
+    if dir.is_file() {
+        return Err(anyhow::anyhow!(
+            "{dir:#?} is a file, not a directory (expected a directory containing BAML files)",
+        ));
+    }
+    if !dir.is_dir() {
+        return Err(anyhow::anyhow!(
+            "{dir:#?} is not a directory (expected a directory containing BAML files)",
+        ));
+    }
+
+    let src_files = walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|e| match e {
+            Ok(e) => Some(e),
+            Err(e) => {
+                log::error!("Error while reading files from {dir:#?}: {e}");
+                None
+            }
+        })
+        .filter(|e| e.file_type().is_file())
+        .filter(|e| {
+            let Some(ext) = e.path().extension() else {
+                return false;
+            };
+            let Some(ext) = ext.to_str() else {
+                return false;
+            };
+            VALID_EXTENSIONS.contains(&ext)
+        })
+        .map(|e| e.path().to_path_buf())
+        .collect::<Vec<_>>();
+
+    if !src_files
+        .iter()
+        .any(|f| f.extension() == Some("baml".as_ref()))
+    {
+        anyhow::bail!("no .baml files found in {dir:#?}");
+    }
+
+    Ok(src_files)
 }

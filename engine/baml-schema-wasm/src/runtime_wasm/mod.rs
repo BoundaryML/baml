@@ -805,7 +805,7 @@ impl WasmRuntime {
         Ok(self
             .runtime
             // convert the input_files into HashMap(PathBuf, string)
-            .run_generators(
+            .run_codegen(
                 &input_files
                     .iter()
                     .map(|(k, v)| (PathBuf::from(k), v.clone()))

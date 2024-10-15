@@ -20,6 +20,7 @@ pytest = "^8.2.1"
 pydantic = "^2.7.1"
 python-dotenv = "^1.0.1"
 assertpy = "^1.1"
+requests = "^2.32.3"
 
 [tool.poetry.group.dev.dependencies]
 types-assertpy = "^1.1.0.20240712"

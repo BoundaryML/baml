@@ -288,58 +288,6 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub fn baml_src_files(dir: &std::path::PathBuf) -> Result<Vec<PathBuf>> {
-    static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
-
-    log::trace!("Reading files from {:#}", dir.to_string_lossy());
-
-    if !dir.exists() {
-        anyhow::bail!("{dir:#?} does not exist (expected a directory containing BAML files)",);
-    }
-    if dir.is_file() {
-        return Err(anyhow::anyhow!(
-            "{dir:#?} is a file, not a directory (expected a directory containing BAML files)",
-        ));
-    }
-    if !dir.is_dir() {
-        return Err(anyhow::anyhow!(
-            "{dir:#?} is not a directory (expected a directory containing BAML files)",
-        ));
-    }
-
-    let src_files = walkdir::WalkDir::new(dir)
-        .into_iter()
-        .filter_map(|e| match e {
-            Ok(e) => Some(e),
-            Err(e) => {
-                log::error!("Error while reading files from {dir:#?}: {e}");
-                None
-            }
-        })
-        .filter(|e| e.file_type().is_file())
-        .filter(|e| {
-            let Some(ext) = e.path().extension() else {
-                return false;
-            };
-            let Some(ext) = ext.to_str() else {
-                return false;
-            };
-            VALID_EXTENSIONS.contains(&ext)
-        })
-        .map(|e| e.path().to_path_buf())
-        .collect::<Vec<_>>();
-
-    if !src_files
-        .iter()
-        .any(|f| f.extension() == Some("baml".as_ref()))
-    {
-        anyhow::bail!("no .baml files found in {dir:#?}");
-    }
-
-    Ok(src_files)
-}
-
 impl RuntimeConstructor for InternalBamlRuntime {
     fn from_file_content<T: AsRef<str>>(
         root_path: &str,
@@ -372,7 +320,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn from_directory(dir: &std::path::PathBuf) -> Result<InternalBamlRuntime> {
-        InternalBamlRuntime::from_files(dir, baml_src_files(dir)?)
+        InternalBamlRuntime::from_files(dir, crate::baml_src_files(dir)?)
     }
 }
 

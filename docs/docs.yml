@@ -18,6 +18,14 @@ tabs:
   observability:
     display-name: Observability
 
+tabs:
+  baml-docs:
+    display-name: BAML
+  boundary-extraction-api:
+    display-name: Document Extraction API
+  observability:
+    display-name: Observability
+
 navigation:
   - tab: baml-docs
     layout:
@@ -51,16 +59,19 @@ navigation:
                 path: docs/get-started/debugging/enable-logging.mdx
               - page: Exception Handling
                 path: docs/calling-baml/exceptions.mdx
-          - section: Deploying BAML Projects
-            contents:
-              - page: Docker
-                path: docs/get-started/deploying/docker.mdx
-              - page: Nextjs
-                path: docs/get-started/deploying/nextjs.mdx
-              - page: AWS
-                path: docs/get-started/deploying/aws.mdx
-              - page: Docker (OpenAPI)
-                path: docs/get-started/deploying/openapi.mdx
+      - section: Deploying BAML Projects
+        contents:
+          - page: Docker
+            path: docs/get-started/deploying/docker.mdx
+          - section: NextJS
+            path: docs/get-started/deploying/nextjs.mdx
+        contents:
+          - page: Streaming BAML functions
+            path: docs/baml-nextjs/baml-nextjs.mdx
+          - page: AWS
+            path: docs/get-started/deploying/aws.mdx
+          - page: Docker (OpenAPI)
+            path: docs/get-started/deploying/openapi.mdx
       - section: BAML Snippets
         contents:
           - section: General BAML Syntax
@@ -175,10 +186,10 @@ navigation:
             path: docs/calling-baml/concurrent-calls.mdx
           - page: Multimodal
             path: docs/calling-baml/multi-modal.mdx
-      - section: NextJS
+      - section: Boundary Cloud
         contents:
-          - page: NextJS Integration
-            path: docs/baml-nextjs/baml-nextjs.mdx
+          - page: Host your BAML functions
+            path: docs/boundary-cloud/host-your-baml-functions.mdx
 
       - section: Observability [Paid]
         contents:
@@ -243,6 +254,9 @@ layout:
   page-width: full
   disable-header: false
   searchbar-placement: header
+  header-height: 54px
+  tabs-placement: header
+
   header-height: 54px
   tabs-placement: header
 

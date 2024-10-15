@@ -1,0 +1,172 @@
+---
+slug: docs/boundary-cloud/host-your-baml-functions
+---
+
+_Learn how to host a BAML function on Boundary Cloud and call it using HTTP requests._
+
+<Info>
+  This feature was added in: v0.58.0.
+</Info>
+
+<Note>
+  The BAML language, compiler, and runtime will always be 100% free and
+  open-source: we will always allow you to run BAML functions directly in your
+  own backends.
+  
+  Boundary Cloud's goal is to make it even easier to host and run BAML
+  functions, by adding support for features like rate limits, telemetry, and
+  end-user feedback.
+</Note>
+
+Boundary Cloud allows you to host your BAML functions on our infrastructure, and expose
+one REST API endpoint per BAML function.
+
+<div class="flex flex-col items-center">
+  <img src="/assets/images/docs_latest/boundary-cloud-diagram.drawio.svg" alt="OpenAPI diagram" />
+</div>
+
+## Get Started
+
+First, create your account and [choose a plan](https://boundaryml.com/pricing).
+
+Then, run this command in your `baml_src/` directory:
+
+```bash
+baml-cli deploy
+```
+
+Once you've done that, you'll see something like this:
+
+```csv
+Successfully deployed to environment 'prod' in 10s! (Subsequent deployments will require `--prod` to deploy to production.)
+
+🔗  Linked to my-company/my-project
+🔍  Dashboard: https://dashboard.boundaryml.com/_/my-company/my-project/functions/
+✅  7 BAML functions deployed at:
+  - https://api2.boundaryml.com/v3/functions/prod/call/ClassifyMessage/
+  - https://api2.boundaryml.com/v3/functions/prod/call/ExtractResume/
+  - and 5 others
+
+Warning: you still need to set environment variables for your BAML functions.
+Please visit the Boundary Dashboard to set ANTHROPIC_API_KEY and OPENAI_API_KEY.
+
+https://dashboard.boundaryml.com/_/my-company/my-project/settings/environment-variables/
+```
+
+Once you've set the environment variables your BAML functions depend on, you can visit
+the dashboard or run `baml-cli deploy show` to create an API key to use for your requests.
+
+In the dashboard, you'll also be able to build cURL requests for your BAML functions like so:
+
+<Error>
+  TODO: replace this with `POST /v3/functions/prod/call/ExtractResume/` - still need to figure out what
+  the "create API key if it doesn't exist" UI will look like.
+
+  <div class="flex flex-col items-center">
+    <img src="/assets/images/docs_latest/boundary-cloud-curl-ui.png" alt="Boundary Cloud curl" />
+  </div>
+</Error>
+
+Congratulations! You've just deployed your first BAML functions to Boundary Cloud.
+
+## Using your OpenAPI client
+
+First, make sure you've updated your OpenAPI client to use `BOUNDARY_ENDPOINT` and `BOUNDARY_API_KEY` if set:
+
+<Markdown src="../doc-snippets/openapi-howto-rely-on-envvars.mdx" />
+
+<Info>
+  Note to ourselves: dashboard.boundaryml.com/settings/api-keys
+  will redirect to the API keys for the user's most recently viewed
+  project, or if none exists, the first project that they're in.
+</Info>
+
+You can now visit the [Boundary Dashboard](https://dashboard.boundaryml.com/settings/api-keys/) to create an API key.
+
+<Tabs>
+<Tab title="Production">
+
+```bash
+# no need to set BOUNDARY_ENDPOINT in prod
+export BOUNDARY_API_KEY=...
+```
+
+</Tab>
+
+<Tab title="Development">
+```bash
+export BOUNDARY_ENDPOINT=https://api2.boundaryml.com/v3/functions/dev/
+export BOUNDARY_API_KEY=...
+```
+</Tab>
+
+</Tabs>
+
+<Info>
+  DISCUSS: do we want server.url to point to https://api2.boundaryml.com/v3/functions/prod/ by default?
+
+  There's also a feature called [server templating](https://swagger.io/docs/specification/v3_0/api-host-and-base-path/) that I think we can use?
+
+</Info>
+
+You should now be able to call your deployed BAML functions using your OpenAPI client!
+
+## Configuring environment variables
+
+<Info>
+  Note to ourselves: dashboard.boundaryml.com/settings/environment-variables
+  will redirect to the project settings for the user's most recently viewed
+  project, or if none exists, the first project that they're in.
+</Info>
+
+Environment variables are configured in the [Boundary Dashboard](https://dashboard.boundaryml.com/settings/environment-variables).
+
+<Error>
+  TODO: replace this with a screenshot of our UI.
+
+  <div class="flex flex-col items-center">
+    <img src="/assets/images/docs_latest/boundary-cloud-secrets-ui.png" alt="Boundary Cloud secrets" />
+  </div>
+</Error>
+
+You can set two types of environment variables per project:
+
+  - production variables are only available in the `prod` deployment
+  - development variables are used for all other deployments
+
+<Info>
+  Design question: is it important to have other "prod" environments? I think yes, but we can do something like
+  `baml-cli deploy --preview --prod` to do a preview deployment with prod environment variables.
+</Info>
+
+## Deploying to different environments
+
+Boundary Cloud deployments are classified as either "development" or "production".
+
+Development deployments are the default; stdout is always the Deployment URL.
+
+<Info>
+  Design note: copying the vercel docs here: https://vercel.com/docs/cli/deploying-from-cli
+
+  Design note: URL format will be `api2.boundaryml.com/v3/functions/<project-name>-<git-branch-name>-<6 random alnum>/`
+
+  alt: URL format will be `/v3/functions/<project-name>-<git-branch-name>-<6 random alnum>/`
+
+  e.g. vercel uses "baml-git-gh-readonly-queue-canarypr-979-adbb6ae3883-a3eaef-gloo.vercel.app"
+</Info>
+
+```bash
+baml-cli deploy
+```
+
+You can also deploy to a special development environment at `/v3/functions/dev/`:
+
+```bash
+baml-cli deploy --dev
+```
+
+To deploy to `prod`, and make your functions available at `/v3/functions/prod/`, run:
+
+```bash
+baml-cli deploy --prod
+```

@@ -116,101 +116,11 @@ curl http://localhost:2024/_debug/ping
 
 ## Update your app to call it
 
-Update your code to use `BAML_ENDPOINT`, if set, as the BAML address. This
-will allow you to point it at `baml-cli` running in another Docker container.
+Update your code to use `BOUNDARY_ENDPOINT`, if set, as the endpoint for your BAML functions. 
 
-<Tabs>
+If you plan to use [Boundary Cloud](/docs/boundary-cloud/host-your-baml-functions) to host your BAML functions, you should also update it to use `BOUNDARY_API_KEY`.
 
-<Tab title="Go">
-
-```go
-import (
-    "os"
-    baml "my-golang-app/baml_client"
-)
-
-func main() {
-    cfg := baml.NewConfiguration()
-    bamlEndpoint := os.Getenv("BAML_ENDPOINT")
-    if bamlEndpoint != "" {
-        cfg.BasePath = bamlEndpoint
-    }
-    b := baml.NewAPIClient(cfg).DefaultAPI
-    // Use `b` to make API calls
-}
-```
-
-</Tab>
-
-<Tab title="Java">
-```java
-import com.boundaryml.baml_client.ApiClient;
-import com.boundaryml.baml_client.ApiException;
-import com.boundaryml.baml_client.Configuration;
-import com.boundaryml.baml_client.api.DefaultApi;
-import com.boundaryml.baml_client.auth.*;
-
-public class ApiExample {
-    public static void main(String[] args) {
-        ApiClient defaultClient = Configuration.getDefaultApiClient();
-        String bamlEndpoint = System.getenv("BAML_ENDPOINT");
-        if (bamlEndpoint != null && !bamlEndpoint.isEmpty()) {
-            defaultClient.setBasePath(bamlEndpoint);
-        }
-
-        DefaultApi apiInstance = new DefaultApi(defaultClient);
-        // Use `apiInstance` to make API calls
-    }
-}
-```
-
-</Tab>
-
-<Tab title="PHP">
-
-```php
-require_once(__DIR__ . '/vendor/autoload.php');
-
-$config = BamlClient\Configuration::getDefaultConfiguration();
-
-$bamlEndpoint = getenv('BAML_ENDPOINT');
-if ($bamlEndpoint !== false && !empty($bamlEndpoint)) {
-    $config->setHost($bamlEndpoint);
-}
-
-$apiInstance = new OpenAPI\Client\Api\DefaultApi(
-    new GuzzleHttp\Client(),
-    $config
-);
-
-// Use `$apiInstance` to make API calls
-```
-
-</Tab>
-
-<Tab title="Ruby">
-```ruby
-require 'baml_client'
-
-api_client = BamlClient::ApiClient.new
-if ENV['BAML_ENDPOINT']
-  # Initialize the ApiClient with the custom BAML_ENDPOINT
-  api_client.config.host = ENV['BAML_ENDPOINT']
-end
-b = BamlClient::DefaultApi.new(api_client)
-```
-</Tab>
-
-<Tab title="Rust">
-```rust
-let mut config = baml_client::apis::configuration::Configuration::default();
-if let Some(base_path) = std::env::var("BAML_ENDPOINT").ok() {
-    config.base_path = base_path;
-}
-```
-</Tab>
-
-</Tabs>
+<Markdown src="../../doc-snippets/openapi-howto-rely-on-envvars.mdx" />
 
 ## Run your app with docker-compose
 

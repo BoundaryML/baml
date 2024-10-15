@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "baml-runtime"
+name = "baml-cli"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
@@ -13,41 +13,48 @@ RSTEST_TIMEOUT = "10"
 anyhow.workspace = true
 
 [lints.rust]
-dead_code = "allow"
 unused_imports = "allow"
 unused_variables = "allow"
 
 [dependencies]
 anyhow.workspace = true
+axum = "0.7.5"
+axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
+baml-runtime = { path = "../baml-runtime", features = ["internal"] }
+baml-types.workspace = true
 base64.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
-clap.workspace = true
+clap = { workspace = true, features = ["env"] }
 colored = "2.1.0"
+console = "0.15.0"
 dashmap.workspace = true
 derive_more.workspace = true
+dialoguer = "0.11.0"
+difference = "2.0.0"
 dunce = "1.0.4"
 either.workspace = true
 env_logger.workspace = true
+etcetera = "0.8.0"
 eventsource-stream = "0.2.3"
 futures.workspace = true
 http.workspace = true
 http-body.workspace = true
 indexmap.workspace = true
+indicatif = "0.17.8"
+indicatif-log-bridge = "0.2.3"
 indoc.workspace = true
-# instant = "0.1"  # do not use this or wasm-timer - use web-time instead
-json_comments = "0.2.2"
-jsonish = { path = "../baml-lib/jsonish" }
 internal-baml-codegen.workspace = true
-baml-types = { path = "../baml-lib/baml-types" }
-internal-baml-core = { path = "../baml-lib/baml-core" }
-internal-baml-jinja = { path = "../baml-lib/jinja" }
+internal-baml-core.workspace = true
 log.workspace = true
-pin-project-lite.workspace = true
-reqwest-eventsource = "0.6.0"
+open = "5.3.0"
+pathdiff = "0.1.0"
+rand.workspace = true
+reqwest.workspace = true
 scopeguard.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+similar = { version = "2.6.0", features = ["inline"] }
 strsim = "0.11.1"
 strum.workspace = true
 strum_macros.workspace = true
@@ -58,6 +65,7 @@ tokio = { version = "1", default-features = false, features = [
 tokio-stream = "0.1.15"
 # NOTE(sam): adding this caused a build error, I suspect because tower uses nightly features or something
 # tower = "0.5.0"
+walkdir.workspace = true
 uuid = { version = "1.8.0", features = ["v4", "serde"] }
 web-time.workspace = true
 static_assertions.workspace = true
@@ -86,47 +94,8 @@ ambassador = "0.4.0"
 aws-smithy-json = "0.60.7"
 jsonwebtoken = "9.3.0"
 pretty_assertions = "1.4.0"
+sha2 = "0.10.8"
 
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-aws-config = { version = "1.5.3", default-features = false, features = [] }
-aws-sdk-bedrockruntime = { version = "1.37.0", default-features = false, features = [
-] }
-colored = { version = "2.1.0", default-features = false, features = [
-  "no-color",
-] }
-futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
-js-sys = "0.3.69"
-reqwest = { version = "0.12.5", features = ["stream", "json"] }
-# 
-send_wrapper = { version = "0.6.0", features = ["futures"] }
-serde-wasm-bindgen = "0.6.5"
-uuid = { version = "1.8.0", features = ["v4", "serde", "js"] }
-# WARNING: Do not add serde-serialize feature to wasm-bindgen.
-# It may produce a dependency cycle in projects that use wasm and import baml.
-wasm-bindgen = "^0.2.74"
-wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3.69", features = [
-  "Headers",
-  "Request",
-  "RequestInit",
-  "Response",
-  "RequestMode",
-  "Window",
-] }
-ring = { version = "0.17.4", features = ["std", "wasm32_unknown_unknown_js"] }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-aws-config = "1.5.3"
-aws-sdk-bedrockruntime = "1.37.0"
-axum = "0.7.5"
-axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
-hostname = "0.3.1"
-notify-debouncer-full = "0.3.1"
-tokio = { version = "1", features = ["full"] }
-reqwest.workspace = true
-walkdir = "2.5.0"
-which = "6.0.3"
 
 [features]
 defaults = []
