@@ -9,7 +9,6 @@ license-file.workspace = true
 
 [dependencies]
 internal-baml-jinja = { path = "../jinja-runtime" }
-# internal-baml-jinja-types = { path = "../jinja" }
 internal-baml-core = { path = "../baml-core" }
 baml-types = { path = "../baml-types" }
 colored = "2"

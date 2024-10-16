@@ -10,7 +10,6 @@ license-file.workspace = true
 
 [dependencies]
 baml-types = { path = "../baml-types", features = ["mini-jinja"] }
-# internal-baml-core = { path = "../baml-core" }
 # TODO: disable imports, etc
 minijinja = { version = "1.0.16", default-features = false, features = [
   "macros",
