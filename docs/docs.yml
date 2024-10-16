@@ -51,16 +51,16 @@ navigation:
                 path: docs/get-started/debugging/enable-logging.mdx
               - page: Exception Handling
                 path: docs/calling-baml/exceptions.mdx
-      - section: Deploying BAML Projects
-        contents:
-          - page: Docker
-            path: docs/get-started/deploying/docker.mdx
-          - section: NextJS
-            path: docs/get-started/deploying/nextjs.mdx
-          - page: AWS
-            path: docs/get-started/deploying/aws.mdx
-          - page: Docker (OpenAPI)
-            path: docs/get-started/deploying/openapi.mdx
+          - section: Deploying BAML Projects
+            contents:
+              - page: Docker
+                path: docs/get-started/deploying/docker.mdx
+              - section: NextJS
+                path: docs/get-started/deploying/nextjs.mdx
+              - page: AWS
+                path: docs/get-started/deploying/aws.mdx
+              - page: Docker (OpenAPI)
+                path: docs/get-started/deploying/openapi.mdx
       - section: BAML Snippets
         contents:
           - section: General BAML Syntax
