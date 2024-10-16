@@ -246,6 +246,9 @@ generator cloud {{
         println!("2. Create an API key to call your deployed functions:");
         println!("   https://dashboard.boundaryml.com/projects/{project_id}/api-keys");
         println!();
+        println!("3. Call your functions!");
+        println!("   https://dashboard.boundaryml.com/projects/{project_id}/api-keys");
+        println!();
         println!("Read the docs to learn more: https://docs.boundaryml.com/cloud");
 
         Ok(resp)
