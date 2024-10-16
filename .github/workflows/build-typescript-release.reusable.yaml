@@ -3,7 +3,7 @@ name: Release language_client_typescript
 on:
   workflow_call: {}
   push:
-    branches: [sam/alpine-builds]
+    branches: [sam/alpine-warnings]
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
