@@ -39,8 +39,9 @@
               runHook postCheck
             '';
 
-            buildInputs = if pkgs.stdenv.isDarwin then appleDeps else [];
+            buildInputs = [pkgs.openssl] ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
             nativeBuildInputs = [
+              pkgs.openssl
               pkgs.ruby
             ];
             cargoLock = {
