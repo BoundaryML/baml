@@ -95,6 +95,7 @@ impl PromptRenderer {
                 })
                 .collect::<Vec<_>>(),
             ir,
+            &ctx.env,
         )
     }
 }

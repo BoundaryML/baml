@@ -1,8 +1,7 @@
 use baml_types::{BamlMedia, BamlValue};
 use colored::*;
 mod chat_message_part;
-// mod evaluate_type;
-// mod get_vars;
+
 mod output_format;
 use internal_baml_core::ir::repr::IntermediateRepr;
 pub use output_format::types;
@@ -411,12 +410,13 @@ pub fn render_prompt(
     ctx: RenderContext,
     template_string_macros: &[TemplateStringMacro],
     ir: &IntermediateRepr,
+    env_vars: &HashMap<String, String>,
 ) -> anyhow::Result<RenderedPrompt> {
     if !matches!(args, BamlValue::Map(_)) {
         anyhow::bail!("args must be a map");
     }
 
-    let minijinja_args: minijinja::Value = args.clone().into_minijinja_value(&ir);
+    let minijinja_args: minijinja::Value = args.clone().into_minijinja_value(&ir, env_vars);
     let default_role = ctx.client.default_role.clone();
     let rendered = render_minijinja(
         template,
@@ -519,6 +519,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(
@@ -578,6 +579,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(
@@ -635,6 +637,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(
@@ -701,6 +704,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(
@@ -777,6 +781,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(
@@ -826,6 +831,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(rendered, RenderedPrompt::Completion("".to_string()));
@@ -864,6 +870,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(rendered, RenderedPrompt::Completion("HI! ".to_string()));
@@ -902,6 +909,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(rendered, RenderedPrompt::Completion("".into()));
@@ -940,6 +948,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(
@@ -1000,6 +1009,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         );
 
         match rendered {
@@ -1058,6 +1068,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(
@@ -1134,6 +1145,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(
@@ -1187,6 +1199,7 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         );
 
         match rendered {
@@ -1236,11 +1249,12 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(
             rendered,
-            RenderedPrompt::Completion("{\"key1\": \"value\"}".to_string())
+            RenderedPrompt::Completion("{\n    \"key1\": \"value\",\n}".to_string())
         );
 
         Ok(())
@@ -1281,9 +1295,433 @@ mod render_tests {
             },
             &vec![],
             &ir,
+            &HashMap::new(),
         )?;
 
         assert_eq!(rendered, RenderedPrompt::Completion("true".to_string()));
+
+        Ok(())
+    }
+
+    // Test nested class B
+    #[test]
+    fn render_nested_class() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "class_arg".to_string(),
+            BamlValue::Class(
+                "A".to_string(),
+                IndexMap::from([
+                    (
+                        "a_prop1".to_string(),
+                        BamlValue::String("value_a".to_string()),
+                    ),
+                    (
+                        "a_prop2".to_string(),
+                        BamlValue::Class(
+                            "B".to_string(),
+                            IndexMap::from([
+                                (
+                                    "b_prop1".to_string(),
+                                    BamlValue::String("value_b".to_string()),
+                                ),
+                                (
+                                    "b_prop2".to_string(),
+                                    BamlValue::List(vec![
+                                        BamlValue::String("item1".to_string()),
+                                        BamlValue::String("item2".to_string()),
+                                    ]),
+                                ),
+                            ]),
+                        ),
+                    ),
+                ]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class A {
+                a_prop1 string @alias("alias_a_prop1")
+                a_prop2 B
+            }
+
+            class B {
+                b_prop1 string @alias("alias_b_prop1")
+                b_prop2 string[]
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ class_arg }}\n{{ class_arg.a_prop1 }} - {{ class_arg.a_prop2.b_prop1 }} - {{ class_arg.a_prop2.b_prop2|length }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion("{\n    \"alias_a_prop1\": \"value_a\",\n    \"a_prop2\": {\n        \"alias_b_prop1\": \"value_b\",\n        \"b_prop2\": [\n            \"item1\",\n            \"item2\",\n        ],\n    },\n}\nvalue_a - value_b - 2".to_string())
+        );
+
+        Ok(())
+    }
+
+    // Test B as a list
+    #[test]
+    fn render_b_as_list() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "class_arg".to_string(),
+            BamlValue::Class(
+                "A".to_string(),
+                IndexMap::from([
+                    (
+                        "a_prop1".to_string(),
+                        BamlValue::String("value_a".to_string()),
+                    ),
+                    (
+                        "a_prop2".to_string(),
+                        BamlValue::List(vec![
+                            BamlValue::Class(
+                                "B".to_string(),
+                                IndexMap::from([
+                                    (
+                                        "b_prop1".to_string(),
+                                        BamlValue::String("value_b1".to_string()),
+                                    ),
+                                    (
+                                        "b_prop2".to_string(),
+                                        BamlValue::List(vec![
+                                            BamlValue::String("item1".to_string()),
+                                            BamlValue::String("item2".to_string()),
+                                        ]),
+                                    ),
+                                ]),
+                            ),
+                            BamlValue::Class(
+                                "B".to_string(),
+                                IndexMap::from([
+                                    (
+                                        "b_prop1".to_string(),
+                                        BamlValue::String("value_b2".to_string()),
+                                    ),
+                                    (
+                                        "b_prop2".to_string(),
+                                        BamlValue::List(vec![BamlValue::String(
+                                            "item3".to_string(),
+                                        )]),
+                                    ),
+                                ]),
+                            ),
+                        ]),
+                    ),
+                ]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class A {
+                a_prop1 string @alias("alias_a_prop1")
+                a_prop2 B[]
+            }
+
+            class B {
+                b_prop1 string @alias("alias_b_prop1")
+                b_prop2 string[]
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ class_arg.a_prop1 }} - {{ class_arg.a_prop2|length }} - {{ class_arg.a_prop2[0].b_prop1 }} - {{ class_arg.a_prop2[1].b_prop2|length }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion("value_a - 2 - value_b1 - 1".to_string())
+        );
+
+        Ok(())
+    }
+
+    // Test A and B as lists
+    #[test]
+    fn render_a_and_b_as_lists() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "class_arg".to_string(),
+            BamlValue::List(vec![
+                BamlValue::Class(
+                    "A".to_string(),
+                    IndexMap::from([
+                        (
+                            "a_prop1".to_string(),
+                            BamlValue::String("value_a1".to_string()),
+                        ),
+                        (
+                            "a_prop2".to_string(),
+                            BamlValue::List(vec![BamlValue::Class(
+                                "B".to_string(),
+                                IndexMap::from([
+                                    (
+                                        "b_prop1".to_string(),
+                                        BamlValue::String("value_b1".to_string()),
+                                    ),
+                                    (
+                                        "b_prop2".to_string(),
+                                        BamlValue::List(vec![
+                                            BamlValue::String("item1".to_string()),
+                                            BamlValue::String("item2".to_string()),
+                                        ]),
+                                    ),
+                                ]),
+                            )]),
+                        ),
+                    ]),
+                ),
+                BamlValue::Class(
+                    "A".to_string(),
+                    IndexMap::from([
+                        (
+                            "a_prop1".to_string(),
+                            BamlValue::String("value_a2".to_string()),
+                        ),
+                        (
+                            "a_prop2".to_string(),
+                            BamlValue::List(vec![BamlValue::Class(
+                                "B".to_string(),
+                                IndexMap::from([
+                                    (
+                                        "b_prop1".to_string(),
+                                        BamlValue::String("value_b2".to_string()),
+                                    ),
+                                    (
+                                        "b_prop2".to_string(),
+                                        BamlValue::List(vec![BamlValue::String(
+                                            "item3".to_string(),
+                                        )]),
+                                    ),
+                                ]),
+                            )]),
+                        ),
+                    ]),
+                ),
+            ]),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class A {
+                a_prop1 string @alias("alias_a_prop1")
+                a_prop2 B[]
+            }
+
+            class B {
+                b_prop1 string @alias("alias_b_prop1")
+                b_prop2 string[]
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ class_arg|length }} - {{ class_arg[0].a_prop1 }} - {{ class_arg[1].a_prop2[0].b_prop1 }} - {% if class_arg[0].a_prop2[0].b_prop2|length > 1 %}true{% else %}false{% endif %}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion("2 - value_a1 - value_b2 - true".to_string())
+        );
+
+        Ok(())
+    }
+
+    // Test aliased key is the nested one
+    #[test]
+    fn render_aliased_nested_key() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "class_arg".to_string(),
+            BamlValue::List(vec![BamlValue::Class(
+                "A".to_string(),
+                IndexMap::from([
+                    (
+                        "a_prop1".to_string(),
+                        BamlValue::String("value_a1".to_string()),
+                    ),
+                    (
+                        "a_prop2".to_string(),
+                        BamlValue::List(vec![BamlValue::Class(
+                            "B".to_string(),
+                            IndexMap::from([
+                                (
+                                    "b_prop1".to_string(),
+                                    BamlValue::String("value_b1".to_string()),
+                                ),
+                                (
+                                    "b_prop2".to_string(),
+                                    BamlValue::List(vec![
+                                        BamlValue::String("item1".to_string()),
+                                        BamlValue::String("item2".to_string()),
+                                    ]),
+                                ),
+                            ]),
+                        )]),
+                    ),
+                ]),
+            )]),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class A {
+                a_prop1 string 
+                a_prop2 B[] @alias("alias_a_prop2")
+            }
+
+            class B {
+                b_prop1 string @alias("alias_b_prop1")
+                b_prop2 string[]
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ class_arg[0].a_prop1 }} - {{ class_arg[0].a_prop2|length }} - {{ class_arg[0].a_prop2[0].b_prop1 }} - {{ class_arg[0].a_prop2[0].b_prop2|length }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion("value_a1 - 1 - value_b1 - 2".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_class_with_image() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "class_arg".to_string(),
+            BamlValue::Class(
+                "A".to_string(),
+                IndexMap::from([
+                    (
+                        "a_prop1".to_string(),
+                        BamlValue::String("value_a".to_string()),
+                    ),
+                    (
+                        "a_prop2".to_string(),
+                        BamlValue::Media(BamlMedia::url(
+                            BamlMediaType::Image,
+                            "https://example.com/image.jpg".to_string(),
+                            None,
+                        )),
+                    ),
+                ]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class A {
+                a_prop1 string
+                a_prop2 image @alias("alias_a_prop2")
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ class_arg }}\n{{ class_arg.a_prop1 }} - {{ class_arg.alias_a_prop2 }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Chat(vec![RenderedChatMessage {
+                role: "system".to_string(),
+                allow_duplicate_role: false,
+                parts: vec![
+                    ChatMessagePart::Text(
+                        "{\n    \"a_prop1\": \"value_a\",\n    \"alias_a_prop2\":".to_string()
+                    ),
+                    ChatMessagePart::Media(BamlMedia::url(
+                        BamlMediaType::Image,
+                        "https://example.com/image.jpg".to_string(),
+                        None
+                    )),
+                    ChatMessagePart::Text(",\n}\nvalue_a -".to_string()),
+                ]
+            }])
+        );
 
         Ok(())
     }

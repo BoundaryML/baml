@@ -1,9 +1,4 @@
-use baml_types::{BamlMedia, BamlValue};
-use colored::*;
 mod evaluate_type;
-mod get_vars;
-// mod output_format;
-// pub use output_format::types;
 
 use evaluate_type::get_variable_types;
 pub use evaluate_type::{PredefinedTypes, Type, TypeError};
