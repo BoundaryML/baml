@@ -20,6 +20,5 @@ export { b } from "./async_client"
 
 export * from "./types"
 export * from "./tracing"
-export * from "./checked"
 export { resetBamlEnvVars } from "./globals"
-export { BamlValidationError } from "@boundaryml/baml"
+export { BamlValidationError, Checked } from "@boundaryml/baml"

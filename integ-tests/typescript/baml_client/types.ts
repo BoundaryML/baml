@@ -120,19 +120,23 @@ export interface Checks__valid_email {
   valid_email: Check
 }
 
-export interface Checks__earth_aged__no_infants {
-  no_infants: Check
-  earth_aged: Check
+export interface Checks__regex_bad__regex_good__trivial {
+  regex_bad: Check
+  trivial: Check
+  regex_good: Check
+}
+
+export interface Checks__young_enough {
+  young_enough: Check
 }
 
 export interface Checks__unreasonably_certain {
   unreasonably_certain: Check
 }
 
-export interface Checks__regex_bad__regex_good__trivial {
-  trivial: Check
-  regex_bad: Check
-  regex_good: Check
+export interface Checks__earth_aged__no_infants {
+  earth_aged: Check
+  no_infants: Check
 }
 
 export interface Checks__valid_phone_number {
@@ -141,10 +145,6 @@ export interface Checks__valid_phone_number {
 
 export interface Checks__too_big {
   too_big: Check
-}
-
-export interface Checks__young_enough {
-  young_enough: Check
 }
 
 export interface BigNumbers {

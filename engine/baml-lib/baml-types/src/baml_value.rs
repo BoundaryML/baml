@@ -533,3 +533,40 @@ fn add_checks<'a, S: SerializeMap>(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+    use crate::JinjaExpression;
+
+    #[test]
+    fn test_baml_value_with_meta_serialization() {
+        let baml_value: BamlValueWithMeta<Vec<ResponseCheck>> =
+            BamlValueWithMeta::String("hi".to_string(), vec![]);
+        let baml_value_2: BamlValueWithMeta<Vec<ResponseCheck>> =
+            BamlValueWithMeta::Class(
+                "ContactInfo".to_string(),
+                vec![
+                    ("primary".to_string(), BamlValueWithMeta::Class(
+                        "PhoneNumber".to_string(),
+                        vec![
+                            ("value".to_string(), BamlValueWithMeta::String(
+                                "123-456-7890".to_string(),
+                                vec![
+                                    ResponseCheck {
+                                        name: "foo".to_string(),
+                                        expression: "foo".to_string(),
+                                        status: "succeeded".to_string(),
+                                    }
+                                ]
+                            ))
+                        ].into_iter().collect(),
+                        vec![]
+                    ))
+                ].into_iter().collect(),
+                vec![]);
+        assert!(serde_json::to_value(baml_value).is_ok());
+        assert!(serde_json::to_value(baml_value_2).is_ok());
+    }
+}

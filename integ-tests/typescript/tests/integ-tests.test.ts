@@ -641,6 +641,14 @@ describe('Integ tests', () => {
     )
     expect(people.length).toBeGreaterThan(0)
   })
+
+  it('should include checks', async() => {
+    const res = await b.ExtractContactInfo("Reach me at 333-333-4444. If that doesn't work, me@hellovai.com!")
+    expect(res.primary.value.value).toEqual("333-333-4444");
+    expect(res.primary.value.checks.valid_phone_number.status).toEqual("succeeded");
+    expect(res.secondary?.value.value).toEqual("me@hellovai.com");
+    expect(res.secondary?.value.checks.valid_email.status).toEqual("succeeded");
+  })
 })
 
 interface MyInterface {

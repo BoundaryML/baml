@@ -23,6 +23,6 @@ impl FunctionResult {
             .parsed_content()
             .map_err(|e| from_anyhow_error(e))?;
 
-        Ok(serde_json::json!(BamlValue::from(parsed)))
+        Ok(serde_json::to_value(parsed)?)
     }
 }

@@ -43,7 +43,7 @@ pub fn parsed_value_to_response(baml_value: BamlValueWithFlags) -> Result<Respon
         Some(err) => Err(anyhow::anyhow!("Failed assertion: {:?}", err)),
         None => Ok(baml_value_with_meta.map_meta(|cs| {
             cs.into_iter()
-                .filter_map(|res| ResponseCheck::from_constraint_result(res))
+                .filter_map(|res| ResponseCheck::from_check_result(res))
                 .collect()
         })),
     }
