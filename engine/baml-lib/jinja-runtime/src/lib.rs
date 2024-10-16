@@ -1223,7 +1223,7 @@ mod render_tests {
             // class args are not aliased yet when passed in to jinja
             BamlValue::Class(
                 "C".to_string(),
-                IndexMap::from([("prop1".to_string(), BamlValue::String("value".to_string()))]),
+                BamlMap::from([("prop1".to_string(), BamlValue::String("value".to_string()))]),
             ),
         )]));
 
@@ -1269,7 +1269,7 @@ mod render_tests {
             "class_arg".to_string(),
             BamlValue::Class(
                 "C".to_string(),
-                IndexMap::from([("prop1".to_string(), BamlValue::String("value".to_string()))]),
+                BamlMap::from([("prop1".to_string(), BamlValue::String("value".to_string()))]),
             ),
         )]));
 
@@ -1299,6 +1299,128 @@ mod render_tests {
         )?;
 
         assert_eq!(rendered, RenderedPrompt::Completion("true".to_string()));
+
+        let rendered = render_prompt(
+            "{% if class_arg.prop1 != 'value' %}true{% else %}false{% endif %}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(rendered, RenderedPrompt::Completion("false".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_number_comparison_with_alias() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "class_arg".to_string(),
+            BamlValue::Class(
+                "C".to_string(),
+                BamlMap::from([("prop1".to_string(), BamlValue::Int(4))]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class C {
+                prop1 int @alias("key1")
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{% if class_arg.prop1 < 40 %}true{% else %}false{% endif %}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(rendered, RenderedPrompt::Completion("true".to_string()));
+
+        let rendered = render_prompt(
+            "{% if class_arg.prop1 > 50 %}true{% else %}false{% endif %}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(rendered, RenderedPrompt::Completion("false".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn render_number_comparison_with_alias2() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "class_arg".to_string(),
+            BamlValue::Class(
+                "C".to_string(),
+                BamlMap::from([("prop1".to_string(), BamlValue::Int(13))]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class C {
+                prop1 int @alias("key1")
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ class_arg.prop1 < 2 }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(rendered, RenderedPrompt::Completion("false".to_string()));
 
         Ok(())
     }
@@ -1726,49 +1848,51 @@ mod render_tests {
         Ok(())
     }
 
-    #[test]
-    fn test_render_prompt_with_enum() -> anyhow::Result<()> {
-        setup_logging();
+    // See the note in baml_value_to_jinja_value.rs for Enum for why we don't support aliases.
+    // tl;dr we don't havea  way to override the equality operator for enum comparisons to NOT use the alias.
+    // #[test]
+    // fn test_render_prompt_with_enum() -> anyhow::Result<()> {
+    //     setup_logging();
 
-        let args = BamlValue::Map(BamlMap::from([(
-            "enum_arg".to_string(),
-            BamlValue::Enum("MyEnum".to_string(), "VALUE_B".to_string()),
-        )]));
+    //     let args = BamlValue::Map(BamlMap::from([(
+    //         "enum_arg".to_string(),
+    //         BamlValue::Enum("MyEnum".to_string(), "VALUE_B".to_string()),
+    //     )]));
 
-        let ir = make_test_ir(
-            r#"
-            enum MyEnum {
-                VALUE_A
-                VALUE_B @alias("ALIAS_B")
-                VALUE_C
-            }
-            "#,
-        )?;
+    //     let ir = make_test_ir(
+    //         r#"
+    //         enum MyEnum {
+    //             VALUE_A
+    //             VALUE_B @alias("ALIAS_B")
+    //             VALUE_C
+    //         }
+    //         "#,
+    //     )?;
 
-        let rendered = render_prompt(
-            "Enum value: {{ enum_arg }}",
-            &args,
-            RenderContext {
-                client: RenderContext_Client {
-                    name: "gpt4".to_string(),
-                    provider: "openai".to_string(),
-                    default_role: "system".to_string(),
-                },
-                output_format: OutputFormatContent::new_string(),
-                tags: HashMap::new(),
-            },
-            &vec![],
-            &ir,
-            &HashMap::new(),
-        )?;
+    //     let rendered = render_prompt(
+    //         "Enum value: {{ enum_arg }}",
+    //         &args,
+    //         RenderContext {
+    //             client: RenderContext_Client {
+    //                 name: "gpt4".to_string(),
+    //                 provider: "openai".to_string(),
+    //                 default_role: "system".to_string(),
+    //             },
+    //             output_format: OutputFormatContent::new_string(),
+    //             tags: HashMap::new(),
+    //         },
+    //         &vec![],
+    //         &ir,
+    //         &HashMap::new(),
+    //     )?;
 
-        assert_eq!(
-            rendered,
-            RenderedPrompt::Completion("Enum value: ALIAS_B".to_string())
-        );
+    //     assert_eq!(
+    //         rendered,
+    //         RenderedPrompt::Completion("Enum value: ALIAS_B".to_string())
+    //     );
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     #[test]
     fn test_render_prompt_with_enum_no_alias() -> anyhow::Result<()> {

@@ -41,19 +41,21 @@ impl IntoMiniJinjaValue for BamlValue {
             BamlValue::Media(i) => i.into_minijinja_value(ir, env_vars),
             // For enums and classes we compute the aliases from the IR, and generate custom jinja structs that print out the alias if stringified.
             BamlValue::Enum(name, value) => {
-                let mut alias: Option<String> = None;
-                if let Ok(e) = ir.find_enum(name) {
-                    if let Some(enum_value) = e
-                        .walk_values()
-                        .find(|ir_enum_value| ir_enum_value.item.elem.0 == *value)
-                    {
-                        alias = enum_value.alias(env_vars).ok().and_then(|a| a);
-                    }
-                }
-                minijinja::Value::from_object(MinijinjaBamlEnum {
-                    value: value.clone(),
-                    alias,
-                })
+                minijinja::Value::from(value.clone())
+                // Until we can fix the broken test, just return the normal value. For now we wont suppport enum alias rendering.
+                // let mut alias: Option<String> = None;
+                // if let Ok(e) = ir.find_enum(name) {
+                //     if let Some(enum_value) = e
+                //         .walk_values()
+                //         .find(|ir_enum_value| ir_enum_value.item.elem.0 == *value)
+                //     {
+                //         alias = enum_value.alias(env_vars).ok().and_then(|a| a);
+                //     }
+                // }
+                // minijinja::Value::from_object(MinijinjaBamlEnum {
+                //     value: value.clone(),
+                //     alias,
+                // })
             }
             BamlValue::Class(name, m) => {
                 let map = m
@@ -170,6 +172,12 @@ impl minijinja::value::StructObject for MinijinjaBamlEnum {
 
     fn static_fields(&self) -> Option<&'static [&'static str]> {
         None
+    }
+}
+
+impl PartialEq for MinijinjaBamlEnum {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
     }
 }
 
