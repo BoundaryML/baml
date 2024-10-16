@@ -68,7 +68,7 @@ jobs:
               echo "$PWD/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
             node_build: pnpm build:napi-release --target aarch64-unknown-linux-musl --use-napi-cross
 
-    name: Build ${{ matrix._.target }}
+    name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
     container: ${{ matrix._.container }}
     steps:

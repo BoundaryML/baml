@@ -36,6 +36,7 @@ jobs:
           # - platform: x86-mingw-ucrt
 
     runs-on: ubuntu-latest
+    name: ${{ matrix._.platform }}
     defaults:
       run:
         working-directory: engine/language_client_ruby
