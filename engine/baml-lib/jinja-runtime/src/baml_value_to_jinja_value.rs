@@ -1,4 +1,8 @@
+use std::collections::HashMap;
+
+use indexmap::IndexMap;
 use internal_baml_core::ir::repr::IntermediateRepr;
+use minijinja::Value;
 
 use crate::{BamlMedia, BamlValue};
 // use internal_baml_core::ir::repr::IntermediateRepr;
@@ -35,6 +39,7 @@ pub trait IntoMiniJinjaValue {
 
 impl IntoMiniJinjaValue for BamlValue {
     fn into_minijinja_value(&self, ir: &IntermediateRepr) -> minijinja::Value {
+        println!("BamlValue::into_minijinja_value");
         match self {
             BamlValue::String(s) => minijinja::Value::from(s.clone()),
             BamlValue::Int(n) => minijinja::Value::from(n.clone()),
@@ -57,7 +62,18 @@ impl IntoMiniJinjaValue for BamlValue {
                 let map = m
                     .into_iter()
                     .map(|(k, v)| (k.as_str(), v.into_minijinja_value(ir)));
-                minijinja::Value::from_iter(map)
+                // minijinja::Value::from_iter(map)
+                // minijinja::Value::from_object(MinijinjaBamlClass::from((
+                //     m,
+                //    &IndexMap::from([("prop1".to_string(), "key1".to_string())]),
+                //)))
+                minijinja::Value::from_iter(MinijinjaBamlClass {
+                    class: map.map(|(k, v)| (k.to_string(), v)).collect(),
+                    key_to_alias: IndexMap::from(
+                        [("prop1".to_string(), "key1".to_string())].clone(),
+                    ),
+                    index: 0,
+                })
             }
             BamlValue::Null => minijinja::Value::from(()),
         }
@@ -114,11 +130,100 @@ impl minijinja::value::Object for MinijinjaBamlMedia {
 }
 
 struct MinijinjaBamlClass {
-    class: BamlValue,
+    class: IndexMap<String, minijinja::Value>,
+    key_to_alias: IndexMap<String, String>,
+    index: usize,
+    // ir: &'a IntermediateRepr,
 }
 
-impl From<BamlValue> for MinijinjaBamlClass {
-    fn from(class: BamlValue) -> MinijinjaBamlClass {
-        MinijinjaBamlClass { class }
+impl IntoIterator for MinijinjaBamlClass {
+    type Item = (String, minijinja::Value);
+    type IntoIter = std::collections::hash_map::IntoIter<String, minijinja::Value>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.class
+            .into_iter()
+            .collect::<HashMap<String, minijinja::Value>>()
+            .into_iter()
     }
 }
+
+// impl From<(&IndexMap<String, BamlValue>, &IndexMap<String, String>)> for MinijinjaBamlClass {
+//     fn from(
+//         (class_map, key_to_alias): (&IndexMap<String, BamlValue>, &IndexMap<String, String>),
+//     ) -> MinijinjaBamlClass {
+//         MinijinjaBamlClass {
+//             class: class_map.clone(),
+//             key_to_alias: key_to_alias.clone(),
+//             index: 0,
+//         }
+//     }
+// }
+
+impl std::fmt::Display for MinijinjaBamlClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        println!("MinijinjaBamlClass::fmt");
+        let mut map = IndexMap::new();
+        // replace the keys with the aliases
+        for (k, v) in self.class.iter() {
+            let alias = self.key_to_alias.get(k).unwrap_or(k);
+            map.insert(alias.to_string(), v.clone());
+        }
+        write!(f, "{:#?}", map)
+    }
+}
+
+// impl std::fmt::Display for IndexMap<String, BamlValue> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+//         write!(f, "{:#?}", self)
+//     }
+// }
+
+impl std::fmt::Debug for MinijinjaBamlClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        println!("MinijinjaBamlClass::Debug::fmt");
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
+impl minijinja::value::IteratorObject for MinijinjaBamlClass {
+    fn next_value(&self) -> Option<minijinja::Value> {
+        println!("next_value");
+        let key = self.key_to_alias.get_index(self.index);
+        // self.index += 1;
+        Some(
+            key.map(|(k, v)| Value::from_serializable(&(k.clone(), v.clone())))
+                .unwrap(),
+        )
+        // match &self.class {
+
+        //     // BamlValue::Class(_, m) => {
+        //     //     let key = self.key_to_alias.get_index(self.index);
+        //     //     // self.index += 1;
+
+        //     //     Some(
+        //     //         key.map(|(k, v)| Value::from_serializable(&(k.clone(), v.clone())))
+        //     //             .unwrap(),
+        //     //     )
+        //     // }
+        //     _ => None,
+        // }
+    }
+
+    fn iterator_len(&self) -> Option<usize> {
+        // match &self.class {
+        //     BamlValue::Class(_, m) => Some(m.len()),
+        //     _ => None,
+        // }
+        Some(self.key_to_alias.len())
+    }
+}
+
+// impl minijinja::value::StructObject for MinijinjaBamlClass {
+//     fn get_field(&self, key: &str) -> Option<minijinja::value::Value> {
+//         match &self.class {
+//             BamlValue::Class(_, m) => Some(m.get(key).unwrap().into_minijinja_value()),
+//             _ => None,
+//         }
+//     }
+// }
