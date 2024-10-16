@@ -124,27 +124,27 @@ export interface Checks__too_big {
   too_big: Check
 }
 
-export interface Checks__unreasonably_certain {
-  unreasonably_certain: Check
-}
-
-export interface Checks__earth_aged__no_infants {
-  no_infants: Check
-  earth_aged: Check
-}
-
 export interface Checks__valid_email {
   valid_email: Check
 }
 
-export interface Checks__regex_bad__regex_good__trivial {
-  trivial: Check
-  regex_good: Check
-  regex_bad: Check
+export interface Checks__earth_aged__no_infants {
+  earth_aged: Check
+  no_infants: Check
+}
+
+export interface Checks__unreasonably_certain {
+  unreasonably_certain: Check
 }
 
 export interface Checks__young_enough {
   young_enough: Check
+}
+
+export interface Checks__regex_bad__regex_good__trivial {
+  trivial: Check
+  regex_bad: Check
+  regex_good: Check
 }
 
 export interface BigNumbers {
@@ -238,7 +238,7 @@ export interface DynamicOutput {
 }
 
 export interface Earthling {
-  age: number
+  age: Checked<number,Checks__earth_aged__no_infants
   
 }
 
@@ -259,7 +259,7 @@ export interface Email {
 }
 
 export interface EmailAddress {
-  value: string
+  value: Checked<string,Checks__valid_email
   
 }
 
@@ -287,8 +287,8 @@ export interface FlightConfirmation {
 
 export interface FooAny {
   planetary_age: Martian | Earthling
-  certainty: number
-  species: string
+  certainty: Checked<number,Checks__unreasonably_certain
+  species: Checked<string,Checks__regex_bad__regex_good__trivial
   
 }
 
@@ -320,7 +320,7 @@ export interface InputWithConstraint {
 }
 
 export interface Martian {
-  age: number
+  age: Checked<number,Checks__young_enough
   
 }
 
@@ -372,7 +372,7 @@ export interface Person {
 }
 
 export interface PhoneNumber {
-  value: string
+  value: Checked<string,Checks__valid_phone_number
   
 }
 

@@ -4,6 +4,7 @@ mod typescript_language_features;
 use std::path::PathBuf;
 
 use anyhow::Result;
+use generate_types::type_name_for_checks;
 use indexmap::IndexMap;
 use internal_baml_core::{
     configuration::GeneratorDefaultClientMode,
@@ -303,7 +304,18 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => format!("{} | null", inner.to_type_ref(ir)),
-            FieldType::Constrained{base,..} => base.to_type_ref(ir),
+            FieldType::Constrained{base,..} => {
+                match field_type_attributes(self) {
+                    Some(checks) => {
+                        let base_type_ref = base.to_type_ref(ir);
+                        let checks_type_ref = type_name_for_checks(&checks);
+                        format!("Checked<{base_type_ref},{checks_type_ref}")
+                    }
+                    None => {
+                        base.to_type_ref(ir)
+                    }
+                }
+            },
         }
     }
 }

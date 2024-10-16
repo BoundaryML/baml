@@ -35,6 +35,13 @@ pub struct TypescriptClass<'ir> {
     pub dynamic: bool,
 }
 
+// TODO: Use this.
+// pub struct TypescriptChecksClass {
+//     pub name: String,
+//     pub fields: Vec<(String, bool, String)>,
+//     pub dynamic: bool,
+// }
+
 impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypescriptTypes<'ir> {
     type Error = anyhow::Error;
 

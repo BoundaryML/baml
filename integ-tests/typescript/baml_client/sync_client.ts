@@ -1095,7 +1095,7 @@ export class BamlSyncClient {
   PredictAgeBare(
       inp: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): number {
+  ): Checked<number,Checks__too_big {
     try {
     const raw = this.runtime.callFunctionSync(
       "PredictAgeBare",
@@ -1106,7 +1106,7 @@ export class BamlSyncClient {
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
     )
-    return raw.parsed() as number
+    return raw.parsed() as Checked<number,Checks__too_big
     } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
