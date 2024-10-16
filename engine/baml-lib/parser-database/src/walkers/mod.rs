@@ -244,8 +244,8 @@ impl<'db> crate::ParserDatabase {
     }
 
     /// Convert a field type to a `Type`.
-    pub fn to_jinja_type(&self, ft: &FieldType) -> internal_baml_jinja::Type {
-        use internal_baml_jinja::Type;
+    pub fn to_jinja_type(&self, ft: &FieldType) -> internal_baml_jinja_types::Type {
+        use internal_baml_jinja_types::Type;
 
         let r = match ft {
             FieldType::Symbol(arity, idn, ..) => {

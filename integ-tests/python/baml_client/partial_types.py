@@ -171,6 +171,18 @@ class InnerClass2(BaseModel):
     prop2: Optional[int] = None
     prop3: Optional[float] = None
 
+class InputClass(BaseModel):
+    
+    
+    key: Optional[str] = None
+    key2: Optional[str] = None
+
+class InputClassNested(BaseModel):
+    
+    
+    key: Optional[str] = None
+    nested: Optional["InputClass"] = None
+
 class NamedArgsSingleClass(BaseModel):
     
     

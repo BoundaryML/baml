@@ -81,6 +81,126 @@ class BamlSyncClient:
       mdl = create_model("AaaSamOutputFormatReturnType", inner=(types.Recipe, ...))
       return coerce(mdl, raw.parsed())
     
+    def AliasedInputClass(
+        self,
+        input: types.InputClass,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "AliasedInputClass",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("AliasedInputClassReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    def AliasedInputClass2(
+        self,
+        input: types.InputClass,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "AliasedInputClass2",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("AliasedInputClass2ReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    def AliasedInputClassNested(
+        self,
+        input: types.InputClassNested,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "AliasedInputClassNested",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("AliasedInputClassNestedReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    def AliasedInputEnum(
+        self,
+        input: types.AliasedEnum,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "AliasedInputEnum",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("AliasedInputEnumReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
+    def AliasedInputList(
+        self,
+        input: List[types.AliasedEnum],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "AliasedInputList",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("AliasedInputListReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     def AudioInput(
         self,
         aud: baml_py.Audio,
@@ -2064,6 +2184,171 @@ class BamlStreamClient:
       partial_mdl = create_model("AaaSamOutputFormatPartialReturnType", inner=(partial_types.Recipe, ...))
 
       return baml_py.BamlSyncStream[partial_types.Recipe, types.Recipe](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def AliasedInputClass(
+        self,
+        input: types.InputClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "AliasedInputClass",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("AliasedInputClassReturnType", inner=(str, ...))
+      partial_mdl = create_model("AliasedInputClassPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlSyncStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def AliasedInputClass2(
+        self,
+        input: types.InputClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "AliasedInputClass2",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("AliasedInputClass2ReturnType", inner=(str, ...))
+      partial_mdl = create_model("AliasedInputClass2PartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlSyncStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def AliasedInputClassNested(
+        self,
+        input: types.InputClassNested,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "AliasedInputClassNested",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("AliasedInputClassNestedReturnType", inner=(str, ...))
+      partial_mdl = create_model("AliasedInputClassNestedPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlSyncStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def AliasedInputEnum(
+        self,
+        input: types.AliasedEnum,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "AliasedInputEnum",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("AliasedInputEnumReturnType", inner=(str, ...))
+      partial_mdl = create_model("AliasedInputEnumPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlSyncStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def AliasedInputList(
+        self,
+        input: List[types.AliasedEnum],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "AliasedInputList",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("AliasedInputListReturnType", inner=(str, ...))
+      partial_mdl = create_model("AliasedInputListPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlSyncStream[Optional[str], str](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

@@ -36,7 +36,7 @@ jsonish = { path = "../baml-lib/jsonish" }
 internal-baml-codegen.workspace = true
 baml-types = { path = "../baml-lib/baml-types" }
 internal-baml-core = { path = "../baml-lib/baml-core" }
-internal-baml-jinja = { path = "../baml-lib/jinja" }
+internal-baml-jinja = { path = "../baml-lib/jinja-runtime" }
 log.workspace = true
 pin-project-lite.workspace = true
 reqwest-eventsource = "0.6.0"

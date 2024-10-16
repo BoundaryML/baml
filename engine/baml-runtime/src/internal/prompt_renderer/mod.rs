@@ -94,6 +94,8 @@ impl PromptRenderer {
                     template: t.template().into(),
                 })
                 .collect::<Vec<_>>(),
+            ir,
+            &ctx.env,
         )
     }
 }

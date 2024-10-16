@@ -4,7 +4,7 @@ use internal_baml_diagnostics::DatamodelError;
 use internal_baml_schema_ast::ast::{WithName, WithSpan};
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
-    let mut defined_types = internal_baml_jinja::PredefinedTypes::default();
+    let mut defined_types = internal_baml_jinja_types::PredefinedTypes::default();
     for enm in ctx.db.walk_enums() {
         for args in enm.walk_input_args() {
             let arg = args.ast_arg();

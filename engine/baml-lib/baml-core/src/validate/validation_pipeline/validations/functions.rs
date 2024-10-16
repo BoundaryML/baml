@@ -13,7 +13,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         .map(|c| c.name().to_string())
         .collect::<Vec<_>>();
 
-    let mut defined_types = internal_baml_jinja::PredefinedTypes::default();
+    let mut defined_types = internal_baml_jinja_types::PredefinedTypes::default();
     ctx.db.walk_classes().for_each(|t| {
         t.add_to_types(&mut defined_types);
     });
@@ -40,7 +40,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                 defined_types.add_variable(name.name(), ctx.db.to_jinja_type(&t.field_type))
             });
         }
-        match internal_baml_jinja::validate_template(
+        match internal_baml_jinja_types::validate_template(
             template.name(),
             prompt.raw_value(),
             &mut defined_types,
@@ -128,7 +128,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
 
             defined_types.add_variable(&name, field_type);
         });
-        match internal_baml_jinja::validate_template(
+        match internal_baml_jinja_types::validate_template(
             func.name(),
             prompt.raw_value(),
             &mut defined_types,

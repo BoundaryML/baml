@@ -36,6 +36,7 @@ impl std::fmt::Display for OutputFormat {
     }
 }
 
+// TODO: do this but for a class. Use the display method to render the alias.
 impl minijinja::value::Object for OutputFormat {
     fn call(
         &self,
