@@ -1095,7 +1095,7 @@ export class BamlAsyncClient {
   async PredictAgeBare(
       inp: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): Promise<Checked<number,Checks__too_big> {
+  ): Promise<Checked<number,Checks__too_big>> {
     try {
       const raw = await this.runtime.callFunction(
         "PredictAgeBare",
@@ -1106,7 +1106,7 @@ export class BamlAsyncClient {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       )
-      return raw.parsed() as Checked<number,Checks__too_big
+      return raw.parsed() as Checked<number,Checks__too_big>
     } catch (error: any) {
       const bamlError = createBamlValidationError(error);
       if (bamlError instanceof BamlValidationError) {
@@ -3587,7 +3587,7 @@ class BamlStreamClient {
   PredictAgeBare(
       inp: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): BamlStream<RecursivePartialNull<Checked<number,Checks__too_big>, Checked<number,Checks__too_big> {
+  ): BamlStream<RecursivePartialNull<Checked<number,Checks__too_big>>, Checked<number,Checks__too_big>> {
     try {
       const raw = this.runtime.streamFunction(
         "PredictAgeBare",
@@ -3599,10 +3599,10 @@ class BamlStreamClient {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       )
-      return new BamlStream<RecursivePartialNull<Checked<number,Checks__too_big>, Checked<number,Checks__too_big>(
+      return new BamlStream<RecursivePartialNull<Checked<number,Checks__too_big>>, Checked<number,Checks__too_big>>(
         raw,
-        (a): a is RecursivePartialNull<Checked<number,Checks__too_big> => a,
-        (a): a is Checked<number,Checks__too_big => a,
+        (a): a is RecursivePartialNull<Checked<number,Checks__too_big>> => a,
+        (a): a is Checked<number,Checks__too_big> => a,
         this.ctx_manager.cloneContext(),
         __baml_options__?.tb?.__tb(),
       )
