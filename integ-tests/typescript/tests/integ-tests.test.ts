@@ -13,6 +13,7 @@ import {
   setTags,
   TestClassNested,
   onLogEvent,
+  AliasedEnum,
 } from '../baml_client'
 import { RecursivePartialNull } from '../baml_client/async_client'
 import { b as b_sync } from '../baml_client/sync_client'
@@ -661,12 +662,12 @@ describe('Integ tests', () => {
 
  it("should use aliases when serializing input objects - enums", async () => {
    const res = await b.AliasedInputEnum(AliasedEnum.KEY_ONE)
-   expect(res).toContain("color")
+   expect(res).toContain("tiger")
  })
 
  it("should use aliases when serializing input objects - lists", async () => {
    const res = await b.AliasedInputList([AliasedEnum.KEY_ONE, AliasedEnum.KEY_TWO])
-   expect(res).toContain("color")
+   expect(res).toContain("tiger")
  })
 })
 

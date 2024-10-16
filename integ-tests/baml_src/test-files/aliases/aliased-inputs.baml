@@ -35,6 +35,7 @@ function AliasedInputClass2(input: InputClass) -> string {
  function AliasedInputClassNested(input: InputClassNested) -> string {
   client GPT35
   prompt #"
+    {{ _.role("user")}}
 
     {{input}}
 
@@ -44,16 +45,21 @@ function AliasedInputClass2(input: InputClass) -> string {
 
 
 enum AliasedEnum {
-  KEY_ONE @alias("color")
+  KEY_ONE @alias("tiger")
   KEY_TWO
 }
 
 function AliasedInputEnum(input: AliasedEnum) -> string {
-  client GPT35
+  client GPT4o
   prompt #"
-    {{input}}
+    {{ _.role("user")}}
 
-    This is a test. What's the name of the first element in the list above? Remember, tell me the key, not value.
+
+    Write out this word only in your response, in lowercase:
+    ---
+    {{input}}
+    ---
+    Answer:
   "#
 }
 
@@ -61,9 +67,13 @@ function AliasedInputEnum(input: AliasedEnum) -> string {
 function AliasedInputList(input: AliasedEnum[]) -> string {
   client GPT35
   prompt #"
+    {{ _.role("user")}}
+    Given this array:
+    ---
     {{input}}
+    ---
 
-    This is a test. What's the name of the first element in the list above?
+    Return the first element in the array:
   "#
 }
 
