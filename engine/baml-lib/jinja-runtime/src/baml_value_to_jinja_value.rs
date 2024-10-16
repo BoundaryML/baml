@@ -39,7 +39,22 @@ impl IntoMiniJinjaValue for BamlValue {
                 minijinja::Value::from(list)
             }
             BamlValue::Media(i) => i.into_minijinja_value(ir, env_vars),
-            BamlValue::Enum(_, v) => minijinja::Value::from(v.clone()),
+            // For enums and classes we compute the aliases from the IR, and generate custom jinja structs that print out the alias if stringified.
+            BamlValue::Enum(name, value) => {
+                let mut alias: Option<String> = None;
+                if let Ok(e) = ir.find_enum(name) {
+                    if let Some(enum_value) = e
+                        .walk_values()
+                        .find(|ir_enum_value| ir_enum_value.item.elem.0 == *value)
+                    {
+                        alias = enum_value.alias(env_vars).ok().and_then(|a| a);
+                    }
+                }
+                minijinja::Value::from_object(MinijinjaBamlEnum {
+                    value: value.clone(),
+                    alias,
+                })
+            }
             BamlValue::Class(name, m) => {
                 let map = m
                     .into_iter()
@@ -122,6 +137,43 @@ impl minijinja::value::Object for MinijinjaBamlMedia {
         ))
     }
 }
+
+// Enums
+
+struct MinijinjaBamlEnum {
+    value: String,
+    alias: Option<String>,
+}
+
+impl std::fmt::Display for MinijinjaBamlEnum {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.alias.as_ref().unwrap_or(&self.value))
+    }
+}
+
+impl std::fmt::Debug for MinijinjaBamlEnum {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
+impl minijinja::value::Object for MinijinjaBamlEnum {
+    fn kind(&self) -> minijinja::value::ObjectKind<'_> {
+        minijinja::value::ObjectKind::Struct(self)
+    }
+}
+
+impl minijinja::value::StructObject for MinijinjaBamlEnum {
+    fn get_field(&self, name: &str) -> Option<minijinja::Value> {
+        return None;
+    }
+
+    fn static_fields(&self) -> Option<&'static [&'static str]> {
+        None
+    }
+}
+
+// Classes
 
 impl minijinja::value::Object for MinijinjaBamlClass {
     fn kind(&self) -> minijinja::value::ObjectKind<'_> {

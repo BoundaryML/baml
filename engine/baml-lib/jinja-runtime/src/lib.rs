@@ -1725,4 +1725,138 @@ mod render_tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_render_prompt_with_enum() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "enum_arg".to_string(),
+            BamlValue::Enum("MyEnum".to_string(), "VALUE_B".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            enum MyEnum {
+                VALUE_A
+                VALUE_B @alias("ALIAS_B")
+                VALUE_C
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "Enum value: {{ enum_arg }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion("Enum value: ALIAS_B".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_with_enum_no_alias() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "enum_arg".to_string(),
+            BamlValue::Enum("MyEnum".to_string(), "VALUE_A".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            enum MyEnum {
+                VALUE_A
+                VALUE_B
+                VALUE_C
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "Enum value: {{ enum_arg }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion("Enum value: VALUE_A".to_string())
+        );
+
+        Ok(())
+    }
+
+    // TODO -- Fix this -- in the future we should know whether the enum is being rendered in an expression or as a string and use the alias or the value.
+    //
+    // #[test]
+    // fn test_render_prompt_with_enum_if_statement() -> anyhow::Result<()> {
+    //     setup_logging();
+
+    //     let args = BamlValue::Map(BamlMap::from([(
+    //         "enum_arg".to_string(),
+    //         BamlValue::Enum("MyEnum".to_string(), "VALUE_B".to_string()),
+    //     )]));
+
+    //     let ir = make_test_ir(
+    //         r#"
+    //         enum MyEnum {
+    //             VALUE_A
+    //             VALUE_B @alias("ALIAS_B")
+    //             VALUE_C
+    //         }
+    //         "#,
+    //     )?;
+
+    //     let rendered = render_prompt(
+    //         "Result: {% if enum_arg == 'VALUE_B' %}true{% else %}false{% endif %}",
+    //         &args,
+    //         RenderContext {
+    //             client: RenderContext_Client {
+    //                 name: "gpt4".to_string(),
+    //                 provider: "openai".to_string(),
+    //                 default_role: "system".to_string(),
+    //             },
+    //             output_format: OutputFormatContent::new_string(),
+    //             tags: HashMap::new(),
+    //         },
+    //         &vec![],
+    //         &ir,
+    //         &HashMap::new(),
+    //     )?;
+
+    //     assert_eq!(
+    //         rendered,
+    //         RenderedPrompt::Completion("Result: true".to_string())
+    //     );
+
+    //     Ok(())
+    // }
 }
