@@ -2,7 +2,7 @@
 slug: docs/boundary-cloud/host-your-baml-functions
 ---
 
-_Learn how to host a BAML function on Boundary Cloud and call it using HTTP requests._
+_Learn how to host your BAML functions on Boundary Cloud and call them over HTTP._
 
 <Info>
   This feature was added in: v0.58.0.
@@ -29,45 +29,52 @@ one REST API endpoint per BAML function.
 
 First, create your account and [choose a plan](https://boundaryml.com/pricing).
 
+```bash
+baml-cli login
+```
+
 Then, run this command in your `baml_src/` directory:
 
 ```bash
 baml-cli deploy
 ```
 
-Once you've done that, you'll see something like this:
+which will point you to the dashboard, where you can set environment variables and create API keys.
 
-```csv
-Successfully deployed to environment 'prod' in 10s! (Subsequent deployments will require `--prod` to deploy to production.)
+<div class="flex flex-col items-center">
+  <img class="rounded-md" src="/assets/images/docs_latest/deploy-screenshot.png" alt="Boundary Cloud deploy output" />
+</div>
 
-🔗  Linked to my-company/my-project
-🔍  Dashboard: https://dashboard.boundaryml.com/_/my-company/my-project/functions/
-✅  7 BAML functions deployed at:
-  - https://api2.boundaryml.com/v3/functions/prod/call/ClassifyMessage/
-  - https://api2.boundaryml.com/v3/functions/prod/call/ExtractResume/
-  - and 5 others
+Once you've set the environment variables you need (probably `ANTHROPIC_API_KEY`
+and/or `OPENAI_API_KEY`), you can call your BAML functions!
 
-Warning: you still need to set environment variables for your BAML functions.
-Please visit the Boundary Dashboard to set ANTHROPIC_API_KEY and OPENAI_API_KEY.
+If you still have the `ExtractResume` function that your BAML project was created with,
+you can use this command to test it out:
 
-https://dashboard.boundaryml.com/_/my-company/my-project/settings/environment-variables/
+```bash
+curl https://api2.boundaryml.com/v3/functions/prod/call/ExtractResume \
+  -H "Authorization: Bearer $BOUNDARY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d @- << EOF
+{
+  "resume": "
+    Grace Hopper
+    grace.hopper@example.com
+
+    Experience:
+    - Rear Admiral, US Navy
+    - Senior Programmer, Eckert-Mauchly Computer Corporation
+    - Associate Professor, Vassar College
+
+    Skills:
+    - COBOL
+    - Compiler development
+  "
+}
+EOF
 ```
 
-Once you've set the environment variables your BAML functions depend on, you can visit
-the dashboard or run `baml-cli deploy show` to create an API key to use for your requests.
-
-In the dashboard, you'll also be able to build cURL requests for your BAML functions like so:
-
-<Error>
-  TODO: replace this with `POST /v3/functions/prod/call/ExtractResume/` - still need to figure out what
-  the "create API key if it doesn't exist" UI will look like.
-
-  <div class="flex flex-col items-center">
-    <img src="/assets/images/docs_latest/boundary-cloud-curl-ui.png" alt="Boundary Cloud curl" />
-  </div>
-</Error>
-
-Congratulations! You've just deployed your first BAML functions to Boundary Cloud.
+Congratulations! You've gotten your first BAML functions working on Boundary Cloud.
 
 ## Using your OpenAPI client
 

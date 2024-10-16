@@ -6,6 +6,7 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::Confirm;
 use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressStyle};
+use indoc::indoc;
 use internal_baml_core::configuration::CloudProject;
 use reqwest;
 use serde::{Deserialize, Serialize};
@@ -159,7 +160,8 @@ impl Deployer {
                     if p.auto_created {
                         format!("found none; created a new project!")
                     } else {
-                        format!("found your project!")
+                        // format!("found your project!")
+                        format!("found none; created a new project!")
                     }
                 },
                 "something went wrong.",
@@ -225,11 +227,16 @@ generator cloud {{
             .context("Failed to wait for user interaction")?;
 
         if should_append {
+            let generator_abspath = std::path::Path::new(&self.from).join(&path);
             let mut file = std::fs::OpenOptions::new()
+                .write(true)
                 .create(true)
-                .append(false) // just overwrite the file; appending is an optimization for the future
-                .open(std::path::Path::new(&self.from).join(&path))?;
-            writeln!(file, "{}", new_generators)?;
+                .open(&generator_abspath)
+                .context(format!("Failed to open {}", generator_abspath.display()))?;
+            writeln!(file, "{}", new_generators).context(format!(
+                "Failed to write to {}",
+                generator_abspath.display()
+            ))?;
             println!("  Updated {}", path.display());
         } else {
             println!(
@@ -238,18 +245,24 @@ generator cloud {{
         }
 
         println!();
-        println!("Next steps:");
-        println!();
-        println!("1. Set environment variables for your deployed project:");
-        println!("   https://dashboard.boundaryml.com/projects/{project_id}/cloud");
-        println!();
-        println!("2. Create an API key to call your deployed functions:");
-        println!("   https://dashboard.boundaryml.com/projects/{project_id}/api-keys");
-        println!();
-        println!("3. Call your functions!");
-        println!("   https://dashboard.boundaryml.com/projects/{project_id}/api-keys");
-        println!();
-        println!("Read the docs to learn more: https://docs.boundaryml.com/cloud");
+        println!(
+            "{}",
+            indoc! {
+                r#"
+        Next steps:
+
+            1. Set environment variables for your deployed project:
+            https://dashboard.boundaryml.com/projects/{project_id}/cloud
+
+            2. Create an API key to call your deployed functions:
+            https://dashboard.boundaryml.com/projects/{project_id}/api-keys
+
+            3. Call your functions!
+
+        Read the docs to learn more: https://docs.boundaryml.com/cloud
+        "#
+            }
+        );
 
         Ok(resp)
     }

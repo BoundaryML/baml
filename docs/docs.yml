@@ -15,6 +15,8 @@ tabs:
     display-name: BAML
   boundary-extraction-api:
     display-name: Document Extraction API
+  boundary-cloud:
+    display-name: Boundary Cloud
   observability:
     display-name: Observability
 
@@ -179,10 +181,6 @@ navigation:
         contents:
           - page: NextJS Integration
             path: docs/baml-nextjs/baml-nextjs.mdx
-      - section: Boundary Cloud
-        contents:
-          - page: Host your BAML functions
-            path: docs/boundary-cloud/host-your-baml-functions.mdx
 
       - section: Observability [Paid]
         contents:
@@ -219,6 +217,12 @@ navigation:
             slug: docs/api
             summary: docs/api/summary.mdx
             display-errors: true
+  - tab: boundary-cloud
+    layout:
+      - section: Boundary Cloud
+        contents:
+          - page: Host your BAML functions
+            path: docs/boundary-cloud/host-your-baml-functions.mdx
 
 navbar-links:
   - type: github
