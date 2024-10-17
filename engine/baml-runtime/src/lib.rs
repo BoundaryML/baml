@@ -374,15 +374,8 @@ impl BamlRuntime {
             .collect()
     }
 
-    pub fn run_codegen(
-        &self,
-        input_files: &IndexMap<PathBuf, String>,
-        no_version_check: bool,
-    ) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
-        use internal_baml_codegen::GenerateClient;
-
-        let client_types: Vec<(&CodegenGenerator, internal_baml_codegen::GeneratorArgs)> = self
-            .inner
+    pub fn codegen_generators(&self) -> impl Iterator<Item = &CodegenGenerator> {
+        self.inner
             .ir()
             .configuration()
             .generators
@@ -391,6 +384,17 @@ impl BamlRuntime {
                 Generator::Codegen(generator) => Some(generator),
                 Generator::BoundaryCloud(_) => None,
             })
+    }
+
+    pub fn run_codegen(
+        &self,
+        input_files: &IndexMap<PathBuf, String>,
+        no_version_check: bool,
+    ) -> Result<Vec<internal_baml_codegen::GenerateOutput>> {
+        use internal_baml_codegen::GenerateClient;
+
+        let client_types: Vec<(&CodegenGenerator, internal_baml_codegen::GeneratorArgs)> = self
+            .codegen_generators()
             .map(|generator| {
                 Ok((
                     generator,

@@ -964,12 +964,8 @@ impl WasmRuntime {
     #[wasm_bindgen]
     pub fn list_generators(&self) -> Vec<WasmGeneratorConfig> {
         self.runtime
-            .internal()
-            .ir()
-            .configuration()
-            .generators
-            .iter()
-            .map(|(generator, _)| WasmGeneratorConfig {
+            .codegen_generators()
+            .map(|generator| WasmGeneratorConfig {
                 output_type: generator.output_type.clone().to_string(),
                 version: generator.version.clone(),
                 span: WasmSpan {

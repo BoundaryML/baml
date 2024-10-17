@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 pub struct ApiClient {
@@ -34,6 +34,13 @@ impl ApiClient {
             .json(&req)
             .send()
             .await?;
+
+        if !resp.status().is_success() {
+            return Err(resp
+                .error_for_status()
+                .context("Failed to get or create project")
+                .unwrap_err());
+        }
 
         let resp_body: serde_json::Value = resp.json().await?;
         log::debug!("resp_body: {:#}", resp_body);

@@ -21,12 +21,15 @@ impl<F: Future<Output = Result<T>>, T> FutureWithProgress<T> for F {
     ) -> Result<T> {
         let start_msg = start_msg.into();
 
+        let success_style = ProgressStyle::default_spinner()
+            .tick_chars("⠁⠁⠉⠙⠚⠒⠂⠂⠒⠲⠴⠤⠄⠄⠤⠠⠠⠤⠦⠖⠒⠐⠐⠒⠓⠋⠉⠈⠈✓")
+            .template("{spinner:.green.bold/cyan.bold} {msg}")?;
+        let error_style = ProgressStyle::default_spinner()
+            .tick_chars("⠁⠁⠉⠙⠚⠒⠂⠂⠒⠲⠴⠤⠄⠄⠤⠠⠠⠤⠦⠖⠒⠐⠐⠒⠓⠋⠉⠈⠈✗")
+            .template("{spinner:.red.bold/cyan.bold} {msg}")?;
+
         let spinner = ProgressBar::new_spinner();
-        spinner.set_style(
-            ProgressStyle::default_spinner()
-                .tick_chars("⠁⠁⠉⠙⠚⠒⠂⠂⠒⠲⠴⠤⠄⠄⠤⠠⠠⠤⠦⠖⠒⠐⠐⠒⠓⠋⠉⠈⠈✓")
-                .template("{spinner:.green.bold/cyan.bold} {msg}")?,
-        );
+        spinner.set_style(success_style);
         spinner.set_message(format!("{start_msg}..."));
         spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
@@ -36,6 +39,7 @@ impl<F: Future<Output = Result<T>>, T> FutureWithProgress<T> for F {
                 spinner.finish_with_message(format!("{start_msg}... {}", on_ok_msg(ok)));
             }
             Err(_) => {
+                spinner.set_style(error_style);
                 spinner.finish_with_message(format!("{start_msg}... {}", on_err_msg.into()));
             }
         }
