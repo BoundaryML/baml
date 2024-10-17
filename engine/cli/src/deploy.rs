@@ -272,7 +272,7 @@ generator cloud {{
         project_uuid: &str,
         baml_src_overrides: IndexMap<String, String>,
     ) -> Result<CreateBamlDeploymentResponse> {
-        let baml_src = baml_src_files(&self.from)
+        let mut baml_src = baml_src_files(&self.from)
             .context("Failed while searching for .baml files in baml_src/")?
             .into_iter()
             .map(|f| {
@@ -285,6 +285,8 @@ generator cloud {{
             })
             .chain(baml_src_overrides.into_iter().map(|(k, v)| Ok((k, v))))
             .collect::<Result<IndexMap<_, _>>>()?;
+
+        baml_src.shift_remove("generators.baml");
 
         let api_client = ApiClient {
             base_url: self.api_url.clone(),
