@@ -136,7 +136,7 @@ impl ParsingContext<'_> {
             scope: self.scope.clone(),
             causes: missing
                 .into_iter()
-                .map(|(k)| ParsingError {
+                .map(|k| ParsingError {
                     scope: self.scope.clone(),
                     reason: format!("Missing required field: {}", k),
                     causes: vec![],

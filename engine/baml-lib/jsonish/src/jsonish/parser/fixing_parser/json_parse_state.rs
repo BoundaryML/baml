@@ -574,12 +574,10 @@ impl JsonParseState {
             }
             '"' => {
                 // Peek if next 2 characters are also quotes
-                let is_triple_quoted = match next.peek() {
-                    Some((_, '"')) => match next.peek() {
-                        Some((_, '"')) => true,
-                        _ => false,
-                    },
-                    _ => false,
+                let is_triple_quoted = {
+                    next.next_if(|&(_, c)| c == '"')
+                        .and_then(|_| next.next_if(|&(_, c)| c == '"'))
+                        .is_some()
                 };
 
                 if is_triple_quoted {
