@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use axum::{extract::Path, extract::Query, routing::get, Router};
 use baml_runtime::{baml_src_files, BamlRuntime};
 use base64::{engine::general_purpose, Engine as _};
+use console::style;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::Confirm;
 use indexmap::IndexMap;
@@ -257,6 +258,29 @@ generator cloud {{
             );
         }
 
+        let function_names = self
+            .runtime
+            .function_names()
+            .map(|f| format!("{}/v3/functions/{DEPLOYMENT_ID}/{}", self.api_url, f))
+            .collect::<Vec<_>>();
+
+        println!();
+        match function_names.len() {
+            0 => println!(
+                "{}: there were zero functions defined in your project.",
+                style("Warning").yellow()
+            ),
+            1 => println!("Your function is deployed at:\n  {}", function_names[0]),
+            _ => {
+                println!("Your functions are deployed at:");
+                for name in function_names.iter().take(2) {
+                    println!("  - {}", name);
+                }
+                if function_names.len() > 2 {
+                    println!("  ... and {} others", function_names.len() - 2);
+                }
+            }
+        }
         println!();
         println!(
             "{}",
@@ -264,13 +288,13 @@ generator cloud {{
                 r#"
         Next steps:
 
-            1. Set environment variables for your deployed project:
-            https://dashboard.boundaryml.com/projects/{project_id}/cloud
+          1. Set environment variables for your deployed project:
+          https://dashboard.boundaryml.com/projects/{project_id}/cloud
 
-            2. Create an API key to call your deployed functions:
-            https://dashboard.boundaryml.com/projects/{project_id}/api-keys
+          2. Create an API key to call your deployed functions:
+          https://dashboard.boundaryml.com/projects/{project_id}/api-keys
 
-            3. Call your functions!
+          3. Call your functions!
 
         Read the docs to learn more: https://docs.boundaryml.com/cloud
         "#
@@ -282,7 +306,7 @@ generator cloud {{
 
     async fn deploy_project_no_progress_spinner(
         &self,
-        project_uuid: &str,
+        project_dbid: &str,
         baml_src_overrides: IndexMap<String, String>,
     ) -> Result<CreateBamlDeploymentResponse> {
         let mut baml_src = baml_src_files(&self.from)
@@ -315,7 +339,7 @@ generator cloud {{
         let req = client
             .post(format!("{}/v3/functions/{DEPLOYMENT_ID}", self.api_url))
             .bearer_auth(self.token_data.borrow_mut().access_token().await?)
-            .header("x-boundary-project-id", project_uuid);
+            .header("x-boundary-project-id", project_dbid);
 
         let response = req
             .json(&CreateDeploymentRequest { baml_src })
@@ -327,16 +351,10 @@ generator cloud {{
             let resp_body: CreateBamlDeploymentResponse = response.json().await?;
             Ok(resp_body)
         } else {
-            let status = response.status();
-            let error_message = response
-                .text()
-                .await
-                .context("Failed to read error response")?;
-            Err(anyhow::anyhow!(
-                "Deployment failed with status {}\n{}",
-                status,
-                error_message
-            ))
+            Err(response
+                .error_for_status()
+                .context("Deployment failed")
+                .unwrap_err())
         }
     }
 }

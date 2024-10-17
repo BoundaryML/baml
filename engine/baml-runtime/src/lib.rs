@@ -338,6 +338,10 @@ impl BamlRuntime {
 
 // Interfaces for generators
 impl BamlRuntime {
+    pub fn function_names(&self) -> impl Iterator<Item = &str> {
+        self.inner.ir().function_names()
+    }
+
     /// Determine the file containing the generators.
     pub fn generator_path(&self) -> Option<PathBuf> {
         let path_counts: HashMap<&PathBuf, u32> = self
