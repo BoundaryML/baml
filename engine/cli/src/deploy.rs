@@ -106,8 +106,7 @@ impl Deployer {
             .filter_map(|cloud_project| {
                 internal_baml_codegen::version_check::check_version(
                     &cloud_project.version,
-                    "0.65.0",
-                    // env!("CARGO_PKG_VERSION"),
+                    env!("CARGO_PKG_VERSION"),
                     internal_baml_codegen::version_check::GeneratorType::CLI,
                     internal_baml_codegen::version_check::VersionCheckMode::Strict,
                     baml_types::GeneratorOutputType::OpenApi,
