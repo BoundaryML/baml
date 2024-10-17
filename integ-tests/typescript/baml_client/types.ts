@@ -116,8 +116,22 @@ export enum TestEnum {
   G = "G",
 }
 
+export interface Checks__regex_bad__regex_good__trivial {
+  trivial: Check
+  regex_good: Check
+  regex_bad: Check
+}
+
+export interface Checks__valid_phone_number {
+  valid_phone_number: Check
+}
+
 export interface Checks__too_big {
   too_big: Check
+}
+
+export interface Checks__valid_email {
+  valid_email: Check
 }
 
 export interface Checks__young_enough {
@@ -129,22 +143,8 @@ export interface Checks__unreasonably_certain {
 }
 
 export interface Checks__earth_aged__no_infants {
-  no_infants: Check
   earth_aged: Check
-}
-
-export interface Checks__valid_email {
-  valid_email: Check
-}
-
-export interface Checks__regex_bad__regex_good__trivial {
-  trivial: Check
-  regex_good: Check
-  regex_bad: Check
-}
-
-export interface Checks__valid_phone_number {
-  valid_phone_number: Check
+  no_infants: Check
 }
 
 export interface BigNumbers {

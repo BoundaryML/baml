@@ -593,7 +593,22 @@ paths:
             application/json:
               schema:
                 title: PredictAgeBareResponse
-                type: integer
+                type: object
+                properties:
+                  value:
+                    type: integer
+                  checks:
+                    type: object
+                    properties:
+                      too_big:
+                        $ref: '#components/schemas/Check'
+                    required:
+                    - too_big
+                    additionalProperties: false
+                required:
+                - value
+                - checks
+                additionalProperties: false
       operationId: PredictAgeBare
   /call/PredictAgeComplex:
     post:
@@ -2648,6 +2663,15 @@ components:
       - name
       - provider
       - options
+    Check:
+      type: object
+      properties:
+        name:
+          type: string
+        expr:
+          type: string
+        status:
+          type: string
     Category:
       enum:
       - Refund
@@ -2910,7 +2934,25 @@ components:
       type: object
       properties:
         age:
-          type: integer
+          type: object
+          properties:
+            value:
+              type: integer
+            checks:
+              type: object
+              properties:
+                no_infants:
+                  $ref: '#components/schemas/Check'
+                earth_aged:
+                  $ref: '#components/schemas/Check'
+              required:
+              - no_infants
+              - earth_aged
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
       required:
       - age
       additionalProperties: false
@@ -2953,7 +2995,22 @@ components:
       type: object
       properties:
         value:
-          type: string
+          type: object
+          properties:
+            value:
+              type: string
+            checks:
+              type: object
+              properties:
+                valid_email:
+                  $ref: '#components/schemas/Check'
+              required:
+              - valid_email
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
       required:
       - value
       additionalProperties: false
@@ -3010,9 +3067,45 @@ components:
           - $ref: '#/components/schemas/Martian'
           - $ref: '#/components/schemas/Earthling'
         certainty:
-          type: integer
+          type: object
+          properties:
+            value:
+              type: integer
+            checks:
+              type: object
+              properties:
+                unreasonably_certain:
+                  $ref: '#components/schemas/Check'
+              required:
+              - unreasonably_certain
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
         species:
-          type: string
+          type: object
+          properties:
+            value:
+              type: string
+            checks:
+              type: object
+              properties:
+                trivial:
+                  $ref: '#components/schemas/Check'
+                regex_bad:
+                  $ref: '#components/schemas/Check'
+                regex_good:
+                  $ref: '#components/schemas/Check'
+              required:
+              - trivial
+              - regex_bad
+              - regex_good
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
       required:
       - planetary_age
       - certainty
@@ -3080,7 +3173,22 @@ components:
       type: object
       properties:
         age:
-          type: integer
+          type: object
+          properties:
+            value:
+              type: integer
+            checks:
+              type: object
+              properties:
+                young_enough:
+                  $ref: '#components/schemas/Check'
+              required:
+              - young_enough
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
       required:
       - age
       additionalProperties: false
@@ -3173,7 +3281,22 @@ components:
       type: object
       properties:
         value:
-          type: string
+          type: object
+          properties:
+            value:
+              type: string
+            checks:
+              type: object
+              properties:
+                valid_phone_number:
+                  $ref: '#components/schemas/Check'
+              required:
+              - valid_phone_number
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
       required:
       - value
       additionalProperties: false
