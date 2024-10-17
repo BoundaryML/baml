@@ -1,0 +1,23 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      fern-api:
+        specifier: ^0.31.24
+        version: 0.31.24
+
+packages:
+
+  fern-api@0.31.24:
+    resolution: {integrity: sha512-hO0BY0q3+//OVLALI6875Sh6OlMPRJG4HeIRjIaX4ZmMtPbsZKMoowPSKWyewwnw2uYotklIgIsZWLKoAo7C3A==}
+    hasBin: true
+
+snapshots:
+
+  fern-api@0.31.24: {}
