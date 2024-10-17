@@ -1201,3 +1201,27 @@ test_deserializer!(
   FieldType::Class("Foo".to_string()),
   {"a": "", "b": "", "res": []}
 );
+
+test_deserializer!(
+  test_string_field_with_spaces,
+  r#"
+  class Foo {
+    a string
+    b string
+    res string[]
+  }
+  "#,
+  r#"{
+    a: Hi friends!,
+    b: hey world lets do something kinda cool
+    so that we can test this out,
+    res: [hello,
+     world]
+  }"#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "a": "Hi friends!",
+    "b": "hey world lets do something kinda cool\n    so that we can test this out",
+    "res": ["hello", "world"]
+  }
+);
