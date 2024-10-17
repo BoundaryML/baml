@@ -152,7 +152,7 @@ impl Deployer {
     }
 
     async fn deploy_new_project(&self) -> Result<CreateBamlDeploymentResponse> {
-        let project_id = self
+        let project = self
             .get_or_create_project()
             .with_progress_spinner(
                 "Looking up your projects",
@@ -160,20 +160,33 @@ impl Deployer {
                     if p.auto_created {
                         format!("found none; created a new project!")
                     } else {
-                        // format!("found your project!")
-                        format!("found none; created a new project!")
+                        format!("found your project!")
                     }
                 },
                 "something went wrong.",
             )
-            .await?
-            .project_uuid;
+            .await?;
+
+        let project_dbid = if project.auto_created {
+            project.dbid
+        } else {
+            let should_deploy = Confirm::with_theme(&ColorfulTheme::default())
+                .with_prompt(format!("Deploy to project {}?", project.dbid))
+                .interact()
+                .context("Failed to wait for user interaction")?;
+
+            if !should_deploy {
+                return Err(anyhow::anyhow!("Deployment cancelled"));
+            }
+
+            project.dbid
+        };
 
         let new_generator_block = format!(
             r#"
 generator cloud {{
   output_type cloud
-  project_id "{project_id}"
+  project_id "{project_dbid}"
   version "{}"
 }}
             "#,
@@ -199,7 +212,7 @@ generator cloud {{
 
         let resp = self
             .deploy_project_no_progress_spinner(
-                &project_id,
+                &project_dbid,
                 vec![(path.to_string_lossy().to_string(), new_generators.clone())]
                     .into_iter()
                     .collect(),

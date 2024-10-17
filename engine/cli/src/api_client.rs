@@ -8,7 +8,9 @@ pub struct ApiClient {
 
 #[derive(Debug, Deserialize)]
 pub struct Project {
-    pub project_uuid: String,
+    pub dbid: String,
+    // This field is returned by the API, but does not yet have concrete semantics, so we shouldn't use it yet.
+    // pub name: String,
     pub auto_created: bool,
 }
 
