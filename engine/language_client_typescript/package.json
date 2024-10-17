@@ -80,5 +80,8 @@
     "url": "https://github.com/BoundaryML/baml/issues"
   },
   "homepage": "https://github.com/BoundaryML/baml#readme",
-  "author": ""
+  "author": "",
+  "dependencies": {
+    "@scarf/scarf": "^1.3.0"
+  }
 }
