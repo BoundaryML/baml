@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use axum::{extract::Path, extract::Query, routing::get, Router};
-use baml_runtime::{baml_src_files, BamlRuntime};
+use baml_runtime::{baml_src_files, internal, BamlRuntime};
 use base64::{engine::general_purpose, Engine as _};
 use console::style;
 use dialoguer::theme::ColorfulTheme;
@@ -100,6 +100,28 @@ struct Deployer {
 impl Deployer {
     async fn run_async(&self) -> Result<()> {
         let cloud_projects = self.runtime.cloud_projects();
+
+        let version_check_errors = cloud_projects
+            .iter()
+            .filter_map(|cloud_project| {
+                internal_baml_codegen::version_check::check_version(
+                    &cloud_project.version,
+                    "0.65.0",
+                    // env!("CARGO_PKG_VERSION"),
+                    internal_baml_codegen::version_check::GeneratorType::CLI,
+                    internal_baml_codegen::version_check::VersionCheckMode::Strict,
+                    baml_types::GeneratorOutputType::OpenApi,
+                    false,
+                )
+            })
+            .collect::<Vec<_>>();
+        if !version_check_errors.is_empty() {
+            let mut err = anyhow::anyhow!("Version check failed");
+            for error in version_check_errors.iter() {
+                err = err.context(error.msg());
+            }
+            return Err(err);
+        }
 
         if cloud_projects.is_empty() {
             self.deploy_new_project().await?;
