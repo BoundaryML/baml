@@ -6,7 +6,7 @@ export interface Checked<T,K extends BaseChecks> {
 interface Check {
     name: string,
     expr: string
-    result: "succeeded" | "failed"
+    status: "succeeded" | "failed"
 }
 
 interface BaseChecks {
@@ -14,5 +14,5 @@ interface BaseChecks {
 }
 
 function all_succeeded<K extends BaseChecks>(checks: K): boolean {
-    return Object.values(checks).every(value => value.result == "succeeded");
+    return Object.values(checks).every(value => value.status == "succeeded");
 }

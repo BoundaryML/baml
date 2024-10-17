@@ -408,6 +408,38 @@ impl<T> BamlValueWithMeta<T> {
         }
     }
 
+    pub fn meta_mut(&mut self) -> &mut T {
+        match self {
+            BamlValueWithMeta::String(_, m) => m,
+            BamlValueWithMeta::Int(_, m) => m,
+            BamlValueWithMeta::Float(_, m) => m,
+            BamlValueWithMeta::Bool(_, m) => m,
+            BamlValueWithMeta::Map(_, m) => m,
+            BamlValueWithMeta::List(_, m) => m,
+            BamlValueWithMeta::Media(_, m) => m,
+            BamlValueWithMeta::Enum(_, _, m) => m,
+            BamlValueWithMeta::Class(_, _, m) => m,
+            BamlValueWithMeta::Null(m) => m,
+        }
+    }
+
+    pub fn with_default_meta(value: &BamlValue) -> BamlValueWithMeta<T> where T: Default {
+        use BamlValueWithMeta::*;
+        match value {
+            BamlValue::String(s) => String(s.clone(), T::default()),
+            BamlValue::Int(i) => Int(*i, T::default()),
+            BamlValue::Float(f) => Float(*f, T::default()),
+            BamlValue::Bool(b) => Bool(*b, T::default()),
+            BamlValue::Map(entries) => BamlValueWithMeta::Map(entries.iter().map(|(k,v)| (k.clone(), Self::with_default_meta(v))).collect(), T::default()),
+            BamlValue::List(items) => List(items.iter().map(|i| Self::with_default_meta(i)).collect(), T::default()),
+            BamlValue::Media(m) => Media(m.clone(), T::default()),
+            BamlValue::Enum(n,v) => Enum(n.clone(), v.clone(), T::default()),
+            BamlValue::Class(n, items) => Map(items.iter().map(|(k,v)| (k.clone(), Self::with_default_meta(v))).collect(), T::default()),
+            BamlValue::Null => Null(T::default()),
+            _ => unimplemented!()
+        }
+    }
+
     pub fn map_meta<F, U>(self, f: F) -> BamlValueWithMeta<U>
     where
         F: Fn(T) -> U + Copy,

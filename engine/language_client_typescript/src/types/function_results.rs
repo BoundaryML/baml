@@ -1,4 +1,3 @@
-use baml_types::BamlValue;
 use napi_derive::napi;
 
 use crate::errors::from_anyhow_error;

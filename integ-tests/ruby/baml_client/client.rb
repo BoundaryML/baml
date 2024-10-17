@@ -1399,7 +1399,7 @@ module Baml
         varargs: T.untyped,
         inp: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Integer)
+      ).returns(Baml::Checked[Integer, Checks__too_big])
     }
     def PredictAgeBare(
         *varargs,
@@ -4290,7 +4290,7 @@ module Baml
         varargs: T.untyped,
         inp: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::BamlStream[Integer])
+      ).returns(Baml::BamlStream[Baml::Checked[Integer, Checks__too_big]])
     }
     def PredictAgeBare(
         *varargs,
@@ -4314,7 +4314,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
       )
-      Baml::BamlStream[T.nilable(Integer), Integer].new(
+      Baml::BamlStream[Baml::Checked[T.nilable(Integer), Checks__too_big], Baml::Checked[Integer, Checks__too_big]].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

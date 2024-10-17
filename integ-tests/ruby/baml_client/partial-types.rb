@@ -271,7 +271,7 @@ module Baml
     end
     class Earthling < T::Struct
       include Baml::Sorbet::Struct
-      const :age, T.nilable(Integer)
+      const :age, Baml::Checks::Checked[T.nilable(Integer), Baml::Types::Checks__earth_aged__no_infants]
 
       def initialize(props)
         super(
@@ -319,7 +319,7 @@ module Baml
     end
     class EmailAddress < T::Struct
       include Baml::Sorbet::Struct
-      const :value, T.nilable(String)
+      const :value, Baml::Checks::Checked[T.nilable(String), Baml::Types::Checks__valid_email]
 
       def initialize(props)
         super(
@@ -382,8 +382,8 @@ module Baml
     class FooAny < T::Struct
       include Baml::Sorbet::Struct
       const :planetary_age, T.nilable(T.any(Baml::PartialTypes::Martian, Baml::PartialTypes::Earthling))
-      const :certainty, T.nilable(Integer)
-      const :species, T.nilable(String)
+      const :certainty, Baml::Checks::Checked[T.nilable(Integer), Baml::Types::Checks__unreasonably_certain]
+      const :species, Baml::Checks::Checked[T.nilable(String), Baml::Types::Checks__regex_bad__regex_good__trivial]
 
       def initialize(props)
         super(
@@ -459,7 +459,7 @@ module Baml
     end
     class Martian < T::Struct
       include Baml::Sorbet::Struct
-      const :age, T.nilable(Integer)
+      const :age, Baml::Checks::Checked[T.nilable(Integer), Baml::Types::Checks__young_enough]
 
       def initialize(props)
         super(
@@ -577,7 +577,7 @@ module Baml
     end
     class PhoneNumber < T::Struct
       include Baml::Sorbet::Struct
-      const :value, T.nilable(String)
+      const :value, Baml::Checks::Checked[T.nilable(String), Baml::Types::Checks__valid_phone_number]
 
       def initialize(props)
         super(
