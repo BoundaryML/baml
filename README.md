@@ -330,6 +330,10 @@ Boundary takes security issues very seriously. If you have any concerns about BA
 
 Note that this security address should be used only for undisclosed vulnerabilities. Please report any security problems to us before disclosing it publicly.
 
+## Contributing
+Checkout our [guide on getting started](/CONTRIBUTING.md)
+
+
 <hr />
 
 Made with ❤️ by Boundary
