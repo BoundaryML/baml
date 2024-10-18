@@ -236,6 +236,7 @@ impl<'db> WithJsonSchema for FieldType {
                     }
                 }
             }
+            FieldType::Constrained { base, .. } => base.json_schema(),
         }
     }
 }

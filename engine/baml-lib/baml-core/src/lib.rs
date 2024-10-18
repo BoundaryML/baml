@@ -41,7 +41,7 @@ impl std::fmt::Debug for ValidatedSchema {
     }
 }
 
-/// The most general API for dealing with Prisma schemas. It accumulates what analysis and
+/// The most general API for dealing with BAML source code. It accumulates what analysis and
 /// validation information it can, and returns it along with any error and warning diagnostics.
 pub fn validate(root_path: &PathBuf, files: Vec<SourceFile>) -> ValidatedSchema {
     let mut diagnostics = Diagnostics::new(root_path.clone());

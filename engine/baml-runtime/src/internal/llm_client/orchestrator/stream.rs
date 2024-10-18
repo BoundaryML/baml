@@ -8,8 +8,7 @@ use web_time::Duration;
 use crate::{
     internal::{
         llm_client::{
-            traits::{WithPrompt, WithStreamable},
-            LLMErrorResponse, LLMResponse,
+            parsed_value_to_response, traits::{WithPrompt, WithStreamable}, LLMErrorResponse, LLMResponse, ResponseBamlValue
         },
         prompt_renderer::PromptRenderer,
     },
@@ -31,7 +30,7 @@ pub async fn orchestrate_stream<F>(
     Vec<(
         OrchestrationScope,
         LLMResponse,
-        Option<Result<BamlValueWithFlags>>,
+        Option<Result<ResponseBamlValue>>,
     )>,
     Duration,
 )
@@ -60,10 +59,12 @@ where
                         match &stream_part {
                             LLMResponse::Success(s) => {
                                 let parsed = partial_parse_fn(&s.content);
+                                let response_value: Result<ResponseBamlValue,_> =
+                                    parsed.and_then(|v| parsed_value_to_response(v));
                                 on_event(FunctionResult::new(
                                     node.scope.clone(),
                                     LLMResponse::Success(s.clone()),
-                                    Some(parsed),
+                                    Some(response_value),
                                 ));
                             }
                             _ => {}
@@ -92,8 +93,9 @@ where
             LLMResponse::Success(s) => Some(parse_fn(&s.content)),
             _ => None,
         };
+        let response_value: Option<Result<ResponseBamlValue,_>> = parsed_response.map(|r| r.and_then(|v| parsed_value_to_response(v)));
         let sleep_duration = node.error_sleep_duration().cloned();
-        results.push((node.scope, final_response, parsed_response));
+        results.push((node.scope, final_response, response_value));
 
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results

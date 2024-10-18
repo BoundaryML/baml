@@ -4,19 +4,19 @@ use std::fmt::{Display, Formatter};
 /// An opaque identifier for a value in an AST enum. Use the
 /// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ArguementId(pub u32);
+pub struct ArgumentId(pub u32);
 
-impl ArguementId {
+impl ArgumentId {
     /// Used for range bounds when iterating over BTreeMaps.
-    pub const MIN: ArguementId = ArguementId(0);
+    pub const MIN: ArgumentId = ArgumentId(0);
     /// Used for range bounds when iterating over BTreeMaps.
-    pub const MAX: ArguementId = ArguementId(u32::MAX);
+    pub const MAX: ArgumentId = ArgumentId(u32::MAX);
 }
 
-impl std::ops::Index<ArguementId> for ArgumentsList {
+impl std::ops::Index<ArgumentId> for ArgumentsList {
     type Output = Argument;
 
-    fn index(&self, index: ArguementId) -> &Self::Output {
+    fn index(&self, index: ArgumentId) -> &Self::Output {
         &self.arguments[index.0 as usize]
     }
 }
@@ -34,11 +34,11 @@ pub struct ArgumentsList {
 }
 
 impl ArgumentsList {
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (ArguementId, &Argument)> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (ArgumentId, &Argument)> {
         self.arguments
             .iter()
             .enumerate()
-            .map(|(idx, field)| (ArguementId(idx as u32), field))
+            .map(|(idx, field)| (ArgumentId(idx as u32), field))
     }
 }
 

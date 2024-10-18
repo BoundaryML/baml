@@ -83,7 +83,7 @@ impl OrchestratorNode {
     }
 }
 
-#[derive(Default, Clone, Serialize)]
+#[derive(Debug, Default, Clone, Serialize)]
 pub struct OrchestrationScope {
     pub scope: Vec<ExecutionScope>,
 }
@@ -138,7 +138,7 @@ impl OrchestrationScope {
     }
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub enum ExecutionScope {
     Direct(String),
     // PolicyName, RetryCount, RetryDelayMs

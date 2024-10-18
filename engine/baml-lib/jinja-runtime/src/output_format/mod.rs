@@ -9,6 +9,7 @@ use crate::{types::RenderOptions, RenderContext};
 
 use self::types::OutputFormatContent;
 
+// TODO: Rename the field to `content`.
 #[derive(Debug)]
 pub struct OutputFormat {
     text: OutputFormatContent,

@@ -10,9 +10,11 @@ mod ir_ref;
 mod match_string;
 
 use anyhow::Result;
+
+use baml_types::{BamlValue, Constraint};
 use internal_baml_jinja::types::OutputFormatContent;
 
-use internal_baml_core::ir::FieldType;
+use internal_baml_core::ir::{FieldType, jinja_helpers::evaluate_predicate};
 
 use super::types::BamlValueWithFlags;
 
@@ -125,7 +127,7 @@ impl ParsingContext<'_> {
         &self,
         unparsed: Vec<(String, &ParsingError)>,
         missing: Vec<String>,
-        item: Option<&crate::jsonish::Value>,
+        _item: Option<&crate::jsonish::Value>,
     ) -> ParsingError {
         ParsingError {
             reason: format!(
@@ -218,4 +220,23 @@ pub trait TypeCoercer {
 
 pub trait DefaultValue {
     fn default_value(&self, error: Option<&ParsingError>) -> Option<BamlValueWithFlags>;
+}
+
+/// Run all checks and asserts for a value at a given type.
+pub fn run_user_checks(
+    baml_value: &BamlValue,
+    type_: &FieldType,
+) -> Result<Vec<(Constraint, bool)>> {
+    match type_ {
+        FieldType::Constrained { constraints, .. } => {
+            constraints.iter().map(|constraint| {
+                let result =
+                    evaluate_predicate(baml_value, &constraint.expression).map_err(|e| {
+                    anyhow::anyhow!(format!("Error evaluating constraint: {:?}", e))
+                    })?;
+                Ok((constraint.clone(), result))
+            }).collect::<Result<Vec<_>>>()
+        }
+        _ => Ok(vec![]),
+    }
 }

@@ -1,10 +1,12 @@
 use internal_baml_schema_ast::ast::{Top, TopId, TypeExpId, TypeExpressionBlock};
 
 mod alias;
+mod constraint;
 mod description;
 mod to_string_attribute;
 use crate::interner::StringId;
 use crate::{context::Context, types::ClassAttributes, types::EnumAttributes};
+use baml_types::Constraint;
 use internal_baml_schema_ast::ast::{Expression, SubType};
 
 ///
@@ -21,6 +23,9 @@ pub struct Attributes {
 
     /// Whether the node should be skipped during prompt rendering and parsing.
     pub skip: Option<bool>,
+
+    /// @check and @assert attributes attached to the node.
+    pub constraints: Vec<Constraint>,
 }
 
 impl Attributes {
@@ -63,7 +68,6 @@ impl Attributes {
     pub fn set_skip(&mut self) {
         self.skip.replace(true);
     }
-
 }
 pub(super) fn resolve_attributes(ctx: &mut Context<'_>) {
     for top in ctx.ast.iter_tops() {
@@ -90,7 +94,7 @@ fn resolve_type_exp_block_attributes<'db>(
             let mut enum_attributes = EnumAttributes::default();
 
             for (value_idx, _value) in ast_typexpr.iter_fields() {
-                ctx.visit_attributes((type_id, value_idx).into());
+                ctx.assert_all_attributes_processed((type_id, value_idx).into());
                 if let Some(attrs) = to_string_attribute::visit(ctx, false) {
                     enum_attributes.value_serilizers.insert(value_idx, attrs);
                 }
@@ -98,7 +102,7 @@ fn resolve_type_exp_block_attributes<'db>(
             }
 
             // Now validate the enum attributes.
-            ctx.visit_attributes(type_id.into());
+            ctx.assert_all_attributes_processed(type_id.into());
             enum_attributes.serilizer = to_string_attribute::visit(ctx, true);
             ctx.validate_visited_attributes();
 
@@ -108,7 +112,7 @@ fn resolve_type_exp_block_attributes<'db>(
             let mut class_attributes = ClassAttributes::default();
 
             for (field_idx, _field) in ast_typexpr.iter_fields() {
-                ctx.visit_attributes((type_id, field_idx).into());
+                ctx.assert_all_attributes_processed((type_id, field_idx).into());
                 if let Some(attrs) = to_string_attribute::visit(ctx, false) {
                     class_attributes.field_serilizers.insert(field_idx, attrs);
                 }
@@ -116,7 +120,7 @@ fn resolve_type_exp_block_attributes<'db>(
             }
 
             // Now validate the class attributes.
-            ctx.visit_attributes(type_id.into());
+            ctx.assert_all_attributes_processed(type_id.into());
             class_attributes.serilizer = to_string_attribute::visit(ctx, true);
             ctx.validate_visited_attributes();
 

@@ -4,6 +4,7 @@ mod chat_message_part;
 
 mod output_format;
 use internal_baml_core::ir::repr::IntermediateRepr;
+use internal_baml_core::ir::jinja_helpers::get_env;
 pub use output_format::types;
 mod baml_value_to_jinja_value;
 
@@ -17,14 +18,6 @@ use std::collections::HashMap;
 use crate::baml_value_to_jinja_value::IntoMiniJinjaValue;
 pub use crate::chat_message_part::ChatMessagePart;
 use crate::output_format::OutputFormat;
-
-fn get_env<'a>() -> minijinja::Environment<'a> {
-    let mut env = minijinja::Environment::new();
-    env.set_debug(true);
-    env.set_trim_blocks(true);
-    env.set_lstrip_blocks(true);
-    env
-}
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Serialize)]
@@ -442,6 +435,7 @@ pub fn render_prompt(
         }
     }
 }
+
 
 #[cfg(test)]
 mod render_tests {
@@ -1983,4 +1977,5 @@ mod render_tests {
 
     //     Ok(())
     // }
+
 }
