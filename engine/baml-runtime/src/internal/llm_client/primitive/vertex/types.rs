@@ -101,9 +101,9 @@ pub struct VertexAiSearch {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SafetySetting {
-    pub category: HarmCategory,
-    pub threshold: HarmBlockThreshold,
-    pub method: HarmBlockMethod,
+    pub category: Option<HarmCategory>,
+    pub threshold: Option<HarmBlockThreshold>,
+    pub method: Option<HarmBlockMethod>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -178,8 +178,8 @@ pub enum BlockReason {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SafetyRating {
-    pub category: HarmCategory,
-    pub probability: HarmProbability,
+    pub category: Option<HarmCategory>,
+    pub probability: Option<HarmProbability>,
     pub probability_score: Option<f64>,
     pub severity: Option<HarmSeverity>,
     pub severity_score: Option<f64>,
@@ -326,18 +326,19 @@ pub enum FinishReason {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CitationMetadata {
-    pub citations: Vec<Citation>,
+    pub citations: Option<Vec<Citation>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Citation {
-    pub start_index: i32,
-    pub end_index: i32,
-    pub uri: String,
-    pub title: String,
-    pub license: String,
-    pub publication_date: Date,
+    pub start_index: Option<i32>,
+    pub end_index: Option<i32>,
+    pub uri: Option<String>,
+    // Their docs are incorrect, this is sometimes missing.
+    pub title: Option<String>,
+    pub license: Option<String>,
+    pub publication_date: Option<Date>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

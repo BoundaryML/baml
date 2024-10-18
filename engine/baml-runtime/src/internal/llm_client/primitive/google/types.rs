@@ -101,8 +101,8 @@ pub struct VertexAiSearch {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SafetySetting {
-    pub category: HarmCategory,
-    pub threshold: HarmBlockThreshold,
+    pub category: Option<HarmCategory>,
+    pub threshold: Option<HarmBlockThreshold>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
