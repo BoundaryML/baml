@@ -20,7 +20,6 @@ from typing import Dict, List, Optional, Union, Literal
 
 from . import types
 
-
 ###############################################################################
 #
 #  These types are used for streaming, for when an instance of a type

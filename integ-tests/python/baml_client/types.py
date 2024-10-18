@@ -19,7 +19,6 @@ from pydantic import BaseModel, ConfigDict
 from typing import Dict, List, Optional, Union, Literal
 
 
-
 class AliasedEnum(str, Enum):
     
     KEY_ONE = "KEY_ONE"
