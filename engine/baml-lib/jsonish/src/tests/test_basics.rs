@@ -49,10 +49,41 @@ test_deserializer!(
     [true]
 );
 
+test_deserializer!(
+    test_bool_wrapped_mismatched_case,
+    EMPTY_FILE,
+    "The answer is True",
+    FieldType::bool().as_list(),
+    [true]
+);
+
+test_deserializer!(
+    test_bool_wrapped_mismatched_case_preceded_by_text,
+    EMPTY_FILE,
+    "The tax return you provided has section for dependents.\n\nAnswer: **True**",
+    FieldType::bool(),
+    true
+);
+
+test_deserializer!(
+    test_bool_mismatched_case_followed_by_text,
+    EMPTY_FILE,
+    r#"False.\n\nThe statement "2 + 2 = 5" is mathematically incorrect. The correct sum of 2 + 2 is 4, not 5."#,
+    FieldType::bool(),
+    false
+);
+
 test_failing_deserializer!(
     test_ambiguous_bool,
     EMPTY_FILE,
     "The answer is true or false",
+    FieldType::bool()
+);
+
+test_failing_deserializer!(
+    test_elaborate_ambiguous_bool,
+    EMPTY_FILE,
+    r#"False. The statement "2 + 2 = 5" is not accurate according to basic arithmetic. In standard arithmetic, the sum of 2 and 2 is equal to 4, not 5. Therefore, the statement does not hold true."#,
     FieldType::bool()
 );
 

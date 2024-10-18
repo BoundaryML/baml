@@ -117,34 +117,39 @@ fn string_match_strategy<'c>(
         }
     }
 
+    // We'll match evetything using lower case and then return the original
+    // variants.
+    let case_insensitive_str = value_str.to_lowercase();
+
     // Now find all the candidates which occur in the value, by frequency.
-    let mut result = candidates
-        .iter()
-        .filter_map(|(variant, valid_names)| {
-            // Check how many counts of the variant are in the value.
-            let match_count_pos = valid_names
-                .iter()
-                .filter_map(|valid_name| {
-                    let matches = value_str.match_indices(valid_name);
-                    // Return (count, first_idx)
-                    matches.fold(None, |acc, (idx, _)| match acc {
-                        Some((count, prev_idx)) => Some((count + 1, prev_idx)),
-                        None => Some((1, idx)),
-                    })
+    let mut result = Vec::from_iter(candidates.iter().filter_map(|(variant, valid_names)| {
+        // Check how many counts of the variant are in the value.
+        let match_count_pos = valid_names
+            .iter()
+            .filter_map(|valid_name| {
+                // Convert to lower.
+                let case_insensitive_name = valid_name.to_lowercase();
+                // Match against full lower case input.
+                let matches = case_insensitive_str.match_indices(&case_insensitive_name);
+                // Return (count, first_idx)
+                matches.fold(None, |acc, (idx, _)| match acc {
+                    Some((count, prev_idx)) => Some((count + 1, prev_idx)),
+                    None => Some((1, idx)),
                 })
-                .reduce(|a, b| match a.0.cmp(&b.0) {
-                    // Return the one with more matches.
-                    Ordering::Less => b,
-                    Ordering::Greater => a,
-                    // Return the one that matches earlier
-                    Ordering::Equal => match a.1.cmp(&b.1) {
-                        Ordering::Less => a,
-                        _ => b,
-                    },
-                });
-            match_count_pos.map(|(count, pos)| (count, pos, variant))
-        })
-        .collect::<Vec<_>>();
+            })
+            .reduce(|a, b| match a.0.cmp(&b.0) {
+                // Return the one with more matches.
+                Ordering::Less => b,
+                Ordering::Greater => a,
+                // Return the one that matches earlier
+                Ordering::Equal => match a.1.cmp(&b.1) {
+                    Ordering::Less => a,
+                    _ => b,
+                },
+            });
+
+        match_count_pos.map(|(count, pos)| (count, pos, variant))
+    }));
 
     // Sort by max count, then min pos.
     result.sort_by(|a, b| match a.0.cmp(&b.0) {

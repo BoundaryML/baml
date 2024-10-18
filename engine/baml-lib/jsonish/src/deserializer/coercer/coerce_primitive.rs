@@ -223,12 +223,12 @@ pub(super) fn coerce_bool(
     if let Some(value) = value {
         match value {
             crate::jsonish::Value::Boolean(b) => Ok(BamlValueWithFlags::Bool((*b).into())),
-            crate::jsonish::Value::String(s) => match s.as_str() {
+            crate::jsonish::Value::String(s) => match s.to_lowercase().as_str() {
                 "true" => Ok(BamlValueWithFlags::Bool(
                     (true, Flag::StringToBool(s.clone())).into(),
                 )),
                 "false" => Ok(BamlValueWithFlags::Bool(
-                    (true, Flag::StringToBool(s.clone())).into(),
+                    (false, Flag::StringToBool(s.clone())).into(),
                 )),
                 _ => {
                     match super::match_string::match_string(
@@ -255,7 +255,7 @@ pub(super) fn coerce_bool(
             },
             crate::jsonish::Value::Array(items) => {
                 coerce_array_to_singular(ctx, target, &items.iter().collect::<Vec<_>>(), &|value| {
-                    coerce_float(ctx, target, Some(value))
+                    coerce_bool(ctx, target, Some(value))
                 })
             }
             _ => Err(ctx.error_unexpected_type(target, value)),
