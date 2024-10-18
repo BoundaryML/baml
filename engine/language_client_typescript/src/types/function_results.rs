@@ -1,4 +1,3 @@
-use baml_types::BamlValue;
 use napi_derive::napi;
 
 use crate::errors::from_anyhow_error;
@@ -23,6 +22,6 @@ impl FunctionResult {
             .parsed_content()
             .map_err(|e| from_anyhow_error(e))?;
 
-        Ok(serde_json::json!(BamlValue::from(parsed)))
+        Ok(serde_json::to_value(parsed)?)
     }
 }

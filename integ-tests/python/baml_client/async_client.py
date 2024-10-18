@@ -563,6 +563,30 @@ class BamlAsyncClient:
       mdl = create_model("ExpectFailureReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    async def ExtractContactInfo(
+        self,
+        document: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.ContactInfo:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "ExtractContactInfo",
+        {
+          "document": document,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("ExtractContactInfoReturnType", inner=(types.ContactInfo, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def ExtractNames(
         self,
         input: str,
@@ -1139,6 +1163,54 @@ class BamlAsyncClient:
       mdl = create_model("OptionalTest_FunctionReturnType", inner=(List[Optional[types.OptionalTest_ReturnType]], ...))
       return coerce(mdl, raw.parsed())
     
+    async def PredictAge(
+        self,
+        name: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.FooAny:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "PredictAge",
+        {
+          "name": name,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("PredictAgeReturnType", inner=(types.FooAny, ...))
+      return coerce(mdl, raw.parsed())
+    
+    async def PredictAgeBare(
+        self,
+        inp: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.Checked[int,types.Checks__too_big]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "PredictAgeBare",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("PredictAgeBareReturnType", inner=(baml_py.Checked[int,types.Checks__too_big], ...))
+      return coerce(mdl, raw.parsed())
+    
     async def PromptTestClaude(
         self,
         input: str,
@@ -1307,6 +1379,30 @@ class BamlAsyncClient:
       mdl = create_model("PromptTestStreamingReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    async def ReturnFailingAssert(
+        self,
+        inp: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "ReturnFailingAssert",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("ReturnFailingAssertReturnType", inner=(int, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def SchemaDescriptions(
         self,
         input: str,
@@ -1353,6 +1449,30 @@ class BamlAsyncClient:
         __cr__,
       )
       mdl = create_model("StreamBigNumbersReturnType", inner=(types.BigNumbers, ...))
+      return coerce(mdl, raw.parsed())
+    
+    async def StreamFailingAssertion(
+        self,
+        theme: str,length: int,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TwoStoriesOneTitle:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "StreamFailingAssertion",
+        {
+          "theme": theme,"length": length,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("StreamFailingAssertionReturnType", inner=(types.TwoStoriesOneTitle, ...))
       return coerce(mdl, raw.parsed())
     
     async def StreamOneBigNumber(
@@ -2853,6 +2973,39 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def ExtractContactInfo(
+        self,
+        document: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.ContactInfo, types.ContactInfo]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "ExtractContactInfo",
+        {
+          "document": document,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("ExtractContactInfoReturnType", inner=(types.ContactInfo, ...))
+      partial_mdl = create_model("ExtractContactInfoPartialReturnType", inner=(partial_types.ContactInfo, ...))
+
+      return baml_py.BamlStream[partial_types.ContactInfo, types.ContactInfo](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
     def ExtractNames(
         self,
         input: str,
@@ -3647,6 +3800,72 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def PredictAge(
+        self,
+        name: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.FooAny, types.FooAny]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "PredictAge",
+        {
+          "name": name,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("PredictAgeReturnType", inner=(types.FooAny, ...))
+      partial_mdl = create_model("PredictAgePartialReturnType", inner=(partial_types.FooAny, ...))
+
+      return baml_py.BamlStream[partial_types.FooAny, types.FooAny](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def PredictAgeBare(
+        self,
+        inp: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[baml_py.Checked[Optional[int],types.Checks__too_big], baml_py.Checked[int,types.Checks__too_big]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "PredictAgeBare",
+        {
+          "inp": inp,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("PredictAgeBareReturnType", inner=(baml_py.Checked[int,types.Checks__too_big], ...))
+      partial_mdl = create_model("PredictAgeBarePartialReturnType", inner=(baml_py.Checked[Optional[int],types.Checks__too_big], ...))
+
+      return baml_py.BamlStream[baml_py.Checked[Optional[int],types.Checks__too_big], baml_py.Checked[int,types.Checks__too_big]](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
     def PromptTestClaude(
         self,
         input: str,
@@ -3878,6 +4097,39 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def ReturnFailingAssert(
+        self,
+        inp: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[int], int]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "ReturnFailingAssert",
+        {
+          "inp": inp,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("ReturnFailingAssertReturnType", inner=(int, ...))
+      partial_mdl = create_model("ReturnFailingAssertPartialReturnType", inner=(Optional[int], ...))
+
+      return baml_py.BamlStream[Optional[int], int](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
     def SchemaDescriptions(
         self,
         input: str,
@@ -3938,6 +4190,40 @@ class BamlStreamClient:
       partial_mdl = create_model("StreamBigNumbersPartialReturnType", inner=(partial_types.BigNumbers, ...))
 
       return baml_py.BamlStream[partial_types.BigNumbers, types.BigNumbers](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def StreamFailingAssertion(
+        self,
+        theme: str,length: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "StreamFailingAssertion",
+        {
+          "theme": theme,
+          "length": length,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("StreamFailingAssertionReturnType", inner=(types.TwoStoriesOneTitle, ...))
+      partial_mdl = create_model("StreamFailingAssertionPartialReturnType", inner=(partial_types.TwoStoriesOneTitle, ...))
+
+      return baml_py.BamlStream[partial_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle](
         raw,
         lambda x: coerce(partial_mdl, x),
         lambda x: coerce(mdl, x),

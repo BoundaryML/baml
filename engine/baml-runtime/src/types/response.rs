@@ -1,16 +1,16 @@
 pub use crate::internal::llm_client::LLMResponse;
-use crate::{errors::ExposedError, internal::llm_client::orchestrator::OrchestrationScope};
+use crate::{errors::ExposedError, internal::llm_client::{orchestrator::OrchestrationScope, ResponseBamlValue}};
 use anyhow::Result;
 use colored::*;
 
 use baml_types::BamlValue;
-use jsonish::BamlValueWithFlags;
 
+#[derive(Debug)]
 pub struct FunctionResult {
     event_chain: Vec<(
         OrchestrationScope,
         LLMResponse,
-        Option<Result<jsonish::BamlValueWithFlags>>,
+        Option<Result<ResponseBamlValue>>,
     )>,
 }
 
@@ -27,7 +27,6 @@ impl std::fmt::Display for FunctionResult {
         writeln!(f, "{}", self.llm_response())?;
         match &self.parsed() {
             Some(Ok(val)) => {
-                let val: BamlValue = val.into();
                 writeln!(
                     f,
                     "{}",
@@ -48,10 +47,10 @@ impl FunctionResult {
     pub fn new(
         scope: OrchestrationScope,
         response: LLMResponse,
-        parsed: Option<Result<BamlValueWithFlags>>,
+        baml_value: Option<Result<ResponseBamlValue>>,
     ) -> Self {
         Self {
-            event_chain: vec![(scope, response, parsed)],
+            event_chain: vec![(scope, response, baml_value)],
         }
     }
 
@@ -60,7 +59,7 @@ impl FunctionResult {
     ) -> &Vec<(
         OrchestrationScope,
         LLMResponse,
-        Option<Result<BamlValueWithFlags>>,
+        Option<Result<ResponseBamlValue>>,
     )> {
         &self.event_chain
     }
@@ -69,7 +68,7 @@ impl FunctionResult {
         chain: Vec<(
             OrchestrationScope,
             LLMResponse,
-            Option<Result<BamlValueWithFlags>>,
+            Option<Result<ResponseBamlValue>>,
         )>,
     ) -> Result<Self> {
         if chain.is_empty() {
@@ -91,11 +90,11 @@ impl FunctionResult {
         &self.event_chain.last().unwrap().0
     }
 
-    pub fn parsed(&self) -> &Option<Result<BamlValueWithFlags>> {
+    pub fn parsed(&self) -> &Option<Result<ResponseBamlValue>> {
         &self.event_chain.last().unwrap().2
     }
 
-    pub fn parsed_content(&self) -> Result<&BamlValueWithFlags> {
+    pub fn parsed_content(&self) -> Result<&ResponseBamlValue> {
         self.parsed()
             .as_ref()
             .map(|res| {

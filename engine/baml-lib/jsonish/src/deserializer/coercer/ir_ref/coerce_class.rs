@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::BamlMap;
+use baml_types::{BamlMap, Constraint};
 use internal_baml_core::ir::FieldType;
 use internal_baml_jinja::types::{Class, Name};
 
@@ -11,7 +11,7 @@ use crate::deserializer::{
 
 use super::ParsingContext;
 
-// Name, type, description
+// Name, type, description, constraints.
 type FieldValue = (Name, FieldType, Option<String>);
 
 impl TypeCoercer for Class {

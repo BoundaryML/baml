@@ -36,6 +36,7 @@ impl ToRuby for Expression {
             Expression::RawString(val) => format!("`{}`", val.replace('`', "\\`")),
             Expression::Numeric(val) => val.clone(),
             Expression::Bool(val) => val.to_string(),
+            Expression::JinjaExpression(val) => val.to_string(),
         }
     }
 }

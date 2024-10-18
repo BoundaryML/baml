@@ -1,8 +1,9 @@
-use crate::validate::validation_pipeline::context::Context;
+use crate::{validate::validation_pipeline::context::Context};
 
+use either::Either;
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 
-use internal_baml_schema_ast::ast::{WithIdentifier, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{FieldType, WithIdentifier, WithName, WithSpan};
 
 use super::types::validate_type;
 
@@ -73,7 +74,18 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
     for func in ctx.db.walk_functions() {
         for args in func.walk_input_args().chain(func.walk_output_args()) {
             let arg = args.ast_arg();
-            validate_type(ctx, &arg.1.field_type)
+            validate_type(ctx, &arg.1.field_type);
+        }
+
+        for args in func.walk_input_args() {
+            let arg = args.ast_arg();
+            let field_type = &arg.1.field_type;
+
+            let span = field_type.span().clone();
+            if has_checks_nested(ctx, field_type) {
+                ctx.push_error(DatamodelError::new_validation_error("Types with checks are not allowed as function parameters.", span));
+            }
+
         }
 
         // Ensure the client is correct.
@@ -156,5 +168,34 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         }
         defined_types.end_scope();
         defined_types.errors_mut().clear();
+    }
+}
+
+/// Recusively search for `check` attributes in a field type and all of its
+/// composed children.
+fn has_checks_nested(ctx: &Context<'_>, field_type: &FieldType) -> bool {
+    if field_type.has_checks() {
+        return true;
+    }
+
+    match field_type {
+        FieldType::Symbol(_, id, ..) => {
+            match ctx.db.find_type(id) {
+                Some(Either::Left(class_walker)) => {
+                    let mut fields = class_walker.static_fields();
+                    fields.any(|field| field.ast_field().expr.as_ref().map_or(false, |ft| has_checks_nested(ctx, &ft)))
+                }
+                ,
+                _ => false,
+            }
+        },
+
+        FieldType::Primitive(..) => false,
+        FieldType::Union(_, children, ..) => children.iter().any(|ft| has_checks_nested(ctx, ft)),
+        FieldType::Literal(..) => false,
+        FieldType::Tuple(_, children, ..) => children.iter().any(|ft| has_checks_nested(ctx, ft)),
+        FieldType::List(_, child, ..) => has_checks_nested(ctx, child),
+        FieldType::Map(_, kv, ..) =>
+            has_checks_nested(ctx, &kv.as_ref().0) || has_checks_nested(ctx, &kv.as_ref().1),
     }
 }
