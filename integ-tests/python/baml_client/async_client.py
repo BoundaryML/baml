@@ -2099,6 +2099,30 @@ class BamlAsyncClient:
       mdl = create_model("TestRetryExponentialReturnType", inner=(str, ...))
       return coerce(mdl, raw.parsed())
     
+    async def TestSingleFallbackClient(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "TestSingleFallbackClient",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      mdl = create_model("TestSingleFallbackClientReturnType", inner=(str, ...))
+      return coerce(mdl, raw.parsed())
+    
     async def TestVertex(
         self,
         input: str,
@@ -4958,6 +4982,38 @@ class BamlStreamClient:
 
       mdl = create_model("TestRetryExponentialReturnType", inner=(str, ...))
       partial_mdl = create_model("TestRetryExponentialPartialReturnType", inner=(Optional[str], ...))
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: coerce(partial_mdl, x),
+        lambda x: coerce(mdl, x),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestSingleFallbackClient(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "TestSingleFallbackClient",
+        {
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      mdl = create_model("TestSingleFallbackClientReturnType", inner=(str, ...))
+      partial_mdl = create_model("TestSingleFallbackClientPartialReturnType", inner=(Optional[str], ...))
 
       return baml_py.BamlStream[Optional[str], str](
         raw,

@@ -115,6 +115,7 @@ describe "ruby<->baml integration tests" do
     end
   end
 
+
   it "works with fallbacks" do
     res = b.TestFallbackClient()
     assert res.size > 0
