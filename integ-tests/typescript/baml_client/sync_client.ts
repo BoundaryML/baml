@@ -1593,14 +1593,14 @@ export class BamlSyncClient {
   }
   
   TestCaching(
-      input: string,
+      input: string,not_cached: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
     const raw = this.runtime.callFunctionSync(
       "TestCaching",
       {
-        "input": input
+        "input": input,"not_cached": not_cached
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),

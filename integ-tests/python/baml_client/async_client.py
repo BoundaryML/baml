@@ -1477,7 +1477,7 @@ class BamlAsyncClient:
     
     async def TestCaching(
         self,
-        input: str,
+        input: str,not_cached: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
@@ -1490,7 +1490,7 @@ class BamlAsyncClient:
       raw = await self.__runtime.call_function(
         "TestCaching",
         {
-          "input": input,
+          "input": input,"not_cached": not_cached,
         },
         self.__ctx_manager.get(),
         tb,
@@ -3950,7 +3950,7 @@ class BamlStreamClient:
     
     def TestCaching(
         self,
-        input: str,
+        input: str,not_cached: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
       __tb__ = baml_options.get("tb", None)
@@ -3964,6 +3964,7 @@ class BamlStreamClient:
         "TestCaching",
         {
           "input": input,
+          "not_cached": not_cached,
         },
         None,
         self.__ctx_manager.get(),

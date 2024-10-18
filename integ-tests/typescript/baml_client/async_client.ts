@@ -1593,14 +1593,14 @@ export class BamlAsyncClient {
   }
   
   async TestCaching(
-      input: string,
+      input: string,not_cached: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<string> {
     try {
       const raw = await this.runtime.callFunction(
         "TestCaching",
         {
-          "input": input
+          "input": input,"not_cached": not_cached
         },
         this.ctx_manager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -4295,14 +4295,14 @@ class BamlStreamClient {
   }
   
   TestCaching(
-      input: string,
+      input: string,not_cached: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<RecursivePartialNull<string>, string> {
     try {
       const raw = this.runtime.streamFunction(
         "TestCaching",
         {
-          "input": input
+          "input": input,"not_cached": not_cached
         },
         undefined,
         this.ctx_manager.cloneContext(),

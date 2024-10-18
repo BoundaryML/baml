@@ -2037,13 +2037,13 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        input: String,
+        input: String,not_cached: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestCaching(
         *varargs,
-        input:,
+        input:,not_cached:,
         baml_options: {}
     )
       if varargs.any?
@@ -2057,7 +2057,7 @@ module Baml
       raw = @runtime.call_function(
         "TestCaching",
         {
-          input: input,
+          input: input,not_cached: not_cached,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -5052,13 +5052,13 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        input: String,
+        input: String,not_cached: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestCaching(
         *varargs,
-        input:,
+        input:,not_cached:,
         baml_options: {}
     )
       if varargs.any?
@@ -5072,7 +5072,7 @@ module Baml
       raw = @runtime.stream_function(
         "TestCaching",
         {
-          input: input,
+          input: input,not_cached: not_cached,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),

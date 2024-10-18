@@ -2214,11 +2214,14 @@ components:
             properties:
               input:
                 type: string
+              not_cached:
+                type: string
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            - not_cached
             additionalProperties: false
     TestFallbackClient:
       required: true
