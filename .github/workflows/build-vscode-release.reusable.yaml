@@ -56,7 +56,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: baml-vscode.vsix
-          path: typescript/vscode-ext/packages/gloo-${{ steps.build.outputs.version }}.vsix
+          path: typescript/vscode-ext/packages/Gloo-${{ steps.build.outputs.version }}.vsix
           if-no-files-found: error
 
       # Upload the artifact (helpful for debugging and manual downloads)
