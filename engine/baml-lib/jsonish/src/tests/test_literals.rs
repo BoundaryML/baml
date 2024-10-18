@@ -83,9 +83,25 @@ test_deserializer!(
 );
 
 test_deserializer!(
+    test_literal_string_preceded_by_extra_text_case_mismatch,
+    EMPTY_FILE,
+    "The answer is Two",
+    FieldType::Literal(LiteralValue::String("TWO".into())),
+    "TWO"
+);
+
+test_deserializer!(
     test_literal_string_followed_by_extra_text,
     EMPTY_FILE,
     "TWO is the answer",
+    FieldType::Literal(LiteralValue::String("TWO".into())),
+    "TWO"
+);
+
+test_deserializer!(
+    test_literal_string_followed_by_extra_text_case_mismatch,
+    EMPTY_FILE,
+    "Two is the answer",
     FieldType::Literal(LiteralValue::String("TWO".into())),
     "TWO"
 );
@@ -99,11 +115,37 @@ test_deserializer!(
 );
 
 test_deserializer!(
+    test_literal_string_with_quotes_preceded_by_extra_text_case_mismatch,
+    EMPTY_FILE,
+    r#"The answer is "two""#,
+    FieldType::Literal(LiteralValue::String("TWO".into())),
+    "TWO"
+);
+
+test_deserializer!(
     test_literal_string_with_quotes_followed_by_extra_text,
     EMPTY_FILE,
     r#""TWO" is the answer"#,
     FieldType::Literal(LiteralValue::String("TWO".into())),
     "TWO"
+);
+
+test_deserializer!(
+    test_literal_string_with_quotes_followed_by_extra_text_case_mismatch,
+    EMPTY_FILE,
+    r#""Two" is the answer"#,
+    FieldType::Literal(LiteralValue::String("TWO".into())),
+    "TWO"
+);
+
+test_deserializer!(
+    test_literal_string_case_mismatch_upper,
+    EMPTY_FILE,
+    // Came up with this example unintentioanlly but this causes ambiguity
+    // issues with unions ("two" | "one"), see the TODO at the end of this file.
+    r#"The ansewr "TWO" is the correct one"#,
+    FieldType::Literal(LiteralValue::String("two".into())),
+    "two"
 );
 
 test_deserializer!(

@@ -8,6 +8,14 @@ TWO
 }
 "#;
 
+const PASCAL_CASE_ENUM_FILE: &str = r#"
+// Enums
+enum PascalCaseCategory {
+One
+Two
+}
+"#;
+
 test_deserializer!(
     test_enum,
     ENUM_FILE,
@@ -54,6 +62,30 @@ test_deserializer!(
     r#""ONE: The description of k1""#,
     FieldType::Enum("Category".to_string()),
     "ONE"
+);
+
+test_deserializer!(
+    from_string_and_case_mismatch,
+    ENUM_FILE,
+    "The answer is One",
+    FieldType::Enum("Category".to_string()),
+    "ONE"
+);
+
+test_deserializer!(
+    from_string_and_case_mismatch_wrapped,
+    ENUM_FILE,
+    "**one** is the answer",
+    FieldType::Enum("Category".to_string()),
+    "ONE"
+);
+
+test_deserializer!(
+    from_string_and_case_mismatch_upper,
+    PASCAL_CASE_ENUM_FILE,
+    "**ONE** is the answer",
+    FieldType::Enum("PascalCaseCategory".to_string()),
+    "One"
 );
 
 test_deserializer!(
