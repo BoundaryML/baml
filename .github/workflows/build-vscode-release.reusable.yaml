@@ -1,0 +1,83 @@
+name: Release vscode_ext
+
+on:
+  workflow_call: {}
+  push:
+    branches: [vscode-release]
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-vscode
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build VSCode
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Bindgen
+        run: cargo install -f wasm-bindgen-cli@0.2.92
+        working-directory: engine/baml-schema-wasm
+      # Set up Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache: "pnpm"
+          node-version: 20
+          cache-dependency-path: |
+            typescript/**/pnpm-lock.yaml
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: typescript/
+      - name: Build Typescript Project
+        run: pnpm run build
+        working-directory: typescript/
+
+      # Build the VSCode Extension
+      - name: Build VSCode Extension
+        id: build
+        run: |
+          pnpm run vscode:package
+          VERSION=$(cat package.json| grep version | cut -d ' ' -f 4 | sed 's/[",]//g')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        working-directory: typescript/vscode-ext/packages
+
+      # Upload the artifact (helpful for debugging and manual downloads)
+      - name: Upload VSCode Extension Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: baml-vscode.vsix
+          path: typescript/vscode-ext/packages/baml-extension-${{ steps.build.outputs.version }}.vsix
+          if-no-files-found: error
+
+      # Upload the artifact (helpful for debugging and manual downloads)
+      - name: Upload VSCode Extension Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: baml-out
+          path: typescript/vscode-ext/packages/vscode/out
+          if-no-files-found: error
+
+      # upload the lang server artifact
+      - name: Upload VSCode Lang Server Extension Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: language-server
+          path: typescript/vscode-ext/packages/language-server/out
+          if-no-files-found: error
+
+      - name: VSCode Playground Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-playground
+          path: typescript/vscode-ext/packages/web-panel/dist
+          if-no-files-found: error
