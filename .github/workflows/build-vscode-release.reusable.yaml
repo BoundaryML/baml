@@ -38,15 +38,15 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
         working-directory: typescript/
+
       - name: Build Typescript Project
-        run: pnpm run build
+        run: pnpm turbo vscode:package
         working-directory: typescript/
 
       # Build the VSCode Extension
       - name: Build VSCode Extension
         id: build
         run: |
-          pnpm run vscode:package
           VERSION=$(cat package.json| grep version | cut -d ' ' -f 4 | sed 's/[",]//g')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
         working-directory: typescript/vscode-ext/packages
@@ -56,7 +56,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: baml-vscode.vsix
-          path: typescript/vscode-ext/packages/Gloo-${{ steps.build.outputs.version }}.vsix
+          path: typescript/vscode-ext/packages/gloo-${{ steps.build.outputs.version }}.vsix
           if-no-files-found: error
 
       # Upload the artifact (helpful for debugging and manual downloads)
