@@ -230,6 +230,21 @@ paths:
                 title: DescribeImage4Response
                 type: string
       operationId: DescribeImage4
+  /call/DifferentiateUnions:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/DifferentiateUnions'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: DifferentiateUnionsResponse
+                oneOf:
+                - $ref: '#/components/schemas/OriginalA'
+                - $ref: '#/components/schemas/OriginalB'
+      operationId: DifferentiateUnions
   /call/DummyOutputFunction:
     post:
       requestBody:
@@ -1448,6 +1463,19 @@ components:
             - classWithImage
             - img2
             additionalProperties: false
+    DifferentiateUnions:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: DifferentiateUnionsRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
+            additionalProperties: false
     DummyOutputFunction:
       required: true
       content:
@@ -2186,11 +2214,14 @@ components:
             properties:
               input:
                 type: string
+              not_cached:
+                type: string
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            - not_cached
             additionalProperties: false
     TestFallbackClient:
       required: true
@@ -3152,6 +3183,22 @@ components:
           type: string
       required:
       - order_status
+      additionalProperties: false
+    OriginalA:
+      type: object
+      properties:
+        value:
+          type: integer
+      required:
+      - value
+      additionalProperties: false
+    OriginalB:
+      type: object
+      properties:
+        value:
+          type: integer
+      required:
+      - value
       additionalProperties: false
     Person:
       type: object

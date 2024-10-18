@@ -74,11 +74,11 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
             if event is None:
                 break
             if event.is_ok():
-                yield self.__partial_coerce(event.parsed())
+                yield self.__partial_coerce(event)
 
     async def get_final_response(self):
         final = self.__drive_to_completion_in_bg()
-        return self.__final_coerce((await asyncio.wrap_future(final)).parsed())
+        return self.__final_coerce((await asyncio.wrap_future(final)))
 
 
 class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
@@ -138,7 +138,7 @@ class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
             if event is None:
                 break
             if event.is_ok():
-                yield self.__partial_coerce(event.parsed())
+                yield self.__partial_coerce(event)
 
     def get_final_response(self):
         self.__drive_to_completion_in_bg()
@@ -153,4 +153,4 @@ class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
                 "BAML Internal error: Stream did not complete successfully. Please report this issue."
             )
 
-        return self.__final_coerce(self.__result.parsed())
+        return self.__final_coerce(self.__result)

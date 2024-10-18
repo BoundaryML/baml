@@ -316,6 +316,17 @@ export interface OrderInfo {
   
 }
 
+export interface OriginalA {
+  value: number
+  
+}
+
+export interface OriginalB {
+  value: number
+  
+  [key: string]: any;
+}
+
 export interface Person {
   name?: string | null
   hair_color?: (string | Color) | null

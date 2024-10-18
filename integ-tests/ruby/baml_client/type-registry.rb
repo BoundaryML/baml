@@ -18,7 +18,7 @@ module Baml
     class TypeBuilder
         def initialize
             @registry = Baml::Ffi::TypeBuilder.new
-            @classes = Set[ "BigNumbers",  "Blah",  "BookOrder",  "ClassOptionalOutput",  "ClassOptionalOutput2",  "ClassWithImage",  "CompoundBigNumbers",  "CustomTaskResult",  "DummyOutput",  "DynInputOutput",  "DynamicClassOne",  "DynamicClassTwo",  "DynamicOutput",  "Education",  "Email",  "Event",  "FakeImage",  "FlightConfirmation",  "GroceryReceipt",  "InnerClass",  "InnerClass2",  "InputClass",  "InputClassNested",  "NamedArgsSingleClass",  "Nested",  "Nested2",  "OptionalTest_Prop1",  "OptionalTest_ReturnType",  "OrderInfo",  "Person",  "Quantity",  "RaysData",  "ReceiptInfo",  "ReceiptItem",  "Recipe",  "Resume",  "Schema",  "SearchParams",  "SomeClassNestedDynamic",  "StringToClassEntry",  "TestClassAlias",  "TestClassNested",  "TestClassWithEnum",  "TestOutputClass",  "UnionTest_ReturnType",  "WithReasoning", ]
+            @classes = Set[ "BigNumbers",  "Blah",  "BookOrder",  "ClassOptionalOutput",  "ClassOptionalOutput2",  "ClassWithImage",  "CompoundBigNumbers",  "CustomTaskResult",  "DummyOutput",  "DynInputOutput",  "DynamicClassOne",  "DynamicClassTwo",  "DynamicOutput",  "Education",  "Email",  "Event",  "FakeImage",  "FlightConfirmation",  "GroceryReceipt",  "InnerClass",  "InnerClass2",  "InputClass",  "InputClassNested",  "NamedArgsSingleClass",  "Nested",  "Nested2",  "OptionalTest_Prop1",  "OptionalTest_ReturnType",  "OrderInfo",  "OriginalA",  "OriginalB",  "Person",  "Quantity",  "RaysData",  "ReceiptInfo",  "ReceiptItem",  "Recipe",  "Resume",  "Schema",  "SearchParams",  "SomeClassNestedDynamic",  "StringToClassEntry",  "TestClassAlias",  "TestClassNested",  "TestClassWithEnum",  "TestOutputClass",  "UnionTest_ReturnType",  "WithReasoning", ]
             @enums = Set[ "AliasedEnum",  "Category",  "Category2",  "Category3",  "Color",  "DataType",  "DynEnumOne",  "DynEnumTwo",  "EnumInClass",  "EnumOutput",  "Hobby",  "NamedArgsSingleEnum",  "NamedArgsSingleEnumList",  "OptionalTest_CategoryType",  "OrderStatus",  "Tag",  "TestEnum", ]
         end
 
@@ -133,6 +133,10 @@ module Baml
         
         def DynamicOutput
             ClassBuilder.new(@registry, "DynamicOutput", Set[])
+        end
+        
+        def OriginalB
+            ClassBuilder.new(@registry, "OriginalB", Set[ "value", ])
         end
         
         def Person
