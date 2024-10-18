@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, TypeVar, Union, TypedDict, Type, Literal
+from typing import Any, Dict, List, Optional, TypeVar, Union, TypedDict, Type, Literal, cast
 from typing_extensions import NotRequired
 import pprint
 
@@ -12,16 +12,6 @@ from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, D
 
 OutputType = TypeVar('OutputType')
 
-def coerce(cls: Type[BaseModel], parsed: Any) -> Any:
-  try:
-    return cls.model_validate({"inner": parsed}).inner # type: ignore
-  except ValidationError as e:
-    raise TypeError(
-      "Internal BAML error while casting output to {}\n{}".format(
-        cls.__name__,
-        pprint.pformat(parsed)
-      )
-    ) from e
 
 # Define the TypedDict with optional parameters having default values
 class BamlCallOptions(TypedDict, total=False):
@@ -69,8 +59,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
       )
-      mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
-      return coerce(mdl, raw.parsed())
+      return cast({{fn.return_type}}, raw.cast_to(types, types))
     {% endfor %}
 
 
@@ -110,13 +99,10 @@ class BamlStreamClient:
         __cr__,
       )
 
-      mdl = create_model("{{ fn.name }}ReturnType", inner=({{ fn.return_type }}, ...))
-      partial_mdl = create_model("{{ fn.name }}PartialReturnType", inner=({{ fn.partial_return_type }}, ...))
-
       return baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](
         raw,
-        lambda x: coerce(partial_mdl, x),
-        lambda x: coerce(mdl, x),
+        lambda x: cast({{fn.partial_return_type}}, x.cast_to(types, partial_types)),
+        lambda x: cast({{fn.return_type}}, x.cast_to(types, types)),
         self.__ctx_manager.get(),
       )
     {% endfor %}
