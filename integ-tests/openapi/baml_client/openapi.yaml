@@ -1168,6 +1168,19 @@ paths:
                 title: TestRetryExponentialResponse
                 type: string
       operationId: TestRetryExponential
+  /call/TestSingleFallbackClient:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestSingleFallbackClient'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestSingleFallbackClientResponse
+                type: string
+      operationId: TestSingleFallbackClient
   /call/TestVertex:
     post:
       requestBody:
@@ -2594,6 +2607,19 @@ components:
         application/json:
           schema:
             title: TestRetryExponentialRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
+            additionalProperties: false
+    TestSingleFallbackClient:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestSingleFallbackClientRequest
             type: object
             properties:
               __baml_options__:
