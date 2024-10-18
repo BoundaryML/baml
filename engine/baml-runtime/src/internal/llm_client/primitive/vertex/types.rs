@@ -101,9 +101,9 @@ pub struct VertexAiSearch {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SafetySetting {
-    pub category: HarmCategory,
-    pub threshold: HarmBlockThreshold,
-    pub method: HarmBlockMethod,
+    pub category: Option<HarmCategory>,
+    pub threshold: Option<HarmBlockThreshold>,
+    pub method: Option<HarmBlockMethod>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -178,8 +178,8 @@ pub enum BlockReason {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SafetyRating {
-    pub category: HarmCategory,
-    pub probability: HarmProbability,
+    pub category: Option<HarmCategory>,
+    pub probability: Option<HarmProbability>,
     pub probability_score: Option<f64>,
     pub severity: Option<HarmSeverity>,
     pub severity_score: Option<f64>,
