@@ -326,18 +326,19 @@ pub enum FinishReason {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CitationMetadata {
-    pub citations: Vec<Citation>,
+    pub citations: Option<Vec<Citation>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Citation {
-    pub start_index: i32,
-    pub end_index: i32,
-    pub uri: String,
-    pub title: String,
-    pub license: String,
-    pub publication_date: Date,
+    pub start_index: Option<i32>,
+    pub end_index: Option<i32>,
+    pub uri: Option<String>,
+    // Their docs are incorrect, this is sometimes missing.
+    pub title: Option<String>,
+    pub license: Option<String>,
+    pub publication_date: Option<Date>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
