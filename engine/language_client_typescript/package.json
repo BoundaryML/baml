@@ -29,7 +29,10 @@
     "./stream.d.ts",
     "./stream.js",
     "./type_builder.d.ts",
-    "./type_builder.js"
+    "./type_builder.js",
+    "./checked.js",
+    "./checked.d.ts",
+    "./checked.d.ts.map"
   ],
   "main": "./index.js",
   "types": "./index.d.ts",

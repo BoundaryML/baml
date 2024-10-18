@@ -4,7 +4,7 @@ mod typescript_language_features;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use either::Either;
+use generate_types::type_name_for_checks;
 use indexmap::IndexMap;
 use internal_baml_core::{
     configuration::GeneratorDefaultClientMode,
@@ -12,12 +12,14 @@ use internal_baml_core::{
 };
 
 use self::typescript_language_features::{ToTypescript, TypescriptLanguageFeatures};
-use crate::dir_writer::FileCollector;
+use crate::{dir_writer::FileCollector, field_type_attributes, type_check_attributes, TypeCheckAttributes};
+use self::generate_types::{TypescriptClass, type_def_for_checks};
 
 #[derive(askama::Template)]
 #[template(path = "async_client.ts.j2", escape = "none")]
 struct AsyncTypescriptClient {
     funcs: Vec<TypescriptFunction>,
+    check_types: Vec<TypescriptClass<'static>>,
     types: Vec<String>,
 }
 
@@ -25,11 +27,13 @@ struct AsyncTypescriptClient {
 #[template(path = "sync_client.ts.j2", escape = "none")]
 struct SyncTypescriptClient {
     funcs: Vec<TypescriptFunction>,
+    check_types: Vec<TypescriptClass<'static>>,
     types: Vec<String>,
 }
 
 struct TypescriptClient {
     funcs: Vec<TypescriptFunction>,
+    check_types: Vec<TypescriptClass<'static>>,
     types: Vec<String>,
 }
 
@@ -37,6 +41,7 @@ impl From<TypescriptClient> for AsyncTypescriptClient {
     fn from(value: TypescriptClient) -> Self {
         Self {
             funcs: value.funcs,
+            check_types: value.check_types,
             types: value.types,
         }
     }
@@ -46,6 +51,7 @@ impl From<TypescriptClient> for SyncTypescriptClient {
     fn from(value: TypescriptClient) -> Self {
         Self {
             funcs: value.funcs,
+            check_types: value.check_types,
             types: value.types,
         }
     }
@@ -153,6 +159,8 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
             .flatten()
             .collect();
 
+        let check_types = type_check_attributes(ir).iter().map(|checks| type_def_for_checks(checks)).collect();
+
         let types = ir
             .walk_classes()
             .map(|c| c.name().to_string())
@@ -160,6 +168,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
             .collect();
         Ok(TypescriptClient {
             funcs: functions,
+            check_types,
             types,
         })
     }
@@ -295,6 +304,18 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => format!("{} | null", inner.to_type_ref(ir)),
+            FieldType::Constrained{base,..} => {
+                match field_type_attributes(self) {
+                    Some(checks) => {
+                        let base_type_ref = base.to_type_ref(ir);
+                        let checks_type_ref = type_name_for_checks(&checks);
+                        format!("Checked<{base_type_ref},{checks_type_ref}>")
+                    }
+                    None => {
+                        base.to_type_ref(ir)
+                    }
+                }
+            },
         }
     }
 }

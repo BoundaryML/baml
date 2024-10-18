@@ -60,6 +60,18 @@ pub(crate) fn parse_value_expr(
     }
 }
 
+fn reassociate_type_attributes(
+    field_attributes: &mut Vec<Attribute>,
+    field_type: &mut FieldType,
+) {
+    let mut all_attrs = field_type.attributes().to_owned();
+    all_attrs.append(field_attributes);
+    let (attrs_for_type, attrs_for_field): (Vec<Attribute>, Vec<Attribute>) =
+        all_attrs.into_iter().partition(|attr| ["assert", "check"].contains(&attr.name()));
+    field_type.set_attributes(attrs_for_type);
+    *field_attributes = attrs_for_field;
+}
+
 pub(crate) fn parse_type_expr(
     model_name: &Option<Identifier>,
     container_type: &'static str,
@@ -90,11 +102,18 @@ pub(crate) fn parse_type_expr(
         }
     }
 
+    // Strip certain attributes from the field and attach them to the type.
+    match field_type.as_mut() {
+        None => {},
+        Some(ft) => reassociate_type_attributes(&mut field_attributes, ft),
+    }
+
     match (name, &field_type) {
+        // Class field.
         (Some(name), Some(field_type)) => Ok(Field {
             expr: Some(field_type.clone()),
             name,
-            attributes: field_type.clone().attributes().to_vec(),
+            attributes: field_attributes,
             documentation: comment,
             span: diagnostics.span(pair_span),
         }),

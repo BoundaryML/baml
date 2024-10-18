@@ -215,7 +215,7 @@ impl JsonParseState {
                                                     log::debug!("Closing due to: new key after space + comma");
                                                     return Some(idx);
                                                 }
-                                                x => {
+                                                _x => {
                                                     break;
                                                 }
                                             }

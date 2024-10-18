@@ -8,6 +8,14 @@ export enum {{enum.name}} {
 }
 {% endfor %}
 
+{%- for cls in check_classes %}
+export interface {{cls.name}} {
+  {%- for (name, optional, type) in cls.fields %}
+  {{name}}: {{type}}
+  {%- endfor %}
+}
+{% endfor %}
+
 {%- for cls in classes %}
 export interface {{cls.name}} {
   {%- for (name, optional, type) in cls.fields %}

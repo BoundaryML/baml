@@ -1,10 +1,13 @@
-use baml_types::{BamlMap, BamlMediaType, BamlValue, FieldType, LiteralValue, TypeValue};
+use baml_types::{
+    BamlMap, BamlValue, Constraint, ConstraintLevel, FieldType, LiteralValue, TypeValue
+};
 use core::result::Result;
 use std::path::PathBuf;
 
 use crate::ir::IntermediateRepr;
 
 use super::{scope_diagnostics::ScopeStack, IRHelper};
+use crate::ir::jinja_helpers::evaluate_predicate;
 
 #[derive(Default)]
 pub struct ParameterError {
@@ -324,6 +327,36 @@ impl ArgCoercer {
                         baml_arg
                     }
                 }
+            }
+            FieldType::Constrained { base, constraints } => {
+                let val = self.coerce_arg(ir, base, value, scope)?;
+                for c@Constraint {
+                    level,
+                    expression,
+                    label,
+                } in constraints.iter()
+                {
+                    let constraint_ok =
+                        evaluate_predicate(&val, &expression).unwrap_or_else(|err| {
+                            scope.push_error(format!(
+                                "Error while evaluating check {c:?}: {:?}",
+                                err
+                            ));
+                            false
+                        });
+                    if !constraint_ok {
+                        let msg = label.as_ref().unwrap_or(&expression.0);
+                        match level {
+                            ConstraintLevel::Check => {
+                                scope.push_warning(format!("Failed check: {msg}"));
+                            }
+                            ConstraintLevel::Assert => {
+                                scope.push_error(format!("Failed assert: {msg}"));
+                            }
+                        }
+                    }
+                }
+                Ok(val)
             }
         }
     }

@@ -148,4 +148,8 @@ impl ScopeStack {
     pub fn push_error(&mut self, error: String) {
         self.scopes.last_mut().unwrap().errors.push(error);
     }
+
+    pub fn push_warning(&mut self, warning: String) {
+        self.scopes.last_mut().unwrap().warnings.push(warning);
+    }
 }

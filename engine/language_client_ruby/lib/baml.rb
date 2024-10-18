@@ -7,11 +7,16 @@ end
 # require_relative "baml/ruby_ffi"
 require_relative "stream"
 require_relative "struct"
+require_relative "checked"
 
 module Baml
   ClientRegistry = Baml::Ffi::ClientRegistry
   Image = Baml::Ffi::Image
   Audio = Baml::Ffi::Audio
+
+  # Reexport Checked types.
+  Checked = Baml::Checks::Checked
+  Check = Baml::Checks::Check
 
   # Dynamically + idempotently define Baml::TypeConverter
   # NB: this does not respect raise_coercion_error = false

@@ -19,7 +19,6 @@ workspace = true
 optional = true
 
 [dependencies.minijinja]
-optional = true
 version = "1.0.16"
 default-features = false
 features = [
@@ -43,4 +42,3 @@ features = [
 [features]
 default = ["stable_sort"]
 stable_sort = ["indexmap"]
-mini-jinja = ["minijinja"]

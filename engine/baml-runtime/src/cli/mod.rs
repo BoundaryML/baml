@@ -1,5 +1,5 @@
 mod dev;
-mod generate;
+pub mod generate;
 mod init;
 mod serve;
 

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use anyhow::{anyhow, Context, Result};
-use baml_types::FieldType;
+use anyhow::{anyhow, Result};
+use baml_types::{Constraint, ConstraintLevel, FieldType};
 use either::Either;
 use indexmap::IndexMap;
 use internal_baml_parser_database::{
@@ -13,6 +13,7 @@ use internal_baml_parser_database::{
 };
 use internal_baml_schema_ast::ast::SubType;
 
+use baml_types::JinjaExpression;
 use internal_baml_schema_ast::ast::{self, FieldArity, WithName, WithSpan};
 use serde::Serialize;
 
@@ -197,6 +198,8 @@ pub struct NodeAttributes {
     #[serde(with = "indexmap::map::serde_seq")]
     meta: IndexMap<String, Expression>,
 
+    constraints: Vec<Constraint>,
+
     // Spans
     #[serde(skip)]
     pub span: Option<ast::Span>,
@@ -208,39 +211,69 @@ impl NodeAttributes {
     }
 }
 
+impl Default for NodeAttributes {
+    fn default() -> Self {
+        NodeAttributes {
+            meta: IndexMap::new(),
+            constraints: Vec::new(),
+            span: None,
+        }
+    }
+}
+
 fn to_ir_attributes(
     db: &ParserDatabase,
     maybe_ast_attributes: Option<&Attributes>,
-) -> IndexMap<String, Expression> {
-    let mut attributes = IndexMap::new();
+) -> (IndexMap<String, Expression>, Vec<Constraint>) {
+    let null_result = (IndexMap::new(), Vec::new());
+    maybe_ast_attributes.map_or(null_result, |attributes| {
+        let Attributes {
+            description,
+            alias,
+            dynamic_type,
+            skip,
+            constraints,
+        } = attributes;
+        let description = description.as_ref().and_then(|d| {
+            let name = "description".to_string();
+            match d {
+                ast::Expression::StringValue(s, _) => Some((name, Expression::String(s.clone()))),
+                ast::Expression::RawStringValue(s) => {
+                    Some((name, Expression::RawString(s.value().to_string())))
+                }
+                ast::Expression::JinjaExpressionValue(j, _) => {
+                    Some((name, Expression::JinjaExpression(j.clone())))
+                }
+                _ => {
+                    eprintln!("Warning, encountered an unexpected description attribute");
+                    None
+                }
+            }
+        });
+        let alias = alias
+            .as_ref()
+            .map(|v| ("alias".to_string(), Expression::String(db[*v].to_string())));
+        let dynamic_type = dynamic_type.as_ref().and_then(|v| {
+            if *v {
+                Some(("dynamic_type".to_string(), Expression::Bool(true)))
+            } else {
+                None
+            }
+        });
+        let skip = skip.as_ref().and_then(|v| {
+            if *v {
+                Some(("skip".to_string(), Expression::Bool(true)))
+            } else {
+                None
+            }
+        });
 
-    if let Some(Attributes {
-        description,
-        alias,
-        dynamic_type,
-        skip,
-    }) = maybe_ast_attributes
-    {
-        if let Some(true) = dynamic_type {
-            attributes.insert("dynamic_type".to_string(), Expression::Bool(true));
-        }
-        if let Some(v) = alias {
-            attributes.insert("alias".to_string(), Expression::String(db[*v].to_string()));
-        }
-        if let Some(d) = description {
-            let ir_expr = match d {
-                ast::Expression::StringValue(s, _) => Expression::String(s.clone()),
-                ast::Expression::RawStringValue(s) => Expression::RawString(s.value().to_string()),
-                _ => panic!("Couldn't deal with description: {:?}", d),
-            };
-            attributes.insert("description".to_string(), ir_expr);
-        }
-        if let Some(true) = skip {
-            attributes.insert("skip".to_string(), Expression::Bool(true));
-        }
-    }
-
-    attributes
+        let meta = vec![description, alias, dynamic_type, skip]
+            .into_iter()
+            .filter_map(|s| s)
+            .collect();
+        (meta, constraints.clone())
+    })
 }
 
 /// Nodes allow attaching metadata to a given IR entity: attributes, source location, etc
@@ -256,6 +289,7 @@ pub trait WithRepr<T> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
+            constraints: Vec::new(),
             span: None,
         }
     }
@@ -278,8 +312,46 @@ fn type_with_arity(t: FieldType, arity: &FieldArity) -> FieldType {
 }
 
 impl WithRepr<FieldType> for ast::FieldType {
+
+    // TODO: (Greg) This code only extracts constraints, and ignores any
+    // other types of attributes attached to the type directly.
+    fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
+        let constraints = self
+            .attributes()
+            .iter()
+            .filter_map(|attr| {
+                let level = match attr.name.to_string().as_str() {
+                    "assert" => Some(ConstraintLevel::Assert),
+                    "check" => Some(ConstraintLevel::Check),
+                    _ => None
+                }?;
+                let (expression, label) = match attr.arguments.arguments.as_slice() {
+                    [arg1, arg2] => match (arg1.clone().value, arg2.clone().value) {
+                        (ast::Expression::JinjaExpressionValue(j,_), ast::Expression::Identifier(ast::Identifier::Local(s, _))) => Some((j,Some(s))),
+                        _ => None
+                    },
+                    [arg1] => match arg1.clone().value {
+                        ast::Expression::JinjaExpressionValue(JinjaExpression(j),_) => Some((JinjaExpression(j.clone()),None)),
+                        _ => None
+                    }
+                    _ => None,
+                }?;
+                Some(Constraint{ level, expression, label })
+            })
+            .collect::<Vec<Constraint>>();
+        let attributes = NodeAttributes {
+            meta: IndexMap::new(),
+            constraints,
+            span: Some(self.span().clone()),
+        };
+
+        attributes
+    }
+
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
-        Ok(match self {
+        let constraints = WithRepr::attributes(self, db).constraints;
+        let has_constraints = constraints.len() > 0;
+        let base = match self {
             ast::FieldType::Primitive(arity, typeval, ..) => {
                 let repr = FieldType::Primitive(typeval.clone());
                 if arity.is_optional() {
@@ -347,7 +419,14 @@ impl WithRepr<FieldType> for ast::FieldType {
                 FieldType::Tuple(t.iter().map(|ft| ft.repr(db)).collect::<Result<Vec<_>>>()?),
                 arity,
             ),
-        })
+        };
+
+        let with_constraints = if has_constraints {
+            FieldType::Constrained { base: Box::new(base.clone()), constraints }
+        } else {
+            base
+        };
+        Ok(with_constraints)
     }
 }
 
@@ -384,6 +463,7 @@ pub enum Expression {
     RawString(String),
     List(Vec<Expression>),
     Map(Vec<(Expression, Expression)>),
+    JinjaExpression(JinjaExpression),
 }
 
 impl Expression {
@@ -411,6 +491,9 @@ impl WithRepr<Expression> for ast::Expression {
             ast::Expression::NumericValue(val, _) => Expression::Numeric(val.clone()),
             ast::Expression::StringValue(val, _) => Expression::String(val.clone()),
             ast::Expression::RawStringValue(val) => Expression::RawString(val.value().to_string()),
+            ast::Expression::JinjaExpressionValue(val, _) => {
+                Expression::JinjaExpression(val.clone())
+            }
             ast::Expression::Identifier(idn) => match idn {
                 ast::Identifier::ENV(k, _) => {
                     Ok(Expression::Identifier(Identifier::ENV(k.clone())))
@@ -459,7 +542,7 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: Default::default(),
-
+            constraints: Vec::new(),
             span: Some(self.span().clone()),
         }
     }
@@ -480,7 +563,6 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
                             .ok()
                     })
                     .collect::<Vec<_>>(),
-                _ => vec![],
             }),
             content: self.template_string().to_string(),
         })
@@ -499,8 +581,10 @@ pub struct Enum {
 
 impl WithRepr<EnumValue> for EnumValueWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        let (meta, constraints) = to_ir_attributes(db, self.get_default_attributes());
         let attributes = NodeAttributes {
-            meta: to_ir_attributes(db, self.get_default_attributes()),
+            meta,
+            constraints,
             span: Some(self.span().clone()),
         };
 
@@ -514,8 +598,10 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
 
 impl WithRepr<Enum> for EnumWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        let (meta, constraints) = to_ir_attributes(db, self.get_default_attributes(SubType::Enum));
         let attributes = NodeAttributes {
-            meta: to_ir_attributes(db, self.get_default_attributes(SubType::Enum)),
+            meta,
+            constraints,
             span: Some(self.span().clone()),
         };
 
@@ -541,8 +627,10 @@ pub struct Field {
 
 impl WithRepr<Field> for FieldWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        let (meta, constraints) = to_ir_attributes(db, self.get_default_attributes());
         let attributes = NodeAttributes {
-            meta: to_ir_attributes(db, self.get_default_attributes()),
+            meta,
+            constraints,
             span: Some(self.span().clone()),
         };
 
@@ -570,18 +658,26 @@ impl WithRepr<Field> for FieldWalker<'_> {
 
 type ClassId = String;
 
+/// A BAML Class.
 #[derive(serde::Serialize, Debug)]
 pub struct Class {
+    /// User defined class name.
     pub name: ClassId,
+
+    /// Fields of the class.
     pub static_fields: Vec<Node<Field>>,
+
+    /// Parameters to the class definition.
     pub inputs: Vec<(String, FieldType)>,
 }
 
 impl WithRepr<Class> for ClassWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
         let default_attributes = self.get_default_attributes(SubType::Class);
+        let (meta, constraints) = to_ir_attributes(db, default_attributes);
         let attributes = NodeAttributes {
-            meta: to_ir_attributes(db, default_attributes),
+            meta,
+            constraints,
             span: Some(self.span().clone()),
         };
 
@@ -799,6 +895,7 @@ impl WithRepr<Function> for FunctionWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: Default::default(),
+            constraints: Vec::new(),
             span: Some(self.span().clone()),
         }
     }
@@ -855,6 +952,7 @@ impl WithRepr<Client> for ClientWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
+            constraints: Vec::new(),
             span: Some(self.span().clone()),
         }
     }
@@ -895,6 +993,7 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
+            constraints: Vec::new(),
             span: Some(self.span().clone()),
         }
     }
@@ -936,12 +1035,12 @@ impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
         let span = self.0.test_case().functions[self.1].1.clone();
         NodeAttributes {
             meta: IndexMap::new(),
-
+            constraints: Vec::new(),
             span: Some(span),
         }
     }
 
-    fn repr(&self, db: &ParserDatabase) -> Result<TestCaseFunction> {
+    fn repr(&self, _db: &ParserDatabase) -> Result<TestCaseFunction> {
         Ok(TestCaseFunction(
             self.0.test_case().functions[self.1].0.clone(),
         ))
@@ -953,6 +1052,7 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
         NodeAttributes {
             meta: IndexMap::new(),
             span: Some(self.span().clone()),
+            constraints: Vec::new(),
         }
     }
 
@@ -1007,4 +1107,23 @@ impl WithRepr<Prompt> for PromptAst<'_> {
             ),
         })
     }
+}
+
+/// Generate an IntermediateRepr from a single block of BAML source code.
+/// This is useful for generating IR test fixtures.
+pub fn make_test_ir(source_code: &str) -> anyhow::Result<IntermediateRepr> {
+    use std::path::PathBuf;
+    use internal_baml_diagnostics::SourceFile;
+    use crate::ValidatedSchema;
+    use crate::validate;
+
+    let path: PathBuf = "fake_file.baml".into();
+    let source_file: SourceFile = (path.clone(), source_code).into();
+    let validated_schema: ValidatedSchema = validate(&path, vec![source_file]);
+    let diagnostics = &validated_schema.diagnostics;
+    if diagnostics.has_errors() {
+        return Err(anyhow::anyhow!("Source code was invalid: \n{:?}", diagnostics.errors()))
+    }
+    let ir = IntermediateRepr::from_parser_database(&validated_schema.db, validated_schema.configuration)?;
+    Ok(ir)
 }

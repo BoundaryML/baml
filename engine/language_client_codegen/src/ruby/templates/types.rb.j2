@@ -22,6 +22,11 @@ module Baml
     class {{cls.name}} < T::Struct; end
     {%- endfor %}
 
+    {#- Forward declarations for checks classes #}
+    {%- for cls in checks_classes %}
+    class {{cls.name}} < T::Struct; end
+    {%- endfor %}
+
     {#- https://sorbet.org/docs/tstruct #}
     {%- for cls in classes %}
     class {{cls.name}} < T::Struct
@@ -42,5 +47,27 @@ module Baml
       end
     end
     {%- endfor %}
+
+    {#- https://sorbet.org/docs/tstruct #}
+    {%- for cls in checks_classes %}
+    class {{cls.name}} < T::Struct
+      include Baml::Sorbet::Struct
+
+      {%- for (name, type) in cls.fields %}
+      const :{{name}}, {{type}}
+      {%- endfor %}
+
+      def initialize(props)
+        super(
+          {%- for (name, _) in cls.fields %}
+          {{name}}: props[:{{name}}],
+          {%- endfor %}
+        )
+
+        @props = props
+      end
+    end
+    {%- endfor %}
+
   end
 end

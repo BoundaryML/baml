@@ -30,21 +30,19 @@ pub enum SubType {
     Other(String),
 }
 
-/// An enum declaration. Enumeration can either be in the database schema, or completely a Prisma level concept.
-///
-/// PostgreSQL stores enums in a schema, while in MySQL the information is in
-/// the table definition. On MongoDB the enumerations are handled in the Query
-/// Engine.
+/// A class or enum declaration.
 #[derive(Debug, Clone)]
 pub struct TypeExpressionBlock {
-    /// The name of the enum.
+    /// The name of the class or enum.
     ///
     /// ```ignore
     /// enum Foo { ... }
     ///      ^^^
+    /// class Bar { ... }
+    ///       ^^^
     /// ```
     pub name: Identifier,
-    /// The values of the enum.
+    /// The values of the enum, or fields of the class.
     ///
     /// ```ignore
     /// enum Foo {

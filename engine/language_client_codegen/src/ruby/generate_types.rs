@@ -1,6 +1,9 @@
+use std::borrow::Cow;
 use std::collections::HashSet;
 
 use anyhow::Result;
+
+use crate::{field_type_attributes, type_check_attributes, TypeCheckAttributes};
 
 use super::ruby_language_features::ToRuby;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType};
@@ -10,6 +13,7 @@ use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, Fi
 pub(crate) struct RubyTypes<'ir> {
     enums: Vec<RubyEnum<'ir>>,
     classes: Vec<RubyStruct<'ir>>,
+    checks_classes: Vec<RubyStruct<'ir>>,
 }
 
 struct RubyEnum<'ir> {
@@ -19,8 +23,8 @@ struct RubyEnum<'ir> {
 }
 
 struct RubyStruct<'ir> {
-    name: &'ir str,
-    fields: Vec<(&'ir str, String)>,
+    name: Cow<'ir, str>,
+    fields: Vec<(Cow<'ir, str>, String)>,
     dynamic: bool,
 }
 
@@ -51,6 +55,7 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir crate::GeneratorArgs)> for RubyTy
         Ok(RubyTypes {
             enums: ir.walk_enums().map(|e| e.into()).collect(),
             classes: ir.walk_classes().map(|c| c.into()).collect(),
+            checks_classes: type_check_attributes(ir).into_iter().map(|checks| type_def_for_checks(checks)).collect::<Vec<_>>()
         })
     }
 }
@@ -74,14 +79,14 @@ impl<'ir> From<EnumWalker<'ir>> for RubyEnum<'ir> {
 impl<'ir> From<ClassWalker<'ir>> for RubyStruct<'ir> {
     fn from(c: ClassWalker<'ir>) -> RubyStruct<'ir> {
         RubyStruct {
-            name: c.name(),
+            name: Cow::Borrowed(c.name()),
             dynamic: c.item.attributes.get("dynamic_type").is_some(),
             fields: c
                 .item
                 .elem
                 .static_fields
                 .iter()
-                .map(|f| (f.elem.name.as_str(), f.elem.r#type.elem.to_type_ref()))
+                .map(|f| (Cow::Borrowed(f.elem.name.as_str()), f.elem.r#type.elem.to_type_ref()))
                 .collect(),
         }
     }
@@ -163,6 +168,18 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => inner.to_partial_type_ref(),
+            FieldType::Constrained{base,..} => {
+                match field_type_attributes(self) {
+                    Some(checks) => {
+                        let base_type_ref = base.to_partial_type_ref();
+                        let checks_type_ref = type_name_for_checks(&checks);
+                        format!("Baml::Checked[{base_type_ref}, {checks_type_ref}]")
+                    }
+                    None => {
+                        base.to_partial_type_ref()
+                    }
+                }
+            },
         }
     }
 }
@@ -177,5 +194,24 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for TypeReg
             enums: ir.walk_enums().map(RubyEnum::from).collect::<Vec<_>>(),
             classes: ir.walk_classes().map(RubyStruct::from).collect::<Vec<_>>(),
         })
+    }
+}
+
+pub fn type_name_for_checks(checks: &TypeCheckAttributes) -> String {
+    let mut name = "Checks".to_string();
+    let mut names: Vec<&String> = checks.0.iter().collect();
+    names.sort();
+    for check_name in names.iter() {
+        name.push_str("__");
+        name.push_str(check_name);
+    }
+    name
+}
+
+fn type_def_for_checks(checks: TypeCheckAttributes) -> RubyStruct<'static> {
+    RubyStruct {
+        name: Cow::Owned(type_name_for_checks(&checks)),
+        fields: checks.0.into_iter().map(|check_name| (Cow::Owned(check_name), "Baml::Check".to_string())).collect(),
+        dynamic: false
     }
 }

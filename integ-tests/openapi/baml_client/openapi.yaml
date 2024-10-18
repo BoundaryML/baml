@@ -312,6 +312,19 @@ paths:
                 title: ExpectFailureResponse
                 type: string
       operationId: ExpectFailure
+  /call/ExtractContactInfo:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ExtractContactInfo'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ExtractContactInfoResponse
+                $ref: '#/components/schemas/ContactInfo'
+      operationId: ExtractContactInfo
   /call/ExtractNames:
     post:
       requestBody:
@@ -636,6 +649,47 @@ paths:
                 items:
                   $ref: '#/components/schemas/OptionalTest_ReturnType'
       operationId: OptionalTest_Function
+  /call/PredictAge:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/PredictAge'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: PredictAgeResponse
+                $ref: '#/components/schemas/FooAny'
+      operationId: PredictAge
+  /call/PredictAgeBare:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/PredictAgeBare'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: PredictAgeBareResponse
+                type: object
+                properties:
+                  value:
+                    type: integer
+                  checks:
+                    type: object
+                    properties:
+                      too_big:
+                        $ref: '#components/schemas/Check'
+                    required:
+                    - too_big
+                    additionalProperties: false
+                required:
+                - value
+                - checks
+                additionalProperties: false
+      operationId: PredictAgeBare
   /call/PromptTestClaude:
     post:
       requestBody:
@@ -727,6 +781,19 @@ paths:
                 title: PromptTestStreamingResponse
                 type: string
       operationId: PromptTestStreaming
+  /call/ReturnFailingAssert:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ReturnFailingAssert'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ReturnFailingAssertResponse
+                type: integer
+      operationId: ReturnFailingAssert
   /call/SchemaDescriptions:
     post:
       requestBody:
@@ -753,6 +820,19 @@ paths:
                 title: StreamBigNumbersResponse
                 $ref: '#/components/schemas/BigNumbers'
       operationId: StreamBigNumbers
+  /call/StreamFailingAssertion:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/StreamFailingAssertion'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: StreamFailingAssertionResponse
+                $ref: '#/components/schemas/TwoStoriesOneTitle'
+      operationId: StreamFailingAssertion
   /call/StreamOneBigNumber:
     post:
       requestBody:
@@ -1555,6 +1635,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
+    ExtractContactInfo:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ExtractContactInfoRequest
+            type: object
+            properties:
+              document:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - document
+            additionalProperties: false
     ExtractNames:
       required: true
       content:
@@ -1945,6 +2041,38 @@ components:
             required:
             - input
             additionalProperties: false
+    PredictAge:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: PredictAgeRequest
+            type: object
+            properties:
+              name:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - name
+            additionalProperties: false
+    PredictAgeBare:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: PredictAgeBareRequest
+            type: object
+            properties:
+              inp:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - inp
+            additionalProperties: false
     PromptTestClaude:
       required: true
       content:
@@ -2057,6 +2185,22 @@ components:
             required:
             - input
             additionalProperties: false
+    ReturnFailingAssert:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ReturnFailingAssertRequest
+            type: object
+            properties:
+              inp:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - inp
+            additionalProperties: false
     SchemaDescriptions:
       required: true
       content:
@@ -2088,6 +2232,25 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - digits
+            additionalProperties: false
+    StreamFailingAssertion:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: StreamFailingAssertionRequest
+            type: object
+            properties:
+              theme:
+                type: string
+              length:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - theme
+            - length
             additionalProperties: false
     StreamOneBigNumber:
       required: true
@@ -2710,6 +2873,15 @@ components:
       - name
       - provider
       - options
+    Check:
+      type: object
+      properties:
+        name:
+          type: string
+        expr:
+          type: string
+        status:
+          type: string
     AliasedEnum:
       enum:
       - KEY_ONE
@@ -2902,6 +3074,20 @@ components:
       - big_nums
       - another
       additionalProperties: false
+    ContactInfo:
+      type: object
+      properties:
+        primary:
+          oneOf:
+          - $ref: '#/components/schemas/PhoneNumber'
+          - $ref: '#/components/schemas/EmailAddress'
+        secondary:
+          oneOf:
+          - $ref: '#/components/schemas/PhoneNumber'
+          - $ref: '#/components/schemas/EmailAddress'
+      required:
+      - primary
+      additionalProperties: false
     CustomTaskResult:
       type: object
       properties:
@@ -2959,6 +3145,32 @@ components:
       properties: {}
       required: []
       additionalProperties: false
+    Earthling:
+      type: object
+      properties:
+        age:
+          type: object
+          properties:
+            value:
+              type: integer
+            checks:
+              type: object
+              properties:
+                earth_aged:
+                  $ref: '#components/schemas/Check'
+                no_infants:
+                  $ref: '#components/schemas/Check'
+              required:
+              - earth_aged
+              - no_infants
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
+      required:
+      - age
+      additionalProperties: false
     Education:
       type: object
       properties:
@@ -2993,6 +3205,29 @@ components:
       - subject
       - body
       - from_address
+      additionalProperties: false
+    EmailAddress:
+      type: object
+      properties:
+        value:
+          type: object
+          properties:
+            value:
+              type: string
+            checks:
+              type: object
+              properties:
+                valid_email:
+                  $ref: '#components/schemas/Check'
+              required:
+              - valid_email
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
+      required:
+      - value
       additionalProperties: false
     Event:
       type: object
@@ -3038,6 +3273,58 @@ components:
       - departureTime
       - arrivalTime
       - seatNumber
+      additionalProperties: false
+    FooAny:
+      type: object
+      properties:
+        planetary_age:
+          oneOf:
+          - $ref: '#/components/schemas/Martian'
+          - $ref: '#/components/schemas/Earthling'
+        certainty:
+          type: object
+          properties:
+            value:
+              type: integer
+            checks:
+              type: object
+              properties:
+                unreasonably_certain:
+                  $ref: '#components/schemas/Check'
+              required:
+              - unreasonably_certain
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
+        species:
+          type: object
+          properties:
+            value:
+              type: string
+            checks:
+              type: object
+              properties:
+                trivial:
+                  $ref: '#components/schemas/Check'
+                regex_good:
+                  $ref: '#components/schemas/Check'
+                regex_bad:
+                  $ref: '#components/schemas/Check'
+              required:
+              - trivial
+              - regex_good
+              - regex_bad
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
+      required:
+      - planetary_age
+      - certainty
+      - species
       additionalProperties: false
     GroceryReceipt:
       type: object
@@ -3107,6 +3394,29 @@ components:
       required:
       - key
       - nested
+      additionalProperties: false
+    Martian:
+      type: object
+      properties:
+        age:
+          type: object
+          properties:
+            value:
+              type: integer
+            checks:
+              type: object
+              properties:
+                young_enough:
+                  $ref: '#components/schemas/Check'
+              required:
+              - young_enough
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
+      required:
+      - age
       additionalProperties: false
     NamedArgsSingleClass:
       type: object
@@ -3208,6 +3518,29 @@ components:
         hair_color:
           $ref: '#/components/schemas/Color'
       required: []
+      additionalProperties: false
+    PhoneNumber:
+      type: object
+      properties:
+        value:
+          type: object
+          properties:
+            value:
+              type: string
+            checks:
+              type: object
+              properties:
+                valid_phone_number:
+                  $ref: '#components/schemas/Check'
+              required:
+              - valid_phone_number
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
+      required:
+      - value
       additionalProperties: false
     Quantity:
       type: object
@@ -3450,6 +3783,20 @@ components:
       required:
       - prop1
       - prop2
+      additionalProperties: false
+    TwoStoriesOneTitle:
+      type: object
+      properties:
+        title:
+          type: string
+        story_a:
+          type: string
+        story_b:
+          type: string
+      required:
+      - title
+      - story_a
+      - story_b
       additionalProperties: false
     UnionTest_ReturnType:
       type: object
