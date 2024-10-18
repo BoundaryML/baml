@@ -56,7 +56,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: baml-vscode.vsix
-          path: typescript/vscode-ext/packages/baml-extension-${{ steps.build.outputs.version }}.vsix
+          path: typescript/vscode-ext/packages/gloo-${{ steps.build.outputs.version }}.vsix
           if-no-files-found: error
 
       # Upload the artifact (helpful for debugging and manual downloads)
@@ -81,3 +81,53 @@ jobs:
           name: vscode-playground
           path: typescript/vscode-ext/packages/web-panel/dist
           if-no-files-found: error
+  
+  publish-vscode:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Get all the artifacts
+      - name: Get artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: baml-vscode.vsix
+          path: typescript/vscode-ext/packages
+      - name: Get artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: baml-out
+          path: typescript/vscode-ext/packages/vscode/out
+      - name: Get artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: language-server
+          path: typescript/vscode-ext/packages/language-server/out
+      - name: Get artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vscode-playground
+          path: typescript/vscode-ext/packages/web-panel/dist
+
+      - name: setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.6
+          package_json_file: typescript/package.json
+          run_install: false
+      # Set up Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache: "pnpm"
+          node-version: 20
+          cache-dependency-path: typescript/pnpm-lock.yaml
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: typescript/
+      - name: Publish
+        run: |
+          pnpm run vscode:publish --no-git-tag-version -p ${{ secrets.VSCODE_PAT }}
+        working-directory: typescript/vscode-ext/packages
