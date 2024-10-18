@@ -23,6 +23,7 @@ from ..baml_client.types import (
     DynInputOutput,
     NamedArgsSingleEnumList,
     NamedArgsSingleClass,
+    OriginalB,
     StringToClassEntry,
     CompoundBigNumbers,
 )
@@ -1211,3 +1212,11 @@ async def test_no_stream_compound_object_with_yapping():
         if msg.another is not None:
             assert True if msg.another.a is None else msg.another.a == res.another.a
             assert True if msg.another.b is None else msg.another.b == res.another.b
+
+
+@pytest.mark.asyncio
+async def test_differing_unions():
+    tb = TypeBuilder()
+    tb.OriginalB.add_property("value2", tb.string())
+    res = await b.DifferentiateUnions({"tb": tb})
+    assert isinstance(res, OriginalB)

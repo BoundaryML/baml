@@ -223,6 +223,17 @@ class OrderInfo(BaseModel):
     tracking_number: Optional[str] = None
     estimated_arrival_date: Optional[str] = None
 
+class OriginalA(BaseModel):
+    
+    
+    value: Optional[int] = None
+
+class OriginalB(BaseModel):
+    
+    model_config = ConfigDict(extra='allow')
+    
+    value: Optional[int] = None
+
 class Person(BaseModel):
     
     model_config = ConfigDict(extra='allow')
