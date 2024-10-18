@@ -13,7 +13,7 @@ concurrency:
 jobs:
   build:
     name: Build VSCode
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
@@ -84,7 +84,7 @@ jobs:
   
   publish-vscode:
     needs: [build]
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
