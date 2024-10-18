@@ -38,15 +38,15 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
         working-directory: typescript/
-
       - name: Build Typescript Project
-        run: pnpm turbo vscode:package
+        run: pnpm run build
         working-directory: typescript/
 
       # Build the VSCode Extension
       - name: Build VSCode Extension
         id: build
         run: |
+          pnpm run vscode:package
           VERSION=$(cat package.json| grep version | cut -d ' ' -f 4 | sed 's/[",]//g')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
         working-directory: typescript/vscode-ext/packages
