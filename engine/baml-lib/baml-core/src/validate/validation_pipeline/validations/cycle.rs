@@ -1,32 +1,46 @@
 use std::collections::HashSet;
 
+use either::Either;
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_schema_ast::ast::{TypeExpId, WithIdentifier, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{FieldType, TypeExpId, WithIdentifier, WithName, WithSpan};
 
 use crate::validate::validation_pipeline::context::Context;
 
+/// Validates if there's a cycle in any dependency graph.
 pub(super) fn validate(ctx: &mut Context<'_>) {
-    // Validates if there's a cycle in any dependency graph.
-    let mut deps_list = ctx
+    // We're only going to consider type dependencies that can actually cause
+    // infinite recursion. Unions and optionals can stop the recursion at any
+    // point, so they don't have to be part of the "dependency" graph because
+    // technically an optional field doesn't "depend" on anything, it can just
+    // be null.
+    let mut required_deps = ctx
         .db
         .walk_classes()
-        .map(|f| {
-            (
-                f.id,
-                f.dependencies()
-                    .into_iter()
-                    .filter(|f| match ctx.db.find_type_by_str(f) {
-                        Some(either::Either::Left(_cls)) => true,
-                        // Don't worry about enum dependencies, they can't form cycles.
-                        Some(either::Either::Right(_enm)) => false,
-                        None => {
-                            panic!("Unknown class `{}`", f);
-                        }
-                    })
-                    .collect::<HashSet<_>>(),
-            )
+        .map(|cls| {
+            let expr_block = &ctx.db.ast()[cls.class_id()];
+
+            // TODO: There's already a hash set that returns "dependencies" in
+            // the DB, it shoudn't be necessary to traverse all the fields here
+            // again, we need to refactor .dependencies() or add a new method
+            // that returns not only the dependency name but also field arity.
+            // The arity could be computed at the same time as the dependencies
+            // hash set. Code is here:
+            //
+            // baml-lib/parser-database/src/types/mod.rs
+            // fn visit_class()
+            let mut deps = HashSet::new();
+
+            for field in &expr_block.fields {
+                if let Some(field_type) = &field.expr {
+                    insert_deps(field_type, ctx, &mut deps);
+                }
+            }
+
+            (cls.id, deps)
         })
         .collect::<Vec<_>>();
+
+    // println!("{:?}", required_deps);
 
     // Now we can check for cycles using topological sort.
     let mut stack: Vec<(TypeExpId, Vec<TypeExpId>)> = Vec::new(); // This stack now also keeps track of the path
@@ -34,7 +48,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
     let mut in_stack = HashSet::new();
 
     // Find all items with 0 dependencies
-    for (id, deps) in &deps_list {
+    for (id, deps) in &required_deps {
         if deps.is_empty() {
             stack.push((*id, vec![*id]));
         }
@@ -70,7 +84,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         in_stack.insert(current);
         visited.insert(current);
 
-        deps_list.iter_mut().for_each(|(id, deps)| {
+        required_deps.iter_mut().for_each(|(id, deps)| {
             if deps.remove(&name) {
                 // If this item has now 0 dependencies, add it to the stack
                 if deps.is_empty() {
@@ -85,8 +99,8 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
     }
 
     // If there are still items left in deps_list after the above steps, there's a cycle
-    if visited.len() != deps_list.len() {
-        for (id, _) in &deps_list {
+    if visited.len() != required_deps.len() {
+        for (id, _) in &required_deps {
             if !visited.contains(id) {
                 let cls = &ctx.db.ast()[*id];
                 ctx.push_error(DatamodelError::new_validation_error(
@@ -95,5 +109,28 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                 ));
             }
         }
+    }
+}
+
+/// Inserts all the required dependencies of a field into the given set.
+///
+/// Recursively deals with unions of unions. Can be implemented iteratively with
+/// a while loop and a stack/queue if this ends up being slow / inefficient.
+fn insert_deps(field: &FieldType, ctx: &Context<'_>, deps: &mut HashSet<String>) {
+    match field {
+        FieldType::Symbol(arity, ident, _) if arity.is_required() => {
+            let name = ident.name();
+            if let Some(Either::Left(_cls_dep)) = ctx.db.find_type_by_str(&name) {
+                deps.insert(name.to_string());
+            }
+        }
+
+        FieldType::Union(arity, field_types, _, _) if arity.is_required() => {
+            for f in field_types {
+                insert_deps(f, ctx, deps);
+            }
+        }
+
+        _ => {}
     }
 }
