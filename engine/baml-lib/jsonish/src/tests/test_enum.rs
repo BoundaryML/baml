@@ -96,6 +96,21 @@ test_deserializer!(
     "ONE"
 );
 
+test_deserializer!(
+    case_sensitive_non_ambiguous_match,
+    ENUM_FILE,
+    r#"TWO" is one of the correct answers."#,
+    FieldType::Enum("Category".to_string()),
+    "TWO"
+);
+
+test_failing_deserializer!(
+    case_insensitive_ambiguous_match,
+    ENUM_FILE,
+    r#"Two" is one of the correct answers."#,
+    FieldType::Enum("Category".to_string())
+);
+
 test_failing_deserializer!(
     from_string_with_extra_text_after_3,
     ENUM_FILE,
