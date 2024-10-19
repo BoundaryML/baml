@@ -62,13 +62,7 @@ impl BamlError {
                 } => {
                     // Assuming ValidationError has fields that correspond to prompt, message, and raw_output
                     // If not, you may need to adjust this part based on the actual structure of ValidationError
-                    Python::with_gil(|py| {
-                        raise_baml_validation_error(
-                            prompt.clone(),
-                            message.clone(),
-                            raw_output.clone(),
-                        )
-                    })
+                    raise_baml_validation_error(prompt.clone(), message.clone(), raw_output.clone())
                 }
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {

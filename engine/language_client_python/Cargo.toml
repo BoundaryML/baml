@@ -13,6 +13,8 @@ crate-type = ["cdylib"]
 [lints.rust]
 dead_code = "deny"
 unused_imports = "deny"
+unused_must_use = "deny"
+unused_variables = "deny"
 
 [dependencies]
 anyhow.workspace = true
