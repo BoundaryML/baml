@@ -10,6 +10,10 @@ license = "Apache-2.0"
 name = "baml_py"
 crate-type = ["cdylib"]
 
+[lints.rust]
+dead_code = "deny"
+unused_imports = "deny"
+
 [dependencies]
 anyhow.workspace = true
 baml-types.workspace = true

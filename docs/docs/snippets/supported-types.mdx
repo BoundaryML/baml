@@ -40,6 +40,25 @@ See [Union(|)](#union-) for more details.
 See [calling a function with multimodal types](/docs/snippets/calling-baml/multi-modal)
 and [testing image inputs](/docs/snippets/test-cases#images)
 
+<Accordion title="Implementation details: runtime and security considerations">
+  BAML's multimodal types are designed for ease of use: we have deliberately made it
+  easy for you to construct a `image` or `audio` instance from a URL. Under the
+  hood, depending on the model you're using, BAML may need to download the image
+  and transcode it (usually as base64) for the model to consume.
+
+  This ease-of-use does come with some tradeoffs; namely, if you construct
+  an `image` or `audio` instance using untrusted user input, you may be exposing
+  yourself to [server-side request forgery (SSRF) attacks][ssrf]. Attackers may be
+  able to fetch files on your internal network, on external networks using your
+  application's identity, or simply excessively drive up your cloud network
+  bandwidth bill.
+
+  To prevent this, we recommend only using URLs from trusted sources/users or
+  validating them using allowlists or denylists.
+
+[ssrf]: https://portswigger.net/web-security/ssrf
+</Accordion>
+
 ### `image`
 
 You can use an image like this for models that support them:
@@ -113,6 +132,36 @@ def test_image_input
 end
 ```
 </CodeBlocks>
+
+<Accordion title="Pydantic compatibility">
+If using Pydantic, the following are valid ways to construct the `Image` type.
+
+```json
+{
+  "url": "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+}
+```
+
+```json
+{
+  "url": "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png",
+  "mime_type": "image/png"
+}
+```
+
+```json
+{
+  "base64": "iVBORw0K....",
+}
+```
+
+```json
+{
+  "base64": "iVBORw0K....",
+  "mime_type": "image/png"
+}
+```
+</Accordion>
 
 ### `audio`
 
