@@ -82,14 +82,30 @@ def deserialize(data):
     else:
         SchemaValidator(
             core_schema.union_schema([
-                core_schema.dataclass_args_schema('baml.Image', [
-                    core_schema.dataclass_field(name='url', schema=core_schema.str_schema()),
-                    core_schema.dataclass_field(name='mime_type', schema=core_schema.with_default_schema(core_schema.str_schema(), default='')),
-                ]),
-                core_schema.dataclass_args_schema('baml.Image', [
-                    core_schema.dataclass_field(name='base64', schema=core_schema.str_schema()),
-                    core_schema.dataclass_field(name='mime_type', schema=core_schema.with_default_schema(core_schema.str_schema(), default='')),
-                ]),
+                core_schema.model_fields_schema({
+                    'url': core_schema.model_field(core_schema.str_schema()),
+                    'mime_type': core_schema.model_field(
+                        core_schema.with_default_schema(
+                            core_schema.union_schema([
+                                core_schema.str_schema(),
+                                core_schema.none_schema(),
+                            ]),
+                            default=None,
+                        ),
+                    ),
+                }),
+                core_schema.model_fields_schema({
+                    'base64': core_schema.model_field(core_schema.str_schema()),
+                    'mime_type': core_schema.model_field(
+                        core_schema.with_default_schema(
+                            core_schema.union_schema([
+                                core_schema.str_schema(),
+                                core_schema.none_schema(),
+                            ]),
+                            default=None,
+                        ),
+                    ),
+                }),
             ])
         ).validate_python(data)
         return BamlImagePy.baml_deserialize(data)
