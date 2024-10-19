@@ -236,8 +236,11 @@ pub(super) fn coerce_bool(
                         target,
                         Some(value),
                         &[
-                            ("true", vec!["true".into()]),
-                            ("false", vec!["false".into()]),
+                            ("true", vec!["true".into(), "True".into(), "TRUE".into()]),
+                            (
+                                "false",
+                                vec!["false".into(), "False".into(), "FALSE".into()],
+                            ),
                         ],
                     ) {
                         Ok(val) => match val.value().as_str() {
