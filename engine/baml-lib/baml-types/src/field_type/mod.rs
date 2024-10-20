@@ -161,7 +161,7 @@ impl FieldType {
     ///
     /// If the function encounters directly nested Constrained types,
     /// (i.e. `FieldType::Constrained { base: FieldType::Constrained { .. }, .. } `)
-    /// then the constraints of the two levels will be combined into a single vector.
+    /// then the constraints of the two levels will be flattened into a single vector.
     /// So, we always return a base type that is not FieldType::Constrained.
     pub fn distribute_constraints(self: &FieldType) -> (&FieldType, Vec<Constraint>) {
 

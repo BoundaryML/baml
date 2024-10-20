@@ -124,17 +124,17 @@ class TestEnum(str, Enum):
     F = "F"
     G = "G"
 
+class Checks__valid_email(BaseModel):
+    valid_email: baml_py.Check
+
 class Checks__unreasonably_certain(BaseModel):
     unreasonably_certain: baml_py.Check
-
-class Checks__too_big(BaseModel):
-    too_big: baml_py.Check
 
 class Checks__young_enough(BaseModel):
     young_enough: baml_py.Check
 
-class Checks__valid_email(BaseModel):
-    valid_email: baml_py.Check
+class Checks__valid_phone_number(BaseModel):
+    valid_phone_number: baml_py.Check
 
 class Checks__regex_bad__regex_good__trivial(BaseModel):
     regex_good: baml_py.Check
@@ -142,11 +142,11 @@ class Checks__regex_bad__regex_good__trivial(BaseModel):
     regex_bad: baml_py.Check
 
 class Checks__earth_aged__no_infants(BaseModel):
-    no_infants: baml_py.Check
     earth_aged: baml_py.Check
+    no_infants: baml_py.Check
 
-class Checks__valid_phone_number(BaseModel):
-    valid_phone_number: baml_py.Check
+class Checks__too_big(BaseModel):
+    too_big: baml_py.Check
 
 class BigNumbers(BaseModel):
     

@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::{collections::{HashSet, VecDeque}, fmt};
 
+use indexmap::IndexMap;
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::media::BamlMediaType;
-use crate::{BamlMap, BamlMedia, ResponseCheck};
+use crate::{BamlMap, BamlMedia, FieldType, ResponseCheck, TypeValue};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BamlValue {

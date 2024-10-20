@@ -1,7 +1,7 @@
 use anyhow::Context;
 use baml_types::{BamlValue, BamlValueWithMeta, ResponseCheck};
 use pyo3::prelude::{pymethods, PyResult};
-use pyo3::types::{PyAnyMethods, PyListMethods, PyModule};
+use pyo3::types::{PyAnyMethods, PyListMethods, PyModule, PyType};
 use pyo3::{Bound, IntoPy, PyObject, Python};
 use pythonize::pythonize;
 
@@ -46,7 +46,8 @@ fn pythonize_checks(
     checks: &Vec<ResponseCheck>
 ) -> PyResult<PyObject> {
 
-    fn type_name_for_checks(checks: &Vec<ResponseCheck>) -> String {
+    fn type_name_for_checks(py: Python<'_>, checks: &Vec<ResponseCheck>) -> PyResult<String> {
+
         let mut name = "Checks".to_string();
         let mut check_names: Vec<String> = checks.iter().map(|ResponseCheck{name,..}| name).cloned().collect();
         check_names.sort();
@@ -54,18 +55,20 @@ fn pythonize_checks(
             name.push_str("__");
             name.push_str(check_name);
         }
-        name
+        Ok(name)
     }
 
-    let checks_class_name = type_name_for_checks(checks);
+    let baml_py = py.import_bound("baml_py")?;
+    let check_class = baml_py.getattr("Check")?;
+
+    let checks_class_name = type_name_for_checks(py, checks)?;
     let checks_class = cls_module.getattr(checks_class_name.as_str())?;
     let properties_dict = pyo3::types::PyDict::new_bound(py);
     checks.iter().try_for_each(|ResponseCheck{name, expression, status}| {
         // Construct the Check.
-        let check_class = cls_module.getattr("Check")?;
         let check_properties_dict = pyo3::types::PyDict::new_bound(py);
         check_properties_dict.set_item("name", name)?;
-        check_properties_dict.set_item("expr", expression)?;
+        check_properties_dict.set_item("expression", expression)?;
         check_properties_dict.set_item("status", status)?;
         let check_instance = check_class.call_method("model_validate", (check_properties_dict,), None)?;
 
@@ -96,13 +99,16 @@ fn pythonize_strict(
         *parsed.meta_mut() = vec![];
         let python_value = pythonize_strict(py, parsed, enum_module, cls_module)?;
 
+        // Assemble the pythonized checks and pythonized value into a `Checked[T,K]`.
         let properties_dict = pyo3::types::PyDict::new_bound(py);
         properties_dict.set_item("value", python_value)?;
         properties_dict.set_item("checks", python_checks)?;
 
-        let class_checked_type = cls_module.getattr("Checked")?;
+        dbg!(&properties_dict);
+        eprintln!("{:?}", properties_dict);
+        let baml_py = py.import_bound("baml_py")?;
+        let class_checked_type = baml_py.getattr("Checked")?;
         let checked_instance = class_checked_type.call_method("model_validate", (properties_dict,), None)?;
-
         Ok(checked_instance.into())
     } else {
         match parsed {

@@ -1,5 +1,5 @@
 use baml_types::{
-    BamlMap, BamlValue, Constraint, ConstraintLevel, FieldType, LiteralValue, TypeValue
+    BamlMap, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, LiteralValue, TypeValue
 };
 use core::result::Result;
 use std::path::PathBuf;
@@ -329,35 +329,53 @@ impl ArgCoercer {
                 }
             }
             FieldType::Constrained { base, constraints } => {
+                // to_baml_arg(base)
                 let val = self.coerce_arg(ir, base, value, scope)?;
-                for c@Constraint {
-                    level,
-                    expression,
-                    label,
-                } in constraints.iter()
-                {
-                    let constraint_ok =
-                        evaluate_predicate(&val, &expression).unwrap_or_else(|err| {
-                            scope.push_error(format!(
-                                "Error while evaluating check {c:?}: {:?}",
-                                err
-                            ));
-                            false
-                        });
-                    if !constraint_ok {
+                let search_for_failures_result = first_failing_assert_nested(ir, &val, field_type).map_err(|e| {
+                        scope.push_error(format!("Failed to evaluate assert: {:?}", e));
+                        ()
+                })?;
+                match search_for_failures_result {
+                    Some(Constraint {label, expression, ..}) => {
                         let msg = label.as_ref().unwrap_or(&expression.0);
-                        match level {
-                            ConstraintLevel::Check => {
-                                scope.push_warning(format!("Failed check: {msg}"));
-                            }
-                            ConstraintLevel::Assert => {
-                                scope.push_error(format!("Failed assert: {msg}"));
-                            }
-                        }
+                        scope.push_error(format!("Failed assert: {msg}"));
+                        Ok(val)
                     }
+                    None => Ok(val)
                 }
-                Ok(val)
             }
         }
     }
+}
+
+/// Search a potentially deeply-nested `BamlValue` for any failing asserts,
+/// returning the first one encountered.
+fn first_failing_assert_nested<'a>(
+    ir: &'a IntermediateRepr,
+    baml_value: &BamlValue,
+    field_type: &'a FieldType
+) -> anyhow::Result<Option<Constraint>> {
+    let value_with_types = ir.distribute_type(baml_value.clone(), field_type)?;
+    let first_failure = value_with_types
+        .iter()
+        .map(|value_node| {
+            let (_, constraints) = value_node.meta().distribute_constraints();
+            constraints.into_iter().filter_map(|c| {
+                let constraint = c.clone();
+                let baml_value: BamlValue = value_node.into();
+                let result = evaluate_predicate(&&baml_value, &c.expression).map_err(|e| {
+                    anyhow::anyhow!(format!("Error evaluating constraint: {:?}", e))
+                });
+                match result {
+                    Ok(false) => if c.level == ConstraintLevel::Assert {Some(Ok(constraint))} else { None },
+                    Ok(true) => None,
+                    Err(e) => Some(Err(e))
+
+                }
+            })
+        })
+        .flatten()
+        .next();
+    first_failure.transpose()
+
 }

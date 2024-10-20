@@ -191,13 +191,13 @@ module Baml
     class TwoStoriesOneTitle < T::Struct; end
     class UnionTest_ReturnType < T::Struct; end
     class WithReasoning < T::Struct; end
-    class Checks__regex_bad__regex_good__trivial < T::Struct; end
     class Checks__valid_email < T::Struct; end
-    class Checks__earth_aged__no_infants < T::Struct; end
     class Checks__young_enough < T::Struct; end
-    class Checks__valid_phone_number < T::Struct; end
-    class Checks__too_big < T::Struct; end
     class Checks__unreasonably_certain < T::Struct; end
+    class Checks__too_big < T::Struct; end
+    class Checks__earth_aged__no_infants < T::Struct; end
+    class Checks__regex_bad__regex_good__trivial < T::Struct; end
+    class Checks__valid_phone_number < T::Struct; end
     class BigNumbers < T::Struct
       include Baml::Sorbet::Struct
       const :a, Integer
@@ -1028,22 +1028,6 @@ module Baml
         @props = props
       end
     end
-    class Checks__regex_bad__regex_good__trivial < T::Struct
-      include Baml::Sorbet::Struct
-      const :regex_bad, Baml::Check
-      const :regex_good, Baml::Check
-      const :trivial, Baml::Check
-
-      def initialize(props)
-        super(
-          regex_bad: props[:regex_bad],
-          regex_good: props[:regex_good],
-          trivial: props[:trivial],
-        )
-
-        @props = props
-      end
-    end
     class Checks__valid_email < T::Struct
       include Baml::Sorbet::Struct
       const :valid_email, Baml::Check
@@ -1051,20 +1035,6 @@ module Baml
       def initialize(props)
         super(
           valid_email: props[:valid_email],
-        )
-
-        @props = props
-      end
-    end
-    class Checks__earth_aged__no_infants < T::Struct
-      include Baml::Sorbet::Struct
-      const :earth_aged, Baml::Check
-      const :no_infants, Baml::Check
-
-      def initialize(props)
-        super(
-          earth_aged: props[:earth_aged],
-          no_infants: props[:no_infants],
         )
 
         @props = props
@@ -1082,13 +1052,13 @@ module Baml
         @props = props
       end
     end
-    class Checks__valid_phone_number < T::Struct
+    class Checks__unreasonably_certain < T::Struct
       include Baml::Sorbet::Struct
-      const :valid_phone_number, Baml::Check
+      const :unreasonably_certain, Baml::Check
 
       def initialize(props)
         super(
-          valid_phone_number: props[:valid_phone_number],
+          unreasonably_certain: props[:unreasonably_certain],
         )
 
         @props = props
@@ -1106,13 +1076,43 @@ module Baml
         @props = props
       end
     end
-    class Checks__unreasonably_certain < T::Struct
+    class Checks__earth_aged__no_infants < T::Struct
       include Baml::Sorbet::Struct
-      const :unreasonably_certain, Baml::Check
+      const :no_infants, Baml::Check
+      const :earth_aged, Baml::Check
 
       def initialize(props)
         super(
-          unreasonably_certain: props[:unreasonably_certain],
+          no_infants: props[:no_infants],
+          earth_aged: props[:earth_aged],
+        )
+
+        @props = props
+      end
+    end
+    class Checks__regex_bad__regex_good__trivial < T::Struct
+      include Baml::Sorbet::Struct
+      const :regex_bad, Baml::Check
+      const :regex_good, Baml::Check
+      const :trivial, Baml::Check
+
+      def initialize(props)
+        super(
+          regex_bad: props[:regex_bad],
+          regex_good: props[:regex_good],
+          trivial: props[:trivial],
+        )
+
+        @props = props
+      end
+    end
+    class Checks__valid_phone_number < T::Struct
+      include Baml::Sorbet::Struct
+      const :valid_phone_number, Baml::Check
+
+      def initialize(props)
+        super(
+          valid_phone_number: props[:valid_phone_number],
         )
 
         @props = props

@@ -5,7 +5,7 @@ T = TypeVar('T')
 K = TypeVar('K')
 
 class Check(BaseModel):
-    name: Optional[str]
+    name: str
     expression: str
     status: str
 

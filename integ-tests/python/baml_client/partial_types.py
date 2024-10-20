@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Union, Literal
 from . import types
 
 
-from .types import Checks__young_enough, Checks__too_big, Checks__valid_phone_number, Checks__valid_email, Checks__unreasonably_certain, Checks__earth_aged__no_infants, Checks__regex_bad__regex_good__trivial
+from .types import Checks__valid_phone_number, Checks__regex_bad__regex_good__trivial, Checks__too_big, Checks__earth_aged__no_infants, Checks__valid_email, Checks__young_enough, Checks__unreasonably_certain
 
 
 ###############################################################################

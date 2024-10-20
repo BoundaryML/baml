@@ -223,6 +223,11 @@ pub trait DefaultValue {
 }
 
 /// Run all checks and asserts for a value at a given type.
+/// This function only runs checks on the top-level node of the `BamlValue`.
+/// Checks on nested fields, list items etc. are not run here.
+///
+/// For a function that traverses a whole `BamlValue` looking for failed asserts,
+/// see `first_failing_assert_nested`.
 pub fn run_user_checks(
     baml_value: &BamlValue,
     type_: &FieldType,

@@ -3306,16 +3306,16 @@ components:
             checks:
               type: object
               properties:
+                regex_bad:
+                  $ref: '#components/schemas/Check'
                 trivial:
                   $ref: '#components/schemas/Check'
                 regex_good:
                   $ref: '#components/schemas/Check'
-                regex_bad:
-                  $ref: '#components/schemas/Check'
               required:
+              - regex_bad
               - trivial
               - regex_good
-              - regex_bad
               additionalProperties: false
           required:
           - value
