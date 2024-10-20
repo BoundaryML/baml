@@ -33,7 +33,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
 
         for field in &expr_block.fields {
             if let Some(field_type) = &field.expr {
-                insert_required_deps(field_type, ctx, &mut dependencies);
+                insert_required_deps(class.id, field_type, ctx, &mut dependencies);
             }
         }
 
@@ -61,7 +61,12 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
 /// Recursively deals with unions of unions. Can be implemented iteratively with
 /// a while loop and a stack/queue if this ends up being slow / inefficient or
 /// it reaches stack overflows with large inputs.
-fn insert_required_deps(field: &FieldType, ctx: &Context<'_>, deps: &mut HashSet<TypeExpId>) {
+fn insert_required_deps(
+    id: TypeExpId,
+    field: &FieldType,
+    ctx: &Context<'_>,
+    deps: &mut HashSet<TypeExpId>,
+) {
     match field {
         FieldType::Symbol(arity, ident, _) if arity.is_required() => {
             if let Some(Either::Left(class)) = ctx.db.find_type_by_str(ident.name()) {
@@ -70,9 +75,40 @@ fn insert_required_deps(field: &FieldType, ctx: &Context<'_>, deps: &mut HashSet
         }
 
         FieldType::Union(arity, field_types, _, _) if arity.is_required() => {
+            // All the dependencies of union.
+            let mut union_deps = HashSet::new();
+
+            // All the dependencies of a single field in the union. This is
+            // reused on every iteration of the loop below to avoid allocating
+            // a new hash set every time.
+            let mut nested_deps = HashSet::new();
+
             for f in field_types {
-                insert_required_deps(f, ctx, deps);
+                insert_required_deps(id, f, ctx, &mut nested_deps);
+
+                // No nested deps found on this component, this makes the
+                // union finite.
+                if nested_deps.is_empty() {
+                    return; // Finite union, no need to go deeper.
+                }
+
+                // Add the nested deps to the overall union deps and clear the
+                // iteration hash set.
+                union_deps.extend(nested_deps.drain());
             }
+
+            // A union does not depend on itself if the field can take other
+            // values. However, if it only depends on itself, it means we have
+            // something like this:
+            //
+            // class Example {
+            //    field: Example | Example | Example
+            // }
+            if union_deps.len() > 1 {
+                union_deps.remove(&id);
+            }
+
+            deps.extend(union_deps);
         }
 
         _ => {}
@@ -154,6 +190,11 @@ impl<'g> Tarjan<'g> {
                 tarjans.strong_connect(*node);
             }
         }
+
+        // Sort components by the first element in each cycle (which is already
+        // sorted as well). This should get rid of all the randomness caused by
+        // hash maps and hash sets.
+        tarjans.components.sort_by(|a, b| a[0].cmp(&b[0]));
 
         tarjans.components
     }
@@ -293,7 +334,7 @@ mod tests {
 
         assert_eq!(
             Tarjan::components(&graph),
-            expected_components(&[&[0, 1, 2], &[5, 6], &[3, 4], &[7]]),
+            expected_components(&[&[0, 1, 2], &[3, 4], &[5, 6], &[7]]),
         );
     }
 
