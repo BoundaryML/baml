@@ -264,6 +264,12 @@ async def test_works_with_fallbacks():
     res = await b.TestFallbackClient()
     assert len(res) > 0, "Expected non-empty result but got empty."
 
+@pytest.mark.asyncio
+async def test_works_with_failing_azure_fallback():
+    with pytest.raises(Exception) as e:
+        res = await b.TestSingleFallbackClient()
+        assert len(res) > 0, "Expected non-empty result but got empty."
+    assert "Either base_url or" in str(e)
 
 @pytest.mark.asyncio
 async def test_claude():
