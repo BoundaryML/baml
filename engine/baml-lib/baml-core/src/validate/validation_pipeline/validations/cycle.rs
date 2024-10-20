@@ -1,6 +1,6 @@
 use std::{
     cmp,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
 };
 
 use either::Either;
@@ -47,6 +47,8 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             .collect::<Vec<_>>()
             .join(" -> ");
 
+        // TODO: We can push an error for every sinlge class here (that's what
+        // Rust does), for now it's an error for every cycle found.
         ctx.push_error(DatamodelError::new_validation_error(
             &format!("These classes form a dependency cycle: {}", cycle),
             ctx.db.ast()[component[0]].span().clone(),
@@ -197,30 +199,56 @@ impl<'g> Tarjan<'g> {
         // state. Keep it to a minimum :)
         self.state.insert(node_id, node);
 
+        // Root node of a strongly connected component.
         if node.low_link == node.index {
             let mut component = Vec::new();
 
-            while let Some(successor_id) = self.stack.pop() {
+            while let Some(parent_id) = self.stack.pop() {
                 // This should not fail since all nodes should be stored in
                 // the state hash map.
-                if let Some(successor) = self.state.get_mut(&successor_id) {
-                    successor.on_stack = false;
+                if let Some(parent) = self.state.get_mut(&parent_id) {
+                    parent.on_stack = false;
                 }
 
-                component.push(successor_id);
+                component.push(parent_id);
 
-                if successor_id == node_id {
+                if parent_id == node_id {
                     break;
                 }
             }
 
-            // Path should be shown as parent -> child.
-            // TODO: The start node is random because hash maps. A simple fix
-            // is to consider that the cycle starts at the node with the
-            // smallest ID.
+            // Path should be shown as parent -> child not child -> parent.
             component.reverse();
 
-            self.components.push(component);
+            // Find index of minimum element in the component.
+            //
+            // The cycle path is not computed deterministacally because the
+            // graph is stored in a hash map, so random state will cause the
+            // traversal algorithm to start at different nodes each time.
+            //
+            // Therefore, to avoid reporting errors to the user differently
+            // every time, we'll use a simple deterministic way to determine
+            // the start node of a cycle.
+            //
+            // Basically, the start node will always be the smallest type ID in
+            // the cycle. That gets rid of the random state.
+            let min_index = component
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .map(|(i, _)| i);
+
+            // We have a cycle if the component contains more than one node or
+            // it contains a single node that points to itself. Otherwise it's
+            // just a normal node with no cycles whatsoever, so we'll skip it.
+            if component.len() > 1
+                || (component.len() == 1 && self.graph[&node_id].contains(&node_id))
+            {
+                if let Some(index) = min_index {
+                    component.rotate_left(index);
+                    self.components.push(component);
+                }
+            }
         }
     }
 }
@@ -250,26 +278,6 @@ mod tests {
             .collect()
     }
 
-    /// Ignores the graph cycle path.
-    ///
-    /// The graph is stored in a HashMap so Tarjan's algorithm will not always
-    /// follow the same path due to random state. We can't use Vecs to compare
-    /// determinstically so we'll just ignore the cycle path and compare the
-    /// nodes that form the cycle.
-    ///
-    /// TODO: Implement the fix mentioned in the implementation and this won't
-    /// be necessary.
-    fn ignore_path(components: Vec<Vec<TypeExpId>>) -> Vec<HashSet<TypeExpId>> {
-        components
-            .into_iter()
-            .map(|v| v.into_iter().collect())
-            .collect()
-    }
-
-    fn assert_eq_components(actual: Vec<Vec<TypeExpId>>, expected: Vec<Vec<TypeExpId>>) {
-        assert_eq!(ignore_path(actual), ignore_path(expected));
-    }
-
     #[test]
     fn find_cycles() {
         let graph = graph(&[
@@ -283,9 +291,23 @@ mod tests {
             (7, &[4, 6, 7]),
         ]);
 
-        assert_eq_components(
+        assert_eq!(
             Tarjan::components(&graph),
             expected_components(&[&[0, 1, 2], &[5, 6], &[3, 4], &[7]]),
         );
+    }
+
+    #[test]
+    fn no_cycles_found() {
+        let graph = graph(&[
+            (0, &[1]),
+            (1, &[2, 3]),
+            (2, &[4]),
+            (3, &[5]),
+            (4, &[]),
+            (5, &[]),
+        ]);
+
+        assert_eq!(Tarjan::components(&graph), expected_components(&[]));
     }
 }
