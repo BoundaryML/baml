@@ -18,3 +18,7 @@ class Two {
 class Three {
   o One
 }
+
+class Four {
+  f Four
+}

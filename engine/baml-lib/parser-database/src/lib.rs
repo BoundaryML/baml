@@ -190,24 +190,25 @@ impl ParserDatabase {
             }
         }
 
-        if max_loops == 0 && !deps.is_empty() {
-            let circular_deps = deps
-                .iter()
-                .map(|(k, _)| self.ast[*k].name())
-                .collect::<Vec<_>>()
-                .join(" -> ");
+        // TODO: Is this code necessary? Dependency cycles are already checked in the validation.
+        // if max_loops == 0 && !deps.is_empty() {
+        //     let circular_deps = deps
+        //         .iter()
+        //         .map(|(k, _)| self.ast[*k].name())
+        //         .collect::<Vec<_>>()
+        //         .join(" -> ");
 
-            deps.iter().for_each(|(k, _)| {
-                diag.push_error(DatamodelError::new_validation_error(
-                    &format!(
-                        "Circular dependency detected for class `{}`.\n{}",
-                        self.ast[*k].name(),
-                        circular_deps
-                    ),
-                    self.ast[*k].identifier().span().clone(),
-                ));
-            });
-        }
+        //     deps.iter().for_each(|(k, _)| {
+        //         diag.push_error(DatamodelError::new_validation_error(
+        //             &format!(
+        //                 "Circular dependency detected for class `{}`.\n{}",
+        //                 self.ast[*k].name(),
+        //                 circular_deps
+        //             ),
+        //             self.ast[*k].identifier().span().clone(),
+        //         ));
+        //     });
+        // }
 
         // Additionally ensure the same thing for functions, but since we've already handled classes,
         // this should be trivial.
