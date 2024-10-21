@@ -85,7 +85,7 @@ fn pythonize_strict(
             let enum_type = match enum_module.getattr(enum_name.as_str()) {
                 Ok(e) => e,
                 // This can be true in the case of dynamic types.
-                Err(_) => return Ok(enum_name.into_py(py)),
+                Err(_) => return Ok(value.into_py(py)),
             };
 
             // Call the constructor with the value

@@ -790,6 +790,34 @@ async def test_dynamic_inputs_list2():
 
 
 @pytest.mark.asyncio
+async def test_dynamic_types_enum():
+    tb = TypeBuilder()
+    field_enum = tb.add_enum("Animal")
+    animals = ["giraffe", "elephant", "lion"]
+    for animal in animals:
+        field_enum.add_value(animal.upper())
+    tb.Person.add_property("animalLiked", field_enum.type())
+    res = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+        {"tb": tb},
+    )
+    assert len(res) > 0
+    assert res[0].animalLiked == "GIRAFFE", res[0]
+
+@pytest.mark.asyncio
+async def test_dynamic_literals():
+    tb = TypeBuilder()
+    animals = tb.union([tb.literal_string(animal.upper()) for animal in ["giraffe", "elephant", "lion"]])
+    tb.Person.add_property("animalLiked", animals)
+    res = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+        {"tb": tb},
+    )
+    assert len(res) > 0
+    assert res[0].animalLiked == "GIRAFFE"
+
+
+@pytest.mark.asyncio
 async def test_dynamic_inputs_list():
     tb = TypeBuilder()
     tb.DynInputOutput.add_property("new_key", tb.string().optional())

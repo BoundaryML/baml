@@ -15,6 +15,9 @@ export declare class TypeBuilder {
     _tb(): _TypeBuilder;
     null(): FieldType;
     string(): FieldType;
+    literalString(value: string): FieldType;
+    literalInt(value: number): FieldType;
+    literalBool(value: boolean): FieldType;
     int(): FieldType;
     float(): FieldType;
     bool(): FieldType;

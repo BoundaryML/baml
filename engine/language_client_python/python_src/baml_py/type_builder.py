@@ -21,6 +21,15 @@ class TypeBuilder:
 
     def string(self):
         return self._tb.string()
+    
+    def literal_string(self, value: str):
+        return self._tb.literal_string(value)
+    
+    def literal_int(self, value: int):
+        return self._tb.literal_int(value)
+    
+    def literal_bool(self, value: bool):
+        return self._tb.literal_bool(value)
 
     def int(self):
         return self._tb.int()
