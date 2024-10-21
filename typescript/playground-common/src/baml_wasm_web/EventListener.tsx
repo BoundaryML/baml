@@ -58,6 +58,11 @@ const envKeyValueStorage = atomWithStorage<[string, string][]>(
   defaultEnvKeyValues,
   vscodeLocalStorageStore,
 )
+export const hasClosedEnvVarsDialogAtom = atomWithStorage<boolean>(
+  'has-closed-env-vars-dialog',
+  false,
+  vscodeLocalStorageStore,
+)
 export const bamlCliVersionAtom = atom<string | null>(null)
 
 export const resetEnvKeyValuesAtom = atom(null, (get, set) => {
