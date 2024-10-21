@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.62.0](https://github.com/boundaryml/baml/compare/0.61.1..0.62.0) - 2024-10-21
+### Bug Fixes
+
+- Surface errors in fallbacks containing only erroneous clients (#1061) - ([b69ef79](https://github.com/boundaryml/baml/commit/b69ef79542ec818b8779f9710dad65d33166c862)) - Greg Hale
+- Fix parser to correctly detect sequences of empty strings (#1048) - ([977e277](https://github.com/boundaryml/baml/commit/977e2776119a6f1e79f29cbe596b1c31697becb5)) - hellovai
+- Make substring match algorithm case insensitive (#1056) - ([fa2c477](https://github.com/boundaryml/baml/commit/fa2c4770791297a7a37a3f0c837ede4bb709f0ef)) - Antonio Sarosi
+- Prefer case sensitive match over case insensitive (#1063) - ([cd6b141](https://github.com/boundaryml/baml/commit/cd6b141020ec8dfd2514c82ffffaebc5678a025b)) - Antonio Sarosi
+- Fix Vertex-AI citation data being optional (#1058) - ([5eae0a7](https://github.com/boundaryml/baml/commit/5eae0a73be6cc8286ce045185537aeed0b9feb7d)) - aaronvg
+- Fix issue with casting to pydantic types (#1059) - ([830b0cb](https://github.com/boundaryml/baml/commit/830b0cb194b99fa6f019928e7466dcf3e3992596)) - hellovai
+- Only popup the VSCode env var dialog once (#1066) - ([1951474](https://github.com/boundaryml/baml/commit/19514745cfc8efeb8bda0be655e0fa2f216e4b29)) - aaronvg
+
+### Features
+
+- Add literal support for type_builder (#1069) - ([c0085d9](https://github.com/boundaryml/baml/commit/c0085d908cbf8696623fd70f49de5ca8325de06c)) - hellovai
+- Add docs for literal types (#1030) - ([55e5964](https://github.com/boundaryml/baml/commit/55e596419055c8da52b841b9ecbf16e328bc1033)) - Antonio Sarosi
+- Render aliased input class keys in prompts (#1045) - ([3824cda](https://github.com/boundaryml/baml/commit/3824cda75524105f3401e5c7e4c21e604d639f76)) - aaronvg
+- Add unstable_internal_repr on FunctionResult in Python (#1068) - ([00082e8](https://github.com/boundaryml/baml/commit/00082e8b941d3648ec499215d2c38091f36db944)) - hellovai
+
+
+### Miscellaneous
+
+- Added Contribution guide (#1055) - ([f09d943](https://github.com/boundaryml/baml/commit/f09d9432d95c876f5e63f3abdb47a40417c5c45a)) - aaronvg
+- Fix VSCode metrics (#1044) - ([a131336](https://github.com/boundaryml/baml/commit/a13133656e1610cac9a92aa4b4459c78340c7304)) - hellovai
+- Add more test cases for unquoted strings in objects (#1054) - ([2d1b700](https://github.com/boundaryml/baml/commit/2d1b700e82604e444d904cfeb67f46ced97153a5)) - hellovai
+
 ## [0.61.1](https://github.com/boundaryml/baml/compare/0.61.0..0.61.1) - 2024-10-15
 
 ### Bug Fixes
