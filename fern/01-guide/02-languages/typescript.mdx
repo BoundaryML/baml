@@ -1,0 +1,122 @@
+<Note>You can check out this repo: https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter</Note>
+
+To set up BAML with Typescript do the following:
+
+<Steps>
+  ### Install BAML VSCode/Cursor Extension
+      https://marketplace.visualstudio.com/items?itemName=boundary.baml-extension
+
+      - syntax highlighting
+      - testing playground
+      - prompt previews
+  
+  ### Install BAML
+      <CodeBlocks>
+        ```bash npm
+        npm install @boundaryml/baml
+        ```
+        
+        ```bash pnpm
+        pnpm add @boundaryml/baml
+        ```
+
+        ```bash yarn
+        yarn add @boundaryml/baml
+        ```
+
+        ```bash deno
+        deno install npm:@boundaryml/baml
+        ```
+    </CodeBlocks>
+  
+  ### Add BAML to your existing project
+      This will give you some starter BAML code in a `baml_src` directory.
+      
+      <CodeBlocks>
+        ```bash npm
+        npx baml-cli init
+        ```
+        
+        ```bash pnpm
+        pnpx baml-cli init
+        ```
+
+        ```bash yarn
+        yarn baml-cli init
+        ```
+
+        ```bash deno
+        dpx baml-cli init
+        ```
+    </CodeBlocks>
+  
+  ### Generate the `baml_client` typescript package from `.baml` files
+
+    ```bash
+    npx baml-cli generate
+    ```
+
+    You can modify your `package.json` so you have a helper prefix in front of your build command.
+
+    ```json package.json
+    {
+      "scripts": {
+        // Add a new command
+        "baml-generate": "baml-cli generate",
+        // Always call baml-generate on every build.
+        "build": "npm run baml-generate && tsc --build",
+      }
+    }
+    ```
+    
+    See [What is baml_src](/guide/introduction/baml_src) to learn more about how this works.
+    <img src="/assets/languages/baml-to-ts.png" />
+
+    As fun as writing BAML is, we want you be able to leverage BAML with existing typescript modules. This command gives you a typescript module that is a type-safe interface to every BAML function.
+
+    <Tip>
+      If you set up the [VSCode extension](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension), it will automatically run `baml-cli generate` on saving a BAML file.
+    </Tip>
+  
+  ### Use a BAML function in Typescript!
+    <Error>If `baml_client` doesn't exist, make sure to run the previous step! </Error>
+
+    <CodeBlocks>
+    ```typescript index.ts
+    import {b} from "baml_client"
+    import type {Resume} from "baml_client/types"
+
+    async function Example(raw_resume: string): Resume {
+      // BAML's internal parser guarantees ExtractResume
+      // to be always return a Resume type
+      const response = await b.ExtractResume(raw_resume);
+      return response;
+    }
+
+    async function ExampleStream(raw_resume: string): Resume {
+      const stream = b.stream.ExtractResume(raw_resume);
+      for await (const msg of stream) {
+        console.log(msg) // This will be a Partial<Resume> type
+      }
+
+      // This is guaranteed to be a Resume type.
+      return await stream.get_final_response();
+    }
+    ```
+
+    ```typescript sync_example.ts
+    import {b} from "baml_client/sync_client"
+    import type {Resume} from "baml_client/types"
+
+    function Example(raw_resume: string): Resume {
+      // BAML's internal parser guarantees ExtractResume
+      // to be always return a Resume type
+      const response = b.ExtractResume(raw_resume);
+      return response;
+    }
+
+    // Streaming is not available in the sync_client.
+
+    ```
+    </CodeBlocks>
+</Steps>
