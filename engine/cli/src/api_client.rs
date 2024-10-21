@@ -8,6 +8,7 @@ pub struct ApiClient {
 
 #[derive(Debug, Deserialize)]
 pub struct Project {
+    #[serde(rename = "project_uuid")]
     pub dbid: String,
     // This field is returned by the API, but does not yet have concrete semantics, so we shouldn't use it yet.
     // pub name: String,

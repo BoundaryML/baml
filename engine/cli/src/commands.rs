@@ -39,7 +39,12 @@ pub(crate) enum Commands {
 }
 
 impl RuntimeCli {
-    pub async fn run(&mut self, defaults: RuntimeCliDefaults) -> Result<()> {
+    pub fn run(&mut self, defaults: RuntimeCliDefaults) -> Result<()> {
+        // NB: we spawn a runtime here but block_on inside the match arms
+        // because 'baml-cli dev' and 'baml-cli serve' cannot block_on
+        let t = tokio::runtime::Runtime::new()?;
+        let _ = t.enter();
+
         match &mut self.command {
             Commands::Generate(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
@@ -54,11 +59,11 @@ impl RuntimeCli {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
                 args.run(defaults)
             }
-            Commands::Auth(args) => args.run_async().await,
-            Commands::Login(args) => args.run_async().await,
+            Commands::Auth(args) => t.block_on(async { args.run_async().await }),
+            Commands::Login(args) => t.block_on(async { args.run_async().await }),
             Commands::Deploy(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
-                args.run_async().await
+                t.block_on(async { args.run_async().await })
             }
         }
     }

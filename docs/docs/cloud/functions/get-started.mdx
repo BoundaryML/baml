@@ -1,0 +1,127 @@
+---
+slug: cloud/functions/get-started
+---
+
+_Learn how to host your BAML functions on Boundary Cloud and call them over HTTP._
+
+<Info>
+  This is a preview feature, available starting with `baml-cli v0.63.0`.
+</Info>
+
+<Note>
+  The BAML language, compiler, and runtime will always be 100% free and
+  open-source: we will always allow you to run BAML functions directly in your
+  own backends.
+  
+  Boundary Cloud's goal is to make it even easier to host and run BAML
+  functions, by adding support for features like rate limits, telemetry, and
+  end-user feedback.
+</Note>
+
+Boundary Cloud allows you to host your BAML functions on our infrastructure, exposing
+one REST API endpoint per BAML function.
+
+<div class="flex flex-col items-center">
+  <img src="/assets/cloud/boundary-cloud-diagram.drawio.svg" alt="OpenAPI diagram" />
+</div>
+
+This guide will walk you through:
+
+  - creating a Boundary Cloud account,
+  - deploying your BAML code to Boundary Cloud,
+  - setting your API keys, and
+  - calling your BAML functions.
+
+Once you've deployed your BAML functions, you can use the [OpenAPI client] to
+call them.
+
+[OpenAPI client]: /docs/get-started/quickstart/openapi
+
+## Get Started
+
+First, create your account and organization:
+
+```bash
+baml-cli login
+```
+
+Then, run this command in your `baml_src/` directory:
+
+```bash
+baml-cli deploy
+```
+
+which will point you to the dashboard, where you can set environment variables and create API keys.
+
+<div class="flex flex-col items-center">
+  <img class="rounded-md px-4 py-2 m-0" src="/assets/cloud/deploy-screenshot.png" alt="Boundary Cloud deploy output" />
+</div>
+
+Once you've set the environment variables you need (probably `ANTHROPIC_API_KEY`
+and/or `OPENAI_API_KEY`), you can call your BAML functions!
+
+If you still have the `ExtractResume` function that your BAML project was created with,
+you can use this command to test it out:
+
+```bash
+curl https://api2.boundaryml.com/v3/functions/prod/call/ExtractResume \
+  -H "Authorization: Bearer $BOUNDARY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d @- << EOF
+{
+  "resume": "
+    Grace Hopper
+    grace.hopper@example.com
+
+    Experience:
+    - Rear Admiral, US Navy
+    - Senior Programmer, Eckert-Mauchly Computer Corporation
+    - Associate Professor, Vassar College
+
+    Skills:
+    - COBOL
+    - Compiler development
+  "
+}
+EOF
+```
+
+Congratulations! You've gotten your first BAML functions working on Boundary Cloud.
+
+## Local development and testing
+
+To test your BAML functions locally, you can use `baml-cli dev`:
+
+```bash
+ANTHROPIC_API_KEY=... OPENAI_API_KEY=... baml-cli dev
+```
+
+which will allow you to call your functions at `http://localhost:2024/call/<function_name>` instead of
+`https://api2.boundaryml.com/v3/functions/prod/call/<function_name>`:
+
+```bash
+curl http://localhost:2024/functions/prod/call/ExtractResume \
+  -H "Authorization: Bearer $BOUNDARY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d @- << EOF
+{
+  "resume": "
+    Grace Hopper
+    grace.hopper@example.com
+
+    Experience:
+    - Rear Admiral, US Navy
+    - Senior Programmer, Eckert-Mauchly Computer Corporation
+    - Associate Professor, Vassar College
+
+    Skills:
+    - COBOL
+    - Compiler development
+  "
+}
+EOF
+```
+
+<div class="flex flex-col items-center">
+  <img class="rounded-md px-4 py-2 m-0" src="/assets/cloud/local-function-call.png" alt="Boundary Cloud deploy output" />
+</div>

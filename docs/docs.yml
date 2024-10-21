@@ -219,10 +219,18 @@ navigation:
             display-errors: true
   - tab: boundary-cloud
     layout:
-      - section: Boundary Cloud
+      - section: Boundary Functions
         contents:
-          - page: Host your BAML functions
-            path: docs/boundary-cloud/host-your-baml-functions.mdx
+          - page: Get Started
+            path: docs/cloud/functions/get-started.mdx
+          - page: Using OpenAPI
+            path: docs/cloud/functions/using-openapi.mdx
+          - page: Environment Variables
+            path: docs/cloud/functions/environment-variables.mdx
+      - section: Reference
+        contents:
+          - page: Limits
+            path: docs/cloud/limits.mdx
 
 navbar-links:
   - type: github

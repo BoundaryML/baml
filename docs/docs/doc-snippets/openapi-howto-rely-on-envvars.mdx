@@ -11,20 +11,10 @@ import (
 func main() {
     cfg := baml.NewConfiguration()
     if boundaryEndpoint := os.Getenv("BOUNDARY_ENDPOINT"); boundaryEndpoint != "" {
-        boundaryEndpoint := "https://api2.boundaryml.com/v3/"
         cfg.BasePath = boundaryEndpoint + "/functions/userControlledTag/"
-
-        boundaryEndpoint := "http://localhost:2024/"
-        cfg.BasePath = boundaryEndpoint + "/functions/userControlledTag/"
-
-        boundaryEndpoint := "https://api2.boundaryml.com/v3/"
-        boundaryEndpoint := "http://localhost:2024/"
-        if !boundaryEndpoint.startsWith("http://localhost") {
-          cfg.BasePath = boundaryEndpoint + "/functions/userControlledTag/"
-        }
     }
     if boundaryApiKey := os.Getenv("BOUNDARY_API_KEY"); boundaryApiKey != "" {
-        cfg.DefaultHeader["x-boundary-api-key"] = boundaryApiKey
+        cfg.DefaultHeader["Authorization"] = "Bearer " + boundaryApiKey
     }
     b := baml.NewAPIClient(cfg).DefaultAPI
     // Use `b` to make API calls
@@ -52,9 +42,7 @@ public class ApiExample {
 
         String boundaryApiKey = System.getenv("BOUNDARY_API_KEY");
         if (boundaryApiKey != null && !boundaryApiKey.isEmpty()) {
-            Map<String, String> defaultHeaders = new HashMap<>();
-            defaultHeaders.put("x-boundary-api-key", boundaryApiKey);
-            apiClient.setDefaultHeaders(defaultHeaders);
+            apiClient.addDefaultHeader("Authorization", "Bearer " + boundaryApiKey);
         }
 
         DefaultApi apiInstance = new DefaultApi(apiClient);
@@ -80,7 +68,7 @@ if ($boundaryEndpoint) {
 }
 
 if ($boundaryApiKey) {
-    $config->setApiKey('x-boundary-api-key', $boundaryApiKey);
+    $config->setAccessToken($boundaryApiKey);
 }
 
 $apiInstance = new OpenAPI\Client\Api\DefaultApi(
@@ -106,7 +94,7 @@ end
 
 boundary_api_key = ENV['BOUNDARY_API_KEY']
 if boundary_api_key
-  api_client.default_headers['x-boundary-api-key'] = boundary_api_key
+  api_client.default_headers['Authorization'] = "Bearer #{boundary_api_key}"
 end
 b = BamlClient::DefaultApi.new(api_client)
 ```
@@ -118,8 +106,9 @@ let mut config = baml_client::apis::configuration::Configuration::default();
 if let Some(base_path) = std::env::var("BOUNDARY_ENDPOINT").ok() {
     config.base_path = base_path;
 }
-
-// TODO: set api key
+if let Some(api_key) = std::env::var("BOUNDARY_API_KEY").ok() {
+    config.bearer_access_token = Some(api_key);
+}
 ```
 </Tab>
 

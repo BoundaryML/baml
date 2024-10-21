@@ -302,24 +302,20 @@ generator cloud {{
                 }
             }
         }
-        println!();
         println!(
-            "{}",
-            indoc! {
-                r#"
-        Next steps:
+            r#"
+Next steps:
 
-          1. Set environment variables for your deployed project:
-          https://dashboard.boundaryml.com/projects/{project_id}/cloud
+    1. Set environment variables for your deployed project:
+    https://dashboard.boundaryml.com/projects/{project_dbid}/cloud
 
-          2. Create an API key to call your deployed functions:
-          https://dashboard.boundaryml.com/projects/{project_id}/api-keys
+    2. Create an API key to call your deployed functions:
+    https://dashboard.boundaryml.com/projects/{project_dbid}/api-keys
 
-          3. Call your functions!
+    3. Call your functions!
 
-        Read the docs to learn more: https://docs.boundaryml.com/cloud
+Read the docs to learn more: https://docs.boundaryml.com/cloud
         "#
-            }
         );
 
         Ok(resp)
@@ -357,8 +353,9 @@ generator cloud {{
         };
 
         let client = reqwest::Client::new();
+        let url = format!("{}/v3/functions/{DEPLOYMENT_ID}", self.api_url);
         let req = client
-            .post(format!("{}/v3/functions/{DEPLOYMENT_ID}", self.api_url))
+            .post(url)
             .bearer_auth(self.token_data.borrow_mut().access_token().await?)
             .header("x-boundary-project-id", project_dbid);
 
@@ -368,14 +365,19 @@ generator cloud {{
             .await
             .context("Failed to send deployment request")?;
 
-        if response.status().is_success() {
+        let status = response.status();
+        if status.is_success() {
             let resp_body: CreateBamlDeploymentResponse = response.json().await?;
             Ok(resp_body)
         } else {
-            Err(response
-                .error_for_status()
-                .context("Deployment failed")
-                .unwrap_err())
+            match response.text().await {
+                Ok(text) => {
+                    Err(anyhow::anyhow!(text).context(format!("Deployment failed with {}", status)))
+                }
+                Err(e) => Err(anyhow::Error::from(e)
+                    .context("Failed to decode error body")
+                    .context(format!("Deployment failed with {}", status))),
+            }
         }
     }
 }
