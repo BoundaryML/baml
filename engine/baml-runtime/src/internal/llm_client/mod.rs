@@ -154,6 +154,7 @@ pub struct LLMErrorResponse {
     pub model: Option<String>,
     pub prompt: RenderedPrompt,
     pub request_options: HashMap<String, serde_json::Value>,
+    #[cfg_attr(target_arch = "wasm32", serde(skip_serializing))]
     pub start_time: web_time::SystemTime,
     pub latency: web_time::Duration,
 
@@ -232,6 +233,7 @@ pub struct LLMCompleteResponse {
     pub prompt: RenderedPrompt,
     pub request_options: HashMap<String, serde_json::Value>,
     pub content: String,
+    #[cfg_attr(target_arch = "wasm32", serde(skip_serializing))]
     pub start_time: web_time::SystemTime,
     pub latency: web_time::Duration,
     pub metadata: LLMCompleteResponseMetadata,
