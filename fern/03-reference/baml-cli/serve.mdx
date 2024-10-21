@@ -1,0 +1,89 @@
+The `serve` command starts a BAML-over-HTTP API server that exposes your BAML functions via HTTP endpoints. This feature allows you to interact with your BAML functions through a RESTful API interface.
+
+<Warning>
+  **Warning: Preview Feature**
+  
+  1. You must include the `--preview` flag when running the `dev` command.
+  2. Be aware that this feature is still being stabilized and may change in future releases.
+</Warning>
+
+## Usage
+
+```
+baml-cli serve [OPTIONS] --preview
+```
+
+<Tip>
+If you're actively developing, you can use the `dev` command to include hotreload functionality:
+```
+baml-cli dev [OPTIONS] --preview
+```
+
+[See more](./dev)
+</Tip>
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--from <PATH>` | Path to the `baml_src` directory | `./baml_src` |
+| `--port <PORT>` | Port to expose BAML on | `2024` |
+| `--no-version-check` | Generate `baml_client` without checking for version mismatch | `false` |
+| `--preview` | Enable the preview feature | |
+
+## Description
+
+The `serve` command performs the following actions:
+
+1. Exposes BAML functions as HTTP endpoints on the specified port.
+2. Provides authentication middleware for secure access.
+
+## Endpoints
+
+
+- `POST /call/:function_name`: Call a BAML function
+
+**Debugging**
+- `GET /docs`: Interactive API documentation (Swagger UI)
+- `GET /openapi.json`: OpenAPI specification for the BAML functions
+- `GET /_debug/ping`: Health check endpoint
+- `GET /_debug/status`: Server status and authentication check
+
+## Authentication
+
+We support the header: `x-baml-api-key`
+
+Set the `BAML_PASSWORD` environment variable to enable authentication.
+
+## Examples
+
+1. Start the server with default settings:
+   ```
+   baml-cli serve --preview
+   ```
+
+2. Start the server with a custom source directory and port:
+   ```
+   baml-cli serve --from /path/to/my/baml_src --port 3000 --preview
+   ```
+
+## Testing
+
+To test the server, you can use the following `curl` commands:
+
+1. Check if the server is running:
+   ```bash
+   curl http://localhost:2024/_debug/ping
+   ```
+
+2. Call a function:
+   ```bash
+   curl -X POST http://localhost:2024/call/MyFunctionName -d '{"arg1": "value1", "arg2": "value2"}'
+   ```
+
+   ```bash API Key
+    curl -X POST http://localhost:2024/call/MyFunctionName -H "x-baml-api-key: ${BAML_PASSWORD}" -d '{"arg1": "value1", "arg2": "value2"}'
+    ```
+
+3. Access the API documentation:
+   Open `http://localhost:2024/docs` in your web browser.

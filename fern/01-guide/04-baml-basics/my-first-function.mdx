@@ -1,5 +1,5 @@
 ---
-title: A BAML AI function
+title: Prompting in BAML
 ---
 BAML helps you write prompts as `functions` that you can use in your application. The BAML compiler translates these to REST requests to call the LLM provider endpoints, and parse the output to get the **guaranteed output type** you want.
 
@@ -34,6 +34,12 @@ function ExtractResume(resume_text: string) -> Resume {
 
     JSON:
   "#
+}
+
+test TestExtractResume {
+  args {
+    resume_text "Jason Doe\nPython, Rust\nUniversity of California, Berkeley, B.S.\nin Computer Science, 2020\nAlso an expert in Tableau, SQL, and C++"
+  }
 }
 ```
 

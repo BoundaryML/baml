@@ -108,7 +108,7 @@ navigation:
                 path: 01-guide/03-development/deploying/openapi.mdx
       - section: BAML Basics
         contents:
-          - page: A BAML AI function
+          - page: Prompting with BAML
             icon: fa-solid fa-terminal
             path: 01-guide/04-baml-basics/my-first-function.mdx
           - page: Switching LLMs
@@ -270,15 +270,15 @@ navigation:
             path: 03-reference/baml-cli/init.mdx
           - page: generate
             path: 03-reference/baml-cli/generate.mdx
-          - page: dev
-            path: 03-reference/baml-cli/dev.mdx
           - page: serve
             path: 03-reference/baml-cli/serve.mdx
+          - page: dev
+            path: 03-reference/baml-cli/dev.mdx
       - section: Language Reference
         slug: baml
         contents:
           - page: Supported Types
-            path: 01-guide/introduction.mdx
+            path: 03-reference/baml/types.mdx
           - page: comments
             path: 01-guide/introduction.mdx
           - section: values

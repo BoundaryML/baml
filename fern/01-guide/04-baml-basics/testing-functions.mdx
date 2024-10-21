@@ -1,0 +1,271 @@
+---
+slug: /guide/baml-basics/testing-functions
+---
+
+
+You can test your BAML functions in the VSCode Playground by adding a `test` snippet into a BAML file:
+
+```baml
+enum Category {
+    Refund
+    CancelOrder
+    TechnicalSupport
+    AccountIssue
+    Question
+}
+
+function ClassifyMessage(input: string) -> Category {
+  client GPT4Turbo
+  prompt #"
+    ... truncated ...
+  "#
+}
+
+test Test1 {
+  functions [ClassifyMessage]
+  args {
+    // input is the first argument of ClassifyMessage
+    input "Can't access my account using my usual login credentials, and each attempt results in an error message stating 'Invalid username or password.' I have tried resetting my password using the 'Forgot Password' link, but I haven't received the promised password reset email."
+  }
+}
+```
+See the [interactive examples](https://promptfiddle.com)
+
+The BAML playground will give you a starting snippet to copy that will match your function signature.
+
+<Warning>
+BAML doesn't use colons `:` between key-value pairs except in function parameters.
+</Warning>
+
+## Complex object inputs
+
+Objects are injected as dictionaries
+```rust
+class Message {
+  user string
+  content string
+}
+
+function ClassifyMessage(messages: Messages[]) -> Category {
+...
+}
+
+test Test1 {
+  functions [ClassifyMessage]
+  args {
+    messages [
+      {
+        user "hey there"
+        // multi-line string using the #"..."# syntax
+        content #"
+          You can also add a multi-line
+          string with the hashtags
+          Instead of ugly json with \n
+        "#
+      }
+    ]
+  }
+}
+```
+
+## Images
+
+For a function that takes an image as input, like so:
+
+```baml
+function MyFunction(myImage: image) -> string {
+  client GPT4o
+  prompt #"
+    Describe this image: {{myImage}}
+  "#
+}
+```
+
+You can define test cases using image files, URLs, or base64 strings.
+
+<Tabs>
+
+<Tab title="File">
+
+<Warning>
+  Committing a lot of images into your repository can make it slow to clone and
+  pull your repository. If you expect to commit >500MiB of images, please read
+  [GitHub's size limit documentation][github-large-files] and consider setting
+  up [large file storage][github-lfs].
+</Warning>
+
+[github-large-files]: https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github
+[github-lfs]: https://docs.github.com/en/repositories/working-with-files/managing-large-files/configuring-git-large-file-storage
+
+```baml
+test Test1 {
+  functions [MyFunction]
+  args {
+    myImage {
+      file "../path/to/image.png"
+    }
+  }
+}
+```
+
+<ParamField path="file" type="string" required="true">
+  The path to the image file, relative to the directory containing the current BAML file.
+
+  Image files must be somewhere in `baml_src/`.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the image. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on first, the file extension,
+  and second, the contents of the file.
+</ParamField>
+
+</Tab>
+
+<Tab title="URL">
+```baml
+test Test1 {
+  functions [MyFunction]
+  args {
+    myImage {
+      url "https...."
+    }
+  }
+}
+```
+
+<ParamField path="url" type="string" required="true">
+  The publicly accessible URL from which the image may be downloaded.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the image. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on the contents of the file.
+</ParamField>
+
+</Tab>
+
+<Tab title="Base64">
+```baml
+test Test1 {
+  args {
+    myImage {
+      base64 "base64string"
+      media_type "image/png"
+    }
+  }
+}
+```
+
+<ParamField path="base64" type="string" required="true">
+  The base64-encoded image data.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the image. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on the contents of the file.
+
+  If `base64` is a data URL, this field will be ignored.
+</ParamField>
+
+</Tab>
+</Tabs>
+
+## Audio
+
+For a function that takes audio as input, like so:
+
+```baml
+function MyFunction(myAudio: audio) -> string {
+  client GPT4o
+  prompt #"
+    Describe this audio: {{myAudio}}
+  "#
+}
+```
+
+You can define test cases using audio files, URLs, or base64 strings.
+
+<Tabs>
+
+<Tab title="File">
+
+<Warning>
+  Committing a lot of audio files into your repository can make it slow to clone and
+  pull your repository. If you expect to commit >500MiB of audio, please read
+  [GitHub's size limit documentation][github-large-files] and consider setting
+  up [large file storage][github-lfs].
+</Warning>
+
+```baml
+test Test1 {
+  functions [MyFunction]
+  args {
+    myAudio {
+      file "../path/to/audio.mp3"
+    }
+  }
+}
+```
+
+<ParamField path="file" type="string" required="true">
+  The path to the audio file, relative to the directory containing the current BAML file.
+
+  audio files must be somewhere in `baml_src/`.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the audio. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on first, the file extension,
+  and second, the contents of the file.
+</ParamField>
+
+</Tab>
+
+<Tab title="URL">
+```baml
+test Test1 {
+  functions [MyFunction]
+  args {
+    myAudio {
+      url "https...."
+    }
+  }
+}
+```
+
+<ParamField path="url" type="string" required="true">
+  The publicly accessible URL from which the audio may be downloaded.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the audio. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on the contents of the file.
+</ParamField>
+
+</Tab>
+
+<Tab title="Base64">
+```baml
+test Test1 {
+  args {
+    myAudio {
+      base64 "base64string"
+      media_type "audio/mp3"
+    }
+  }
+}
+```
+
+<ParamField path="base64" type="string" required="true">
+  The base64-encoded audio data.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the audio. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on the contents of the file.
+
+  If `base64` is a data URL, this field will be ignored.
+</ParamField>
+</Tab>
+</Tabs>
