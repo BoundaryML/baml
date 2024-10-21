@@ -190,24 +190,36 @@ impl ParserDatabase {
             }
         }
 
-        if max_loops == 0 && !deps.is_empty() {
-            let circular_deps = deps
-                .iter()
-                .map(|(k, _)| self.ast[*k].name())
-                .collect::<Vec<_>>()
-                .join(" -> ");
+        // NOTE: Class dependency cycles are already checked at
+        // baml-lib/baml-core/src/validate/validation_pipeline/validations/cycle.rs
+        //
+        // The algorithm at `cycle.rs` takes arity and recursive types into
+        // account unlike the topological sort performed here. The code below
+        // does not need to run since cycles would have already been detected
+        // at the validation stage, which runs before this function. Check
+        // baml-lib/baml-core/src/lib.rs
+        //
+        // The code above this comment seems modifies the AST by extending
+        // .class_dependencies so that one still needs to run.
 
-            deps.iter().for_each(|(k, _)| {
-                diag.push_error(DatamodelError::new_validation_error(
-                    &format!(
-                        "Circular dependency detected for class `{}`.\n{}",
-                        self.ast[*k].name(),
-                        circular_deps
-                    ),
-                    self.ast[*k].identifier().span().clone(),
-                ));
-            });
-        }
+        // if max_loops == 0 && !deps.is_empty() {
+        //     let circular_deps = deps
+        //         .iter()
+        //         .map(|(k, _)| self.ast[*k].name())
+        //         .collect::<Vec<_>>()
+        //         .join(" -> ");
+
+        //     deps.iter().for_each(|(k, _)| {
+        //         diag.push_error(DatamodelError::new_validation_error(
+        //             &format!(
+        //                 "Circular dependency detected for class `{}`.\n{}",
+        //                 self.ast[*k].name(),
+        //                 circular_deps
+        //             ),
+        //             self.ast[*k].identifier().span().clone(),
+        //         ));
+        //     });
+        // }
 
         // Additionally ensure the same thing for functions, but since we've already handled classes,
         // this should be trivial.

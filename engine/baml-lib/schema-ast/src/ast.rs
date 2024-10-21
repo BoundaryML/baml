@@ -84,6 +84,13 @@ impl SchemaAst {
 /// An opaque identifier for an enum in a schema AST.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TypeExpId(u32);
+
+impl From<u32> for TypeExpId {
+    fn from(id: u32) -> Self {
+        TypeExpId(id)
+    }
+}
+
 impl std::ops::Index<TypeExpId> for SchemaAst {
     type Output = TypeExpressionBlock;
 
