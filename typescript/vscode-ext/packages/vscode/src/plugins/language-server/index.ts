@@ -16,7 +16,7 @@ import type { BamlVSCodePlugin } from '../types'
 import { URI } from 'vscode-uri'
 import StatusBarPanel from '../../panels/StatusBarPanel'
 
-import packageJson from '../../../../package.json'
+import packageJson from '../../../package.json'
 
 const BamlConfig = z.optional(
   z.object({
