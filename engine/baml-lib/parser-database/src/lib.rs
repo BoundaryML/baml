@@ -47,7 +47,7 @@ pub use types::{
 };
 
 use self::{context::Context, interner::StringId, types::Types};
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use names::Names;
 
 /// ParserDatabase is a container for a Schema AST, together with information
@@ -170,7 +170,7 @@ impl ParserDatabase {
                             Some(walker.dependencies().iter().cloned().collect::<Vec<_>>())
                         }
                         Some(Either::Right(walker)) => Some(vec![walker.name().to_string()]),
-                        _ => panic!("Unknown class `{}`", f),
+                        _ => panic!("Unknown class `{f}`"),
                     })
                     .flatten()
                     .collect::<HashSet<_>>();
@@ -222,7 +222,7 @@ impl ParserDatabase {
                     .filter_map(|f| match self.find_type_by_str(f) {
                         Some(Either::Left(walker)) => Some(walker.dependencies().iter().cloned()),
                         Some(Either::Right(_)) => None,
-                        _ => panic!("Unknown class `{}`", f),
+                        _ => panic!("Unknown class `{f}`"),
                     })
                     .flatten()
                     .collect::<HashSet<_>>();
@@ -232,7 +232,7 @@ impl ParserDatabase {
                     .filter_map(|f| match self.find_type_by_str(f) {
                         Some(Either::Left(walker)) => Some(walker.dependencies().iter().cloned()),
                         Some(Either::Right(_)) => None,
-                        _ => panic!("Unknown class `{}`", f),
+                        _ => panic!("Unknown class `{f}`"),
                     })
                     .flatten()
                     .collect::<HashSet<_>>();

@@ -42,10 +42,12 @@ pub(crate) fn parse_value_expression_block(
                 Ok(arg) => input = Some(arg),
                 Err(err) => diagnostics.push_error(err),
             },
-            Rule::field_type | Rule::field_type_chain => match parse_function_arg(current, diagnostics) {
-                Ok(arg) => output = Some(arg),
-                Err(err) => diagnostics.push_error(err),
-            },
+            Rule::field_type | Rule::field_type_chain => {
+                match parse_function_arg(current, diagnostics) {
+                    Ok(arg) => output = Some(arg),
+                    Err(err) => diagnostics.push_error(err),
+                }
+            }
             Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
 
             Rule::value_expression_contents => {

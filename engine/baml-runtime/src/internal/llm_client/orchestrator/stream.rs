@@ -46,7 +46,11 @@ where
         let prompt = match node.render_prompt(ir, prompt, ctx, params).await {
             Ok(p) => p,
             Err(e) => {
-                results.push((node.scope, LLMResponse::InternalFailure(e.to_string()), None));
+                results.push((
+                    node.scope,
+                    LLMResponse::InternalFailure(e.to_string()),
+                    None,
+                ));
                 continue;
             }
         };

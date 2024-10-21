@@ -5,8 +5,7 @@ use crate::{
     coerce, coerce_array, Context, DatamodelError, StaticType, StringId,
 };
 
-use baml_types::FieldType;
-use internal_baml_schema_ast::ast::{ConfigBlockProperty, Expression, Field, WithIdentifier};
+use internal_baml_schema_ast::ast::{Expression, Field, WithIdentifier};
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use validate_reserved_names::*;

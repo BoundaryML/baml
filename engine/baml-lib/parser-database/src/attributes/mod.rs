@@ -63,7 +63,6 @@ impl Attributes {
     pub fn set_skip(&mut self) {
         self.skip.replace(true);
     }
-
 }
 pub(super) fn resolve_attributes(ctx: &mut Context<'_>) {
     for top in ctx.ast.iter_tops() {

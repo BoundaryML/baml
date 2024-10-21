@@ -1,4 +1,4 @@
-use baml_types::{BamlMap, BamlMediaType, BamlValue, FieldType, LiteralValue, TypeValue};
+use baml_types::{BamlMap, BamlValue, FieldType, LiteralValue, TypeValue};
 use core::result::Result;
 use std::path::PathBuf;
 
@@ -15,13 +15,12 @@ pub struct ParameterError {
 impl ParameterError {
     pub(super) fn required_param_missing(&mut self, param_name: &str) {
         self.vec
-            .push(format!("Missing required parameter: {}", param_name));
+            .push(format!("Missing required parameter: {param_name}"));
     }
 
     pub fn invalid_param_type(&mut self, param_name: &str, expected: &str, got: &str) {
         self.vec.push(format!(
-            "Invalid parameter type for {}: expected {}, got {}",
-            param_name, expected, got
+            "Invalid parameter type for {param_name}: expected {expected}, got {got}"
         ));
     }
 }
@@ -49,7 +48,7 @@ impl ArgCoercer {
                     BamlValue::Bool(false) => Ok(BamlValue::String("false".to_string())),
                     BamlValue::Null => Ok(BamlValue::String("null".to_string())),
                     _ => {
-                        scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                        scope.push_error(format!("Expected type {t:?}, got `{value}`"));
                         Err(())
                     }
                 },
@@ -58,7 +57,7 @@ impl ArgCoercer {
                     BamlValue::Int(val) => Ok(BamlValue::Float(*val as f64)),
                     BamlValue::Float(_) => Ok(value.clone()),
                     _ => {
-                        scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                        scope.push_error(format!("Expected type {t:?}, got `{value}`"));
                         Err(())
                     }
                 },
@@ -82,9 +81,7 @@ impl ArgCoercer {
                             for key in kv.keys() {
                                 if !vec!["file", "media_type"].contains(&key.as_str()) {
                                     scope.push_error(format!(
-                                        "Invalid property `{}` on file {}: `media_type` is the only supported property",
-                                        key,
-                                        media_type
+                                        "Invalid property `{key}` on file {media_type}: `media_type` is the only supported property"
                                     ));
                                 }
                             }
@@ -116,9 +113,7 @@ impl ArgCoercer {
                             for key in kv.keys() {
                                 if !vec!["url", "media_type"].contains(&key.as_str()) {
                                     scope.push_error(format!(
-                                        "Invalid property `{}` on url {}: `media_type` is the only supported property",
-                                        key,
-                                        media_type
+                                        "Invalid property `{key}` on url {media_type}: `media_type` is the only supported property"
                                     ));
                                 }
                             }
@@ -141,9 +136,7 @@ impl ArgCoercer {
                             for key in kv.keys() {
                                 if !vec!["base64", "media_type"].contains(&key.as_str()) {
                                     scope.push_error(format!(
-                                        "Invalid property `{}` on base64 {}: `media_type` is the only supported property",
-                                        key,
-                                        media_type
+                                        "Invalid property `{key}` on base64 {media_type}: `media_type` is the only supported property"
                                     ));
                                 }
                             }
@@ -154,19 +147,18 @@ impl ArgCoercer {
                             )))
                         } else {
                             scope.push_error(format!(
-                                "Invalid image: expected `file`, `url`, or `base64`, got `{}`",
-                                value
+                                "Invalid image: expected `file`, `url`, or `base64`, got `{value}`"
                             ));
                             Err(())
                         }
                     }
                     _ => {
-                        scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                        scope.push_error(format!("Expected type {t:?}, got `{value}`"));
                         Err(())
                     }
                 },
                 _ => {
-                    scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                    scope.push_error(format!("Expected type {t:?}, got `{value}`"));
                     Err(())
                 }
             },
@@ -188,13 +180,13 @@ impl ArgCoercer {
                             Err(())
                         }
                     } else {
-                        scope.push_error(format!("Enum {} not found", name));
+                        scope.push_error(format!("Enum {name} not found"));
                         Err(())
                     }
                 }
                 BamlValue::Enum(n, _) if n == name => Ok(value.clone()),
                 _ => {
-                    scope.push_error(format!("Invalid enum {}: Got `{}`", name, value));
+                    scope.push_error(format!("Invalid enum {name}: Got `{value}`"));
                     Err(())
                 }
             },
@@ -205,7 +197,7 @@ impl ArgCoercer {
                 }
                 (LiteralValue::Bool(lit), BamlValue::Bool(baml)) if lit == baml => value.clone(),
                 _ => {
-                    scope.push_error(format!("Expected literal {:?}, got `{}`", literal, value));
+                    scope.push_error(format!("Expected literal {literal:?}, got `{value}`"));
                     return Err(());
                 }
             }),
@@ -250,12 +242,12 @@ impl ArgCoercer {
                         Ok(BamlValue::Class(name.to_string(), fields))
                     }
                     Err(_) => {
-                        scope.push_error(format!("Class {} not found", name));
+                        scope.push_error(format!("Class {name} not found"));
                         Err(())
                     }
                 },
                 _ => {
-                    scope.push_error(format!("Expected class {}, got `{}`", name, value));
+                    scope.push_error(format!("Expected class {name}, got `{value}`"));
                     Err(())
                 }
             },
@@ -270,7 +262,7 @@ impl ArgCoercer {
                     Ok(BamlValue::List(items))
                 }
                 _ => {
-                    scope.push_error(format!("Expected array, got `{}`", value));
+                    scope.push_error(format!("Expected array, got `{value}`"));
                     Err(())
                 }
             },
@@ -296,7 +288,7 @@ impl ArgCoercer {
                     }
                     Ok(BamlValue::Map(map))
                 } else {
-                    scope.push_error(format!("Expected map, got `{}`", value));
+                    scope.push_error(format!("Expected map, got `{value}`"));
                     Err(())
                 }
             }
@@ -308,7 +300,7 @@ impl ArgCoercer {
                         return result;
                     }
                 }
-                scope.push_error(format!("Expected one of {:?}, got `{}`", options, value));
+                scope.push_error(format!("Expected one of {options:?}, got `{value}`"));
                 Err(())
             }
             FieldType::Optional(inner) => {
@@ -318,7 +310,7 @@ impl ArgCoercer {
                     let mut inner_scope = ScopeStack::new();
                     let baml_arg = self.coerce_arg(ir, inner, value, &mut inner_scope);
                     if inner_scope.has_errors() {
-                        scope.push_error(format!("Expected optional {}, got `{}`", inner, value));
+                        scope.push_error(format!("Expected optional {inner}, got `{value}`"));
                         Err(())
                     } else {
                         baml_arg

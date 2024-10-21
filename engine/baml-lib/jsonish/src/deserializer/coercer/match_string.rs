@@ -115,7 +115,7 @@ fn try_match_only_once(
             target,
             mismatch
                 .iter()
-                .map(|(count, string)| format!("{} ({} times)", string, count)),
+                .map(|(count, string)| format!("{string} ({count} times)")),
         ));
     };
 

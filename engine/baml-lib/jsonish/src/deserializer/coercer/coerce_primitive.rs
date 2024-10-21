@@ -341,8 +341,7 @@ mod tests {
             let result = float_from_comma_separated(input);
             assert_eq!(
                 result, expected,
-                "Failed to parse '{}'. Expected {:?}, got {:?}",
-                input, expected, result
+                "Failed to parse '{input}'. Expected {expected:?}, got {result:?}"
             );
         }
     }

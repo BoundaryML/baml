@@ -80,8 +80,9 @@ fn resolve_properties(client: &ClientWalker, ctx: &RuntimeContext) -> Result<Req
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "user".to_string());
     let allowed_metadata = match properties.remove("allowed_role_metadata") {
-        Some(allowed_metadata) => serde_json::from_value(allowed_metadata)
-            .context("allowed_role_metadata must be an array of keys. For example: ['key1', 'key2']")?,
+        Some(allowed_metadata) => serde_json::from_value(allowed_metadata).context(
+            "allowed_role_metadata must be an array of keys. For example: ['key1', 'key2']",
+        )?,
         None => AllowedMetadata::None,
     };
     let inference_config = match properties.remove("inference_configuration") {

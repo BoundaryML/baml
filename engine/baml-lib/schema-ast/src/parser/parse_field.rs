@@ -78,14 +78,16 @@ pub(crate) fn parse_type_expr(
         match current.as_rule() {
             Rule::identifier => {
                 name = Some(parse_identifier(current, diagnostics));
-            },
+            }
             Rule::trailing_comment => {
                 comment = merge_comments(comment, parse_trailing_comment(current));
             }
             Rule::field_type_chain => {
-                    field_type = parse_field_type_chain(current, diagnostics);
+                field_type = parse_field_type_chain(current, diagnostics);
             }
-            Rule::field_attribute => field_attributes.push(parse_attribute(current, false, diagnostics)),
+            Rule::field_attribute => {
+                field_attributes.push(parse_attribute(current, false, diagnostics))
+            }
             _ => parsing_catch_all(current, "field"),
         }
     }
@@ -178,8 +180,7 @@ pub(crate) fn parse_field_type_with_attr(
                     //     ft.set_attributes(attributes.clone()); // Clone the borrowed `Vec<Attribute>`
                     // }
                 }
-                _ => {
-                }
+                _ => {}
             }
             ft.extend_attributes(field_attributes);
 
@@ -252,7 +253,10 @@ mod tests {
         let result = parse_field_type_chain(parsed, &mut diagnostics).unwrap();
         if let FieldType::Union(_, types, _, _) = &result {
             assert_eq!(types[1].clone().attributes().len(), 1);
-            assert_eq!(types[1].clone().attributes()[0].name.to_string().as_str(), "description");
+            assert_eq!(
+                types[1].clone().attributes()[0].name.to_string().as_str(),
+                "description"
+            );
         } else {
             panic!("Expected union");
         }

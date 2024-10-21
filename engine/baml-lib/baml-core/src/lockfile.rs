@@ -155,8 +155,7 @@ impl LockFileWrapper {
                 // Not ok as prev is set, but current is not.
                 diag.push_error(DatamodelError::new_validation_error(
                     &format!(
-                        "The last CLI version was {}. The current version of baml isn't found.",
-                        b
+                        "The last CLI version was {b}. The current version of baml isn't found."
                     ),
                     self.span.clone().unwrap(),
                 ));
@@ -173,7 +172,7 @@ impl LockFileWrapper {
                     std::cmp::Ordering::Less => {
                         // Not ok as prev is newer than current.
                         diag.push_error(DatamodelError::new_validation_error(
-                            &format!("The last CLI version was {}. You're currently at: {}. Please run `baml update`", b,a),
+                            &format!("The last CLI version was {b}. You're currently at: {a}. Please run `baml update`"),
                             self.span.clone().unwrap(),
                         ));
                     }
@@ -181,7 +180,7 @@ impl LockFileWrapper {
                     std::cmp::Ordering::Greater => {
                         // Ok as prev is older than current.
                         diag.push_warning(DatamodelWarning::new(
-                            format!("Upgrading generated code with latest CLI: {}", a),
+                            format!("Upgrading generated code with latest CLI: {a}"),
                             self.span.clone().unwrap(),
                         ));
                     }
@@ -198,8 +197,7 @@ impl LockFileWrapper {
                 // Not ok as prev is set, but current is not.
                 diag.push_warning(DatamodelWarning::new(
                     format!(
-                        "The last client version was {}. The current version of the client isn't found. Have you run `baml update-client`?",
-                        b
+                        "The last client version was {b}. The current version of the client isn't found. Have you run `baml update-client`?"
                     ),
                     self.span.clone().unwrap(),
                 ));
@@ -209,7 +207,7 @@ impl LockFileWrapper {
                     std::cmp::Ordering::Less => {
                         // Not ok as prev is newer than current.
                         diag.push_error(DatamodelError::new_validation_error(
-                            &format!("The last client version was {}. You're using an older version: {}. Please run: `baml update-client`", b,a),
+                            &format!("The last client version was {b}. You're using an older version: {a}. Please run: `baml update-client`"),
                             self.span.clone().unwrap(),
                         ));
                     }
@@ -217,7 +215,7 @@ impl LockFileWrapper {
                     std::cmp::Ordering::Greater => {
                         // Ok as prev is older than current.
                         diag.push_warning(DatamodelWarning::new(
-                            format!("Upgrading generated code with latest baml client: {}", a),
+                            format!("Upgrading generated code with latest baml client: {a}"),
                             self.span.clone().unwrap(),
                         ));
                     }

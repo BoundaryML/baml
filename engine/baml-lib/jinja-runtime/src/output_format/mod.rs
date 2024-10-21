@@ -30,7 +30,7 @@ impl std::fmt::Display for OutputFormat {
             .map_err(|e| std::fmt::Error {})?;
 
         match content {
-            Some(content) => write!(f, "{}", content),
+            Some(content) => write!(f, "{content}"),
             None => Ok(()),
         }
     }
@@ -59,7 +59,7 @@ impl minijinja::value::Object for OutputFormat {
                 Err(e) => {
                     return Err(Error::new(
                         ErrorKind::SyntaxError,
-                        format!("Invalid value for prefix (expected string | null): {}", e),
+                        format!("Invalid value for prefix (expected string | null): {e}"),
                     ))
                 }
             }
@@ -73,7 +73,7 @@ impl minijinja::value::Object for OutputFormat {
                 Err(e) => {
                     return Err(Error::new(
                         ErrorKind::SyntaxError,
-                        format!("Invalid value for or_splitter (expected string): {}", e),
+                        format!("Invalid value for or_splitter (expected string): {e}"),
                     ))
                 }
             }
@@ -88,8 +88,7 @@ impl minijinja::value::Object for OutputFormat {
                     return Err(Error::new(
                         ErrorKind::SyntaxError,
                         format!(
-                            "Invalid value for enum_value_prefix (expected string | null): {}",
-                            e
+                            "Invalid value for enum_value_prefix (expected string | null): {e}"
                         ),
                     ))
                 }
@@ -104,10 +103,7 @@ impl minijinja::value::Object for OutputFormat {
                 Err(e) => {
                     return Err(Error::new(
                         ErrorKind::SyntaxError,
-                        format!(
-                            "Invalid value for always_hoist_enums (expected bool): {}",
-                            e
-                        ),
+                        format!("Invalid value for always_hoist_enums (expected bool): {e}"),
                     ))
                 }
             }
@@ -174,7 +170,7 @@ impl minijinja::value::Object for OutputFormat {
     ) -> Result<minijinja::value::Value, minijinja::Error> {
         Err(minijinja::Error::new(
             ErrorKind::UnknownMethod,
-            format!("output_format has no callable attribute '{}'", name),
+            format!("output_format has no callable attribute '{name}'"),
         ))
     }
 }

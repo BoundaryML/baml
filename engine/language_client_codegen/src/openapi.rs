@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::{path::PathBuf, process::Command};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use baml_types::{BamlMediaType, FieldType, LiteralValue, TypeValue};
@@ -8,7 +7,7 @@ use internal_baml_core::ir::{
     repr::{Function, IntermediateRepr, Node, Walker},
     ClassWalker, EnumWalker,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::json;
 
 use crate::dir_writer::{FileCollector, LanguageFeatures, RemoveDirBehavior};
@@ -420,7 +419,7 @@ impl<'ir> TryFrom<Walker<'ir, &'ir Node<Function>>> for OpenApiMethodDef<'ir> {
                     // function arg signature (I think the Java generator too?)
                     //
                     // title: None,
-                    title: Some(format!("{}Request", function_name)),
+                    title: Some(format!("{function_name}Request")),
                     r#enum: None,
                     r#const: None,
                     nullable: false,
@@ -445,7 +444,7 @@ impl<'ir> TryFrom<Walker<'ir, &'ir Node<Function>>> for OpenApiMethodDef<'ir> {
             },
             response: {
                 let mut response_type = value.item.elem.output().to_type_spec(value.db)?;
-                response_type.meta.title = Some(format!("{}Response", function_name));
+                response_type.meta.title = Some(format!("{function_name}Response"));
                 response_type
             },
         })
@@ -538,7 +537,7 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                     nullable: false,
                 },
                 type_spec: TypeSpec::Ref {
-                    r#ref: format!("#/components/schemas/{}", name),
+                    r#ref: format!("#/components/schemas/{name}"),
                 },
             },
             FieldType::Literal(v) => TypeSpecWithMeta {

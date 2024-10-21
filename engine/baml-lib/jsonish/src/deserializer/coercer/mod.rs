@@ -61,7 +61,7 @@ impl ParsingContext<'_> {
                     if acc.is_empty() {
                         return f.to_string();
                     }
-                    return format!("{}, {}", acc, f);
+                    return format!("{acc}, {f}");
                 })
             ),
             scope: self.scope.clone(),
@@ -75,7 +75,7 @@ impl ParsingContext<'_> {
         error: impl IntoIterator<Item = &'a ParsingError>,
     ) -> ParsingError {
         ParsingError {
-            reason: format!("{}", summary),
+            reason: format!("{summary}"),
             scope: self.scope.clone(),
             causes: error.into_iter().map(|e| e.clone()).collect(),
         }
@@ -91,7 +91,7 @@ impl ParsingContext<'_> {
 
     pub(crate) fn error_unexpected_null(&self, target: &FieldType) -> ParsingError {
         ParsingError {
-            reason: format!("Expected {}, got null", target),
+            reason: format!("Expected {target}, got null"),
             scope: self.scope.clone(),
             causes: vec![],
         }
@@ -115,7 +115,7 @@ impl ParsingContext<'_> {
 
     pub(crate) fn error_map_must_have_string_key(&self, key_type: &FieldType) -> ParsingError {
         ParsingError {
-            reason: format!("Maps may only have strings for keys, but got {}", key_type),
+            reason: format!("Maps may only have strings for keys, but got {key_type}"),
             scope: self.scope.clone(),
             causes: vec![],
         }
@@ -138,12 +138,12 @@ impl ParsingContext<'_> {
                 .into_iter()
                 .map(|k| ParsingError {
                     scope: self.scope.clone(),
-                    reason: format!("Missing required field: {}", k),
+                    reason: format!("Missing required field: {k}"),
                     causes: vec![],
                 })
                 .chain(unparsed.into_iter().map(|(k, e)| ParsingError {
                     scope: self.scope.clone(),
-                    reason: format!("Failed to parse field {}: {}", k, e),
+                    reason: format!("Failed to parse field {k}: {e}"),
                     causes: vec![e.clone()],
                 }))
                 .collect(),
@@ -159,8 +159,8 @@ impl ParsingContext<'_> {
             reason: format!(
                 "Expected {}, got {:?}.",
                 match target {
-                    FieldType::Enum(_) => format!("{} enum value", target),
-                    FieldType::Class(_) => format!("{}", target),
+                    FieldType::Enum(_) => format!("{target} enum value"),
+                    FieldType::Class(_) => format!("{target}"),
                     _ => format!("{target}"),
                 },
                 got
@@ -172,7 +172,7 @@ impl ParsingContext<'_> {
 
     pub(crate) fn error_internal<T: std::fmt::Display>(&self, error: T) -> ParsingError {
         ParsingError {
-            reason: format!("Internal error: {}", error),
+            reason: format!("Internal error: {error}"),
             scope: self.scope.clone(),
             causes: vec![],
         }
@@ -199,7 +199,7 @@ impl std::fmt::Display for ParsingError {
             self.reason
         )?;
         for cause in &self.causes {
-            write!(f, "\n  - {}", format!("{}", cause).replace("\n", "\n  "))?;
+            write!(f, "\n  - {}", format!("{cause}").replace("\n", "\n  "))?;
         }
         Ok(())
     }

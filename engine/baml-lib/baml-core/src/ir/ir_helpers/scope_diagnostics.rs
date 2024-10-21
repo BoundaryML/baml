@@ -61,7 +61,7 @@ impl GenericScope {
     #[allow(dead_code)]
     fn push_type_error(&mut self, expected: &str, got: &str) {
         self.errors
-            .push(format!("Expected type {}, got `{}`", expected, got));
+            .push(format!("Expected type {expected}, got `{got}`"));
     }
 }
 
@@ -81,13 +81,13 @@ impl std::fmt::Display for ScopeStack {
             }
             let indent = "  ".repeat(depth);
             if let Some(name) = &scope.name {
-                writeln!(f, "{}{}:", indent, name)?;
+                writeln!(f, "{indent}{name}:")?;
             }
             for error in &scope.errors {
-                writeln!(f, "{}  Error: {}", indent, error)?;
+                writeln!(f, "{indent}  Error: {error}")?;
             }
             for warning in &scope.warnings {
-                writeln!(f, "{}  Warning: {}", indent, warning)?;
+                writeln!(f, "{indent}  Warning: {warning}")?;
             }
         }
         Ok(())
@@ -126,15 +126,15 @@ impl ScopeStack {
             if errors_as_warnings {
                 parent_scope
                     .warnings
-                    .extend(scope.errors.iter().map(|e| format!("{}: {}", name, e)));
+                    .extend(scope.errors.iter().map(|e| format!("{name}: {e}")));
             } else {
                 parent_scope
                     .errors
-                    .extend(scope.errors.iter().map(|e| format!("{}: {}", name, e)));
+                    .extend(scope.errors.iter().map(|e| format!("{name}: {e}")));
             }
             parent_scope
                 .warnings
-                .extend(scope.warnings.iter().map(|e| format!("{}: {}", name, e)));
+                .extend(scope.warnings.iter().map(|e| format!("{name}: {e}")));
         } else {
             if errors_as_warnings {
                 parent_scope.warnings.extend(scope.errors);

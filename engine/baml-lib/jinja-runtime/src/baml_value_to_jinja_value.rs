@@ -135,7 +135,7 @@ impl minijinja::value::Object for MinijinjaBamlMedia {
     ) -> Result<minijinja::value::Value, minijinja::Error> {
         Err(minijinja::Error::new(
             minijinja::ErrorKind::UnknownMethod,
-            format!("BamlImage has no callable attribute '{:#?}'", args),
+            format!("BamlImage has no callable attribute '{args:#?}'"),
         ))
     }
 }
@@ -224,7 +224,7 @@ impl std::fmt::Display for MinijinjaBamlClass {
             let alias = self.key_to_alias.get(k).unwrap_or(k);
             map.insert(alias.to_string(), v.clone());
         }
-        write!(f, "{:#?}", map)
+        write!(f, "{map:#?}")
     }
 }
 

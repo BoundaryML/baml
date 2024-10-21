@@ -27,7 +27,7 @@ impl ToRuby for Expression {
                 )
             }
             Expression::Identifier(idn) => match idn {
-                Identifier::ENV(idn) => format!("process.env.{}", idn),
+                Identifier::ENV(idn) => format!("process.env.{idn}"),
                 Identifier::Local(k) => format!("\"{}\"", k.replace('"', "\\\"")),
                 Identifier::Ref(r) => format!("\"{}\"", r.join(".")),
                 Identifier::Primitive(p) => p.to_ruby(),

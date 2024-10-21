@@ -20,7 +20,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                         // Don't worry about enum dependencies, they can't form cycles.
                         Some(either::Either::Right(_enm)) => false,
                         None => {
-                            panic!("Unknown class `{}`", f);
+                            panic!("Unknown class `{f}`");
                         }
                     })
                     .collect::<HashSet<_>>(),
@@ -61,7 +61,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                 .collect::<Vec<_>>()
                 .join(" -> ");
             ctx.push_error(DatamodelError::new_validation_error(
-                &format!("These classes form a dependency cycle: {}", cycle),
+                &format!("These classes form a dependency cycle: {cycle}"),
                 span.clone(),
             ));
             return;

@@ -96,7 +96,7 @@ pub fn parse<'a>(str: &'a str, _options: &ParseOptions) -> Result<Vec<(Value, Ve
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::jsonish::{Value, ParseOptions};
+    use crate::jsonish::{ParseOptions, Value};
 
     #[test]
     fn test_partial_array() {
@@ -117,7 +117,6 @@ mod tests {
             }
             _ => panic!("Expected array"),
         }
-
     }
 
     #[test]
@@ -135,10 +134,10 @@ mod tests {
                         assert_eq!(a, &serde_json::Number::from(11));
                         assert_eq!(b, &serde_json::Number::from(22));
                     }
-                    _ => panic!("Expected two numbers.")
+                    _ => panic!("Expected two numbers."),
                 }
             }
-            _ => panic!("Expected object")
+            _ => panic!("Expected object"),
         }
     }
 
@@ -157,10 +156,10 @@ mod tests {
                         assert_eq!(a, &serde_json::Number::from(11));
                         assert_eq!(b, &serde_json::Number::from(22));
                     }
-                    _ => panic!("Expected two numbers.")
+                    _ => panic!("Expected two numbers."),
                 }
             }
-            _ => panic!("Expected object")
+            _ => panic!("Expected object"),
         }
     }
 }

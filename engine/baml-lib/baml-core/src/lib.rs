@@ -156,7 +156,7 @@ fn validate_configuration(
                 }
                 Err(err) => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Failed to create lock file: {}", err),
+                        &format!("Failed to create lock file: {err}"),
                         gen.span.clone(),
                     ));
                     None

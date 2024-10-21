@@ -69,8 +69,7 @@ fn try_delete_tmp_dir(temp_path: &Path) -> Result<()> {
                 Err(e) => {
                     // For other errors or if it's the last attempt, fail with an error
                     return Err(anyhow::Error::new(e).context(format!(
-                        "Failed to delete temp directory '{:?}' after {} attempts",
-                        temp_path, attempt
+                        "Failed to delete temp directory '{temp_path:?}' after {attempt} attempts"
                     )));
                 }
             }
@@ -107,11 +106,9 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
         args: (&'ir IntermediateRepr, &'ir GeneratorArgs),
     ) -> Result<()> {
         let rendered = V::try_from(args)
-            .map_err(|e| e.context(format!("Error while building {}", name)))?
+            .map_err(|e| e.context(format!("Error while building {name}")))?
             .render()
-            .map_err(|e| {
-                anyhow::Error::from(e).context(format!("Error while rendering {}", name))
-            })?;
+            .map_err(|e| anyhow::Error::from(e).context(format!("Error while rendering {name}")))?;
         self.files.insert(
             name.into(),
             format!("{}\n{}", self.lang.content_prefix(), rendered),

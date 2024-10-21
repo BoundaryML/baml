@@ -172,7 +172,7 @@ impl IRHelper for IntermediateRepr {
             } else {
                 // Check if the parameter is optional.
                 if !param_type.is_optional() {
-                    scope.push_error(format!("Missing required parameter: {}", param_name));
+                    scope.push_error(format!("Missing required parameter: {param_name}"));
                 }
             }
             scope.pop(false);

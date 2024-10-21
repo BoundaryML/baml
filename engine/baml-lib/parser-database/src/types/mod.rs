@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 use internal_baml_diagnostics::Span;
 use internal_baml_prompt_parser::ast::{ChatBlock, PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
-    self, Expression, FieldId, RawString, TypeExpId, ValExpId, WithIdentifier, WithName, WithSpan,
+    self, Expression, FieldId, RawString, ValExpId, WithIdentifier, WithName, WithSpan,
 };
 
 mod configurations;
@@ -276,7 +276,7 @@ fn visit_enum<'db>(
         })
         .for_each(|(span, field)| {
             ctx.push_error(DatamodelError::new_validation_error(
-                format!("Unexpected type specified for value `{}`", field).as_str(),
+                format!("Unexpected type specified for value `{field}`").as_str(),
                 span.clone(),
             ));
         });
@@ -306,7 +306,7 @@ fn visit_class<'db>(
         })
         .for_each(|(span, field)| {
             ctx.push_error(DatamodelError::new_validation_error(
-                format!("No type specified for field `{}`", field).as_str(),
+                format!("No type specified for field `{field}`").as_str(),
                 span.clone(),
             ));
         });
@@ -359,7 +359,7 @@ fn visit_function<'db>(idx: ValExpId, function: &'db ast::ValueExprBlock, ctx: &
                 }
             }
             config => ctx.push_error(DatamodelError::new_validation_error(
-                &format!("Unknown field `{}` in function", config),
+                &format!("Unknown field `{config}` in function"),
                 field.span().clone(),
             )),
         });
@@ -438,7 +438,7 @@ fn visit_client<'db>(idx: ValExpId, client: &'db ast::ValueExprBlock, ctx: &mut 
                 };
             }
             config => ctx.push_error(DatamodelError::new_validation_error(
-                &format!("Unknown field `{}` in client", config),
+                &format!("Unknown field `{config}` in client"),
                 field.span().clone(),
             )),
         });

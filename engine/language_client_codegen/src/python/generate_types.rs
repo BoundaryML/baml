@@ -151,7 +151,7 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
 
 pub fn add_default_value(node: &FieldType, type_str: &String) -> String {
     if type_str.starts_with("Optional[") {
-        return format!("{} = None", type_str);
+        return format!("{type_str} = None");
     } else {
         return type_str.clone();
     }
@@ -176,7 +176,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     format!("\"{name}\"")
                 }
             }
-            FieldType::Literal(value) => format!("Literal[{}]", value),
+            FieldType::Literal(value) => format!("Literal[{value}]"),
             FieldType::Class(name) => format!("\"{name}\""),
             FieldType::List(inner) => format!("List[{}]", inner.to_type_ref(ir)),
             FieldType::Map(key, value) => {
@@ -223,7 +223,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     format!("Optional[types.{name}]")
                 }
             }
-            FieldType::Literal(value) => format!("Literal[{}]", value),
+            FieldType::Literal(value) => format!("Literal[{value}]"),
             FieldType::List(inner) => format!("List[{}]", inner.to_partial_type_ref(ir, true)),
             FieldType::Map(key, value) => {
                 format!(

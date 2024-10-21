@@ -1,8 +1,6 @@
-use std::any::Any;
-
 use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
 use anyhow::Result;
-use internal_baml_core::{ast::Field, ir::FieldType};
+use internal_baml_core::ir::FieldType;
 
 use super::{ParsingContext, ParsingError};
 
@@ -170,8 +168,8 @@ pub(super) fn pick_best(
             .iter()
             .enumerate()
             .filter_map(|(idx, r)| match r {
-                Ok(r) => Some(format!("{idx} {:#}", r)),
-                Err(e) => Some(format!("{idx} {:#}", e)),
+                Ok(r) => Some(format!("{idx} {r:#}")),
+                Err(e) => Some(format!("{idx} {e:#}")),
             })
             .collect::<Vec<_>>()
             .join("\n")
