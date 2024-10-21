@@ -31,7 +31,7 @@ impl ApiClient {
         &self,
         req: GetOrCreateProjectRequest,
     ) -> Result<GetOrCreateProjectResponse> {
-        let resp = reqwest::Client::new()
+        let resp = baml_runtime::request::create_client()?
             .post(format!("{}/v3/projects", self.base_url))
             .bearer_auth(&self.token)
             .json(&req)

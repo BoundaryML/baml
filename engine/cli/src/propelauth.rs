@@ -67,20 +67,20 @@ struct OrgInfo {
 /// TODO: a lot of this should be replaced with the oauth2 crate or openidconnect crate, neither of which
 /// I realized existed until after I finished writing all this.
 impl PropelAuthClient {
-    pub fn new() -> Self {
-        let client = reqwest::Client::new();
+    pub fn new() -> Result<Self> {
+        let client = baml_runtime::request::create_client()?;
         if std::env::var("BOUNDARY_API_ENV").as_deref() == Ok("test") {
-            Self {
+            Ok(Self {
                 auth_url: "https://681310426.propelauthtest.com".to_string(),
                 client_id: "64ae726d05cddb6a46c541a8e0ff5e4a".to_string(),
                 client,
-            }
+            })
         } else {
-            Self {
+            Ok(Self {
                 auth_url: "https://auth.boundaryml.com".to_string(),
                 client_id: "f09552c069706a76d5f3e9a113e7cdfe".to_string(),
                 client,
-            }
+            })
         }
     }
 
@@ -155,7 +155,7 @@ impl PropelAuthClient {
         code_verifier: &str,
     ) -> Result<GetAccessTokenResponse> {
         // Make the POST request
-        let client = reqwest::Client::new();
+        let client = baml_runtime::request::create_client()?;
         let response = client
             .post(format!("{}/propelauth/oauth/token", self.auth_url))
             .header("Content-Type", "application/x-www-form-urlencoded")
@@ -192,7 +192,7 @@ impl PropelAuthClient {
         //     .as_str()
         //     .ok_or_else(|| anyhow::anyhow!("Access token not found in creds.json"))?;
 
-        let client = reqwest::Client::new();
+        let client = baml_runtime::request::create_client()?;
         let response = client
             .get(format!("{}/propelauth/oauth/userinfo", self.auth_url))
             .bearer_auth(access_token)
@@ -304,7 +304,7 @@ impl PersistedTokenData {
     }
 
     async fn refresh_access_token(&mut self) -> Result<RefreshAccessTokenResponse> {
-        let client = PropelAuthClient::new();
+        let client = PropelAuthClient::new()?;
         let response = client
             .post("/propelauth/oauth/token")
             .header("Content-Type", "application/x-www-form-urlencoded")

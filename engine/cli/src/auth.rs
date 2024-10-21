@@ -42,7 +42,7 @@ pub struct LoginArgs {}
 
 impl LoginArgs {
     pub async fn run_async(&self) -> Result<()> {
-        let propel_auth_client = super::propelauth::PropelAuthClient::new();
+        let propel_auth_client = super::propelauth::PropelAuthClient::new()?;
         let mut token_data = propel_auth_client.run_authorization_code_flow().await?;
         token_data.write_to_storage()?;
         println!("{} Authentication successful!", style("✓").bold().green());

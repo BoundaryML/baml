@@ -352,7 +352,7 @@ Read the docs to learn more: https://docs.boundaryml.com/cloud
                 .to_string(),
         };
 
-        let client = reqwest::Client::new();
+        let client = baml_runtime::request::create_client()?;
         let url = format!("{}/v3/functions/{DEPLOYMENT_ID}", self.api_url);
         let req = client
             .post(url)

@@ -23,7 +23,7 @@ fn builder() -> reqwest::ClientBuilder {
     }
 }
 
-pub(crate) fn create_client() -> Result<reqwest::Client> {
+pub fn create_client() -> Result<reqwest::Client> {
     builder().build().context("Failed to create reqwest client")
 }
 
