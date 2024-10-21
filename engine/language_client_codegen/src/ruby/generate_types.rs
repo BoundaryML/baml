@@ -1,4 +1,3 @@
-
 use anyhow::Result;
 
 use super::ruby_language_features::ToRuby;

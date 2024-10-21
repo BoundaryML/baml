@@ -98,9 +98,7 @@ impl TypeError {
         } else {
             // If there are multiple close names, suggest them all
             let suggestions = close_names.join("`, `");
-            format!(
-                "Variable `{name}` does not exist. Did you mean one of these: `{suggestions}`?"
-            )
+            format!("Variable `{name}` does not exist. Did you mean one of these: `{suggestions}`?")
         };
 
         Self { message, span }
@@ -135,9 +133,7 @@ impl TypeError {
 
     fn new_wrong_arg_count(func: &str, span: Span, expected: usize, got: usize) -> Self {
         Self {
-            message: format!(
-                "Function '{func}' expects {expected} arguments, but got {got}"
-            ),
+            message: format!("Function '{func}' expects {expected} arguments, but got {got}"),
             span,
         }
     }
@@ -185,9 +181,7 @@ impl TypeError {
         } else {
             // If there are multiple close names, suggest them all
             let suggestions = close_names.join("', '");
-            format!(
-                "Filter '{name}' does not exist. Did you mean one of these: '{suggestions}'?"
-            )
+            format!("Filter '{name}' does not exist. Did you mean one of these: '{suggestions}'?")
         };
 
         Self { message: format!("{message}\n\nSee: https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions for the compelete list"), span }

@@ -108,9 +108,7 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
         let rendered = V::try_from(args)
             .map_err(|e| e.context(format!("Error while building {name}")))?
             .render()
-            .map_err(|e| {
-                anyhow::Error::from(e).context(format!("Error while rendering {name}"))
-            })?;
+            .map_err(|e| anyhow::Error::from(e).context(format!("Error while rendering {name}")))?;
         self.files.insert(
             name.into(),
             format!("{}\n{}", self.lang.content_prefix(), rendered),

@@ -51,9 +51,7 @@ impl JsonParseState {
                 }
                 _ => {
                     // TODO: this should never happen as we should only be pushing objects and arrays
-                    panic!(
-                        "Unexpected value: {value:?} in collection stack: {last:?}"
-                    );
+                    panic!("Unexpected value: {value:?} in collection stack: {last:?}");
                 }
             }
         } else {

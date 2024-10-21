@@ -97,9 +97,7 @@ pub fn parse_prompt(
         }
         Err(err) => {
             diagnostics.push_error(DatamodelError::new_parser_error(
-                format!(
-                    "Unabled to parse this raw string. Please file a bug.\n{err}"
-                ),
+                format!("Unabled to parse this raw string. Please file a bug.\n{err}"),
                 raw_string.span().clone(),
             ));
             Err(diagnostics)

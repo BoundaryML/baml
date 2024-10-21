@@ -1,4 +1,3 @@
-
 use crate::ast::Span;
 use std::fmt;
 
@@ -191,7 +190,6 @@ impl fmt::Display for Expression {
 }
 
 impl Expression {
-
     pub fn from_json(value: serde_json::Value, span: Span, empty_span: Span) -> Expression {
         match value {
             serde_json::Value::Null => Expression::StringValue("Null".to_string(), empty_span),
@@ -343,30 +341,31 @@ impl Expression {
     pub fn assert_eq_up_to_span(&self, other: &Expression) {
         use Expression::*;
         match (self, other) {
-            (BoolValue(v1,_), BoolValue(v2,_)) => assert_eq!(v1,v2),
-            (BoolValue(_,_), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (NumericValue(n1,_), NumericValue(n2,_)) => assert_eq!(n1, n2),
-            (NumericValue(_,_), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (Identifier(i1), Identifier(i2)) => assert_eq!(i1,i2),
+            (BoolValue(v1, _), BoolValue(v2, _)) => assert_eq!(v1, v2),
+            (BoolValue(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (NumericValue(n1, _), NumericValue(n2, _)) => assert_eq!(n1, n2),
+            (NumericValue(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (Identifier(i1), Identifier(i2)) => assert_eq!(i1, i2),
             (Identifier(_), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (StringValue(s1,_), StringValue(s2,_)) => assert_eq!(s1, s2),
-            (StringValue(_,_), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (StringValue(s1, _), StringValue(s2, _)) => assert_eq!(s1, s2),
+            (StringValue(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
             (RawStringValue(s1), RawStringValue(s2)) => s1.assert_eq_up_to_span(s2),
             (RawStringValue(_), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (Array(xs,_), Array(ys,_)) => {
+            (Array(xs, _), Array(ys, _)) => {
                 assert_eq!(xs.len(), ys.len());
-                xs.iter().zip(ys).for_each(|(x,y)| { x.assert_eq_up_to_span(y); })
-            },
-            (Array(_,_), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (Map(m1,_), Map(m2,_)) => {
+                xs.iter().zip(ys).for_each(|(x, y)| {
+                    x.assert_eq_up_to_span(y);
+                })
+            }
+            (Array(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (Map(m1, _), Map(m2, _)) => {
                 assert_eq!(m1.len(), m2.len());
                 m1.iter().zip(m2).for_each(|((k1, v1), (k2, v2))| {
                     k1.assert_eq_up_to_span(k2);
                     v1.assert_eq_up_to_span(v2);
                 });
-            },
-            (Map(_,_), _) => panic!("Types do not match: {self:?} and {other:?}"),
-
+            }
+            (Map(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
         }
     }
 }

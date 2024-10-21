@@ -103,9 +103,7 @@ impl minijinja::value::Object for OutputFormat {
                 Err(e) => {
                     return Err(Error::new(
                         ErrorKind::SyntaxError,
-                        format!(
-                            "Invalid value for always_hoist_enums (expected bool): {e}"
-                        ),
+                        format!("Invalid value for always_hoist_enums (expected bool): {e}"),
                     ))
                 }
             }

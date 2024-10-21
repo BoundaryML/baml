@@ -13,9 +13,7 @@ pub fn main() {
             println!("cargo:rustc-link-search=native={ruby_path}/lib");
         }
         Err(e) => {
-            println!(
-                "cargo:rustc-warning=Failed to execute 'mise where ruby': {e}"
-            );
+            println!("cargo:rustc-warning=Failed to execute 'mise where ruby': {e}");
         }
     }
 

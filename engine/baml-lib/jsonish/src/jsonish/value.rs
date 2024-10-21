@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fixes {
     GreppedForJSON,
