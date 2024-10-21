@@ -16,6 +16,6 @@
     "skipLibCheck": true,
     "noUnusedParameters": false
   },
-  "include": ["src"],
+  "include": ["src", "../package.json"],
   "exclude": ["node_modules", ".vscode-test"]
 }
