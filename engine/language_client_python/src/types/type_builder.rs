@@ -45,6 +45,18 @@ impl TypeBuilder {
         }
     }
 
+    pub fn literal_string(&self, value: &str) -> FieldType {
+        baml_types::FieldType::literal_string(value.to_string()).into()
+    }
+
+    pub fn literal_int(&self, value: i64) -> FieldType {
+        baml_types::FieldType::literal_int(value).into()
+    }
+
+    pub fn literal_bool(&self, value: bool) -> FieldType {
+        baml_types::FieldType::literal_bool(value).into()
+    }
+
     pub fn list(&self, inner: &FieldType) -> FieldType {
         inner.inner.lock().unwrap().clone().as_list().into()
     }
