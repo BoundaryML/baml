@@ -1,5 +1,5 @@
 [package]
-name = "internal-baml-jinja-types"
+name = "internal-baml-jinja"
 edition = "2021"
 version.workspace = true
 authors.workspace = true
@@ -10,6 +10,9 @@ license-file.workspace = true
 
 [dependencies]
 baml-types = { path = "../baml-types", features = ["mini-jinja"] }
+internal-baml-jinja-types = { path = "../jinja" }
+internal-baml-core = { path = "../baml-core" }
+internal-baml-diagnostics = { path = "../diagnostics" }
 # TODO: disable imports, etc
 minijinja = { version = "1.0.16", default-features = false, features = [
   "macros",

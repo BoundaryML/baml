@@ -10,6 +10,12 @@ license = "Apache-2.0"
 name = "baml_py"
 crate-type = ["cdylib"]
 
+[lints.rust]
+dead_code = "deny"
+unused_imports = "deny"
+unused_must_use = "deny"
+unused_variables = "deny"
+
 [dependencies]
 anyhow.workspace = true
 baml-types.workspace = true
@@ -17,7 +23,6 @@ baml-runtime = { path = "../baml-runtime", default-features = false, features = 
   "internal",
 ] }
 internal-baml-codegen.workspace = true
-internal-baml-jinja = { path = "../baml-lib/jinja" }
 env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true

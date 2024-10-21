@@ -12,7 +12,6 @@ import baml_py
 from baml_py import errors
 
 # also test importing the error from the baml_py submodules
-from baml_py.errors import BamlValidationError, BamlClientError
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
 from ..baml_client.globals import (
@@ -23,8 +22,9 @@ from ..baml_client.types import (
     DynInputOutput,
     NamedArgsSingleEnumList,
     NamedArgsSingleClass,
+    Nested,
+    OriginalB,
     StringToClassEntry,
-    CompoundBigNumbers,
 )
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
@@ -34,6 +34,43 @@ import datetime
 import concurrent.futures
 import asyncio
 import random
+
+
+
+
+@pytest.mark.asyncio
+async def test_env_vars_reset():
+    env_vars = {
+        "OPENAI_API_KEY": "sk-1234567890",
+    }
+    reset_baml_env_vars(env_vars)
+
+    @trace
+    def top_level_async_tracing():
+        reset_baml_env_vars(env_vars)
+
+    @trace
+    async def atop_level_async_tracing():
+        reset_baml_env_vars(env_vars)
+
+    with pytest.raises(errors.BamlError):
+        # Not allowed to call reset_baml_env_vars inside a traced function
+        top_level_async_tracing()
+
+    with pytest.raises(errors.BamlError):
+        # Not allowed to call reset_baml_env_vars inside a traced function
+        await atop_level_async_tracing()
+
+    with pytest.raises(errors.BamlClientHttpError):
+        _ = await b.ExtractPeople(
+            "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
+        )
+
+    reset_baml_env_vars(os.environ.copy())
+    people = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
+    )
+    assert len(people) > 0
 
 
 def test_sync():
@@ -227,6 +264,12 @@ async def test_works_with_fallbacks():
     res = await b.TestFallbackClient()
     assert len(res) > 0, "Expected non-empty result but got empty."
 
+@pytest.mark.asyncio
+async def test_works_with_failing_azure_fallback():
+    with pytest.raises(Exception) as e:
+        res = await b.TestSingleFallbackClient()
+        assert len(res) > 0, "Expected non-empty result but got empty."
+    assert "Either base_url or" in str(e)
 
 @pytest.mark.asyncio
 async def test_claude():
@@ -747,6 +790,34 @@ async def test_dynamic_inputs_list2():
 
 
 @pytest.mark.asyncio
+async def test_dynamic_types_enum():
+    tb = TypeBuilder()
+    field_enum = tb.add_enum("Animal")
+    animals = ["giraffe", "elephant", "lion"]
+    for animal in animals:
+        field_enum.add_value(animal.upper())
+    tb.Person.add_property("animalLiked", field_enum.type())
+    res = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+        {"tb": tb},
+    )
+    assert len(res) > 0
+    assert res[0].animalLiked == "GIRAFFE", res[0]
+
+@pytest.mark.asyncio
+async def test_dynamic_literals():
+    tb = TypeBuilder()
+    animals = tb.union([tb.literal_string(animal.upper()) for animal in ["giraffe", "elephant", "lion"]])
+    tb.Person.add_property("animalLiked", animals)
+    res = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+        {"tb": tb},
+    )
+    assert len(res) > 0
+    assert res[0].animalLiked == "GIRAFFE"
+
+
+@pytest.mark.asyncio
 async def test_dynamic_inputs_list():
     tb = TypeBuilder()
     tb.DynInputOutput.add_property("new_key", tb.string().optional())
@@ -1008,17 +1079,20 @@ async def test_descriptions():
         "donkey kong"
     )  # Assuming this returns a Pydantic model
 
+
+
+    # Check Schema values
+    assert res.prop1 == "one"
+
+    # Check Nested values
+    assert isinstance(res.prop2, Nested)
+    assert res.prop2.prop3 == "three"
+    assert res.prop2.prop4 == "four"
+
     # Check Nested2 values
     assert res.prop2.prop20.prop11 == "three"
     assert res.prop2.prop20.prop12 == "four"
 
-    # Check Nested values
-    assert res.prop2.prop3 == "three"
-    assert res.prop2.prop4 == "four"
-
-    # Check Schema values
-    assert res.prop1 == "one"
-    assert res.prop2 == "two"
     assert res.prop5 == ["hi"]  # Assuming it's a list with one item
     assert res.prop6 == "blah"
     assert res.nested_attrs == ["nested"]  # Assuming it's a list with one item
@@ -1029,20 +1103,28 @@ async def test_descriptions():
 @pytest.mark.asyncio
 async def test_caching():
     story_idea = """
-    In a near-future society where dreams have become a tradable commodity and shared experience, a lonely and socially awkward teenager named Alex discovers they possess a rare and powerful ability to not only view but also manipulate the dreams of others. Initially thrilled by this newfound power, Alex begins subtly altering the dreams of classmates and family members, helping them overcome fears, boost confidence, or experience fantastical adventures.
-As Alex's skills grow, so does their influence. They start selling premium dream experiences on the black market, crafting intricate and addictive dreamscapes for wealthy clients. However, the line between dream and reality begins to blur for those exposed to Alex's creations. Some clients struggle to differentiate between their true memories and the artificial ones implanted by Alex's dream manipulation.
-Complications arise when a mysterious government agency takes notice of Alex's unique abilities. They offer Alex a chance to use their gift for "the greater good," hinting at applications in therapy, criminal rehabilitation, and even national security. Simultaneously, a underground resistance movement reaches out, warning Alex about the dangers of dream manipulation and the potential for mass control and exploitation.
-Caught between these opposing forces, Alex must navigate a complex web of ethical dilemmas. They grapple with questions of free will, the nature of consciousness, and the responsibility that comes with having power over people's minds. As the consequences of their actions spiral outward, affecting the lives of loved ones and strangers alike, Alex is forced to confront the true nature of their ability and decide how—or if—it should be used.
-The story explores themes of identity, the subconscious mind, the ethics of technology, and the power of imagination. It delves into the potential consequences of a world where our most private thoughts and experiences are no longer truly our own, and examines the fine line between helping others and manipulating them for personal gain or a perceived greater good.
+    In a near-future society where dreams have become a tradable commodity and shared experience, a lonely and socially awkward teenager named Alex discovers they possess a rare and powerful ability to not only view but also manipulate the dreams of others. Initially thrilled by this newfound power, Alex begins subtly altering the dreams of classmates and family members, helping them overcome fears, boost confidence, or experience fantastical adventures. As Alex's skills grow, so does their influence. They start selling premium dream experiences on the black market, crafting intricate and addictive dreamscapes for wealthy clients. However, the line between dream and reality begins to blur for those exposed to Alex's creations. Some clients struggle to differentiate between their true memories and the artificial ones implanted by Alex's dream manipulation.
+
+    Complications arise when a mysterious government agency takes notice of Alex's unique abilities. They offer Alex a chance to use their gift for "the greater good," hinting at applications in therapy, criminal rehabilitation, and even national security. Simultaneously, an underground resistance movement reaches out, warning Alex about the dangers of dream manipulation and the potential for mass control and exploitation. Caught between these opposing forces, Alex must navigate a complex web of ethical dilemmas. They grapple with questions of free will, the nature of consciousness, and the responsibility that comes with having power over people's minds. As the consequences of their actions spiral outward, affecting the lives of loved ones and strangers alike, Alex is forced to confront the true nature of their ability and decide how—or if—it should be used.
+
+    The story explores themes of identity, the subconscious mind, the ethics of technology, and the power of imagination. It delves into the potential consequences of a world where our most private thoughts and experiences are no longer truly our own, and examines the fine line between helping others and manipulating them for personal gain or a perceived greater good. The narrative further expands on the societal implications of such abilities, questioning the moral boundaries of altering consciousness and the potential for abuse in a world where dreams can be commodified. It challenges the reader to consider the impact of technology on personal autonomy and the ethical responsibilities of those who wield such power.
+
+    As Alex's journey unfolds, they encounter various individuals whose lives have been touched by their dream manipulations, each presenting a unique perspective on the ethical quandaries at hand. From a classmate who gains newfound confidence to a wealthy client who becomes addicted to the dreamscapes, the ripple effects of Alex's actions are profound and far-reaching. The government agency's interest in Alex's abilities raises questions about the potential for state control and surveillance, while the resistance movement highlights the dangers of unchecked power and the importance of safeguarding individual freedoms.
+
+    Ultimately, Alex's story is one of self-discovery and moral reckoning, as they must decide whether to embrace their abilities for personal gain, align with the government's vision of a controlled utopia, or join the resistance in their fight for freedom and autonomy. The narrative invites readers to reflect on the nature of reality, the boundaries of human experience, and the ethical implications of a world where dreams are no longer private sanctuaries but shared and manipulated commodities. It also explores the psychological impact on Alex, who must deal with the burden of knowing the intimate fears and desires of others, and the isolation that comes from being unable to share their own dreams without altering them.
+
+    The story further examines the technological advancements that have made dream manipulation possible, questioning the role of innovation in society and the potential for both progress and peril. It considers the societal divide between those who can afford to buy enhanced dream experiences and those who cannot, highlighting issues of inequality and access. As Alex becomes more entangled in the web of their own making, they must confront the possibility that their actions could lead to unintended consequences, not just for themselves but for the fabric of society as a whole.
+
+    In the end, Alex's journey is a cautionary tale about the power of dreams and the responsibilities that come with wielding such influence. It serves as a reminder of the importance of ethical considerations in the face of technological advancement and the need to balance innovation with humanity. The story leaves readers pondering the true cost of a world where dreams are no longer sacred, and the potential for both wonder and danger in the uncharted territories of the mind.
 """
     rand = random.randint(0, 26)
     story_idea += " " + rand * "a"
     start = time.time()
-    res = await b.TestCaching(story_idea)
+    _ = await b.TestCaching(story_idea, "be funny")
     duration = time.time() - start
 
     start = time.time()
-    res2 = await b.TestCaching(story_idea)
+    _ = await b.TestCaching(story_idea, "be real")
     duration2 = time.time() - start
 
     print("Duration no caching: ", duration)
@@ -1060,8 +1142,9 @@ async def test_arg_exceptions():
 
     with pytest.raises(errors.BamlInvalidArgumentError):
         _ = await b.TestCaching(
-            111
-        )  # ldintentionally passing an int instead of a string
+            111, # type: ignore -- intentionally passing an int instead of a string
+            ".."
+        ) 
 
     with pytest.raises(errors.BamlClientError):
         cr = baml_py.ClientRegistry()
@@ -1097,44 +1180,6 @@ async def test_map_as_param():
         )  # intentionally passing the wrong type
 
 
-import os
-
-
-@pytest.mark.asyncio
-async def test_env_vars_reset():
-    env_vars = {
-        "OPENAI_API_KEY": "sk-1234567890",
-    }
-    reset_baml_env_vars(env_vars)
-
-    @trace
-    def top_level_async_tracing():
-        reset_baml_env_vars(env_vars)
-
-    @trace
-    async def atop_level_async_tracing():
-        reset_baml_env_vars(env_vars)
-
-    with pytest.raises(errors.BamlError):
-        # Not allowed to call reset_baml_env_vars inside a traced function
-        top_level_async_tracing()
-
-    with pytest.raises(errors.BamlError):
-        # Not allowed to call reset_baml_env_vars inside a traced function
-        await atop_level_async_tracing()
-
-    with pytest.raises(errors.BamlClientHttpError):
-        _ = await b.ExtractPeople(
-            "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
-        )
-
-    reset_baml_env_vars(os.environ.copy())
-    people = await b.ExtractPeople(
-        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
-    )
-    assert len(people) > 0
-
-
 @pytest.mark.asyncio
 async def test_baml_validation_error_format():
     with pytest.raises(errors.BamlValidationError) as excinfo:
@@ -1155,7 +1200,7 @@ async def test_baml_validation_error_format():
 @pytest.mark.asyncio
 async def test_no_stream_big_integer():
     stream = b.stream.StreamOneBigNumber(digits=12)
-    msgs = []
+    msgs: List[int | None] = []
     async for msg in stream:
         msgs.append(msg)
     res = await stream.get_final_response()
@@ -1165,7 +1210,7 @@ async def test_no_stream_big_integer():
 @pytest.mark.asyncio
 async def test_no_stream_object_with_numbers():
     stream = b.stream.StreamBigNumbers(digits=12)
-    msgs = []
+    msgs: List[partial_types.BigNumbers] = []
     async for msg in stream:
         msgs.append(msg)
     res = await stream.get_final_response()
@@ -1179,7 +1224,7 @@ async def test_no_stream_object_with_numbers():
 @pytest.mark.asyncio
 async def test_no_stream_compound_object():
     stream = b.stream.StreamingCompoundNumbers(digits = 12, yapping=False)
-    msgs: List[CompoundBigNumbers] = []
+    msgs: List[partial_types.CompoundBigNumbers] = []
     async for msg in stream:
         msgs.append(msg)
     res = await stream.get_final_response()
@@ -1197,7 +1242,7 @@ async def test_no_stream_compound_object():
 @pytest.mark.asyncio
 async def test_no_stream_compound_object_with_yapping():
     stream = b.stream.StreamingCompoundNumbers(digits = 12, yapping=True)
-    msgs: List[CompoundBigNumbers] = []
+    msgs: List[partial_types.CompoundBigNumbers] = []
     async for msg in stream:
         msgs.append(msg)
     res = await stream.get_final_response()
@@ -1211,3 +1256,11 @@ async def test_no_stream_compound_object_with_yapping():
         if msg.another is not None:
             assert True if msg.another.a is None else msg.another.a == res.another.a
             assert True if msg.another.b is None else msg.another.b == res.another.b
+
+
+@pytest.mark.asyncio
+async def test_differing_unions():
+    tb = TypeBuilder()
+    tb.OriginalB.add_property("value2", tb.string())
+    res = await b.DifferentiateUnions({"tb": tb})
+    assert isinstance(res, OriginalB)

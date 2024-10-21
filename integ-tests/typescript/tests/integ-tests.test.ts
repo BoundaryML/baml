@@ -13,6 +13,7 @@ import {
   setTags,
   TestClassNested,
   onLogEvent,
+  AliasedEnum,
 } from '../baml_client'
 import { RecursivePartialNull } from '../baml_client/async_client'
 import { b as b_sync } from '../baml_client/sync_client'
@@ -409,6 +410,18 @@ describe('Integ tests', () => {
     expect(res[0]['animalLiked']).toEqual('GIRAFFE')
   })
 
+  it('should work with dynamic literals', async () => {
+    let tb = new TypeBuilder()
+    const animals = tb.union(['giraffe', 'elephant', 'lion'].map((animal) => tb.literalString(animal.toUpperCase())))
+    tb.Person.addProperty('animalLiked', animals)
+    const res = await b.ExtractPeople(
+      "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+      { tb },
+    )
+    expect(res.length).toBeGreaterThan(0)
+    expect(res[0]['animalLiked']).toEqual('GIRAFFE')
+  })
+
   it('should work with dynamic types class', async () => {
     let tb = new TypeBuilder()
     const animalClass = tb.addClass('Animal')
@@ -640,6 +653,40 @@ describe('Integ tests', () => {
       "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
     )
     expect(people.length).toBeGreaterThan(0)
+  })
+
+  it('should use aliases when serializing input objects - classes', async () => {
+    const res = await b.AliasedInputClass({ key: 'hello', key2: 'world' })
+    expect(res).toContain('color')
+
+    const res2 = await b.AliasedInputClassNested({
+      key: 'hello',
+      nested: { key: 'nested-hello', key2: 'nested-world' },
+    })
+    expect(res2).toContain('interesting-key')
+  })
+
+  it('should use aliases when serializing, but still have original keys in jinja', async () => {
+    const res = await b.AliasedInputClass2({ key: 'tiger', key2: 'world' })
+    expect(res).toContain('tiger')
+
+    const res2 = await b.AliasedInputClassNested({
+      key: 'hello',
+      nested: { key: 'nested-hello', key2: 'nested-world' },
+    })
+    expect(res2).toContain('interesting-key')
+  })
+
+  // TODO: Enum aliases are not supported
+  it('should use aliases when serializing input objects - enums', async () => {
+    const res = await b.AliasedInputEnum(AliasedEnum.KEY_ONE)
+    expect(res).not.toContain('tiger')
+  })
+
+  // TODO: enum aliases are not supported
+  it('should use aliases when serializing input objects - lists', async () => {
+    const res = await b.AliasedInputList([AliasedEnum.KEY_ONE, AliasedEnum.KEY_TWO])
+    expect(res).not.toContain('tiger')
   })
 })
 

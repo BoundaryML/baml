@@ -1,8 +1,11 @@
-use pyo3::prelude::{pymethods, PyAnyMethods, PyModule, PyResult};
+use pyo3::prelude::{pymethods, PyResult};
 use pyo3::types::PyType;
-use pyo3::{Bound, Py, PyAny, PyObject, Python, ToPyObject};
+use pyo3::{Bound, PyAny, PyObject, Python};
+use pythonize::{depythonize_bound, pythonize};
 
-use crate::errors::BamlInvalidArgumentError;
+use crate::errors::{BamlError, BamlInvalidArgumentError};
+
+use super::media_repr::{self, UserFacingBamlMedia};
 crate::lang_wrapper!(BamlImagePy, baml_types::BamlMedia);
 
 #[pymethods]
@@ -62,29 +65,27 @@ impl BamlImagePy {
         }
     }
 
-    // Makes it work with Pydantic
     #[classmethod]
     pub fn __get_pydantic_core_schema__(
         _cls: Bound<'_, PyType>,
         _source_type: Bound<'_, PyAny>,
         _handler: Bound<'_, PyAny>,
     ) -> PyResult<PyObject> {
-        Python::with_gil(|py| {
-            let code = r#"
-from pydantic_core import core_schema
+        media_repr::__get_pydantic_core_schema__(_cls, _source_type, _handler)
+    }
 
-def get_schema():
-    # No validation
-    return core_schema.any_schema()
-
-ret = get_schema()
-    "#;
-            // py.run(code, None, Some(ret_dict));
-            let fun: Py<PyAny> = PyModule::from_code_bound(py, code, "", "")?
-                .getattr("ret")?
-                .into();
-            Ok(fun.to_object(py)) // Return the PyObject
+    #[staticmethod]
+    fn baml_deserialize(data: PyObject, py: Python<'_>) -> PyResult<Self> {
+        let data: UserFacingBamlMedia = depythonize_bound(data.into_bound(py))?;
+        Ok(BamlImagePy {
+            inner: data.to_baml_media(baml_types::BamlMediaType::Image),
         })
+    }
+
+    pub fn baml_serialize(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let s: UserFacingBamlMedia = (&self.inner).try_into().map_err(BamlError::from_anyhow)?;
+        let s = serde_json::to_value(&s).map_err(|e| BamlError::from_anyhow(e.into()))?;
+        Ok(pythonize(py, &s)?)
     }
 
     pub fn __eq__(&self, other: &Self) -> bool {

@@ -1152,11 +1152,76 @@ test_partial_deserializer!(
   {"big": {"a": 11, "b": 12.0}, "big_nums": [{"a": 22, "b": null}], "another": null}
 );
 
-
 test_partial_deserializer!(
   test_big_object_start_big_into_list2,
   BIG_OBJECT_STREAM_TEST,
   r#"json```{"big": {"a": 11, "b": 12.2}, "big_nums": [{"a": 22, "b": 33}, {"a": 1, "b": 2.2}], "another": {"a": 45, "b": 0.1"#,
   FieldType::Class("CompoundBigNumbers".to_string()),
   {"big": {"a": 11, "b": 12.2}, "big_nums": [{"a": 22, "b": 33.0}, {"a": 1, "b": 2.2}], "another": {"a": 45, "b": null}}
+);
+
+test_deserializer!(
+  test_empty_string_value,
+  r#"
+  class Foo {
+    a string
+  }
+  "#,
+  r#"{"a": ""}"#,
+  FieldType::Class("Foo".to_string()),
+  {"a": ""}
+);
+
+test_deserializer!(
+  test_empty_string_value_1,
+  r#"
+  class Foo {
+    a string
+  }
+  "#,
+  r#"{a: ""}"#,
+  FieldType::Class("Foo".to_string()),
+  {"a": ""}
+);
+
+test_deserializer!(
+  test_empty_string_value_2,
+  r#"
+  class Foo {
+    a string
+    b string
+    res string[]
+  }
+  "#,
+  r#"{
+    a: "",
+    b: "",
+    res: []
+  }"#,
+  FieldType::Class("Foo".to_string()),
+  {"a": "", "b": "", "res": []}
+);
+
+test_deserializer!(
+  test_string_field_with_spaces,
+  r#"
+  class Foo {
+    a string
+    b string
+    res string[]
+  }
+  "#,
+  r#"{
+    a: Hi friends!,
+    b: hey world lets do something kinda cool
+    so that we can test this out,
+    res: [hello,
+     world]
+  }"#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "a": "Hi friends!",
+    "b": "hey world lets do something kinda cool\n    so that we can test this out",
+    "res": ["hello", "world"]
+  }
 );

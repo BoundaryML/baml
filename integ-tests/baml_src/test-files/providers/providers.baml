@@ -81,10 +81,12 @@ test TestProvider {
 }
 
 
-function TestCaching(input: string) -> string {
+function TestCaching(input: string, not_cached: string) -> string {
   client ClaudeWithCaching
   prompt #"
-    {{ _.role('user', cache_control={"type": "ephemeral"}) }}
+    {{ _.role('system', cache_control={"type": "ephemeral"}) }}
     Describe this in 5 words: {{ input }}
+    {{ _.role('user') }}
+    {{ not_cached }}
   "#
 }

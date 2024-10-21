@@ -27,7 +27,11 @@ import {
   SettingsIcon,
   Trash2Icon,
 } from 'lucide-react'
-import { envKeyValuesAtom, runtimeRequiredEnvVarsAtom } from '../baml_wasm_web/EventListener'
+import {
+  envKeyValuesAtom,
+  hasClosedEnvVarsDialogAtom,
+  runtimeRequiredEnvVarsAtom,
+} from '../baml_wasm_web/EventListener'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import clsx from 'clsx'
@@ -183,6 +187,7 @@ export const ShowSettingsButton: React.FC<{ iconClassName: string }> = ({ iconCl
   const requiredAndSetCount = useAtomValue(requiredAndSetCountAtom)
   const requiredEnvVars = useAtomValue(runtimeRequiredEnvVarsAtom)
   const requiredButUnsetCount = requiredButUnset.length
+  const hasClosedEnvVarsDialog = useAtomValue(hasClosedEnvVarsDialogAtom)
   useEffect(() => {
     if ((window as any).next?.version) {
       // dont run in nextjs
@@ -190,7 +195,10 @@ export const ShowSettingsButton: React.FC<{ iconClassName: string }> = ({ iconCl
     }
     if (requiredAndSetCount === 0 && requiredEnvVars.length > 0) {
       // no env vars have been set at all pop up the dialog
-      setShowSettings(true)
+      // but only if we haven't already closed the dialog
+      if (!hasClosedEnvVarsDialog) {
+        setShowSettings(true)
+      }
     }
   }, [requiredAndSetCount, requiredEnvVars, setShowSettings])
 
@@ -239,9 +247,16 @@ export const SettingsDialog: React.FC = () => {
   const [enableObservability, setEnableObservability] = useState(
     envvars.some((t) => t.type === 'tracing' && t.value.length > 0),
   )
+  const [hasClosedEnvVarsDialog, setHasClosedEnvVarsDialog] = useAtom(hasClosedEnvVarsDialogAtom)
 
   return (
-    <Dialog open={showSettings} onOpenChange={setShowSettings}>
+    <Dialog
+      open={showSettings}
+      onOpenChange={(open) => {
+        setShowSettings(open)
+        setHasClosedEnvVarsDialog(true)
+      }}
+    >
       <DialogContent className=' min-h-[550px] max-h-[550px] overflow-y-auto bg-vscode-editorWidget-background flex flex-col border-vscode-textSeparator-foreground overflow-x-clip'>
         <DialogHeader className='flex flex-row gap-x-4 items-end'>
           <DialogTitle className='font-semibold'>Environment variables</DialogTitle>

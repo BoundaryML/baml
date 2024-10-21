@@ -6,6 +6,7 @@ pub(crate) mod client_registry;
 pub(crate) mod function_result_stream;
 pub(crate) mod function_results;
 pub(crate) mod image;
+pub(super) mod media_repr;
 pub(crate) mod runtime_ctx_manager;
 pub(crate) mod span;
 pub(crate) mod trace_stats;

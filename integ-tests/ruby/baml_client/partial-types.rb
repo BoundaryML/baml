@@ -41,12 +41,16 @@ module Baml
     class GroceryReceipt < T::Struct; end
     class InnerClass < T::Struct; end
     class InnerClass2 < T::Struct; end
+    class InputClass < T::Struct; end
+    class InputClassNested < T::Struct; end
     class NamedArgsSingleClass < T::Struct; end
     class Nested < T::Struct; end
     class Nested2 < T::Struct; end
     class OptionalTest_Prop1 < T::Struct; end
     class OptionalTest_ReturnType < T::Struct; end
     class OrderInfo < T::Struct; end
+    class OriginalA < T::Struct; end
+    class OriginalB < T::Struct; end
     class Person < T::Struct; end
     class Quantity < T::Struct; end
     class RaysData < T::Struct; end
@@ -382,6 +386,34 @@ module Baml
         @props = props
       end
     end
+    class InputClass < T::Struct
+      include Baml::Sorbet::Struct
+      const :key, T.nilable(String)
+      const :key2, T.nilable(String)
+
+      def initialize(props)
+        super(
+          key: props[:key],
+          key2: props[:key2],
+        )
+
+        @props = props
+      end
+    end
+    class InputClassNested < T::Struct
+      include Baml::Sorbet::Struct
+      const :key, T.nilable(String)
+      const :nested, Baml::PartialTypes::InputClass
+
+      def initialize(props)
+        super(
+          key: props[:key],
+          nested: props[:nested],
+        )
+
+        @props = props
+      end
+    end
     class NamedArgsSingleClass < T::Struct
       include Baml::Sorbet::Struct
       const :key, T.nilable(String)
@@ -469,6 +501,30 @@ module Baml
           order_status: props[:order_status],
           tracking_number: props[:tracking_number],
           estimated_arrival_date: props[:estimated_arrival_date],
+        )
+
+        @props = props
+      end
+    end
+    class OriginalA < T::Struct
+      include Baml::Sorbet::Struct
+      const :value, T.nilable(Integer)
+
+      def initialize(props)
+        super(
+          value: props[:value],
+        )
+
+        @props = props
+      end
+    end
+    class OriginalB < T::Struct
+      include Baml::Sorbet::Struct
+      const :value, T.nilable(Integer)
+
+      def initialize(props)
+        super(
+          value: props[:value],
         )
 
         @props = props

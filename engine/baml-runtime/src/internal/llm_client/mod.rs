@@ -84,7 +84,7 @@ pub struct RetryLLMResponse {
     pub failed: Vec<LLMResponse>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum LLMResponse {
     /// BAML was able to successfully make the HTTP request and got a 2xx
     /// response from the model provider
@@ -148,12 +148,13 @@ impl LLMResponse {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct LLMErrorResponse {
     pub client: String,
     pub model: Option<String>,
     pub prompt: RenderedPrompt,
     pub request_options: HashMap<String, serde_json::Value>,
+    #[cfg_attr(target_arch = "wasm32", serde(skip_serializing))]
     pub start_time: web_time::SystemTime,
     pub latency: web_time::Duration,
 
@@ -162,7 +163,7 @@ pub struct LLMErrorResponse {
     pub code: ErrorCode,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ErrorCode {
     InvalidAuthentication, // 401
     NotSupported,          // 403
@@ -225,13 +226,14 @@ impl ErrorCode {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct LLMCompleteResponse {
     pub client: String,
     pub model: String,
     pub prompt: RenderedPrompt,
     pub request_options: HashMap<String, serde_json::Value>,
     pub content: String,
+    #[cfg_attr(target_arch = "wasm32", serde(skip_serializing))]
     pub start_time: web_time::SystemTime,
     pub latency: web_time::Duration,
     pub metadata: LLMCompleteResponseMetadata,

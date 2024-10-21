@@ -101,21 +101,26 @@ impl IterOrchestrator for FallbackStrategy {
             .iter()
             .enumerate()
             .map(
-                |(idx, client)| match client_lookup.get_llm_provider(client, ctx) {
-                    Ok(client) => {
-                        let client = client.clone();
-                        Ok(client.iter_orchestrator(
-                            state,
-                            ExecutionScope::Fallback(self.name.clone(), idx).into(),
-                            ctx,
-                            client_lookup,
-                        ))
+                |(idx, client)| {
+                    match client_lookup.get_llm_provider(client, ctx) {
+                        Ok(client) => {
+                            let client = client.clone();
+                            Ok(client.iter_orchestrator(
+                                state,
+                                ExecutionScope::Fallback(self.name.clone(), idx).into(),
+                                ctx,
+                                client_lookup,
+                            ))
+                        }
+                        Err(e) => {
+                            Err(e)
+                        },
                     }
-                    Err(e) => Err(e),
-                },
+                }
             )
-            .flatten()
             .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
             .into_iter()
             .flatten()
             .collect();

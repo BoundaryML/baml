@@ -59,7 +59,7 @@ impl<'db> ClassWalker<'db> {
     }
 
     /// The name of the template string.
-    pub fn add_to_types(self, types: &mut internal_baml_jinja::PredefinedTypes) {
+    pub fn add_to_types(self, types: &mut internal_baml_jinja_types::PredefinedTypes) {
         types.add_class(
             self.name(),
             self.static_fields()

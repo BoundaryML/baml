@@ -9,4 +9,4 @@ function DummyOutputFunction(input: string) -> DummyOutput {
   prompt #"
     Say "hello there".
   "#
-} 
+}

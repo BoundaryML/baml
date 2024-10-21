@@ -171,6 +171,18 @@ class InnerClass2(BaseModel):
     prop2: Optional[int] = None
     prop3: Optional[float] = None
 
+class InputClass(BaseModel):
+    
+    
+    key: Optional[str] = None
+    key2: Optional[str] = None
+
+class InputClassNested(BaseModel):
+    
+    
+    key: Optional[str] = None
+    nested: Optional["InputClass"] = None
+
 class NamedArgsSingleClass(BaseModel):
     
     
@@ -210,6 +222,17 @@ class OrderInfo(BaseModel):
     order_status: Optional[types.OrderStatus] = None
     tracking_number: Optional[str] = None
     estimated_arrival_date: Optional[str] = None
+
+class OriginalA(BaseModel):
+    
+    
+    value: Optional[int] = None
+
+class OriginalB(BaseModel):
+    
+    model_config = ConfigDict(extra='allow')
+    
+    value: Optional[int] = None
 
 class Person(BaseModel):
     

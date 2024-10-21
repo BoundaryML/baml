@@ -19,6 +19,11 @@ from pydantic import BaseModel, ConfigDict
 from typing import Dict, List, Optional, Union, Literal
 
 
+class AliasedEnum(str, Enum):
+    
+    KEY_ONE = "KEY_ONE"
+    KEY_TWO = "KEY_TWO"
+
 class Category(str, Enum):
     
     Refund = "Refund"
@@ -262,6 +267,18 @@ class InnerClass2(BaseModel):
     prop2: int
     prop3: float
 
+class InputClass(BaseModel):
+    
+    
+    key: str
+    key2: str
+
+class InputClassNested(BaseModel):
+    
+    
+    key: str
+    nested: "InputClass"
+
 class NamedArgsSingleClass(BaseModel):
     
     
@@ -301,6 +318,17 @@ class OrderInfo(BaseModel):
     order_status: "OrderStatus"
     tracking_number: Optional[str] = None
     estimated_arrival_date: Optional[str] = None
+
+class OriginalA(BaseModel):
+    
+    
+    value: int
+
+class OriginalB(BaseModel):
+    
+    model_config = ConfigDict(extra='allow')
+    
+    value: int
 
 class Person(BaseModel):
     

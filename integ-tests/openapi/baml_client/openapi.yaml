@@ -32,6 +32,71 @@ paths:
                 title: AaaSamOutputFormatResponse
                 $ref: '#/components/schemas/Recipe'
       operationId: AaaSamOutputFormat
+  /call/AliasedInputClass:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AliasedInputClass'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AliasedInputClassResponse
+                type: string
+      operationId: AliasedInputClass
+  /call/AliasedInputClass2:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AliasedInputClass2'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AliasedInputClass2Response
+                type: string
+      operationId: AliasedInputClass2
+  /call/AliasedInputClassNested:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AliasedInputClassNested'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AliasedInputClassNestedResponse
+                type: string
+      operationId: AliasedInputClassNested
+  /call/AliasedInputEnum:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AliasedInputEnum'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AliasedInputEnumResponse
+                type: string
+      operationId: AliasedInputEnum
+  /call/AliasedInputList:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AliasedInputList'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AliasedInputListResponse
+                type: string
+      operationId: AliasedInputList
   /call/AudioInput:
     post:
       requestBody:
@@ -165,6 +230,21 @@ paths:
                 title: DescribeImage4Response
                 type: string
       operationId: DescribeImage4
+  /call/DifferentiateUnions:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/DifferentiateUnions'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: DifferentiateUnionsResponse
+                oneOf:
+                - $ref: '#/components/schemas/OriginalA'
+                - $ref: '#/components/schemas/OriginalB'
+      operationId: DifferentiateUnions
   /call/DummyOutputFunction:
     post:
       requestBody:
@@ -1088,6 +1168,19 @@ paths:
                 title: TestRetryExponentialResponse
                 type: string
       operationId: TestRetryExponential
+  /call/TestSingleFallbackClient:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestSingleFallbackClient'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestSingleFallbackClientResponse
+                type: string
+      operationId: TestSingleFallbackClient
   /call/TestVertex:
     post:
       requestBody:
@@ -1131,6 +1224,88 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - recipe
+            additionalProperties: false
+    AliasedInputClass:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AliasedInputClassRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/InputClass'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    AliasedInputClass2:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AliasedInputClass2Request
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/InputClass'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    AliasedInputClassNested:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AliasedInputClassNestedRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/InputClassNested'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    AliasedInputEnum:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AliasedInputEnumRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/AliasedEnum'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    AliasedInputList:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AliasedInputListRequest
+            type: object
+            properties:
+              input:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AliasedEnum'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     AudioInput:
       required: true
@@ -1300,6 +1475,19 @@ components:
             required:
             - classWithImage
             - img2
+            additionalProperties: false
+    DifferentiateUnions:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: DifferentiateUnionsRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
             additionalProperties: false
     DummyOutputFunction:
       required: true
@@ -2039,11 +2227,14 @@ components:
             properties:
               input:
                 type: string
+              not_cached:
+                type: string
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            - not_cached
             additionalProperties: false
     TestFallbackClient:
       required: true
@@ -2423,6 +2614,19 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
+    TestSingleFallbackClient:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestSingleFallbackClientRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
+            additionalProperties: false
     TestVertex:
       required: true
       content:
@@ -2532,6 +2736,11 @@ components:
       - name
       - provider
       - options
+    AliasedEnum:
+      enum:
+      - KEY_ONE
+      - KEY_TWO
+      type: string
     Category:
       enum:
       - Refund
@@ -2903,6 +3112,28 @@ components:
       - prop2
       - prop3
       additionalProperties: false
+    InputClass:
+      type: object
+      properties:
+        key:
+          type: string
+        key2:
+          type: string
+      required:
+      - key
+      - key2
+      additionalProperties: false
+    InputClassNested:
+      type: object
+      properties:
+        key:
+          type: string
+        nested:
+          $ref: '#/components/schemas/InputClass'
+      required:
+      - key
+      - nested
+      additionalProperties: false
     NamedArgsSingleClass:
       type: object
       properties:
@@ -2978,6 +3209,22 @@ components:
           type: string
       required:
       - order_status
+      additionalProperties: false
+    OriginalA:
+      type: object
+      properties:
+        value:
+          type: integer
+      required:
+      - value
+      additionalProperties: false
+    OriginalB:
+      type: object
+      properties:
+        value:
+          type: integer
+      required:
+      - value
       additionalProperties: false
     Person:
       type: object

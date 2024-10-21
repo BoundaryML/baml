@@ -31,6 +31,8 @@ export default class TypeBuilder {
     
     DynamicOutput: ClassBuilder<'DynamicOutput'>;
     
+    OriginalB: ClassBuilder<'OriginalB', "value">;
+    
     Person: ClassBuilder<'Person', "name" | "hair_color">;
     
     SomeClassNestedDynamic: ClassBuilder<'SomeClassNestedDynamic', "hi">;
@@ -48,10 +50,10 @@ export default class TypeBuilder {
     constructor() {
         this.tb = new _TypeBuilder({
           classes: new Set([
-            "BigNumbers","Blah","BookOrder","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","CompoundBigNumbers","CustomTaskResult","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","Education","Email","Event","FakeImage","FlightConfirmation","GroceryReceipt","InnerClass","InnerClass2","NamedArgsSingleClass","Nested","Nested2","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","Person","Quantity","RaysData","ReceiptInfo","ReceiptItem","Recipe","Resume","Schema","SearchParams","SomeClassNestedDynamic","StringToClassEntry","TestClassAlias","TestClassNested","TestClassWithEnum","TestOutputClass","UnionTest_ReturnType","WithReasoning",
+            "BigNumbers","Blah","BookOrder","ClassOptionalOutput","ClassOptionalOutput2","ClassWithImage","CompoundBigNumbers","CustomTaskResult","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","Education","Email","Event","FakeImage","FlightConfirmation","GroceryReceipt","InnerClass","InnerClass2","InputClass","InputClassNested","NamedArgsSingleClass","Nested","Nested2","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","OriginalA","OriginalB","Person","Quantity","RaysData","ReceiptInfo","ReceiptItem","Recipe","Resume","Schema","SearchParams","SomeClassNestedDynamic","StringToClassEntry","TestClassAlias","TestClassNested","TestClassWithEnum","TestOutputClass","UnionTest_ReturnType","WithReasoning",
           ]),
           enums: new Set([
-            "Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumTwo","EnumInClass","EnumOutput","Hobby","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",
+            "AliasedEnum","Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumTwo","EnumInClass","EnumOutput","Hobby","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",
           ])
         });
         
@@ -73,6 +75,10 @@ export default class TypeBuilder {
         
         this.DynamicOutput = this.tb.classBuilder("DynamicOutput", [
           
+        ]);
+        
+        this.OriginalB = this.tb.classBuilder("OriginalB", [
+          "value",
         ]);
         
         this.Person = this.tb.classBuilder("Person", [
@@ -108,6 +114,18 @@ export default class TypeBuilder {
     
     string(): FieldType {
         return this.tb.string()
+    }
+
+    literalString(value: string): FieldType {
+        return this.tb.literalString(value)
+    }
+
+    literalInt(value: number): FieldType {
+        return this.tb.literalInt(value)
+    }
+
+    literalBool(value: boolean): FieldType {
+        return this.tb.literalBool(value)
     }
 
     int(): FieldType {

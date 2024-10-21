@@ -85,6 +85,166 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
+        input: Baml::Types::InputClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(String)
+    }
+    def AliasedInputClass(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("AliasedInputClass may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "AliasedInputClass",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::InputClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(String)
+    }
+    def AliasedInputClass2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("AliasedInputClass2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "AliasedInputClass2",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::InputClassNested,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(String)
+    }
+    def AliasedInputClassNested(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("AliasedInputClassNested may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "AliasedInputClassNested",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.any(Baml::Types::AliasedEnum, String),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(String)
+    }
+    def AliasedInputEnum(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("AliasedInputEnum may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "AliasedInputEnum",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T::Array[T.any(Baml::Types::AliasedEnum, String)],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(String)
+    }
+    def AliasedInputList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("AliasedInputList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "AliasedInputList",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
         aud: Baml::Audio,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
@@ -394,6 +554,38 @@ module Baml
         "DescribeImage4",
         {
           classWithImage: classWithImage,img2: img2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(T.any(Baml::Types::OriginalA, Baml::Types::OriginalB))
+    }
+    def DifferentiateUnions(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("DifferentiateUnions may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "DifferentiateUnions",
+        {
+          
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -1845,13 +2037,13 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        input: String,
+        input: String,not_cached: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestCaching(
         *varargs,
-        input:,
+        input:,not_cached:,
         baml_options: {}
     )
       if varargs.any?
@@ -1865,7 +2057,7 @@ module Baml
       raw = @runtime.call_function(
         "TestCaching",
         {
-          input: input,
+          input: input,not_cached: not_cached,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -2613,6 +2805,38 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(String)
+    }
+    def TestSingleFallbackClient(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("TestSingleFallbackClient may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.call_function(
+        "TestSingleFallbackClient",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      (raw.parsed_using_types(Baml::Types))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
@@ -2717,6 +2941,181 @@ module Baml
         baml_options[:client_registry],
       )
       Baml::BamlStream[Baml::PartialTypes::Recipe, Baml::Types::Recipe].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::InputClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[String])
+    }
+    def AliasedInputClass(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("AliasedInputClass may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "AliasedInputClass",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::InputClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[String])
+    }
+    def AliasedInputClass2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("AliasedInputClass2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "AliasedInputClass2",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::InputClassNested,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[String])
+    }
+    def AliasedInputClassNested(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("AliasedInputClassNested may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "AliasedInputClassNested",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.any(Baml::Types::AliasedEnum, String),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[String])
+    }
+    def AliasedInputEnum(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("AliasedInputEnum may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "AliasedInputEnum",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T::Array[T.any(Baml::Types::AliasedEnum, String)],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[String])
+    }
+    def AliasedInputList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("AliasedInputList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "AliasedInputList",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -3067,6 +3466,41 @@ module Baml
         baml_options[:client_registry],
       )
       Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[T.any(Baml::Types::OriginalA, Baml::Types::OriginalB)])
+    }
+    def DifferentiateUnions(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("DifferentiateUnions may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "DifferentiateUnions",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[T.nilable(T.any(Baml::PartialTypes::OriginalA, Baml::PartialTypes::OriginalB)), T.any(Baml::Types::OriginalA, Baml::Types::OriginalB)].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -4650,13 +5084,13 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        input: String,
+        input: String,not_cached: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[String])
     }
     def TestCaching(
         *varargs,
-        input:,
+        input:,not_cached:,
         baml_options: {}
     )
       if varargs.any?
@@ -4670,7 +5104,7 @@ module Baml
       raw = @runtime.stream_function(
         "TestCaching",
         {
-          input: input,
+          input: input,not_cached: not_cached,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -5474,6 +5908,41 @@ module Baml
 
       raw = @runtime.stream_function(
         "TestRetryExponential",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestSingleFallbackClient(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("TestSingleFallbackClient may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      raw = @runtime.stream_function(
+        "TestSingleFallbackClient",
         {
           
         },

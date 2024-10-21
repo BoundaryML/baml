@@ -9,7 +9,7 @@ license-file.workspace = true
 
 [dependencies]
 baml-types = { path = "../baml-types" }
-internal-baml-jinja = { path = "../jinja" }
+internal-baml-jinja-types = { path = "../jinja" }
 internal-baml-diagnostics = { path = "../diagnostics" }
 internal-baml-schema-ast = { path = "../schema-ast" }
 internal-baml-prompt-parser = { path = "../prompt-parser" }

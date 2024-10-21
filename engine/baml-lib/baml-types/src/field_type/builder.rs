@@ -5,6 +5,18 @@ impl FieldType {
         FieldType::Primitive(TypeValue::String)
     }
 
+    pub fn literal_string(value: String) -> Self {
+        FieldType::Literal(super::LiteralValue::String(value))
+    }
+
+    pub fn literal_int(value: i64) -> Self {
+        FieldType::Literal(super::LiteralValue::Int(value))
+    }
+
+    pub fn literal_bool(value: bool) -> Self {
+        FieldType::Literal(super::LiteralValue::Bool(value))
+    }
+
     pub fn int() -> Self {
         FieldType::Primitive(TypeValue::Int)
     }
