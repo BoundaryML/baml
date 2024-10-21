@@ -1,8 +1,7 @@
 use baml_types::BamlValue;
 use pyo3::prelude::{pymethods, PyResult};
-use pyo3::types::{PyAnyMethods, PyListMethods, PyModule};
+use pyo3::types::{PyAnyMethods, PyModule};
 use pyo3::{Bound, IntoPy, PyObject, Python};
-use pythonize::pythonize;
 
 use crate::errors::BamlError;
 

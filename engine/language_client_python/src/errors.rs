@@ -1,12 +1,8 @@
 use baml_runtime::{
     errors::ExposedError, internal::llm_client::LLMResponse, scope_diagnostics::ScopeStack,
 };
-use pyo3::prelude::pyclass;
 use pyo3::types::PyModule;
-use pyo3::{
-    create_exception, py_run, pyfunction, pymodule, wrap_pyfunction, wrap_pymodule, Bound, PyClass,
-    PyErr, PyResult, Python,
-};
+use pyo3::{create_exception, pymodule, Bound, PyErr, PyResult, Python};
 
 create_exception!(baml_py, BamlError, pyo3::exceptions::PyException);
 // Existing exception definitions
@@ -66,13 +62,7 @@ impl BamlError {
                 } => {
                     // Assuming ValidationError has fields that correspond to prompt, message, and raw_output
                     // If not, you may need to adjust this part based on the actual structure of ValidationError
-                    Python::with_gil(|py| {
-                        raise_baml_validation_error(
-                            prompt.clone(),
-                            message.clone(),
-                            raw_output.clone(),
-                        )
-                    })
+                    raise_baml_validation_error(prompt.clone(), message.clone(), raw_output.clone())
                 }
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {

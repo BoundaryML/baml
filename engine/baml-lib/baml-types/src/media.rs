@@ -18,8 +18,12 @@ impl fmt::Display for BamlMediaType {
     }
 }
 
-// We rely on the serialization and deserialization of this struct for:
-// - prompt rendering (going into minijinja rendering and coming out)
+/// We rely on the serialization and deserialization of this struct for:
+///
+/// - prompt rendering (going into minijinja rendering and coming out)
+///   i.e. when we render a prompt, minijinja operates on a string; that
+///   string needs to encode BamlMedia instances, and this is how we do
+///   that
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BamlMedia {
     pub media_type: BamlMediaType,
