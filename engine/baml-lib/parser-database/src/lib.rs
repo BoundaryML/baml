@@ -190,7 +190,18 @@ impl ParserDatabase {
             }
         }
 
-        // TODO: Is this code necessary? Dependency cycles are already checked in the validation.
+        // NOTE: Class dependency cycles are already checked at
+        // baml-lib/baml-core/src/validate/validation_pipeline/validations/cycle.rs
+        //
+        // The algorithm at `cycle.rs` takes arity and recursive types into
+        // account unlike the topological sort performed here. The code below
+        // does not need to run since cycles would have already been detected
+        // at the validation stage, which runs before this function. Check
+        // baml-lib/baml-core/src/lib.rs
+        //
+        // The code above this comment seems modifies the AST by extending
+        // .class_dependencies so that one still needs to run.
+
         // if max_loops == 0 && !deps.is_empty() {
         //     let circular_deps = deps
         //         .iter()

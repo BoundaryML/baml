@@ -75,7 +75,7 @@ fn insert_required_deps(
         }
 
         FieldType::Union(arity, field_types, _, _) if arity.is_required() => {
-            // All the dependencies of union.
+            // All the dependencies of the union.
             let mut union_deps = HashSet::new();
 
             // All the dependencies of a single field in the union. This is
