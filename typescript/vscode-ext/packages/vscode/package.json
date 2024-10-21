@@ -2,7 +2,7 @@
   "name": "baml-client",
   "displayName": "Baml - Insider - Client",
   "description": "This is the Insider Build of the Baml VS Code extension (only use it if you are also using the dev version of the CLI).",
-  "version": "0.1.1",
+  "version": "0.62.0",
   "publisher": "Gloo",
   "repository": "https://github.com/BoundaryML/baml",
   "homepage": "https://boundaryml.com",
