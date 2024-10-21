@@ -16,7 +16,7 @@ import type { BamlVSCodePlugin } from '../types'
 import { URI } from 'vscode-uri'
 import StatusBarPanel from '../../panels/StatusBarPanel'
 
-import packageJson from '../../../package.json'
+const packageJson = require('../../../../package.json') // eslint-disable-line
 
 const BamlConfig = z.optional(
   z.object({
