@@ -16,7 +16,7 @@ tabs:
   boundary-extraction-api:
     display-name: Document Extraction API
   boundary-cloud:
-    display-name: Boundary Cloud
+    display-name: Boundary Functions
   observability:
     display-name: Observability
 
