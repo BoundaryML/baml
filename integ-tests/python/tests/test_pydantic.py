@@ -14,12 +14,17 @@ def test_model_validate_success():
     assert isinstance(foo_inst.my_image, baml_py.Image)
 
     foo_inst = Foo.model_validate(
-        {"my_image": {"url": "https://example.com/image.png", "mime_type": None}}
+        {"my_image": {"url": "https://example.com/image.png", "media_type": None}}
     )
     assert isinstance(foo_inst.my_image, baml_py.Image)
 
     foo_inst = Foo.model_validate(
-        {"my_image": {"url": "https://example.com/image.png", "mime_type": "image/png"}}
+        {
+            "my_image": {
+                "url": "https://example.com/image.png",
+                "media_type": "image/png",
+            }
+        }
     )
     assert isinstance(foo_inst.my_image, baml_py.Image)
 
@@ -32,7 +37,7 @@ def test_model_validate_success():
         {
             "my_image": {
                 "base64": "iVBORw0KGgoAAAANSUhEUgAAAAUA",
-                "mime_type": None,
+                "media_type": None,
             }
         }
     )
@@ -42,7 +47,7 @@ def test_model_validate_success():
         {
             "my_image": {
                 "base64": "iVBORw0KGgoAAAANSUhEUgAAAAUA",
-                "mime_type": "image/png",
+                "media_type": "image/png",
             }
         }
     )
@@ -68,5 +73,8 @@ def test_model_dump():
         my_image=baml_py.Image.from_base64("image/png", "iVBORw0KGgoAAAANSUhEUgAAAAUA")
     )
     assert foo_inst.model_dump() == {
-        "my_image": {"base64": "iVBORw0KGgoAAAANSUhEUgAAAAUA", "mime_type": "image/png"}
+        "my_image": {
+            "base64": "iVBORw0KGgoAAAANSUhEUgAAAAUA",
+            "media_type": "image/png",
+        }
     }

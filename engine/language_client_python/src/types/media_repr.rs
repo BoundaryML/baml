@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserFacingBamlMedia {
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "media_type")]
     pub mime_type: Option<String>,
     #[serde(flatten)]
     pub content: UserFacingBamlMediaContent,
@@ -84,7 +85,7 @@ def deserialize(data):
             core_schema.union_schema([
                 core_schema.model_fields_schema({
                     'url': core_schema.model_field(core_schema.str_schema()),
-                    'mime_type': core_schema.model_field(
+                    'media_type': core_schema.model_field(
                         core_schema.with_default_schema(
                             core_schema.union_schema([
                                 core_schema.str_schema(),
@@ -96,7 +97,7 @@ def deserialize(data):
                 }),
                 core_schema.model_fields_schema({
                     'base64': core_schema.model_field(core_schema.str_schema()),
-                    'mime_type': core_schema.model_field(
+                    'media_type': core_schema.model_field(
                         core_schema.with_default_schema(
                             core_schema.union_schema([
                                 core_schema.str_schema(),
@@ -111,7 +112,6 @@ def deserialize(data):
         return BamlImagePy.baml_deserialize(data)
 
 def get_schema():
-    # No validation
     return core_schema.no_info_after_validator_function(
         deserialize,
         core_schema.any_schema(),
