@@ -941,7 +941,7 @@ dependencies = [
  "clap",
  "derive_builder",
  "indexmap 2.2.6",
- "minijinja",
+ "minijinja 1.0.21",
  "serde",
  "serde_json",
  "strum",
@@ -2414,7 +2414,7 @@ dependencies = [
  "internal-baml-diagnostics",
  "internal-baml-jinja-types",
  "log",
- "minijinja",
+ "minijinja 2.3.1",
  "serde",
  "serde_json",
  "strsim 0.11.1",
@@ -2432,7 +2432,7 @@ dependencies = [
  "env_logger",
  "indexmap 2.2.6",
  "log",
- "minijinja",
+ "minijinja 2.3.1",
  "serde",
  "serde_json",
  "strsim 0.11.1",
@@ -2771,6 +2771,20 @@ name = "minijinja"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55e877d961d4f96ce13615862322df7c0b6d169d40cab71a7ef3f9b9e594451e"
+dependencies = [
+ "aho-corasick",
+ "indexmap 1.9.3",
+ "serde",
+ "serde_json",
+ "unicase",
+ "unicode-ident",
+]
+
+[[package]]
+name = "minijinja"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1028b628753a7e1a88fc59c9ba4b02ecc3bc0bd3c7af23df667bc28df9b3310e"
 dependencies = [
  "aho-corasick",
  "indexmap 1.9.3",

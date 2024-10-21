@@ -129,7 +129,7 @@ impl std::fmt::Debug for MinijinjaBamlMedia {
 
 impl minijinja::value::Object for MinijinjaBamlMedia {
     fn call(
-        &self,
+        self: &std::sync::Arc<MinijinjaBamlMedia>,
         _state: &minijinja::State<'_, '_>,
         args: &[minijinja::value::Value],
     ) -> Result<minijinja::value::Value, minijinja::Error> {
@@ -147,31 +147,20 @@ struct MinijinjaBamlEnum {
     alias: Option<String>,
 }
 
-impl std::fmt::Display for MinijinjaBamlEnum {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.alias.as_ref().unwrap_or(&self.value))
-    }
-}
-
-impl std::fmt::Debug for MinijinjaBamlEnum {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        std::fmt::Display::fmt(self, f)
-    }
-}
-
 impl minijinja::value::Object for MinijinjaBamlEnum {
-    fn kind(&self) -> minijinja::value::ObjectKind<'_> {
-        minijinja::value::ObjectKind::Struct(self)
-    }
-}
-
-impl minijinja::value::StructObject for MinijinjaBamlEnum {
-    fn get_field(&self, name: &str) -> Option<minijinja::Value> {
-        return None;
+    fn repr(self: &std::sync::Arc<Self>) -> minijinja::value::ObjectRepr {
+        minijinja::value::ObjectRepr::Plain
     }
 
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        None
+    fn is_true(self: &std::sync::Arc<Self>) -> bool {
+        true
+    }
+
+    fn render(self: &std::sync::Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    where
+        Self: Sized + 'static,
+    {
+        self.alias.as_ref().unwrap_or(&self.value)
     }
 }
 

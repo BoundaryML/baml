@@ -54,6 +54,25 @@ pin-project-lite = "0.2.14"
 url = "2.5.2"
 walkdir = "2.5.0"
 web-time = "1.1.0"
+# TODO: disable imports, etc
+minijinja = { version = "2", default-features = false, features = [
+  "macros",
+  "builtins",
+  "debug",
+  "preserve_order",
+  "adjacent_loop_items",
+  "unicode",
+  "json",
+  "unstable_machinery",
+  "unstable_machinery_serde",
+  "custom_syntax",
+  "internal_debug",
+  "deserialization",
+  # We don't want to use these features:
+  # multi_template
+  # loader
+  #
+] }
 
 baml-types = { path = "baml-lib/baml-types" }
 internal-baml-codegen = { path = "language_client_codegen" }
