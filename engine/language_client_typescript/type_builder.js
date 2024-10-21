@@ -20,6 +20,15 @@ class TypeBuilder {
     string() {
         return this.tb.string();
     }
+    literalString(value) {
+        return this.tb.literalString(value);
+    }
+    literalInt(value) {
+        return this.tb.literalInt(value);
+    }
+    literalBool(value) {
+        return this.tb.literalBool(value);
+    }
     int() {
         return this.tb.int();
     }

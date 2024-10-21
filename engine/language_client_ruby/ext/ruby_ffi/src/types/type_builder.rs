@@ -65,6 +65,18 @@ impl TypeBuilder {
         baml_types::FieldType::string().into()
     }
 
+    pub fn literal_string(&self, value: String) -> FieldType {
+        baml_types::FieldType::literal_string(value).into()
+    }
+
+    pub fn literal_int(&self, value: i64) -> FieldType {
+        baml_types::FieldType::literal_int(value).into()
+    }
+
+    pub fn literal_bool(&self, value: bool) -> FieldType {
+        baml_types::FieldType::literal_bool(value).into()
+    }
+
     pub fn int(&self) -> FieldType {
         baml_types::FieldType::int().into()
     }
@@ -117,6 +129,9 @@ impl TypeBuilder {
         cls.define_method("null", method!(TypeBuilder::null, 0))?;
         cls.define_method("map", method!(TypeBuilder::map, 2))?;
         cls.define_method("union", method!(TypeBuilder::union, -1))?;
+        cls.define_method("literal_string", method!(TypeBuilder::literal_string, 1))?;
+        cls.define_method("literal_int", method!(TypeBuilder::literal_int, 1))?;
+        cls.define_method("literal_bool", method!(TypeBuilder::literal_bool, 1))?;
 
         Ok(())
     }

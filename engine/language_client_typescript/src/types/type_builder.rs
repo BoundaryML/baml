@@ -56,6 +56,21 @@ impl TypeBuilder {
     }
 
     #[napi]
+    pub fn literal_string(&self, value: String) -> FieldType {
+        baml_types::FieldType::literal_string(value).into()
+    }
+
+    #[napi]
+    pub fn literal_int(&self, value: i64) -> FieldType {
+        baml_types::FieldType::literal_int(value).into()
+    }
+
+    #[napi]
+    pub fn literal_bool(&self, value: bool) -> FieldType {
+        baml_types::FieldType::literal_bool(value).into()
+    }
+
+    #[napi]
     pub fn int(&self) -> FieldType {
         baml_types::FieldType::int().into()
     }

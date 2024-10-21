@@ -41,6 +41,18 @@ export default class TypeBuilder {
         return this.tb.string()
     }
 
+    literalString(value: string): FieldType {
+        return this.tb.literalString(value)
+    }
+
+    literalInt(value: number): FieldType {
+        return this.tb.literalInt(value)
+    }
+
+    literalBool(value: boolean): FieldType {
+        return this.tb.literalBool(value)
+    }
+
     int(): FieldType {
         return this.tb.int()
     }
