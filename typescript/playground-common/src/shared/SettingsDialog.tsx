@@ -27,7 +27,11 @@ import {
   SettingsIcon,
   Trash2Icon,
 } from 'lucide-react'
-import { envKeyValuesAtom, hasClosedEnvVarsDialogAtom, runtimeRequiredEnvVarsAtom } from '../baml_wasm_web/EventListener'
+import {
+  envKeyValuesAtom,
+  hasClosedEnvVarsDialogAtom,
+  runtimeRequiredEnvVarsAtom,
+} from '../baml_wasm_web/EventListener'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import clsx from 'clsx'
@@ -246,10 +250,13 @@ export const SettingsDialog: React.FC = () => {
   const [hasClosedEnvVarsDialog, setHasClosedEnvVarsDialog] = useAtom(hasClosedEnvVarsDialogAtom)
 
   return (
-    <Dialog open={showSettings} onOpenChange={(open) => {
-      setShowSettings(open)
-      setHasClosedEnvVarsDialog(true)
-    }}>
+    <Dialog
+      open={showSettings}
+      onOpenChange={(open) => {
+        setShowSettings(open)
+        setHasClosedEnvVarsDialog(true)
+      }}
+    >
       <DialogContent className=' min-h-[550px] max-h-[550px] overflow-y-auto bg-vscode-editorWidget-background flex flex-col border-vscode-textSeparator-foreground overflow-x-clip'>
         <DialogHeader className='flex flex-row gap-x-4 items-end'>
           <DialogTitle className='font-semibold'>Environment variables</DialogTitle>
