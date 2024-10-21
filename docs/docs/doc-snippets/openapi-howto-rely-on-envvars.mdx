@@ -11,7 +11,7 @@ import (
 func main() {
     cfg := baml.NewConfiguration()
     if boundaryEndpoint := os.Getenv("BOUNDARY_ENDPOINT"); boundaryEndpoint != "" {
-        cfg.BasePath = boundaryEndpoint + "/functions/userControlledTag/"
+        cfg.BasePath = boundaryEndpoint
     }
     if boundaryApiKey := os.Getenv("BOUNDARY_API_KEY"); boundaryApiKey != "" {
         cfg.DefaultHeader["Authorization"] = "Bearer " + boundaryApiKey
@@ -97,6 +97,7 @@ if boundary_api_key
   api_client.default_headers['Authorization'] = "Bearer #{boundary_api_key}"
 end
 b = BamlClient::DefaultApi.new(api_client)
+# Use `b` to make API calls
 ```
 </Tab>
 
@@ -109,6 +110,7 @@ if let Some(base_path) = std::env::var("BOUNDARY_ENDPOINT").ok() {
 if let Some(api_key) = std::env::var("BOUNDARY_API_KEY").ok() {
     config.bearer_access_token = Some(api_key);
 }
+// Use `config` to make API calls
 ```
 </Tab>
 

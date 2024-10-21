@@ -2,7 +2,7 @@
 slug: cloud/functions/get-started
 ---
 
-_Learn how to host your BAML functions on Boundary Cloud and call them over HTTP._
+_Learn how to host your BAML functions on Boundary Functions and call them over HTTP._
 
 <Info>
   This is a preview feature, available starting with `baml-cli v0.63.0`.
@@ -13,12 +13,12 @@ _Learn how to host your BAML functions on Boundary Cloud and call them over HTTP
   open-source: we will always allow you to run BAML functions directly in your
   own backends.
   
-  Boundary Cloud's goal is to make it even easier to host and run BAML
+  Boundary Functions' goal is to make it even easier to host and run BAML
   functions, by adding support for features like rate limits, telemetry, and
   end-user feedback.
 </Note>
 
-Boundary Cloud allows you to host your BAML functions on our infrastructure, exposing
+Boundary Functions allows you to host your BAML functions on our infrastructure, exposing
 one REST API endpoint per BAML function.
 
 <div class="flex flex-col items-center">
@@ -28,7 +28,7 @@ one REST API endpoint per BAML function.
 This guide will walk you through:
 
   - creating a Boundary Cloud account,
-  - deploying your BAML code to Boundary Cloud,
+  - deploying your BAML code to Boundary Functions,
   - setting your API keys, and
   - calling your BAML functions.
 
@@ -54,7 +54,7 @@ baml-cli deploy
 which will point you to the dashboard, where you can set environment variables and create API keys.
 
 <div class="flex flex-col items-center">
-  <img class="rounded-md px-4 py-2 m-0" src="/assets/cloud/deploy-screenshot.png" alt="Boundary Cloud deploy output" />
+  <img class="rounded-md px-4 py-2 m-0" src="/assets/cloud/deploy-screenshot.png" alt="Boundary Functions deploy output" />
 </div>
 
 Once you've set the environment variables you need (probably `ANTHROPIC_API_KEY`
@@ -86,7 +86,7 @@ curl https://api2.boundaryml.com/v3/functions/prod/call/ExtractResume \
 EOF
 ```
 
-Congratulations! You've gotten your first BAML functions working on Boundary Cloud.
+Congratulations! You've gotten your first BAML functions working on Boundary Functions.
 
 ## Local development and testing
 
@@ -123,5 +123,5 @@ EOF
 ```
 
 <div class="flex flex-col items-center">
-  <img class="rounded-md px-4 py-2 m-0" src="/assets/cloud/local-function-call.png" alt="Boundary Cloud deploy output" />
+  <img class="rounded-md px-4 py-2 m-0" src="/assets/cloud/local-function-call.png" alt="Boundary Functions local output" />
 </div>
