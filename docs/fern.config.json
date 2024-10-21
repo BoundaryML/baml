@@ -1,4 +1,4 @@
 {
   "organization": "boundary",
-  "version": "0.44.11"
+  "version": "*"
 }

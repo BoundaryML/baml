@@ -6,7 +6,6 @@ use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct Configuration {
-    // pub generators: Vec<(Generator, LockFileWrapper)>,
     pub generators: Vec<Generator>,
 }
 
