@@ -288,12 +288,12 @@ generator cloud {{
         println!();
         match function_names.len() {
             0 => println!(
-                "{}: there were zero functions defined in your project.",
+                "{}: deploy succeeded, but there are zero functions defined in your project.",
                 style("Warning").yellow()
             ),
-            1 => println!("Your function is deployed at:\n  {}", function_names[0]),
+            1 => println!("1 function deployed at:\n  {}", function_names[0]),
             _ => {
-                println!("Your functions are deployed at:");
+                println!("{} functions deployed at:", function_names.len());
                 for name in function_names.iter().take(2) {
                     println!("  - {}", name);
                 }
