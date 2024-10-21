@@ -369,13 +369,66 @@ fn infer_const_type(v: &minijinja::value::Value) -> Type {
         minijinja::value::ValueKind::Undefined => Type::Undefined,
         minijinja::value::ValueKind::None => Type::None,
         minijinja::value::ValueKind::Bool => Type::Bool,
+        minijinja::value::ValueKind::Number => Type::Number,
         minijinja::value::ValueKind::String => Type::String,
+        minijinja::value::ValueKind::Bytes => Type::Undefined,
         minijinja::value::ValueKind::Seq => {
-            let list = v.as_seq().unwrap();
-            match list.item_count() {
-                0 => Type::List(Box::new(Type::Unknown)),
-                _ => {
-                    let inner = list
+            let list = v.as_object().unwrap();
+            let iter = match list.enumerate() {
+                minijinja::value::Enumerator::NonEnumerable => Type::List(Box::new(Type::Unknown)),
+                minijinja::value::Enumerator::Empty => Type::List(Box::new(Type::Unknown)),
+                minijinja::value::Enumerator::Str(_) => Type::String,
+                minijinja::value::Enumerator::Iter(iterator) => {
+                    let inner = iterator
+                        .map(|x| infer_const_type(&x))
+                        .fold(None, |acc, x| match acc {
+                            None => Some(x),
+                            Some(Type::Union(mut acc)) => {
+                                if acc.contains(&x) {
+                                    Some(Type::Union(acc))
+                                } else {
+                                    acc.push(x);
+                                    Some(Type::Union(acc))
+                                }
+                            }
+                            Some(acc) => {
+                                if acc == x {
+                                    Some(acc)
+                                } else {
+                                    Some(Type::Union(vec![acc, x]))
+                                }
+                            }
+                        })
+                        .unwrap();
+                    Type::List(Box::new(inner))
+                }
+                minijinja::value::Enumerator::RevIter(double_ended_iterator) => {
+                    let inner = double_ended_iterator
+                        .map(|x| infer_const_type(&x))
+                        .fold(None, |acc, x| match acc {
+                            None => Some(x),
+                            Some(Type::Union(mut acc)) => {
+                                if acc.contains(&x) {
+                                    Some(Type::Union(acc))
+                                } else {
+                                    acc.push(x);
+                                    Some(Type::Union(acc))
+                                }
+                            }
+                            Some(acc) => {
+                                if acc == x {
+                                    Some(acc)
+                                } else {
+                                    Some(Type::Union(vec![acc, x]))
+                                }
+                            }
+                        })
+                        .unwrap();
+                    Type::List(Box::new(inner))
+                }
+                minijinja::value::Enumerator::Seq(_) => Type::List(Box::new(Type::Int)),
+                minijinja::value::Enumerator::Values(vec) => {
+                    let inner = vec
                         .iter()
                         .map(|x| infer_const_type(&x))
                         .fold(None, |acc, x| match acc {
@@ -399,12 +452,16 @@ fn infer_const_type(v: &minijinja::value::Value) -> Type {
                         .unwrap();
                     Type::List(Box::new(inner))
                 }
-            }
+                _ => todo!(),
+            };
+            iter
         }
         minijinja::value::ValueKind::Map => Type::Unknown,
         // We don't handle these types
-        minijinja::value::ValueKind::Number => Type::Number,
-        minijinja::value::ValueKind::Bytes => Type::Undefined,
+        minijinja::value::ValueKind::Iterable => todo!(),
+        minijinja::value::ValueKind::Plain => todo!(),
+        minijinja::value::ValueKind::Invalid => todo!(),
+        _ => unreachable!(),
     }
 }
 
