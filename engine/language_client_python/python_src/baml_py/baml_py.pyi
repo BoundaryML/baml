@@ -19,6 +19,14 @@ class FunctionResult:
     def is_ok(self) -> bool: ...
     def cast_to(self, enum_module: Any, class_module: Any) -> Any: ...
 
+    # This is a debug function that returns the internal representation of the response
+    # This is not to be relied upon and is subject to change
+    # Usage:
+    #   result = await runtime.call_function(...)
+    #   val = json.loads(result.unstable_internal_repr())
+    #   print(val)
+    def unstable_internal_repr(self) -> str: ...
+
 class FunctionResultStream:
     """The result of a BAML function stream.
 

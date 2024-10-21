@@ -20,6 +20,12 @@ impl FunctionResult {
         self.inner.parsed_content().is_ok()
     }
 
+    /// This is a debug function that returns the internal representation of the response
+    /// This is not to be relied upon and is subject to change
+    fn unstable_internal_repr(&self) -> String {
+        serde_json::json!(self.inner.llm_response()).to_string()
+    }
+
     // Cast the parsed value to a specific type
     // the module is the module that the type is defined in
     fn cast_to(
