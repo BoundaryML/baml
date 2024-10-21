@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use base64::write;
 use colored::*;
 pub mod llm_provider;
 pub mod orchestrator;
@@ -12,16 +11,44 @@ pub mod traits;
 
 use anyhow::Result;
 
+use baml_types::{BamlValueWithMeta, Constraint, ConstraintLevel, ResponseCheck};
 use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage, RenderedPrompt};
+use internal_baml_jinja::RenderedPrompt;
+use jsonish::BamlValueWithFlags;
 use serde::{Deserialize, Serialize};
-use serde_json::Map;
 use std::error::Error;
 
 use reqwest::StatusCode;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
+
+pub type ResponseBamlValue = BamlValueWithMeta<Vec<ResponseCheck>>;
+
+/// Validate a parsed value, checking asserts and checks.
+pub fn parsed_value_to_response(baml_value: BamlValueWithFlags) -> Result<ResponseBamlValue> {
+    let baml_value_with_meta: BamlValueWithMeta<Vec<(Constraint, bool)>> = baml_value.into();
+    let first_failing_assert: Option<Constraint> = baml_value_with_meta
+        .iter()
+        .map(|v| v.meta())
+        .flatten()
+        .filter_map(|(c @ Constraint { level, .. }, succeeded)| {
+            if !succeeded && level == &ConstraintLevel::Assert {
+                Some(c.clone())
+            } else {
+                None
+            }
+        })
+        .next();
+    match first_failing_assert {
+        Some(err) => Err(anyhow::anyhow!("Failed assertion: {:?}", err)),
+        None => Ok(baml_value_with_meta.map_meta(|cs| {
+            cs.into_iter()
+                .filter_map(|res| ResponseCheck::from_check_result(res))
+                .collect()
+        })),
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum ResolveMediaUrls {

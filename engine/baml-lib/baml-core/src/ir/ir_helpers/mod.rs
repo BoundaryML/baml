@@ -10,8 +10,8 @@ use crate::{
         Class, Client, Enum, EnumValue, Field, FunctionNode, RetryPolicy, TemplateString, TestCase,
     },
 };
-use anyhow::Result;
-use baml_types::{BamlMap, BamlValue};
+use anyhow::{Context, Result};
+use baml_types::{BamlMap, BamlValue, BamlValueWithMeta, FieldType, TypeValue};
 pub use to_baml_arg::ArgCoercer;
 
 use super::repr;
@@ -44,6 +44,7 @@ pub trait IRHelper {
         params: &BamlMap<String, BamlValue>,
         coerce_settings: ArgCoercer,
     ) -> Result<BamlValue>;
+    fn distribute_type<'a>(&'a self, value: BamlValue, field_type: &'a FieldType) -> Result<BamlValueWithMeta<&'a FieldType>>;
 }
 
 impl IRHelper for IntermediateRepr {
@@ -182,6 +183,82 @@ impl IRHelper for IntermediateRepr {
             Err(anyhow::anyhow!(scope))
         } else {
             Ok(BamlValue::Map(baml_arg_map))
+        }
+    }
+
+    /// For some `BamlValue` with type `FieldType`, walk the structure of both the value
+    /// and the type simultaneously, associating each node in the `BamlValue` with its
+    /// `FieldType`.
+    fn distribute_type<'a>(
+        &'a self,
+        value: BamlValue,
+        field_type: &'a FieldType,
+    ) -> anyhow::Result<BamlValueWithMeta<&'a FieldType>> {
+        let (unconstrained_type, _) = field_type.distribute_constraints();
+        match (value, unconstrained_type) {
+
+            (BamlValue::String(s), FieldType::Primitive(TypeValue::String)) => Ok(BamlValueWithMeta::String(s, field_type)),
+            (BamlValue::String(_), _) => anyhow::bail!("Could not unify Strinig with {:?}", field_type),
+
+            (BamlValue::Int(i), FieldType::Primitive(TypeValue::Int)) => Ok(BamlValueWithMeta::Int(i, field_type)),
+            (BamlValue::Int(_), _) => anyhow::bail!("Could not unify Int with {:?}", field_type),
+
+            (BamlValue::Float(f), FieldType::Primitive(TypeValue::Float)) => Ok(BamlValueWithMeta::Float(f, field_type)),
+            (BamlValue::Float(_), _) => anyhow::bail!("Could not unify Float with {:?}", field_type),
+
+            (BamlValue::Bool(b), FieldType::Primitive(TypeValue::Bool)) => Ok(BamlValueWithMeta::Bool(b, field_type)),
+            (BamlValue::Bool(_), _) => anyhow::bail!("Could not unify Bool with {:?}", field_type),
+
+            (BamlValue::Null, FieldType::Primitive(TypeValue::Null)) => Ok(BamlValueWithMeta::Null(field_type)),
+            (BamlValue::Null, _) => anyhow::bail!("Could not unify Null with {:?}", field_type),
+
+            (BamlValue::Map(pairs), FieldType::Map(k,val_type)) => {
+                let mapped_fields: BamlMap<String, BamlValueWithMeta<&FieldType>> =
+                    pairs
+                    .into_iter()
+                    .map(|(key, val)| {
+                        let sub_value = self.distribute_type(val, val_type.as_ref())?;
+                        Ok((key, sub_value))
+                    })
+                    .collect::<anyhow::Result<BamlMap<String,BamlValueWithMeta<&FieldType>>>>()?;
+                Ok(BamlValueWithMeta::Map( mapped_fields, field_type ))
+            },
+            (BamlValue::Map(_), _) => anyhow::bail!("Could not unify Map with {:?}", field_type),
+
+            (BamlValue::List(items), FieldType::List(item_type)) => {
+                let mapped_items: Vec<BamlValueWithMeta<&FieldType>> =
+                    items
+                        .into_iter()
+                        .map(|i| self.distribute_type(i, item_type))
+                        .collect::<anyhow::Result<Vec<_>>>()?;
+                Ok(BamlValueWithMeta::List(mapped_items, field_type))
+            }
+            (BamlValue::List(_), _) => anyhow::bail!("Could not unify List with {:?}", field_type),
+
+            (BamlValue::Media(m), FieldType::Primitive(TypeValue::Media(_))) => Ok(BamlValueWithMeta::Media(m, field_type)),
+            (BamlValue::Media(_), _) => anyhow::bail!("Could not unify Media with {:?}", field_type),
+
+            (BamlValue::Enum(name, val), FieldType::Enum(type_name)) => if name == *type_name {
+                Ok(BamlValueWithMeta::Enum(name, val, field_type))
+            } else {
+                Err(anyhow::anyhow!("Could not unify Enum {name} with Enum type {type_name}"))
+            }
+            (BamlValue::Enum(enum_name,_), _) => anyhow::bail!("Could not unify Enum {enum_name} with {:?}", field_type),
+
+            (BamlValue::Class(name, fields), FieldType::Class(type_name)) => if name == *type_name {
+                let class_type = &self.find_class(type_name)?.item.elem;
+                let class_fields: BamlMap<&str, &FieldType> = class_type.static_fields.iter().map(|field_node| (field_node.elem.name.as_ref(), &field_node.elem.r#type.elem)).collect();
+                let mapped_fields = fields.into_iter().map(|(k,v)| {
+                    let field_type = class_fields.get(k.as_str()).context("Could not find field {k} in class {name}")?;
+                    let mapped_field = self.distribute_type(v, field_type)?;
+                    Ok((k, mapped_field))
+                }).collect::<anyhow::Result<BamlMap<String, BamlValueWithMeta<&FieldType>>>>()?;
+                Ok(BamlValueWithMeta::Class(name, mapped_fields, field_type))
+            } else {
+                Err(anyhow::anyhow!("Could not unify Class {name} with Class type {type_name}"))
+            }
+            (BamlValue::Class(class_name,_), _) => anyhow::bail!("Could not unify Class {class_name} with {:?}", field_type),
+
         }
     }
 }

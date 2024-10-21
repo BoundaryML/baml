@@ -13,6 +13,15 @@ class {{enum.name}}(str, Enum):
     {%- endfor %}
 {% endfor %}
 
+{#- Checks Classes -#}
+{% for cls in checks_classes %}
+class {{cls.name}}(BaseModel):
+
+    {%- for (name, type) in cls.fields %}
+    {{name}}: {{type}}
+    {%- endfor %}
+{% endfor %}
+
 {#- Classes -#}
 {% for cls in classes %}
 class {{cls.name}}(BaseModel):

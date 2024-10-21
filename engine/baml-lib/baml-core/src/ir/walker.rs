@@ -6,6 +6,7 @@ use internal_baml_parser_database::RetryPolicyStrategy;
 
 use std::collections::HashMap;
 
+use crate::ir::jinja_helpers::render_expression;
 use super::{
     repr::{self, FunctionConfig},
     Class, Client, Enum, EnumValue, Expression, Field, FunctionNode, Identifier, Impl, RetryPolicy,
@@ -214,9 +215,19 @@ impl Expression {
                     anyhow::bail!("Invalid numeric value: {}", n)
                 }
             }
+            Expression::JinjaExpression(expr) => {
+                // TODO: do not coerce all context values to strings.
+                let jinja_context: HashMap<String, BamlValue> = env_values
+                    .iter()
+                    .map(|(k, v)| (k.clone(), BamlValue::String(v.clone())))
+                    .collect();
+                let res_string = render_expression(&expr, &jinja_context)?;
+                Ok(BamlValue::String(res_string))
+            }
         }
     }
 }
+
 
 impl<'a> Walker<'a, (&'a FunctionNode, &'a Impl)> {
     #[allow(dead_code)]
@@ -407,11 +418,36 @@ impl<'a> Walker<'a, &'a Field> {
         self.item
             .attributes
             .get("description")
-            .map(|v| v.as_string_value(env_values))
+            .map(|v| {
+                let normalized = v.normalize(env_values)?;
+                let baml_value = normalized
+                    .as_str()
+                    .ok_or(anyhow::anyhow!("Unexpected: Evaluated to non-string value"))?;
+                Ok(String::from(baml_value))
+            })
             .transpose()
     }
 
     pub fn span(&self) -> Option<&crate::Span> {
         self.item.attributes.span.as_ref()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use baml_types::JinjaExpression;
+
+    #[test]
+    fn basic_jinja_normalization() {
+        let expr = Expression::JinjaExpression(JinjaExpression("this == 'hello'".to_string()));
+        let env = vec![("this".to_string(), "hello".to_string())]
+            .into_iter()
+            .collect();
+        let normalized = expr.normalize(&env).unwrap();
+        match normalized {
+            BamlValue::String(s) => assert_eq!(&s, "true"),
+            _ => panic!("Expected String Expression"),
+        }
     }
 }

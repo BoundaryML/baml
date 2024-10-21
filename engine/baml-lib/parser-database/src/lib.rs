@@ -47,7 +47,7 @@ pub use types::{
 };
 
 use self::{context::Context, interner::StringId, types::Types};
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use names::Names;
 
 /// ParserDatabase is a container for a Schema AST, together with information

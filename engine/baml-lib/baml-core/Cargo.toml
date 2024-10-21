@@ -20,6 +20,7 @@ internal-baml-jinja-types = { path = "../jinja" }
 internal-baml-parser-database = { path = "../parser-database" }
 internal-baml-prompt-parser = { path = "../prompt-parser" }
 internal-baml-schema-ast = { path = "../schema-ast" }
+minijinja.workspace = true
 rayon = "1.8.0"
 regex = "1.10.3"
 semver = "1.0.20"

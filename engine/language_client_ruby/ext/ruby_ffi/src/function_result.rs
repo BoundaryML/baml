@@ -1,4 +1,3 @@
-use baml_types::BamlValue;
 use magnus::{
     class, exception::runtime_error, method, prelude::*, value::Value, Error, RModule, Ruby,
 };
@@ -39,7 +38,7 @@ impl FunctionResult {
     ) -> Result<Value> {
         match rb_self.inner.parsed_content() {
             Ok(parsed) => {
-                ruby_to_json::RubyToJson::serialize_baml(ruby, types, &BamlValue::from(parsed))
+                ruby_to_json::RubyToJson::serialize_baml(ruby, types, parsed.clone())
                     .map_err(|e| {
                         magnus::Error::new(
                             ruby.exception_type_error(),

@@ -4,6 +4,7 @@ use crate::ast::Span;
 use std::fmt;
 
 use super::{Identifier, WithName, WithSpan};
+use baml_types::JinjaExpression;
 
 #[derive(Debug, Clone)]
 pub struct RawString {
@@ -159,6 +160,8 @@ pub enum Expression {
     Array(Vec<Expression>, Span),
     /// A mapping function.
     Map(Vec<(Expression, Expression)>, Span),
+    /// A JinjaExpression. e.g. "this|length > 5".
+    JinjaExpressionValue(JinjaExpression, Span),
 }
 
 impl fmt::Display for Expression {
@@ -171,6 +174,7 @@ impl fmt::Display for Expression {
             Expression::RawStringValue(val, ..) => {
                 write!(f, "{}", crate::string_literal(val.value()))
             }
+            Expression::JinjaExpressionValue(val,..) => fmt::Display::fmt(val, f),
             Expression::Array(vals, _) => {
                 let vals = vals
                     .iter()
@@ -293,6 +297,7 @@ impl Expression {
             Self::NumericValue(_, span) => span,
             Self::StringValue(_, span) => span,
             Self::RawStringValue(r) => r.span(),
+            Self::JinjaExpressionValue(_,span) => span,
             Self::Identifier(id) => id.span(),
             Self::Map(_, span) => span,
             Self::Array(_, span) => span,
@@ -310,6 +315,7 @@ impl Expression {
             Expression::NumericValue(_, _) => "numeric",
             Expression::StringValue(_, _) => "string",
             Expression::RawStringValue(_) => "raw_string",
+            Expression::JinjaExpressionValue(_, _) => "jinja_expression",
             Expression::Identifier(id) => match id {
                 Identifier::String(_, _) => "string",
                 Identifier::Local(_, _) => "local_type",
@@ -354,6 +360,8 @@ impl Expression {
             (StringValue(_,_), _) => panic!("Types do not match: {:?} and {:?}", self, other),
             (RawStringValue(s1), RawStringValue(s2)) => s1.assert_eq_up_to_span(s2),
             (RawStringValue(_), _) => panic!("Types do not match: {:?} and {:?}", self, other),
+            (JinjaExpressionValue(j1, _), JinjaExpressionValue(j2, _)) => assert_eq!(j1, j2),
+            (JinjaExpressionValue(_,_), _) => panic!("Types do not match: {:?} and {:?}", self, other),
             (Array(xs,_), Array(ys,_)) => {
                 assert_eq!(xs.len(), ys.len());
                 xs.iter().zip(ys).for_each(|(x,y)| { x.assert_eq_up_to_span(y); })

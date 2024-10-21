@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
+use baml_types::{Constraint, ConstraintLevel, FieldType};
 use indexmap::IndexMap;
 use internal_baml_core::{
     configuration::{GeneratorDefaultClientMode, GeneratorOutputType},
     ir::repr::IntermediateRepr,
 };
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::{BTreeMap, HashSet}, path::PathBuf};
 use version_check::{check_version, GeneratorType, VersionCheckMode};
 
 mod dir_writer;
@@ -217,5 +218,174 @@ impl GenerateClient for GeneratorOutputType {
             output_dir_full: gen.output_dir(),
             files,
         })
+    }
+}
+
+/// A set of names of @check attributes. This set determines the
+/// way name of a Python Class or TypeScript Interface that holds
+/// the results of running these checks. See TODO (Docs) for details on
+/// the support types generated from checks.
+#[derive(Clone, Debug, Eq)]
+pub struct TypeCheckAttributes(pub HashSet<String>);
+
+impl PartialEq for TypeCheckAttributes {
+   fn eq(&self, other: &Self) -> bool {
+       self.0.len() == other.0.len() && self.0.iter().all(|x| other.0.contains(x))
+   }
+}
+
+impl <'a> std::hash::Hash for TypeCheckAttributes {
+    fn hash<H>(&self, state: &mut H)
+        where H: std::hash::Hasher
+    {
+        let mut strings: Vec<_> = self.0.iter().collect();
+        strings.sort();
+        strings.into_iter().for_each(|s| s.hash(state))
+    }
+
+}
+
+impl TypeCheckAttributes {
+    /// Extend one set of attributes with the contents of another.
+    pub fn extend(&mut self, other: &TypeCheckAttributes) {
+        self.0.extend(other.0.clone())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+/// Search the IR for all types with checks, combining the checks on each type
+/// into a `TypeCheckAttributes` (a HashSet of the check names). Return a HashSet
+/// of these HashSets.
+///
+/// For example, consider this IR defining two classes:
+///
+/// ``` baml
+/// class Foo {
+///   int @check("a") @check("b")
+///   string @check("a")
+/// }
+///
+/// class Bar {
+///   bool @check("a")
+/// }
+/// ````
+///
+/// It contains two distinct `TypeCheckAttributes`:
+/// - ["a"]
+/// - ["a", "b"]
+///
+/// We will need to construct two district support types:
+/// `Classes_a` and `Classes_a_b`.
+pub fn type_check_attributes(
+    ir: &IntermediateRepr
+) -> HashSet<TypeCheckAttributes> {
+
+
+    let mut all_types_in_ir: Vec<&FieldType> = Vec::new();
+    for class in ir.walk_classes() {
+        for field in class.item.elem.static_fields.iter() {
+            let field_type = &field.elem.r#type.elem;
+            all_types_in_ir.push(field_type);
+        }
+    }
+    for function in ir.walk_functions() {
+        for (_param_name, parameter) in function.item.elem.inputs.iter() {
+            all_types_in_ir.push(parameter);
+        }
+        let return_type = &function.item.elem.output;
+        all_types_in_ir.push(return_type);
+    }
+
+    all_types_in_ir.into_iter().filter_map(field_type_attributes).collect()
+
+}
+
+/// The set of Check names associated with a type.
+fn field_type_attributes<'a>(field_type: &FieldType) -> Option<TypeCheckAttributes> {
+    match field_type {
+        FieldType::Constrained {base, constraints} => {
+            let direct_sub_attributes = field_type_attributes(base);
+            let mut check_names =
+                TypeCheckAttributes(
+                    constraints
+                        .iter()
+                        .filter_map(|Constraint {label, level, ..}|
+                                    if matches!(level, ConstraintLevel::Check) {
+                                        Some(label.clone().expect("TODO"))
+                                    } else { None }
+                        ).collect::<HashSet<String>>());
+            if let Some(ref sub_attrs) = direct_sub_attributes {
+                check_names.extend(&sub_attrs);
+            }
+            if !check_names.is_empty() {
+                Some(check_names)
+            } else {
+                None
+            }
+        },
+        _ => None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use internal_baml_core::ir::repr::make_test_ir;
+    use super::*;
+
+
+    /// Utility function for creating test fixtures.
+    fn mk_tc_attrs(names: &[&str]) -> TypeCheckAttributes {
+        TypeCheckAttributes(names.into_iter().map(|s| s.to_string()).collect())
+    }
+
+    #[test]
+    fn type_check_attributes_eq() {
+        assert_eq!(mk_tc_attrs(&["a", "b"]), mk_tc_attrs(&["b", "a"]));
+
+        let attrs: HashSet<TypeCheckAttributes> = vec![mk_tc_attrs(&["a", "b"])].into_iter().collect();
+        assert!(attrs.contains( &mk_tc_attrs(&["a", "b"]) ));
+        assert!(attrs.contains( &mk_tc_attrs(&["b", "a"]) ));
+
+    }
+
+    #[test]
+    fn find_type_check_attributes() {
+        let ir = make_test_ir(
+            r##"
+client<llm> GPT4 {
+  provider openai
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+function Go(a: int @assert({{ this < 0 }}, c)) -> Foo {
+  client GPT4
+  prompt #""#
+}
+
+class Foo {
+  ab int @check({{this}}, a) @check({{this}}, b)
+  a int @check({{this}}, a)
+}
+
+class Bar {
+  cb int @check({{this}}, c) @check({{this}}, b)
+  nil int @description("no checks") @assert({{this}}, a) @assert({{this}}, d)
+}
+
+        "##).expect("Valid source");
+
+        let attrs = type_check_attributes(&ir);
+        dbg!(&attrs);
+        assert_eq!(attrs.len(), 3);
+        assert!(attrs.contains( &mk_tc_attrs(&["a","b"]) ));
+        assert!(attrs.contains( &mk_tc_attrs(&["a"]) ));
+        assert!(attrs.contains( &mk_tc_attrs(&["b", "c"]) ));
+        assert!(!attrs.contains( &mk_tc_attrs(&["a", "d"]) ));
     }
 }

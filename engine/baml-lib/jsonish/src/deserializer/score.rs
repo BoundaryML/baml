@@ -1,3 +1,5 @@
+use baml_types::{Constraint, ConstraintLevel};
+
 use super::{
     deserialize_flags::{DeserializerConditions, Flag},
     types::{BamlValueWithFlags, ValueWithFlags},
@@ -62,6 +64,18 @@ impl WithScore for Flag {
             Flag::StringToChar(_) => 1,
             Flag::FloatToInt(_) => 1,
             Flag::NoFields(_) => 1,
+            Flag::ConstraintResults(cs) => {
+                cs
+                    .iter()
+                    .map(|(Constraint{ level,.. }, succeeded)|
+                            if *succeeded { 0 } else {
+                            match level {
+                                ConstraintLevel::Check => 5,
+                                ConstraintLevel::Assert => 50,
+                            }
+                        })
+                    .sum()
+            }
         }
     }
 }
