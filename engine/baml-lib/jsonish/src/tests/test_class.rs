@@ -1225,3 +1225,52 @@ test_deserializer!(
     "res": ["hello", "world"]
   }
 );
+
+test_failing_deserializer!(
+    // This test fails due to the ” character that is not ".
+    // This is a real LLM output!
+    test_almost_quote_character,
+    r#"
+class TestClassNested {
+  prop1 string
+  prop2 InnerClass
+}
+
+class InnerClass {
+  prop1 string
+  prop2 string
+  inner InnerClass2
+}
+
+class InnerClass2 {
+  prop2 int
+  prop3 float
+}
+  "#,
+    r#"Sure! Here is a made-up JSON blob that matches the schema you provided:
+```
+{
+  "prop1": "example",
+  "prop2": {
+    "prop1": "value1",
+    "prop2": "value2”,
+    "inner": {
+      "prop2": 42,
+      "prop3": 3.14,
+    }
+  }
+}
+```"#,
+    FieldType::Class("TestClassNested".to_string())
+);
+// {
+//   "prop1": "example",
+//   "prop2": {
+//     "prop1": "value1",
+//     "prop2": "value2",
+//     "inner": {
+//       "prop2": 42,
+//       "prop3": 3.14
+//     }
+//   }
+// }

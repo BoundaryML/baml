@@ -1,7 +1,7 @@
 
 class InputClass {
   key string @alias("color")
-  key2 string
+  key2 string @alias("inner-key")
 }
 
 

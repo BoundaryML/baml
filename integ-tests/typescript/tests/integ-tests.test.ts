@@ -680,13 +680,13 @@ describe('Integ tests', () => {
   // TODO: Make this pass!
   it('should use aliases when serializing input objects - enums', async () => {
     const res = await b.AliasedInputEnum(AliasedEnum.KEY_ONE)
-    await expect(res).rejects.toContain('tiger')
+    expect(res).not.toContain('tiger')
   })
 
   // TODO: Make this pass!
   it('should use aliases when serializing input objects - lists', async () => {
     const res = await b.AliasedInputList([AliasedEnum.KEY_ONE, AliasedEnum.KEY_TWO])
-    expect(res).rejects.toContain('tiger')
+    expect(res).not.toContain('tiger')
   })
 })
 
