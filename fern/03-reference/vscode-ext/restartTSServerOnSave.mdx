@@ -1,0 +1,16 @@
+| Type | Default Value |
+| --- | --- |
+| `boolean` | `true` |
+
+## Docs
+
+- `true`: Automatically restarts the TypeScript Language Server in VSCode when the BAML extension generates the TypeScript `baml_client` files. This is a workaround for VSCode's issues with recognizing newly added directories and files in the TypeScript Language Server. No-op if not generating TypeScript files.
+- `false`: Does not automatically restart the TypeScript Server. You may need to manually reload the TS server to ensure it recognizes the new types.
+
+## Usage
+
+```json
+{
+  "baml.restartTSServerOnSave": true
+}
+```

@@ -1,0 +1,89 @@
+---
+title: Set Environment Variables
+slug: docs/guide/development/environment-variables
+---
+
+
+
+## Environment Variables in BAML
+
+Environment variables are primarily used in clients to propagate authorization
+credentials, such as API keys, like so:
+
+```baml
+
+client<llm> GPT4o {
+  provider baml-openai-chat
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+  }
+}
+```
+
+## Setting Environment Variables in Python/Typescript/etc
+
+The generated BAML client will capture all environment variables when you import it,
+and **will not be able to see any environment variables you load after importing
+the BAML client**.
+
+Any of the following strategies are compatible with BAML:
+
+  - set environment variables in your `Dockerfile`
+  - set environment variables in your `next.config.js`
+  - set environment variables in your Kubernetes manifest
+  - load environment variables from secrets-store.csi.k8s.io
+  - load environment variables from a secrets provider such as [Infisical](https://infisical.com/) / [Doppler](https://www.doppler.com/)
+  - dotenv (`.env` file) cli (e.g. `dotenv -e .env python myscript.py`)
+  - using account credentials for ephemeral token generation (e.g. Vertex AI Auth Tokens)
+
+<Tip>If BAML doesn't work for your use case, please [contact us]!</Tip>
+
+
+## Modifying env variables in your program
+
+<Info>
+This is available in Baml Version 0.57+
+</Info>
+
+If you don't want BAML to try to auto-load your env vars, you can call manually `reset_baml_env_vars`
+with the current environment variables.
+<CodeBlocks>
+
+```python Python
+
+from baml_client import b
+from baml_client import reset_baml_env_vars
+import os
+import dotenv
+
+dotenv.load_dotenv()
+reset_baml_env_vars(dict(os.environ))
+```
+
+```typescript TypeScript
+import dotenv from 'dotenv'
+// Wait to import the BAML client until after loading environment variables
+import { b, resetBamlEnvVars } from 'baml-client'
+
+dotenv.config()
+resetBamlEnvVars(process.env)
+```
+
+```ruby Ruby (beta)
+require 'dotenv/load'
+
+# Wait to import the BAML client until after loading environment variables
+# reset_baml_env_vars is not yet implemented in the Ruby client
+require 'baml_client'
+```
+
+
+</CodeBlocks>
+
+### Dynamically setting LLM API Keys
+You can set the API key for an LLM dynamically by passing in the key as a header or as a parameter (depending on the provider), using the [ClientRegistry](/reference/client-registry).
+
+Please [contact us] if you need support for these use cases.
+
+[contact us]: /contact

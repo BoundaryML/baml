@@ -1,0 +1,22 @@
+| Type | Default Value |
+| --- | --- |
+| `"always" \| "never"` | "always" |
+
+## Docs
+
+- `always`: Generate code for `baml_client` on every save
+- `never`: Do not generate `baml_client` on any save
+
+If you have a generator of type `rest/*`, `"always"` will not do any code generation. You will have to manually run:
+
+```
+path/to/baml-cli generate
+```
+
+## Usage
+
+```json settings.json
+{
+  "baml.generateCodeOnSave": "never",
+}
+```

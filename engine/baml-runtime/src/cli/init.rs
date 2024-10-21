@@ -19,7 +19,7 @@ pub struct InitArgs {
 
     #[arg(
         long,
-        help = r#"The OpenAPI client generator to run, if --client-type=openapi.
+        help = r#"The OpenAPI client generator to run, if --client-type=rest/openapi.
 Examples: "go", "java", "php", "ruby", "rust".  See full list at https://github.com/OpenAPITools/openapi-generator#overview."#
     )]
     openapi_client_type: Option<String>,

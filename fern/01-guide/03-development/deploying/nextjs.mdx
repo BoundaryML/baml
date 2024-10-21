@@ -1,0 +1,45 @@
+---
+slug: docs/get-started/deploying/nextjs
+---
+
+To deploy a NextJS with BAML, take a look at the starter template:
+https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter
+
+All you need is to modify the `nextjs.config.mjs` to allow BAML to run properly:
+```JS
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    serverComponentsExternalPackages: ["@boundaryml/baml"],
+  },
+  webpack: (config, { dev, isServer, webpack, nextRuntime }) => {
+    config.module.rules.push({
+      test: /\.node$/,
+      use: [
+        {
+          loader: "nextjs-node-loader",
+          options: {
+            outputPath: config.output.path,
+          },
+        },
+      ],
+    });
+
+    return config;
+  },
+};
+
+export default nextConfig;
+```
+
+and change your `package.json` to build the baml client automatically (and enable logging in dev mode if you want):
+
+```json
+ "scripts": {
+    "dev": "BAML_LOG=info next dev",
+    "build": "pnpm generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "generate": "baml-cli generate --from ./baml_src"
+  },
+```

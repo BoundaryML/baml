@@ -1,0 +1,78 @@
+
+The `init` command is used to initialize a project with BAML. It sets up the necessary directory structure and configuration files to get you started with BAML.
+
+## Usage
+
+```
+baml-cli init [OPTIONS]
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--dest <PATH>` | Specifies where to initialize the BAML project | Current directory (`.`) |
+| `--client-type <TYPE>` | Type of BAML client to generate | Guesses based on where the CLI was installed from (`python/pydantic` for pip, `typescript` for npm, etc.) |
+| `--openapi-client-type <TYPE>` | The OpenAPI client generator to run, if `--client-type=openapi` | None |
+
+## Description
+
+The `init` command performs the following actions:
+
+1. Creates a new BAML project structure in `${DEST}/baml_src`.
+2. Creates a `generators.baml` file in the `baml_src` directory with initial configuration.
+3. Includes some additional examples files in `baml_src` to get you started.
+
+## Client Types
+
+The `--client-type` option allows you to specify the type of BAML client to generate. Available options include:
+
+- `python/pydantic`: For Python clients using Pydantic
+- `typescript`: For TypeScript clients
+- `ruby/sorbet`: For Ruby clients using Sorbet
+- `rest/openapi`: For REST clients using OpenAPI
+
+If not specified, it uses the default from the runtime CLI configuration.
+
+## OpenAPI Client Types
+
+When using `--client-type=rest/openai`, you can specify the OpenAPI client generator using the `--openapi-client-type` option. Some examples include:
+
+- `go`
+- `java`
+- `php`
+- `ruby`
+- `rust`
+- `csharp`
+
+For a full list of supported OpenAPI client types, refer to the [OpenAPI Generator documentation](https://github.com/OpenAPITools/openapi-generator#overview).
+
+## Examples
+
+1. Initialize a BAML project in the current directory with default settings:
+   ```
+   baml init
+   ```
+
+2. Initialize a BAML project in a specific directory:
+   ```
+   baml init --dest /path/to/my/project
+   ```
+
+3. Initialize a BAML project for Python with Pydantic:
+   ```
+   baml init --client-type python/pydantic
+   ```
+
+4. Initialize a BAML project for OpenAPI with a Go client:
+   ```
+   baml init --client-type openapi --openapi-client-type go
+   ```
+
+## Notes
+
+- If the destination directory already contains a `baml_src` directory, the command will fail to prevent overwriting existing projects.
+- The command attempts to infer the OpenAPI generator command based on what's available in your system PATH. It checks for `openapi-generator`, `openapi-generator-cli`, or falls back to using `npx @openapitools/openapi-generator-cli`.
+- After initialization, follow the instructions provided in the console output for language-specific setup steps.
+
+For more information on getting started with BAML, visit the [BAML documentation](https://docs.boundaryml.com/docs/get-started/quickstart).

@@ -1,0 +1,21 @@
+| Type | Value |
+| --- | --- |
+| `string \| null` | null |
+
+## Docs
+
+If set, all generated code will use this instead of the packaged generator shipped with the extension.
+
+<Tip>
+We recommend this setting! This prevents mismatches between the VSCode Extension and the installed BAML package.
+</Tip>
+
+## Usage
+
+If you use unix, you can run `where baml-cli` in your project to figure out what the path is.
+
+```json settings.json
+{
+  "baml.cliPath": "/path/to/baml-cli"
+}
+```

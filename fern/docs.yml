@@ -38,13 +38,13 @@ navigation:
         path: pages/welcome.mdx
   - tab: guides
     layout:
-      - page: Changelog
-        icon: fa-regular fa-history
-        path: 01-guide/introduction.mdx
+      # - page: Changelog
+      #   icon: fa-regular fa-history
+      #   path: 01-guide/introduction.mdx
 
       - section: Introduction
         contents:
-          - page: What are function defintions
+          - page: What is BAML?
             icon: fa-regular fa-question-circle
             path: 01-guide/what-are-function-definitions.mdx
           - page: What's the baml_src folder
@@ -84,48 +84,48 @@ navigation:
         contents:
           - page: Environment Variables
             icon: fa-regular fa-cogs
-            path: 01-guide/introduction.mdx
+            path: 01-guide/03-development/environment-variables.mdx
           - page: Terminal Logs
             icon: fa-regular fa-file-lines
-            path: 01-guide/introduction.mdx
+            path: 01-guide/03-development/terminal-logs.mdx
           - page: Upgrade BAML versions
             icon: fa-regular fa-circle-arrow-up
-            path: 01-guide/introduction.mdx
+            path: 01-guide/03-development/upgrade-baml-versions.mdx
           - section: Deploying
             icon: fa-regular fa-rocket
             contents:
               - page: AWS
                 icon: fa-brands fa-aws
-                path: 01-guide/introduction.mdx
+                path: 01-guide/03-development/deploying/aws.mdx
               - page: NextJs
                 icon: fa-brands fa-react
-                path: 01-guide/introduction.mdx
+                path: 01-guide/03-development/deploying/nextjs.mdx
               - page: Docker
                 icon: fa-brands fa-docker
-                path: 01-guide/introduction.mdx
+                path: 01-guide/03-development/deploying/docker.mdx
               - page: Docker (REST API)
                 icon: fa-brands fa-docker
-                path: 01-guide/introduction.mdx
+                path: 01-guide/03-development/deploying/openapi.mdx
       - section: BAML Basics
         contents:
-          - page: My first function
+          - page: A BAML AI function
             icon: fa-solid fa-terminal
-            path: 01-guide/introduction.mdx
+            path: 01-guide/04-baml-basics/my-first-function.mdx
           - page: Switching LLMs
             icon: fa-regular fa-random
-            path: 01-guide/introduction.mdx
+            path: 01-guide/04-baml-basics/switching-llms.mdx
           - page: Testing functions
             icon: fa-regular fa-vial
-            path: 01-guide/introduction.mdx
+            path: 01-guide/04-baml-basics/testing-functions.mdx
           - page: Streaming
             icon: fa-regular fa-wave-square
-            path: 01-guide/introduction.mdx
+            path: 01-guide/04-baml-basics/streaming.mdx
           - page: Multi-Modal (Images / Audio)
             icon: fa-regular fa-image
-            path: 01-guide/introduction.mdx
+            path: 01-guide/04-baml-basics/multi-modal.mdx
           - page: Error Handling
             icon: fa-regular fa-bug
-            path: 01-guide/introduction.mdx
+            path: 01-guide/04-baml-basics/error-handling.mdx
           - section: Advanced
             icon: fa-regular fa-rectangle-pro
             contents:
@@ -239,145 +239,144 @@ navigation:
           - page: PHP
             icon: fa-brands fa-php
             path: 01-guide/introduction.mdx
-  # - tab: reference
-  # #   layout:
-  # #     - page: Changelog
-  # #       icon: fa-regular fa-history
-  # #       path: ./Changelog.mdx
+  - tab: reference
+    layout:
+      #     - page: Changelog
+      #       icon: fa-regular fa-history
+      #       path: ./Changelog.mdx
 
-  # #     - section: Boundary Tools
-  # #       contents:
-  # #         - api: Document Extraction API
-  # #           icon: fa-regular fa-dollar-sign
-  # #           slug: reference/extract
-  # #           summary: reference/extract/summary.mdx
-  # #           display-errors: true
-  # #           layout:
-  # #             - POST /extract
-  # #             - page: Extraction Examples
-  # #               path: reference/extract/examples.mdx
-  # #               slug: examples
-  # #     - section: Editor Extension Settings
-  # #       contents:
-  # #         - page: baml.cliPath
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: baml.generateCodeOnSave
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: baml.restartTSServerOnSave
-  # #           path: 01-guide/introduction.mdx
-  # #     - section: baml-cli
-  # #       contents:
-  # #         - page: init
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: generate
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: dev
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: serve
-  # #           path: 01-guide/introduction.mdx
-  # #     - section: Language Reference
-  # #       slug: baml
-  # #       contents:
-  # #         - page: Supported Types
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: comments
-  # #           path: 01-guide/introduction.mdx
-  # #         - section: values
-  # #           contents:
-  # #             - page: Enviornment Variables
-  # #               path: 01-guide/introduction.mdx
-  # #             - page: strings
-  # #               path: 01-guide/introduction.mdx
-  # #             - page: numbers
-  # #               path: 01-guide/introduction.mdx
-  # #             - page: bool
-  # #               path: 01-guide/introduction.mdx
-  # #             - page: array / list
-  # #               path: 01-guide/introduction.mdx
-  # #             - page: dictionary / map
-  # #               path: 01-guide/introduction.mdx
-  # #         - page: function
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: test
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: template_string
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: "client<llm>"
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: class
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: enum
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: generator
-  # #           path: 01-guide/introduction.mdx
+      # - section: Boundary Tools
+      #   contents:
+      #     - api: Document Extraction API
+      #       icon: fa-regular fa-dollar-sign
+      #       slug: reference/extract
+      #       display-errors: true
+      #       layout:
+      #         - POST /extract
+      #         - page: Extraction Examples
+      #           path: reference/extract/examples.mdx
+      #           slug: examples
+      - section: Editor Extension Settings
+        contents:
+          - page: baml.cliPath
+            path: 03-reference/vscode-ext/clipath.mdx
+          - page: baml.generateCodeOnSave
+            path: 03-reference/vscode-ext/generateCodeOnSave.mdx
+          - page: baml.restartTSServerOnSave
+            path: 03-reference/vscode-ext/restartTSServerOnSave.mdx
+      - section: baml-cli
+        contents:
+          - page: init
+            path: 03-reference/baml-cli/init.mdx
+          - page: generate
+            path: 03-reference/baml-cli/generate.mdx
+          - page: dev
+            path: 03-reference/baml-cli/dev.mdx
+          - page: serve
+            path: 03-reference/baml-cli/serve.mdx
+      - section: Language Reference
+        slug: baml
+        contents:
+          - page: Supported Types
+            path: 01-guide/introduction.mdx
+          - page: comments
+            path: 01-guide/introduction.mdx
+          - section: values
+            contents:
+              - page: Enviornment Variables
+                path: 01-guide/introduction.mdx
+              - page: strings
+                path: 01-guide/introduction.mdx
+              - page: numbers
+                path: 01-guide/introduction.mdx
+              - page: bool
+                path: 01-guide/introduction.mdx
+              - page: array / list
+                path: 01-guide/introduction.mdx
+              - page: dictionary / map
+                path: 01-guide/introduction.mdx
+          - page: function
+            path: 01-guide/introduction.mdx
+          - page: test
+            path: 01-guide/introduction.mdx
+          - page: template_string
+            path: 01-guide/introduction.mdx
+          - page: "client<llm>"
+            path: 01-guide/introduction.mdx
+          - page: class
+            path: 01-guide/introduction.mdx
+          - page: enum
+            path: 01-guide/introduction.mdx
+          - page: generator
+            path: 01-guide/introduction.mdx
 
-  # #     - section: Prompt Syntax
-  # #       contents:
-  # #         - page: What is jinja?
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: "ctx.output_format"
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: Message roles
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: Variables
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: Conditionals
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: Loops
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: Advanced
-  # #           path: 01-guide/introduction.mdx
+      - section: Prompt Syntax
+        contents:
+          - page: What is jinja?
+            path: 01-guide/introduction.mdx
+          - page: "ctx.output_format"
+            path: 01-guide/introduction.mdx
+          - page: Message roles
+            path: 01-guide/introduction.mdx
+          - page: Variables
+            path: 01-guide/introduction.mdx
+          - page: Conditionals
+            path: 01-guide/introduction.mdx
+          - page: Loops
+            path: 01-guide/introduction.mdx
+          - page: Advanced
+            path: 01-guide/introduction.mdx
 
-  # #     - section: "baml_client: Python"
-  # #       contents:
-  # #         - page: TypeBuilder
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: ClientRegistry
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: BamlError
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: BamlImagePy
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: BamlAudioPy
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: b
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: async_client
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: sync_client
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: reset_baml_env_vars
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: trace
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: set_tags
-  # #           path: 01-guide/introduction.mdx
-  # #     - section: "baml_client: Typescript"
-  # #       contents:
-  # #         - page: TypeBuilder
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: ClientRegistry
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: BamlError
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: BamlImageTs
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: BamlAudioTs
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: b
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: async_client
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: sync_client
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: resetBamlEnvVars
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: trace_async
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: trace_sync
-  # #           path: 01-guide/introduction.mdx
-  # #         - page: set_tags
-  # #           path: 01-guide/introduction.mdx
+      # - section: "baml_client: Python"
+      #   contents:
+      #     - page: TypeBuilder
+      #       path: 01-guide/introduction.mdx
+      #     - page: ClientRegistry
+      #       path: 01-guide/introduction.mdx
+      #     - page: BamlError
+      #       path: 01-guide/introduction.mdx
+      #     - page: BamlImagePy
+      #       path: 01-guide/introduction.mdx
+      #     - page: BamlAudioPy
+      #       path: 01-guide/introduction.mdx
+      #     - page: b
+      #       path: 01-guide/introduction.mdx
+      #     - page: async_client
+      #       path: 01-guide/introduction.mdx
+      #     - page: sync_client
+      #       path: 01-guide/introduction.mdx
+      #     - page: reset_baml_env_vars
+      #       path: 01-guide/introduction.mdx
+      #     - page: trace
+      #       path: 01-guide/introduction.mdx
+      #     - page: set_tags
+      #       path: 01-guide/introduction.mdx
+      # - section: "baml_client: Typescript"
+      #   contents:
+      #     - page: TypeBuilder
+      #       path: 01-guide/introduction.mdx
+      #     - page: ClientRegistry
+      #       path: 01-guide/introduction.mdx
+      #     - page: BamlError
+      #       path: 01-guide/introduction.mdx
+      #     - page: BamlImageTs
+      #       path: 01-guide/introduction.mdx
+      #     - page: BamlAudioTs
+      #       path: 01-guide/introduction.mdx
+      #     - page: b
+      #       path: 01-guide/introduction.mdx
+      #     - page: async_client
+      #       path: 01-guide/introduction.mdx
+      #     - page: sync_client
+      #       path: 01-guide/introduction.mdx
+      #     - page: resetBamlEnvVars
+      #       path: 01-guide/introduction.mdx
+      #     - page: trace_async
+      #       path: 01-guide/introduction.mdx
+      #     - page: trace_sync
+      #       path: 01-guide/introduction.mdx
+      #     - page: set_tags
+      #       path: 01-guide/introduction.mdx
 
   # - tab: paid-tooling
   #   layout:

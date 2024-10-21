@@ -1,0 +1,53 @@
+The `generate` command is used to generate BAML clients based on your BAML source files. It processes the BAML configurations and creates the necessary client code for your specified output type.
+
+## Usage
+
+```
+baml-cli generate [OPTIONS]
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--from <PATH>` | Path to the `baml_src` directory | `./baml_src` |
+| `--no-version-check` | Generate `baml_client` without checking for version mismatch | `false` |
+
+## Description
+
+The `generate` command performs the following actions:
+
+1. Finds all generators in the BAML project (usualy in `generators.baml`).
+2. Ensure all generators match the CLI version.
+3. Generate each `baml_client` based on the generator configurations.
+
+## Examples
+
+1. Generate clients using default settings:
+   ```
+   baml-cli generate
+   ```
+
+2. Generate clients from a specific directory:
+   ```
+   baml-cli generate --from /path/to/my/baml_src
+   ```
+
+3. Generate clients without version check:
+   ```
+   baml-cli generate --no-version-check
+   ```
+
+## Output
+
+The command provides informative output about the generation process:
+
+- If no clients were generated, it will suggest a configuration to add to your BAML files.
+- If clients were generated, it will report the number of clients generated and their locations.
+
+
+## Notes
+
+- If no generator configurations are found in the BAML files, the command will generate a default client based on the CLI defaults and provide instructions on how to add a generator configuration to your BAML files.
+- If generator configurations are found, the command will generate clients according to those configurations.
+- If one of the generators fails, the command will stop at that point and report the error.
