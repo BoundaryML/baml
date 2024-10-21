@@ -52,7 +52,7 @@
       "dependsOn": ["@gloo-ai/baml-language-server#build"],
       "outputs": ["out/**"]
     },
-    "baml#vscode:package": {
+    "gloo#vscode:package": {
       "dependsOn": ["baml-client#build"],
       "outputs": ["baml-*.vsix"]
     },

@@ -2,8 +2,6 @@ name: Release language_client_typescript
 
 on:
   workflow_call: {}
-  push:
-    branches: [sam/alpine-warnings]
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -101,7 +99,7 @@ jobs:
       - name: PNPM Install
         run: pnpm install --frozen-lockfile
         working-directory: engine/language_client_typescript
-      
+
       # per-matrix-entry dependency setup
       - name: Build tools setup
         run: ${{ matrix._.before }}
@@ -110,7 +108,7 @@ jobs:
       - name: PNPM Build
         run: ${{ matrix._.node_build }}
         working-directory: engine/language_client_typescript
-      
+
       - name: Build TS
         run: pnpm build:ts_build
         working-directory: engine/language_client_typescript
