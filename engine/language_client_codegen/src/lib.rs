@@ -192,12 +192,12 @@ impl GenerateClient for GeneratorOutputType {
                     .arg(cmd)
                     .current_dir(gen.output_dir())
                     .status()
-                    .context(format!("Failed to run on_generate command {:?}", cmd))?;
+                    .context(format!("Failed to run on_generate command {cmd:?}"))?;
                 if !status.success() {
                     anyhow::bail!(
                         "on_generate command finished with {}: {:?}",
                         match status.code() {
-                            Some(code) => format!("exit code {}", code),
+                            Some(code) => format!("exit code {code}"),
                             None => "no exit code".to_string(),
                         },
                         cmd,

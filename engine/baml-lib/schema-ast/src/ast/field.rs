@@ -1,5 +1,4 @@
 use baml_types::{LiteralValue, TypeValue};
-use internal_baml_diagnostics::DatamodelError;
 
 use super::{
     traits::WithAttributes, Attribute, Comment, Identifier, Span, WithDocumentation,

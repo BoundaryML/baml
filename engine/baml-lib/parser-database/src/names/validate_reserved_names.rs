@@ -1,7 +1,7 @@
-use internal_baml_schema_ast::ast::{FieldType, ValueExprBlockType};
+use internal_baml_schema_ast::ast::FieldType;
 
 use crate::{
-    ast::{self, WithIdentifier, WithName},
+    ast::{self, WithIdentifier},
     DatamodelError, Diagnostics,
 };
 

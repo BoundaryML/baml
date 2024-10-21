@@ -109,7 +109,7 @@ impl std::fmt::Display for DeserializerConditions {
 
         writeln!(f, "----Parsing Conditions----")?;
         for flag in &self.flags {
-            writeln!(f, "{}", flag)?;
+            writeln!(f, "{flag}")?;
         }
         writeln!(f, "--------------------------")?;
         Ok(())
@@ -135,96 +135,96 @@ impl std::fmt::Display for Flag {
                 write!(f, "Object from markdown")?;
             }
             Flag::ImpliedKey(key) => {
-                write!(f, "Implied key: {}", key)?;
+                write!(f, "Implied key: {key}")?;
             }
             Flag::JsonToString(value) => {
                 write!(f, "Json to string: ")?;
-                writeln!(f, "{:#?}", value)?;
+                writeln!(f, "{value:#?}")?;
             }
             Flag::ArrayItemParseError(idx, error) => {
-                write!(f, "Error parsing item {}: {}", idx, error)?;
+                write!(f, "Error parsing item {idx}: {error}")?;
             }
             Flag::MapKeyParseError(idx, error) => {
-                write!(f, "Error parsing map key {}: {}", idx, error)?;
+                write!(f, "Error parsing map key {idx}: {error}")?;
             }
             Flag::MapValueParseError(key, error) => {
-                write!(f, "Error parsing map value for key {}: {}", key, error)?;
+                write!(f, "Error parsing map value for key {key}: {error}")?;
             }
             Flag::SingleToArray => {
                 write!(f, "Converted a single value to an array")?;
             }
             Flag::ExtraKey(key, value) => {
-                write!(f, "Extra key: {}", key)?;
+                write!(f, "Extra key: {key}")?;
                 writeln!(f, "----RAW----")?;
-                writeln!(f, "{:#?}", value)?;
+                writeln!(f, "{value:#?}")?;
                 writeln!(f, "-----------")?;
             }
             Flag::StrMatchOneFromMany(values) => {
                 write!(f, "Enum one from many: ")?;
                 for (idx, value) in values {
-                    writeln!(f, "Item {}: {}", idx, value)?;
+                    writeln!(f, "Item {idx}: {value}")?;
                 }
             }
             Flag::DefaultButHadUnparseableValue(value) => {
                 write!(f, "Null but had unparseable value")?;
                 writeln!(f, "----RAW----")?;
-                writeln!(f, "{}", value)?;
+                writeln!(f, "{value}")?;
                 writeln!(f, "-----------")?;
             }
             Flag::ObjectToString(value) => {
                 write!(f, "Object to string: ")?;
-                writeln!(f, "{:#?}", value)?;
+                writeln!(f, "{value:#?}")?;
             }
             Flag::ObjectToPrimitive(value) => {
                 write!(f, "Object to field: ")?;
-                writeln!(f, "{:#?}", value)?;
+                writeln!(f, "{value:#?}")?;
             }
             Flag::ObjectToMap(value) => {
                 write!(f, "Object to map: ")?;
-                writeln!(f, "{:#?}", value)?;
+                writeln!(f, "{value:#?}")?;
             }
             Flag::StrippedNonAlphaNumeric(value) => {
-                write!(f, "Stripped non-alphanumeric characters: {}", value)?;
+                write!(f, "Stripped non-alphanumeric characters: {value}")?;
             }
             Flag::SubstringMatch(value) => {
-                write!(f, "Substring match: {}", value)?;
+                write!(f, "Substring match: {value}")?;
             }
             Flag::FirstMatch(idx, values) => {
-                writeln!(f, "Picked item {}:", idx)?;
+                writeln!(f, "Picked item {idx}:")?;
                 for (idx, value) in values.iter().enumerate() {
                     if let Ok(value) = value {
-                        writeln!(f, "{idx}: {:#?}", value)?;
+                        writeln!(f, "{idx}: {value:#?}")?;
                     }
                 }
             }
             Flag::UnionMatch(idx, values) => {
-                writeln!(f, "Picked item {}:", idx)?;
+                writeln!(f, "Picked item {idx}:")?;
                 for (idx, value) in values.iter().enumerate() {
                     if let Ok(value) = value {
-                        writeln!(f, "{idx}: {:#?}", value)?;
+                        writeln!(f, "{idx}: {value:#?}")?;
                     }
                 }
             }
             Flag::DefaultButHadValue(value) => {
                 write!(f, "Null but had value: ")?;
-                writeln!(f, "{:#?}", value)?;
+                writeln!(f, "{value:#?}")?;
             }
             Flag::StringToBool(value) => {
-                write!(f, "String to bool: {}", value)?;
+                write!(f, "String to bool: {value}")?;
             }
             Flag::StringToNull(value) => {
-                write!(f, "String to null: {}", value)?;
+                write!(f, "String to null: {value}")?;
             }
             Flag::StringToChar(value) => {
-                write!(f, "String to char: {}", value)?;
+                write!(f, "String to char: {value}")?;
             }
             Flag::FloatToInt(value) => {
-                write!(f, "Float to int: {}", value)?;
+                write!(f, "Float to int: {value}")?;
             }
             Flag::NoFields(value) => {
                 write!(f, "No fields: ")?;
                 if let Some(value) = value {
-                    writeln!(f, "{:#?}", value)?;
+                    writeln!(f, "{value:#?}")?;
                 } else {
                     writeln!(f, "<empty>")?;
                 }

@@ -98,8 +98,7 @@ pub fn parse_prompt(
         Err(err) => {
             diagnostics.push_error(DatamodelError::new_parser_error(
                 format!(
-                    "Unabled to parse this raw string. Please file a bug.\n{}",
-                    err
+                    "Unabled to parse this raw string. Please file a bug.\n{err}"
                 ),
                 raw_string.span().clone(),
             ));
@@ -203,7 +202,7 @@ fn handle_print_block(
                 }
                 other => {
                     diagnostics.push_error(DatamodelError::new_parser_error(
-                        format!("unknown printer function name `print{}`. Did you mean print_type or print_enum?", other),
+                        format!("unknown printer function name `print{other}`. Did you mean print_type or print_enum?"),
                         raw_string.to_raw_span(current.as_span()),
                     ));
                 }
@@ -497,7 +496,7 @@ fn get_expected_from_error(positives: &[Rule]) -> String {
     let mut out = String::with_capacity(positives.len() * 6);
 
     for positive in positives {
-        write!(out, "{:?} ", positive).unwrap();
+        write!(out, "{positive:?} ").unwrap();
     }
 
     out

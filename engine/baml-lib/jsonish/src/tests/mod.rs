@@ -39,7 +39,7 @@ fn load_test_ir(file_content: &str) -> IntermediateRepr {
     match schema.diagnostics.to_result() {
         Ok(_) => {}
         Err(e) => {
-            panic!("Failed to validate schema: {}", e);
+            panic!("Failed to validate schema: {e}");
         }
     }
 

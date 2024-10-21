@@ -28,7 +28,7 @@ fn parse_required_key<'a>(
         Some(expr) => expr,
         None => {
             return Err(DatamodelError::new_validation_error(
-                &format!("The `{}` argument is required for a generator.", key),
+                &format!("The `{key}` argument is required for a generator."),
                 generator_span.clone(),
             ))
         }
@@ -37,7 +37,7 @@ fn parse_required_key<'a>(
     match expr.as_string_value() {
         Some((name, _)) => Ok(name),
         None => Err(DatamodelError::new_validation_error(
-            &format!("`{}` must be a string.", key),
+            &format!("`{key}` must be a string."),
             expr.span().clone(),
         )),
     }
@@ -57,7 +57,7 @@ fn parse_optional_key<'a>(
     match expr.as_string_value() {
         Some((name, _)) => Ok(Some(name)),
         None => Err(DatamodelError::new_validation_error(
-            &format!("`{}` must be a string.", key),
+            &format!("`{key}` must be a string."),
             expr.span().clone(),
         )),
     }
@@ -117,7 +117,7 @@ pub(crate) fn parse_generator(
             }
             Err(_) => {
                 errors.push(DatamodelError::new_validation_error(
-                    &format!("The language '{}' is not supported.", name),
+                    &format!("The language '{name}' is not supported."),
                     ast_generator.span().clone(),
                 ));
             }
@@ -177,7 +177,7 @@ pub(crate) fn parse_generator(
     }
 
     let _test_command = match command_prefix {
-        Some(prefix) => format!("{} python -m pytest", prefix),
+        Some(prefix) => format!("{prefix} python -m pytest"),
         None => "python -m pytest".into(),
     };
 

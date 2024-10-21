@@ -52,8 +52,7 @@ impl JsonParseState {
                 _ => {
                     // TODO: this should never happen as we should only be pushing objects and arrays
                     panic!(
-                        "Unexpected value: {:?} in collection stack: {:?}",
-                        value, last
+                        "Unexpected value: {value:?} in collection stack: {last:?}"
                     );
                 }
             }
@@ -80,7 +79,7 @@ impl JsonParseState {
                 s.push(token);
             }
             _ => {
-                panic!("Unexpected token: {:?} in: {:?}", token, last);
+                panic!("Unexpected token: {token:?} in: {last:?}");
             }
         }
         Ok(0)

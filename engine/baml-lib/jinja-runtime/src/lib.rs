@@ -8,7 +8,7 @@ pub use output_format::types;
 mod baml_value_to_jinja_value;
 
 use minijinja::{self, value::Kwargs};
-use minijinja::{context, ErrorKind, Value};
+use minijinja::{context, ErrorKind};
 use output_format::types::OutputFormatContent;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -117,7 +117,7 @@ fn render_minijinja(
                     // If both are present, we should error
                     return Err(minijinja::Error::new(
                         ErrorKind::TooManyArguments,
-                        format!("role() called with two roles: '{}' and '{}'", a, b),
+                        format!("role() called with two roles: '{a}' and '{b}'"),
                     ));
                 }
                 (Some(role), _) => role,
@@ -227,7 +227,7 @@ fn render_minijinja(
                         Ok(m) => Some(ChatMessagePart::Media(m)),
                         Err(_) => Err(minijinja::Error::new(
                             ErrorKind::CannotUnpack,
-                            format!("Media variable had unrecognizable data: {}", media_data),
+                            format!("Media variable had unrecognizable data: {media_data}"),
                         ))?,
                     }
                 } else if !part.trim().is_empty() {
@@ -463,7 +463,7 @@ mod render_tests {
 
     pub fn make_test_ir(source_code: &str) -> anyhow::Result<IntermediateRepr> {
         use internal_baml_core::validate;
-        use internal_baml_core::{Configuration, ValidatedSchema};
+        use internal_baml_core::ValidatedSchema;
         use internal_baml_diagnostics::SourceFile;
         use std::path::PathBuf;
         let path: PathBuf = "fake_file.baml".into();
