@@ -67,6 +67,12 @@ impl TryInto<UserFacingBamlMedia> for &BamlMedia {
 ///   - allows constructing Pydantic models containing a BamlImagePy instance
 ///   - allows FastAPI requests to deserialize BamlImagePy instances in JSON format
 ///   - allows serializing BamlImagePy instances in JSON format
+///
+/// Ideally this belongs in baml_py.internal_monkeypatch, so that we can get
+/// ruff-based type checking, but this depends on the pydantic libraries, so we
+/// can't implement this in internal_monkeypatch without adding a hard dependency
+/// on pydantic. And we don't want to do _that_, because that will make it harder
+/// to implement output_type python/vanilla in the future.
 pub fn __get_pydantic_core_schema__(
     _cls: Bound<'_, PyType>,
     _source_type: Bound<'_, PyAny>,
