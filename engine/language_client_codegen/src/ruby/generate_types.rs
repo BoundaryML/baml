@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 
 use anyhow::Result;
 
@@ -30,7 +29,7 @@ pub(crate) struct RubyStreamTypes<'ir> {
     partial_classes: Vec<PartialRubyStruct<'ir>>,
 }
 
-/// The Python class corresponding to Partial<TypeDefinedInBaml>
+/// The Python class corresponding to Partial<TypeDefinedjInBaml>
 struct PartialRubyStruct<'ir> {
     name: &'ir str,
     // the name, and the type of the field
