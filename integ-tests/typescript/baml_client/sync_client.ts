@@ -592,6 +592,31 @@ export class BamlSyncClient {
     }
   }
   
+  ExtractHobby(
+      text: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): (string | Hobby)[] {
+    try {
+    const raw = this.runtime.callFunctionSync(
+      "ExtractHobby",
+      {
+        "text": text
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed() as (string | Hobby)[]
+    } catch (error: any) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
+  }
+  
   ExtractNames(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }

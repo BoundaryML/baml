@@ -552,6 +552,29 @@ class BamlSyncClient:
       )
       return cast(str, raw.cast_to(types, types))
     
+    def ExtractHobby(
+        self,
+        text: str,
+        baml_options: BamlCallOptions = {},
+    ) -> List[Union[types.Hobby, str]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "ExtractHobby",
+        {
+          "text": text,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(List[Union[types.Hobby, str]], raw.cast_to(types, types))
+    
     def ExtractNames(
         self,
         input: str,
@@ -2763,6 +2786,36 @@ class BamlStreamClient:
         raw,
         lambda x: cast(Optional[str], x.cast_to(types, partial_types)),
         lambda x: cast(str, x.cast_to(types, types)),
+        self.__ctx_manager.get(),
+      )
+    
+    def ExtractHobby(
+        self,
+        text: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[List[Optional[Union[types.Hobby, str]]], List[Union[types.Hobby, str]]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "ExtractHobby",
+        {
+          "text": text,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlSyncStream[List[Optional[Union[types.Hobby, str]]], List[Union[types.Hobby, str]]](
+        raw,
+        lambda x: cast(List[Optional[Union[types.Hobby, str]]], x.cast_to(types, partial_types)),
+        lambda x: cast(List[Union[types.Hobby, str]], x.cast_to(types, types)),
         self.__ctx_manager.get(),
       )
     
