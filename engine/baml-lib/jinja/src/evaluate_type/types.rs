@@ -92,8 +92,8 @@ impl Type {
                 v.iter().map(|x| x.name()).collect::<Vec<_>>().join(" | ")
             ),
             Type::Both(l, r) => format!("{} & {}", l.name(), r.name()),
-            Type::ClassRef(name) => format!("class {}", name),
-            Type::FunctionRef(name) => format!("function {}", name),
+            Type::ClassRef(name) => format!("class {name}"),
+            Type::FunctionRef(name) => format!("function {name}"),
             Type::Image => "image".into(),
             Type::Audio => "audio".into(),
         }

@@ -283,7 +283,7 @@ impl OutputFormatContent {
                 }
             },
             FieldType::Literal(v) => match v {
-                LiteralValue::String(s) => format!("\"{}\"", s),
+                LiteralValue::String(s) => format!("\"{s}\""),
                 LiteralValue::Int(i) => i.to_string(),
                 LiteralValue::Bool(b) => b.to_string(),
             },
@@ -291,7 +291,7 @@ impl OutputFormatContent {
                 let Some(enm) = self.enums.get(e) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
-                        format!("Enum {} not found", e),
+                        format!("Enum {e} not found"),
                     ));
                 };
 
@@ -317,7 +317,7 @@ impl OutputFormatContent {
                 let Some(class) = self.classes.get(cls) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
-                        format!("Class {} not found", cls),
+                        format!("Class {cls} not found"),
                     ));
                 };
 
@@ -349,9 +349,9 @@ impl OutputFormatContent {
                     format!("[\n  {}\n]", inner_str.replace('\n', "\n  "))
                 } else {
                     if matches!(inner.as_ref(), FieldType::Optional(_)) {
-                        format!("({})[]", inner_str)
+                        format!("({inner_str})[]")
                     } else {
-                        format!("{}[]", inner_str)
+                        format!("{inner_str}[]")
                     }
                 }
             }
@@ -399,7 +399,7 @@ impl OutputFormatContent {
                 let Some(enm) = self.enums.get(e) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
-                        format!("Enum {} not found", e),
+                        format!("Enum {e} not found"),
                     ));
                 };
 
@@ -427,7 +427,7 @@ impl OutputFormatContent {
                         message,
                     )))
                 } else {
-                    Ok(Some(format!("{}{}", prefix, message)))
+                    Ok(Some(format!("{prefix}{message}")))
                 }
             }
             (None, Some(message)) => {

@@ -615,16 +615,23 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             true,
             GeneratorDefaultClientMode::Sync,
             Vec::new(),
-        ).map_err(|_| BamlError::InternalError{ message: "Failed to make placeholder generator".to_string()})?;
+        )
+        .map_err(|_| BamlError::InternalError {
+            message: "Failed to make placeholder generator".to_string(),
+        })?;
         let schema: OpenApiSchema = (locked.inner.ir.as_ref(), &fake_generator)
             .try_into()
             .map_err(|e| {
                 log::warn!("Failed to generate openapi schema: {}", e);
-                BamlError::InternalError{ message: format!("Failed to generate openapi schema")}
+                BamlError::InternalError {
+                    message: format!("Failed to generate openapi schema"),
+                }
             })?;
         serde_json::to_string(&schema).map_err(|e| {
             log::warn!("Failed to serialize openapi schema: {}", e);
-            BamlError::InternalError{ message: format!("Failed to serialize openapi schema") }
+            BamlError::InternalError {
+                message: format!("Failed to serialize openapi schema"),
+            }
         })
     }
 }

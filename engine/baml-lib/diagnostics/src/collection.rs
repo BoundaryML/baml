@@ -21,10 +21,10 @@ impl std::fmt::Display for Diagnostics {
         let warn_str = self.warnings_to_pretty_string();
 
         if !err_str.is_empty() {
-            writeln!(f, "{}", err_str)?;
+            writeln!(f, "{err_str}")?;
         }
         if !warn_str.is_empty() {
-            writeln!(f, "{}", warn_str)?;
+            writeln!(f, "{warn_str}")?;
         }
 
         Ok(())

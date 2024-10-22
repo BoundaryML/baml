@@ -109,7 +109,7 @@ print("Hello, world!")
         {
             let value = &res[0];
             let Value::AnyOf(value, _) = value else {
-                panic!("Expected AnyOf, got {:#?}", value);
+                panic!("Expected AnyOf, got {value:#?}");
             };
             assert!(value.contains(&Value::Object(
                 [("a".to_string(), Value::Number((1).into()))]
@@ -120,7 +120,7 @@ print("Hello, world!")
         {
             let value = &res[1];
             let Value::AnyOf(value, _) = value else {
-                panic!("Expected AnyOf, got {:#?}", value);
+                panic!("Expected AnyOf, got {value:#?}");
             };
             assert!(value.contains(&Value::Array(vec![Value::String(
                 "This is a test".to_string()

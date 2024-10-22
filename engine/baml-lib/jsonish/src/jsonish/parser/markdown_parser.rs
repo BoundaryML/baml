@@ -115,7 +115,7 @@ print("Hello, world!")
             assert_eq!(tag, "json");
 
             let Value::AnyOf(value, _) = value else {
-                panic!("Expected AnyOf, got {:#?}", value);
+                panic!("Expected AnyOf, got {value:#?}");
             };
             assert!(value.contains(&Value::Object(
                 [("a".to_string(), Value::Number((1).into()))]
@@ -132,7 +132,7 @@ print("Hello, world!")
             assert_eq!(tag, "test json");
 
             let Value::AnyOf(value, _) = value else {
-                panic!("Expected AnyOf, got {:#?}", value);
+                panic!("Expected AnyOf, got {value:#?}");
             };
             assert!(value.contains(&Value::String("This is a test".to_string())));
         }

@@ -120,7 +120,7 @@ mod tests {
     use super::*;
     use crate::parser::{BAMLParser, Rule};
     use internal_baml_diagnostics::{Diagnostics, SourceFile};
-    use pest::{Parser, consumes_to, fails_with, parses_to};
+    use pest::{consumes_to, fails_with, parses_to, Parser};
 
     #[test]
     fn keyword_name_mandatory_whitespace() {

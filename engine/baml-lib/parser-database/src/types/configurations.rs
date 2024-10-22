@@ -1,7 +1,6 @@
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 use internal_baml_schema_ast::ast::{ValExpId, ValueExprBlock, WithIdentifier, WithName, WithSpan};
 use regex::Regex;
-use std::collections::HashSet;
 
 use crate::{coerce, coerce_array, coerce_expression::coerce_map, context::Context};
 
@@ -21,7 +20,7 @@ fn dedent(s: &str) -> String {
     }
 
     // Remove that amount of indentation from each line.
-    let dedent_pattern = format!(r"(?m)^\s{{1,{}}}", shortest_indent);
+    let dedent_pattern = format!(r"(?m)^\s{{1,{shortest_indent}}}");
     Regex::new(&dedent_pattern)
         .unwrap()
         .replace_all(s, "")
@@ -175,7 +174,7 @@ fn visit_strategy(
         Some((name, span)) => {
             diagnostics.push_error(
                 internal_baml_diagnostics::DatamodelError::new_validation_error(
-                    &format!("Unknown retry strategy type: {}. Options are `constant_delay` or `exponential_backoff`", name),
+                    &format!("Unknown retry strategy type: {name}. Options are `constant_delay` or `exponential_backoff`"),
                     span.clone(),
                 ),
             );

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use baml_types::FieldType;
 use either::Either;
 use indexmap::IndexMap;
@@ -231,7 +231,7 @@ fn to_ir_attributes(
             let ir_expr = match d {
                 ast::Expression::StringValue(s, _) => Expression::String(s.clone()),
                 ast::Expression::RawStringValue(s) => Expression::RawString(s.value().to_string()),
-                _ => panic!("Couldn't deal with description: {:?}", d),
+                _ => panic!("Couldn't deal with description: {d:?}"),
             };
             attributes.insert("description".to_string(), ir_expr);
         }
@@ -770,7 +770,7 @@ fn process_field(
                         },
                         AliasedKey {
                             key: original_name.to_string(),
-                            alias: Expression::String(format!("{}: {}", alias, description)),
+                            alias: Expression::String(format!("{alias}: {description}")),
                         },
                     ]
                 } else {

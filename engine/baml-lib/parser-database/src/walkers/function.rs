@@ -143,7 +143,7 @@ impl<'db> FunctionWalker<'db> {
         match client.0.split_once("/") {
             // TODO: do this in a more robust way
             // actually validate which clients are and aren't allowed
-            Some((provider, model)) => Ok(ClientSpec::Shorthand(format!("{}/{}", provider, model))),
+            Some((provider, model)) => Ok(ClientSpec::Shorthand(format!("{provider}/{model}"))),
             None => match self.db.find_client(client.0.as_str()) {
                 Some(client) => Ok(ClientSpec::Named(client.name().to_string())),
                 None => {

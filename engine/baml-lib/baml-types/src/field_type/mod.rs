@@ -87,10 +87,10 @@ impl std::fmt::Display for FieldType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FieldType::Enum(name) | FieldType::Class(name) => {
-                write!(f, "{}", name)
+                write!(f, "{name}")
             }
-            FieldType::Primitive(t) => write!(f, "{}", t),
-            FieldType::Literal(v) => write!(f, "{}", v),
+            FieldType::Primitive(t) => write!(f, "{t}"),
+            FieldType::Literal(v) => write!(f, "{v}"),
             FieldType::Union(choices) => {
                 write!(
                     f,

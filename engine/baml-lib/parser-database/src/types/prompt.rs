@@ -94,12 +94,12 @@ fn process_prompt_ast(ctx: &mut Context<'_>, ast: PromptAst) -> (String, Vec<Pro
             (_, Top::WhiteSpace(ws, _)) => {
                 if is_comment {
                     post_white_space = match post_white_space {
-                        Some(existing_ws) => Some(format!("{}{}", existing_ws, ws)),
+                        Some(existing_ws) => Some(format!("{existing_ws}{ws}")),
                         None => Some(ws.to_string()),
                     };
                 } else {
                     prev_white_space = match prev_white_space {
-                        Some(existing_ws) => Some(format!("{}{}", existing_ws, ws)),
+                        Some(existing_ws) => Some(format!("{existing_ws}{ws}")),
                         None => Some(ws.to_string()),
                     };
                 }
@@ -131,7 +131,7 @@ fn process_prompt_ast(ctx: &mut Context<'_>, ast: PromptAst) -> (String, Vec<Pro
                         full_prompt_text.push_str(&replacement.key().to_string());
                         replacers.push(replacement);
                     }
-                    None => full_prompt_text.push_str(&format!("{{{}}}", raw_string)),
+                    None => full_prompt_text.push_str(&format!("{{{raw_string}}}")),
                 }
             }
         }

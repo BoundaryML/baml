@@ -10,13 +10,10 @@ pub fn main() {
     match Command::new("mise").args(["where", "ruby"]).output() {
         Ok(output) => {
             let ruby_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            println!("cargo:rustc-link-search=native={}/lib", ruby_path);
+            println!("cargo:rustc-link-search=native={ruby_path}/lib");
         }
         Err(e) => {
-            println!(
-                "cargo:rustc-warning=Failed to execute 'mise where ruby': {}",
-                e
-            );
+            println!("cargo:rustc-warning=Failed to execute 'mise where ruby': {e}");
         }
     }
 
