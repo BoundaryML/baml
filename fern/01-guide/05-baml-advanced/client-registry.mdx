@@ -1,0 +1,163 @@
+---
+title: Client Registry
+---
+
+If you need to modify the model / parameters for an LLM client at runtime, you can modify the `ClientRegistry` for any specified function.
+
+<Tabs>
+
+<Tab title="Python">
+
+```python
+import os
+from baml_py import ClientRegistry
+
+async def run():
+    cr = ClientRegistry()
+    # Creates a new client
+    cr.add_llm_client(name='MyAmazingClient', provider='openai', options={
+        "model": "gpt-4o",
+        "temperature": 0.7,
+        "api_key": os.environ.get('OPENAI_API_KEY')
+    })
+    # Sets MyAmazingClient as the primary client
+    cr.set_primary('MyAmazingClient')
+
+    # ExtractResume will now use MyAmazingClient as the calling client
+    res = await b.ExtractResume("...", { "client_registry": cr })
+```
+
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
+import { ClientRegistry } from '@boundaryml/baml'
+
+async function run() {
+    const cr = new ClientRegistry()
+    // Creates a new client
+    cr.addLlmClient({ name: 'MyAmazingClient', provider: 'openai', options: {
+        model: "gpt-4o",
+        temperature: 0.7,
+        api_key: process.env.OPENAI_API_KEY
+    }})
+    // Sets MyAmazingClient as the primary client
+    cr.setPrimary('MyAmazingClient')
+
+    // ExtractResume will now use MyAmazingClient as the calling client
+    const res = await b.ExtractResume("...", { clientRegistry: cr })
+}
+```
+</Tab>
+
+<Tab title="Ruby">
+
+```ruby
+require_relative "baml_client/client"
+
+def run
+  cr = Baml::ClientRegistry.new
+
+  # Creates a new client
+  cr.add_llm_client(
+    name: 'MyAmazingClient',
+    provider: 'openai',
+    options: {
+      model: 'gpt-4o',
+      temperature: 0.7,
+      api_key: ENV['OPENAI_API_KEY']
+    }
+  )
+
+  # Sets MyAmazingClient as the primary client
+  cr.set_primary('MyAmazingClient')
+
+  # ExtractResume will now use MyAmazingClient as the calling client
+  res = Baml.Client.extract_resume(input: '...', baml_options: { client_registry: cr })
+end
+
+# Call the asynchronous function
+run
+```
+</Tab>
+
+<Tab title="OpenAPI">
+
+The API supports passing client registry as a field on `__baml_options__` in the request body.
+
+Example request body:
+
+```json
+{
+    "resume": "Vaibhav Gupta",
+    "__baml_options__": {
+        "client_registry": {
+            "clients": [
+                {
+                    "name": "OpenAI",
+                    "provider": "openai",
+                    "retry_policy": null,
+                    "options": {
+                        "model": "gpt-4o-mini",
+                        "api_key": "sk-..."
+                    }
+                }
+            ],
+            "primary": "OpenAI"
+        }
+    }
+}
+```
+
+```sh
+curl -X POST http://localhost:2024/call/ExtractResume \
+    -H 'Content-Type: application/json' -d @body.json
+```
+
+</Tab>
+
+</Tabs>
+
+## ClientRegistry Interface
+
+<Tip>
+    Note: `ClientRegistry` is imported from `baml_py` in Python and `@boundaryml/baml` in TypeScript, not `baml_client`.
+
+    As we mature `ClientRegistry`, we will add a more type-safe and ergonomic interface directly in `baml_client`. See [Github issue #766](https://github.com/BoundaryML/baml/issues/766).
+</Tip>
+
+Methods use `snake_case` in Python and `camelCase` in TypeScript.
+
+### add_llm_client / addLlmClient
+A function to add an LLM client to the registry.
+
+<ParamField
+    path="name"
+    type="string"
+    required
+>
+    The name of the client.
+
+    <Warning>
+    Using the exact same name as a client also defined in .baml files overwrites the existing client whenever the ClientRegistry is used.
+    </Warning>
+</ParamField>
+
+<Markdown src="../snippets/client-constructor.mdx" />
+
+<ParamField path="retry_policy" type="string">
+The name of a retry policy that is already defined in a .baml file. See [Retry Policies](/docs/snippets/clients/retry).
+</ParamField>
+
+### set_primary / setPrimary
+This sets the client for the function to use. (i.e. replaces the `client` property in a function)
+
+<ParamField
+    path="name"
+    type="string"
+    required
+>
+    The name of the client to use.
+
+    This can be a new client that was added with `add_llm_client` or an existing client that is already in a .baml file.
+</ParamField>

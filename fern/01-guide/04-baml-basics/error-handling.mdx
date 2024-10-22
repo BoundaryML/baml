@@ -1,0 +1,144 @@
+
+When BAML raises an exception, it will be an instance of a subclass of `BamlError`. This allows you to catch all BAML-specific exceptions with a single `except` block.
+
+## Example
+<CodeGroup>
+```python Python
+from baml_client import b
+from baml_py.errors import BamlError, BamlInvalidArgumentError, BamlClientError, BamlClientHttpError, BamlValidationError
+
+try:
+  b.CallFunctionThatRaisesError()
+except BamlError as e:
+  print(e)
+
+
+try:
+  b.CallFunctionThatRaisesError()
+except BamlValidationError as e:
+  # The original prompt sent to the LLM
+  print(e.prompt)
+  # The LLM response string
+  print(e.raw_output)
+  # A human-readable error message
+  print(e.message)
+```
+
+
+```typescript TypeScript
+import { b } from './baml_client'
+// For catching parsing errors, you can import this
+import { BamlValidationError } from '@boundaryml/baml'
+// The rest of the BAML errors contain a string that is prefixed with:
+// "BamlError:"
+// Subclasses are sequentially appended to the string.
+// For example, BamlInvalidArgumentError is returned as:
+// "BamlError: BamlInvalidArgumentError:"
+// Or, BamlClientHttpError is returned as:
+// "BamlError: BamlClientError: BamlClientHttpError:"
+
+
+async function example() {
+  try {
+    await b.CallFunctionThatRaisesError()
+  } catch (e) {
+    if (e instanceof BamlValidationError) {
+      // You should be lenient to these fields missing.
+      // The original prompt sent to the LLM
+      console.log(e.prompt)
+      // The LLM response string
+      console.log(e.raw_output)
+      // A human-readable error message
+      console.log(e.message)
+    } else {
+      // Handle other BAML errors
+      console.log(e)
+    }
+  }
+}
+
+```
+
+```ruby Ruby
+# Example coming soon
+```  
+</CodeGroup>
+
+
+## BamlError
+
+Base class for all BAML exceptions.  
+
+<ParamField
+  path="message"
+  type="string"
+>
+  A human-readable error message.
+</ParamField>
+
+### BamlInvalidArgumentError
+
+Subclass of `BamlError`.
+
+Raised when one or multiple arguments to a function are invalid.
+
+### BamlClientError
+
+Subclass of `BamlError`.
+
+Raised when a client fails to return a valid response.
+
+<Warning>
+In the case of aggregate clients like `fallback` or those with `retry_policy`, only the last client's error is raised.  
+</Warning>
+
+#### BamlClientHttpError
+
+Subclass of `BamlClientError`.
+
+Raised when the HTTP request made by a client fails with a non-200 status code.
+
+<ParamField
+  path="status_code"
+  type="int"
+>
+  The status code of the response.
+
+Common status codes are:
+
+- 1: Other
+- 2: Other
+- 400: Bad Request
+- 401: Unauthorized
+- 403: Forbidden
+- 404: Not Found
+- 429: Too Many Requests
+- 500: Internal Server Error
+</ParamField>
+
+### BamlValidationError
+
+Subclass of `BamlError`.
+
+Raised when BAML fails to parse a string from the LLM into the specified object.
+
+<ParamField
+  path="raw_output"
+  type="string"
+>
+  The raw text from the LLM that failed to parse into the expected return type of a function.
+</ParamField>
+
+<ParamField
+  path="message"
+  type="string"
+>
+  The parsing-related error message.
+</ParamField>
+
+<ParamField
+  path="prompt"
+  type="string"
+>
+  The original prompt that was sent to the LLM, formatted as a plain string. Images sent as base64-encoded strings are not serialized into this field.
+</ParamField>

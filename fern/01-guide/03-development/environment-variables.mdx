@@ -7,8 +7,7 @@ slug: docs/guide/development/environment-variables
 
 ## Environment Variables in BAML
 
-Environment variables are primarily used in clients to propagate authorization
-credentials, such as API keys, like so:
+Sometimes you'll see environment variables used in BAML, like in clients:
 
 ```baml
 
@@ -21,26 +20,22 @@ client<llm> GPT4o {
 }
 ```
 
-## Setting Environment Variables in Python/Typescript/etc
+BAML will expect these to be set already in your program **before** you import the baml_client in Python/ TS / etc.
 
-The generated BAML client will capture all environment variables when you import it,
-and **will not be able to see any environment variables you load after importing
-the BAML client**.
-
-Any of the following strategies are compatible with BAML:
-
-  - set environment variables in your `Dockerfile`
-  - set environment variables in your `next.config.js`
-  - set environment variables in your Kubernetes manifest
-  - load environment variables from secrets-store.csi.k8s.io
-  - load environment variables from a secrets provider such as [Infisical](https://infisical.com/) / [Doppler](https://www.doppler.com/)
-  - dotenv (`.env` file) cli (e.g. `dotenv -e .env python myscript.py`)
+Any of the following strategies for setting env vars are compatible with BAML:
+  - setting them in your shell before running your program
+  - in your `Dockerfile`
+  - in your `next.config.js`
+  - in your Kubernetes manifest
+  - from secrets-store.csi.k8s.io
+  - from a secrets provider such as [Infisical](https://infisical.com/) / [Doppler](https://www.doppler.com/)
+  - from a `.env` file (using `dotenv` cli)
   - using account credentials for ephemeral token generation (e.g. Vertex AI Auth Tokens)
 
 <Tip>If BAML doesn't work for your use case, please [contact us]!</Tip>
 
 
-## Modifying env variables in your program
+## Loading environment variables manually
 
 <Info>
 This is available in Baml Version 0.57+
@@ -81,9 +76,5 @@ require 'baml_client'
 
 </CodeBlocks>
 
-### Dynamically setting LLM API Keys
+## Dynamically setting LLM API Keys
 You can set the API key for an LLM dynamically by passing in the key as a header or as a parameter (depending on the provider), using the [ClientRegistry](/reference/client-registry).
-
-Please [contact us] if you need support for these use cases.
-
-[contact us]: /contact

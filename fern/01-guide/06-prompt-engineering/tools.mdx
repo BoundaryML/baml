@@ -1,7 +1,7 @@
 ---
-title: Function Calling / Tools
-slug: docs/snippets/functions/function-calling
+title: Tools / Function Calling
 ---
+
 
 "Function calling" is a technique for getting an LLM to choose a function to call for you.
 
@@ -60,4 +60,4 @@ Injecting your function schemas into the prompt, as BAML does, outperforms funct
 Keep in mind that "JSON mode" is nearly the same thing as "prompting", but it enforces the LLM response is ONLY a JSON blob.
 BAML does not use JSON mode since it allows developers to use better prompting techniques like chain-of-thought, to allow the LLM to express its reasoning before printing out the actual schema. BAML's parser can find the json schema(s) out of free-form text for you.
 
-BAML will support native function-calling APIs in the future (please let us know more about your use-case so we can prioritize accordingly)
+BAML may support native function-calling APIs in the future (please let us know more about your use-case so we can prioritize accordingly)

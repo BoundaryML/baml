@@ -1,13 +1,10 @@
----
-title: strings
----
-
-
-BAML treats strings as first-class citizens, to support more struggle-free prompt engineering.
+BAML treats templatized strings as first-class citizens.
 
 ## Quoted Strings
 
 These is a valid **inline string**, which is surrounded by double quotes. They behave like regular strings in most programming languages, and can be escaped with a backslash.
+
+<Tip>These cannot have template variables or expressions inside them. Use a block string for that.</Tip>
 
 
 ```rust
@@ -56,3 +53,33 @@ Block strings are automatically dedented and stripped of the first and last newl
     World
 "#
 ```
+
+When used for templating, block strings can contain expressions and variables using [Jinja](https://jinja.palletsprojects.com/en/3.0.x/templates/) syntax.
+
+```rust
+template_string Greeting(name: string) #"
+  Hello {{ name }}!
+"#
+```
+
+### Escape Characters
+
+Escaped characters are injected as is into the string.
+
+```rust
+#"\n"#
+```
+
+This will render as `\\n` in the output.
+
+### Adding a `"#`
+To include a `"#` in a block string, you can prefix it with a different count of `#`.
+
+
+```baml
+###"
+  #"Hello"#
+"###
+```
+
+This will render as `#"Hello"#`.

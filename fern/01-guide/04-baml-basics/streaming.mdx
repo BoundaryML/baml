@@ -4,6 +4,16 @@ slug: /guide/baml-basics/streaming
 
 BAML lets you stream in structured JSON output from LLMs as it comes in.
 
+If you tried streaming in a JSON output from an LLM you'd see something like:
+```
+{"items": [{"name": "Appl
+{"items": [{"name": "Apple", "quantity": 2, "price": 1.
+{"items": [{"name": "Apple", "quantity": 2, "price": 1.50}], "total_cost":
+{"items": [{"name": "Apple", "quantity": 2, "price": 1.50}], "total_cost": 3.00} # Completed
+```
+
+BAML automatically fixes this partial JSON, and transforms all your types into `Partial` types with all `Optional` fields only during the stream.
+
 <Tip>You can check out more examples (including streaming in FastAPI and NextJS) in the [BAML Examples] repo.</Tip>
 
 [call BAML functions]: /docs/calling-baml/calling-functions
@@ -52,9 +62,11 @@ from baml_client import b, partial_types, types
 def example1(receipt: str):
     stream = b.stream.ExtractReceiptInfo(receipt)
 
+    # partial is a Partial type with all Optional fields
     for partial in stream:
         print(f"partial: parsed {len(partial.items)} items (object: {partial})")
 
+    # final is the full, original, validated ReceiptInfo type
     final = stream.get_final_response()
     print(f"final: {len(final.items)} items (object: {final})")
 
@@ -114,10 +126,12 @@ import { b } from './baml_client'
 const example1 = async (receipt: string) => {
   const stream = b.stream.ExtractReceiptInfo(receipt)
 
+  // partial is a Partial type with all Optional fields
   for await (const partial of stream) {
     console.log(`partial: ${partial.items?.length} items (object: ${partial})`)
   }
 
+  // final is the full, original, validated ReceiptInfo type
   const final = await stream.getFinalResponse()
   console.log(`final: ${final.items.length} items (object: ${final})`)
 }
@@ -239,5 +253,5 @@ Streaming is not yet supported via OpenAPI, but it will be coming soon!
 </Tabs>
 
 <Note>
-Number fields are always streamed in only when the LLM completes them. E.g. if the final number is 129.95, you'll only see null or 129.95, not 129.9 or 12
+Number fields are always streamed in only when the LLM completes them. E.g. if the final number is 129.95, you'll only see null or 129.95 instead of partial numbers like 1, 12, 129.9, etc.
 </Note>

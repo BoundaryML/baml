@@ -26,10 +26,14 @@ tabs:
     display-name: BAML Reference
     icon: fa-solid fa-code-branch
     slug: ref
-  paid-tooling:
-    display-name: Paid Offerings
-    icon: fa-solid fa-dollar-sign
-    slug: paid-tooling
+  # paid-tooling:
+  #   display-name: Paid Offerings
+  #   icon: fa-solid fa-dollar-sign
+  #   slug: paid-tooling
+  playground:
+    display-name: Playground
+    icon: fa-solid fa-play
+    href: https://promptfiddle.com
 
 navigation:
   - tab: home
@@ -108,7 +112,7 @@ navigation:
                 path: 01-guide/03-development/deploying/openapi.mdx
       - section: BAML Basics
         contents:
-          - page: Prompting with BAML
+          - page: Prompting and calling LLMs with BAML
             icon: fa-solid fa-terminal
             path: 01-guide/04-baml-basics/my-first-function.mdx
           - page: Switching LLMs
@@ -126,15 +130,15 @@ navigation:
           - page: Error Handling
             icon: fa-regular fa-bug
             path: 01-guide/04-baml-basics/error-handling.mdx
-          - section: Advanced
-            icon: fa-regular fa-rectangle-pro
-            contents:
-              - page: Re-using Prompts
-                icon: fa-regular fa-repeat
-                path: 01-guide/introduction.mdx
-              - page: Prompt Caching
-                icon: fa-regular fa-save
-                path: 01-guide/introduction.mdx
+
+      - section: BAML Advanced
+        contents:
+          - page: Client Registry
+            icon: fa-regular fa-gears
+            path: 01-guide/05-baml-advanced/client-registry.mdx
+          - page: Dynamic / Runtime Types
+            icon: fa-regular fa-dice-d20
+            path: 01-guide/05-baml-advanced/dynamic-types.mdx
       - section: Prompt Engineering
         contents:
           - page: Chat History
@@ -377,6 +381,7 @@ navigation:
       #       path: 01-guide/introduction.mdx
       #     - page: set_tags
       #       path: 01-guide/introduction.mdx
+  - tab: playground
 
   # - tab: paid-tooling
   #   layout:

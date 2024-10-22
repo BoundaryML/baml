@@ -2,26 +2,21 @@
 title: Switching LLMs
 ---
 
-BAML Supports getting structured output from **all** major providers as well as all OpenAI-API compatible open-source models. See [the full list](/reference/providers).
-<Tip>
-BAML can help you get structured output from **any Open-Source model**, with better performance than other techniques, even when it's not officially supported via a Tool-Use API or fine-tuned for it! [Read more about how BAML does this](https://www.boundaryml.com/blog/schema-aligned-parsing).
-</Tip>
+Switch LLMs using the `client` property. You can use the shorthand form, or the longer form with a named client.
 
-### Using `client "<provider>/<model>"`
+The shorthand form is `<provider>/<model>`:
 
-Using `openai/model-name` or `anthropic/model-name` will assume you have the ANTHROPIC_API_KEY or OPENAI_API_KEY environment variables set.
+which uses ANTHROPIC_API_KEY or OPENAI_API_KEY environment variables as the defaults.
 
 ```rust BAML
 function MakeHaiku(topic: string) -> string {
-  client "openai/gpt-4o" // or anthropic/claude-3-5-sonnet-20240620
+  client "openai/gpt-4o" // or anthropic/claude-3-5-sonnet-20241022
   prompt #"
     Write a haiku about {{ topic }}.
   "#
 }
 ```
 
-### Using a named client
-<Note>Use this if you are using open-source models or need customization</Note>
 The longer form uses a named client, and supports adding any parameters supported by the provider or changing the temperature, top_p, etc.
 
 ```rust BAML
@@ -31,7 +26,7 @@ client<llm> MyClient {
     model "gpt-4o"
     api_key env.OPENAI_API_KEY
     // other params like temperature, top_p, etc.
-    temperature 0.0
+    temperature 0.5
     base_url "https://my-custom-endpoint.com/v1"
     // add headers
     headers {
