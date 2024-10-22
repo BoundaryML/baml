@@ -16,9 +16,9 @@ generator lang_ruby {
   version "0.62.0"
 }
 
-generator openapi {
-  output_type rest/openapi
-  output_dir "../openapi"
-  version "0.62.0"
-  on_generate "rm .gitignore"
-}
+// generator openapi {
+//   output_type rest/openapi
+//   output_dir "../openapi"
+//   version "0.62.0"
+//   on_generate "rm .gitignore"
+// }

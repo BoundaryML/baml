@@ -20,6 +20,7 @@ from ..baml_client.globals import (
 from ..baml_client import partial_types
 from ..baml_client.types import (
     DynInputOutput,
+    Hobby,
     NamedArgsSingleEnumList,
     NamedArgsSingleClass,
     Nested,
@@ -790,7 +791,7 @@ async def test_dynamic_inputs_list2():
 
 
 @pytest.mark.asyncio
-async def test_dynamic_types_enum():
+async def test_dynamic_types_new_enum():
     tb = TypeBuilder()
     field_enum = tb.add_enum("Animal")
     animals = ["giraffe", "elephant", "lion"]
@@ -803,6 +804,20 @@ async def test_dynamic_types_enum():
     )
     assert len(res) > 0
     assert res[0].animalLiked == "GIRAFFE", res[0]
+
+
+@pytest.mark.asyncio
+async def test_dynamic_types_existing_enum():
+    tb = TypeBuilder()
+    tb.Hobby.add_value("Golfing")
+    res = await b.ExtractHobby(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. golf and music are my favorite!.",
+        {"tb": tb},
+    )
+    assert len(res) > 0
+    assert "Golfing" in res, res
+    assert Hobby.MUSIC in res, res
+
 
 @pytest.mark.asyncio
 async def test_dynamic_literals():

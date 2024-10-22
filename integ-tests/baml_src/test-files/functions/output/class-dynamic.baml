@@ -37,3 +37,16 @@ enum Hobby {
 
   @@dynamic
 }
+
+
+function ExtractHobby(text: string) -> Hobby[] {
+  client GPT4
+  prompt #"
+     {{ _.role('system') }}
+     {# This is a special macro that prints out the output schema of the function #}
+     {{ ctx.output_format }} 
+     
+     {{ _.role('user') }}
+     {{text}}
+   "#
+}
