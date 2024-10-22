@@ -1,6 +1,5 @@
-use std::collections::HashSet;
 
-use baml_types::{BamlMediaType, FieldType, LiteralValue, TypeValue};
+use baml_types::{BamlMediaType, FieldType, TypeValue};
 
 use super::ruby_language_features::ToRuby;
 

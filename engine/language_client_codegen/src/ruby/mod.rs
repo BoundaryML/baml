@@ -9,7 +9,6 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use ruby_language_features::ToRuby;
 
-use either::Either;
 
 use internal_baml_core::ir::repr::IntermediateRepr;
 

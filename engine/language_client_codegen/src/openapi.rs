@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::{path::PathBuf, process::Command};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use baml_types::{BamlMediaType, FieldType, LiteralValue, TypeValue};
@@ -8,7 +7,7 @@ use internal_baml_core::ir::{
     repr::{Function, IntermediateRepr, Node, Walker},
     ClassWalker, EnumWalker,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::json;
 
 use crate::dir_writer::{FileCollector, LanguageFeatures, RemoveDirBehavior};
