@@ -12,9 +12,52 @@ Here's a list of all the types that can be represented in BAML:
 * `string`
 * `null`
 
+## Literal Types
+
+The primitive types `string`, `int` and `bool` can be constrained to a specific value.
+For example, you can use literal values as return types:
+
+```rust
+function ClassifyIssue(issue_description: string) -> "bug" | "enhancement" {
+  client GPT4Turbo
+  prompt #"
+    Classify the issue based on the following description:
+    {{ ctx.output_format }}
+
+    {{ _.role("user")}}
+    {{ issue_description }}
+  "#
+}
+```
+
+See [Union(|)](#union-) for more details.
+
+<Info>
+  This feature was added in: v0.61.0.
+</Info>
+
 ## Multimodal Types
 See [calling a function with multimodal types](/docs/snippets/calling-baml/multi-modal)
 and [testing image inputs](/docs/snippets/test-cases#images)
+
+<Accordion title="Implementation details: runtime and security considerations">
+  BAML's multimodal types are designed for ease of use: we have deliberately made it
+  easy for you to construct a `image` or `audio` instance from a URL. Under the
+  hood, depending on the model you're using, BAML may need to download the image
+  and transcode it (usually as base64) for the model to consume.
+
+  This ease-of-use does come with some tradeoffs; namely, if you construct
+  an `image` or `audio` instance using untrusted user input, you may be exposing
+  yourself to [server-side request forgery (SSRF) attacks][ssrf]. Attackers may be
+  able to fetch files on your internal network, on external networks using your
+  application's identity, or simply excessively drive up your cloud network
+  bandwidth bill.
+
+  To prevent this, we recommend only using URLs from trusted sources/users or
+  validating them using allowlists or denylists.
+
+[ssrf]: https://portswigger.net/web-security/ssrf
+</Accordion>
 
 ### `image`
 
@@ -89,6 +132,36 @@ def test_image_input
 end
 ```
 </CodeBlocks>
+
+<Accordion title="Pydantic compatibility">
+If using Pydantic, the following are valid ways to construct the `Image` type.
+
+```json
+{
+  "url": "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+}
+```
+
+```json
+{
+  "url": "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png",
+  "media_type": "image/png"
+}
+```
+
+```json
+{
+  "base64": "iVBORw0K....",
+}
+```
+
+```json
+{
+  "base64": "iVBORw0K....",
+  "media_type": "image/png"
+}
+```
+</Accordion>
 
 ### `audio`
 
@@ -330,6 +403,23 @@ Optional[List[Union[Optional[int], List[str], MyClass]]]
 
 ```typescript TypeScript Equivalent
 ((number | null) | string[] | MyClass)[]
+```
+
+</CodeBlocks>
+
+### Example 5
+
+<CodeBlocks>
+```baml BAML
+"str" | 1 | false
+```
+
+```python Python Equivalent
+Union[Literal["str"], Literal[1], Literal[False]]
+```
+
+```typescript TypeScript Equivalent
+"str" | 1 | false
 ```
 
 </CodeBlocks>

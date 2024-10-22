@@ -1,0 +1,126 @@
+---
+slug: /guide/baml-basics/multi-modal
+---
+
+## Multi-modal input
+
+You can use `audio` or `image` input types in BAML prompts. Just create an input argument of that type and render it in the prompt.
+
+Check the "raw curl" checkbox in the playground to see how BAML translates multi-modal input into the LLM Request body.
+
+```baml
+// "image" is a reserved keyword so we name the arg "img"
+function DescribeMedia(img: image) -> string {
+  client openai/gpt-4o
+  // Most LLM providers require images or audio to be sent as "user" messages.
+  prompt #"
+    {{_.role("user")}}
+    Describe this image: {{ img }}
+  "#
+}
+
+// See the "testing functions" Guide for more on testing Multimodal functions
+test Test {
+  args {
+    img {
+      url "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+    }
+  }
+}
+```
+
+## Calling Multimodal BAML Functions
+
+#### Images
+Calling a BAML function with an `image` input argument type (see [image types])
+
+The `from_url` and `from_base64` methods create an `Image` object based on input type.
+<CodeBlocks>
+```python Python
+from baml_py import Image
+from baml_client import b
+
+async def test_image_input():
+  # from URL
+  res = await b.TestImageInput(
+      img=Image.from_url(
+          "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+      )
+  )
+
+  # Base64 image
+  image_b64 = "iVBORw0K...."
+  res = await b.TestImageInput(
+    img=Image.from_base64("image/png", image_b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Image } from "@boundaryml/baml"
+...
+
+  // URL
+  let res = await b.TestImageInput(
+    Image.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png'),
+  )
+
+  // Base64
+  const image_b64 = "iVB0R..."
+  let res = await b.TestImageInput(
+    Image.fromBase64('image/png', image_b64),
+  )
+  
+```
+
+```ruby Ruby (beta)
+we're working on it!
+```
+
+</CodeBlocks>
+ 
+### Audio
+Calling functions that have `audio` types. See [audio types](../snippets/supported-types.mdx)
+
+<CodeBlocks>
+```python Python
+from baml_py import Audio
+from baml_client import b
+
+async def run():
+  # from URL
+  res = await b.TestAudioInput(
+      img=Audio.from_url(
+          "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg"
+      )
+  )
+
+  # Base64
+  b64 = "iVBORw0K...."
+  res = await b.TestAudioInput(
+    audio=Audio.from_base64("audio/ogg", b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Audio } from "@boundaryml/baml"
+...
+
+  // URL
+  let res = await b.TestAudioInput(
+    Audio.fromUrl('https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg'),
+  )
+
+  // Base64
+  const audio_base64 = ".."
+  let res = await b.TestAudioInput(
+    Audio.fromBase64('audio/ogg', audio_base64),
+  )
+  
+```
+
+```ruby Ruby (beta)
+we're working on it!
+```
+</CodeBlocks>

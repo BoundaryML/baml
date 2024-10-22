@@ -280,14 +280,14 @@ navigation:
           - page: Supported Types
             path: 03-reference/baml/types.mdx
           - page: comments
-            path: 01-guide/introduction.mdx
+            path: 03-reference/baml/comments.mdx
           - section: values
             contents:
               - page: Enviornment Variables
                 path: 01-guide/introduction.mdx
-              - page: strings
-                path: 01-guide/introduction.mdx
-              - page: numbers
+              - page: string
+                path: 03-reference/baml/string.mdx
+              - page: "int / float"
                 path: 01-guide/introduction.mdx
               - page: bool
                 path: 01-guide/introduction.mdx

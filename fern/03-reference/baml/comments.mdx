@@ -1,0 +1,53 @@
+
+
+## Single line / trailing comments
+
+Denoted by `//`.
+
+```baml
+// hello there!
+foo // this is a trailing comment
+```
+
+## Docstrings
+
+We have no special syntax for docstrings. Instead, we use comments.
+Eventually, we'll support a `///` syntax for docstrings which will
+also be used for generating documentation in `baml_client`.
+
+{/* ## Docstrings
+
+To add a docstring to any block, use `///`.
+
+```baml
+/// This is a docstring for a class
+class Foo {
+    /// This is a docstring for a property
+    property1 string
+}
+``` */}
+
+{/* ## Multiline comments
+
+Multiline comments are denoted via `{//` and `//}`.
+
+```baml
+{//
+    this is a multiline comment
+    foo
+    bar
+//}
+``` */}
+ 
+## Comments in block strings
+
+See [Block Strings](./values/string#block-strings) for more information.
+
+```baml
+#"
+    My string. {#
+        This is a comment
+    #}
+    hi!
+"#
+```
