@@ -9,7 +9,7 @@ use internal_baml_schema_ast::ast::{FieldType, TypeExpId, WithName, WithSpan};
 
 use crate::validate::validation_pipeline::context::Context;
 
-/// Validates if there's a cycle in the dependency graph.
+/// Validates if the dependency graph contains one or more infinite cycles.
 pub(super) fn validate(ctx: &mut Context<'_>) {
     // First, build a graph of all the "required" dependencies represented as an
     // adjacency list. We're only going to consider type dependencies that can
@@ -87,9 +87,9 @@ fn insert_required_deps(
                 insert_required_deps(id, f, ctx, &mut nested_deps);
 
                 // No nested deps found on this component, this makes the
-                // union finite.
+                // union finite, so no need to go deeper.
                 if nested_deps.is_empty() {
-                    return; // Finite union, no need to go deeper.
+                    return;
                 }
 
                 // Add the nested deps to the overall union deps and clear the

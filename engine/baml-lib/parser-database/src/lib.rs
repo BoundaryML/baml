@@ -129,97 +129,13 @@ impl ParserDatabase {
     }
 
     fn finalize_dependencies(&mut self, diag: &mut Diagnostics) {
-        let mut deps = self
-            .types
-            .class_dependencies
-            .iter()
-            .map(|f| {
-                (
-                    *f.0,
-                    f.1.iter()
-                        .fold((0, 0, 0), |prev, i| match self.find_type_by_str(i) {
-                            Some(Either::Left(_)) => (prev.0 + 1, prev.1 + 1, prev.2),
-                            Some(Either::Right(_)) => (prev.0 + 1, prev.1, prev.2 + 1),
-                            _ => prev,
-                        }),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        // Can only process deps which have 0 class dependencies.
-        let mut max_loops = 100;
-        while !deps.is_empty() && max_loops > 0 {
-            max_loops -= 1;
-            // Remove all the ones which have 0 class dependencies.
-            let removed = deps
-                .iter()
-                .filter(|(_, v)| v.1 == 0)
-                .map(|(k, _)| *k)
-                .collect::<Vec<_>>();
-            deps.retain(|(_, v)| v.1 > 0);
-            for cls in removed {
-                let child_deps = self
-                    .types
-                    .class_dependencies
-                    .get(&cls)
-                    // These must exist by definition so safe to unwrap.
-                    .unwrap()
-                    .iter()
-                    .filter_map(|f| match self.find_type_by_str(f) {
-                        Some(Either::Left(walker)) => {
-                            Some(walker.dependencies().iter().cloned().collect::<Vec<_>>())
-                        }
-                        Some(Either::Right(walker)) => Some(vec![walker.name().to_string()]),
-                        _ => panic!("Unknown class `{}`", f),
-                    })
-                    .flatten()
-                    .collect::<HashSet<_>>();
-                let name = self.ast[cls].name();
-                deps.iter_mut()
-                    .filter(|(k, _)| self.types.class_dependencies[k].contains(name))
-                    .for_each(|(_, v)| {
-                        v.1 -= 1;
-                    });
-
-                // Get the dependencies of all my dependencies.
-                self.types
-                    .class_dependencies
-                    .get_mut(&cls)
-                    .unwrap()
-                    .extend(child_deps);
-            }
-        }
-
         // NOTE: Class dependency cycles are already checked at
         // baml-lib/baml-core/src/validate/validation_pipeline/validations/cycle.rs
         //
-        // The algorithm at `cycle.rs` takes arity and recursive types into
-        // account unlike the topological sort performed here. The code below
-        // does not need to run since cycles would have already been detected
-        // at the validation stage, which runs before this function. Check
+        // The validation pipeline runs before this code. Check
         // baml-lib/baml-core/src/lib.rs
         //
-        // The code above this comment seems modifies the AST by extending
-        // .class_dependencies so that one still needs to run.
-
-        // if max_loops == 0 && !deps.is_empty() {
-        //     let circular_deps = deps
-        //         .iter()
-        //         .map(|(k, _)| self.ast[*k].name())
-        //         .collect::<Vec<_>>()
-        //         .join(" -> ");
-
-        //     deps.iter().for_each(|(k, _)| {
-        //         diag.push_error(DatamodelError::new_validation_error(
-        //             &format!(
-        //                 "Circular dependency detected for class `{}`.\n{}",
-        //                 self.ast[*k].name(),
-        //                 circular_deps
-        //             ),
-        //             self.ast[*k].identifier().span().clone(),
-        //         ));
-        //     });
-        // }
+        // So we won't check cycles again.
 
         // Additionally ensure the same thing for functions, but since we've already handled classes,
         // this should be trivial.
