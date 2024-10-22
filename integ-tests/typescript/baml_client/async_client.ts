@@ -592,6 +592,31 @@ export class BamlAsyncClient {
     }
   }
   
+  async ExtractHobby(
+      text: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Promise<(string | Hobby)[]> {
+    try {
+      const raw = await this.runtime.callFunction(
+        "ExtractHobby",
+        {
+          "text": text
+        },
+        this.ctx_manager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      )
+      return raw.parsed() as (string | Hobby)[]
+    } catch (error: any) {
+      const bamlError = createBamlValidationError(error);
+      if (bamlError instanceof BamlValidationError) {
+        throw bamlError;
+      } else {
+        throw error;
+      }
+    }
+  }
+  
   async ExtractNames(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -2985,6 +3010,39 @@ class BamlStreamClient {
         raw,
         (a): a is RecursivePartialNull<string> => a,
         (a): a is string => a,
+        this.ctx_manager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+      )
+    } catch (error) {
+      if (error instanceof Error) {
+        const bamlError = createBamlValidationError(error);
+        if (bamlError instanceof BamlValidationError) {
+          throw bamlError;
+        }
+      }
+      throw error;
+    }
+  }
+  
+  ExtractHobby(
+      text: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): BamlStream<RecursivePartialNull<(string | Hobby)[]>, (string | Hobby)[]> {
+    try {
+      const raw = this.runtime.streamFunction(
+        "ExtractHobby",
+        {
+          "text": text
+        },
+        undefined,
+        this.ctx_manager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      )
+      return new BamlStream<RecursivePartialNull<(string | Hobby)[]>, (string | Hobby)[]>(
+        raw,
+        (a): a is RecursivePartialNull<(string | Hobby)[]> => a,
+        (a): a is (string | Hobby)[] => a,
         this.ctx_manager.cloneContext(),
         __baml_options__?.tb?.__tb(),
       )

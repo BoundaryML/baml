@@ -84,11 +84,26 @@ fn pythonize_strict(
             let enum_type = match enum_module.getattr(enum_name.as_str()) {
                 Ok(e) => e,
                 // This can be true in the case of dynamic types.
+                /*
+                   tb = TypeBuilder()
+                   tb.add_enum("Foo")
+                */
                 Err(_) => return Ok(value.into_py(py)),
             };
 
             // Call the constructor with the value
-            let instance = enum_type.call1((value,))?;
+            let instance = match enum_type.call1((value,)) {
+                Ok(instance) => instance,
+                Err(_) => {
+                    // This can happen if the enum value is dynamic
+                    /*
+                       enum Foo {
+                           @@dynamic
+                       }
+                    */
+                    return Ok(value.into_py(py));
+                }
+            };
             Ok(instance.into())
         }
         BamlValue::Class(class_name, index_map) => {
@@ -109,6 +124,10 @@ fn pythonize_strict(
             let class_type = match cls_module.getattr(class_name.as_str()) {
                 Ok(class) => class,
                 // This can be true in the case of dynamic types.
+                /*
+                    tb = TypeBuilder()
+                    tb.add_class("Foo")
+                */
                 Err(_) => return Ok(properties_dict.into()),
             };
             let instance = class_type.call_method("model_validate", (properties_dict,), None)?;
