@@ -256,3 +256,28 @@ test_deserializer!(
     FieldType::List(FieldType::Enum("Category".to_string()).into()),
     ["ONE", "TWO", "THREE"]
 );
+
+test_deserializer!(
+    test_numerical_enum,
+    r#"
+enum TaxReturnFormType {
+    F9325 @alias("9325")
+    F9465 @alias("9465")
+    F1040 @alias("1040")
+    F1040X @alias("1040-X")
+}
+"#,
+    r#"
+(such as 1040-X, 1040, etc.) or any payment vouchers.
+
+Based on the criteria provided, this page does not qualify as a tax return form page. Therefore, the appropriate response is:
+
+```json
+null
+``` 
+
+This indicates that there is no relevant tax return form type present on the page.
+    "#,
+    FieldType::Enum("TaxReturnFormType".to_string()).as_optional(),
+    null
+);
