@@ -55,7 +55,7 @@ function UseTool(user_message: string) -> (WeatherAPI | MyOtherAPI)[] {
 ```
 
 ## Function-calling APIs vs Prompting
-Injecting your function schemas into the prompt, as BAML does, outperforms function-calling across all benchmarks for major providers (see [Berkeley's Function-calling Leaderboard](https://gorilla.cs.berkeley.edu/leaderboard.html), where "Prompt" outperforms "FC").
+Injecting your function schemas into the prompt, as BAML does, outperforms function-calling across all benchmarks for major providers ([see our Berkeley FC Benchmark results with BAML](https://www.boundaryml.com/blog/sota-function-calling?q=0)).
 
 Keep in mind that "JSON mode" is nearly the same thing as "prompting", but it enforces the LLM response is ONLY a JSON blob.
 BAML does not use JSON mode since it allows developers to use better prompting techniques like chain-of-thought, to allow the LLM to express its reasoning before printing out the actual schema. BAML's parser can find the json schema(s) out of free-form text for you.

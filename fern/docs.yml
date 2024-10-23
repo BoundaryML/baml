@@ -146,7 +146,7 @@ navigation:
             path: 01-guide/introduction.mdx
           - page: Tools / Function Calling
             icon: fa-regular fa-wrench
-            path: 01-guide/introduction.mdx
+            path: 01-guide/06-prompt-engineering/tools.mdx
           - page: Zero shot prompting
             icon: fa-regular fa-bullseye
             path: 01-guide/introduction.mdx

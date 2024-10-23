@@ -34,6 +34,53 @@ function UseTool(user_message: string) -> WeatherAPI {
   "#
 }
 ```
+Call the function like this:
+
+<CodeGroup>
+```python Python
+import asyncio
+from baml_client import b
+from baml_client.types import WeatherAPI
+
+async def main():
+    weather_info = await b.UseTool("What's the weather like in San Francisco?")
+    print(weather_info)
+    assert isinstance(weather_info, WeatherAPI)
+    print(f"City: {weather_info.city}")
+    print(f"Time of Day: {weather_info.timeOfDay}")
+
+if __name__ == '__main__':
+    asyncio.run(main())
+```
+
+```typescript TypeScript
+import { b } from './baml_client'
+import { WeatherAPI } from './baml_client/types'
+import assert from 'assert'
+
+const main = async () => {
+  const weatherInfo = await b.UseTool("What's the weather like in San Francisco?")
+  console.log(weatherInfo)
+  assert(weatherInfo instanceof WeatherAPI)
+  console.log(`City: ${weatherInfo.city}`)
+  console.log(`Time of Day: ${weatherInfo.timeOfDay}`)
+}
+```
+
+```ruby Ruby
+require_relative "baml_client/client"
+
+$b = Baml.Client
+
+def main
+  weather_info = $b.UseTool(user_message: "What's the weather like in San Francisco?")
+  puts weather_info
+  raise unless weather_info.is_a?(Baml::Types::WeatherAPI)
+  puts "City: #{weather_info.city}"
+  puts "Time of Day: #{weather_info.timeOfDay}"
+end
+```
+</CodeGroup>
 
 ## Choosing multiple Tools
 
@@ -46,6 +93,75 @@ function UseTool(user_message: string) -> WeatherAPI | MyOtherAPI {
 
 <Tip>If you use [VSCode Playground](../../get-started/quickstart/editors-vscode.mdx), you can see what we inject into the prompt, with full transparency.</Tip>
 
+Call the function like this:
+
+<CodeGroup>
+```python Python
+import asyncio
+from baml_client import b
+from baml_client.types import WeatherAPI, MyOtherAPI
+
+async def main():
+    tool = await b.UseTool("What's the weather like in San Francisco?")
+    print(tool)
+    
+    if isinstance(tool, WeatherAPI):
+        print(f"Weather API called:")
+        print(f"City: {tool.city}")
+        print(f"Time of Day: {tool.timeOfDay}")
+    elif isinstance(tool, MyOtherAPI):
+        print(f"MyOtherAPI called:")
+        # Handle MyOtherAPI specific attributes here
+
+if __name__ == '__main__':
+    asyncio.run(main())
+```
+
+```typescript TypeScript
+import { b } from './baml_client'
+import { WeatherAPI, MyOtherAPI } from './baml_client/types'
+
+const main = async () => {
+  const tool = await b.UseTool("What's the weather like in San Francisco?")
+  console.log(tool)
+  
+  if (tool instanceof WeatherAPI) {
+    console.log("Weather API called:")
+    console.log(`City: ${tool.city}`)
+    console.log(`Time of Day: ${tool.timeOfDay}`)
+  } else if (tool instanceof MyOtherAPI) {
+    console.log("MyOtherAPI called:")
+    // Handle MyOtherAPI specific attributes here
+  }
+}
+
+main()
+```
+
+```ruby Ruby
+require_relative "baml_client/client"
+
+$b = Baml.Client
+
+def main
+  tool = $b.UseTool(user_message: "What's the weather like in San Francisco?")
+  puts tool
+  
+  case tool
+  when Baml::Types::WeatherAPI
+    puts "Weather API called:"
+    puts "City: #{tool.city}"
+    puts "Time of Day: #{tool.timeOfDay}"
+  when Baml::Types::MyOtherAPI
+    puts "MyOtherAPI called:"
+    # Handle MyOtherAPI specific attributes here
+  end
+end
+
+main
+```
+</CodeGroup>
+
 ## Choosing N Tools
 To choose many tools, you can use a union of a list:
 ```baml BAML
@@ -54,10 +170,89 @@ function UseTool(user_message: string) -> (WeatherAPI | MyOtherAPI)[] {
 }
 ```
 
+Call the function like this:
+
+<CodeGroup>
+```python Python
+import asyncio
+from baml_client import b
+from baml_client.types import WeatherAPI, MyOtherAPI
+
+async def main():
+    tools = await b.UseTool("What's the weather like in San Francisco and New York?")
+    print(tools)
+    
+    for tool in tools:
+        if isinstance(tool, WeatherAPI):
+            print(f"Weather API called:")
+            print(f"City: {tool.city}")
+            print(f"Time of Day: {tool.timeOfDay}")
+        elif isinstance(tool, MyOtherAPI):
+            print(f"MyOtherAPI called:")
+            # Handle MyOtherAPI specific attributes here
+
+if __name__ == '__main__':
+    asyncio.run(main())
+```
+
+```typescript TypeScript
+import { b } from './baml_client'
+import { WeatherAPI, MyOtherAPI } from './baml_client/types'
+
+const main = async () => {
+  const tools = await b.UseTool("What's the weather like in San Francisco and New York?")
+  console.log(tools)
+  
+  tools.forEach(tool => {
+    if (tool instanceof WeatherAPI) {
+      console.log("Weather API called:")
+      console.log(`City: ${tool.city}`)
+      console.log(`Time of Day: ${tool.timeOfDay}`)
+    } else if (tool instanceof MyOtherAPI) {
+      console.log("MyOtherAPI called:")
+      // Handle MyOtherAPI specific attributes here
+    }
+  })
+}
+
+main()
+```
+
+```ruby Ruby
+require_relative "baml_client/client"
+
+$b = Baml.Client
+
+def main
+  tools = $b.UseTool(user_message: "What's the weather like in San Francisco and New York?")
+  puts tools
+  
+  tools.each do |tool|
+    case tool
+    when Baml::Types::WeatherAPI
+      puts "Weather API called:"
+      puts "City: #{tool.city}"
+      puts "Time of Day: #{tool.timeOfDay}"
+    when Baml::Types::MyOtherAPI
+      puts "MyOtherAPI called:"
+      # Handle MyOtherAPI specific attributes here
+    end
+  end
+end
+
+main
+```
+</CodeGroup>
+
 ## Function-calling APIs vs Prompting
-Injecting your function schemas into the prompt, as BAML does, outperforms function-calling across all benchmarks for major providers (see [Berkeley's Function-calling Leaderboard](https://gorilla.cs.berkeley.edu/leaderboard.html), where "Prompt" outperforms "FC").
+Injecting your function schemas into the prompt, as BAML does, outperforms function-calling across all benchmarks for major providers ([see our Berkeley FC Benchmark results with BAML](https://www.boundaryml.com/blog/sota-function-calling?q=0)).
+
+Amongst other limitations, function-calling APIs will at times:
+1. Return a schema when you don't want any (you want an error)
+2. Not work for tools with more than 100 parameters.
+3. Use [many more tokens than prompting](https://www.boundaryml.com/blog/type-definition-prompting-baml).
 
 Keep in mind that "JSON mode" is nearly the same thing as "prompting", but it enforces the LLM response is ONLY a JSON blob.
-BAML does not use JSON mode since it allows developers to use better prompting techniques like chain-of-thought, to allow the LLM to express its reasoning before printing out the actual schema. BAML's parser can find the json schema(s) out of free-form text for you.
+BAML does not use JSON mode since it allows developers to use better prompting techniques like chain-of-thought, to allow the LLM to express its reasoning before printing out the actual schema. BAML's parser can find the json schema(s) out of free-form text for you. Read more about different approaches to structured generation [here](https://www.boundaryml.com/blog/schema-aligned-parsing)
 
-BAML may support native function-calling APIs in the future (please let us know more about your use-case so we can prioritize accordingly)
+BAML will still support native function-calling APIs in the future (please let us know more about your use-case so we can prioritize accordingly)
