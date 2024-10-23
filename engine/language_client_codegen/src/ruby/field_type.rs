@@ -1,6 +1,8 @@
 
 use baml_types::{BamlMediaType, FieldType, TypeValue};
 
+use crate::field_type_attributes;
+
 use super::ruby_language_features::ToRuby;
 
 impl ToRuby for FieldType {
@@ -46,6 +48,17 @@ impl ToRuby for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => format!("T.nilable({})", inner.to_ruby()),
+            FieldType::Constrained{base,..} => {
+                match field_type_attributes(self) {
+                    Some(_) => {
+                        let base_type_ref = base.to_ruby();
+                        format!("Baml::Checked[{base_type_ref}]")
+                    }
+                    None => {
+                        base.to_ruby()
+                    }
+                }
+            }
         }
     }
 }

@@ -25,3 +25,4 @@ sugar_path = "1.2.0"
 walkdir.workspace = true
 semver = "1.0.23"
 colored = "2.1.0"
+itertools = "0.13.0"

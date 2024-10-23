@@ -138,21 +138,21 @@ pub(crate) fn parse_generator(
     };
 
     match parse_required_key(&args, "test_command", ast_generator.span()) {
-        Ok(name) => (),
+        Ok(_name) => (),
         Err(err) => {
             errors.push(err);
         }
     };
 
     match parse_required_key(&args, "install_command", ast_generator.span()) {
-        Ok(name) => (),
+        Ok(_name) => (),
         Err(err) => {
             errors.push(err);
         }
     };
 
     match parse_required_key(&args, "package_version_command", ast_generator.span()) {
-        Ok(name) => (),
+        Ok(_name) => (),
         Err(err) => {
             errors.push(err);
         }

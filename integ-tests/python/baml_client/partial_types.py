@@ -74,6 +74,12 @@ class CompoundBigNumbers(BaseModel):
     big_nums: List["BigNumbers"]
     another: Optional["BigNumbers"] = None
 
+class ContactInfo(BaseModel):
+    
+    
+    primary: Optional[Union["PhoneNumber", "EmailAddress"]] = None
+    secondary: Optional[Union["PhoneNumber", "EmailAddress", Optional[None]]] = None
+
 class CustomTaskResult(BaseModel):
     
     
@@ -112,6 +118,11 @@ class DynamicOutput(BaseModel):
     model_config = ConfigDict(extra='allow')
     
 
+class Earthling(BaseModel):
+    
+    
+    age: baml_py.Checked[Optional[int],Literal["earth_aged", "no_infants"]]
+
 class Education(BaseModel):
     
     
@@ -127,6 +138,11 @@ class Email(BaseModel):
     subject: Optional[str] = None
     body: Optional[str] = None
     from_address: Optional[str] = None
+
+class EmailAddress(BaseModel):
+    
+    
+    value: baml_py.Checked[Optional[str],Literal["valid_email"]]
 
 class Event(BaseModel):
     
@@ -149,6 +165,13 @@ class FlightConfirmation(BaseModel):
     departureTime: Optional[str] = None
     arrivalTime: Optional[str] = None
     seatNumber: Optional[str] = None
+
+class FooAny(BaseModel):
+    
+    
+    planetary_age: Optional[Union["Martian", "Earthling"]] = None
+    certainty: baml_py.Checked[Optional[int],Literal["unreasonably_certain"]]
+    species: baml_py.Checked[Optional[str],Literal["regex_bad", "regex_good", "trivial"]]
 
 class GroceryReceipt(BaseModel):
     
@@ -182,6 +205,21 @@ class InputClassNested(BaseModel):
     
     key: Optional[str] = None
     nested: Optional["InputClass"] = None
+
+class MalformedConstraints(BaseModel):
+    
+    
+    foo: baml_py.Checked[Optional[int],Literal["foo_check"]]
+
+class MalformedConstraints2(BaseModel):
+    
+    
+    foo: Optional[int] = None
+
+class Martian(BaseModel):
+    
+    
+    age: baml_py.Checked[Optional[int],Literal["young_enough"]]
 
 class NamedArgsSingleClass(BaseModel):
     
@@ -240,6 +278,11 @@ class Person(BaseModel):
     
     name: Optional[str] = None
     hair_color: Optional[Union[types.Color, str]] = None
+
+class PhoneNumber(BaseModel):
+    
+    
+    value: baml_py.Checked[Optional[str],Literal["valid_phone_number"]]
 
 class Quantity(BaseModel):
     
@@ -342,6 +385,13 @@ class TestOutputClass(BaseModel):
     
     prop1: Optional[str] = None
     prop2: Optional[int] = None
+
+class TwoStoriesOneTitle(BaseModel):
+    
+    
+    title: Optional[str] = None
+    story_a: Optional[str] = None
+    story_b: Optional[str] = None
 
 class UnionTest_ReturnType(BaseModel):
     

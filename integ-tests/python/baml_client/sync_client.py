@@ -552,6 +552,29 @@ class BamlSyncClient:
       )
       return cast(str, raw.cast_to(types, types))
     
+    def ExtractContactInfo(
+        self,
+        document: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.ContactInfo:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "ExtractContactInfo",
+        {
+          "document": document,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(types.ContactInfo, raw.cast_to(types, types))
+    
     def ExtractHobby(
         self,
         text: str,
@@ -1127,6 +1150,52 @@ class BamlSyncClient:
       )
       return cast(List[Optional[types.OptionalTest_ReturnType]], raw.cast_to(types, types))
     
+    def PredictAge(
+        self,
+        name: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.FooAny:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "PredictAge",
+        {
+          "name": name,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(types.FooAny, raw.cast_to(types, types))
+    
+    def PredictAgeBare(
+        self,
+        inp: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.Checked[int,types.Literal["too_big"]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "PredictAgeBare",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(baml_py.Checked[int,types.Literal["too_big"]], raw.cast_to(types, types))
+    
     def PromptTestClaude(
         self,
         input: str,
@@ -1288,6 +1357,52 @@ class BamlSyncClient:
       )
       return cast(str, raw.cast_to(types, types))
     
+    def ReturnFailingAssert(
+        self,
+        inp: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "ReturnFailingAssert",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(int, raw.cast_to(types, types))
+    
+    def ReturnMalformedConstraints(
+        self,
+        a: int,
+        baml_options: BamlCallOptions = {},
+    ) -> types.MalformedConstraints:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "ReturnMalformedConstraints",
+        {
+          "a": a,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(types.MalformedConstraints, raw.cast_to(types, types))
+    
     def SchemaDescriptions(
         self,
         input: str,
@@ -1333,6 +1448,29 @@ class BamlSyncClient:
         __cr__,
       )
       return cast(types.BigNumbers, raw.cast_to(types, types))
+    
+    def StreamFailingAssertion(
+        self,
+        theme: str,length: int,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TwoStoriesOneTitle:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "StreamFailingAssertion",
+        {
+          "theme": theme,"length": length,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(types.TwoStoriesOneTitle, raw.cast_to(types, types))
     
     def StreamOneBigNumber(
         self,
@@ -2116,6 +2254,29 @@ class BamlSyncClient:
       )
       return cast(types.UnionTest_ReturnType, raw.cast_to(types, types))
     
+    def UseMalformedConstraints(
+        self,
+        a: types.MalformedConstraints2,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "UseMalformedConstraints",
+        {
+          "a": a,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(int, raw.cast_to(types, types))
+    
 
 
 
@@ -2786,6 +2947,36 @@ class BamlStreamClient:
         raw,
         lambda x: cast(Optional[str], x.cast_to(types, partial_types)),
         lambda x: cast(str, x.cast_to(types, types)),
+        self.__ctx_manager.get(),
+      )
+    
+    def ExtractContactInfo(
+        self,
+        document: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.ContactInfo, types.ContactInfo]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "ExtractContactInfo",
+        {
+          "document": document,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlSyncStream[partial_types.ContactInfo, types.ContactInfo](
+        raw,
+        lambda x: cast(partial_types.ContactInfo, x.cast_to(types, partial_types)),
+        lambda x: cast(types.ContactInfo, x.cast_to(types, types)),
         self.__ctx_manager.get(),
       )
     
@@ -3541,6 +3732,66 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def PredictAge(
+        self,
+        name: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.FooAny, types.FooAny]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "PredictAge",
+        {
+          "name": name,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlSyncStream[partial_types.FooAny, types.FooAny](
+        raw,
+        lambda x: cast(partial_types.FooAny, x.cast_to(types, partial_types)),
+        lambda x: cast(types.FooAny, x.cast_to(types, types)),
+        self.__ctx_manager.get(),
+      )
+    
+    def PredictAgeBare(
+        self,
+        inp: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[baml_py.Checked[Optional[int],types.Literal["too_big"]], baml_py.Checked[int,types.Literal["too_big"]]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "PredictAgeBare",
+        {
+          "inp": inp,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlSyncStream[baml_py.Checked[Optional[int],types.Literal["too_big"]], baml_py.Checked[int,types.Literal["too_big"]]](
+        raw,
+        lambda x: cast(baml_py.Checked[Optional[int],types.Literal["too_big"]], x.cast_to(types, partial_types)),
+        lambda x: cast(baml_py.Checked[int,types.Literal["too_big"]], x.cast_to(types, types)),
+        self.__ctx_manager.get(),
+      )
+    
     def PromptTestClaude(
         self,
         input: str,
@@ -3751,6 +4002,66 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def ReturnFailingAssert(
+        self,
+        inp: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[int], int]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "ReturnFailingAssert",
+        {
+          "inp": inp,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlSyncStream[Optional[int], int](
+        raw,
+        lambda x: cast(Optional[int], x.cast_to(types, partial_types)),
+        lambda x: cast(int, x.cast_to(types, types)),
+        self.__ctx_manager.get(),
+      )
+    
+    def ReturnMalformedConstraints(
+        self,
+        a: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.MalformedConstraints, types.MalformedConstraints]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "ReturnMalformedConstraints",
+        {
+          "a": a,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlSyncStream[partial_types.MalformedConstraints, types.MalformedConstraints](
+        raw,
+        lambda x: cast(partial_types.MalformedConstraints, x.cast_to(types, partial_types)),
+        lambda x: cast(types.MalformedConstraints, x.cast_to(types, types)),
+        self.__ctx_manager.get(),
+      )
+    
     def SchemaDescriptions(
         self,
         input: str,
@@ -3808,6 +4119,37 @@ class BamlStreamClient:
         raw,
         lambda x: cast(partial_types.BigNumbers, x.cast_to(types, partial_types)),
         lambda x: cast(types.BigNumbers, x.cast_to(types, types)),
+        self.__ctx_manager.get(),
+      )
+    
+    def StreamFailingAssertion(
+        self,
+        theme: str,length: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "StreamFailingAssertion",
+        {
+          "theme": theme,
+          "length": length,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlSyncStream[partial_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle](
+        raw,
+        lambda x: cast(partial_types.TwoStoriesOneTitle, x.cast_to(types, partial_types)),
+        lambda x: cast(types.TwoStoriesOneTitle, x.cast_to(types, types)),
         self.__ctx_manager.get(),
       )
     
@@ -4827,6 +5169,36 @@ class BamlStreamClient:
         raw,
         lambda x: cast(partial_types.UnionTest_ReturnType, x.cast_to(types, partial_types)),
         lambda x: cast(types.UnionTest_ReturnType, x.cast_to(types, types)),
+        self.__ctx_manager.get(),
+      )
+    
+    def UseMalformedConstraints(
+        self,
+        a: types.MalformedConstraints2,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[int], int]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "UseMalformedConstraints",
+        {
+          "a": a,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlSyncStream[Optional[int], int](
+        raw,
+        lambda x: cast(Optional[int], x.cast_to(types, partial_types)),
+        lambda x: cast(int, x.cast_to(types, types)),
         self.__ctx_manager.get(),
       )
     

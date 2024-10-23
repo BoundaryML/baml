@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use baml_types::{FieldType, LiteralValue, TypeValue};
+use baml_types::{FieldType, LiteralValue, TypeValue, Constraint};
 use indexmap::{IndexMap, IndexSet};
 
 #[derive(Debug)]
@@ -34,18 +34,23 @@ impl Name {
     }
 }
 
+// TODO: (Greg) Enum needs to carry its constraints.
 #[derive(Debug)]
 pub struct Enum {
     pub name: Name,
     // name and description
     pub values: Vec<(Name, Option<String>)>,
+    pub constraints: Vec<Constraint>,
 }
 
+/// The components of a Class needed to render `OutputFormatContent`.
+/// This type is also used by `jsonish` to drive flexible parsing.
 #[derive(Debug)]
 pub struct Class {
     pub name: Name,
-    // type and description
+    // fields have name, type and description.
     pub fields: Vec<(Name, FieldType, Option<String>)>,
+    pub constraints: Vec<Constraint>,
 }
 
 #[derive(Debug, Clone)]
@@ -227,10 +232,8 @@ impl OutputFormatContent {
     }
 
     fn prefix<'a>(&self, options: &'a RenderOptions) -> Option<&'a str> {
-        match &options.prefix {
-            RenderSetting::Always(prefix) => Some(prefix.as_str()),
-            RenderSetting::Never => None,
-            RenderSetting::Auto => match &self.target {
+        fn auto_prefix(ft: &FieldType) -> Option<&'static str> {
+            match ft {
                 FieldType::Primitive(TypeValue::String) => None,
                 FieldType::Primitive(_) => Some("Answer as a: "),
                 FieldType::Literal(_) => Some("Answer using this specific value:\n"),
@@ -241,7 +244,13 @@ impl OutputFormatContent {
                 FieldType::Optional(_) => Some("Answer in JSON using this schema:\n"),
                 FieldType::Map(_, _) => Some("Answer in JSON using this schema:\n"),
                 FieldType::Tuple(_) => None,
-            },
+                FieldType::Constrained { base, .. } => auto_prefix(base),
+            }
+        }
+        match &options.prefix {
+            RenderSetting::Always(prefix) => Some(prefix.as_str()),
+            RenderSetting::Never => None,
+            RenderSetting::Auto => auto_prefix(&self.target),
         }
     }
 
@@ -287,6 +296,9 @@ impl OutputFormatContent {
                 LiteralValue::Int(i) => i.to_string(),
                 LiteralValue::Bool(b) => b.to_string(),
             },
+            FieldType::Constrained { base, .. } => {
+                self.inner_type_render(options, base, render_state, group_hoisted_literals)?
+            }
             FieldType::Enum(e) => {
                 let Some(enm) = self.enums.get(e) else {
                     return Err(minijinja::Error::new(
@@ -523,6 +535,7 @@ mod tests {
                 (Name::new("Green".to_string()), None),
                 (Name::new("Blue".to_string()), None),
             ],
+            constraints: Vec::new(),
         });
 
         let content = OutputFormatContent::new(enums, vec![], FieldType::Enum("Color".to_string()));
@@ -553,6 +566,7 @@ mod tests {
                     Some("The person's age".to_string()),
                 ),
             ],
+            constraints: Vec::new(),
         });
 
         let content =
@@ -589,6 +603,7 @@ mod tests {
                     None,
                 ),
             ],
+            constraints: Vec::new(),
         });
 
         let content =

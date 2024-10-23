@@ -1,10 +1,13 @@
-use baml_types::{BamlMap, BamlMediaType, BamlValue, FieldType, LiteralValue, TypeValue};
+use baml_types::{
+    BamlMap, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, LiteralValue, TypeValue
+};
 use core::result::Result;
 use std::path::PathBuf;
 
 use crate::ir::IntermediateRepr;
 
 use super::{scope_diagnostics::ScopeStack, IRHelper};
+use crate::ir::jinja_helpers::evaluate_predicate;
 
 #[derive(Default)]
 pub struct ParameterError {
@@ -39,8 +42,8 @@ impl ArgCoercer {
         value: &BamlValue, // original value passed in by user
         scope: &mut ScopeStack,
     ) -> Result<BamlValue, ()> {
-        match field_type {
-            FieldType::Primitive(t) => match t {
+        let value = match field_type.distribute_constraints() {
+            (FieldType::Primitive(t), _) => match t {
                 TypeValue::String if matches!(value, BamlValue::String(_)) => Ok(value.clone()),
                 TypeValue::String if self.allow_implicit_cast_to_string => match value {
                     BamlValue::Int(i) => Ok(BamlValue::String(i.to_string())),
@@ -170,7 +173,7 @@ impl ArgCoercer {
                     Err(())
                 }
             },
-            FieldType::Enum(name) => match value {
+            (FieldType::Enum(name), _) => match value {
                 BamlValue::String(s) => {
                     if let Ok(e) = ir.find_enum(name) {
                         if e.walk_values().find(|v| v.item.elem.0 == *s).is_some() {
@@ -198,7 +201,7 @@ impl ArgCoercer {
                     Err(())
                 }
             },
-            FieldType::Literal(literal) => Ok(match (literal, value) {
+            (FieldType::Literal(literal), _) => Ok(match (literal, value) {
                 (LiteralValue::Int(lit), BamlValue::Int(baml)) if lit == baml => value.clone(),
                 (LiteralValue::String(lit), BamlValue::String(baml)) if lit == baml => {
                     value.clone()
@@ -209,8 +212,8 @@ impl ArgCoercer {
                     return Err(());
                 }
             }),
-            FieldType::Class(name) => match value {
-                BamlValue::Class(n, _) if n == name => return Ok(value.clone()),
+            (FieldType::Class(name), _) => match value {
+                BamlValue::Class(n, _) if n == name => Ok(value.clone()),
                 BamlValue::Class(_, obj) | BamlValue::Map(obj) => match ir.find_class(name) {
                     Ok(c) => {
                         let mut fields = BamlMap::new();
@@ -259,7 +262,7 @@ impl ArgCoercer {
                     Err(())
                 }
             },
-            FieldType::List(item) => match value {
+            (FieldType::List(item), _) => match value {
                 BamlValue::List(arr) => {
                     let mut items = Vec::new();
                     for v in arr {
@@ -274,11 +277,11 @@ impl ArgCoercer {
                     Err(())
                 }
             },
-            FieldType::Tuple(_) => {
+            (FieldType::Tuple(_), _) => {
                 scope.push_error(format!("Tuples are not yet supported"));
                 Err(())
             }
-            FieldType::Map(k, v) => {
+            (FieldType::Map(k, v), _) => {
                 if let BamlValue::Map(kv) = value {
                     let mut map = BamlMap::new();
                     for (key, value) in kv {
@@ -300,18 +303,27 @@ impl ArgCoercer {
                     Err(())
                 }
             }
-            FieldType::Union(options) => {
+            (FieldType::Union(options), _) => {
+                let mut first_good_result = Err(());
                 for option in options {
                     let mut scope = ScopeStack::new();
-                    let result = self.coerce_arg(ir, option, value, &mut scope);
-                    if !scope.has_errors() {
-                        return result;
+                    if first_good_result.is_err() {
+                        let result = self.coerce_arg(ir, option, value, &mut scope);
+                        if !scope.has_errors() {
+                            if first_good_result.is_err() {
+                            first_good_result = result
+                            }
+                        }
                     }
                 }
-                scope.push_error(format!("Expected one of {:?}, got `{}`", options, value));
-                Err(())
+                if first_good_result.is_err(){
+                    scope.push_error(format!("Expected one of {:?}, got `{}`", options, value));
+                    Err(())
+                } else {
+                    first_good_result
+                }
             }
-            FieldType::Optional(inner) => {
+            (FieldType::Optional(inner), _) => {
                 if matches!(value, BamlValue::Null) {
                     Ok(value.clone())
                 } else {
@@ -325,6 +337,57 @@ impl ArgCoercer {
                     }
                 }
             }
+            (FieldType::Constrained { .. }, _) => {
+                unreachable!("The return value of distribute_constraints can never be FieldType::Constrainted");
+            }
+        }?;
+
+
+        let search_for_failures_result = first_failing_assert_nested(ir, &value, field_type).map_err(|e| {
+            scope.push_error(format!("Failed to evaluate assert: {:?}", e));
+            ()
+        })?;
+        match search_for_failures_result {
+            Some(Constraint {label, expression, ..}) => {
+                let msg = label.as_ref().unwrap_or(&expression.0);
+                scope.push_error(format!("Failed assert: {msg}"));
+                Ok(value)
+            }
+            None => Ok(value)
         }
     }
+}
+
+/// Search a potentially deeply-nested `BamlValue` for any failing asserts,
+/// returning the first one encountered.
+fn first_failing_assert_nested<'a>(
+    ir: &'a IntermediateRepr,
+    baml_value: &BamlValue,
+    field_type: &'a FieldType
+) -> anyhow::Result<Option<Constraint>> {
+    let value_with_types = ir.distribute_type(baml_value.clone(), field_type.clone())?;
+    let first_failure = value_with_types
+        .iter()
+        .map(|value_node| {
+            let (_, constraints) = value_node.meta().distribute_constraints();
+            constraints.into_iter().filter_map(|c| {
+                let constraint = c.clone();
+                let baml_value: BamlValue = value_node.into();
+                let result = evaluate_predicate(&&baml_value, &c.expression).map_err(|e| {
+                    anyhow::anyhow!(format!("Error evaluating constraint: {:?}", e))
+                });
+                match result {
+                    Ok(false) => if c.level == ConstraintLevel::Assert {Some(Ok(constraint))} else { None },
+                    Ok(true) => None,
+                    Err(e) => Some(Err(e))
+
+                }
+            })
+            .collect::<Vec<_>>()
+        })
+        .map(|x| x.into_iter())
+        .flatten()
+        .next();
+    first_failure.transpose()
+
 }

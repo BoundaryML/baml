@@ -118,7 +118,7 @@ impl<'a> Visualize for FunctionResult {
             ));
         }
         s.push(self.llm_response().visualize(max_chunk_size));
-        match self.parsed() {
+        match self.result_with_constraints() {
             Some(Ok(val)) => {
                 let val: BamlValue = val.into();
                 s.push(format!(
@@ -292,7 +292,7 @@ impl BamlTracer {
 
         if let Ok(response) = &response {
             let name = event_chain.last().map(|s| s.name.as_str());
-            let is_ok = response.parsed().as_ref().is_some_and(|r| r.is_ok());
+            let is_ok = response.result_with_constraints().as_ref().is_some_and(|r| r.is_ok());
             log::log!(
                 target: "baml_events",
                 if is_ok { log::Level::Info } else { log::Level::Warn },
@@ -339,7 +339,7 @@ impl BamlTracer {
 
         if let Ok(response) = &response {
             let name = event_chain.last().map(|s| s.name.as_str());
-            let is_ok = response.parsed().as_ref().is_some_and(|r| r.is_ok());
+            let is_ok = response.result_with_constraints().as_ref().is_some_and(|r| r.is_ok());
             log::log!(
                 target: "baml_events",
                 if is_ok { log::Level::Info } else { log::Level::Warn },
@@ -461,7 +461,7 @@ impl From<&BamlValue> for IOValue {
 }
 
 fn error_from_result(result: &FunctionResult) -> Option<api_wrapper::core_types::Error> {
-    match result.parsed() {
+    match result.result_with_constraints() {
         Some(Ok(_)) => None,
         Some(Err(e)) => Some(api_wrapper::core_types::Error {
             code: 2,
@@ -607,7 +607,7 @@ impl ToLogSchema for FunctionResult {
             io: IO {
                 input: Some((&span.params).into()),
                 output: self
-                    .parsed()
+                    .result_with_constraints()
                     .as_ref()
                     .map(|r| r.as_ref().ok())
                     .flatten()
@@ -628,7 +628,7 @@ impl From<&FunctionResult> for MetadataType {
             result
                 .event_chain()
                 .iter()
-                .map(|(_, r, _)| r.into())
+                .map(|(_, r, _, _)| r.into())
                 .collect::<Vec<_>>(),
         )
     }

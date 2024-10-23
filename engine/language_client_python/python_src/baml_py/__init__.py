@@ -18,6 +18,7 @@ from .baml_py import (
 )
 from .stream import BamlStream, BamlSyncStream
 from .ctx_manager import CtxManager as BamlCtxManager
+from .constraints import Check, Checked
 
 __all__ = [
     "BamlRuntime",

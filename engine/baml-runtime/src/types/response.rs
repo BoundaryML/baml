@@ -1,16 +1,18 @@
 pub use crate::internal::llm_client::LLMResponse;
-use crate::{errors::ExposedError, internal::llm_client::orchestrator::OrchestrationScope};
+use crate::{errors::ExposedError, internal::llm_client::{orchestrator::OrchestrationScope, ResponseBamlValue}};
 use anyhow::Result;
 use colored::*;
 
 use baml_types::BamlValue;
 use jsonish::BamlValueWithFlags;
 
+#[derive(Debug)]
 pub struct FunctionResult {
     event_chain: Vec<(
         OrchestrationScope,
         LLMResponse,
-        Option<Result<jsonish::BamlValueWithFlags>>,
+        Option<Result<BamlValueWithFlags>>,
+        Option<Result<ResponseBamlValue>>,
     )>,
 }
 
@@ -25,9 +27,8 @@ impl std::fmt::Display for FunctionResult {
             )?;
         }
         writeln!(f, "{}", self.llm_response())?;
-        match &self.parsed() {
+        match &self.result_with_constraints() {
             Some(Ok(val)) => {
-                let val: BamlValue = val.into();
                 writeln!(
                     f,
                     "{}",
@@ -49,9 +50,10 @@ impl FunctionResult {
         scope: OrchestrationScope,
         response: LLMResponse,
         parsed: Option<Result<BamlValueWithFlags>>,
+        baml_value: Option<Result<ResponseBamlValue>>,
     ) -> Self {
         Self {
-            event_chain: vec![(scope, response, parsed)],
+            event_chain: vec![(scope, response, parsed, baml_value)],
         }
     }
 
@@ -61,6 +63,7 @@ impl FunctionResult {
         OrchestrationScope,
         LLMResponse,
         Option<Result<BamlValueWithFlags>>,
+        Option<Result<ResponseBamlValue>>,
     )> {
         &self.event_chain
     }
@@ -70,6 +73,7 @@ impl FunctionResult {
             OrchestrationScope,
             LLMResponse,
             Option<Result<BamlValueWithFlags>>,
+            Option<Result<ResponseBamlValue>>,
         )>,
     ) -> Result<Self> {
         if chain.is_empty() {
@@ -95,46 +99,81 @@ impl FunctionResult {
         &self.event_chain.last().unwrap().2
     }
 
+    /// Get the parsed result. This logic is strange because parsing errors can
+    /// be forwarded to a different field in the orchestrator.
+    /// TODO: (Greg) Fix the strange logic.
+    /// Historical note: Most of the consumers of the orchestrator use a final
+    /// `ResponseBamlValue`, a type designed to hold only the information needed
+    /// in those responses. But one consumer, the wasm client, requires extra info
+    /// from the parsing stage. Therefore we preserve both the parsing stage data
+    /// and the `ResponseValue` side by side. And because `anyhow::Error` is not
+    /// `Clone`, errors from the parsing stage are handled the most easily by
+    /// migrating them to the `ResponseValue` in cases where parsing failed.
+    /// The proper solution is to create a `RuntimeBamlValue` that contains
+    /// enough information for all clients, and then types like
+    /// `SDKClientResponseBamlValue` and `WasmResponseBamlValue` which derive
+    /// from `RuntimeBamlValue` where needed.
     pub fn parsed_content(&self) -> Result<&BamlValueWithFlags> {
-        self.parsed()
+        match (self.parsed(), self.result_with_constraints()) {
+            // Error at parse time was forwarded to later result.
+            (None, Some(Err(e))) => Err(self.format_err(e)),
+            // Parsing succeeded.
+            (Some(Ok(v)), _) => Ok(v),
+            // Error at parse time was not forwarded to later results.
+            (Some(Err(e)), _) => Err(self.format_err(e)),
+            (None, None) => Err(anyhow::anyhow!(self.llm_response().clone())),
+            (None, Some(_)) => unreachable!("A response could not have been created without a successful parse")
+        }
+    }
+
+    pub fn result_with_constraints(&self) -> &Option<Result<ResponseBamlValue>> {
+        &self.event_chain.last().unwrap().3
+    }
+
+    pub fn result_with_constraints_content(&self) -> Result<&ResponseBamlValue> {
+        self.result_with_constraints()
             .as_ref()
             .map(|res| {
                 if let Ok(val) = res {
                     Ok(val)
                 } else {
-                    // Capture the actual error to preserve its details
-                    let actual_error = res.as_ref().err().unwrap().to_string();
-                    Err(anyhow::anyhow!(ExposedError::ValidationError {
-                        prompt: match self.llm_response() {
-                            LLMResponse::Success(resp) => resp.prompt.to_string(),
-                            LLMResponse::LLMFailure(err) => err.prompt.to_string(),
-                            _ => "N/A".to_string(),
-                        },
-                        raw_output: self
-                            .llm_response()
-                            .content()
-                            .unwrap_or_default()
-                            .to_string(),
-                        // The only branch that should be hit is LLMResponse::Success(_) since we
-                        // only call this function when we have a successful response.
-                        message: match self.llm_response() {
-                            LLMResponse::Success(_) =>
-                                format!("Failed to parse LLM response: {}", actual_error),
-                            LLMResponse::LLMFailure(err) => format!(
-                                "LLM Failure: {} ({}) - {}",
-                                err.message,
-                                err.code.to_string(),
-                                actual_error
-                            ),
-                            LLMResponse::UserFailure(err) =>
-                                format!("User Failure: {} - {}", err, actual_error),
-                            LLMResponse::InternalFailure(err) =>
-                                format!("Internal Failure: {} - {}", err, actual_error),
-                        },
-                    }))
+                    Err(self.format_err( res.as_ref().err().unwrap() ))
                 }
             })
             .unwrap_or_else(|| Err(anyhow::anyhow!(self.llm_response().clone())))
+    }
+
+    fn format_err(&self, err: &anyhow::Error) -> anyhow::Error {
+        // Capture the actual error to preserve its details
+        let actual_error = err.to_string();
+        anyhow::anyhow!(ExposedError::ValidationError {
+            prompt: match self.llm_response() {
+                LLMResponse::Success(resp) => resp.prompt.to_string(),
+                LLMResponse::LLMFailure(err) => err.prompt.to_string(),
+                _ => "N/A".to_string(),
+            },
+            raw_output: self
+                .llm_response()
+                .content()
+                .unwrap_or_default()
+                .to_string(),
+            // The only branch that should be hit is LLMResponse::Success(_) since we
+            // only call this function when we have a successful response.
+            message: match self.llm_response() {
+                LLMResponse::Success(_) =>
+                    format!("Failed to parse LLM response: {}", actual_error),
+                LLMResponse::LLMFailure(err) => format!(
+                    "LLM Failure: {} ({}) - {}",
+                    err.message,
+                    err.code.to_string(),
+                    actual_error
+                ),
+                LLMResponse::UserFailure(err) =>
+                    format!("User Failure: {} - {}", err, actual_error),
+                LLMResponse::InternalFailure(err) =>
+                    format!("Internal Failure: {} - {}", err, actual_error),
+            },
+        })
     }
 }
 
@@ -189,7 +228,7 @@ impl Eq for TestFailReason<'_> {}
 impl TestResponse {
     pub fn status(&self) -> TestStatus {
         let func_res = &self.function_response;
-        if let Some(parsed) = func_res.parsed() {
+        if let Some(parsed) = func_res.result_with_constraints() {
             if parsed.is_ok() {
                 TestStatus::Pass
             } else {
@@ -210,7 +249,7 @@ use std::process::Termination;
 #[cfg(test)]
 impl Termination for FunctionResult {
     fn report(self) -> std::process::ExitCode {
-        if self.parsed_content().is_ok() {
+        if self.result_with_constraints_content().is_ok() {
             std::process::ExitCode::SUCCESS
         } else {
             std::process::ExitCode::FAILURE

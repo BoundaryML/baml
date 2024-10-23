@@ -288,4 +288,11 @@ describe "ruby<->baml integration tests" do
     )
     assert_match(/london/, capitol.downcase)
   end
+
+  it "uses constraints for unions" do
+    res = b.ExtractContactInfo(document: "reach me at 888-888-8888, or try to email hello@boundaryml.com")
+    assert_equal res['primary']['value'].value, "888-888-8888"
+    print(res['primary']['value'].checks)
+    assert_equal res['primary']['value'].checks[:valid_phone_number].status, "succeeded"
+  end
 end

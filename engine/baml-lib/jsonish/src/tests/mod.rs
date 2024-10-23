@@ -6,6 +6,7 @@ pub mod macros;
 
 mod test_basics;
 mod test_class;
+mod test_constraints;
 mod test_enum;
 mod test_lists;
 mod test_literals;
@@ -18,7 +19,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_types::BamlValue;
+use baml_types::{BamlValue, Constraint, ConstraintLevel, JinjaExpression};
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
     ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType, IRHelper, TypeValue},
@@ -105,20 +106,22 @@ fn find_enum_value(
     Ok(Some((name, desc)))
 }
 
+// TODO: (Greg) Is the use of `String` as a hash key safe? Is there some way to
+// get a collision that results in some type not getting put onto the stack?
 fn relevant_data_models<'a>(
     ir: &'a IntermediateRepr,
     output: &'a FieldType,
     env_values: &HashMap<String, String>,
 ) -> Result<(Vec<Enum>, Vec<Class>)> {
-    let mut checked_types = HashSet::new();
+    let mut checked_types: HashSet<String> = HashSet::new();
     let mut enums = Vec::new();
-    let mut classes = Vec::new();
+    let mut classes: Vec<Class> = Vec::new();
     let mut start: Vec<baml_types::FieldType> = vec![output.clone()];
 
     while !start.is_empty() {
         let output = start.pop().unwrap();
-        match &output {
-            FieldType::Enum(enm) => {
+        match output.distribute_constraints() {
+            (FieldType::Enum(enm), constraints) => {
                 if checked_types.insert(output.to_string()) {
                     let walker = ir.find_enum(enm);
 
@@ -140,15 +143,16 @@ fn relevant_data_models<'a>(
                     enums.push(Enum {
                         name: Name::new_with_alias(enm.to_string(), walker?.alias(env_values)?),
                         values,
+                        constraints,
                     });
                 }
             }
-            FieldType::List(inner) | FieldType::Optional(inner) => {
+            (FieldType::List(inner), _constraints) | (FieldType::Optional(inner), _constraints) => {
                 if !checked_types.contains(&inner.to_string()) {
                     start.push(inner.as_ref().clone());
                 }
             }
-            FieldType::Map(k, v) => {
+            (FieldType::Map(k, v), _constraints) => {
                 if checked_types.insert(output.to_string()) {
                     if !checked_types.contains(&k.to_string()) {
                         start.push(k.as_ref().clone());
@@ -158,7 +162,7 @@ fn relevant_data_models<'a>(
                     }
                 }
             }
-            FieldType::Tuple(options) | FieldType::Union(options) => {
+            (FieldType::Tuple(options), _constraints) | (FieldType::Union(options), _constraints) => {
                 if checked_types.insert((&output).to_string()) {
                     for inner in options {
                         if !checked_types.contains(&inner.to_string()) {
@@ -167,7 +171,7 @@ fn relevant_data_models<'a>(
                     }
                 }
             }
-            FieldType::Class(cls) => {
+            (FieldType::Class(cls), constraints) => {
                 if checked_types.insert(output.to_string()) {
                     let walker = ir.find_class(&cls);
 
@@ -192,11 +196,15 @@ fn relevant_data_models<'a>(
                     classes.push(Class {
                         name: Name::new_with_alias(cls.to_string(), walker?.alias(env_values)?),
                         fields,
+                        constraints,
                     });
                 }
             }
-            FieldType::Primitive(_) => {}
-            FieldType::Literal(_) => {}
+            (FieldType::Literal(_), _) => {}
+            (FieldType::Primitive(_), _constraints) => {}
+            (FieldType::Constrained{..}, _) => {
+                unreachable!("It is guaranteed that a call to distribute_constraints will not return FieldType::Constrained")
+            }
         }
     }
 

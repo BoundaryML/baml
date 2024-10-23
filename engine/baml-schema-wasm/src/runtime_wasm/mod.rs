@@ -469,7 +469,7 @@ impl WasmLLMResponse {
 impl WasmFunctionResponse {
     pub fn parsed_response(&self) -> Option<String> {
         self.function_response
-            .parsed_content()
+            .result_with_constraints_content()
             .map(|p| serde_json::to_string(&BamlValue::from(p)))
             .map_or_else(|_| None, |s| s.ok())
     }
@@ -783,6 +783,7 @@ fn get_dummy_value(
             Some(format!("({},)", dummy))
         }
         baml_runtime::FieldType::Optional(_) => None,
+        baml_runtime::FieldType::Constrained{ base, .. } => get_dummy_value(indent, allow_multiline, t)
     }
 }
 

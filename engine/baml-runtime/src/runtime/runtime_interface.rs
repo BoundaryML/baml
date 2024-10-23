@@ -393,6 +393,7 @@ impl RuntimeInterface for InternalBamlRuntime {
                         e
                     )),
                     None,
+                    None,
                 ))
             }
         };

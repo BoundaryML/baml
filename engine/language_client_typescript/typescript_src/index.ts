@@ -11,6 +11,7 @@ export {
 } from './native'
 export { BamlStream } from './stream'
 export { BamlCtxManager } from './async_context_vars'
+export { Checked } from './checked'
 
 export class BamlValidationError extends Error {
   prompt: string
