@@ -54,7 +54,7 @@ pub fn from_str(
             if v.conditions()
                 .flags()
                 .iter()
-                .any(|f| matches!(f, Flag::InferedObject(jsonish::Value::String(_))))
+                .any(|f| matches!(f, Flag::InferredObject(jsonish::Value::String(_))))
             {
                 anyhow::bail!("Failed to coerce value: {:?}", v.conditions().flags());
             }
@@ -130,7 +130,7 @@ fn last_value_as_number(value: &mut Value) -> Vec<&mut Value> {
  *
  * Displaying partial results can be more harmful for certain datatypes,
  * like ints and floats, despite being useful for strings. This is because
- * the prefix of a number conveys something very differenet about the full
+ * the prefix of a number conveys something very different about the full
  * number than what the prefix of a string conveys about the full string.
  *
  * To prevent confusing users with streamed number prefixes, we have

@@ -4,9 +4,9 @@ use std::process::Command;
 
 fn check_ruby_version() -> Result<()> {
     // Run the 'ruby -v' command to get the Ruby version
-    let output = Command::new("ruby").arg("-v").output().context(format!(
-        "Failed while running 'ruby -v': Ruby does not appear to be installed"
-    ))?;
+    let output = Command::new("ruby").arg("-v").output().context(
+        "Failed while running 'ruby -v': Ruby does not appear to be installed".to_string()
+    )?;
 
     // Extract the version number from the string
     // Typical output: "ruby 3.0.0p0 (2020-12-25 revision 95aff21468) [x86_64-darwin20]"
@@ -33,7 +33,7 @@ fn check_clang_support() -> Result<()> {
     let output = Command::new("clang")
         .arg("--print-targets")
         .output()
-        .context(format!("Failed while running 'clang --print-targets'"))?;
+        .context("Failed while running 'clang --print-targets'".to_string())?;
 
     // Extract the version number from the string
     let target_list = String::from_utf8_lossy(&output.stdout);
@@ -94,9 +94,7 @@ fn main() {
         return;
     }
 
-    println!("");
-    println!("Please install mise and direnv to build BAML (instructions: https://www.notion.so/gloochat/To-build-BAML-0e9e3e9b583e40fb8fb040505b24d65f )");
-    println!("");
+    println!("\nPlease install mise and direnv to build BAML (instructions: https://www.notion.so/gloochat/To-build-BAML-0e9e3e9b583e40fb8fb040505b24d65f )\n");
     println!("The following errors occurred during build checks:");
     for error in errors {
         println!("{:#}", error);
@@ -114,7 +112,6 @@ fn main() {
         // the system Ruby, so the result is that rust-analyzer will soft fail on... I guess Linux?
         // which is a compromise I can live with for now.
         println!("Running inside rust-analyzer - will not induce build failure");
-        return;
     }
 
     // comment this out - might cause a build break

@@ -1,7 +1,6 @@
 use either::Either;
 use internal_baml_jinja_types::{PredefinedTypes, Type};
 use internal_baml_schema_ast::ast::{self, BlockArgs, Span, WithIdentifier, WithName, WithSpan};
-
 use crate::types::TemplateStringProperties;
 
 use super::Walker;

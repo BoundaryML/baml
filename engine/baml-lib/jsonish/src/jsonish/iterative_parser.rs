@@ -439,7 +439,7 @@ impl JsonParseState {
                             _ => return false,
                         }
                     }
-                    // If we faile, terminate the string
+                    // If we fail, terminate the string
                     true
                 }
                 x if closing_char == *x => {

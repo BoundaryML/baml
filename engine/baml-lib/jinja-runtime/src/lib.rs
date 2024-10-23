@@ -1849,7 +1849,7 @@ mod render_tests {
     }
 
     // See the note in baml_value_to_jinja_value.rs for Enum for why we don't support aliases.
-    // tl;dr we don't havea  way to override the equality operator for enum comparisons to NOT use the alias.
+    // tl;dr we don't have a way to override the equality operator for enum comparisons to NOT use the alias.
     // #[test]
     // fn test_render_prompt_with_enum() -> anyhow::Result<()> {
     //     setup_logging();

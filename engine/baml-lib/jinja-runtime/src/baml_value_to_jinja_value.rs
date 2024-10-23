@@ -42,7 +42,7 @@ impl IntoMiniJinjaValue for BamlValue {
             // For enums and classes we compute the aliases from the IR, and generate custom jinja structs that print out the alias if stringified.
             BamlValue::Enum(name, value) => {
                 minijinja::Value::from(value.clone())
-                // Until we can fix the broken test, just return the normal value. For now we wont suppport enum alias rendering.
+                // Until we can fix the broken test, just return the normal value. For now we wont support enum alias rendering.
                 // let mut alias: Option<String> = None;
                 // if let Ok(e) = ir.find_enum(name) {
                 //     if let Some(enum_value) = e

@@ -29,7 +29,7 @@ pub(crate) struct RubyStreamTypes<'ir> {
     partial_classes: Vec<PartialRubyStruct<'ir>>,
 }
 
-/// The Python class corresponding to Partial<TypeDefinedjInBaml>
+/// The Python class corresponding to Partial<TypeDefinedInBaml>
 struct PartialRubyStruct<'ir> {
     name: &'ir str,
     // the name, and the type of the field

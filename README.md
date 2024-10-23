@@ -185,7 +185,7 @@ Showcase of applications using BAML
 - [Aer Compliance](https://www.aercompliance.com/) - AI-powered compliance tasks
 - [Haven](https://www.usehaven.ai/) - Automate Tenant communications with AI
 - [Muckrock](https://www.muckrock.com/) - FOIA request tracking and filing
-- and more! [Let us know](https://calendly.com/boundaryml/meeting-with-founders) if you want to be showcased or want to work with us 1-1 to solve your usecase.
+- and more! [Let us know](https://calendly.com/boundaryml/meeting-with-founders) if you want to be showcased or want to work with us 1-1 to solve your use cases.
 
 ## Observability
 
@@ -227,7 +227,7 @@ BAML handles this and many more cases, such as identifying `Enums` in LLM string
 
 **Aliasing issues**
 
-Prompt engineering requires you to think carefully about what the name of each key in the schema is. Rather than changing your code everytime you want to try a new name out, you can alias fields to a different name and convert them back into the original field name during parsing.
+Prompt engineering requires you to think carefully about what the name of each key in the schema is. Rather than changing your code every time you want to try a new name out, you can alias fields to a different name and convert them back into the original field name during parsing.
 
 Here's how BAML differs from these frameworks:
 
@@ -302,7 +302,7 @@ We basically wanted [Jinja](https://jinja.palletsprojects.com/en/3.1.x/), but wi
 
 ### Does BAML use LLMs to generate code?
 
-No, the BAML dependency transpiles the code using Rust 🦀. It takes just a few milliseconds!
+No, the BAML dependency transpile the code using Rust 🦀. It takes just a few milliseconds!
 
 ### What does BAML stand for?
 

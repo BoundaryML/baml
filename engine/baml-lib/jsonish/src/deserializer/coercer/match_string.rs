@@ -49,10 +49,10 @@ pub(super) fn match_string(
         }
     };
 
-    // Trim whitespaces.
+    // Trim whitespace.
     let match_context = jsonish_string.trim();
 
-    // First attempt, case sensitive match ignoring possible pucntuation.
+    // First attempt, case sensitive match ignoring possible punctuation.
     if let Some(string_match) = string_match_strategy(&match_context, &candidates, &mut flags) {
         return try_match_only_once(parsing_context, target, string_match, flags);
     }
@@ -125,10 +125,10 @@ fn try_match_only_once(
 /// Heuristic string match algorithm.
 ///
 /// The algorithm is case sensitive so for case insensitive matches it must
-/// recieve lowercase strings. This algorithm will first try to look for exact
+/// receive lowercase strings. This algorithm will first try to look for exact
 /// matches in the input string, if it doesn't find any it will look for
 /// substring matches and return the one with the most matches. Whether that is
-/// an ambigous match or not is up to the caller to decide.
+/// an ambiguous match or not is up to the caller to decide.
 fn string_match_strategy<'c>(
     value_str: &str,
     candidates: &'c [(&'c str, Vec<String>)],
@@ -148,7 +148,7 @@ fn string_match_strategy<'c>(
         let match_count_pos = valid_names
             .iter()
             .filter_map(|valid_name| {
-                // Match ocurrences of valid name.
+                // Match occurrences of valid name.
                 let matches = value_str.match_indices(valid_name);
                 // Return (count, first_idx)
                 matches.fold(None, |acc, (idx, _)| match acc {

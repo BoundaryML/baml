@@ -202,7 +202,7 @@ impl ThreadedTracer {
                     ProcessorStatus::Done(r_id) if r_id >= id => {
                         return Ok(());
                     }
-                    ProcessorStatus::Done(id) => {
+                    ProcessorStatus::Done(_id) => {
                         // Old flush, ignore
                     }
                 }

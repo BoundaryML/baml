@@ -60,7 +60,7 @@ impl GeneratorArgs {
         Ok(Self {
             output_dir_relative_to_baml_src: output_dir_relative_to_baml_src.into(),
             baml_src_dir: baml_src.clone(),
-            // for the key, whhich is the name, just get the filename
+            // for the key, which is the name, just get the filename
             inlined_file_map: input_file_map,
             version,
             no_version_check,

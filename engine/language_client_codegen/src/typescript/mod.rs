@@ -101,8 +101,8 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for AsyncTypescri
     type Error = anyhow::Error;
 
     fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
-        let typscript_client = TypescriptClient::try_from(params)?;
-        Ok(typscript_client.into())
+        let typescript_client = TypescriptClient::try_from(params)?;
+        Ok(typescript_client.into())
     }
 }
 
@@ -110,8 +110,8 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for SyncTypescrip
     type Error = anyhow::Error;
 
     fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
-        let typscript_client = TypescriptClient::try_from(params)?;
-        Ok(typscript_client.into())
+        let typescript_client = TypescriptClient::try_from(params)?;
+        Ok(typescript_client.into())
     }
 }
 

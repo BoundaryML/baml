@@ -6,14 +6,14 @@ use super::Attributes;
 
 #[derive(Debug, Default)]
 pub struct EnumAttributes {
-    pub value_serilizers: HashMap<FieldId, Attributes>,
+    pub value_serializers: HashMap<FieldId, Attributes>,
 
-    pub serilizer: Option<Attributes>,
+    pub serializer: Option<Attributes>,
 }
 
 #[derive(Debug, Default)]
 pub struct ClassAttributes {
-    pub field_serilizers: HashMap<FieldId, Attributes>,
+    pub field_serializers: HashMap<FieldId, Attributes>,
 
-    pub serilizer: Option<Attributes>,
+    pub serializer: Option<Attributes>,
 }

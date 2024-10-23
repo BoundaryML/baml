@@ -261,7 +261,7 @@ class Vertex {
 class Edge {
   source_id string
   target_id string
-  // note, you could use an enum here if you know what rthe relationships are
+  // note, you could use an enum here if you know what the relationships are
   relationship string @description(#"
     A human-readable label for the edge, like 'knows' or "works_with", etc..
   "#)

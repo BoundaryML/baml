@@ -6,15 +6,15 @@ mod internal_tests {
     use std::any;
     use std::collections::HashMap;
 
+    use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
     use baml_runtime::BamlRuntime;
     use std::sync::Once;
 
-    use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
     use baml_runtime::InternalRuntimeInterface;
     use baml_types::BamlValue;
 
     use baml_runtime::{
-        internal::llm_client::LLMResponse, DiagnosticsError, IRHelper, RenderedPrompt,
+      internal::llm_client::LLMResponse, DiagnosticsError, IRHelper, RenderedPrompt,
     };
 
     use wasm_bindgen_test::*;

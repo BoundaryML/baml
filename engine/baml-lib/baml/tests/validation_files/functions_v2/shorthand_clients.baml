@@ -29,7 +29,7 @@ function InputEnum(color: Color) -> string {
   prompt #" color {{ color }} "#
 }
 
-// Try it with wierd spacing and comments
+// Try it with weird spacing and comments
 
 function InputEnum2(
   color: Color, 

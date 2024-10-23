@@ -79,13 +79,13 @@ impl<'db> ClassWalker<'db> {
                 .types
                 .enum_attributes
                 .get(&self.id)
-                .and_then(|f| f.serilizer.as_ref()),
+                .and_then(|f| f.serializer.as_ref()),
             _ => self
                 .db
                 .types
                 .class_attributes
                 .get(&self.id)
-                .and_then(|f| f.serilizer.as_ref()),
+                .and_then(|f| f.serializer.as_ref()),
         }
     }
 

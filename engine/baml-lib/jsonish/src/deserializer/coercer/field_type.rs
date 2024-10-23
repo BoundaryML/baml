@@ -93,7 +93,7 @@ impl DefaultValue for FieldType {
     fn default_value(&self, error: Option<&ParsingError>) -> Option<BamlValueWithFlags> {
         let get_flags = || {
             DeserializerConditions::new().with_flag(error.map_or(Flag::DefaultFromNoValue, |e| {
-                Flag::DefaultButHadUnparseableValue(e.clone())
+                Flag::DefaultButHadUnparsableValue(e.clone())
             }))
         };
 

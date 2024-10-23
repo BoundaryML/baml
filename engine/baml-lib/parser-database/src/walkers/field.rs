@@ -25,7 +25,7 @@ impl<'db> FieldWalker<'db> {
 
     /// Traverse the field's attributes.
     pub fn attributes(self) -> &'db Attributes {
-        &self.db.types.class_attributes[&self.id.0].field_serilizers[&self.id.1]
+        &self.db.types.class_attributes[&self.id.0].field_serializers[&self.id.1]
     }
 
     /// The field's default attributes.
@@ -35,7 +35,7 @@ impl<'db> FieldWalker<'db> {
             .types
             .class_attributes
             .get(&self.id.0)
-            .and_then(|f| f.field_serilizers.get(&self.id.1));
+            .and_then(|f| f.field_serializers.get(&self.id.1));
 
         result
     }

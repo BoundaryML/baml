@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
 use anyhow::Result;
 use internal_baml_core::{ast::Field, ir::FieldType};

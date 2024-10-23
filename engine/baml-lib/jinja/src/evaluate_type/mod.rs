@@ -194,7 +194,7 @@ impl TypeError {
             )
         };
 
-        Self { message: format!("{message}\n\nSee: https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions for the compelete list"), span }
+        Self { message: format!("{message}\n\nSee: https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions for the complete list"), span }
     }
 
     fn new_invalid_type(expr: &Expr, got: &Type, expected: &str, span: Span) -> Self {

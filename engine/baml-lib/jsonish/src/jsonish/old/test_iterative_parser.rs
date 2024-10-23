@@ -59,7 +59,7 @@ test_jsonish!(test_incomplete_string_in_object, r#"{"key": "value"#, {"key": "va
 
 // This is un-changed
 test_jsonish!(
-    test_prefixed_incompleted_string,
+    test_prefixed_incomplete_string,
     r#"prefix "hello"#,
     r#"prefix "hello"#
 );
@@ -156,7 +156,7 @@ test_jsonish!(
   ```json
   {
     "key": "value",
-    "array": [1, 2, 3, "some stinrg"with quotes"],
+    "array": [1, 2, 3, "some string"with quotes"],
     "object": {
       "key": "value"
     },
@@ -165,7 +165,7 @@ test_jsonish!(
   "#,
   {
     "key": "value",
-    "array": [1, 2, 3, "some stinrg\"with quotes"],
+    "array": [1, 2, 3, "some string\"with quotes"],
     "object": {
       "key": "value"
     }
@@ -179,7 +179,7 @@ test_jsonish!(
   ```json
   {
     "key": "value",
-    "array": [1, 2, 3, 'some stinrg'   with quotes' /* test */],
+    "array": [1, 2, 3, 'some string'   with quotes' /* test */],
     "object": { // Test comment
       "key": "value"
     },
@@ -188,7 +188,7 @@ test_jsonish!(
   "#,
   {
     "key": "value",
-    "array": [1, 2, 3, "some stinrg'   with quotes"],
+    "array": [1, 2, 3, "some string'   with quotes"],
     "object": {
       "key": "value"
     }

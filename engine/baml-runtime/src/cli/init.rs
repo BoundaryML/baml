@@ -1,5 +1,4 @@
 use std::{path::PathBuf, process::Command};
-
 use anyhow::Result;
 use baml_types::GeneratorOutputType;
 use include_dir::include_dir;

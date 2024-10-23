@@ -1,5 +1,4 @@
 use std::{collections::HashMap, path::PathBuf};
-
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -60,7 +59,7 @@ pub enum TypeSchemaName {
 #[serde(untagged)]
 pub enum ValueType {
     String(String),
-    // For mutli-args, we use a list of strings
+    // For multi-args, we use a list of strings
     List(Vec<String>),
 }
 
