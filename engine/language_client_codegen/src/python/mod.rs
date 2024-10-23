@@ -4,6 +4,7 @@ mod python_language_features;
 use std::path::PathBuf;
 
 use anyhow::Result;
+use generate_types::type_name_for_checks;
 use indexmap::IndexMap;
 use internal_baml_core::{
     configuration::GeneratorDefaultClientMode,
@@ -11,7 +12,7 @@ use internal_baml_core::{
 };
 
 use self::python_language_features::{PythonLanguageFeatures, ToPython};
-use crate::dir_writer::FileCollector;
+use crate::{dir_writer::FileCollector, field_type_attributes};
 
 #[derive(askama::Template)]
 #[template(path = "async_client.py.j2", escape = "none")]
@@ -109,7 +110,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonInit {
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonGlobals {
     type Error = anyhow::Error;
 
-    fn try_from((_, args): (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+    fn try_from((_, _args): (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
         Ok(PythonGlobals {})
     }
 }
@@ -157,12 +158,12 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
                         let (_function, _impl_) = c.item;
                         Ok(PythonFunction {
                             name: f.name().to_string(),
-                            partial_return_type: f.elem().output().to_partial_type_ref(ir),
-                            return_type: f.elem().output().to_type_ref(ir),
+                            partial_return_type: f.elem().output().to_partial_type_ref(ir, true),
+                            return_type: f.elem().output().to_type_ref(ir, true),
                             args: f
                                 .inputs()
                                 .iter()
-                                .map(|(name, r#type)| (name.to_string(), r#type.to_type_ref(ir)))
+                                .map(|(name, r#type)| (name.to_string(), r#type.to_type_ref(ir, false)))
                                 .collect(),
                         })
                     })
@@ -178,13 +179,13 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
 }
 
 trait ToTypeReferenceInClientDefinition {
-    fn to_type_ref(&self, ir: &IntermediateRepr) -> String;
+    fn to_type_ref(&self, ir: &IntermediateRepr, with_checked: bool) -> String;
 
-    fn to_partial_type_ref(&self, ir: &IntermediateRepr) -> String;
+    fn to_partial_type_ref(&self, ir: &IntermediateRepr, with_checked: bool) -> String;
 }
 
 impl ToTypeReferenceInClientDefinition for FieldType {
-    fn to_type_ref(&self, ir: &IntermediateRepr) -> String {
+    fn to_type_ref(&self, ir: &IntermediateRepr, with_checked: bool) -> String {
         match self {
             FieldType::Enum(name) => {
                 if ir
@@ -199,16 +200,16 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             }
             FieldType::Literal(value) => format!("Literal[{}]", value),
             FieldType::Class(name) => format!("types.{name}"),
-            FieldType::List(inner) => format!("List[{}]", inner.to_type_ref(ir)),
+            FieldType::List(inner) => format!("List[{}]", inner.to_type_ref(ir, with_checked)),
             FieldType::Map(key, value) => {
-                format!("Dict[{}, {}]", key.to_type_ref(ir), value.to_type_ref(ir))
+                format!("Dict[{}, {}]", key.to_type_ref(ir, with_checked), value.to_type_ref(ir, with_checked))
             }
             FieldType::Primitive(r#type) => r#type.to_python(),
             FieldType::Union(inner) => format!(
                 "Union[{}]",
                 inner
                     .iter()
-                    .map(|t| t.to_type_ref(ir))
+                    .map(|t| t.to_type_ref(ir, with_checked))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -216,15 +217,27 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 "Tuple[{}]",
                 inner
                     .iter()
-                    .map(|t| t.to_type_ref(ir))
+                    .map(|t| t.to_type_ref(ir, with_checked))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_ref(ir)),
+            FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_ref(ir, with_checked)),
+            FieldType::Constrained{base, ..} => {
+                match field_type_attributes(self) {
+                    Some(checks) => {
+                        let base_type_ref = base.to_type_ref(ir, with_checked);
+                        let checks_type_ref = type_name_for_checks(&checks);
+                        format!("baml_py.Checked[{base_type_ref},types.{checks_type_ref}]")
+                    }
+                    None => {
+                        base.to_type_ref(ir, with_checked)
+                    }
+                }
+            },
         }
     }
 
-    fn to_partial_type_ref(&self, ir: &IntermediateRepr) -> String {
+    fn to_partial_type_ref(&self, ir: &IntermediateRepr, with_checked: bool) -> String {
         match self {
             FieldType::Enum(name) => {
                 if ir
@@ -239,12 +252,12 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             }
             FieldType::Class(name) => format!("partial_types.{name}"),
             FieldType::Literal(value) => format!("Literal[{}]", value),
-            FieldType::List(inner) => format!("List[{}]", inner.to_partial_type_ref(ir)),
+            FieldType::List(inner) => format!("List[{}]", inner.to_partial_type_ref(ir, with_checked)),
             FieldType::Map(key, value) => {
                 format!(
                     "Dict[{}, {}]",
-                    key.to_type_ref(ir),
-                    value.to_partial_type_ref(ir)
+                    key.to_type_ref(ir, with_checked),
+                    value.to_partial_type_ref(ir, with_checked)
                 )
             }
             FieldType::Primitive(r#type) => format!("Optional[{}]", r#type.to_python()),
@@ -252,7 +265,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 "Optional[Union[{}]]",
                 inner
                     .iter()
-                    .map(|t| t.to_partial_type_ref(ir))
+                    .map(|t| t.to_partial_type_ref(ir, with_checked))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -260,11 +273,23 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 "Optional[Tuple[{}]]",
                 inner
                     .iter()
-                    .map(|t| t.to_partial_type_ref(ir))
+                    .map(|t| t.to_partial_type_ref(ir, with_checked))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => inner.to_partial_type_ref(ir),
+            FieldType::Optional(inner) => inner.to_partial_type_ref(ir, with_checked),
+            FieldType::Constrained{base, ..} => {
+                match field_type_attributes(self) {
+                    Some(checks) => {
+                        let base_type_ref = base.to_partial_type_ref(ir, with_checked);
+                        let checks_type_ref = type_name_for_checks(&checks);
+                        format!("baml_py.Checked[{base_type_ref},types.{checks_type_ref}]")
+                    }
+                    None => {
+                        base.to_partial_type_ref(ir, with_checked)
+                    }
+                }
+            },
         }
     }
 }

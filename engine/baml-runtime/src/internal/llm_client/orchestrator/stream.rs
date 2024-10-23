@@ -8,8 +8,7 @@ use web_time::Duration;
 use crate::{
     internal::{
         llm_client::{
-            traits::{WithPrompt, WithStreamable},
-            LLMErrorResponse, LLMResponse,
+            parsed_value_to_response, traits::{WithPrompt, WithStreamable}, LLMErrorResponse, LLMResponse, ResponseBamlValue
         },
         prompt_renderer::PromptRenderer,
     },
@@ -32,6 +31,7 @@ pub async fn orchestrate_stream<F>(
         OrchestrationScope,
         LLMResponse,
         Option<Result<BamlValueWithFlags>>,
+        Option<Result<ResponseBamlValue>>,
     )>,
     Duration,
 )
@@ -46,7 +46,7 @@ where
         let prompt = match node.render_prompt(ir, prompt, ctx, params).await {
             Ok(p) => p,
             Err(e) => {
-                results.push((node.scope, LLMResponse::InternalFailure(e.to_string()), None));
+                results.push((node.scope, LLMResponse::InternalFailure(e.to_string()), None, None));
                 continue;
             }
         };
@@ -60,10 +60,15 @@ where
                         match &stream_part {
                             LLMResponse::Success(s) => {
                                 let parsed = partial_parse_fn(&s.content);
+                                let (parsed, response_value) = match parsed {
+                                    Ok(v) => (Some(Ok(v.clone())), Some(parsed_value_to_response(&v))),
+                                    Err(e) => (None, Some(Err(e))),
+                                };
                                 on_event(FunctionResult::new(
                                     node.scope.clone(),
                                     LLMResponse::Success(s.clone()),
-                                    Some(parsed),
+                                    parsed,
+                                    response_value,
                                 ));
                             }
                             _ => {}
@@ -92,13 +97,19 @@ where
             LLMResponse::Success(s) => Some(parse_fn(&s.content)),
             _ => None,
         };
+        let (parsed_response, response_value) = match parsed_response {
+            Some(Ok(v)) => (Some(Ok(v.clone())), Some(parsed_value_to_response(&v))),
+            Some(Err(e)) => (None, Some(Err(e))),
+            None => (None, None),
+        };
+            // parsed_response.map(|r| r.and_then(|v| parsed_value_to_response(v)));
         let sleep_duration = node.error_sleep_duration().cloned();
-        results.push((node.scope, final_response, parsed_response));
+        results.push((node.scope, final_response, parsed_response, response_value));
 
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results
             .last()
-            .map_or(false, |(_, r, _)| matches!(r, LLMResponse::Success(_)))
+            .map_or(false, |(_, r, _, _)| matches!(r, LLMResponse::Success(_)))
         {
             break;
         } else {

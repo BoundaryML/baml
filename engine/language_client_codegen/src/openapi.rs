@@ -10,7 +10,7 @@ use internal_baml_core::ir::{
 use serde::Serialize;
 use serde_json::json;
 
-use crate::dir_writer::{FileCollector, LanguageFeatures, RemoveDirBehavior};
+use crate::{dir_writer::{FileCollector, LanguageFeatures, RemoveDirBehavior}, field_type_attributes, TypeCheckAttributes};
 
 #[derive(Default)]
 pub(super) struct OpenApiLanguageFeatures {}
@@ -70,46 +70,6 @@ impl Serialize for OpenApiSchema<'_> {
         &self,
         serializer: S,
     ) -> core::result::Result<S::Ok, S::Error> {
-        let baml_image_schema = TypeSpecWithMeta {
-            meta: TypeMetadata {
-                title: Some("BamlImage".to_string()),
-                r#enum: None,
-                r#const: None,
-                nullable: false,
-            },
-            type_spec: TypeSpec::Inline(TypeDef::Class {
-                properties: vec![
-                    (
-                        "base64".to_string(),
-                        TypeSpecWithMeta {
-                            meta: TypeMetadata {
-                                title: None,
-                                r#enum: None,
-                                r#const: None,
-                                nullable: false,
-                            },
-                            type_spec: TypeSpec::Inline(TypeDef::String),
-                        },
-                    ),
-                    (
-                        "media_type".to_string(),
-                        TypeSpecWithMeta {
-                            meta: TypeMetadata {
-                                title: None,
-                                r#enum: None,
-                                r#const: None,
-                                nullable: true,
-                            },
-                            type_spec: TypeSpec::Inline(TypeDef::String),
-                        },
-                    ),
-                ]
-                .into_iter()
-                .collect(),
-                required: vec!["base64".to_string()],
-                additional_properties: false,
-            }),
-        };
         let schemas = match self
             .schemas
             .iter()
@@ -271,6 +231,17 @@ impl Serialize for OpenApiSchema<'_> {
                             },
                             "required": ["name", "provider", "options"]
                         })
+                    ),
+                    (  "Check",
+                        json!({
+                            "type": "object",
+                            "properties": {
+                                "name": { "type": "string" },
+                                "expr": { "type": "string" },
+                                "status": { "type": "string" }
+                            }
+
+                        })
                     )
                 ]
                 .into_iter()
@@ -370,6 +341,29 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for OpenApi
                 .chain(ir.walk_classes().map(|c| Ok((c.name(), c.try_into()?))))
                 .collect::<Result<_>>()?,
         })
+    }
+}
+
+fn check() -> TypeSpecWithMeta {
+    TypeSpecWithMeta {
+        meta: TypeMetadata::default(),
+        type_spec: TypeSpec::Ref{ r#ref: "#components/schemas/Check".to_string() },
+    }
+}
+
+/// The type definition for a single "Checked_*" type. Note that we don't
+/// produce a named type for each of these the way we do for SDK
+/// codegeneration.
+fn type_def_for_checks(checks: TypeCheckAttributes) -> TypeSpecWithMeta {
+    TypeSpecWithMeta {
+        meta: TypeMetadata::default(),
+        type_spec: TypeSpec::Inline(
+            TypeDef::Class {
+                properties: checks.0.iter().map(|check_name| (check_name.clone(), check())).collect(),
+                required: checks.0.into_iter().collect(),
+                additional_properties: false,
+            }
+        )
     }
 }
 
@@ -637,6 +631,27 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                 // something i saw suggested doing this
                 type_spec
             }
+            FieldType::Constrained{base,..} => {
+                match field_type_attributes(self) {
+                    Some(checks) => {
+                        let base_type_ref = base.to_type_spec(ir)?;
+                        let checks_type_spec = type_def_for_checks(checks);
+                        TypeSpecWithMeta {
+                            meta: TypeMetadata::default(),
+                            type_spec: TypeSpec::Inline(
+                                TypeDef::Class {
+                                    properties: vec![("value".to_string(), base_type_ref),("checks".to_string(), checks_type_spec)].into_iter().collect(),
+                                    required: vec!["value".to_string(), "checks".to_string()],
+                                    additional_properties: false,
+                                }
+                            )
+                        }
+                    }
+                    None => {
+                        base.to_type_spec(ir)?
+                    }
+                }
+            },
         })
     }
 }
@@ -669,6 +684,17 @@ struct TypeMetadata {
     /// Nulls in OpenAPI are weird: https://swagger.io/docs/specification/data-models/data-types/
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     nullable: bool,
+}
+
+impl Default for TypeMetadata {
+    fn default() -> Self {
+        TypeMetadata {
+            title: None,
+            r#enum: None,
+            r#const: None,
+            nullable: false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]

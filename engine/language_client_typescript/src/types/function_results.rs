@@ -1,4 +1,3 @@
-use baml_types::BamlValue;
 use napi_derive::napi;
 
 use crate::errors::from_anyhow_error;
@@ -13,16 +12,16 @@ impl FunctionResult {
 
     #[napi]
     pub fn is_ok(&self) -> bool {
-        self.inner.parsed_content().is_ok()
+        self.inner.result_with_constraints_content().is_ok()
     }
 
     #[napi]
     pub fn parsed(&self) -> napi::Result<serde_json::Value> {
         let parsed = self
             .inner
-            .parsed_content()
+            .result_with_constraints_content()
             .map_err(|e| from_anyhow_error(e))?;
 
-        Ok(serde_json::json!(BamlValue::from(parsed)))
+        Ok(serde_json::to_value(parsed)?)
     }
 }

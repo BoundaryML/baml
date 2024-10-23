@@ -178,6 +178,7 @@ mod tests {
         let input = r#"
             class MyClass {
                 myProperty string[] @description("This is a description") @alias("MP")
+                prop2 string @description({{ "a " + "b" }})
             }
         "#;
 
@@ -192,11 +193,13 @@ mod tests {
         assert_eq!(schema_ast.tops.len(), 1);
 
         match &schema_ast.tops[0] {
-            Top::Class(model) => {
-                assert_eq!(model.name.name(), "MyClass");
-                assert_eq!(model.fields.len(), 1);
-                assert_eq!(model.fields[0].name.name(), "myProperty");
-                assert_eq!(model.fields[0].attributes.len(), 2)
+            Top::Class(TypeExpressionBlock { name, fields, .. }) => {
+                assert_eq!(name.name(), "MyClass");
+                assert_eq!(fields.len(), 2);
+                assert_eq!(fields[0].name.name(), "myProperty");
+                assert_eq!(fields[1].name.name(), "prop2");
+                assert_eq!(fields[0].attributes.len(), 2);
+                assert_eq!(fields[1].attributes.len(), 1);
             }
             _ => panic!("Expected a model declaration"),
         }

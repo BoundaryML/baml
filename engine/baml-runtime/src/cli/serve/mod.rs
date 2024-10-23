@@ -33,7 +33,9 @@ use tokio::{net::TcpListener, sync::RwLock};
 use tokio_stream::StreamExt;
 
 use crate::{
-    client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
+    client_registry::ClientRegistry,
+    errors::ExposedError,
+    internal::llm_client::{LLMResponse, ResponseBamlValue},
     BamlRuntime, FunctionResult, RuntimeContextManager,
 };
 use internal_baml_codegen::openapi::OpenApiSchema;
@@ -364,10 +366,10 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
 
         match result {
             Ok(function_result) => match function_result.llm_response() {
-                LLMResponse::Success(_) => match function_result.parsed_content() {
+                LLMResponse::Success(_) => match function_result.result_with_constraints_content() {
                     // Just because the LLM returned 2xx doesn't mean that it returned parse-able content!
                     Ok(parsed) => {
-                        (StatusCode::OK, Json::<BamlValue>(parsed.into())).into_response()
+                        (StatusCode::OK, Json::<ResponseBamlValue>(parsed.clone())).into_response()
                     }
                     Err(e) => {
                         if let Some(ExposedError::ValidationError {
@@ -476,10 +478,12 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
 
                     match result {
                         Ok(function_result) => match function_result.llm_response() {
-                            LLMResponse::Success(_) => match function_result.parsed_content() {
+                            LLMResponse::Success(_) => match function_result.result_with_constraints_content() {
                                 // Just because the LLM returned 2xx doesn't mean that it returned parse-able content!
-                                Ok(parsed) => (StatusCode::OK, Json::<BamlValue>(parsed.into()))
-                                    .into_response(),
+                                Ok(parsed) => {
+                                    (StatusCode::OK, Json::<ResponseBamlValue>(parsed.clone()))
+                                        .into_response()
+                                }
 
                                 Err(e) => {
                                     log::debug!("Error parsing content: {:?}", e);
@@ -641,7 +645,7 @@ impl Stream for EventStream {
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         match self.receiver.poll_recv(cx) {
-            Poll::Ready(Some(item)) => match item.parsed_content() {
+            Poll::Ready(Some(item)) => match item.result_with_constraints_content() {
                 // TODO: not sure if this is the correct way to implement this.
                 Ok(parsed) => Poll::Ready(Some(parsed.into())),
                 Err(_) => Poll::Pending,

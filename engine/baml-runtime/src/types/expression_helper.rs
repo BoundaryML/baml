@@ -51,6 +51,7 @@ pub fn to_value(ctx: &RuntimeContext, expr: &Expression) -> Result<serde_json::V
                 })
                 .collect::<Result<HashMap<_, _>>>()?;
             json!(res)
-        }
+        },
+        Expression::JinjaExpression(_) => anyhow::bail!("Unable to normalize jinja expression to a value without a context."),
     })
 }

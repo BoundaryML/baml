@@ -1,5 +1,10 @@
+use std::borrow::Cow;
+use std::collections::HashSet;
 
 use anyhow::Result;
+use itertools::Itertools;
+
+use crate::{field_type_attributes, type_check_attributes, TypeCheckAttributes};
 
 use super::ruby_language_features::ToRuby;
 use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType};
@@ -18,8 +23,8 @@ struct RubyEnum<'ir> {
 }
 
 struct RubyStruct<'ir> {
-    name: &'ir str,
-    fields: Vec<(&'ir str, String)>,
+    name: Cow<'ir, str>,
+    fields: Vec<(Cow<'ir, str>, String)>,
     dynamic: bool,
 }
 
@@ -73,14 +78,14 @@ impl<'ir> From<EnumWalker<'ir>> for RubyEnum<'ir> {
 impl<'ir> From<ClassWalker<'ir>> for RubyStruct<'ir> {
     fn from(c: ClassWalker<'ir>) -> RubyStruct<'ir> {
         RubyStruct {
-            name: c.name(),
+            name: Cow::Borrowed(c.name()),
             dynamic: c.item.attributes.get("dynamic_type").is_some(),
             fields: c
                 .item
                 .elem
                 .static_fields
                 .iter()
-                .map(|f| (f.elem.name.as_str(), f.elem.r#type.elem.to_type_ref()))
+                .map(|f| (Cow::Borrowed(f.elem.name.as_str()), f.elem.r#type.elem.to_type_ref()))
                 .collect(),
         }
     }
@@ -162,6 +167,17 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => inner.to_partial_type_ref(),
+            FieldType::Constrained{base,..} => {
+                match field_type_attributes(self) {
+                    Some(checks) => {
+                        let base_type_ref = base.to_partial_type_ref();
+                        format!("Baml::Checked[{base_type_ref}]")
+                    }
+                    None => {
+                        base.to_partial_type_ref()
+                    }
+                }
+            },
         }
     }
 }

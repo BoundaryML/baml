@@ -1,8 +1,11 @@
+use std::borrow::Cow;
+
 use anyhow::Result;
+use itertools::Itertools;
 
 use internal_baml_core::ir::{repr::IntermediateRepr, ClassWalker, EnumWalker};
 
-use crate::GeneratorArgs;
+use crate::{type_check_attributes, GeneratorArgs, TypeCheckAttributes};
 
 use super::ToTypeReferenceInClientDefinition;
 
@@ -26,10 +29,10 @@ struct TypescriptEnum<'ir> {
     pub dynamic: bool,
 }
 
-struct TypescriptClass<'ir> {
-    name: &'ir str,
-    fields: Vec<(&'ir str, bool, String)>,
-    dynamic: bool,
+pub struct TypescriptClass<'ir> {
+    pub name: Cow<'ir, str>,
+    pub fields: Vec<(Cow<'ir, str>, bool, String)>,
+    pub dynamic: bool,
 }
 
 impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypescriptTypes<'ir> {
@@ -87,7 +90,7 @@ impl<'ir> From<&EnumWalker<'ir>> for TypescriptEnum<'ir> {
 impl<'ir> From<&ClassWalker<'ir>> for TypescriptClass<'ir> {
     fn from(c: &ClassWalker<'ir>) -> TypescriptClass<'ir> {
         TypescriptClass {
-            name: c.name(),
+            name: Cow::Borrowed(c.name()),
             dynamic: c.item.attributes.get("dynamic_type").is_some(),
             fields: c
                 .item
@@ -96,7 +99,7 @@ impl<'ir> From<&ClassWalker<'ir>> for TypescriptClass<'ir> {
                 .iter()
                 .map(|f| {
                     (
-                        f.elem.name.as_str(),
+                        Cow::Borrowed(f.elem.name.as_str()),
                         f.elem.r#type.elem.is_optional(),
                         f.elem.r#type.elem.to_type_ref(&c.db),
                     )
@@ -104,4 +107,8 @@ impl<'ir> From<&ClassWalker<'ir>> for TypescriptClass<'ir> {
                 .collect(),
         }
     }
+}
+
+pub fn type_name_for_checks(checks: &TypeCheckAttributes) -> String {
+    checks.0.iter().map(|check| format!("\"{check}\"")).sorted().join(" | ")
 }

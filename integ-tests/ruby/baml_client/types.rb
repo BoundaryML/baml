@@ -143,22 +143,29 @@ module Baml
     class ClassOptionalOutput2 < T::Struct; end
     class ClassWithImage < T::Struct; end
     class CompoundBigNumbers < T::Struct; end
+    class ContactInfo < T::Struct; end
     class CustomTaskResult < T::Struct; end
     class DummyOutput < T::Struct; end
     class DynInputOutput < T::Struct; end
     class DynamicClassOne < T::Struct; end
     class DynamicClassTwo < T::Struct; end
     class DynamicOutput < T::Struct; end
+    class Earthling < T::Struct; end
     class Education < T::Struct; end
     class Email < T::Struct; end
+    class EmailAddress < T::Struct; end
     class Event < T::Struct; end
     class FakeImage < T::Struct; end
     class FlightConfirmation < T::Struct; end
+    class FooAny < T::Struct; end
     class GroceryReceipt < T::Struct; end
     class InnerClass < T::Struct; end
     class InnerClass2 < T::Struct; end
     class InputClass < T::Struct; end
     class InputClassNested < T::Struct; end
+    class MalformedConstraints < T::Struct; end
+    class MalformedConstraints2 < T::Struct; end
+    class Martian < T::Struct; end
     class NamedArgsSingleClass < T::Struct; end
     class Nested < T::Struct; end
     class Nested2 < T::Struct; end
@@ -168,6 +175,7 @@ module Baml
     class OriginalA < T::Struct; end
     class OriginalB < T::Struct; end
     class Person < T::Struct; end
+    class PhoneNumber < T::Struct; end
     class Quantity < T::Struct; end
     class RaysData < T::Struct; end
     class ReceiptInfo < T::Struct; end
@@ -182,6 +190,7 @@ module Baml
     class TestClassNested < T::Struct; end
     class TestClassWithEnum < T::Struct; end
     class TestOutputClass < T::Struct; end
+    class TwoStoriesOneTitle < T::Struct; end
     class UnionTest_ReturnType < T::Struct; end
     class WithReasoning < T::Struct; end
     class BigNumbers < T::Struct
@@ -290,6 +299,20 @@ module Baml
         @props = props
       end
     end
+    class ContactInfo < T::Struct
+      include Baml::Sorbet::Struct
+      const :primary, T.any(Baml::Types::PhoneNumber, Baml::Types::EmailAddress)
+      const :secondary, T.any(Baml::Types::PhoneNumber, Baml::Types::EmailAddress, NilClass)
+
+      def initialize(props)
+        super(
+          primary: props[:primary],
+          secondary: props[:secondary],
+        )
+
+        @props = props
+      end
+    end
     class CustomTaskResult < T::Struct
       include Baml::Sorbet::Struct
       const :bookOrder, T.any(Baml::Types::BookOrder, T.nilable(NilClass))
@@ -368,6 +391,18 @@ module Baml
         @props = props
       end
     end
+    class Earthling < T::Struct
+      include Baml::Sorbet::Struct
+      const :age, Baml::Checked[Integer]
+
+      def initialize(props)
+        super(
+          age: props[:age],
+        )
+
+        @props = props
+      end
+    end
     class Education < T::Struct
       include Baml::Sorbet::Struct
       const :institution, String
@@ -399,6 +434,18 @@ module Baml
           subject: props[:subject],
           body: props[:body],
           from_address: props[:from_address],
+        )
+
+        @props = props
+      end
+    end
+    class EmailAddress < T::Struct
+      include Baml::Sorbet::Struct
+      const :value, Baml::Checked[String]
+
+      def initialize(props)
+        super(
+          value: props[:value],
         )
 
         @props = props
@@ -449,6 +496,22 @@ module Baml
           departureTime: props[:departureTime],
           arrivalTime: props[:arrivalTime],
           seatNumber: props[:seatNumber],
+        )
+
+        @props = props
+      end
+    end
+    class FooAny < T::Struct
+      include Baml::Sorbet::Struct
+      const :planetary_age, T.any(Baml::Types::Martian, Baml::Types::Earthling)
+      const :certainty, Baml::Checked[Integer]
+      const :species, Baml::Checked[String]
+
+      def initialize(props)
+        super(
+          planetary_age: props[:planetary_age],
+          certainty: props[:certainty],
+          species: props[:species],
         )
 
         @props = props
@@ -525,6 +588,42 @@ module Baml
         super(
           key: props[:key],
           nested: props[:nested],
+        )
+
+        @props = props
+      end
+    end
+    class MalformedConstraints < T::Struct
+      include Baml::Sorbet::Struct
+      const :foo, Baml::Checked[Integer]
+
+      def initialize(props)
+        super(
+          foo: props[:foo],
+        )
+
+        @props = props
+      end
+    end
+    class MalformedConstraints2 < T::Struct
+      include Baml::Sorbet::Struct
+      const :foo, Integer
+
+      def initialize(props)
+        super(
+          foo: props[:foo],
+        )
+
+        @props = props
+      end
+    end
+    class Martian < T::Struct
+      include Baml::Sorbet::Struct
+      const :age, Baml::Checked[Integer]
+
+      def initialize(props)
+        super(
+          age: props[:age],
         )
 
         @props = props
@@ -655,6 +754,18 @@ module Baml
         super(
           name: props[:name],
           hair_color: props[:hair_color],
+        )
+
+        @props = props
+      end
+    end
+    class PhoneNumber < T::Struct
+      include Baml::Sorbet::Struct
+      const :value, Baml::Checked[String]
+
+      def initialize(props)
+        super(
+          value: props[:value],
         )
 
         @props = props
@@ -890,6 +1001,22 @@ module Baml
         @props = props
       end
     end
+    class TwoStoriesOneTitle < T::Struct
+      include Baml::Sorbet::Struct
+      const :title, String
+      const :story_a, String
+      const :story_b, String
+
+      def initialize(props)
+        super(
+          title: props[:title],
+          story_a: props[:story_a],
+          story_b: props[:story_b],
+        )
+
+        @props = props
+      end
+    end
     class UnionTest_ReturnType < T::Struct
       include Baml::Sorbet::Struct
       const :prop1, T.any(String, T::Boolean)
@@ -920,5 +1047,6 @@ module Baml
         @props = props
       end
     end
+
   end
 end

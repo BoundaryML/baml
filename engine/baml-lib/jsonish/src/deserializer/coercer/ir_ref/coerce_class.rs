@@ -11,7 +11,7 @@ use crate::deserializer::{
 
 use super::ParsingContext;
 
-// Name, type, description
+// Name, type, description.
 type FieldValue = (Name, FieldType, Option<String>);
 
 impl TypeCoercer for Class {

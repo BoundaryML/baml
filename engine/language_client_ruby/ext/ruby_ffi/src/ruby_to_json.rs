@@ -1,7 +1,7 @@
-use baml_types::{BamlMap, BamlValue};
+use baml_types::{BamlValue, BamlMap, BamlValueWithMeta, ResponseCheck};
 use indexmap::IndexMap;
 use magnus::{
-    prelude::*, typed_data::Obj, value::Value, Error, Float, Integer, IntoValue, RArray, RClass,
+    prelude::*, typed_data::Obj, value::Value, class, Error, Float, Integer, IntoValue, RArray, RClass,
     RHash, RModule, RString, Ruby, Symbol, TypedData,
 };
 use std::result::Result;
@@ -26,57 +26,99 @@ impl<'rb> RubyToJson<'rb> {
         serde_magnus::serialize(&json)
     }
 
-    pub fn serialize_baml(ruby: &Ruby, types: RModule, from: &BamlValue) -> crate::Result<Value> {
-        match from {
-            BamlValue::Class(class_name, class_fields) => {
-                let hash = ruby.hash_new();
-                for (k, v) in class_fields.iter() {
-                    let k = ruby.sym_new(k.as_str());
-                    let v = RubyToJson::serialize_baml(ruby, types, v)?;
-                    hash.aset(k, v)?;
-                }
-                match types.const_get::<_, RClass>(class_name.as_str()) {
-                    Ok(class_type) => class_type.funcall("new", (hash,)),
-                    Err(_) => {
-                        let dynamic_class_type = ruby.eval::<RClass>("Baml::DynamicStruct")?;
-                        dynamic_class_type.funcall("new", (hash,))
-                    }
-                }
-            }
-            BamlValue::Enum(enum_name, enum_value) => {
-                if let Ok(enum_type) = types.const_get::<_, RClass>(enum_name.as_str()) {
-                    let enum_value = ruby.str_new(enum_value);
-                    if let Ok(enum_instance) = enum_type.funcall("deserialize", (enum_value,)) {
-                        return Ok(enum_instance);
-                    }
-                }
+    /// Serialize a list of check results into some `Checked__*` instance.
+    pub fn serialize_response_checks(ruby: &Ruby, checks: &Vec<ResponseCheck>) -> crate::Result<RHash> {
 
-                Ok(ruby.str_new(enum_value).into_value_with(ruby))
-            }
-            BamlValue::Map(m) => {
-                let hash = ruby.hash_new();
-                for (k, v) in m.iter() {
-                    let k = ruby.str_new(k);
-                    let v = RubyToJson::serialize_baml(ruby, types, v)?;
-                    hash.aset(k, v)?;
+
+        // Create a `Check` for each check in the `Checked__*`.
+        let hash = ruby.hash_new();
+        checks.iter().try_for_each(|ResponseCheck{name, expression, status}| {
+            let check_class = ruby.eval::<RClass>("Baml::Checks::Check")?;
+            let check_hash = ruby.hash_new();
+            check_hash.aset(ruby.sym_new("name"), name.as_str())?;
+            check_hash.aset(ruby.sym_new("expr"), expression.as_str())?;
+            check_hash.aset(ruby.sym_new("status"), status.as_str())?;
+
+            let check: Value = check_class.funcall("new", (check_hash,))?;
+            hash.aset(ruby.sym_new(name.as_str()), check)?;
+            crate::Result::Ok(())
+        })?;
+
+        Ok(hash.into())
+    }
+
+    pub fn serialize_baml(ruby: &Ruby, types: RModule, mut from: BamlValueWithMeta<Vec<ResponseCheck>>) -> crate::Result<Value> {
+
+        // If we encounter a BamlValue node with check results, serialize it as
+        // { value: T, checks: K }. To compute `value`, we strip the metadata
+        // off the node and pass it back to `serialize_baml`.
+        if !from.meta().is_empty() {
+            let meta = from.meta().clone();
+            let checks = Self::serialize_response_checks(ruby, &meta)?;
+
+            *from.meta_mut() = vec![];
+            let serialized_subvalue = Self::serialize_baml(ruby, types, from)?;
+
+            let checked_class = ruby.eval::<RClass>("Baml::Checked")?;
+            let hash = ruby.hash_new();
+            hash.aset(ruby.sym_new("value"), serialized_subvalue)?;
+            hash.aset(ruby.sym_new("checks"), checks)?;
+            Ok(checked_class.funcall("new", (hash,))?)
+        }
+        // Otherwise encode it directly.
+        else {
+            match from {
+                BamlValueWithMeta::Class(class_name, class_fields, _) => {
+                    let hash = ruby.hash_new();
+                    for (k, v) in class_fields.into_iter() {
+                        let k = ruby.sym_new(k.as_str());
+                        let v = RubyToJson::serialize_baml(ruby, types, v)?;
+                        hash.aset(k, v)?;
+                    }
+                    match types.const_get::<_, RClass>(class_name.as_str()) {
+                        Ok(class_type) => class_type.funcall("new", (hash,)),
+                        Err(_) => {
+                            let dynamic_class_type = ruby.eval::<RClass>("Baml::DynamicStruct")?;
+                            dynamic_class_type.funcall("new", (hash,))
+                        }
+                    }
                 }
-                Ok(hash.into_value_with(ruby))
-            }
-            BamlValue::List(l) => {
-                let arr = ruby.ary_new();
-                for v in l.iter() {
-                    let v = RubyToJson::serialize_baml(ruby, types, v)?;
-                    arr.push(v)?;
+                BamlValueWithMeta::Enum(enum_name, enum_value, _) => {
+                    if let Ok(enum_type) = types.const_get::<_, RClass>(enum_name.as_str()) {
+                        let enum_value = ruby.str_new(&enum_value);
+                        if let Ok(enum_instance) = enum_type.funcall("deserialize", (enum_value,)) {
+                            return Ok(enum_instance);
+                        }
+                    }
+
+                    Ok(ruby.str_new(&enum_value).into_value_with(ruby))
                 }
-                Ok(arr.into_value_with(ruby))
+                BamlValueWithMeta::Map(m,_) => {
+                    let hash = ruby.hash_new();
+                    for (k, v) in m.into_iter() {
+                        let k = ruby.str_new(&k);
+                        let v = RubyToJson::serialize_baml(ruby, types, v)?;
+                        hash.aset(k, v)?;
+                    }
+                    Ok(hash.into_value_with(ruby))
+                }
+                BamlValueWithMeta::List(l, _) => {
+                    let arr = ruby.ary_new();
+                    for v in l.into_iter() {
+                        let v = RubyToJson::serialize_baml(ruby, types, v)?;
+                        arr.push(v)?;
+                    }
+                    Ok(arr.into_value_with(ruby))
+                }
+            _ => serde_magnus::serialize(&from),
             }
-            _ => serde_magnus::serialize(from),
+
         }
     }
 
     pub fn serialize(ruby: &Ruby, types: RModule, from: Value) -> crate::Result<Value> {
         let json = RubyToJson::convert(from)?;
-        RubyToJson::serialize_baml(ruby, types, &json)
+        RubyToJson::serialize_baml(ruby, types, BamlValueWithMeta::with_default_meta(&json))
     }
 
     /// Convert a Ruby object to a JSON object.

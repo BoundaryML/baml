@@ -2,12 +2,9 @@ use super::{
     traits::WithAttributes, Attribute, Comment, Expression, Field, FieldType, Identifier, Span,
     WithDocumentation, WithIdentifier, WithSpan,
 };
+use super::argument::ArgumentId;
 use std::fmt::Display;
 use std::fmt::Formatter;
-/// An opaque identifier for a value in an AST enum. Use the
-/// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ArgumentId(pub u32);
 
 /// An opaque identifier for a field in an AST model. Use the
 /// `model[field_id]` syntax to resolve the id to an `ast::Field`.
@@ -27,13 +24,6 @@ impl std::ops::Index<FieldId> for ValueExprBlock {
     fn index(&self, index: FieldId) -> &Self::Output {
         &self.fields[index.0 as usize]
     }
-}
-
-impl ArgumentId {
-    /// Used for range bounds when iterating over BTreeMaps.
-    pub const MIN: ArgumentId = ArgumentId(0);
-    /// Used for range bounds when iterating over BTreeMaps.
-    pub const MAX: ArgumentId = ArgumentId(u32::MAX);
 }
 
 impl std::ops::Index<ArgumentId> for BlockArgs {

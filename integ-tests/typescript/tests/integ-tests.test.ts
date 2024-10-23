@@ -688,6 +688,28 @@ describe('Integ tests', () => {
     const res = await b.AliasedInputList([AliasedEnum.KEY_ONE, AliasedEnum.KEY_TWO])
     expect(res).not.toContain('tiger')
   })
+
+ it("should use aliases when serializing input objects - enums", async () => {
+   const res = await b.AliasedInputEnum(AliasedEnum.KEY_ONE)
+   expect(res).toContain("tiger")
+ })
+
+ it("should use aliases when serializing input objects - lists", async () => {
+   const res = await b.AliasedInputList([AliasedEnum.KEY_ONE, AliasedEnum.KEY_TWO])
+   expect(res).toContain("tiger")
+ })
+
+ it("constraints: should handle checks in return types", async() => {
+   const res = await b.PredictAge("Greg")
+   expect(res.certainty.checks.unreasonably_certain.status).toBe("failed")
+ })
+
+ it("constraints: should handle checks in returned unions", async() => {
+   const res = await b.ExtractContactInfo("Reach me at 111-222-3333, or robert@boundaryml.com if needed")
+   expect(res.primary.value.checks.valid_phone_number.status).toBe("succeeded")
+   expect(res.secondary?.value.checks.valid_email.status).toBe("succeeded")
+ })
+
 })
 
 interface MyInterface {

@@ -2,7 +2,7 @@
 mod tests;
 
 use anyhow::Result;
-mod deserializer;
+pub mod deserializer;
 mod jsonish;
 
 use baml_types::FieldType;

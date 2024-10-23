@@ -1,4 +1,4 @@
-use super::{ArguementId, ArgumentsList, Identifier, Span, WithIdentifier, WithSpan};
+use super::{ArgumentId, ArgumentsList, Identifier, Span, WithIdentifier, WithSpan};
 use std::ops::Index;
 
 /// An attribute (following `@` or `@@``) on a model, model field, enum, enum value or composite
@@ -29,7 +29,7 @@ pub struct Attribute {
 
 impl Attribute {
     /// Try to find the argument and return its span.
-    pub fn span_for_argument(&self, argument: ArguementId) -> Span {
+    pub fn span_for_argument(&self, argument: ArgumentId) -> Span {
         self.arguments[argument].span.clone()
     }
 
