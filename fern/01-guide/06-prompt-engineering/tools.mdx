@@ -42,15 +42,15 @@ import asyncio
 from baml_client import b
 from baml_client.types import WeatherAPI
 
-async def main():
-    weather_info = await b.UseTool("What's the weather like in San Francisco?")
+def main():
+    weather_info = b.UseTool("What's the weather like in San Francisco?")
     print(weather_info)
     assert isinstance(weather_info, WeatherAPI)
     print(f"City: {weather_info.city}")
     print(f"Time of Day: {weather_info.timeOfDay}")
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
 ```
 
 ```typescript TypeScript
@@ -102,7 +102,7 @@ from baml_client import b
 from baml_client.types import WeatherAPI, MyOtherAPI
 
 async def main():
-    tool = await b.UseTool("What's the weather like in San Francisco?")
+    tool = b.UseTool("What's the weather like in San Francisco?")
     print(tool)
     
     if isinstance(tool, WeatherAPI):
@@ -114,7 +114,7 @@ async def main():
         # Handle MyOtherAPI specific attributes here
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
 ```
 
 ```typescript TypeScript
@@ -179,8 +179,8 @@ from baml_client import b
 from baml_client.types import WeatherAPI, MyOtherAPI
 
 async def main():
-    tools = await b.UseTool("What's the weather like in San Francisco and New York?")
-    print(tools)
+    tools = b.UseTool("What's the weather like in San Francisco and New York?")
+    print(tools)  
     
     for tool in tools:
         if isinstance(tool, WeatherAPI):
@@ -192,7 +192,7 @@ async def main():
             # Handle MyOtherAPI specific attributes here
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
 ```
 
 ```typescript TypeScript

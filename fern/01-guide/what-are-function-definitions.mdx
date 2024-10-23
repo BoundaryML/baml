@@ -1,3 +1,92 @@
 ---
 title: What is BAML?
 ---
+
+The best way to understand BAML is to see it live in a demo (see below).
+
+### Demo video
+Here we write a BAML function definition, and then call it from a Python script.
+
+<iframe src="https://fast.wistia.net/embed/iframe/5fxpquglde?seo=false&videoFoam=false" title="BAML Demo Video" allow="autoplay; fullscreen" allowtransparency="true" frameborder="0" scrolling="no" class="wistia_embed" name="wistia_embed" msallowfullscreen width="640" height="352"></iframe>
+<script src="https://fast.wistia.net/assets/external/E-v1.js" async></script>
+
+### Examples
+- [Interactive NextJS app with streaming](https://baml-examples.vercel.app/examples/stream-object)
+- [Starter boilerplates for Python, Typescript, Ruby, etc.](https://github.com/boundaryml/baml-examples)
+
+### High-level Developer Flow
+
+<Steps>
+### Write a BAML function definition
+```baml main.baml
+class WeatherAPI {
+  city string @description("the user's city")
+  timeOfDay string @description("As an ISO8601 timestamp")
+}
+
+function UseTool(user_message: string) -> WeatherAPI {
+  client "openai/gpt-4o"
+  prompt #"
+    Extract.... {# we will explain the rest in the guides #}
+  "#
+}
+```
+Here you can run tests in the VSCode Playground.
+
+### Generate `baml_client` from those .baml files.
+This is auto-generated code with all boilerplate to call the LLM endpoint, parse the output, fix broken JSON, and handle errors.
+<img src="/assets/vscode/baml-client.png" width="300px"/>
+
+
+### Call your function in any language
+with type-safety, autocomplete, retry-logic, robust JSON parsing, etc..
+<CodeGroup>
+```python Python
+import asyncio
+from baml_client import b
+from baml_client.types import WeatherAPI
+
+def main():
+    weather_info = b.UseTool("What's the weather like in San Francisco?")
+    print(weather_info)
+    assert isinstance(weather_info, WeatherAPI)
+    print(f"City: {weather_info.city}")
+    print(f"Time of Day: {weather_info.timeOfDay}")
+
+if __name__ == '__main__':
+    main()
+```
+
+```typescript TypeScript
+import { b } from './baml_client'
+import { WeatherAPI } from './baml_client/types'
+import assert from 'assert'
+
+const main = async () => {
+  const weatherInfo = await b.UseTool("What's the weather like in San Francisco?")
+  console.log(weatherInfo)
+  assert(weatherInfo instanceof WeatherAPI)
+  console.log(`City: ${weatherInfo.city}`)
+  console.log(`Time of Day: ${weatherInfo.timeOfDay}`)
+}
+```
+
+```ruby Ruby
+require_relative "baml_client/client"
+
+$b = Baml.Client
+
+def main
+  weather_info = $b.UseTool(user_message: "What's the weather like in San Francisco?")
+  puts weather_info
+  raise unless weather_info.is_a?(Baml::Types::WeatherAPI)
+  puts "City: #{weather_info.city}"
+  puts "Time of Day: #{weather_info.timeOfDay}"
+end
+```
+
+```python Other Languages
+# read the installation guide for other languages!
+```
+</CodeGroup>
+</Steps>

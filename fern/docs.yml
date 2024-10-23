@@ -122,23 +122,29 @@ navigation:
             icon: fa-regular fa-vial
             path: 01-guide/04-baml-basics/testing-functions.mdx
           - page: Streaming
-            icon: fa-regular fa-wave-square
+            icon: fa-regular fa-faucet
             path: 01-guide/04-baml-basics/streaming.mdx
           - page: Multi-Modal (Images / Audio)
             icon: fa-regular fa-image
             path: 01-guide/04-baml-basics/multi-modal.mdx
           - page: Error Handling
-            icon: fa-regular fa-bug
+            icon: fa-regular fa-triangle-exclamation
             path: 01-guide/04-baml-basics/error-handling.mdx
 
       - section: BAML Advanced
         contents:
-          - page: Client Registry
+          - page: LLM Client Registry
             icon: fa-regular fa-gears
             path: 01-guide/05-baml-advanced/client-registry.mdx
           - page: Dynamic / Runtime Types
-            icon: fa-regular fa-dice-d20
+            icon: fa-solid fa-person-running
             path: 01-guide/05-baml-advanced/dynamic-types.mdx
+          - page: Reusing Prompt Snippets
+            icon: fa-regular fa-repeat
+            path: 01-guide/05-baml-advanced/reusing-prompt-snippets.mdx
+          - page: Prompt Caching
+            icon: fa-regular fa-save
+            path: 01-guide/05-baml-advanced/prompt-caching.mdx
       - section: Prompt Engineering
         contents:
           - page: Chat History
@@ -281,24 +287,24 @@ navigation:
       - section: Language Reference
         slug: baml
         contents:
-          - page: Supported Types
-            path: 03-reference/baml/types.mdx
-          - page: comments
-            path: 03-reference/baml/comments.mdx
-          - section: values
+          - section: General BAML Syntax
             contents:
+              - page: comments
+                path: 03-reference/baml/comments.mdx
               - page: Enviornment Variables
-                path: 01-guide/introduction.mdx
+                path: 03-reference/baml/env-vars.mdx
               - page: string
                 path: 03-reference/baml/string.mdx
               - page: "int / float"
-                path: 01-guide/introduction.mdx
+                path: 03-reference/baml/int-float.mdx
               - page: bool
                 path: 01-guide/introduction.mdx
               - page: array / list
                 path: 01-guide/introduction.mdx
               - page: dictionary / map
                 path: 01-guide/introduction.mdx
+          - page: Supported Types
+            path: 03-reference/baml/types.mdx
           - page: function
             path: 01-guide/introduction.mdx
           - page: test

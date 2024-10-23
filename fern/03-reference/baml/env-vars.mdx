@@ -1,0 +1,60 @@
+To set a value to an environment variable, use the following syntax:
+
+```baml
+env.YOUR_VARIABLE_NAME
+```
+
+<Warning>Environment variables with spaces in their names are not supported.</Warning>
+
+### Example
+
+Using an environment variable for API key:
+
+```baml
+client<llm> MyCustomClient {
+    provider "openai"
+    options {
+        model "gpt-4o-mini"
+        // Set the API key using an environment variable
+        api_key env.MY_SUPER_SECRET_API_KEY
+    }
+}
+```
+
+To set environment variables:
+
+<AccordionGroup>
+  <Accordion title="In the VSCode Playground">
+    You can put other components inside Accordions.
+
+    ```ts
+    export function generateRandomNumber() {
+      return Math.random();
+    }   
+    ```
+
+  </Accordion>
+
+  <Accordion title="For your app">
+    BAML will expect these to be set already in your program **before** you import the baml_client in Python/ TS / etc.
+
+    Any of the following strategies for setting env vars are compatible with BAML:
+    - setting them in your shell before running your program
+    - in your `Dockerfile`
+    - in your `next.config.js`
+    - in your Kubernetes manifest
+    - from secrets-store.csi.k8s.io
+    - from a secrets provider such as [Infisical](https://infisical.com/) / [Doppler](https://www.doppler.com/)
+    - from a `.env` file (using `dotenv` cli)
+    - using account credentials for ephemeral token generation (e.g. Vertex AI Auth Tokens)
+
+    ```bash
+    export MY_SUPER_SECRET_API_KEY="..."
+    python my_program.py
+    ```
+  </Accordion>
+  
+  <Accordion title="At runtime">
+    This is a third option.
+  </Accordion>
+</AccordionGroup>
