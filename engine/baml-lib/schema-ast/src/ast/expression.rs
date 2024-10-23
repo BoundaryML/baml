@@ -1,5 +1,4 @@
 use baml_types::TypeValue;
-
 use crate::ast::Span;
 use std::fmt;
 
@@ -257,7 +256,7 @@ impl Expression {
         }
     }
 
-    pub fn as_identifer(&self) -> Option<&Identifier> {
+    pub fn as_identifier(&self) -> Option<&Identifier> {
         match self {
             Expression::Identifier(id) => Some(id),
             _ => None,
@@ -365,7 +364,7 @@ impl Expression {
                     k1.assert_eq_up_to_span(k2);
                     v1.assert_eq_up_to_span(v2);
                 });
-            },
+            }
             (Map(_,_), _) => panic!("Types do not match: {:?} and {:?}", self, other),
 
         }

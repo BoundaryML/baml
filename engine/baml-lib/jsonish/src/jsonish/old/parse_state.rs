@@ -166,7 +166,7 @@ impl<'a> ParseState<'a> {
 
     pub fn new_not_parsed(&mut self, location: &'a JsonishValue, expected: &str) {
         self.errors.push(ParseError {
-            message: ErrorType::Error(format!("Not parseable: Expected: {}", expected)),
+            message: ErrorType::Error(format!("Not parsable: Expected: {}", expected)),
             location,
         });
     }

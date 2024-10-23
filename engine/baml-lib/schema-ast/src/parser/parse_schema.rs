@@ -156,7 +156,7 @@ pub fn parse_schema(
                 pest::error::ErrorVariant::ParsingError { positives, .. } => {
                     get_expected_from_error(&positives)
                 }
-                _ => panic!("Could not construct parsing error. This should never happend."),
+                _ => panic!("Could not construct parsing error. This should never happened."),
             };
 
             diagnostics.push_error(DatamodelError::new_parser_error(expected, location));

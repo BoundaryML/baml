@@ -27,7 +27,7 @@ use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use serde_json::json;
 use std::collections::HashMap;
-struct PostRequestProperities {
+struct PostRequestProperties {
     default_role: String,
     api_key: Option<String>,
     headers: HashMap<String, String>,
@@ -44,13 +44,13 @@ pub struct GoogleAIClient {
     pub retry_policy: Option<String>,
     pub context: RenderContext_Client,
     pub features: ModelFeatures,
-    properties: PostRequestProperities,
+    properties: PostRequestProperties,
 }
 
 fn resolve_properties(
     mut properties: HashMap<String, serde_json::Value>,
     ctx: &RuntimeContext,
-) -> Result<PostRequestProperities, anyhow::Error> {
+) -> Result<PostRequestProperties, anyhow::Error> {
     let default_role = properties
         .remove("default_role")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
@@ -100,7 +100,7 @@ fn resolve_properties(
         None => Default::default(),
     };
 
-    Ok(PostRequestProperities {
+    Ok(PostRequestProperties {
         default_role,
         api_key,
         headers,

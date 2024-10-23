@@ -368,7 +368,7 @@ The default base URL for the Gemini provider has been updated to v1beta. This ch
 - LLVM install and rebuild script (#794) - ([9ee66ed](https://github.com/boundaryml/baml/commit/9ee66ed2dd14bc0ee12a788f41eae64377e7f2b0)) - Anish Palakurthi
 - Prevent version mismatches when generating baml_client (#791) - ([d793603](https://github.com/boundaryml/baml/commit/d7936036e6afa4a0e738242cfb3feaa9e15b3657)) - aaronvg
 - fiddle build fix (#800) - ([d304203](https://github.com/boundaryml/baml/commit/d304203241726ac0ba8781db7ac5693339189eb4)) - aaronvg
-- Dont drop extra fields in dynamic classes when passing them as inputs to a function (#802) - ([4264c9b](https://github.com/boundaryml/baml/commit/4264c9b143edda0239af197d110357b1969bf12c)) - aaronvg
+- Don't drop extra fields in dynamic classes when passing them as inputs to a function (#802) - ([4264c9b](https://github.com/boundaryml/baml/commit/4264c9b143edda0239af197d110357b1969bf12c)) - aaronvg
 - Adding support for a sync client for Python + Typescript (#803) - ([62085e7](https://github.com/boundaryml/baml/commit/62085e79d4d86f580ce189bc60f36bd1414893c4)) - hellovai
 - Fix WASM-related issues introduced in #803 (#804) - ([0a950e0](https://github.com/boundaryml/baml/commit/0a950e084748837ee2e269504d22dba66f339ca4)) - hellovai
 - Adding various fixes (#806) - ([e8c1a61](https://github.com/boundaryml/baml/commit/e8c1a61a96051160566b6458dac5c89d5ddfb86e)) - hellovai
@@ -416,7 +416,7 @@ The default base URL for the Gemini provider has been updated to v1beta. This ch
 
 ### Bug Fixes
 
-- Fix env variables dialoge on VSCode (#750)
+- Fix env variables dialog on VSCode (#750)
 - Playground selects correct function after loading (#757) - ([09963a0](https://github.com/boundaryml/baml/commit/09963a02e581da9eb8f7bafd3ba812058c97f672)) - aaronvg
 
 ### Miscellaneous Chores
@@ -528,7 +528,7 @@ The default base URL for the Gemini provider has been updated to v1beta. This ch
 - add internal build tooling for sam (#512) - ([9ebacca](https://github.com/boundaryml/baml/commit/9ebaccaa542760cb96382ae2a91d780f1ade613b)) - Samuel Lijin
 - delete clients dir, this is now dead code (#652) - ([ec2627f](https://github.com/boundaryml/baml/commit/ec2627f59c7fe9edfff46fcdb65f9b9f0e2e072c)) - Samuel Lijin
 - consolidate vscode workspace, bump a bunch of deps (#654) - ([82bf6ab](https://github.com/boundaryml/baml/commit/82bf6ab1ad839f84782a7ef0441f21124c368757)) - Samuel Lijin
-- Add RB2B tracking script to propmt fiddle (#681) - ([4cf806b](https://github.com/boundaryml/baml/commit/4cf806bba26563fd8b6ddbd68296ab8bdfac21c4)) - hellovai
+- Add RB2B tracking script to prompt fiddle (#681) - ([4cf806b](https://github.com/boundaryml/baml/commit/4cf806bba26563fd8b6ddbd68296ab8bdfac21c4)) - hellovai
 - Adding better release script (#688) - ([5bec282](https://github.com/boundaryml/baml/commit/5bec282d39d2250b39ef4aba5d6bba9830a35988)) - hellovai
 
 ### [AUTO

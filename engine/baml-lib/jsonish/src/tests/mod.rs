@@ -353,7 +353,7 @@ test_deserializer!(
     json!({"id": null })
 );
 
-// also fails -- if you are in an object and you are casting to a string, dont do that.
+// also fails -- if you are in an object and you are casting to a string, don't do that.
 // TODO: find all the json blobs here correctly
 test_deserializer!(
     test_string_from_string24,
@@ -698,7 +698,7 @@ fn singleton_list_int_deleted() {
     let output_format = OutputFormatContent::new(Vec::new(), Vec::new(), target.clone());
     let res = from_str(&output_format, &target, "[123", true).expect("Can parse");
     let baml_value: BamlValue = res.into();
-    assert_eq!(baml_value, BamlValue::List( vec![] ));
+    assert_eq!(baml_value, BamlValue::List(vec![]));
 }
 
 #[test]
@@ -710,7 +710,7 @@ fn list_int_deleted() {
     let output_format = OutputFormatContent::new(Vec::new(), Vec::new(), target.clone());
     let res = from_str(&output_format, &target, "[123, 456", true).expect("Can parse");
     let baml_value: BamlValue = res.into();
-    assert_eq!(baml_value, BamlValue::List( vec![ BamlValue::Int(123)] ));
+    assert_eq!(baml_value, BamlValue::List(vec![BamlValue::Int(123)]));
 }
 
 #[test]
@@ -722,7 +722,10 @@ fn list_int_not_deleted() {
     let output_format = OutputFormatContent::new(Vec::new(), Vec::new(), target.clone());
     let res = from_str(&output_format, &target, "[123, 456 // Done", true).expect("Can parse");
     let baml_value: BamlValue = res.into();
-    assert_eq!(baml_value, BamlValue::List( vec![ BamlValue::Int(123), BamlValue::Int(456)] ));
+    assert_eq!(
+      baml_value,
+      BamlValue::List( vec![ BamlValue::Int(123), BamlValue::Int(456)])
+    );
 }
 
 #[test]

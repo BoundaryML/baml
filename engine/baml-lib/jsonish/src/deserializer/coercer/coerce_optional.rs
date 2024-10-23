@@ -32,7 +32,7 @@ pub(super) fn coerce_optional(
         Some(v) => match inner.coerce(ctx, optional_target, Some(v)) {
             Ok(v) => Ok(v),
             Err(e) => {
-                flags.add_flag(Flag::DefaultButHadUnparseableValue(e));
+                flags.add_flag(Flag::DefaultButHadUnparsableValue(e));
                 Ok(BamlValueWithFlags::Null(flags))
             }
         },

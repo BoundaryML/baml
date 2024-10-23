@@ -355,7 +355,7 @@ impl WithRepr<FieldType> for ast::FieldType {
 pub enum Identifier {
     /// Starts with env.*
     ENV(String),
-    /// The path to a Local Identifer + the local identifer. Separated by '.'
+    /// The path to a Local Identifier + the local identifier. Separated by '.'
     #[allow(dead_code)]
     Ref(Vec<String>),
     /// A string without spaces or '.' Always starts with a letter. May contain numbers
@@ -622,7 +622,7 @@ pub enum OracleType {
 #[derive(serde::Serialize, Debug)]
 pub struct AliasOverride {
     pub name: String,
-    // This is used to generate deserializers with aliased keys (see .overload in python deserializer)
+    // This is used to generate deserializer with aliased keys (see .overload in python deserializer)
     pub aliased_keys: Vec<AliasedKey>,
 }
 
@@ -974,7 +974,7 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
 }
 #[derive(Debug, Clone, Serialize)]
 pub enum Prompt {
-    // The prompt stirng, and a list of input replacer keys (raw key w/ magic string, and key to replace with)
+    // The prompt string, and a list of input replacer keys (raw key w/ magic string, and key to replace with)
     String(String, Vec<(String, String)>),
 
     // same thing, the chat message, and the replacer input keys (raw key w/ magic string, and key to replace with)

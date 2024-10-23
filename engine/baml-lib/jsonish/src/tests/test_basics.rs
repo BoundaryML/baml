@@ -320,7 +320,7 @@ test_deserializer!(
 
 // This is un-changed
 test_deserializer!(
-    test_prefixed_incompleted_string,
+    test_prefixed_incompletestring,
     EMPTY_FILE,
     r#"prefix "hello"#,
     FieldType::string(),
@@ -518,7 +518,7 @@ test_deserializer!(
   ```json
   {
     "key": "value",
-    "array": [1, 2, 3, 'some stinrg'   with quotes' /* test */],
+    "array": [1, 2, 3, 'some string'   with quotes' /* test */],
     "object": { // Test comment
       "key": "value"
     },
@@ -526,7 +526,7 @@ test_deserializer!(
   ```
   "#,
   FieldType::class("Test"),
-  {"key": "value", "array": [1, 2, 3, "some stinrg'   with quotes"], "object": {"key": "value"}}
+  {"key": "value", "array": [1, 2, 3, "some string'   with quotes"], "object": {"key": "value"}}
 );
 
 test_deserializer!(
@@ -547,7 +547,7 @@ test_deserializer!(
   ```json
   {
     key: "value",
-    array: [1, 2, 3, 'some stinrg'   with quotes' /* test */],
+    array: [1, 2, 3, 'some string'   with quotes' /* test */],
     object: { // Test comment
       key: "value"
     },
@@ -555,7 +555,7 @@ test_deserializer!(
   ```
   "#,
   FieldType::class("Test"),
-  {"key": "value", "array": [1, 2, 3, "some stinrg'   with quotes"], "object": {"key": "value"}}
+  {"key": "value", "array": [1, 2, 3, "some string'   with quotes"], "object": {"key": "value"}}
 );
 
 test_deserializer!(

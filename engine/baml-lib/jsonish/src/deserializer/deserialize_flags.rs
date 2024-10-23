@@ -6,7 +6,7 @@ pub enum Flag {
     ObjectFromMarkdown(i32),
     ObjectFromFixedJson(Vec<crate::jsonish::Fixes>),
 
-    DefaultButHadUnparseableValue(ParsingError),
+    DefaultButHadUnparsableValue(ParsingError),
     ObjectToString(crate::jsonish::Value),
     ObjectToPrimitive(crate::jsonish::Value),
     ObjectToMap(crate::jsonish::Value),
@@ -20,7 +20,7 @@ pub enum Flag {
 
     JsonToString(crate::jsonish::Value),
     ImpliedKey(String),
-    InferedObject(crate::jsonish::Value),
+    InferredObject(crate::jsonish::Value),
 
     // Values here are all the possible matches.
     FirstMatch(usize, Vec<Result<BamlValueWithFlags, ParsingError>>),
@@ -32,15 +32,15 @@ pub enum Flag {
     DefaultButHadValue(crate::jsonish::Value),
     OptionalDefaultFromNoValue,
 
-    // String -> X convertions.
+    // String -> X conversions.
     StringToBool(String),
     StringToNull(String),
     StringToChar(String),
 
-    // Number -> X convertions.
+    // Number -> X conversions.
     FloatToInt(f64),
 
-    // X -> Object convertions.
+    // X -> Object conversions.
     NoFields(Option<crate::jsonish::Value>),
 }
 
@@ -77,7 +77,7 @@ impl DeserializerConditions {
                 }
                 Flag::JsonToString(_) => None,
                 Flag::ImpliedKey(_) => None,
-                Flag::InferedObject(_) => None,
+                Flag::InferredObject(_) => None,
                 Flag::FirstMatch(_idx, _) => None,
                 Flag::StrMatchOneFromMany(_matches) => None,
                 Flag::DefaultFromNoValue => None,
@@ -89,7 +89,7 @@ impl DeserializerConditions {
                 Flag::FloatToInt(_) => None,
                 Flag::NoFields(_) => None,
                 Flag::UnionMatch(_idx, _) => None,
-                Flag::DefaultButHadUnparseableValue(e) => Some(e.clone()),
+                Flag::DefaultButHadUnparsableValue(e) => Some(e.clone()),
             })
             .collect::<Vec<_>>()
     }
@@ -119,8 +119,8 @@ impl std::fmt::Display for DeserializerConditions {
 impl std::fmt::Display for Flag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Flag::InferedObject(value) => {
-                write!(f, "Infered object from: {}", value.r#type())?;
+            Flag::InferredObject(value) => {
+                write!(f, "Inferred object from: {}", value.r#type())?;
             }
             Flag::OptionalDefaultFromNoValue => {
                 write!(f, "Optional Default value")?;
@@ -165,8 +165,8 @@ impl std::fmt::Display for Flag {
                     writeln!(f, "Item {}: {}", idx, value)?;
                 }
             }
-            Flag::DefaultButHadUnparseableValue(value) => {
-                write!(f, "Null but had unparseable value")?;
+            Flag::DefaultButHadUnparsableValue(value) => {
+                write!(f, "Null but had unparsable value")?;
                 writeln!(f, "----RAW----")?;
                 writeln!(f, "{}", value)?;
                 writeln!(f, "-----------")?;

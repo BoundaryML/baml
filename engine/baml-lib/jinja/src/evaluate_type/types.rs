@@ -304,7 +304,7 @@ impl PredefinedTypes {
         };
 
         // Any vars that are in both branches are merged
-        // Any vars that are only in one branch, unioned with undefined
+        // Any vars that are only in one branch, united with undefined
 
         let mut new_vars = HashMap::new();
         for (name, t) in true_vars.iter() {

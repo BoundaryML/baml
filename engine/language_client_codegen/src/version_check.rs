@@ -98,10 +98,18 @@ pub fn check_version(
                 )
             } else {
                 let update_instruction = match generator_language {
-                    GeneratorOutputType::OpenApi => format!("use 'npx @boundaryml/baml@{gen_version}'"),
-                    GeneratorOutputType::PythonPydantic => format!("pip install --upgrade baml-py=={}", gen_version),
-                    GeneratorOutputType::Typescript => format!("npm install --save-dev @boundaryml/baml@{}", gen_version),
-                    GeneratorOutputType::RubySorbet => format!("gem install baml -v {}", gen_version),
+                    GeneratorOutputType::OpenApi => {
+                        format!("use 'npx @boundaryml/baml@{gen_version}'")
+                    }
+                    GeneratorOutputType::PythonPydantic => {
+                        format!("pip install --upgrade baml-py=={}", gen_version)
+                    }
+                    GeneratorOutputType::Typescript => {
+                        format!("npm install --save-dev @boundaryml/baml@{}", gen_version)
+                    }
+                    GeneratorOutputType::RubySorbet => {
+                        format!("gem install baml -v {}", gen_version)
+                    }
                 };
                 (
                     match generator_type {
@@ -121,12 +129,11 @@ pub fn check_version(
             false => format!("[documentation]({})", docs_link),
             _ => docs_link.to_string(),
         };
-  
         let error_message = format!(
             "{}\n\nAction required: {}\n\nTo prevent this issue, see: {}",
             base_message, update_message, formatted_link
         );
-  
+
         return Some(VersionCheckError { 
             msg: if !is_diagnostic {
                 format!("⚠️⚠️⚠️ BAML GENERATION DISABLED: {}", error_message)
@@ -135,7 +142,6 @@ pub fn check_version(
             },
         });
     }
-  
     None
 }
 

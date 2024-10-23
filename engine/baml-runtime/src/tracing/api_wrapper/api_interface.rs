@@ -53,7 +53,7 @@ pub(crate) struct CacheRequest {
     provider: String,
     prompt: Template,
     prompt_vars: HashMap<String, String>,
-    invovation_params: HashMap<String, Value>,
+    invocation_params: HashMap<String, Value>,
 }
 
 #[derive(Debug, Serialize)]

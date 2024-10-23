@@ -59,8 +59,6 @@ pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
 pub use runtime_interface::InternalRuntimeInterface;
 
 #[cfg(not(feature = "internal"))]
-pub(crate) use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
-#[cfg(not(feature = "internal"))]
 pub(crate) use runtime_interface::InternalRuntimeInterface;
 
 pub use internal_baml_core::internal_baml_diagnostics;
@@ -382,7 +380,7 @@ impl BamlRuntime {
                     // generating code, run 'baml-cli dev' to generate code" because that's surprising
                     //
                     // We _could_ do something like "show that message the first time the user tries to
-                    // codegen for rest/openapi", but that's overengineered, I think
+                    // codegen for rest/openapi", but that's over engineered, I think
                     return Ok(vec![]);
                 }
             }

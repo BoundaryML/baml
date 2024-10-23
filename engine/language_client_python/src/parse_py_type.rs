@@ -98,8 +98,8 @@ fn pyobject_to_json<'py, F>(
 where
     F: FnMut(Python<'py>, PyObject, &UnknownTypeHandler) -> Result<MappedPyType>,
 {
-    let infered = match to_type(py, any, handle_unknown_types) {
-        Ok(infered) => infered,
+    let inferred = match to_type(py, any, handle_unknown_types) {
+        Ok(inferred) => inferred,
         Err(e) => {
             return Err(vec![SerializationError {
                 position: vec![],
@@ -107,7 +107,7 @@ where
             }])
         }
     };
-    Ok(Some(match infered {
+    Ok(Some(match inferred {
         MappedPyType::Enum(e, value) => BamlValue::Enum(e, value),
         MappedPyType::Class(c, kvs) => {
             let mut errs = vec![];

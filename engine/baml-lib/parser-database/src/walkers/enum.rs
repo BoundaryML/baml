@@ -51,7 +51,7 @@ impl<'db> EnumValueWalker<'db> {
             .types
             .enum_attributes
             .get(&self.id.0)
-            .and_then(|f| f.value_serilizers.get(&self.id.1));
+            .and_then(|f| f.value_serializers.get(&self.id.1));
 
         result
     }

@@ -22,7 +22,7 @@ node -e "const prismaSchema = require('@prisma/prisma-schema-wasm'); console.log
     - It is triggered from the https://github.com/prisma/engines-wrapper publish action.
 - The [Rust source code](https://github.com/prisma/prisma-engines/tree/main/prisma-schema-wasm/src) for the wasm module
 - The [nix build definition](https://github.com/prisma/prisma-engines/blob/main/prisma-schema-wasm/default.nix)
-    - It gives us a fully reproducible, thoroughly described build process and environment. The alternative would be a bash script with installs through `rustup`, `cargo install` and `apt`, with underspecified system dependencies and best-effort version pinning.
+    - It gives us a fully reproducible, thoroughly described build process and environment. The alternative would be a bash script with installs through `rustup`, `cargo install` and `apt`, with under specified system dependencies and best-effort version pinning.
     - You can read more about nix on [nix.dev](https://nix.dev/) and the [official website](https://nixos.org/).
 
 ## Local Dev with Language-Tools

@@ -23,7 +23,7 @@ async def extract_resume(resume: str) -> None:
     print("\n\nNow extracting using streaming")
     async with b.ExtractResume.stream(resume) as stream:
         async for x in stream.parsed_stream:
-            if x.is_parseable:
+            if x.is_parsable:
                 print(f"streaming: {x.parsed.model_dump_json()}")
         response = await stream.get_final_response()
         if response.has_value:

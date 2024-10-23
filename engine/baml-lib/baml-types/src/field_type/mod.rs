@@ -113,9 +113,9 @@ impl std::fmt::Display for FieldType {
                         .join(", ")
                 )
             }
-            FieldType::Map(k, v) => write!(f, "map<{}, {}>", k.to_string(), v.to_string()),
-            FieldType::List(t) => write!(f, "{}[]", t.to_string()),
-            FieldType::Optional(t) => write!(f, "{}?", t.to_string()),
+            FieldType::Map(k, v) => write!(f, "map<{}, {}>", k, v),
+            FieldType::List(t) => write!(f, "{}[]", t),
+            FieldType::Optional(t) => write!(f, "{}?", t),
         }
     }
 }

@@ -132,7 +132,7 @@ impl TypeCoercer for Class {
                     let parsed = match field.1.coerce(&scope, &field.1, Some(x)) {
                         Ok(mut v) => {
                             v.add_flag(Flag::ImpliedKey(field.0.real_name().into()));
-                            flags.add_flag(Flag::InferedObject(x.clone()));
+                            flags.add_flag(Flag::InferredObject(x.clone()));
                             Ok(v)
                         }
                         Err(e) => Err(e),
@@ -275,7 +275,7 @@ impl TypeCoercer for Class {
                                 k.to_string(),
                                 BamlValueWithFlags::Null(
                                     DeserializerConditions::new()
-                                        .with_flag(Flag::DefaultButHadUnparseableValue(e)),
+                                        .with_flag(Flag::DefaultButHadUnparsableValue(e)),
                                 ),
                             ),
                         }

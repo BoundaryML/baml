@@ -92,14 +92,14 @@ fn resolve_type_exp_block_attributes<'db>(
             for (value_idx, _value) in ast_typexpr.iter_fields() {
                 ctx.visit_attributes((type_id, value_idx).into());
                 if let Some(attrs) = to_string_attribute::visit(ctx, false) {
-                    enum_attributes.value_serilizers.insert(value_idx, attrs);
+                    enum_attributes.value_serializers.insert(value_idx, attrs);
                 }
                 ctx.validate_visited_attributes();
             }
 
             // Now validate the enum attributes.
             ctx.visit_attributes(type_id.into());
-            enum_attributes.serilizer = to_string_attribute::visit(ctx, true);
+            enum_attributes.serializer = to_string_attribute::visit(ctx, true);
             ctx.validate_visited_attributes();
 
             ctx.types.enum_attributes.insert(type_id, enum_attributes);
@@ -110,14 +110,14 @@ fn resolve_type_exp_block_attributes<'db>(
             for (field_idx, _field) in ast_typexpr.iter_fields() {
                 ctx.visit_attributes((type_id, field_idx).into());
                 if let Some(attrs) = to_string_attribute::visit(ctx, false) {
-                    class_attributes.field_serilizers.insert(field_idx, attrs);
+                    class_attributes.field_serializers.insert(field_idx, attrs);
                 }
                 ctx.validate_visited_attributes();
             }
 
             // Now validate the class attributes.
             ctx.visit_attributes(type_id.into());
-            class_attributes.serilizer = to_string_attribute::visit(ctx, true);
+            class_attributes.serializer = to_string_attribute::visit(ctx, true);
             ctx.validate_visited_attributes();
 
             ctx.types.class_attributes.insert(type_id, class_attributes);

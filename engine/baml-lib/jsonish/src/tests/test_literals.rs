@@ -141,9 +141,9 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_case_mismatch_upper,
     EMPTY_FILE,
-    // Came up with this example unintentioanlly but this causes ambiguity
+    // Came up with this example unintentionally but this causes ambiguity
     // issues with unions ("two" | "one"), see the TODO at the end of this file.
-    r#"The ansewr "TWO" is the correct one"#,
+    r#"The answer "TWO" is the correct one"#,
     FieldType::Literal(LiteralValue::String("two".into())),
     "two"
 );

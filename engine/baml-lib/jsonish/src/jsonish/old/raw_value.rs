@@ -175,7 +175,7 @@ impl<'a> JsonishValue<'a> {
             return JsonishValue::Number(trimmed, N::Float(n));
         }
 
-        // Instead of doing fancy parsing on the string pre-emptively, just return it as a string. Later we can search that string for the actual value.
+        // Instead of doing fancy parsing on the string preemptively, just return it as a string. Later, we can search that string for the actual value.
         JsonishValue::Stringish(s)
     }
 
@@ -186,7 +186,7 @@ impl<'a> JsonishValue<'a> {
     ) -> Result<&'a JsonishValue<'a>, JsonParseError> {
         let trimmed = s.trim();
 
-        // Skip whitespaces at the start (if any)
+        // Skip whitespace at the start (if any)
         if trimmed.is_empty() {
             return Err(JsonParseError::EmptyString);
         }
@@ -199,7 +199,7 @@ impl<'a> JsonishValue<'a> {
             Some('-') => parse_unquoted_single_word(trimmed, state),
             Some(x) if x.is_alphanumeric() => parse_unquoted_single_word(trimmed, state),
             Some(_) => Err(JsonParseError::InvalidSyntax(
-                "JSON is not parseable".into(),
+                "JSON is not parsable".into(),
             )),
             None => Err(JsonParseError::InvalidSyntax(
                 "JSON has empty content".into(),

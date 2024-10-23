@@ -1,5 +1,4 @@
 use std::{collections::HashMap, path::PathBuf, pin::Pin};
-
 use anyhow::{Context, Result};
 use aws_smithy_types::byte_stream::error::Error;
 use serde_json::{json, Map};
@@ -638,7 +637,7 @@ async fn fetch_with_proxy(
     proxy_url: Option<&str>,
 ) -> Result<reqwest::Response, anyhow::Error> {
     let client = reqwest::Client::new();
-    let mut request = if let Some(proxy) = proxy_url {
+    let request = if let Some(proxy) = proxy_url {
         client.get(proxy).header("baml-original-url", url)
     } else {
         client.get(url)

@@ -36,7 +36,7 @@ use crate::RuntimeContext;
 use super::types::MessageChunk;
 
 // stores properties required for making a post request to the API
-struct PostRequestProperities {
+struct PostRequestProperties {
     default_role: String,
     base_url: String,
     api_key: Option<String>,
@@ -53,7 +53,7 @@ pub struct AnthropicClient {
     retry_policy: Option<String>,
     context: RenderContext_Client,
     features: ModelFeatures,
-    properties: PostRequestProperities,
+    properties: PostRequestProperties,
 
     // clients
     client: reqwest::Client,
@@ -64,7 +64,7 @@ pub struct AnthropicClient {
 fn resolve_properties(
     mut properties: HashMap<String, serde_json::Value>,
     ctx: &RuntimeContext,
-) -> Result<PostRequestProperities> {
+) -> Result<PostRequestProperties> {
     // this is a required field
     properties
         .entry("max_tokens".into())
@@ -113,7 +113,7 @@ fn resolve_properties(
         .entry("anthropic-version".to_string())
         .or_insert("2023-06-01".to_string());
 
-    Ok(PostRequestProperities {
+    Ok(PostRequestProperties {
         default_role,
         base_url,
         api_key,
@@ -289,7 +289,7 @@ impl SseResponseTrait for AnthropicClient {
     }
 }
 
-// handles streamign chat interactions, when sending prompt to API and processing response stream
+// handles streaming chat interactions, when sending prompt to API and processing response stream
 impl WithStreamChat for AnthropicClient {
     async fn stream_chat(
         &self,

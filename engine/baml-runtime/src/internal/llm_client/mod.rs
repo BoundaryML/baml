@@ -15,7 +15,6 @@ use anyhow::Result;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage, RenderedPrompt};
 use serde::{Deserialize, Serialize};
-use serde_json::Map;
 use std::error::Error;
 
 use reqwest::StatusCode;
