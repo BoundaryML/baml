@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.63.0](https://github.com/boundaryml/baml/compare/0.62.0..0.63.0) - 2024-10-23
+
+### Bug Fixes
+- Fix dynamic enums which already are defined in BAML (#1080) - ([22d0f1c](https://github.com/boundaryml/baml/commit/22d0f1cff3428c2cd58ea78c50c4fc7ea39c8d0c)) - hellovai
+
+### Features
+- Updated clients.baml to use the latest sonnet model (#1081) - ([71df0b7](https://github.com/boundaryml/baml/commit/71df0b7b627ba218d581d2c21be01fea4e4993c1)) - aaronvg
+- Improved clients.baml generated via baml init (#1089) - ([682dd66](https://github.com/boundaryml/baml/commit/682dd66f4adab8c4fad13bfe32a3fc0268d8b511)) - hellovai
+
 ## [0.62.0](https://github.com/boundaryml/baml/compare/0.61.1..0.62.0) - 2024-10-21
 
 ### Features
