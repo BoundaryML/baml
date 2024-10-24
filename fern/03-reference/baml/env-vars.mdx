@@ -21,42 +21,8 @@ client<llm> MyCustomClient {
 }
 ```
 
-To set environment variables:
+## Setting Environment Variables
+<Markdown src="/snippets/setting-env-vars.mdx" />
 
-<AccordionGroup>
-  <Accordion title="In the VSCode Playground">
-    You can put other components inside Accordions.
-
-    ```ts
-    export function generateRandomNumber() {
-      return Math.random();
-    }   
-    ```
-
-  </Accordion>
-
-  <Accordion title="For your app (default)">
-    BAML will expect these to be set already in your program **before** you import the baml_client in Python/ TS / etc.
-
-    Any of the following strategies for setting env vars are compatible with BAML:
-    - setting them in your shell before running your program
-    - in your `Dockerfile`
-    - in your `next.config.js`
-    - in your Kubernetes manifest
-    - from secrets-store.csi.k8s.io
-    - from a secrets provider such as [Infisical](https://infisical.com/) / [Doppler](https://www.doppler.com/)
-    - from a `.env` file (using `dotenv` cli)
-    - using account credentials for ephemeral token generation (e.g. Vertex AI Auth Tokens)
-
-    ```bash
-    export MY_SUPER_SECRET_API_KEY="..."
-    python my_program.py
-    ```
-  </Accordion>
-  
-  <Accordion title="For your app (manually)">
-    <Info>
-    Requires BAML Version 0.57+
-    </Info>
-  </Accordion>
-</AccordionGroup>
+## Error Handling
+Errors for unset environment variables are only thrown when the variable is accessed. If your BAML project has 15 environment variables and 1 is used for the function you are calling, only that one environment variable will be checked for existence.

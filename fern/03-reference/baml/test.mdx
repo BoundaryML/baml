@@ -1,0 +1,221 @@
+Tests are first-class citizens in BAML, designed to make testing AI functions straightforward and robust. BAML tests can be written anywhere in your codebase and run with minimal setup.
+
+## Overview
+
+A BAML test consists of:
+- Test name and metadata
+- Functions under test
+- Input arguments
+- Optional testing configuration
+- Optional assertions
+
+```baml
+test TestName {
+    functions [FunctionName]
+    args {
+        paramName "value"
+    }
+}
+```
+
+## Test Declaration
+
+### Syntax
+
+```baml
+test name {
+    functions [function_list]
+    args {
+        parameter_assignments
+    }
+}
+```
+
+### Components
+
+- `name`: Test identifier (unique per function)
+- `functions`: List of functions to test
+- `args`: Input parameters for the test case
+
+## Input Types
+
+### Basic Types
+
+Simple values are provided directly:
+
+```baml
+test SimpleTest {
+    functions [ClassifyMessage]
+    args {
+        input "Can't access my account"
+    }
+}
+```
+
+### Complex Objects
+
+Objects are specified using nested structures:
+
+```baml
+test ComplexTest {
+    functions [ProcessMessage]
+    args {
+        message {
+            user "john_doe"
+            content "Hello world"
+            metadata {
+                timestamp 1234567890
+                priority "high"
+            }
+        }
+    }
+}
+```
+
+### Arrays
+
+Arrays use bracket notation:
+
+```baml
+test ArrayTest {
+    functions [BatchProcess]
+    args {
+        messages [
+            {
+                user "user1"
+                content "Message 1"
+            }
+            {
+                user "user2"
+                content "Message 2"
+            }
+        ]
+    }
+}
+```
+
+## Media Inputs
+
+### Images
+
+Images can be specified using three methods:
+
+1. **File Reference**
+```baml {4-6}
+test ImageFileTest {
+    functions [AnalyzeImage]
+    args {
+        param {
+            file "../images/test.png"
+        }
+    }
+}
+```
+
+2. **URL Reference**
+```baml {4-6}
+test ImageUrlTest {
+    functions [AnalyzeImage]
+    args {
+        param {
+            url "https://example.com/image.jpg"
+        }
+    }
+}
+```
+
+3. **Base64 Data**
+```baml {4-7}
+test ImageBase64Test {
+    functions [AnalyzeImage]
+    args {
+        param {
+            base64 "a41f..."
+            media_type "image/png"
+        }
+    }
+}
+```
+
+### Audio
+
+Similar to images, audio can be specified in three ways:
+
+1. **File Reference**
+```baml
+test AudioFileTest {
+    functions [TranscribeAudio]
+    args {
+        audio {
+            file "../audio/sample.mp3"
+        }
+    }
+}
+```
+
+2. **URL Reference**
+```baml
+test AudioUrlTest {
+    functions [TranscribeAudio]
+    args {
+        audio {
+            url "https://example.com/audio.mp3"
+        }
+    }
+}
+```
+
+3. **Base64 Data**
+```baml
+test AudioBase64Test {
+    functions [TranscribeAudio]
+    args {
+        audio {
+            base64 "..."
+            media_type "audio/mp3"
+        }
+    }
+}
+```
+
+## Multi-line Strings
+
+For long text inputs, use the block string syntax:
+
+```baml
+test LongTextTest {
+    functions [AnalyzeText]
+    args {
+        content #"
+            This is a multi-line
+            text input that preserves
+            formatting and whitespace
+        "#
+    }
+}
+```
+
+## Testing Multiple Functions
+
+This requires each function to have teh exact same parameters:
+
+```baml
+test EndToEndFlow {
+    functions [
+        ExtractInfo
+        ProcessInfo
+        ValidateResult
+    ]
+    args {
+        input "test data"
+    }
+}
+```
+
+## Integration with Development Tools
+
+### VSCode Integration
+
+- Tests can be run directly from the BAML playground
+- Real-time syntax validation
+- Test result visualization

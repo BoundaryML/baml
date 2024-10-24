@@ -3,7 +3,7 @@ title: 🏠 Welcome
 description: The easiest way to use LLMs
 slug: home
 layout: overview
-hide-toc: true
+hide-toc: false
 ---
 
 **BAML is a domain-specific language to generate structured outputs from LLMs -- with the best developer experience.**
@@ -52,20 +52,26 @@ With BAML you can build reliable Agents, Chatbots with RAG, extract data from PD
 
 ## Motivation
 
-Prompts are not just f'strings. They are actual functions with logic that can become very complex to maintain and test.
+Prompts are not just f'strings. They are actual functions with logic that can become very complex to organize, maintain, and test.
 
-We developed BAML because other tooling was not sufficient to develop prompts in a way that was type-safe, reusable, and easy to understand.
+Today people are writing LLM prompts as if they were writing raw HTML/JS/CSS in their JS files without:
+- Type safety
+- Hot-reloading nor previews
+- Linting
 
+TSX was the right abstraction for the web, and BAML is that abstraction for prompt engineering.
+
+{/* 
 <div className="motivation">
   Insert something powerful here.
 </div>
 
 <ButtonGroup>
-<Button href="https://buildwithfern.com/contact" intent="primary" rightIcon="arrow-right" large>
+<Button href="https://calendly.com/boundary-founders/connect-45" intent="primary" rightIcon="arrow-right" large>
   Schedule a demo with our team!
 </Button>
 
 <Button href="https://buildwithfern.com/showcase" minimal large>
   View our showcase
 </Button>
-</ButtonGroup>
+</ButtonGroup> */}

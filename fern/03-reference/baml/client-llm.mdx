@@ -1,0 +1,54 @@
+
+Clients are used to configure how LLMs are called, like so:
+
+```rust BAML
+function MakeHaiku(topic: string) -> string {
+  client "openai/gpt-4o"
+  prompt #"
+    Write a haiku about {{ topic }}.
+  "#
+}
+```
+
+This is `<provider>/<model>` shorthand for:
+
+```rust BAML
+client<llm> MyClient {
+  provider "openai"
+  options {
+    model "gpt-4o"
+    // api_key defaults to env.OPENAI_API_KEY
+  }
+}
+
+function MakeHaiku(topic: string) -> string {
+  client MyClient
+  prompt #"
+    Write a haiku about {{ topic }}.
+  "#
+}
+```
+
+Consult the [provider documentation](#fields) for a list of supported providers
+and models, and the default options.
+
+If you want to override options like `api_key` to use a different environment
+variable, or you want to point `base_url` to a different endpoint, you should use
+the latter form.
+
+<Tip>
+If you want to specify which client to use at runtime, in your Python/TS/Ruby code,
+you can use the [client registry](/docs/calling-baml/client-registry) to do so.
+
+This can come in handy if you're trying to, say, send 10% of your requests to a
+different model.
+</Tip>
+
+## Fields
+
+<Markdown src="../client-constructor.mdx" />
+
+<ParamField path="retry_policy">
+  The name of the retry policy. See [Retry
+  Policy](retry.mdx).
+</ParamField>

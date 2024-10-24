@@ -1,0 +1,191 @@
+Functions in BAML define the contract between your application and AI models, providing type-safe interfaces for AI operations.
+
+## Overview
+
+A BAML function consists of:
+- Input parameters with explicit types
+- A return type specification
+- An [LLM client](client-llm)
+- A prompt (as a [block string](general-baml-syntax/string#block-strings))
+
+```baml
+function FunctionName(param: Type) -> ReturnType {
+    client ModelName
+    prompt #"
+        Template content
+    "#
+}
+```
+
+## Function Declaration
+
+### Syntax
+
+```baml
+function name(parameters) -> return_type {
+    client llm_specification
+    prompt block_string_specification
+}
+```
+
+### Parameters
+
+- `name`: The function identifier (must start with a capital letter!)
+- `parameters`: One or more typed parameters (e.g., `text: string`, `data: CustomType`)
+- `return_type`: The type that the function guarantees to return (e.g., `string | MyType`)
+- `llm_specification`: The LLM to use (e.g., `"openai/gpt-4o-mini"`, `GPT4Turbo`, `Claude2`)
+- `block_string_specification`: The prompt template using Jinja syntax
+
+## Type System
+
+Functions leverage BAML's strong type system, supporting:
+
+### Built-in Types
+- `string`: Text data
+- `int`: Integer numbers
+- `float`: Decimal numbers
+- `bool`: True/false values
+- `array`: Denoted with `[]` suffix (e.g., `string[]`)
+- `map`: Key-value pairs (e.g., `map<string, int>`)
+- `literal`: Specific values (e.g., `"red" | "green" | "blue"`)
+- [See all](types)
+
+### Custom Types
+
+Custom types can be defined using class declarations:
+
+```baml
+class CustomType {
+    field1 string
+    field2 int
+    nested NestedType
+}
+
+function ProcessCustomType(data: CustomType) -> ResultType {
+    // ...
+}
+```
+
+## Prompt Templates
+
+### Jinja Syntax
+
+BAML uses Jinja templating for dynamic prompt generation:
+
+```baml
+prompt #"
+    Input data: {{ input_data }}
+    
+    {% if condition %}
+        Conditional content
+    {% endif %}
+    
+    {{ ctx.output_format }}
+"#
+```
+
+### Special Variables
+
+- `ctx.output_format`: Automatically generates format instructions based on return type
+- `ctx.client`: Selected client and model name
+- `_.role`: Define the role of the message chunk
+
+## Error Handling
+
+Functions automatically handle common AI model errors and provide type validation:
+
+- JSON parsing errors are automatically corrected
+- Type mismatches are detected and reported
+- Network and rate limit errors are propagated to the caller
+
+## Usage Examples
+
+### Basic Function
+
+```baml
+function ExtractEmail(text: string) -> string {
+    client GPT4Turbo
+    prompt #"
+        Extract the email address from the following text:
+        {{ text }}
+        
+        {{ ctx.output_format }}
+    "#
+}
+```
+
+### Complex Types
+
+```baml
+class Person {
+    name string
+    age int
+    contacts Contact[]
+}
+
+class Contact {
+    type "email" | "phone"
+    value string
+}
+
+function ParsePerson(data: string) -> Person {
+    client "openai/gpt-4o"
+    prompt #"
+        {{ ctx.output_format }}
+        
+        {{ _.role('user') }}
+        {{ data }}
+    "#
+}
+```
+
+## `baml_client` Integration
+
+<CodeBlocks>
+
+```python Python
+from baml_client import b
+from baml_client.types import Person
+
+async def process() -> Person:
+    result = b.ParsePerson("John Doe, 30 years old...")
+    print(result.name)  # Type-safe access
+    return result
+```
+
+
+```typescript TypeScript
+import { b } from 'baml-client';
+import { Person } from 'baml-client/types';
+
+async function process(): Promise<Person> {
+    const result = await b.ParsePerson("John Doe, 30 years old...");
+    console.log(result.name);  // Type-safe access
+    return result;
+}
+```
+
+</CodeBlocks>
+
+## Best Practices
+
+1. **Type Definition**
+   - Define specific types for complex outputs
+   - Use array types for collections
+   - Add descriptions using `@description` annotations
+
+2. **Prompt Design**
+   - Keep prompts focused on single responsibilities
+   - Use clear instruction patterns
+   - Leverage Jinja conditionals for dynamic content
+
+3. **Error Handling**
+   - Plan for partial results
+   - Consider adding validation rules
+   - Test edge cases with various inputs
+
+## Common Patterns
+
+See examples here:
+
+< go to guides! >

@@ -1,0 +1,105 @@
+Enums are useful for classification tasks. BAML has helper functions that can help you serialize an enum into your prompt in a neatly formatted list (more on that later).
+
+To define your own custom enum in BAML:
+
+<CodeBlocks>
+```baml BAML
+enum MyEnum {
+  Value1
+  Value2
+  Value3
+}
+```
+
+```python Python Equivalent
+from enum import StrEnum
+
+class MyEnum(StrEnum):
+  Value1 = "Value1"
+  Value2 = "Value2"
+  Value3 = "Value3"
+```
+
+```typescript Typescript Equivalent
+enum MyEnum {
+  Value1 = "Value1",
+  Value2 = "Value2",
+  Value3 = "Value3",
+}
+```
+
+</CodeBlocks>
+
+- You may have as many values as you'd like.
+- Values may not be duplicated or empty.
+- Values may not contain spaces or special characters and must not start with a number.
+
+## Enum Attributes
+
+<ParamField
+  path="@@alias"
+  type="string"
+>
+This is the name of the enum rendered in the prompt.
+</ParamField>
+
+
+<ParamField
+  path="@@dynamic"
+>
+If set, will allow you to add/remove/modify values to the enum dynamically at runtime (in your python/ts/etc code). See [dynamic enums](../calling-baml/dynamic-types.mdx) for more information.
+</ParamField>
+
+
+```baml BAML
+enum MyEnum {
+  Value1
+  Value2
+  Value3
+
+  @@alias("My Custom Enum")
+  @@dynamic // allows me to later skip Value2 at runtime
+}
+```
+
+## Value Attributes
+
+When prompt engineering, you can also alias values and add descriptions, or even skip them.
+
+<ParamField
+  path="@alias"
+  type="string"
+>
+Aliasing renames the values for the llm to potentially "understand" your value better, while keeping the original name in your code, so you don't need to change your downstream code everytime.
+
+This will also be used for parsing the output of the LLM back into the enum.
+</ParamField>
+
+<ParamField
+  path="@description"
+  type="string"
+>
+This adds some additional context to the value in the prompt.
+</ParamField>
+
+<ParamField
+  path="@skip"
+>
+Skip this value in the prompt and during parsing.
+</ParamField>
+
+
+```baml BAML
+enum MyEnum {
+  Value1 @alias("complete_summary") @description("Answer in 2 sentences")
+  Value2
+  Value3 @skip
+  Value4 @description(#"
+    This is a long description that spans multiple lines.
+    It can be useful for providing more context to the value.
+  "#)
+}
+```
+
+
+See more in [prompt syntax docs](prompt-syntax/what-is-jinja.mdx)

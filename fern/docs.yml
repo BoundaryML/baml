@@ -21,10 +21,10 @@ tabs:
     slug: guide
   examples:
     display-name: Examples
-    icon: fa-solid fa-code
+    icon: fa-solid fa-grid-2
   reference:
     display-name: BAML Reference
-    icon: fa-solid fa-code-branch
+    icon: fa-solid fa-code
     slug: ref
   # paid-tooling:
   #   display-name: Paid Offerings
@@ -142,14 +142,19 @@ navigation:
           - page: Reusing Prompt Snippets
             icon: fa-regular fa-repeat
             path: 01-guide/05-baml-advanced/reusing-prompt-snippets.mdx
-          - page: Prompt Caching
-            icon: fa-regular fa-save
+          - page: Prompt Caching / Message Role Metadata
+            icon: fa-regular fa-database
+            path: 01-guide/05-baml-advanced/prompt-caching.mdx
+      - section: Observability
+        contents:
+          - page: Track outputs and usage
+            icon: fa-regular fa-bar-chart
             path: 01-guide/05-baml-advanced/prompt-caching.mdx
       - section: Prompt Engineering
         contents:
-          - page: Chat History
+          - page: Chat
             icon: fa-regular fa-comments
-            path: 01-guide/introduction.mdx
+            path: 01-guide/06-prompt-engineering/chat-history.mdx
           - page: Tools / Function Calling
             icon: fa-regular fa-wrench
             path: 01-guide/06-prompt-engineering/tools.mdx
@@ -298,25 +303,25 @@ navigation:
               - page: "int / float"
                 path: 03-reference/baml/int-float.mdx
               - page: bool
-                path: 01-guide/introduction.mdx
-              - page: array / list
-                path: 01-guide/introduction.mdx
-              - page: dictionary / map
-                path: 01-guide/introduction.mdx
+                path: 03-reference/baml/bool.mdx
+              - page: array (list)
+                path: 03-reference/baml/array.mdx
+              - page: map (dictionary)
+                path: 03-reference/baml/map.mdx
           - page: Supported Types
             path: 03-reference/baml/types.mdx
           - page: function
-            path: 01-guide/introduction.mdx
+            path: 03-reference/baml/function.mdx
           - page: test
-            path: 01-guide/introduction.mdx
+            path: 03-reference/baml/test.mdx
           - page: template_string
-            path: 01-guide/introduction.mdx
+            path: 03-reference/baml/template_string.mdx
           - page: "client<llm>"
-            path: 01-guide/introduction.mdx
+            path: 03-reference/baml/client-llm.mdx
           - page: class
-            path: 01-guide/introduction.mdx
+            path: 03-reference/baml/class.mdx
           - page: enum
-            path: 01-guide/introduction.mdx
+            path: 03-reference/baml/enum.mdx
           - page: generator
             path: 01-guide/introduction.mdx
 

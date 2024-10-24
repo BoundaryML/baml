@@ -1,0 +1,70 @@
+---
+title: Prompt Caching / Message Role Metadata
+---
+
+Recall that an LLM request usually looks like this, where it sometimes has metadata in each `message`. In this case, Anthropic has a `cache_control` key.
+
+```curl {3,11} Anthropic Request
+curl https://api.anthropic.com/v1/messages \
+  -H "content-type: application/json" \
+  -H "anthropic-beta: prompt-caching-2024-07-31" \
+  -d '{
+    "model": "claude-3-5-sonnet-20241022",
+    "max_tokens": 1024,
+    "messages": [
+       {
+        "type": "text", 
+        "text": "<the entire contents of Pride and Prejudice>",
+        "cache_control": {"type": "ephemeral"}
+      },
+      {
+        "role": "user",
+        "content": "Analyze the major themes in Pride and Prejudice."
+      }
+    ]
+  }'
+```
+
+
+This is nearly the same as this BAML code, minus the `cache_control` metadata:
+
+
+Let's add the `cache-control` metadata to each of our messges in BAML now.
+There's just 2 steps:
+
+<Steps>
+### Allow role metadata and header in the client definition
+```baml {5-8} main.baml
+client<llm> AnthropicClient {
+  provider "anthropic"
+  options {
+    model "claude-3-5-sonnet-20241022"
+    allowed_role_metadata ["cache_control"]
+    headers {
+      "anthropic-beta" "prompt-caching-2024-07-31"
+    }
+  }
+}
+```
+
+### Add the metadata to the messages
+```baml {2,6} main.baml
+function AnalyzeBook(book: string) -> string {
+  client<llm> AnthropicClient
+  prompt #"
+    {{ _.role("user") }}
+    {{ book }}
+    {{ _.role("user", cache_control={"type": "ephemeral"}) }}
+    Analyze the major themes in Pride and Prejudice.
+  "#
+}
+```
+
+</Steps>
+
+We have the "allowed_role_metadata" so that if you swap to other LLM clients, we don't accidentally forward the wrong metadata to the new provider API.
+
+
+<Tip>
+Remember to check the "raw curl" checkbox in the VSCode Playground to see the exact request being sent!
+</Tip>

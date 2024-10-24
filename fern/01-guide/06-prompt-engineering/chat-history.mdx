@@ -1,0 +1,111 @@
+---
+title: Chat
+---
+
+In this guide we'll build a small chatbot that takes in user messages and generates responses.
+
+
+```baml chat-history.baml
+class MyUserMessage {
+  role "user" | "assistant"
+  content string
+}
+
+function ChatWithLLM(messages: MyUserMessage[]) -> string {
+  client "openai/gpt-4o"
+  prompt #"
+    Answer the user's questions based on the chat history:
+    {% for message in messages %}
+      {{ _.role(message.role) }} 
+      {{ message.content }}
+    {% endfor %}
+
+    Answer:
+  "#
+}
+
+test TestName {
+  functions [ChatWithLLM]
+  args {
+    messages [
+      {
+        role "user"
+        content "Hello!"
+      }
+      {
+        role "assistant"
+        content "Hi!"
+      }
+    ]
+  }
+}
+
+```
+
+#### Code
+<CodeGroup>
+```python Python
+from baml_client import b
+from baml_client.types import MyUserMessage
+
+def main():
+    messages: list[MyUserMessage] = []
+    
+    while True:
+        content = input("Enter your message (or 'quit' to exit): ")
+        if content.lower() == 'quit':
+            break
+        
+        messages.append(MyUserMessage(role="user", content=content))
+        
+        agent_response = b.ChatWithLLM(messages=messages)
+        print(f"AI: {agent_response}")
+        print()
+        
+        # Add the agent's response to the chat history
+        messages.append(MyUserMessage(role="assistant", content=agent_response))
+
+if __name__ == "__main__":
+    main()
+```
+```typescript Typescript
+import { b, MyUserMessage } from 'baml_client';
+import * as readline from 'readline';
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+const messages: MyUserMessage[] = [];
+
+function askQuestion(query: string): Promise<string> {
+  return new Promise((resolve) => {
+    rl.question(query, resolve);
+  });
+}
+
+async function main() {
+
+  while (true) {
+    const content = await askQuestion("Enter your message (or 'quit' to exit): ");
+    if (content.toLowerCase() === 'quit') {
+      break;
+    }
+
+    messages.push({ role: "user", content });
+
+    const agentResponse = await b.ChatWithLLM({ messages });
+    console.log(`AI: ${agentResponse}`);
+    console.log();
+
+    // Add the agent's response to the chat history
+    messages.push({ role: "assistant", content: agentResponse });
+  }
+
+  rl.close();
+}
+
+main();
+```
+</CodeGroup>

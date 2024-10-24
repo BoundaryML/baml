@@ -2,7 +2,7 @@
 title: What is baml_src?
 ---
 
-**baml_src** is where you keep all your BAML files, and where all the prompt-related code lives. It must be named `baml_src` for our tooling to pick it up.
+**baml_src** is where you keep all your BAML files, and where all the prompt-related code lives. It must be named `baml_src` for our tooling to pick it up. It can live wherever you want.
 
 It helps keep your project organized, and makes it easy to separate prompt engineering from the rest of your code.
 
@@ -10,7 +10,7 @@ It helps keep your project organized, and makes it easy to separate prompt engin
 
 
 Some things to note:
-1. Everything you declare in this directory is globally available to all your functions.
+1. All declarations within this directory are accessible across all files contained in the `baml_src` folder.
 2. You can have multiple files, and even nest subdirectories.
 
 You don't need to worry about including this directory when deploying your code.
