@@ -2375,6 +2375,7 @@ dependencies = [
  "internal-baml-parser-database",
  "internal-baml-prompt-parser",
  "internal-baml-schema-ast",
+ "itertools 0.13.0",
  "log",
  "minijinja",
  "rayon",

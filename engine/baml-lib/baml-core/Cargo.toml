@@ -31,6 +31,7 @@ strsim = "0.10.0"
 strum.workspace = true
 textwrap = "0.16.0"
 whoami = "1.4.1"
+itertools = "0.13.0"
 
 
 [dev-dependencies]
