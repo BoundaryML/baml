@@ -3,8 +3,8 @@ use colored::*;
 mod chat_message_part;
 
 mod output_format;
-use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_core::ir::jinja_helpers::get_env;
+use internal_baml_core::ir::repr::IntermediateRepr;
 pub use output_format::types;
 mod baml_value_to_jinja_value;
 
@@ -435,7 +435,6 @@ pub fn render_prompt(
         }
     }
 }
-
 
 #[cfg(test)]
 mod render_tests {
@@ -1977,5 +1976,4 @@ mod render_tests {
 
     //     Ok(())
     // }
-
 }
