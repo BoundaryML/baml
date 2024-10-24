@@ -247,6 +247,7 @@ impl FieldType {
                     },
                 ) => self_base.is_subtype_of(other_base) && self_cs == other_cs,
                 (FieldType::Constrained { base, .. }, _) => base.is_subtype_of(other),
+                (_, FieldType::Constrained { base, .. }) => self.is_subtype_of(base),
 
                 (FieldType::Literal(LiteralValue::Bool(_)), _) => {
                     self.is_subtype_of(&FieldType::Primitive(TypeValue::Bool))
