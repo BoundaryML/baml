@@ -388,7 +388,6 @@ fn first_failing_assert_nested<'a>(
         .map(|x| x.into_iter())
         .flatten()
         .next();
-    dbg!(&first_failure);
     first_failure.transpose()
 
 }
