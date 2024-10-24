@@ -1,0 +1,91 @@
+---
+title: openai-generic
+slug: docs/snippets/clients/providers/openai-generic
+---
+
+
+The `openai-generic` provider supports all APIs that use OpenAI's request and
+response formats, such as Groq, HuggingFace, Ollama, OpenRouter, and Together AI.
+
+Example:
+
+```baml BAML
+client<llm> MyClient {
+  provider "openai-generic"
+  options {
+    base_url "https://api.provider.com"
+    model "<provider-specified-format>"
+  }
+}
+```
+
+
+## Non-forwarded options
+
+<ParamField path="base_url" type="string">
+  The base URL for the API.
+  
+  **Default: `https://api.openai.com/v1`**
+</ParamField>
+
+<ParamField path="default_role" type="string">
+  The default role for any prompts that don't specify a role.
+  
+  We don't do any validation of this field, so you can pass any string you wish.
+  
+  **Default: `system`**
+</ParamField>
+
+<ParamField path="api_key" type="string" default="<none>">
+  Will be used to build the `Authorization` header, like so: `Authorization: Bearer $api_key`
+  If `api_key` is not set, or is set to an empty string, the `Authorization` header will not be sent.
+
+  **Default: `<none>`**
+</ParamField>
+
+<ParamField path="headers" type="object">
+  Additional headers to send with the request.
+
+Example:
+
+```baml BAML
+client<llm> MyClient {
+  provider "openai-generic"
+  options {
+    base_url "https://api.provider.com"
+    model "<provider-specified-format>"
+    headers {
+      "X-My-Header" "my-value"
+    }
+  }
+}
+```
+
+</ParamField>
+
+## Forwarded options
+
+<ParamField
+   path="messages"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you from the prompt
+</ParamField>
+<ParamField
+   path="stream"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you based on how you call the client in your code
+</ParamField>
+<ParamField
+  path="model"
+  type="string"
+>
+  The model to use.
+
+  For OpenAI, this might be `"gpt-4o-mini"`; for Ollama, this might be `"llama2"`. The exact
+  syntax will depend on your API provider's documentation: we'll just forward it to them as-is.
+
+</ParamField>
+
+For all other options, see the [official OpenAI API documentation](https://platform.openai.com/docs/api-reference/chat/create).

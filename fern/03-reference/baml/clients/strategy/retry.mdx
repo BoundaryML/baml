@@ -1,0 +1,87 @@
+---
+title: retry_policy
+slug: docs/snippets/clients/retry
+---
+
+
+A retry policy can be attached to any `client<llm>` and will attempt to retry requests that fail due to a network error.
+
+```baml BAML
+retry_policy MyPolicyName {
+  max_retries 3
+}
+```
+
+Usage:
+```baml BAML
+client<llm> MyClient {
+  provider anthropic
+  retry_policy MyPolicyName
+  options {
+    model "claude-3-sonnet-20240229"
+    api_key env.ANTHROPIC_API_KEY
+  }
+}
+```
+
+## Fields
+<ParamField
+  path="max_retries"
+  type="int"
+  required
+>
+  Number of **additional** retries to attempt after the initial request fails.
+</ParamField>
+
+<ParamField
+  path="strategy"
+  type="Strategy"
+>
+  The strategy to use for retrying requests. Default is `constant_delay(delay_ms=200)`.
+
+| Strategy | Docs | Notes |
+| --- | --- | --- |
+| `constant_delay` | [Docs](#constant-delay) | |
+| `exponential_backoff` | [Docs](#exponential-backoff) | |
+
+Example:
+```baml BAML
+retry_policy MyPolicyName {
+  max_retries 3
+  strategy {
+    type constant_delay
+    delay_ms 200
+  }
+}
+```
+
+</ParamField>
+
+## Strategies
+
+### constant_delay
+<ParamField path="type" type="constant_delay" required>
+  Configures to the constant delay strategy.
+</ParamField>
+
+<ParamField path="delay_ms" type="int">
+  The delay in milliseconds to wait between retries. **Default: 200**
+</ParamField>
+
+
+### exponential_backoff
+<ParamField path="type" type="exponential_backoff" required>
+  Configures to the exponential backoff strategy.
+</ParamField>
+
+<ParamField path="delay_ms" type="int">
+  The initial delay in milliseconds to wait between retries. **Default: 200**
+</ParamField>
+
+<ParamField path="multiplier" type="float">
+  The multiplier to apply to the delay after each retry. **Default: 1.5**
+</ParamField>
+
+<ParamField path="max_delay_ms" type="int">
+  The maximum delay in milliseconds to wait between retries. **Default: 10000**
+</ParamField>

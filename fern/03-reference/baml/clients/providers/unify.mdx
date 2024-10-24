@@ -1,0 +1,21 @@
+---
+title: Unify AI
+---
+
+[Unify AI](https://www.unify.ai/) supports the OpenAI client, allowing you
+to use the [`openai-generic`](/docs/snippets/clients/providers/openai) provider
+with an overridden `base_url`.
+
+See https://docs.unify.ai/universal_api/making_queries#openai-python-package for more information.
+
+```baml BAML
+client<llm> UnifyClient {
+    provider "openai-generic"
+    options {
+        base_url "https://api.unify.ai/v0"
+        api_key env.MY_UNIFY_API_KEY
+        model "llama-3.1-405b-chat@together-ai"
+    }
+}
+```
+

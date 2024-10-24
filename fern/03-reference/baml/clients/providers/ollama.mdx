@@ -1,0 +1,99 @@
+---
+title: ollama
+slug: docs/snippets/clients/providers/ollama
+---
+
+
+[Ollama](https://ollama.com/) supports the OpenAI client, allowing you to use the
+[`openai-generic`](/docs/snippets/clients/providers/openai) provider with an
+overridden `base_url`.
+
+<Tip>
+  Note that to call Ollama, you must use its OpenAI-compatible
+  `/v1` endpoint. See [Ollama's OpenAI compatibility
+  documentation](https://ollama.com/blog/openai-compatibility).
+</Tip>
+<Tip>You can try out BAML with Ollama at promptfiddle.com, by running `OLLAMA_ORIGINS='*' ollama serve`. Learn more in [here](https://www.boundaryml.com/blog/ollama-structured-output)</Tip>
+
+```baml BAML
+client<llm> MyClient {
+  provider "openai-generic"
+  options {
+    base_url "http://localhost:11434/v1"
+    model llama3
+  }
+}
+```
+
+The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
+
+## Non-forwarded options
+<ParamField
+  path="base_url"
+  type="string"
+>
+  The base URL for the API. **Default: `http://localhost:11434/v1`**
+  <Tip>Note the `/v1` at the end of the URL. See [Ollama's OpenAI compatability](https://ollama.com/blog/openai-compatibility)</Tip>
+</ParamField>
+
+<ParamField
+  path="default_role"
+  type="string"
+>
+  The default role for any prompts that don't specify a role. **Default: `system`**
+  
+  We don't have any checks for this field, you can pass any string you wish.
+</ParamField>
+
+<ParamField path="headers" type="object">
+  Additional headers to send with the request.
+
+Example:
+```baml BAML
+client<llm> MyClient {
+  provider ollama
+  options {
+    model "llama3"
+    headers {
+      "X-My-Header" "my-value"
+    }
+  }
+}
+```
+</ParamField>
+
+<Markdown src="../../../../snippets/allowed-role-metadata-basic.mdx" />
+
+## Forwarded options
+<ParamField
+   path="messages"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you from the prompt
+</ParamField>
+<ParamField
+   path="stream"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you based on how you call the client in your code
+</ParamField>
+<ParamField
+  path="model"
+  type="string"
+>
+  The model to use.
+
+| Model | Description |
+| --- | --- |
+| `llama3` | Meta Llama 3: The most capable openly available LLM to date |
+| `qwen2` | Qwen2 is a new series of large language models from Alibaba group |
+| `phi3` | Phi-3 is a family of lightweight 3B (Mini) and 14B (Medium) state-of-the-art open models by Microsoft |
+| `aya` | Aya 23, released by Cohere, is a new family of state-of-the-art, multilingual models that support 23 languages. |
+| `mistral` | The 7B model released by Mistral AI, updated to version 0.3. |
+| `gemma` | Gemma is a family of lightweight, state-of-the-art open models built by Google DeepMind. Updated to version 1.1 |
+| `mixtral` | A set of Mixture of Experts (MoE) model with open weights by Mistral AI in 8x7b and 8x22b parameter sizes. |
+
+For the most up-to-date list of models supported by Ollama, see their [Model Library](https://ollama.com/library).
+
+<Tip>To use a specific version you would do: `"mixtral:8x22b"`</Tip>
+</ParamField>

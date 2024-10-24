@@ -1,0 +1,96 @@
+---
+title: google-ai
+slug: docs/snippets/clients/providers/gemini
+---
+
+
+The `google-ai` provider supports the `https://generativelanguage.googleapis.com/v1beta/models/{model_id}/generateContent` and `https://generativelanguage.googleapis.com/v1beta/models/{model_id}/streamGenerateContent` endpoints.
+
+<Tip>
+The use of `v1beta` rather than `v1` aligns with the endpoint conventions established in [Google's SDKs](https://github.com/google-gemini/generative-ai-python/blob/8a29017e9120f0552ee3ad6092e8545d1aa6f803/google/generativeai/client.py#L60) and offers access to both the existing `v1` models and additional models exclusive to `v1beta`.
+</Tip>
+
+<Tip>
+BAML will automatically pick `streamGenerateContent` if you call the streaming interface.
+</Tip>
+
+Example:
+```baml BAML
+client<llm> MyClient {
+  provider google-ai
+  options {
+    model "gemini-1.5-flash"
+  }
+}
+```
+
+The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
+## Non-forwarded options
+<ParamField
+  path="api_key"
+  type="string"
+>
+  Will be passed as the `x-goog-api-key` header. **Default: `env.GOOGLE_API_KEY`**
+
+  `x-goog-api-key: $api_key`
+</ParamField>
+
+<ParamField path="base_url" type="string">
+  The base URL for the API. **Default: `https://generativelanguage.googleapis.com/v1beta`**
+</ParamField>
+
+<ParamField
+  path="default_role"
+  type="string"
+>
+  The default role for any prompts that don't specify a role. **Default: `user`**
+
+  We don't have any checks for this field, you can pass any string you wish.
+</ParamField>
+
+<ParamField
+  path="model"
+  type="string"
+>
+  The model to use. **Default: `gemini-1.5-flash`**
+
+  We don't have any checks for this field, you can pass any string you wish.
+
+| Model | Input(s) | Optimized for |
+| --- | ---  | --- |
+| `gemini-1.5-pro`  | Audio, images, videos, and text | Complex reasoning tasks such as code and text generation, text editing, problem solving, data extraction and generation |
+| `gemini-1.5-flash`  | Audio, images, videos, and text | Fast and versatile performance across a diverse variety of tasks |
+| `gemini-1.0-pro` | Text | Natural language tasks, multi-turn text and code chat, and code generation |
+
+See the [Google Model Docs](https://ai.google.dev/gemini-api/docs/models/gemini) for the latest models.
+</ParamField>
+
+<ParamField path="headers" type="object">
+  Additional headers to send with the request.
+
+Example:
+```baml BAML
+client<llm> MyClient {
+  provider google-ai
+  options {
+    model "gemini-1.5-flash"
+    headers {
+      "X-My-Header" "my-value"
+    }
+  }
+}
+```
+</ParamField>
+
+<Markdown src="../../../../snippets/allowed-role-metadata-basic.mdx" />
+
+## Forwarded options
+<ParamField
+   path="contents"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you from the prompt
+</ParamField>
+
+
+For all other options, see the [official Google Gemini API documentation](https://ai.google.dev/api/rest/v1beta/models/generateContent).

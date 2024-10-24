@@ -1,0 +1,77 @@
+---
+title: fallback
+slug: docs/snippets/clients/fallback
+---
+
+
+You can use the `fallback` provider to add more resilliancy to your application.
+
+A fallback will attempt to use the first client, and if it fails, it will try the second client, and so on.
+
+<Tip>You can nest fallbacks inside of other fallbacks.</Tip>
+
+```baml BAML
+client<llm> SuperDuperClient {
+  provider fallback
+  options {
+    strategy [
+      ClientA
+      ClientB
+      ClientC
+    ]
+  }
+}
+```
+
+## Options
+
+<ParamField path="strategy" type="List[string]" required>
+  The list of client names to try in order. Cannot be empty.
+</ParamField>
+
+## retry_policy
+
+Like any other client, you can specify a retry policy for the fallback client. See [retry_policy](retry-policy) for more information.
+
+The retry policy will test the fallback itself, after the entire strategy has failed.
+
+```baml BAML
+client<llm> SuperDuperClient {
+  provider fallback
+  retry_policy MyRetryPolicy
+  options {
+    strategy [
+      ClientA
+      ClientB
+      ClientC
+    ]
+  }
+}
+```
+
+## Nesting multiple fallbacks
+
+You can nest multiple fallbacks inside of each other. The fallbacks will just chain as you would expect.
+
+```baml BAML
+client<llm> SuperDuperClient {
+  provider fallback
+  options {
+    strategy [
+      ClientA
+      ClientB
+      ClientC
+    ]
+  }
+}
+
+client<llm> MegaClient {
+  provider fallback
+  options {
+    strategy [
+      SuperDuperClient
+      ClientD
+    ]
+  }
+}
+```

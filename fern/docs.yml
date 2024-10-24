@@ -34,6 +34,9 @@ tabs:
     display-name: Playground
     icon: fa-solid fa-play
     href: https://promptfiddle.com
+  changelog:
+    display-name: Changelog
+    icon: fa-regular fa-history
 
 navigation:
   - tab: home
@@ -42,10 +45,6 @@ navigation:
         path: pages/welcome.mdx
   - tab: guides
     layout:
-      # - page: Changelog
-      #   icon: fa-regular fa-history
-      #   path: 01-guide/introduction.mdx
-
       - section: Introduction
         contents:
           - page: What is BAML?
@@ -181,10 +180,6 @@ navigation:
             path: 01-guide/introduction.mdx
   - tab: examples
     layout:
-      - page: Changelog
-        icon: fa-regular fa-history
-        path: 01-guide/introduction.mdx
-
       - section: Python
         icon: fa-brands fa-python
         contents:
@@ -324,6 +319,48 @@ navigation:
             path: 03-reference/baml/enum.mdx
           - page: generator
             path: 01-guide/introduction.mdx
+      - section: Clients (Supported LLMs)
+        contents:
+          - page: "AWS Bedrock"
+            path: 03-reference/baml/clients/providers/aws-bedrock.mdx
+          - page: "Anthropic"
+            path: 03-reference/baml/clients/providers/anthropic.mdx
+          - page: "Gemini"
+            path: 03-reference/baml/clients/providers/gemini.mdx
+          - page: "OpenAI"
+            path: 03-reference/baml/clients/providers/openai.mdx
+          - page: "OpenAI from Azure"
+            path: 03-reference/baml/clients/providers/azure.mdx
+          - page: "Vertex"
+            path: 03-reference/baml/clients/providers/vertex.mdx
+          - page: "openai-generic"
+            path: 03-reference/baml/clients/providers/openai-generic.mdx
+          - page: "openai-generic: Groq"
+            path: 03-reference/baml/clients/providers/groq.mdx
+          - page: "openai-generic: Hugging Face"
+            path: 03-reference/baml/clients/providers/huggingface.mdx
+          - page: "openai-generic: Keywords AI"
+            path: 03-reference/baml/clients/providers/keywordsai.mdx
+          - page: "openai-generic: LM Studio"
+            path: 03-reference/baml/clients/providers/lmstudio.mdx
+          - page: "openai-generic: Ollama"
+            path: 03-reference/baml/clients/providers/ollama.mdx
+          - page: "openai-generic: OpenRouter"
+            path: 03-reference/baml/clients/providers/openrouter.mdx
+          - page: "openai-generic: TogetherAI"
+            path: 03-reference/baml/clients/providers/together.mdx
+          - page: "openai-generic: Unify AI"
+            path: 03-reference/baml/clients/providers/together.mdx
+          - page: "openai-generic: vLLM"
+            path: 03-reference/baml/clients/providers/vllm.mdx
+      - section: Client Strategies
+        contents:
+          - page: "Retry Policy"
+            path: 03-reference/baml/clients/strategy/retry.mdx
+          - page: "Fallback"
+            path: 03-reference/baml/clients/strategy/fallback.mdx
+          - page: "Round Robin"
+            path: 03-reference/baml/clients/strategy/round-robin.mdx
 
       - section: Prompt Syntax
         contents:
@@ -331,7 +368,9 @@ navigation:
             path: 01-guide/introduction.mdx
           - page: "ctx.output_format"
             path: 01-guide/introduction.mdx
-          - page: Message roles
+          - page: "ctx.client"
+            path: 01-guide/introduction.mdx
+          - page: "_.role"
             path: 01-guide/introduction.mdx
           - page: Variables
             path: 01-guide/introduction.mdx
@@ -393,6 +432,11 @@ navigation:
       #     - page: set_tags
       #       path: 01-guide/introduction.mdx
   - tab: playground
+  - tab: changelog
+    layout:
+      - page: Changelog
+        icon: fa-regular fa-history
+        path: 01-guide/introduction.mdx
 
   # - tab: paid-tooling
   #   layout:

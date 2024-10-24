@@ -1,0 +1,115 @@
+---
+title: azure-openai
+slug: docs/snippets/clients/providers/azure
+---
+
+
+For `azure-openai`, we provide a client that can be used to interact with the OpenAI API hosted on Azure using the `/chat/completions` endpoint.
+
+Example:
+```baml BAML
+client<llm> MyClient {
+  provider azure-openai
+  options {
+    resource_name "my-resource-name"
+    deployment_id "my-deployment-id"
+    // Alternatively, you can use the base_url field
+    // base_url "https://my-resource-name.openai.azure.com/openai/deployments/my-deployment-id"
+    api_version "2024-02-01"
+    api_key env.AZURE_OPENAI_API_KEY
+  }
+}
+```
+
+<Warning>
+  `api_version` is required. Azure will return not found if the version is not specified.
+</Warning>
+
+
+The options are passed through directly to the API, barring a few. Here's a shorthand of the options:
+
+## Non-forwarded options
+<ParamField
+  path="api_key"
+  type="string"
+>
+  Will be injected via the header `API-KEY`. **Default: `env.AZURE_OPENAI_API_KEY`**
+
+  `API-KEY: $api_key`
+</ParamField>
+
+<ParamField
+  path="base_url"
+  type="string"
+>
+  The base URL for the API. **Default: `https://${resource_name}.openai.azure.com/openai/deployments/${deployment_id}`**
+
+  May be used instead of `resource_name` and `deployment_id`.
+</ParamField>
+
+<ParamField
+  path="deployment_id"
+  type="string"
+  required
+>
+  See the `base_url` field.
+</ParamField>
+
+<ParamField
+  path="resource_name"
+  type="string"
+  required
+>
+  See the `base_url` field.
+</ParamField>
+
+<ParamField
+  path="default_role"
+  type="string"
+>
+  The default role for any prompts that don't specify a role. **Default: `system`**
+  
+  We don't have any checks for this field, you can pass any string you wish.
+</ParamField>
+
+<ParamField path="api_version" type="string" required>
+  Will be passed via a query parameter `api-version`.
+</ParamField>
+
+<ParamField path="headers" type="object">
+  Additional headers to send with the request.
+
+Example:
+```baml BAML
+client<llm> MyClient {
+  provider azure-openai
+  options {
+    resource_name "my-resource-name"
+    deployment_id "my-deployment-id"
+    api_version "2024-02-01"
+    api_key env.AZURE_OPENAI_API_KEY
+    headers {
+      "X-My-Header" "my-value"
+    }
+  }
+}
+```
+</ParamField>
+
+<Markdown src="../../../../snippets/allowed-role-metadata-basic.mdx" />
+
+## Forwarded options
+<ParamField
+   path="messages"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you from the prompt
+</ParamField>
+<ParamField
+   path="stream"
+   type="DO NOT USE"
+>
+  BAML will auto construct this field for you based on how you call the client in your code
+</ParamField>
+
+For all other options, see the [official Azure API documentation](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions).

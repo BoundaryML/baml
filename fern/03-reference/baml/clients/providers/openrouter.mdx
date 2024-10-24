@@ -1,0 +1,25 @@
+---
+title: openrouter
+slug: docs/snippets/clients/providers/openrouter
+---
+
+[OpenRouter](https://openrouter.ai) supports the OpenAI client, allowing you to use the
+[`openai-generic`](/docs/snippets/clients/providers/openai) provider with an
+overridden `base_url`.
+
+
+
+```baml BAML
+client<llm> MyClient {
+  provider "openai-generic"
+  options {
+    base_url "https://openrouter.ai/api/v1"
+    api_key env.OPENROUTER_API_KEY
+    model "openai/gpt-3.5-turbo"
+    headers {
+      "HTTP-Referer" "YOUR-SITE-URL" // Optional
+      "X-Title" "YOUR-TITLE" // Optional
+    }
+  }
+}
+```
