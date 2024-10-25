@@ -365,7 +365,7 @@ fn first_failing_assert_nested<'a>(
     baml_value: &BamlValue,
     field_type: &'a FieldType
 ) -> anyhow::Result<Option<Constraint>> {
-    let value_with_types = ir.distribute_type(baml_value.clone(), field_type.clone())?;
+    let value_with_types = ir.distribute_type(baml_value.clone(), field_type.clone()).expect("distribute type works");
     let first_failure = value_with_types
         .iter()
         .map(|value_node| {
