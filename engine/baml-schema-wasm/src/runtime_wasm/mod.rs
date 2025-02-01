@@ -80,8 +80,7 @@ pub fn on_wasm_init() {
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
-#[derive(Serialize, Deserialize)]
-
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WasmProject {
     #[wasm_bindgen(readonly)]
     pub root_dir_name: String,
@@ -102,6 +101,7 @@ pub struct WasmDiagnosticError {
 // use serde::Serialize;
 
 #[wasm_bindgen(getter_with_clone)]
+#[derive(Debug)]
 pub struct SymbolLocation {
     pub uri: String,
     pub start_line: usize,
@@ -290,6 +290,7 @@ impl WasmProject {
 }
 
 #[wasm_bindgen(inspectable, getter_with_clone)]
+#[derive(Clone)]
 pub struct WasmRuntime {
     runtime: BamlRuntime,
 }
@@ -1532,6 +1533,7 @@ impl From<&OrchestratorNode> for SerializableOrchestratorNode {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader {
     Some(Box::new(move |path| {
         Box::pin({
@@ -1563,6 +1565,11 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
             }
         })
     }))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader {
+    None
 }
 
 #[wasm_bindgen]

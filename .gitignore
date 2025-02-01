@@ -19,7 +19,6 @@ $RECYCLE.BIN/
 **/dist
 *.cab
 *.env
-*.exe
 *.icloud
 *.lcov
 *.lnk
@@ -131,7 +130,6 @@ Thumbs.db:encryptable
 [Dd]esktop.ini
 __pycache__
 .pytest_cache
-bin/
 bower_components
 coverage
 coverage/# Logs
@@ -165,3 +163,5 @@ yarn-debug.log*
 yarn-error.log*
 yarn.lock
 artifacts
+.direnv
+typescript/vscode-ext/packages/vscode/server/baml-cli

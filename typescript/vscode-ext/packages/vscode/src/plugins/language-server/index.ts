@@ -1,3 +1,5 @@
+import * as fs from 'fs'
+import * as os from 'os'
 import * as path from 'path'
 
 import type { ParserDatabase, TestRequest } from '@baml/common'
@@ -6,7 +8,12 @@ import semver from 'semver'
 import { type ExtensionContext, OutputChannel, Uri, ViewColumn, commands, window, workspace } from 'vscode'
 import * as vscode from 'vscode'
 import type { LanguageClientOptions } from 'vscode-languageclient'
-import { type LanguageClient, type ServerOptions, TransportKind } from 'vscode-languageclient/node'
+import {
+  type LanguageClient,
+  RevealOutputChannelOn,
+  type ServerOptions,
+  TransportKind,
+} from 'vscode-languageclient/node'
 import { z } from 'zod'
 import pythonToBamlCodeLens from '../../LanguageToBamlCodeLensProvider'
 import { WebPanelView } from '../../panels/WebPanelView'
@@ -48,6 +55,7 @@ export const requestDiagnostics = async () => {
 
 export const requestBamlCLIVersion = async () => {
   try {
+    console.log('requesting baml cli version')
     const version = await client?.sendRequest('bamlCliVersion')
     if (!version) {
       return
@@ -128,137 +136,160 @@ const activateClient = (
   clientOptions: LanguageClientOptions,
 ) => {
   getConfig()
+  console.log('Starting language server with options', JSON.stringify(serverOptions, null, 2))
 
   // Create the language client
   client = createLanguageServer(serverOptions, clientOptions)
+  console.log('client created')
+  client
+    .onReady()
+    .then(() => {
+      console.log('client ready')
+      client.onNotification('baml/showLanguageServerOutput', () => {
+        // need to append line for the show to work for some reason.
+        // dont delete this.
+        client.outputChannel.appendLine('\n')
+        client.outputChannel.show(true)
+      })
+      client.onNotification('baml/message', (message: BAMLMessage) => {
+        client.outputChannel.appendLine('baml/message' + JSON.stringify(message, null, 2))
+        let msg: Thenable<any>
+        switch (message.type) {
+          case 'warn': {
+            msg = window.showWarningMessage(message.message)
+            break
+          }
+          case 'info': {
+            window.withProgress(
+              {
+                location: vscode.ProgressLocation.Notification,
+                cancellable: false,
+              },
+              async (progress, token) => {
+                let customCancellationToken: vscode.CancellationTokenSource | null = null
+                const rest = new Promise<null>((resolve) => {
+                  customCancellationToken = new vscode.CancellationTokenSource()
 
-  client.onReady().then(() => {
-    client.onNotification('baml/showLanguageServerOutput', () => {
-      // need to append line for the show to work for some reason.
-      // dont delete this.
-      client.outputChannel.appendLine('\n')
-      client.outputChannel.show(true)
-    })
-    client.onNotification('baml/message', (message: BAMLMessage) => {
-      client.outputChannel.appendLine('baml/message' + JSON.stringify(message, null, 2))
-      let msg: Thenable<any>
-      switch (message.type) {
-        case 'warn': {
-          msg = window.showWarningMessage(message.message)
-          break
-        }
-        case 'info': {
-          window.withProgress(
-            {
-              location: vscode.ProgressLocation.Notification,
-              cancellable: false,
-            },
-            async (progress, token) => {
-              let customCancellationToken: vscode.CancellationTokenSource | null = null
-              const rest = new Promise<null>((resolve) => {
-                customCancellationToken = new vscode.CancellationTokenSource()
+                  customCancellationToken.token.onCancellationRequested(() => {
+                    customCancellationToken?.dispose()
+                    customCancellationToken = null
 
-                customCancellationToken.token.onCancellationRequested(() => {
-                  customCancellationToken?.dispose()
-                  customCancellationToken = null
+                    // vscode.window.showInformationMessage('Cancelled the progress')
+                    resolve(null)
+                    return
+                  })
 
-                  // vscode.window.showInformationMessage('Cancelled the progress')
-                  resolve(null)
-                  return
+                  const totalMs = message.durationMs || 1500 // Total duration in milliseconds (2 seconds)
+                  const updateCount = 50 // Number of updates
+                  const intervalMs = totalMs / updateCount // Interval between updates
+                  ;(async () => {
+                    for (let i = 0; i < updateCount; i++) {
+                      const prog = ((i + 1) / updateCount) * 100
+                      progress.report({ increment: prog, message: message.message })
+                      await sleep(intervalMs)
+                    }
+                    resolve(null)
+                  })()
                 })
 
-                const totalMs = message.durationMs || 1500 // Total duration in milliseconds (2 seconds)
-                const updateCount = 50 // Number of updates
-                const intervalMs = totalMs / updateCount // Interval between updates
-                ;(async () => {
-                  for (let i = 0; i < updateCount; i++) {
-                    const prog = ((i + 1) / updateCount) * 100
-                    progress.report({ increment: prog, message: message.message })
-                    await sleep(intervalMs)
-                  }
-                  resolve(null)
-                })()
-              })
+                return rest
+              },
+            )
+            break
+          }
+          case 'error': {
+            window.showErrorMessage(message.message)
+            break
+          }
+          default: {
+            throw new Error('Invalid message type')
+          }
+        }
+      })
 
-              return rest
-            },
-          )
-          break
+      client.onRequest('runtime_diagnostics', ({ errors, warnings }: { errors: number; warnings: number }) => {
+        try {
+          if (errors > 0) {
+            StatusBarPanel.instance.setStatus({ status: 'fail', count: errors })
+          } else if (warnings > 0) {
+            StatusBarPanel.instance.setStatus({ status: 'warn', count: warnings })
+          } else {
+            StatusBarPanel.instance.setStatus('pass')
+          }
+        } catch (e) {
+          console.error('Error updating status bar', e)
         }
-        case 'error': {
-          window.showErrorMessage(message.message)
-          break
-        }
-        default: {
-          throw new Error('Invalid message type')
-        }
-      }
-    })
+      })
 
-    client.onRequest('runtime_diagnostics', ({ errors, warnings }: { errors: number; warnings: number }) => {
-      try {
-        if (errors > 0) {
-          StatusBarPanel.instance.setStatus({ status: 'fail', count: errors })
-        } else if (warnings > 0) {
-          StatusBarPanel.instance.setStatus({ status: 'warn', count: warnings })
+      client.onRequest('executeCommand', async (command: string) => {
+        try {
+          console.log('Executing command', command)
+          await vscode.commands.executeCommand(command)
+        } catch (e) {
+          console.error('Error executing command', e)
+        }
+      })
+
+      client.onRequest('baml_settings_updated', (config: typeof bamlConfig) => {
+        console.log('baml_settings_updated', config)
+        bamlConfig.config = config.config
+        bamlConfig.cliVersion = config.cliVersion
+        WebPanelView.currentPanel?.postMessage('baml_settings_updated', bamlConfig)
+      })
+
+      // Handler for both notifications and requests of type "runtime_updated".
+      const handleRuntimeUpdated = (params: { root_path: string; files: Record<string, string> }) => {
+        console.log('*** HANDLE RUNTIME UPDATED ***' + JSON.stringify(params, null, 2))
+        // Only send message if current file is part of this root path
+        const activeEditor =
+          vscode.window.activeTextEditor ||
+          (vscode.window.visibleTextEditors.length > 0 ? vscode.window.visibleTextEditors[0] : null)
+        if (activeEditor) {
+          const currentFilePath = URI.parse(activeEditor.document.uri.toString()).fsPath
+          const rootPathUri = URI.file(params.root_path).fsPath
+          if (currentFilePath.startsWith(rootPathUri)) {
+            console.log('sending add_project message')
+            WebPanelView.currentPanel?.postMessage('add_project', {
+              ...params,
+              root_path: URI.file(params.root_path).toString(),
+            })
+          } else {
+            console.log('root path doesnt match current file', currentFilePath, rootPathUri)
+          }
         } else {
-          StatusBarPanel.instance.setStatus('pass')
+          console.log('no active editor')
         }
-      } catch (e) {
-        console.error('Error updating status bar', e)
       }
-    })
 
-    client.onRequest('executeCommand', async (command: string) => {
-      try {
-        console.log('Executing command', command)
-        await vscode.commands.executeCommand(command)
-      } catch (e) {
-        console.error('Error executing command', e)
-      }
-    })
+      // The Node-based Language Server sends REQUESTS of type "runtime_updated".
+      client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
+        console.log('REQUEST: runtime_updated')
+        handleRuntimeUpdated(params)
+      })
 
-    client.onRequest('baml_settings_updated', (config: typeof bamlConfig) => {
-      console.log('baml_settings_updated', config)
-      bamlConfig.config = config.config
-      bamlConfig.cliVersion = config.cliVersion
-      WebPanelView.currentPanel?.postMessage('baml_settings_updated', bamlConfig)
-    })
+      // The Web-based Language Server sends NOTIFICATIONS of type "runtime_updated".
+      client.onNotification('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
+        console.log('NOTIF: runtime_updated')
+        handleRuntimeUpdated(params)
+      })
 
-    client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
-      // Only send message if current file is part of this root path
-      const activeEditor = vscode.window.activeTextEditor
-      if (activeEditor) {
-        const currentFilePath = URI.parse(activeEditor.document.uri.toString()).fsPath
-        const rootPathUri = URI.file(params.root_path).fsPath
-        if (currentFilePath.startsWith(rootPathUri)) {
-          console.log('sending add_project message')
-          WebPanelView.currentPanel?.postMessage('add_project', {
-            ...params,
-            root_path: URI.file(params.root_path).toString(),
-          })
-        } else {
-          console.log('root path doesnt match current file', currentFilePath, rootPathUri)
-        }
-      } else {
-        console.log('no active editor')
-      }
+      // this will fail otherwise in dev mode if the config where the baml path is hasnt been picked up yet. TODO: pass the config to the server to avoid this.
+      // Immediately check for updates on extension activation
+      void checkForUpdates({ showIfNoUpdates: false })
+      // And check again once every hour
+      intervalTimers.push(
+        setInterval(
+          () => {
+            console.log(`checking for updates ${new Date().toString()}`)
+            checkForUpdates({ showIfNoUpdates: false })
+          },
+          6 * 60 * 60 * 1000 /* 6h in milliseconds: min/hr * secs/min * ms/sec */,
+        ),
+      )
     })
-
-    // this will fail otherwise in dev mode if the config where the baml path is hasnt been picked up yet. TODO: pass the config to the server to avoid this.
-    // Immediately check for updates on extension activation
-    void checkForUpdates({ showIfNoUpdates: false })
-    // And check again once every hour
-    intervalTimers.push(
-      setInterval(
-        () => {
-          console.log(`checking for updates ${new Date().toString()}`)
-          checkForUpdates({ showIfNoUpdates: false })
-        },
-        6 * 60 * 60 * 1000 /* 6h in milliseconds: min/hr * secs/min * ms/sec */,
-      ),
-    )
-  })
+    .catch((err) => {
+      console.error('Error activating client', err)
+    })
 
   const disposable = client.start()
 
@@ -295,28 +326,65 @@ const plugin: BamlVSCodePlugin = {
     console.log('debugmode', isDebugMode())
     // serverModule = context.asAbsolutePath(path.join('../../packages/language-server/dist/src/bin'))
 
-    serverModule = context.asAbsolutePath(path.join('language-server', 'out', 'bin'))
-
-    console.log(`serverModules: ${serverModule}`)
-
     // The debug options for the server
     // --inspect=6009: runs the server in Node's Inspector mode so VS Code can attach to the server for debugging
     const debugOptions = {
       execArgv: ['--nolazy', '--inspect=6009'],
-      env: { DEBUG: true },
+      env: {
+        DEBUG: true,
+        ...process.env,
+      },
     }
 
     // If the extension is launched in debug mode then the debug server options are used
     // Otherwise the run options are used
+    // const serverOptions: ServerOptions = {
+    //   run: { module: serverModule, transport: TransportKind.ipc },
+    //   debug: {
+    //     module: serverModule,
+    //     transport: TransportKind.ipc,
+    //     options: debugOptions,
+    //   },
+    // }
+
+    var serverExecutableName = 'baml-cli'
+    let subdir = ''
+    const platform = os.platform()
+    if (platform === 'win32') {
+      serverExecutableName = `${serverExecutableName}.exe`
+      subdir = 'windows'
+    } else if (platform === 'darwin') {
+      subdir = 'darwin'
+    } else {
+      subdir = 'linux'
+    }
+    var serverAbsolutePath = context.asAbsolutePath(path.join('vscode', 'server', subdir, serverExecutableName))
+    const devServerPath = context.asAbsolutePath(path.join('server', serverExecutableName))
+
+    // If the dev server file exists, overwrite serverAbsolutePath with it.
+    if (fs.existsSync(devServerPath)) {
+      serverAbsolutePath = devServerPath
+    }
+    console.log('serverAbsolutePath: ', serverAbsolutePath)
+
+    if (platform != 'win32') {
+      fs.chmodSync(serverAbsolutePath, '755')
+    }
+
     const serverOptions: ServerOptions = {
-      run: { module: serverModule, transport: TransportKind.ipc },
+      run: {
+        command: serverAbsolutePath,
+        args: ['lsp'],
+        options: {
+          env: process.env,
+        },
+      },
       debug: {
-        module: serverModule,
-        transport: TransportKind.ipc,
+        command: serverAbsolutePath,
+        args: ['lsp'],
         options: debugOptions,
       },
     }
-
     // Options to control the language client
     const clientOptions: LanguageClientOptions = {
       // Register the server for baml docs and python
@@ -327,6 +395,10 @@ const plugin: BamlVSCodePlugin = {
           pattern: '**/baml_src/**',
         },
       ],
+      outputChannel: vscode.window.createOutputChannel('Baml Language Server2'),
+      traceOutputChannel: vscode.window.createOutputChannel('Baml Language Server Trace'),
+      revealOutputChannelOn: RevealOutputChannelOn.Never,
+      // initializationOptions // TODO add settings here.
       synchronize: {
         fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json}'),
       },
@@ -362,7 +434,11 @@ const plugin: BamlVSCodePlugin = {
 
       commands.registerCommand(
         'baml.jumpToDefinition',
-        async (args: { file_path: string; start: number; end: number }) => {
+        async (args: {
+          file_path: string
+          start: number
+          end: number
+        }) => {
           if (!args.file_path) {
             vscode.window.showErrorMessage('File path is missing.')
             return

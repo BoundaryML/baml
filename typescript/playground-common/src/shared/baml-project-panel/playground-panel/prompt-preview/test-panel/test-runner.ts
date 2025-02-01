@@ -69,10 +69,8 @@ export const useRunTests = (maxBatchSize = 5) => {
         const runTest = async (test: { functionName: string; testName: string }) => {
           try {
             const testCase = get(testCaseAtom(test))
-            console.log('test deps', testCase, rt, ctx, wasm)
             if (!rt || !ctx || !testCase || !wasm) {
               setState(test, { status: 'error', message: 'Missing required dependencies' })
-              console.error('Missing required dependencies')
               return
             }
 
