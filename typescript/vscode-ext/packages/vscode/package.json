@@ -19,7 +19,7 @@
   ],
   "main": "./out/extension.js",
   "scripts": {
-    "server:build": "mkdir -p server && cd ../../../../engine && cargo build --bin baml-cli --release && cp target/release/baml-cli ../typescript/vscode-ext/packages/vscode/server/",
+    "server:build": "cd ../../../../engine && cargo build --bin baml-cli && cp target/debug/baml-cli ../typescript/vscode-ext/packages/vscode/server/",
     "vscode:prepublish": "pnpm run esbuild-base --minify",
     "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node ",
     "esbuild-build": "pnpm run esbuild-base --sourcemap",
@@ -57,7 +57,7 @@
     "@types/mocha": "10.0.3",
     "@types/vscode": "1.63.0",
     "@vscode/test-electron": "2.3.5",
-    "@vscode/vsce": "2.21.1",
+    "@vscode/vsce": "3.2.2",
     "esbuild": "^0.19.4",
     "is-ci": "3.0.1",
     "ovsx": "0.8.3",

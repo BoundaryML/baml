@@ -79,9 +79,9 @@ pub fn on_wasm_init() {
     console_error_panic_hook::set_once();
 }
 
+// TODO: (Greg) Move this into language_server.
 #[wasm_bindgen(getter_with_clone, inspectable)]
-#[derive(Serialize, Deserialize)]
-
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WasmProject {
     #[wasm_bindgen(readonly)]
     pub root_dir_name: String,
@@ -102,6 +102,7 @@ pub struct WasmDiagnosticError {
 // use serde::Serialize;
 
 #[wasm_bindgen(getter_with_clone)]
+#[derive(Debug)]
 pub struct SymbolLocation {
     pub uri: String,
     pub start_line: usize,
@@ -289,7 +290,19 @@ impl WasmProject {
     }
 }
 
+impl WasmProject {
+    pub fn run_generators_native(
+        &self,
+        no_version_check: Option<bool>,
+    ) -> Result<Vec<generator::WasmGeneratorOutput>, anyhow::Error> {
+        Err(anyhow::anyhow!(
+            "This function is not available in the wasm target."
+        ))
+    }
+}
+
 #[wasm_bindgen(inspectable, getter_with_clone)]
+#[derive(Clone)]
 pub struct WasmRuntime {
     runtime: BamlRuntime,
 }
@@ -1532,6 +1545,7 @@ impl From<&OrchestratorNode> for SerializableOrchestratorNode {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader {
     Some(Box::new(move |path| {
         Box::pin({
@@ -1563,6 +1577,11 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
             }
         })
     }))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader {
+    None
 }
 
 #[wasm_bindgen]

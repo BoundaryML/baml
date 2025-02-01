@@ -131,7 +131,6 @@ Thumbs.db:encryptable
 [Dd]esktop.ini
 __pycache__
 .pytest_cache
-bin/
 bower_components
 coverage
 coverage/# Logs

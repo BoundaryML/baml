@@ -45,6 +45,9 @@ pub(crate) enum Commands {
 
     #[command(about = "Run BAML tests")]
     Test(baml_runtime::cli::testing::TestArgs),
+
+    #[command(about = "Starts a language server", name = "lsp")]
+    LanguageServer(crate::lsp::LanguageServerArgs),
 }
 
 impl RuntimeCli {
@@ -123,7 +126,12 @@ impl RuntimeCli {
                         Ok(crate::ExitCode::NoTestsRun)
                     }
                 }
-            }
+            Commands::LanguageServer(args) => {
+                match args.run() {
+                    Ok(crate::ExitCode::Success),
+                    Err(_)(crate::ExitCode::Other),
+                }
+            },
         }
     }
 }

@@ -10,6 +10,7 @@ members = [
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
+  "language_server",
   "sandbox",
 ]
 default-members = [
@@ -26,9 +27,12 @@ default-members = [
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
+  "language_server"
 ]
 
 [workspace.dependencies]
+lsp-server = { version = "0.7.6" }
+lsp-types = { version = "0.95.0" }
 anyhow = "1.0"
 askama = "0.12.1"
 baml-cli = { path = "cli" }

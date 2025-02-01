@@ -737,6 +737,9 @@ class BamlProjectManager {
       if (project) {
         project.requestDiagnostics()
         if (project.runtime()) {
+          console.log('RUNTIME_UPDATED')
+          console.log(project.rootPath())
+          console.log(project.files())
           this.notifier({ type: 'runtime_updated', root_path: project.rootPath(), files: project.files() })
         } else {
           console.log('undefined runtime')

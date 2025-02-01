@@ -70,9 +70,14 @@ export const useRunTests = (maxBatchSize = 5) => {
           try {
             const testCase = get(testCaseAtom(test))
             console.log('test deps', testCase, rt, ctx, wasm)
+            var missingDeps = ['missing items:']
             if (!rt || !ctx || !testCase || !wasm) {
-              setState(test, { status: 'error', message: 'Missing required dependencies' })
-              console.error('Missing required dependencies')
+              missingDeps.push(rt ? 'rt' : '')
+              missingDeps.push(ctx ? 'ctx' : '')
+              missingDeps.push(testCase ? 'testCase' : '')
+              missingDeps.push(wasm ? 'wasm' : '')
+              setState(test, { status: 'error', message: 'Missing required dependencies: ' + missingDeps.join(', ') })
+              console.error('Missing required dependencies' + missingDeps.join(', '))
               return
             }
 

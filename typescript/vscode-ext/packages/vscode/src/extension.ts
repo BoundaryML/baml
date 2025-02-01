@@ -376,14 +376,18 @@ export function activate(context: vscode.ExtensionContext) {
   // Listen for messages from the webview
 
   plugins.map(async (plugin) => {
-    const enabled = await plugin.enabled()
-    if (enabled) {
-      console.log(`Activating ${plugin.name}`)
-      if (plugin.activate) {
-        await plugin.activate(context, outputChannel)
+    try {
+      const enabled = await plugin.enabled()
+      if (enabled) {
+        console.log(`Activating ${plugin.name}`)
+        if (plugin.activate) {
+          await plugin.activate(context, outputChannel)
+        }
+      } else {
+        console.log(`${plugin.name} is Disabled`)
       }
-    } else {
-      console.log(`${plugin.name} is Disabled`)
+    } catch (error) {
+      console.error(`Error activating ${plugin.name}:`, error)
     }
   })
 
