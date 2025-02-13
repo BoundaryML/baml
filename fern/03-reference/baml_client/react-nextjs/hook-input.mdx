@@ -9,7 +9,7 @@ The `HookInput` type defines the configuration options for BAML React hooks.
 ```typescript title="Example Usage"
 function Component() {
   const { data, streamingData } = useTestAws({
-    stream: true,
+    stream: true, // optional, defaults to true
     onPartial: (text) => console.log("Streaming:", text),
     onFinal: (text) => console.log("Complete:", text),
     onError: (error) => console.error("Error:", error)
@@ -58,7 +58,7 @@ type HookInput<FunctionName, Options extends { stream?: boolean } = { stream?: f
   path="Options"
   type="{ stream?: boolean }"
 >
-  Configuration object that determines streaming behavior. Defaults to `{ stream?: false }`.
+  Configuration object that determines streaming behavior. Defaults to `{ stream?: true }`.
 </ParamField>
 
 ## Properties

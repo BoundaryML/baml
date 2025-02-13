@@ -10,10 +10,21 @@ BAML automatically generates a server action and React hook for your BAML functi
 
 <CodeBlocks>
 ```baml title="baml_src/prompt.baml"
-function WriteMeAStory(input: string) {
-  client openai/gpt-4o
+class Story {
+  title string @stream.not_null
+  content string @stream.not_null
+}
+
+function WriteMeAStory(input: string) -> Story {
+  client "openai/gpt-4o"
   prompt #"
-    Tell me a story about {{input}}
+    Tell me a story
+
+    {{ ctx.output_format() }}
+
+    {{ _.role("user") }}
+
+    Topic: {{input}}
   "#
 }
 ```
@@ -22,30 +33,38 @@ function WriteMeAStory(input: string) {
 baml-cli generate
 ```
 
-```tsx title="app/components/story-form.tsx" {8}
+```tsx title="app/components/story-form.tsx" {8,10,15-16}
 'use client'
 
   // ✅ Automatically generates a server action and React hook
 
-import { useWriteMeAStoryAction } from "@/baml_client/react/hooks";
+import { useWriteMeAStory } from "@/baml_client/react/hooks";
 
 export function StoryForm() {
-  const writeMeAStory = useWriteMeAStory({ stream: true });
+  const writeMeAStory = useWriteMeAStory();
 
-  return <div>
-    <button onClick={() => writeMeAStory.mutate("Dragons")}>
-      Generate Story
-    </button>
+  const data = writeMeAStory.isLoading ? writeMeAStory.streamingData : writeMeAStory.data;
 
-    {writeMeAStory.isPending && <div>Generating...</div>}
-    {writeMeAStory.data && (
-      <div>
-        <h4>{writeMeAStory.data.title}</h4>
-        <p>{writeMeAStory.data.content}</p>
-      </div>
-    )}
-    {writeMeAStory.error && <div>Error: {writeMeAStory.error.message}</div>}
-  </div>
+  return (
+    <div>
+      <button
+        onClick={() => writeMeAStory.mutate("Dragons")}
+        disabled={writeMeAStory.isLoading}>
+        Generate Story
+      </button>
+
+      {writeMeAStory.isLoading && <div>Generating...</div>}
+
+      {data && (
+        <div>
+          <h4>{data.title}</h4>
+          <p>{data.content}</p>
+        </div>
+      )}
+
+      {writeMeAStory.error && <div>Error: {writeMeAStory.error.message}</div>}
+    </div>
+  );
 }
 ```
 </CodeBlocks>
@@ -187,10 +206,21 @@ BAML automatically generates type-safe Next.js server actions and React hooks fo
 
 <CodeBlocks>
 ```baml title="baml_src/prompt.baml"
-function WriteMeAStory(input: string) {
-  client openai/gpt-4o
+class Story {
+  title string @stream.not_null
+  content string @stream.not_null
+}
+
+function WriteMeAStory(input: string) -> Story {
+  client "openai/gpt-4o"
   prompt #"
-    Tell me a story about {{input}}
+    Tell me a story
+
+    {{ ctx.output_format() }}
+
+    {{ _.role("user") }}
+
+    Topic: {{input}}
   "#
 }
 ```
@@ -208,7 +238,9 @@ export function StoryForm() {
     isError,       // Error state
     error,         // Error details
     mutate        // Function to call the action
-  } = useWriteMeAStory();
+  } = useWriteMeAStory({
+    stream: false
+  });
 
   return (
     <div>
@@ -244,7 +276,6 @@ export function StreamingStoryForm() {
     error,
     mutate
   } = useWriteMeAStory({
-    stream: true,
     onPartial: (partial) => {
       // Handle real-time updates
       console.log('Story in progress:', partial);
@@ -255,25 +286,26 @@ export function StreamingStoryForm() {
     }
   });
 
-  // Use streaming data while loading, fall back to final data when done
-  const story = isLoading ? streamingStory : finalStory;
+  const data = isLoading ? streamingStory : finalStory;
 
   return (
     <div>
       <button
-        onClick={() => mutate("Tell me a story about dragons")}
-        disabled={isLoading}
-      >
-        {isLoading ? 'Generating...' : 'Generate Story'}
+        onClick={() => mutate("Dragons")}
+        disabled={isLoading}>
+        Generate Story
       </button>
 
-      <div>
-        <h3>{streamingStory ? "Writing story..." : "Final story"}</h3>
-        <h4>{story?.title}</h4>
-        <p>{story?.content}</p>
-      </div>
+      {isLoading && <div>Generating...</div>}
 
-      {isError && <div>Error: {error.message}</div>}
+      {data && (
+        <div>
+          <h4>{data.title}</h4>
+          <p>{data.content}</p>
+        </div>
+      )}
+
+      {error && <div>Error: {error.message}</div>}
     </div>
   );
 }

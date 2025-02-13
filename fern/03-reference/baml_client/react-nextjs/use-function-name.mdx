@@ -6,26 +6,45 @@ description: Technical reference for BAML's auto-generated React hooks
 BAML automatically generates a type-safe React hook for each BAML function. Each hook follows the naming pattern `use{FunctionName}` and supports both streaming and non-streaming modes.
 
 <CodeBlocks>
-```baml title="BAML Function"
-function WriteMeAStory(input: string) {
-  client openai/gpt-4
-  prompt #"
-    Tell me a story about {{input}}
-  "#
-}
-```
-
 ```typescript title="Example Usage"
 import { useWriteMeAStory } from "@/baml_client/react/hooks";
 
-// Basic usage
-const { data, error, mutate } = useWriteMeAStory();
+// Basic usage with streaming enabled by default
+const {
+  data,
+  error,
+  mutate,
+  streamingData,
+  isLoading,
+  isSuccess,
+  isError,
+  status
+  } = useWriteMeAStory();
 
 // Streaming usage
-const { data, streamingData } = useWriteMeAStory({
-  stream: true,
-  onPartial: (text) => console.log('Story in progress:', text),
+const writeMeAStory = useWriteMeAStory({
+  stream: true, // optional, defaults to true
 });
+```
+
+```baml title="BAML Function"
+class Story {
+  title string @stream.not_null
+  content string @stream.not_null
+}
+
+function WriteMeAStory(input: string) -> Story {
+  client openai/gpt-4
+  prompt #"
+    Tell me a story.
+
+    {{ ctx.output_format() }}
+
+    {{ _.role("user") }}
+
+    Topic: {{input}}
+  "#
+}
 ```
 </CodeBlocks>
 
@@ -87,7 +106,7 @@ The hook returns an object with the following properties. See [Hook Output](./ho
 </ParamField>
 
 <ParamField
-  path="isPending"
+  path="isLoading"
   type="boolean"
 >
   True while the request is in progress.

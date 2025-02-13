@@ -63,9 +63,9 @@ export type HookOutput<FunctionName extends FunctionNames, Options extends { str
   streamingData?: Options['stream'] extends false ? never : PartialReturnType<FunctionName>
   error?: Error | BamlValidationError | BamlClientFinishReasonError
   isError: boolean
-  isPending: boolean
+  isLoading: boolean
   isSuccess: boolean
-  status: 'idle' | 'pending' | 'success' | 'error'
+  status: 'idle' | 'loading' | 'success' | 'error'
   mutate: (
     ...args: Parameters<(typeof Actions)[FunctionName]>
   ) => Options['stream'] extends false ? Promise<FinalReturnType<FunctionName>> : Promise<ReadableStream<Uint8Array>>
@@ -178,7 +178,7 @@ function hookReducer<TPartial, TFinal>(
  *
  * Features:
  * - **Streaming Support:** Real‑time partial updates via `streamingData`, progress indicators, and incremental UI updates.
- * - **State Management:** Manages loading state (`isPending`), success/error flags, and final/partial results.
+ * - **State Management:** Manages loading state (`isLoading`), success/error flags, and final/partial results.
  * - **Error Handling:** Supports type‑safe error handling for BamlValidationError, BamlClientFinishReasonError, and standard errors.
  *
  * @param Action - The server action to invoke.
@@ -187,7 +187,7 @@ function hookReducer<TPartial, TFinal>(
  *
  * @example
  * ```tsx
- * const { data, error, isPending, mutate } = useBamlAction(StreamingActions.TestAws, { stream: true });
+ * const { data, error, isLoading, mutate } = useBamlAction(StreamingActions.TestAws, { stream: true });
  * ```
  */
 function useBamlAction<FunctionName extends FunctionNames>(
@@ -203,7 +203,7 @@ function useBamlAction<FunctionName extends FunctionNames>(
   props: HookInput<FunctionName, { stream?: boolean }> = {},
 ): HookOutput<FunctionName, { stream: true }> | HookOutput<FunctionName, { stream: false }> {
   const { onFinal, onError } = props
-  const [isPending, startTransition] = useTransition()
+  const [isLoading, startTransition] = useTransition()
 
   const [state, dispatch] = useReducer(hookReducer<PartialReturnType<FunctionName>, FinalReturnType<FunctionName>>, {
     isSuccess: false,
@@ -234,6 +234,7 @@ function useBamlAction<FunctionName extends FunctionNames>(
                       FinalReturnType<FunctionName>
                     > = JSON.parse(chunk)
                     if (parsed.error) {
+                      // TODO: Update this
                       let error: Error | BamlValidationError | BamlClientFinishReasonError = new Error('Unknown error')
 
                       if (isBamlError(parsed.error)) {
@@ -295,26 +296,26 @@ function useBamlAction<FunctionName extends FunctionNames>(
     [action, props.stream, onFinal, onError],
   )
 
-  const status = useMemo<'idle' | 'pending' | 'success' | 'error'>(() => {
-    if (isPending) return 'pending'
+  const status = useMemo<'idle' | 'loading' | 'success' | 'error'>(() => {
+    if (isLoading) return 'loading'
     if (state.error) return 'error'
     if (state.isSuccess) return 'success'
     return 'idle'
-  }, [isPending, state.error, state.isSuccess])
+  }, [isLoading, state.error, state.isSuccess])
 
   const result = {
     data: state.data,
     error: state.error,
     isError: !!state.error,
     isSuccess: state.isSuccess,
-    isPending,
+    isLoading,
     mutate,
     status,
   }
 
   return {
     ...result,
-    streamingData: isStreamingProps(props) ? state.streamingData : undefined,
+    streamingData: isLoadingProps(props) ? state.streamingData : undefined,
   }
 }
 
@@ -345,10 +346,10 @@ function useBamlAction<FunctionName extends FunctionNames>(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = use{{ func.name }}({ stream: false});
+ * const { data, error, isLoading, mutate } = use{{ func.name }}({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = use{{ func.name }}({
+ * const { data, streamingData, isLoading, error, mutate } = use{{ func.name }}({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -364,7 +365,7 @@ export function use{{ func.name }}(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.{{ func.name }}, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.{{ func.name }}, props)
   }
   throw new Error('Invalid props')

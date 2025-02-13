@@ -80,9 +80,9 @@ export type HookOutput<FunctionName extends FunctionNames, Options extends { str
   streamingData?: Options['stream'] extends false ? never : PartialReturnType<FunctionName>
   error?: Error | BamlValidationError | BamlClientFinishReasonError
   isError: boolean
-  isPending: boolean
+  isLoading: boolean
   isSuccess: boolean
-  status: 'idle' | 'pending' | 'success' | 'error'
+  status: 'idle' | 'loading' | 'success' | 'error'
   mutate: (
     ...args: Parameters<(typeof Actions)[FunctionName]>
   ) => Options['stream'] extends false ? Promise<FinalReturnType<FunctionName>> : Promise<ReadableStream<Uint8Array>>
@@ -195,7 +195,7 @@ function hookReducer<TPartial, TFinal>(
  *
  * Features:
  * - **Streaming Support:** Real‑time partial updates via `streamingData`, progress indicators, and incremental UI updates.
- * - **State Management:** Manages loading state (`isPending`), success/error flags, and final/partial results.
+ * - **State Management:** Manages loading state (`isLoading`), success/error flags, and final/partial results.
  * - **Error Handling:** Supports type‑safe error handling for BamlValidationError, BamlClientFinishReasonError, and standard errors.
  *
  * @param Action - The server action to invoke.
@@ -204,7 +204,7 @@ function hookReducer<TPartial, TFinal>(
  *
  * @example
  * ```tsx
- * const { data, error, isPending, mutate } = useBamlAction(StreamingActions.TestAws, { stream: true });
+ * const { data, error, isLoading, mutate } = useBamlAction(StreamingActions.TestAws, { stream: true });
  * ```
  */
 function useBamlAction<FunctionName extends FunctionNames>(
@@ -220,7 +220,7 @@ function useBamlAction<FunctionName extends FunctionNames>(
   props: HookInput<FunctionName, { stream?: boolean }> = {},
 ): HookOutput<FunctionName, { stream: true }> | HookOutput<FunctionName, { stream: false }> {
   const { onFinal, onError } = props
-  const [isPending, startTransition] = useTransition()
+  const [isLoading, startTransition] = useTransition()
 
   const [state, dispatch] = useReducer(hookReducer<PartialReturnType<FunctionName>, FinalReturnType<FunctionName>>, {
     isSuccess: false,
@@ -251,6 +251,7 @@ function useBamlAction<FunctionName extends FunctionNames>(
                       FinalReturnType<FunctionName>
                     > = JSON.parse(chunk)
                     if (parsed.error) {
+                      // TODO: Update this
                       let error: Error | BamlValidationError | BamlClientFinishReasonError = new Error('Unknown error')
 
                       if (isBamlError(parsed.error)) {
@@ -312,26 +313,26 @@ function useBamlAction<FunctionName extends FunctionNames>(
     [action, props.stream, onFinal, onError],
   )
 
-  const status = useMemo<'idle' | 'pending' | 'success' | 'error'>(() => {
-    if (isPending) return 'pending'
+  const status = useMemo<'idle' | 'loading' | 'success' | 'error'>(() => {
+    if (isLoading) return 'loading'
     if (state.error) return 'error'
     if (state.isSuccess) return 'success'
     return 'idle'
-  }, [isPending, state.error, state.isSuccess])
+  }, [isLoading, state.error, state.isSuccess])
 
   const result = {
     data: state.data,
     error: state.error,
     isError: !!state.error,
     isSuccess: state.isSuccess,
-    isPending,
+    isLoading,
     mutate,
     status,
   }
 
   return {
     ...result,
-    streamingData: isStreamingProps(props) ? state.streamingData : undefined,
+    streamingData: isLoadingProps(props) ? state.streamingData : undefined,
   }
 }
 /**
@@ -360,10 +361,10 @@ function useBamlAction<FunctionName extends FunctionNames>(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useAaaSamOutputFormat({ stream: false});
+ * const { data, error, isLoading, mutate } = useAaaSamOutputFormat({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useAaaSamOutputFormat({
+ * const { data, streamingData, isLoading, error, mutate } = useAaaSamOutputFormat({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -379,7 +380,7 @@ export function useAaaSamOutputFormat(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.AaaSamOutputFormat, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.AaaSamOutputFormat, props)
   }
   throw new Error('Invalid props')
@@ -410,10 +411,10 @@ export function useAaaSamOutputFormat(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useAliasThatPointsToRecursiveType({ stream: false});
+ * const { data, error, isLoading, mutate } = useAliasThatPointsToRecursiveType({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useAliasThatPointsToRecursiveType({
+ * const { data, streamingData, isLoading, error, mutate } = useAliasThatPointsToRecursiveType({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -429,7 +430,7 @@ export function useAliasThatPointsToRecursiveType(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.AliasThatPointsToRecursiveType, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.AliasThatPointsToRecursiveType, props)
   }
   throw new Error('Invalid props')
@@ -460,10 +461,10 @@ export function useAliasThatPointsToRecursiveType(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useAliasWithMultipleAttrs({ stream: false});
+ * const { data, error, isLoading, mutate } = useAliasWithMultipleAttrs({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useAliasWithMultipleAttrs({
+ * const { data, streamingData, isLoading, error, mutate } = useAliasWithMultipleAttrs({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -479,7 +480,7 @@ export function useAliasWithMultipleAttrs(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.AliasWithMultipleAttrs, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.AliasWithMultipleAttrs, props)
   }
   throw new Error('Invalid props')
@@ -510,10 +511,10 @@ export function useAliasWithMultipleAttrs(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useAliasedInputClass({ stream: false});
+ * const { data, error, isLoading, mutate } = useAliasedInputClass({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useAliasedInputClass({
+ * const { data, streamingData, isLoading, error, mutate } = useAliasedInputClass({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -529,7 +530,7 @@ export function useAliasedInputClass(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.AliasedInputClass, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.AliasedInputClass, props)
   }
   throw new Error('Invalid props')
@@ -560,10 +561,10 @@ export function useAliasedInputClass(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useAliasedInputClass2({ stream: false});
+ * const { data, error, isLoading, mutate } = useAliasedInputClass2({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useAliasedInputClass2({
+ * const { data, streamingData, isLoading, error, mutate } = useAliasedInputClass2({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -579,7 +580,7 @@ export function useAliasedInputClass2(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.AliasedInputClass2, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.AliasedInputClass2, props)
   }
   throw new Error('Invalid props')
@@ -610,10 +611,10 @@ export function useAliasedInputClass2(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useAliasedInputClassNested({ stream: false});
+ * const { data, error, isLoading, mutate } = useAliasedInputClassNested({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useAliasedInputClassNested({
+ * const { data, streamingData, isLoading, error, mutate } = useAliasedInputClassNested({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -629,7 +630,7 @@ export function useAliasedInputClassNested(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.AliasedInputClassNested, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.AliasedInputClassNested, props)
   }
   throw new Error('Invalid props')
@@ -660,10 +661,10 @@ export function useAliasedInputClassNested(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useAliasedInputEnum({ stream: false});
+ * const { data, error, isLoading, mutate } = useAliasedInputEnum({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useAliasedInputEnum({
+ * const { data, streamingData, isLoading, error, mutate } = useAliasedInputEnum({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -679,7 +680,7 @@ export function useAliasedInputEnum(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.AliasedInputEnum, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.AliasedInputEnum, props)
   }
   throw new Error('Invalid props')
@@ -710,10 +711,10 @@ export function useAliasedInputEnum(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useAliasedInputList({ stream: false});
+ * const { data, error, isLoading, mutate } = useAliasedInputList({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useAliasedInputList({
+ * const { data, streamingData, isLoading, error, mutate } = useAliasedInputList({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -729,7 +730,7 @@ export function useAliasedInputList(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.AliasedInputList, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.AliasedInputList, props)
   }
   throw new Error('Invalid props')
@@ -760,10 +761,10 @@ export function useAliasedInputList(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useAllowedOptionals({ stream: false});
+ * const { data, error, isLoading, mutate } = useAllowedOptionals({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useAllowedOptionals({
+ * const { data, streamingData, isLoading, error, mutate } = useAllowedOptionals({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -779,7 +780,7 @@ export function useAllowedOptionals(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.AllowedOptionals, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.AllowedOptionals, props)
   }
   throw new Error('Invalid props')
@@ -810,10 +811,10 @@ export function useAllowedOptionals(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useAssertFn({ stream: false});
+ * const { data, error, isLoading, mutate } = useAssertFn({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useAssertFn({
+ * const { data, streamingData, isLoading, error, mutate } = useAssertFn({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -829,7 +830,7 @@ export function useAssertFn(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.AssertFn, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.AssertFn, props)
   }
   throw new Error('Invalid props')
@@ -860,10 +861,10 @@ export function useAssertFn(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useAudioInput({ stream: false});
+ * const { data, error, isLoading, mutate } = useAudioInput({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useAudioInput({
+ * const { data, streamingData, isLoading, error, mutate } = useAudioInput({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -879,7 +880,7 @@ export function useAudioInput(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.AudioInput, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.AudioInput, props)
   }
   throw new Error('Invalid props')
@@ -910,10 +911,10 @@ export function useAudioInput(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useBuildLinkedList({ stream: false});
+ * const { data, error, isLoading, mutate } = useBuildLinkedList({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useBuildLinkedList({
+ * const { data, streamingData, isLoading, error, mutate } = useBuildLinkedList({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -929,7 +930,7 @@ export function useBuildLinkedList(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.BuildLinkedList, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.BuildLinkedList, props)
   }
   throw new Error('Invalid props')
@@ -960,10 +961,10 @@ export function useBuildLinkedList(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useBuildTree({ stream: false});
+ * const { data, error, isLoading, mutate } = useBuildTree({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useBuildTree({
+ * const { data, streamingData, isLoading, error, mutate } = useBuildTree({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -979,7 +980,7 @@ export function useBuildTree(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.BuildTree, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.BuildTree, props)
   }
   throw new Error('Invalid props')
@@ -1010,10 +1011,10 @@ export function useBuildTree(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useClassThatPointsToRecursiveClassThroughAlias({ stream: false});
+ * const { data, error, isLoading, mutate } = useClassThatPointsToRecursiveClassThroughAlias({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useClassThatPointsToRecursiveClassThroughAlias({
+ * const { data, streamingData, isLoading, error, mutate } = useClassThatPointsToRecursiveClassThroughAlias({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1029,7 +1030,7 @@ export function useClassThatPointsToRecursiveClassThroughAlias(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ClassThatPointsToRecursiveClassThroughAlias, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ClassThatPointsToRecursiveClassThroughAlias, props)
   }
   throw new Error('Invalid props')
@@ -1060,10 +1061,10 @@ export function useClassThatPointsToRecursiveClassThroughAlias(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useClassifyDynEnumTwo({ stream: false});
+ * const { data, error, isLoading, mutate } = useClassifyDynEnumTwo({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useClassifyDynEnumTwo({
+ * const { data, streamingData, isLoading, error, mutate } = useClassifyDynEnumTwo({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1079,7 +1080,7 @@ export function useClassifyDynEnumTwo(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ClassifyDynEnumTwo, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ClassifyDynEnumTwo, props)
   }
   throw new Error('Invalid props')
@@ -1110,10 +1111,10 @@ export function useClassifyDynEnumTwo(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useClassifyMessage({ stream: false});
+ * const { data, error, isLoading, mutate } = useClassifyMessage({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useClassifyMessage({
+ * const { data, streamingData, isLoading, error, mutate } = useClassifyMessage({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1129,7 +1130,7 @@ export function useClassifyMessage(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ClassifyMessage, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ClassifyMessage, props)
   }
   throw new Error('Invalid props')
@@ -1160,10 +1161,10 @@ export function useClassifyMessage(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useClassifyMessage2({ stream: false});
+ * const { data, error, isLoading, mutate } = useClassifyMessage2({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useClassifyMessage2({
+ * const { data, streamingData, isLoading, error, mutate } = useClassifyMessage2({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1179,7 +1180,7 @@ export function useClassifyMessage2(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ClassifyMessage2, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ClassifyMessage2, props)
   }
   throw new Error('Invalid props')
@@ -1210,10 +1211,10 @@ export function useClassifyMessage2(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useClassifyMessage3({ stream: false});
+ * const { data, error, isLoading, mutate } = useClassifyMessage3({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useClassifyMessage3({
+ * const { data, streamingData, isLoading, error, mutate } = useClassifyMessage3({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1229,7 +1230,7 @@ export function useClassifyMessage3(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ClassifyMessage3, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ClassifyMessage3, props)
   }
   throw new Error('Invalid props')
@@ -1264,10 +1265,10 @@ export function useClassifyMessage3(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useCompletion({ stream: false});
+ * const { data, error, isLoading, mutate } = useCompletion({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useCompletion({
+ * const { data, streamingData, isLoading, error, mutate } = useCompletion({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1283,7 +1284,7 @@ export function useCompletion(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.Completion, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.Completion, props)
   }
   throw new Error('Invalid props')
@@ -1314,10 +1315,10 @@ export function useCompletion(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useCustomTask({ stream: false});
+ * const { data, error, isLoading, mutate } = useCustomTask({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useCustomTask({
+ * const { data, streamingData, isLoading, error, mutate } = useCustomTask({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1333,7 +1334,7 @@ export function useCustomTask(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.CustomTask, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.CustomTask, props)
   }
   throw new Error('Invalid props')
@@ -1364,10 +1365,10 @@ export function useCustomTask(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useDescribeImage({ stream: false});
+ * const { data, error, isLoading, mutate } = useDescribeImage({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useDescribeImage({
+ * const { data, streamingData, isLoading, error, mutate } = useDescribeImage({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1383,7 +1384,7 @@ export function useDescribeImage(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.DescribeImage, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.DescribeImage, props)
   }
   throw new Error('Invalid props')
@@ -1416,10 +1417,10 @@ export function useDescribeImage(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useDescribeImage2({ stream: false});
+ * const { data, error, isLoading, mutate } = useDescribeImage2({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useDescribeImage2({
+ * const { data, streamingData, isLoading, error, mutate } = useDescribeImage2({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1435,7 +1436,7 @@ export function useDescribeImage2(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.DescribeImage2, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.DescribeImage2, props)
   }
   throw new Error('Invalid props')
@@ -1468,10 +1469,10 @@ export function useDescribeImage2(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useDescribeImage3({ stream: false});
+ * const { data, error, isLoading, mutate } = useDescribeImage3({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useDescribeImage3({
+ * const { data, streamingData, isLoading, error, mutate } = useDescribeImage3({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1487,7 +1488,7 @@ export function useDescribeImage3(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.DescribeImage3, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.DescribeImage3, props)
   }
   throw new Error('Invalid props')
@@ -1520,10 +1521,10 @@ export function useDescribeImage3(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useDescribeImage4({ stream: false});
+ * const { data, error, isLoading, mutate } = useDescribeImage4({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useDescribeImage4({
+ * const { data, streamingData, isLoading, error, mutate } = useDescribeImage4({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1539,7 +1540,7 @@ export function useDescribeImage4(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.DescribeImage4, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.DescribeImage4, props)
   }
   throw new Error('Invalid props')
@@ -1568,10 +1569,10 @@ export function useDescribeImage4(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useDifferentiateUnions({ stream: false});
+ * const { data, error, isLoading, mutate } = useDifferentiateUnions({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useDifferentiateUnions({
+ * const { data, streamingData, isLoading, error, mutate } = useDifferentiateUnions({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1587,7 +1588,7 @@ export function useDifferentiateUnions(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.DifferentiateUnions, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.DifferentiateUnions, props)
   }
   throw new Error('Invalid props')
@@ -1618,10 +1619,10 @@ export function useDifferentiateUnions(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useDummyOutputFunction({ stream: false});
+ * const { data, error, isLoading, mutate } = useDummyOutputFunction({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useDummyOutputFunction({
+ * const { data, streamingData, isLoading, error, mutate } = useDummyOutputFunction({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1637,7 +1638,7 @@ export function useDummyOutputFunction(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.DummyOutputFunction, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.DummyOutputFunction, props)
   }
   throw new Error('Invalid props')
@@ -1668,10 +1669,10 @@ export function useDummyOutputFunction(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useDynamicFunc({ stream: false});
+ * const { data, error, isLoading, mutate } = useDynamicFunc({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useDynamicFunc({
+ * const { data, streamingData, isLoading, error, mutate } = useDynamicFunc({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1687,7 +1688,7 @@ export function useDynamicFunc(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.DynamicFunc, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.DynamicFunc, props)
   }
   throw new Error('Invalid props')
@@ -1718,10 +1719,10 @@ export function useDynamicFunc(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useDynamicInputOutput({ stream: false});
+ * const { data, error, isLoading, mutate } = useDynamicInputOutput({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useDynamicInputOutput({
+ * const { data, streamingData, isLoading, error, mutate } = useDynamicInputOutput({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1737,7 +1738,7 @@ export function useDynamicInputOutput(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.DynamicInputOutput, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.DynamicInputOutput, props)
   }
   throw new Error('Invalid props')
@@ -1768,10 +1769,10 @@ export function useDynamicInputOutput(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useDynamicListInputOutput({ stream: false});
+ * const { data, error, isLoading, mutate } = useDynamicListInputOutput({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useDynamicListInputOutput({
+ * const { data, streamingData, isLoading, error, mutate } = useDynamicListInputOutput({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1787,7 +1788,7 @@ export function useDynamicListInputOutput(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.DynamicListInputOutput, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.DynamicListInputOutput, props)
   }
   throw new Error('Invalid props')
@@ -1816,10 +1817,10 @@ export function useDynamicListInputOutput(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useExpectFailure({ stream: false});
+ * const { data, error, isLoading, mutate } = useExpectFailure({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useExpectFailure({
+ * const { data, streamingData, isLoading, error, mutate } = useExpectFailure({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1835,7 +1836,7 @@ export function useExpectFailure(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ExpectFailure, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ExpectFailure, props)
   }
   throw new Error('Invalid props')
@@ -1866,10 +1867,10 @@ export function useExpectFailure(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useExtractContactInfo({ stream: false});
+ * const { data, error, isLoading, mutate } = useExtractContactInfo({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useExtractContactInfo({
+ * const { data, streamingData, isLoading, error, mutate } = useExtractContactInfo({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1885,7 +1886,7 @@ export function useExtractContactInfo(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ExtractContactInfo, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ExtractContactInfo, props)
   }
   throw new Error('Invalid props')
@@ -1916,10 +1917,10 @@ export function useExtractContactInfo(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useExtractHobby({ stream: false});
+ * const { data, error, isLoading, mutate } = useExtractHobby({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useExtractHobby({
+ * const { data, streamingData, isLoading, error, mutate } = useExtractHobby({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1935,7 +1936,7 @@ export function useExtractHobby(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ExtractHobby, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ExtractHobby, props)
   }
   throw new Error('Invalid props')
@@ -1966,10 +1967,10 @@ export function useExtractHobby(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useExtractNames({ stream: false});
+ * const { data, error, isLoading, mutate } = useExtractNames({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useExtractNames({
+ * const { data, streamingData, isLoading, error, mutate } = useExtractNames({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -1985,7 +1986,7 @@ export function useExtractNames(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ExtractNames, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ExtractNames, props)
   }
   throw new Error('Invalid props')
@@ -2016,10 +2017,10 @@ export function useExtractNames(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useExtractPeople({ stream: false});
+ * const { data, error, isLoading, mutate } = useExtractPeople({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useExtractPeople({
+ * const { data, streamingData, isLoading, error, mutate } = useExtractPeople({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2035,7 +2036,7 @@ export function useExtractPeople(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ExtractPeople, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ExtractPeople, props)
   }
   throw new Error('Invalid props')
@@ -2068,10 +2069,10 @@ export function useExtractPeople(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useExtractReceiptInfo({ stream: false});
+ * const { data, error, isLoading, mutate } = useExtractReceiptInfo({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useExtractReceiptInfo({
+ * const { data, streamingData, isLoading, error, mutate } = useExtractReceiptInfo({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2087,7 +2088,7 @@ export function useExtractReceiptInfo(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ExtractReceiptInfo, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ExtractReceiptInfo, props)
   }
   throw new Error('Invalid props')
@@ -2120,10 +2121,10 @@ export function useExtractReceiptInfo(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useExtractResume({ stream: false});
+ * const { data, error, isLoading, mutate } = useExtractResume({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useExtractResume({
+ * const { data, streamingData, isLoading, error, mutate } = useExtractResume({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2139,7 +2140,7 @@ export function useExtractResume(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ExtractResume, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ExtractResume, props)
   }
   throw new Error('Invalid props')
@@ -2170,10 +2171,10 @@ export function useExtractResume(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useExtractResume2({ stream: false});
+ * const { data, error, isLoading, mutate } = useExtractResume2({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useExtractResume2({
+ * const { data, streamingData, isLoading, error, mutate } = useExtractResume2({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2189,7 +2190,7 @@ export function useExtractResume2(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ExtractResume2, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ExtractResume2, props)
   }
   throw new Error('Invalid props')
@@ -2220,10 +2221,10 @@ export function useExtractResume2(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnClassOptionalOutput({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnClassOptionalOutput({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnClassOptionalOutput({
+ * const { data, streamingData, isLoading, error, mutate } = useFnClassOptionalOutput({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2239,7 +2240,7 @@ export function useFnClassOptionalOutput(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnClassOptionalOutput, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnClassOptionalOutput, props)
   }
   throw new Error('Invalid props')
@@ -2270,10 +2271,10 @@ export function useFnClassOptionalOutput(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnClassOptionalOutput2({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnClassOptionalOutput2({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnClassOptionalOutput2({
+ * const { data, streamingData, isLoading, error, mutate } = useFnClassOptionalOutput2({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2289,7 +2290,7 @@ export function useFnClassOptionalOutput2(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnClassOptionalOutput2, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnClassOptionalOutput2, props)
   }
   throw new Error('Invalid props')
@@ -2320,10 +2321,10 @@ export function useFnClassOptionalOutput2(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnEnumListOutput({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnEnumListOutput({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnEnumListOutput({
+ * const { data, streamingData, isLoading, error, mutate } = useFnEnumListOutput({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2339,7 +2340,7 @@ export function useFnEnumListOutput(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnEnumListOutput, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnEnumListOutput, props)
   }
   throw new Error('Invalid props')
@@ -2370,10 +2371,10 @@ export function useFnEnumListOutput(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnEnumOutput({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnEnumOutput({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnEnumOutput({
+ * const { data, streamingData, isLoading, error, mutate } = useFnEnumOutput({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2389,7 +2390,7 @@ export function useFnEnumOutput(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnEnumOutput, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnEnumOutput, props)
   }
   throw new Error('Invalid props')
@@ -2420,10 +2421,10 @@ export function useFnEnumOutput(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnLiteralClassInputOutput({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnLiteralClassInputOutput({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnLiteralClassInputOutput({
+ * const { data, streamingData, isLoading, error, mutate } = useFnLiteralClassInputOutput({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2439,7 +2440,7 @@ export function useFnLiteralClassInputOutput(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnLiteralClassInputOutput, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnLiteralClassInputOutput, props)
   }
   throw new Error('Invalid props')
@@ -2470,10 +2471,10 @@ export function useFnLiteralClassInputOutput(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnLiteralUnionClassInputOutput({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnLiteralUnionClassInputOutput({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnLiteralUnionClassInputOutput({
+ * const { data, streamingData, isLoading, error, mutate } = useFnLiteralUnionClassInputOutput({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2489,7 +2490,7 @@ export function useFnLiteralUnionClassInputOutput(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnLiteralUnionClassInputOutput, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnLiteralUnionClassInputOutput, props)
   }
   throw new Error('Invalid props')
@@ -2520,10 +2521,10 @@ export function useFnLiteralUnionClassInputOutput(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnNamedArgsSingleStringOptional({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnNamedArgsSingleStringOptional({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnNamedArgsSingleStringOptional({
+ * const { data, streamingData, isLoading, error, mutate } = useFnNamedArgsSingleStringOptional({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2539,7 +2540,7 @@ export function useFnNamedArgsSingleStringOptional(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnNamedArgsSingleStringOptional, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnNamedArgsSingleStringOptional, props)
   }
   throw new Error('Invalid props')
@@ -2570,10 +2571,10 @@ export function useFnNamedArgsSingleStringOptional(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnOutputBool({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnOutputBool({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnOutputBool({
+ * const { data, streamingData, isLoading, error, mutate } = useFnOutputBool({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2589,7 +2590,7 @@ export function useFnOutputBool(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnOutputBool, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnOutputBool, props)
   }
   throw new Error('Invalid props')
@@ -2620,10 +2621,10 @@ export function useFnOutputBool(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnOutputClass({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnOutputClass({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnOutputClass({
+ * const { data, streamingData, isLoading, error, mutate } = useFnOutputClass({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2639,7 +2640,7 @@ export function useFnOutputClass(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnOutputClass, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnOutputClass, props)
   }
   throw new Error('Invalid props')
@@ -2670,10 +2671,10 @@ export function useFnOutputClass(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnOutputClassList({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnOutputClassList({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnOutputClassList({
+ * const { data, streamingData, isLoading, error, mutate } = useFnOutputClassList({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2689,7 +2690,7 @@ export function useFnOutputClassList(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnOutputClassList, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnOutputClassList, props)
   }
   throw new Error('Invalid props')
@@ -2720,10 +2721,10 @@ export function useFnOutputClassList(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnOutputClassNested({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnOutputClassNested({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnOutputClassNested({
+ * const { data, streamingData, isLoading, error, mutate } = useFnOutputClassNested({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2739,7 +2740,7 @@ export function useFnOutputClassNested(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnOutputClassNested, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnOutputClassNested, props)
   }
   throw new Error('Invalid props')
@@ -2770,10 +2771,10 @@ export function useFnOutputClassNested(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnOutputClassWithEnum({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnOutputClassWithEnum({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnOutputClassWithEnum({
+ * const { data, streamingData, isLoading, error, mutate } = useFnOutputClassWithEnum({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2789,7 +2790,7 @@ export function useFnOutputClassWithEnum(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnOutputClassWithEnum, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnOutputClassWithEnum, props)
   }
   throw new Error('Invalid props')
@@ -2820,10 +2821,10 @@ export function useFnOutputClassWithEnum(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnOutputInt({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnOutputInt({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnOutputInt({
+ * const { data, streamingData, isLoading, error, mutate } = useFnOutputInt({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2839,7 +2840,7 @@ export function useFnOutputInt(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnOutputInt, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnOutputInt, props)
   }
   throw new Error('Invalid props')
@@ -2870,10 +2871,10 @@ export function useFnOutputInt(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnOutputLiteralBool({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnOutputLiteralBool({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnOutputLiteralBool({
+ * const { data, streamingData, isLoading, error, mutate } = useFnOutputLiteralBool({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2889,7 +2890,7 @@ export function useFnOutputLiteralBool(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnOutputLiteralBool, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnOutputLiteralBool, props)
   }
   throw new Error('Invalid props')
@@ -2920,10 +2921,10 @@ export function useFnOutputLiteralBool(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnOutputLiteralInt({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnOutputLiteralInt({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnOutputLiteralInt({
+ * const { data, streamingData, isLoading, error, mutate } = useFnOutputLiteralInt({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2939,7 +2940,7 @@ export function useFnOutputLiteralInt(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnOutputLiteralInt, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnOutputLiteralInt, props)
   }
   throw new Error('Invalid props')
@@ -2970,10 +2971,10 @@ export function useFnOutputLiteralInt(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnOutputLiteralString({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnOutputLiteralString({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnOutputLiteralString({
+ * const { data, streamingData, isLoading, error, mutate } = useFnOutputLiteralString({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -2989,7 +2990,7 @@ export function useFnOutputLiteralString(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnOutputLiteralString, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnOutputLiteralString, props)
   }
   throw new Error('Invalid props')
@@ -3020,10 +3021,10 @@ export function useFnOutputLiteralString(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnOutputStringList({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnOutputStringList({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnOutputStringList({
+ * const { data, streamingData, isLoading, error, mutate } = useFnOutputStringList({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3039,7 +3040,7 @@ export function useFnOutputStringList(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnOutputStringList, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnOutputStringList, props)
   }
   throw new Error('Invalid props')
@@ -3070,10 +3071,10 @@ export function useFnOutputStringList(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnTestAliasedEnumOutput({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnTestAliasedEnumOutput({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnTestAliasedEnumOutput({
+ * const { data, streamingData, isLoading, error, mutate } = useFnTestAliasedEnumOutput({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3089,7 +3090,7 @@ export function useFnTestAliasedEnumOutput(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnTestAliasedEnumOutput, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnTestAliasedEnumOutput, props)
   }
   throw new Error('Invalid props')
@@ -3120,10 +3121,10 @@ export function useFnTestAliasedEnumOutput(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnTestClassAlias({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnTestClassAlias({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnTestClassAlias({
+ * const { data, streamingData, isLoading, error, mutate } = useFnTestClassAlias({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3139,7 +3140,7 @@ export function useFnTestClassAlias(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnTestClassAlias, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnTestClassAlias, props)
   }
   throw new Error('Invalid props')
@@ -3170,10 +3171,10 @@ export function useFnTestClassAlias(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useFnTestNamedArgsSingleEnum({ stream: false});
+ * const { data, error, isLoading, mutate } = useFnTestNamedArgsSingleEnum({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useFnTestNamedArgsSingleEnum({
+ * const { data, streamingData, isLoading, error, mutate } = useFnTestNamedArgsSingleEnum({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3189,7 +3190,7 @@ export function useFnTestNamedArgsSingleEnum(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.FnTestNamedArgsSingleEnum, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.FnTestNamedArgsSingleEnum, props)
   }
   throw new Error('Invalid props')
@@ -3220,10 +3221,10 @@ export function useFnTestNamedArgsSingleEnum(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useGetDataType({ stream: false});
+ * const { data, error, isLoading, mutate } = useGetDataType({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useGetDataType({
+ * const { data, streamingData, isLoading, error, mutate } = useGetDataType({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3239,7 +3240,7 @@ export function useGetDataType(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.GetDataType, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.GetDataType, props)
   }
   throw new Error('Invalid props')
@@ -3270,10 +3271,10 @@ export function useGetDataType(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useGetOrderInfo({ stream: false});
+ * const { data, error, isLoading, mutate } = useGetOrderInfo({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useGetOrderInfo({
+ * const { data, streamingData, isLoading, error, mutate } = useGetOrderInfo({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3289,7 +3290,7 @@ export function useGetOrderInfo(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.GetOrderInfo, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.GetOrderInfo, props)
   }
   throw new Error('Invalid props')
@@ -3320,10 +3321,10 @@ export function useGetOrderInfo(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useGetQuery({ stream: false});
+ * const { data, error, isLoading, mutate } = useGetQuery({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useGetQuery({
+ * const { data, streamingData, isLoading, error, mutate } = useGetQuery({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3339,7 +3340,7 @@ export function useGetQuery(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.GetQuery, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.GetQuery, props)
   }
   throw new Error('Invalid props')
@@ -3372,10 +3373,10 @@ export function useGetQuery(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useInOutEnumMapKey({ stream: false});
+ * const { data, error, isLoading, mutate } = useInOutEnumMapKey({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useInOutEnumMapKey({
+ * const { data, streamingData, isLoading, error, mutate } = useInOutEnumMapKey({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3391,7 +3392,7 @@ export function useInOutEnumMapKey(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.InOutEnumMapKey, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.InOutEnumMapKey, props)
   }
   throw new Error('Invalid props')
@@ -3424,10 +3425,10 @@ export function useInOutEnumMapKey(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useInOutLiteralStringUnionMapKey({ stream: false});
+ * const { data, error, isLoading, mutate } = useInOutLiteralStringUnionMapKey({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useInOutLiteralStringUnionMapKey({
+ * const { data, streamingData, isLoading, error, mutate } = useInOutLiteralStringUnionMapKey({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3443,7 +3444,7 @@ export function useInOutLiteralStringUnionMapKey(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.InOutLiteralStringUnionMapKey, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.InOutLiteralStringUnionMapKey, props)
   }
   throw new Error('Invalid props')
@@ -3474,10 +3475,10 @@ export function useInOutLiteralStringUnionMapKey(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useInOutSingleLiteralStringMapKey({ stream: false});
+ * const { data, error, isLoading, mutate } = useInOutSingleLiteralStringMapKey({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useInOutSingleLiteralStringMapKey({
+ * const { data, streamingData, isLoading, error, mutate } = useInOutSingleLiteralStringMapKey({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3493,7 +3494,7 @@ export function useInOutSingleLiteralStringMapKey(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.InOutSingleLiteralStringMapKey, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.InOutSingleLiteralStringMapKey, props)
   }
   throw new Error('Invalid props')
@@ -3524,10 +3525,10 @@ export function useInOutSingleLiteralStringMapKey(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useJsonTypeAliasCycle({ stream: false});
+ * const { data, error, isLoading, mutate } = useJsonTypeAliasCycle({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useJsonTypeAliasCycle({
+ * const { data, streamingData, isLoading, error, mutate } = useJsonTypeAliasCycle({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3543,7 +3544,7 @@ export function useJsonTypeAliasCycle(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.JsonTypeAliasCycle, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.JsonTypeAliasCycle, props)
   }
   throw new Error('Invalid props')
@@ -3574,10 +3575,10 @@ export function useJsonTypeAliasCycle(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useLiteralUnionsTest({ stream: false});
+ * const { data, error, isLoading, mutate } = useLiteralUnionsTest({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useLiteralUnionsTest({
+ * const { data, streamingData, isLoading, error, mutate } = useLiteralUnionsTest({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3593,7 +3594,7 @@ export function useLiteralUnionsTest(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.LiteralUnionsTest, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.LiteralUnionsTest, props)
   }
   throw new Error('Invalid props')
@@ -3622,10 +3623,10 @@ export function useLiteralUnionsTest(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useMakeBlockConstraint({ stream: false});
+ * const { data, error, isLoading, mutate } = useMakeBlockConstraint({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useMakeBlockConstraint({
+ * const { data, streamingData, isLoading, error, mutate } = useMakeBlockConstraint({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3641,7 +3642,7 @@ export function useMakeBlockConstraint(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.MakeBlockConstraint, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.MakeBlockConstraint, props)
   }
   throw new Error('Invalid props')
@@ -3670,10 +3671,10 @@ export function useMakeBlockConstraint(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useMakeNestedBlockConstraint({ stream: false});
+ * const { data, error, isLoading, mutate } = useMakeNestedBlockConstraint({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useMakeNestedBlockConstraint({
+ * const { data, streamingData, isLoading, error, mutate } = useMakeNestedBlockConstraint({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3689,7 +3690,7 @@ export function useMakeNestedBlockConstraint(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.MakeNestedBlockConstraint, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.MakeNestedBlockConstraint, props)
   }
   throw new Error('Invalid props')
@@ -3718,10 +3719,10 @@ export function useMakeNestedBlockConstraint(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useMakeSemanticContainer({ stream: false});
+ * const { data, error, isLoading, mutate } = useMakeSemanticContainer({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useMakeSemanticContainer({
+ * const { data, streamingData, isLoading, error, mutate } = useMakeSemanticContainer({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3737,7 +3738,7 @@ export function useMakeSemanticContainer(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.MakeSemanticContainer, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.MakeSemanticContainer, props)
   }
   throw new Error('Invalid props')
@@ -3768,10 +3769,10 @@ export function useMakeSemanticContainer(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useMapAlias({ stream: false});
+ * const { data, error, isLoading, mutate } = useMapAlias({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useMapAlias({
+ * const { data, streamingData, isLoading, error, mutate } = useMapAlias({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3787,7 +3788,7 @@ export function useMapAlias(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.MapAlias, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.MapAlias, props)
   }
   throw new Error('Invalid props')
@@ -3818,10 +3819,10 @@ export function useMapAlias(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useMergeAliasAttributes({ stream: false});
+ * const { data, error, isLoading, mutate } = useMergeAliasAttributes({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useMergeAliasAttributes({
+ * const { data, streamingData, isLoading, error, mutate } = useMergeAliasAttributes({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3837,7 +3838,7 @@ export function useMergeAliasAttributes(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.MergeAliasAttributes, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.MergeAliasAttributes, props)
   }
   throw new Error('Invalid props')
@@ -3868,10 +3869,10 @@ export function useMergeAliasAttributes(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useMyFunc({ stream: false});
+ * const { data, error, isLoading, mutate } = useMyFunc({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useMyFunc({
+ * const { data, streamingData, isLoading, error, mutate } = useMyFunc({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3887,7 +3888,7 @@ export function useMyFunc(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.MyFunc, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.MyFunc, props)
   }
   throw new Error('Invalid props')
@@ -3918,10 +3919,10 @@ export function useMyFunc(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useNestedAlias({ stream: false});
+ * const { data, error, isLoading, mutate } = useNestedAlias({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useNestedAlias({
+ * const { data, streamingData, isLoading, error, mutate } = useNestedAlias({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3937,7 +3938,7 @@ export function useNestedAlias(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.NestedAlias, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.NestedAlias, props)
   }
   throw new Error('Invalid props')
@@ -3968,10 +3969,10 @@ export function useNestedAlias(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useNullLiteralClassHello({ stream: false});
+ * const { data, error, isLoading, mutate } = useNullLiteralClassHello({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useNullLiteralClassHello({
+ * const { data, streamingData, isLoading, error, mutate } = useNullLiteralClassHello({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -3987,7 +3988,7 @@ export function useNullLiteralClassHello(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.NullLiteralClassHello, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.NullLiteralClassHello, props)
   }
   throw new Error('Invalid props')
@@ -4018,10 +4019,10 @@ export function useNullLiteralClassHello(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useOptionalTest_Function({ stream: false});
+ * const { data, error, isLoading, mutate } = useOptionalTest_Function({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useOptionalTest_Function({
+ * const { data, streamingData, isLoading, error, mutate } = useOptionalTest_Function({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4037,7 +4038,7 @@ export function useOptionalTest_Function(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.OptionalTest_Function, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.OptionalTest_Function, props)
   }
   throw new Error('Invalid props')
@@ -4068,10 +4069,10 @@ export function useOptionalTest_Function(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = usePredictAge({ stream: false});
+ * const { data, error, isLoading, mutate } = usePredictAge({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = usePredictAge({
+ * const { data, streamingData, isLoading, error, mutate } = usePredictAge({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4087,7 +4088,7 @@ export function usePredictAge(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.PredictAge, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.PredictAge, props)
   }
   throw new Error('Invalid props')
@@ -4118,10 +4119,10 @@ export function usePredictAge(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = usePredictAgeBare({ stream: false});
+ * const { data, error, isLoading, mutate } = usePredictAgeBare({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = usePredictAgeBare({
+ * const { data, streamingData, isLoading, error, mutate } = usePredictAgeBare({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4137,7 +4138,7 @@ export function usePredictAgeBare(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.PredictAgeBare, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.PredictAgeBare, props)
   }
   throw new Error('Invalid props')
@@ -4168,10 +4169,10 @@ export function usePredictAgeBare(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = usePrimitiveAlias({ stream: false});
+ * const { data, error, isLoading, mutate } = usePrimitiveAlias({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = usePrimitiveAlias({
+ * const { data, streamingData, isLoading, error, mutate } = usePrimitiveAlias({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4187,7 +4188,7 @@ export function usePrimitiveAlias(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.PrimitiveAlias, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.PrimitiveAlias, props)
   }
   throw new Error('Invalid props')
@@ -4218,10 +4219,10 @@ export function usePrimitiveAlias(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = usePromptTestClaude({ stream: false});
+ * const { data, error, isLoading, mutate } = usePromptTestClaude({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = usePromptTestClaude({
+ * const { data, streamingData, isLoading, error, mutate } = usePromptTestClaude({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4237,7 +4238,7 @@ export function usePromptTestClaude(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.PromptTestClaude, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.PromptTestClaude, props)
   }
   throw new Error('Invalid props')
@@ -4268,10 +4269,10 @@ export function usePromptTestClaude(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = usePromptTestClaudeChat({ stream: false});
+ * const { data, error, isLoading, mutate } = usePromptTestClaudeChat({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = usePromptTestClaudeChat({
+ * const { data, streamingData, isLoading, error, mutate } = usePromptTestClaudeChat({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4287,7 +4288,7 @@ export function usePromptTestClaudeChat(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.PromptTestClaudeChat, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.PromptTestClaudeChat, props)
   }
   throw new Error('Invalid props')
@@ -4318,10 +4319,10 @@ export function usePromptTestClaudeChat(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = usePromptTestClaudeChatNoSystem({ stream: false});
+ * const { data, error, isLoading, mutate } = usePromptTestClaudeChatNoSystem({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = usePromptTestClaudeChatNoSystem({
+ * const { data, streamingData, isLoading, error, mutate } = usePromptTestClaudeChatNoSystem({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4337,7 +4338,7 @@ export function usePromptTestClaudeChatNoSystem(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.PromptTestClaudeChatNoSystem, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.PromptTestClaudeChatNoSystem, props)
   }
   throw new Error('Invalid props')
@@ -4368,10 +4369,10 @@ export function usePromptTestClaudeChatNoSystem(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = usePromptTestOpenAI({ stream: false});
+ * const { data, error, isLoading, mutate } = usePromptTestOpenAI({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = usePromptTestOpenAI({
+ * const { data, streamingData, isLoading, error, mutate } = usePromptTestOpenAI({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4387,7 +4388,7 @@ export function usePromptTestOpenAI(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.PromptTestOpenAI, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.PromptTestOpenAI, props)
   }
   throw new Error('Invalid props')
@@ -4418,10 +4419,10 @@ export function usePromptTestOpenAI(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = usePromptTestOpenAIChat({ stream: false});
+ * const { data, error, isLoading, mutate } = usePromptTestOpenAIChat({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = usePromptTestOpenAIChat({
+ * const { data, streamingData, isLoading, error, mutate } = usePromptTestOpenAIChat({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4437,7 +4438,7 @@ export function usePromptTestOpenAIChat(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.PromptTestOpenAIChat, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.PromptTestOpenAIChat, props)
   }
   throw new Error('Invalid props')
@@ -4468,10 +4469,10 @@ export function usePromptTestOpenAIChat(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = usePromptTestOpenAIChatNoSystem({ stream: false});
+ * const { data, error, isLoading, mutate } = usePromptTestOpenAIChatNoSystem({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = usePromptTestOpenAIChatNoSystem({
+ * const { data, streamingData, isLoading, error, mutate } = usePromptTestOpenAIChatNoSystem({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4487,7 +4488,7 @@ export function usePromptTestOpenAIChatNoSystem(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.PromptTestOpenAIChatNoSystem, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.PromptTestOpenAIChatNoSystem, props)
   }
   throw new Error('Invalid props')
@@ -4518,10 +4519,10 @@ export function usePromptTestOpenAIChatNoSystem(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = usePromptTestStreaming({ stream: false});
+ * const { data, error, isLoading, mutate } = usePromptTestStreaming({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = usePromptTestStreaming({
+ * const { data, streamingData, isLoading, error, mutate } = usePromptTestStreaming({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4537,7 +4538,7 @@ export function usePromptTestStreaming(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.PromptTestStreaming, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.PromptTestStreaming, props)
   }
   throw new Error('Invalid props')
@@ -4568,10 +4569,10 @@ export function usePromptTestStreaming(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useRecursiveAliasCycle({ stream: false});
+ * const { data, error, isLoading, mutate } = useRecursiveAliasCycle({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useRecursiveAliasCycle({
+ * const { data, streamingData, isLoading, error, mutate } = useRecursiveAliasCycle({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4587,7 +4588,7 @@ export function useRecursiveAliasCycle(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.RecursiveAliasCycle, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.RecursiveAliasCycle, props)
   }
   throw new Error('Invalid props')
@@ -4618,10 +4619,10 @@ export function useRecursiveAliasCycle(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useRecursiveClassWithAliasIndirection({ stream: false});
+ * const { data, error, isLoading, mutate } = useRecursiveClassWithAliasIndirection({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useRecursiveClassWithAliasIndirection({
+ * const { data, streamingData, isLoading, error, mutate } = useRecursiveClassWithAliasIndirection({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4637,7 +4638,7 @@ export function useRecursiveClassWithAliasIndirection(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.RecursiveClassWithAliasIndirection, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.RecursiveClassWithAliasIndirection, props)
   }
   throw new Error('Invalid props')
@@ -4668,10 +4669,10 @@ export function useRecursiveClassWithAliasIndirection(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useReturnAliasWithMergedAttributes({ stream: false});
+ * const { data, error, isLoading, mutate } = useReturnAliasWithMergedAttributes({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useReturnAliasWithMergedAttributes({
+ * const { data, streamingData, isLoading, error, mutate } = useReturnAliasWithMergedAttributes({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4687,7 +4688,7 @@ export function useReturnAliasWithMergedAttributes(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ReturnAliasWithMergedAttributes, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ReturnAliasWithMergedAttributes, props)
   }
   throw new Error('Invalid props')
@@ -4718,10 +4719,10 @@ export function useReturnAliasWithMergedAttributes(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useReturnFailingAssert({ stream: false});
+ * const { data, error, isLoading, mutate } = useReturnFailingAssert({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useReturnFailingAssert({
+ * const { data, streamingData, isLoading, error, mutate } = useReturnFailingAssert({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4737,7 +4738,7 @@ export function useReturnFailingAssert(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ReturnFailingAssert, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ReturnFailingAssert, props)
   }
   throw new Error('Invalid props')
@@ -4768,10 +4769,10 @@ export function useReturnFailingAssert(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useReturnJsonEntry({ stream: false});
+ * const { data, error, isLoading, mutate } = useReturnJsonEntry({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useReturnJsonEntry({
+ * const { data, streamingData, isLoading, error, mutate } = useReturnJsonEntry({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4787,7 +4788,7 @@ export function useReturnJsonEntry(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ReturnJsonEntry, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ReturnJsonEntry, props)
   }
   throw new Error('Invalid props')
@@ -4818,10 +4819,10 @@ export function useReturnJsonEntry(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useReturnMalformedConstraints({ stream: false});
+ * const { data, error, isLoading, mutate } = useReturnMalformedConstraints({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useReturnMalformedConstraints({
+ * const { data, streamingData, isLoading, error, mutate } = useReturnMalformedConstraints({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4837,7 +4838,7 @@ export function useReturnMalformedConstraints(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.ReturnMalformedConstraints, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.ReturnMalformedConstraints, props)
   }
   throw new Error('Invalid props')
@@ -4868,10 +4869,10 @@ export function useReturnMalformedConstraints(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useSchemaDescriptions({ stream: false});
+ * const { data, error, isLoading, mutate } = useSchemaDescriptions({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useSchemaDescriptions({
+ * const { data, streamingData, isLoading, error, mutate } = useSchemaDescriptions({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4887,7 +4888,7 @@ export function useSchemaDescriptions(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.SchemaDescriptions, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.SchemaDescriptions, props)
   }
   throw new Error('Invalid props')
@@ -4918,10 +4919,10 @@ export function useSchemaDescriptions(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useSimpleRecursiveListAlias({ stream: false});
+ * const { data, error, isLoading, mutate } = useSimpleRecursiveListAlias({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useSimpleRecursiveListAlias({
+ * const { data, streamingData, isLoading, error, mutate } = useSimpleRecursiveListAlias({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4937,7 +4938,7 @@ export function useSimpleRecursiveListAlias(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.SimpleRecursiveListAlias, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.SimpleRecursiveListAlias, props)
   }
   throw new Error('Invalid props')
@@ -4968,10 +4969,10 @@ export function useSimpleRecursiveListAlias(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useSimpleRecursiveMapAlias({ stream: false});
+ * const { data, error, isLoading, mutate } = useSimpleRecursiveMapAlias({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useSimpleRecursiveMapAlias({
+ * const { data, streamingData, isLoading, error, mutate } = useSimpleRecursiveMapAlias({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -4987,7 +4988,7 @@ export function useSimpleRecursiveMapAlias(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.SimpleRecursiveMapAlias, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.SimpleRecursiveMapAlias, props)
   }
   throw new Error('Invalid props')
@@ -5018,10 +5019,10 @@ export function useSimpleRecursiveMapAlias(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useStreamBigNumbers({ stream: false});
+ * const { data, error, isLoading, mutate } = useStreamBigNumbers({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useStreamBigNumbers({
+ * const { data, streamingData, isLoading, error, mutate } = useStreamBigNumbers({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5037,7 +5038,7 @@ export function useStreamBigNumbers(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.StreamBigNumbers, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.StreamBigNumbers, props)
   }
   throw new Error('Invalid props')
@@ -5070,10 +5071,10 @@ export function useStreamBigNumbers(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useStreamFailingAssertion({ stream: false});
+ * const { data, error, isLoading, mutate } = useStreamFailingAssertion({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useStreamFailingAssertion({
+ * const { data, streamingData, isLoading, error, mutate } = useStreamFailingAssertion({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5089,7 +5090,7 @@ export function useStreamFailingAssertion(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.StreamFailingAssertion, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.StreamFailingAssertion, props)
   }
   throw new Error('Invalid props')
@@ -5120,10 +5121,10 @@ export function useStreamFailingAssertion(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useStreamOneBigNumber({ stream: false});
+ * const { data, error, isLoading, mutate } = useStreamOneBigNumber({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useStreamOneBigNumber({
+ * const { data, streamingData, isLoading, error, mutate } = useStreamOneBigNumber({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5139,7 +5140,7 @@ export function useStreamOneBigNumber(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.StreamOneBigNumber, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.StreamOneBigNumber, props)
   }
   throw new Error('Invalid props')
@@ -5170,10 +5171,10 @@ export function useStreamOneBigNumber(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useStreamUnionIntegers({ stream: false});
+ * const { data, error, isLoading, mutate } = useStreamUnionIntegers({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useStreamUnionIntegers({
+ * const { data, streamingData, isLoading, error, mutate } = useStreamUnionIntegers({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5189,7 +5190,7 @@ export function useStreamUnionIntegers(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.StreamUnionIntegers, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.StreamUnionIntegers, props)
   }
   throw new Error('Invalid props')
@@ -5222,10 +5223,10 @@ export function useStreamUnionIntegers(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useStreamingCompoundNumbers({ stream: false});
+ * const { data, error, isLoading, mutate } = useStreamingCompoundNumbers({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useStreamingCompoundNumbers({
+ * const { data, streamingData, isLoading, error, mutate } = useStreamingCompoundNumbers({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5241,7 +5242,7 @@ export function useStreamingCompoundNumbers(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.StreamingCompoundNumbers, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.StreamingCompoundNumbers, props)
   }
   throw new Error('Invalid props')
@@ -5272,10 +5273,10 @@ export function useStreamingCompoundNumbers(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTakeRecAliasDep({ stream: false});
+ * const { data, error, isLoading, mutate } = useTakeRecAliasDep({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTakeRecAliasDep({
+ * const { data, streamingData, isLoading, error, mutate } = useTakeRecAliasDep({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5291,7 +5292,7 @@ export function useTakeRecAliasDep(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TakeRecAliasDep, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TakeRecAliasDep, props)
   }
   throw new Error('Invalid props')
@@ -5322,10 +5323,10 @@ export function useTakeRecAliasDep(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAnthropic({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAnthropic({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAnthropic({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAnthropic({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5341,7 +5342,7 @@ export function useTestAnthropic(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAnthropic, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAnthropic, props)
   }
   throw new Error('Invalid props')
@@ -5372,10 +5373,10 @@ export function useTestAnthropic(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAnthropicShorthand({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAnthropicShorthand({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAnthropicShorthand({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAnthropicShorthand({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5391,7 +5392,7 @@ export function useTestAnthropicShorthand(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAnthropicShorthand, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAnthropicShorthand, props)
   }
   throw new Error('Invalid props')
@@ -5422,10 +5423,10 @@ export function useTestAnthropicShorthand(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAws({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAws({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAws({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAws({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5441,7 +5442,7 @@ export function useTestAws(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAws, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAws, props)
   }
   throw new Error('Invalid props')
@@ -5472,10 +5473,10 @@ export function useTestAws(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAwsInvalidAccessKey({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAwsInvalidAccessKey({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAwsInvalidAccessKey({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAwsInvalidAccessKey({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5491,7 +5492,7 @@ export function useTestAwsInvalidAccessKey(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAwsInvalidAccessKey, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAwsInvalidAccessKey, props)
   }
   throw new Error('Invalid props')
@@ -5522,10 +5523,10 @@ export function useTestAwsInvalidAccessKey(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAwsInvalidProfile({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAwsInvalidProfile({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAwsInvalidProfile({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAwsInvalidProfile({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5541,7 +5542,7 @@ export function useTestAwsInvalidProfile(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAwsInvalidProfile, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAwsInvalidProfile, props)
   }
   throw new Error('Invalid props')
@@ -5572,10 +5573,10 @@ export function useTestAwsInvalidProfile(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAwsInvalidRegion({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAwsInvalidRegion({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAwsInvalidRegion({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAwsInvalidRegion({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5591,7 +5592,7 @@ export function useTestAwsInvalidRegion(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAwsInvalidRegion, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAwsInvalidRegion, props)
   }
   throw new Error('Invalid props')
@@ -5622,10 +5623,10 @@ export function useTestAwsInvalidRegion(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAwsInvalidSessionToken({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAwsInvalidSessionToken({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAwsInvalidSessionToken({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAwsInvalidSessionToken({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5641,7 +5642,7 @@ export function useTestAwsInvalidSessionToken(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAwsInvalidSessionToken, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAwsInvalidSessionToken, props)
   }
   throw new Error('Invalid props')
@@ -5672,10 +5673,10 @@ export function useTestAwsInvalidSessionToken(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAzure({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAzure({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAzure({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAzure({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5691,7 +5692,7 @@ export function useTestAzure(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAzure, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAzure, props)
   }
   throw new Error('Invalid props')
@@ -5722,10 +5723,10 @@ export function useTestAzure(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAzureFailure({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAzureFailure({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAzureFailure({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAzureFailure({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5741,7 +5742,7 @@ export function useTestAzureFailure(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAzureFailure, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAzureFailure, props)
   }
   throw new Error('Invalid props')
@@ -5772,10 +5773,10 @@ export function useTestAzureFailure(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAzureO1NoMaxTokens({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAzureO1NoMaxTokens({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAzureO1NoMaxTokens({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAzureO1NoMaxTokens({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5791,7 +5792,7 @@ export function useTestAzureO1NoMaxTokens(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAzureO1NoMaxTokens, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAzureO1NoMaxTokens, props)
   }
   throw new Error('Invalid props')
@@ -5822,10 +5823,10 @@ export function useTestAzureO1NoMaxTokens(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAzureO1WithMaxCompletionTokens({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAzureO1WithMaxCompletionTokens({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAzureO1WithMaxCompletionTokens({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAzureO1WithMaxCompletionTokens({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5841,7 +5842,7 @@ export function useTestAzureO1WithMaxCompletionTokens(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAzureO1WithMaxCompletionTokens, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAzureO1WithMaxCompletionTokens, props)
   }
   throw new Error('Invalid props')
@@ -5872,10 +5873,10 @@ export function useTestAzureO1WithMaxCompletionTokens(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAzureO1WithMaxTokens({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAzureO1WithMaxTokens({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAzureO1WithMaxTokens({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAzureO1WithMaxTokens({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5891,7 +5892,7 @@ export function useTestAzureO1WithMaxTokens(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAzureO1WithMaxTokens, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAzureO1WithMaxTokens, props)
   }
   throw new Error('Invalid props')
@@ -5922,10 +5923,10 @@ export function useTestAzureO1WithMaxTokens(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAzureO3NoMaxTokens({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAzureO3NoMaxTokens({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAzureO3NoMaxTokens({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAzureO3NoMaxTokens({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5941,7 +5942,7 @@ export function useTestAzureO3NoMaxTokens(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAzureO3NoMaxTokens, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAzureO3NoMaxTokens, props)
   }
   throw new Error('Invalid props')
@@ -5972,10 +5973,10 @@ export function useTestAzureO3NoMaxTokens(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAzureO3WithMaxCompletionTokens({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAzureO3WithMaxCompletionTokens({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAzureO3WithMaxCompletionTokens({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAzureO3WithMaxCompletionTokens({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -5991,7 +5992,7 @@ export function useTestAzureO3WithMaxCompletionTokens(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAzureO3WithMaxCompletionTokens, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAzureO3WithMaxCompletionTokens, props)
   }
   throw new Error('Invalid props')
@@ -6022,10 +6023,10 @@ export function useTestAzureO3WithMaxCompletionTokens(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestAzureWithMaxTokens({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestAzureWithMaxTokens({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestAzureWithMaxTokens({
+ * const { data, streamingData, isLoading, error, mutate } = useTestAzureWithMaxTokens({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6041,7 +6042,7 @@ export function useTestAzureWithMaxTokens(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestAzureWithMaxTokens, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestAzureWithMaxTokens, props)
   }
   throw new Error('Invalid props')
@@ -6074,10 +6075,10 @@ export function useTestAzureWithMaxTokens(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestCaching({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestCaching({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestCaching({
+ * const { data, streamingData, isLoading, error, mutate } = useTestCaching({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6093,7 +6094,7 @@ export function useTestCaching(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestCaching, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestCaching, props)
   }
   throw new Error('Invalid props')
@@ -6122,10 +6123,10 @@ export function useTestCaching(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFallbackClient({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFallbackClient({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFallbackClient({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFallbackClient({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6141,7 +6142,7 @@ export function useTestFallbackClient(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFallbackClient, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFallbackClient, props)
   }
   throw new Error('Invalid props')
@@ -6172,10 +6173,10 @@ export function useTestFallbackClient(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFallbackToShorthand({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFallbackToShorthand({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFallbackToShorthand({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFallbackToShorthand({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6191,7 +6192,7 @@ export function useTestFallbackToShorthand(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFallbackToShorthand, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFallbackToShorthand, props)
   }
   throw new Error('Invalid props')
@@ -6222,10 +6223,10 @@ export function useTestFallbackToShorthand(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFnNamedArgsSingleBool({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFnNamedArgsSingleBool({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFnNamedArgsSingleBool({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFnNamedArgsSingleBool({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6241,7 +6242,7 @@ export function useTestFnNamedArgsSingleBool(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFnNamedArgsSingleBool, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFnNamedArgsSingleBool, props)
   }
   throw new Error('Invalid props')
@@ -6272,10 +6273,10 @@ export function useTestFnNamedArgsSingleBool(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFnNamedArgsSingleClass({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFnNamedArgsSingleClass({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFnNamedArgsSingleClass({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFnNamedArgsSingleClass({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6291,7 +6292,7 @@ export function useTestFnNamedArgsSingleClass(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFnNamedArgsSingleClass, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFnNamedArgsSingleClass, props)
   }
   throw new Error('Invalid props')
@@ -6322,10 +6323,10 @@ export function useTestFnNamedArgsSingleClass(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFnNamedArgsSingleEnumList({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFnNamedArgsSingleEnumList({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFnNamedArgsSingleEnumList({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFnNamedArgsSingleEnumList({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6341,7 +6342,7 @@ export function useTestFnNamedArgsSingleEnumList(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFnNamedArgsSingleEnumList, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFnNamedArgsSingleEnumList, props)
   }
   throw new Error('Invalid props')
@@ -6372,10 +6373,10 @@ export function useTestFnNamedArgsSingleEnumList(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFnNamedArgsSingleFloat({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFnNamedArgsSingleFloat({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFnNamedArgsSingleFloat({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFnNamedArgsSingleFloat({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6391,7 +6392,7 @@ export function useTestFnNamedArgsSingleFloat(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFnNamedArgsSingleFloat, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFnNamedArgsSingleFloat, props)
   }
   throw new Error('Invalid props')
@@ -6422,10 +6423,10 @@ export function useTestFnNamedArgsSingleFloat(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFnNamedArgsSingleInt({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFnNamedArgsSingleInt({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFnNamedArgsSingleInt({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFnNamedArgsSingleInt({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6441,7 +6442,7 @@ export function useTestFnNamedArgsSingleInt(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFnNamedArgsSingleInt, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFnNamedArgsSingleInt, props)
   }
   throw new Error('Invalid props')
@@ -6472,10 +6473,10 @@ export function useTestFnNamedArgsSingleInt(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFnNamedArgsSingleMapStringToClass({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFnNamedArgsSingleMapStringToClass({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFnNamedArgsSingleMapStringToClass({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFnNamedArgsSingleMapStringToClass({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6491,7 +6492,7 @@ export function useTestFnNamedArgsSingleMapStringToClass(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFnNamedArgsSingleMapStringToClass, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFnNamedArgsSingleMapStringToClass, props)
   }
   throw new Error('Invalid props')
@@ -6522,10 +6523,10 @@ export function useTestFnNamedArgsSingleMapStringToClass(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFnNamedArgsSingleMapStringToMap({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFnNamedArgsSingleMapStringToMap({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFnNamedArgsSingleMapStringToMap({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFnNamedArgsSingleMapStringToMap({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6541,7 +6542,7 @@ export function useTestFnNamedArgsSingleMapStringToMap(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFnNamedArgsSingleMapStringToMap, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFnNamedArgsSingleMapStringToMap, props)
   }
   throw new Error('Invalid props')
@@ -6572,10 +6573,10 @@ export function useTestFnNamedArgsSingleMapStringToMap(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFnNamedArgsSingleMapStringToString({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFnNamedArgsSingleMapStringToString({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFnNamedArgsSingleMapStringToString({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFnNamedArgsSingleMapStringToString({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6591,7 +6592,7 @@ export function useTestFnNamedArgsSingleMapStringToString(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFnNamedArgsSingleMapStringToString, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFnNamedArgsSingleMapStringToString, props)
   }
   throw new Error('Invalid props')
@@ -6622,10 +6623,10 @@ export function useTestFnNamedArgsSingleMapStringToString(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFnNamedArgsSingleString({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFnNamedArgsSingleString({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFnNamedArgsSingleString({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFnNamedArgsSingleString({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6641,7 +6642,7 @@ export function useTestFnNamedArgsSingleString(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFnNamedArgsSingleString, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFnNamedArgsSingleString, props)
   }
   throw new Error('Invalid props')
@@ -6672,10 +6673,10 @@ export function useTestFnNamedArgsSingleString(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFnNamedArgsSingleStringArray({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFnNamedArgsSingleStringArray({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFnNamedArgsSingleStringArray({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFnNamedArgsSingleStringArray({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6691,7 +6692,7 @@ export function useTestFnNamedArgsSingleStringArray(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFnNamedArgsSingleStringArray, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFnNamedArgsSingleStringArray, props)
   }
   throw new Error('Invalid props')
@@ -6722,10 +6723,10 @@ export function useTestFnNamedArgsSingleStringArray(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestFnNamedArgsSingleStringList({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestFnNamedArgsSingleStringList({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestFnNamedArgsSingleStringList({
+ * const { data, streamingData, isLoading, error, mutate } = useTestFnNamedArgsSingleStringList({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6741,7 +6742,7 @@ export function useTestFnNamedArgsSingleStringList(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestFnNamedArgsSingleStringList, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestFnNamedArgsSingleStringList, props)
   }
   throw new Error('Invalid props')
@@ -6772,10 +6773,10 @@ export function useTestFnNamedArgsSingleStringList(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestGemini({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestGemini({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestGemini({
+ * const { data, streamingData, isLoading, error, mutate } = useTestGemini({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6791,7 +6792,7 @@ export function useTestGemini(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestGemini, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestGemini, props)
   }
   throw new Error('Invalid props')
@@ -6820,10 +6821,10 @@ export function useTestGemini(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestGeminiOpenAiGeneric({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestGeminiOpenAiGeneric({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestGeminiOpenAiGeneric({
+ * const { data, streamingData, isLoading, error, mutate } = useTestGeminiOpenAiGeneric({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6839,7 +6840,7 @@ export function useTestGeminiOpenAiGeneric(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestGeminiOpenAiGeneric, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestGeminiOpenAiGeneric, props)
   }
   throw new Error('Invalid props')
@@ -6870,10 +6871,10 @@ export function useTestGeminiOpenAiGeneric(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestGeminiSystem({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestGeminiSystem({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestGeminiSystem({
+ * const { data, streamingData, isLoading, error, mutate } = useTestGeminiSystem({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6889,7 +6890,7 @@ export function useTestGeminiSystem(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestGeminiSystem, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestGeminiSystem, props)
   }
   throw new Error('Invalid props')
@@ -6920,10 +6921,10 @@ export function useTestGeminiSystem(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestGeminiSystemAsChat({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestGeminiSystemAsChat({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestGeminiSystemAsChat({
+ * const { data, streamingData, isLoading, error, mutate } = useTestGeminiSystemAsChat({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6939,7 +6940,7 @@ export function useTestGeminiSystemAsChat(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestGeminiSystemAsChat, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestGeminiSystemAsChat, props)
   }
   throw new Error('Invalid props')
@@ -6970,10 +6971,10 @@ export function useTestGeminiSystemAsChat(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestImageInput({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestImageInput({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestImageInput({
+ * const { data, streamingData, isLoading, error, mutate } = useTestImageInput({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -6989,7 +6990,7 @@ export function useTestImageInput(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestImageInput, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestImageInput, props)
   }
   throw new Error('Invalid props')
@@ -7020,10 +7021,10 @@ export function useTestImageInput(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestImageInputAnthropic({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestImageInputAnthropic({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestImageInputAnthropic({
+ * const { data, streamingData, isLoading, error, mutate } = useTestImageInputAnthropic({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7039,7 +7040,7 @@ export function useTestImageInputAnthropic(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestImageInputAnthropic, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestImageInputAnthropic, props)
   }
   throw new Error('Invalid props')
@@ -7070,10 +7071,10 @@ export function useTestImageInputAnthropic(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestImageListInput({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestImageListInput({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestImageListInput({
+ * const { data, streamingData, isLoading, error, mutate } = useTestImageListInput({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7089,7 +7090,7 @@ export function useTestImageListInput(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestImageListInput, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestImageListInput, props)
   }
   throw new Error('Invalid props')
@@ -7120,10 +7121,10 @@ export function useTestImageListInput(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestMemory({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestMemory({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestMemory({
+ * const { data, streamingData, isLoading, error, mutate } = useTestMemory({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7139,7 +7140,7 @@ export function useTestMemory(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestMemory, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestMemory, props)
   }
   throw new Error('Invalid props')
@@ -7172,10 +7173,10 @@ export function useTestMemory(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestMulticlassNamedArgs({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestMulticlassNamedArgs({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestMulticlassNamedArgs({
+ * const { data, streamingData, isLoading, error, mutate } = useTestMulticlassNamedArgs({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7191,7 +7192,7 @@ export function useTestMulticlassNamedArgs(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestMulticlassNamedArgs, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestMulticlassNamedArgs, props)
   }
   throw new Error('Invalid props')
@@ -7222,10 +7223,10 @@ export function useTestMulticlassNamedArgs(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestNamedArgsLiteralBool({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestNamedArgsLiteralBool({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestNamedArgsLiteralBool({
+ * const { data, streamingData, isLoading, error, mutate } = useTestNamedArgsLiteralBool({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7241,7 +7242,7 @@ export function useTestNamedArgsLiteralBool(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestNamedArgsLiteralBool, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestNamedArgsLiteralBool, props)
   }
   throw new Error('Invalid props')
@@ -7272,10 +7273,10 @@ export function useTestNamedArgsLiteralBool(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestNamedArgsLiteralInt({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestNamedArgsLiteralInt({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestNamedArgsLiteralInt({
+ * const { data, streamingData, isLoading, error, mutate } = useTestNamedArgsLiteralInt({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7291,7 +7292,7 @@ export function useTestNamedArgsLiteralInt(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestNamedArgsLiteralInt, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestNamedArgsLiteralInt, props)
   }
   throw new Error('Invalid props')
@@ -7322,10 +7323,10 @@ export function useTestNamedArgsLiteralInt(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestNamedArgsLiteralString({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestNamedArgsLiteralString({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestNamedArgsLiteralString({
+ * const { data, streamingData, isLoading, error, mutate } = useTestNamedArgsLiteralString({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7341,7 +7342,7 @@ export function useTestNamedArgsLiteralString(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestNamedArgsLiteralString, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestNamedArgsLiteralString, props)
   }
   throw new Error('Invalid props')
@@ -7372,10 +7373,10 @@ export function useTestNamedArgsLiteralString(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestOllama({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestOllama({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestOllama({
+ * const { data, streamingData, isLoading, error, mutate } = useTestOllama({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7391,7 +7392,7 @@ export function useTestOllama(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestOllama, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestOllama, props)
   }
   throw new Error('Invalid props')
@@ -7422,10 +7423,10 @@ export function useTestOllama(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestOpenAI({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestOpenAI({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestOpenAI({
+ * const { data, streamingData, isLoading, error, mutate } = useTestOpenAI({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7441,7 +7442,7 @@ export function useTestOpenAI(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestOpenAI, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestOpenAI, props)
   }
   throw new Error('Invalid props')
@@ -7472,10 +7473,10 @@ export function useTestOpenAI(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestOpenAILegacyProvider({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestOpenAILegacyProvider({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestOpenAILegacyProvider({
+ * const { data, streamingData, isLoading, error, mutate } = useTestOpenAILegacyProvider({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7491,7 +7492,7 @@ export function useTestOpenAILegacyProvider(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestOpenAILegacyProvider, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestOpenAILegacyProvider, props)
   }
   throw new Error('Invalid props')
@@ -7522,10 +7523,10 @@ export function useTestOpenAILegacyProvider(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestOpenAIO1NoMaxTokens({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestOpenAIO1NoMaxTokens({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestOpenAIO1NoMaxTokens({
+ * const { data, streamingData, isLoading, error, mutate } = useTestOpenAIO1NoMaxTokens({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7541,7 +7542,7 @@ export function useTestOpenAIO1NoMaxTokens(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestOpenAIO1NoMaxTokens, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestOpenAIO1NoMaxTokens, props)
   }
   throw new Error('Invalid props')
@@ -7572,10 +7573,10 @@ export function useTestOpenAIO1NoMaxTokens(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestOpenAIO1WithMaxCompletionTokens({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestOpenAIO1WithMaxCompletionTokens({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestOpenAIO1WithMaxCompletionTokens({
+ * const { data, streamingData, isLoading, error, mutate } = useTestOpenAIO1WithMaxCompletionTokens({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7591,7 +7592,7 @@ export function useTestOpenAIO1WithMaxCompletionTokens(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestOpenAIO1WithMaxCompletionTokens, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestOpenAIO1WithMaxCompletionTokens, props)
   }
   throw new Error('Invalid props')
@@ -7622,10 +7623,10 @@ export function useTestOpenAIO1WithMaxCompletionTokens(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestOpenAIO1WithMaxTokens({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestOpenAIO1WithMaxTokens({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestOpenAIO1WithMaxTokens({
+ * const { data, streamingData, isLoading, error, mutate } = useTestOpenAIO1WithMaxTokens({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7641,7 +7642,7 @@ export function useTestOpenAIO1WithMaxTokens(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestOpenAIO1WithMaxTokens, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestOpenAIO1WithMaxTokens, props)
   }
   throw new Error('Invalid props')
@@ -7672,10 +7673,10 @@ export function useTestOpenAIO1WithMaxTokens(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestOpenAIShorthand({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestOpenAIShorthand({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestOpenAIShorthand({
+ * const { data, streamingData, isLoading, error, mutate } = useTestOpenAIShorthand({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7691,7 +7692,7 @@ export function useTestOpenAIShorthand(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestOpenAIShorthand, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestOpenAIShorthand, props)
   }
   throw new Error('Invalid props')
@@ -7722,10 +7723,10 @@ export function useTestOpenAIShorthand(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestOpenAIWithMaxTokens({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestOpenAIWithMaxTokens({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestOpenAIWithMaxTokens({
+ * const { data, streamingData, isLoading, error, mutate } = useTestOpenAIWithMaxTokens({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7741,7 +7742,7 @@ export function useTestOpenAIWithMaxTokens(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestOpenAIWithMaxTokens, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestOpenAIWithMaxTokens, props)
   }
   throw new Error('Invalid props')
@@ -7772,10 +7773,10 @@ export function useTestOpenAIWithMaxTokens(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestOpenAIWithNullMaxTokens({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestOpenAIWithNullMaxTokens({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestOpenAIWithNullMaxTokens({
+ * const { data, streamingData, isLoading, error, mutate } = useTestOpenAIWithNullMaxTokens({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7791,7 +7792,7 @@ export function useTestOpenAIWithNullMaxTokens(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestOpenAIWithNullMaxTokens, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestOpenAIWithNullMaxTokens, props)
   }
   throw new Error('Invalid props')
@@ -7820,10 +7821,10 @@ export function useTestOpenAIWithNullMaxTokens(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestRetryConstant({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestRetryConstant({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestRetryConstant({
+ * const { data, streamingData, isLoading, error, mutate } = useTestRetryConstant({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7839,7 +7840,7 @@ export function useTestRetryConstant(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestRetryConstant, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestRetryConstant, props)
   }
   throw new Error('Invalid props')
@@ -7868,10 +7869,10 @@ export function useTestRetryConstant(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestRetryExponential({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestRetryExponential({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestRetryExponential({
+ * const { data, streamingData, isLoading, error, mutate } = useTestRetryExponential({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7887,7 +7888,7 @@ export function useTestRetryExponential(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestRetryExponential, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestRetryExponential, props)
   }
   throw new Error('Invalid props')
@@ -7916,10 +7917,10 @@ export function useTestRetryExponential(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestSingleFallbackClient({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestSingleFallbackClient({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestSingleFallbackClient({
+ * const { data, streamingData, isLoading, error, mutate } = useTestSingleFallbackClient({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7935,7 +7936,7 @@ export function useTestSingleFallbackClient(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestSingleFallbackClient, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestSingleFallbackClient, props)
   }
   throw new Error('Invalid props')
@@ -7966,10 +7967,10 @@ export function useTestSingleFallbackClient(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestUniverseQuestion({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestUniverseQuestion({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestUniverseQuestion({
+ * const { data, streamingData, isLoading, error, mutate } = useTestUniverseQuestion({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -7985,7 +7986,7 @@ export function useTestUniverseQuestion(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestUniverseQuestion, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestUniverseQuestion, props)
   }
   throw new Error('Invalid props')
@@ -8016,10 +8017,10 @@ export function useTestUniverseQuestion(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestVertex({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestVertex({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestVertex({
+ * const { data, streamingData, isLoading, error, mutate } = useTestVertex({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -8035,7 +8036,7 @@ export function useTestVertex(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestVertex, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestVertex, props)
   }
   throw new Error('Invalid props')
@@ -8064,10 +8065,10 @@ export function useTestVertex(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useTestVertexWithSystemInstructions({ stream: false});
+ * const { data, error, isLoading, mutate } = useTestVertexWithSystemInstructions({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useTestVertexWithSystemInstructions({
+ * const { data, streamingData, isLoading, error, mutate } = useTestVertexWithSystemInstructions({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -8083,7 +8084,7 @@ export function useTestVertexWithSystemInstructions(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.TestVertexWithSystemInstructions, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.TestVertexWithSystemInstructions, props)
   }
   throw new Error('Invalid props')
@@ -8114,10 +8115,10 @@ export function useTestVertexWithSystemInstructions(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useUnionTest_Function({ stream: false});
+ * const { data, error, isLoading, mutate } = useUnionTest_Function({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useUnionTest_Function({
+ * const { data, streamingData, isLoading, error, mutate } = useUnionTest_Function({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -8133,7 +8134,7 @@ export function useUnionTest_Function(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.UnionTest_Function, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.UnionTest_Function, props)
   }
   throw new Error('Invalid props')
@@ -8164,10 +8165,10 @@ export function useUnionTest_Function(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useUseBlockConstraint({ stream: false});
+ * const { data, error, isLoading, mutate } = useUseBlockConstraint({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useUseBlockConstraint({
+ * const { data, streamingData, isLoading, error, mutate } = useUseBlockConstraint({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -8183,7 +8184,7 @@ export function useUseBlockConstraint(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.UseBlockConstraint, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.UseBlockConstraint, props)
   }
   throw new Error('Invalid props')
@@ -8214,10 +8215,10 @@ export function useUseBlockConstraint(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useUseMalformedConstraints({ stream: false});
+ * const { data, error, isLoading, mutate } = useUseMalformedConstraints({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useUseMalformedConstraints({
+ * const { data, streamingData, isLoading, error, mutate } = useUseMalformedConstraints({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -8233,7 +8234,7 @@ export function useUseMalformedConstraints(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.UseMalformedConstraints, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.UseMalformedConstraints, props)
   }
   throw new Error('Invalid props')
@@ -8264,10 +8265,10 @@ export function useUseMalformedConstraints(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isPending, mutate } = useUseNestedBlockConstraint({ stream: false});
+ * const { data, error, isLoading, mutate } = useUseNestedBlockConstraint({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamingData, isPending, error, mutate } = useUseNestedBlockConstraint({
+ * const { data, streamingData, isLoading, error, mutate } = useUseNestedBlockConstraint({
  *   stream: true | undefined,
  *   onPartial: (partial) => console.log('Partial update:', partial),
  *   onFinal: (final) => console.log('Final result:', final),
@@ -8283,7 +8284,7 @@ export function useUseNestedBlockConstraint(
   if (isNotStreamingProps(props)) {
     return useBamlAction(Actions.UseNestedBlockConstraint, props)
   }
-  if (isStreamingProps(props)) {
+  if (isLoadingProps(props)) {
     return useBamlAction(StreamingActions.UseNestedBlockConstraint, props)
   }
   throw new Error('Invalid props')

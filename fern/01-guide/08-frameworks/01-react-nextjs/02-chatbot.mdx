@@ -75,8 +75,9 @@ export function ChatInterface() {
 
   const {
     mutate: sendMessage,
-    isPending,
+    isLoading,
     data: messages,
+    streamingData: streamingMessages,
     error
   } = useChat();
 
@@ -105,7 +106,7 @@ export function ChatInterface() {
             {message.content}
           </div>
         ))}
-        {isPending && (
+        {isLoading && (
           <div>Typing...</div>
         )}
       </div>
@@ -117,9 +118,9 @@ export function ChatInterface() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message..."
-            disabled={isPending}
+            disabled={isLoading}
           />
-          <button type="submit" disabled={isPending}>
+          <button type="submit" disabled={isLoading}>
             Send
           </button>
         </div>
@@ -162,7 +163,7 @@ import { useState } from "react";
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [isPending, setIsPending] = useState(false);
+  const [isLoading, setisLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -174,7 +175,7 @@ export function ChatInterface() {
       { role: "user", content: input }
     ];
     setInput("");
-    setIsPending(true);
+    setisLoading(true);
     setError(null);
 
     try {
@@ -186,7 +187,7 @@ export function ChatInterface() {
     } catch (error) {
       setError(error as Error);
     } finally {
-      setIsPending(false);
+      setisLoading(false);
     }
   };
 
@@ -198,7 +199,7 @@ export function ChatInterface() {
             {message.content}
           </div>
         ))}
-        {isPending && (
+        {isLoading && (
           <div>Typing...</div>
         )}
       </div>
@@ -210,9 +211,9 @@ export function ChatInterface() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message..."
-            disabled={isPending}
+            disabled={isLoading}
           />
-          <button type="submit" disabled={isPending}>
+          <button type="submit" disabled={isLoading}>
             Send
           </button>
         </div>

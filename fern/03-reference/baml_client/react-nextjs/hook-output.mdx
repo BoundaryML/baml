@@ -8,13 +8,13 @@ The `HookOutput` type defines the return type for BAML React hooks.
 <CodeBlocks>
 ```typescript title="Example Usage"
 function Component() {
-  const { data, streamingData, error, isPending, mutate } = useTestAws({
+  const { data, streamingData, error, isLoading, mutate } = useTestAws({
     stream: true,
     onPartial: (text) => console.log("Streaming:", text),
   })
 
   // Show partial data while streaming, final data when complete
-  const currentResponse = isPending ? streamingData : data
+  const currentResponse = isLoading ? streamingData : data
 
   return (
     <div>
@@ -33,7 +33,7 @@ const streamingResult: HookOutput<'TestAws', { stream: true }> = {
   streamingData: "Partial response...",
   error: undefined,
   isError: false,
-  isPending: true,
+  isLoading: true,
   isSuccess: false,
   status: 'pending',
   mutate: async () => new ReadableStream()
@@ -44,7 +44,7 @@ const nonStreamingResult: HookOutput<'TestAws'> = {
   data: "Final response",
   error: undefined,
   isError: false,
-  isPending: false,
+  isLoading: false,
   isSuccess: true,
   status: 'success',
   mutate: async () => "Final response"
@@ -57,7 +57,7 @@ type HookOutput<FunctionName, Options extends { stream?: boolean } = { stream?: 
   streamingData?: Options['stream'] extends true ? PartialReturnType<FunctionName> : never
   error?: Error | BamlValidationError | BamlClientFinishReasonError
   isError: boolean
-  isPending: boolean
+  isLoading: boolean
   isSuccess: boolean
   status: 'idle' | 'pending' | 'success' | 'error'
   mutate: (...args: InputType) => Options['stream'] extends true
@@ -80,7 +80,7 @@ type HookOutput<FunctionName, Options extends { stream?: boolean } = { stream?: 
   path="Options"
   type="{ stream?: boolean }"
 >
-  Configuration object that determines streaming behavior. Defaults to `{ stream?: false }`.
+  Configuration object that determines streaming behavior. Defaults to `{ stream?: true }`.
 </ParamField>
 
 ## Properties
@@ -114,7 +114,7 @@ type HookOutput<FunctionName, Options extends { stream?: boolean } = { stream?: 
 </ParamField>
 
 <ParamField
-  path="isPending"
+  path="isLoading"
   type="boolean"
 >
   True if the request is in progress.

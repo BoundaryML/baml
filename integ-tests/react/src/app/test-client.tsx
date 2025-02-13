@@ -19,8 +19,8 @@ type ResponseCardProps = {
 }
 
 function ResponseCard({ streamingHookResult, nonStreamingHookResult, status }: ResponseCardProps) {
-  const { isPending, error, isError, data, streamingData } = streamingHookResult
-  const response = isPending ? streamingData : data
+  const { isLoading, error, isError, data, streamingData } = streamingHookResult
+  const response = isLoading ? streamingData : data
 
   return (
     <>
@@ -162,9 +162,9 @@ export default function TestClient() {
   // nonStreamingIndirectAction.streamingData satisfies never | undefined
   // nonStreamingIndirectAction.mutate satisfies (input: string) => Promise<string>
 
-  const { isPending, error, isError, isSuccess, mutate, status, data, streamingData } = streamingDirectAction
+  const { isLoading, error, isError, isSuccess, mutate, status, data, streamingData } = streamingDirectAction
 
-  const response = isPending ? streamingData : data
+  const response = isLoading ? streamingData : data
   const [prompt, setPrompt] = React.useState('')
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -192,13 +192,13 @@ export default function TestClient() {
               value={prompt}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPrompt(e.target.value)}
               placeholder='Type something...'
-              disabled={isPending}
+              disabled={isLoading}
             />
           </div>
 
-          <Button type='submit' className='w-full' disabled={isPending || !prompt.trim()}>
-            {isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
-            {isPending ? 'Processing...' : 'Submit'}
+          <Button type='submit' className='w-full' disabled={isLoading || !prompt.trim()}>
+            {isLoading && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+            {isLoading ? 'Processing...' : 'Submit'}
           </Button>
         </form>
 
