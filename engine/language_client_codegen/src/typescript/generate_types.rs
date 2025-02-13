@@ -75,12 +75,12 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypescriptTyp
                 .map(|e| Into::<TypescriptClass>::into(&e))
                 .collect::<Vec<_>>(),
             structural_recursive_alias_cycles: {
-                let mut cyles = ir
+                let mut cycles = ir
                 .walk_alias_cycles()
                 .map(TypescriptTypeAlias::from)
                 .collect::<Vec<_>>();
-                cyles.sort_by_key(|alias| alias.name.clone());
-                cyles
+                cycles.sort_by_key(|alias| alias.name.clone());
+                cycles
             },
         })
     }
