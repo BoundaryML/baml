@@ -2,6 +2,7 @@
 #![deny(rust_2018_idioms, unsafe_code)]
 #![allow(clippy::derive_partial_eq_without_eq)]
 
+use enumflags2::BitFlags;
 pub use internal_baml_diagnostics;
 use internal_baml_parser_database::TypeWalker;
 pub use internal_baml_parser_database::{self};
@@ -175,7 +176,7 @@ pub fn run_validation_pipeline_on_db(
     db: &mut internal_baml_parser_database::ParserDatabase,
     diagnostics: &mut Diagnostics,
 ) {
-    validate::validate(db, Default::default(), diagnostics);
+    validate::validate(db, BitFlags::<PreviewFeature>::default(), diagnostics);
     if diagnostics.has_errors() {
         return;
     }
