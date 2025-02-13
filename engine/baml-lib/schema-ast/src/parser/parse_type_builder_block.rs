@@ -92,7 +92,7 @@ pub fn parse_type_builder_contents(
                                 SubType::Class | SubType::Enum => {
                                     entries.push(TypeBuilderEntry::Dynamic(type_expr))
                                 }
-                                _ => {} // may need to save other somehow for error propagation
+                                SubType::Dynamic(_) | SubType::Other(_) => {} // may need to save other somehow for error propagation
                             }
                         }
 
@@ -108,7 +108,7 @@ pub fn parse_type_builder_contents(
                 match type_expr.sub_type {
                     SubType::Class => entries.push(TypeBuilderEntry::Class(type_expr)),
                     SubType::Enum => entries.push(TypeBuilderEntry::Enum(type_expr)),
-                    _ => {} // may need to save other somehow for error propagation
+                    SubType::Dynamic(_) | SubType::Other(_) => {} // may need to save other somehow for error propagation
                 }
             }
 
