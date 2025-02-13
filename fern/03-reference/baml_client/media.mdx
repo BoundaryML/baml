@@ -1,0 +1,107 @@
+---
+title: Image / Audio
+---
+
+Image / Audio values to BAML functions can by created in client libraries. This document explains how to use these functions both at compile time and runtime to handle multimedia data. For more details, refer to [image types](/ref/baml/types#image) and [audio types](/ref/baml/types#audio).
+
+## Images
+
+BAML functions that accept an image input utilize the Image helper, which supports creating Image objects from URLs or Base64 encoded data.
+
+### Image Creation Methods
+
+
+• `Image.from_url(url: string, media_type: string | null)`: Creates an Image object from the specified URL. (optionally specify the media type, otherwise it will be inferred from the URL)
+
+• `Image.from_base64(mime_type: string, data: string)`: Creates an Image object using Base64 encoded data along with the given MIME type.
+
+### Usage
+
+
+<CodeBlocks>
+```python {6,11}
+from baml_py import Image
+from baml_client import b
+
+async def test_image_input():
+    # Create an Image from a URL
+    img = Image.from_url("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png")
+    res = await b.TestImageInput(img=img)
+
+    # Create an Image from Base64 data
+    image_b64 = "iVB0xyz..."
+    img = Image.from_base64("image/png", image_b64)
+    res = await b.TestImageInput(img=img)
+```
+
+```typescript
+import { b } from '../baml_client'
+import { Image } from "@boundaryml/baml"
+
+// Create an Image from a URL
+let res = await b.TestImageInput(
+    Image.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png')
+)
+
+// Create an Image from Base64 data
+const image_b64 = "iVB0xyz..."
+res = await b.TestImageInput(
+    Image.fromBase64('image/png', image_b64)
+)
+```
+
+```ruby
+# Ruby implementation is in development.
+```
+</CodeBlocks>
+## Audio
+
+BAML functions that accept audio inputs utilize the Audio helper. Similar to images, you can create Audio objects from URLs or Base64 encoded data.
+
+### Audio Creation Methods
+
+• Audio.from_url(url: string): Creates an Audio object from the specified URL.
+
+• Audio.from_base64(mime_type: string, data: string): Creates an Audio object using Base64 encoded audio data with the provided MIME type.
+
+### Usage
+
+**Python**
+```python
+from baml_py import Audio
+from baml_client import b
+
+async def run():
+    # Create an Audio object from a URL
+    res = await b.TestAudioInput(
+        audio=Audio.from_url("https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg")
+    )
+
+    # Create an Audio object from Base64 data
+    b64 = "iVB0xyz..."
+    res = await b.TestAudioInput(
+        audio=Audio.from_base64("audio/ogg", b64)
+    )
+```
+
+**TypeScript**
+```typescript
+import { b } from '../baml_client'
+import { Audio } from "@boundaryml/baml"
+
+// Create an Audio object from a URL
+let res = await b.TestAudioInput(
+    Audio.fromUrl('https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg')
+)
+
+// Create an Audio object from Base64 data
+const audio_base64 = "iVB0xyz..."
+res = await b.TestAudioInput(
+    Audio.fromBase64('audio/ogg', audio_base64)
+)
+```
+
+**Ruby (beta)**
+```ruby
+# Ruby implementation is in development.
+```

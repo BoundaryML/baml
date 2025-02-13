@@ -340,6 +340,9 @@ navigation:
                 path: 03-reference/baml/array.mdx
               - page: map (dictionary)
                 path: 03-reference/baml/map.mdx
+              - page: "image / audio"
+                slug: media
+                path: 03-reference/baml/media.mdx
           - page: Types
             path: 03-reference/baml/types.mdx
           - page: function
@@ -422,6 +425,10 @@ navigation:
             path: 03-reference/baml_client/typebuilder.mdx
           - page: ClientRegistry
             path: 01-guide/05-baml-advanced/client-registry.mdx
+          - page: BamlImage / BamlAudio
+            slug: media
+            path: 03-reference/baml_client/media.mdx
+
 
       - section: Prompt Syntax
         contents:

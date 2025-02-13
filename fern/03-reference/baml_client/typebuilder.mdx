@@ -203,14 +203,82 @@ tb.User.add_property("address", address.type)
 
 TypeBuilder provides methods for building different kinds of types:
 
-| Method | Description | Example |
-|--------|-------------|---------|
-| `string()` | Creates a string type | `tb.string()` |
-| `int()` | Creates an integer type | `tb.int()` |
-| `float()` | Creates a float type | `tb.float()` |
-| `bool()` | Creates a boolean type | `tb.bool()` |
-| `list()` | Makes a type into a list | `tb.string().list()` |
-| `optional()` | Makes a type optional | `tb.string().optional()` |
+| Method | Returns | Description | Example |
+|--------|---------|-------------|---------|
+| `string()` | `FieldType` | Creates a string type | `tb.string()` |
+| `int()` | `FieldType` | Creates an integer type | `tb.int()` |
+| `float()` | `FieldType` | Creates a float type | `tb.float()` |
+| `bool()` | `FieldType` | Creates a boolean type | `tb.bool()` |
+| `list(type: FieldType)` | `FieldType` | Makes a type into a list | `tb.list(tb.string())` |
+| `union(types: FieldType[])` | `FieldType` | Creates a union of types | `tb.union([tb.string(), tb.int()])` |
+| `add_class(name: string)` | `ClassBuilder` | Creates a new class | `tb.add_class("User")` |
+| `add_enum(name: string)` | `EnumBuilder` | Creates a new enum | `tb.add_enum("Category")` |
+
+
+In addition to the methods above, all types marked with `@@dynamic` will also appear in the TypeBuilder.
+
+```baml {4}
+class User {
+  name string
+  age int
+  @@dynamic  // Allow adding more properties
+}
+```
+
+```python {2}
+tb = TypeBuilder()
+tb.User.add_property("email", tb.string())
+```
+
+### FieldType
+
+`FieldType` is a type that represents a field in a type. It can be used to add descriptions, constraints, and other metadata to a field.
+
+| Method | Returns | Description | Example |
+|--------|---------|-------------|---------|
+| `list()` | `FieldType` | Makes a type into a list | `tb.string().list()` |
+| `optional()` | `FieldType` | Makes a type optional | `tb.string().optional()` |
+
+### ClassBuilder
+
+`ClassBuilder` is a type that represents a class in a type. It can be used to add properties to a class.
+
+| Method | Returns | Description | Example |
+|--------|---------|-------------|---------|
+| `add_property(name: string, type: FieldType)` | `ClassPropertyBuilder` | Adds a property to the class | `my_cls.add_property("email", tb.string())` |
+| `description(description: string)` | `ClassBuilder` | Adds a description to the class | `my_cls.description("A user class")` |
+| `type()` | `FieldType` | Returns the type of the class | `my_cls.type()` |
+
+### ClassPropertyBuilder
+
+`ClassPropertyBuilder` is a type that represents a property in a class. It can be used to add descriptions, constraints, and other metadata to a property.
+
+
+| Method | Returns | Description | Example |
+|--------|---------|-------------|---------|
+| `description(description: string)` | `ClassPropertyBuilder` | Adds a description to the property | `my_prop.description("An email address")` |
+| `alias(alias: string)` | `ClassPropertyBuilder` | Adds the alias attribute to the property | `my_prop.alias("email_address")` |
+
+### EnumBuilder
+
+`EnumBuilder` is a type that represents an enum in a type. It can be used to add values to an enum.
+
+| Method | Returns | Description | Example |
+|--------|---------|-------------|---------|
+| `add_value(value: string)` | `EnumValueBuilder` | Adds a value to the enum | `my_enum.add_value("VALUE1")` |
+| `description(description: string)` | `EnumBuilder` | Adds a description to the enum value | `my_enum.description("A value in the enum")` |
+| `type()` | `FieldType` | Returns the type of the enum | `my_enum.type()` |
+
+### EnumValueBuilder
+
+`EnumValueBuilder` is a type that represents a value in an enum. It can be used to add descriptions, constraints, and other metadata to a value.
+
+| Method | Returns | Description | Example |
+|--------|---------|-------------|---------|  
+| `description(description: string)` | `EnumValueBuilder` | Adds a description to the enum value | `my_value.description("A value in the enum")` |
+| `alias(alias: string)` | `EnumValueBuilder` | Adds the alias attribute to the enum value | `my_value.alias("VALUE1")` |
+| `skip()` | `EnumValueBuilder` | Adds the skip attribute to the enum value | `my_value.skip()` |
+
 
 ## Adding Descriptions
 
