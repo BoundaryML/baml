@@ -11,7 +11,7 @@
 
 ## BAML: Basically a Made-up Language
 
-*or "Basic-Ass Machine Learning" if your boss isn't around*
+*or "Bad-Ass Machine Learning" if your boss isn't around*
 
 
 <h3>
