@@ -29,6 +29,7 @@ jobs:
 
           echo -e "::group::\033[31mThis is red text\033[0m"
           echo -e "\033[32mThis is green text\033[0m"
+          sleep 120
           echo "::endgroup::"
 
           # New log groups with pass/fail emojis
@@ -39,6 +40,12 @@ jobs:
           echo "::endgroup::"
 
           echo -e "::group::\033[32m✅ Another pass message\033[0m"
+          echo "::endgroup::"
+
+          echo -e "::group::\033[32m✅ Yet Another pass message\033[0m"
+          echo "sleep 120 start"
+          sleep 120
+          echo "sleep 120 done"
           echo "::endgroup::"
 
           # Output some colored text outside the group as well.
