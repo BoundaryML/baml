@@ -2,7 +2,7 @@ use crate::internal::llm_client::{
     traits::{ToProviderMessage, ToProviderMessageExt, WithClientProperties},
     ResolveMediaUrls,
 };
-use btrace::WithTraceContext;
+use btrace::{tracer::tracer::WithTraceContext, WithTraceContext};
 use secrecy::ExposeSecret;
 use std::collections::HashMap;
 
@@ -189,7 +189,7 @@ impl SseResponseTrait for AnthropicClient {
                                     Some(body.usage.input_tokens + body.usage.output_tokens);
                             }
                             MessageChunk::ContentBlockDelta(event) => {
-                                btrace::log(
+                                btrace::tracer::tracer::log(
                                     tracing::Level::INFO,
                                     "anthropic_client".to_string(),
                                     "event".to_string(),

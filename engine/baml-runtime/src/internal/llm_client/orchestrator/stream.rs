@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_std::stream::StreamExt;
 use baml_types::{BamlValue, BamlValueWithMeta};
-use btrace::WithTraceContext;
+use btrace::tracer::tracer::{btrace, WithTraceContext};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
 use serde_json::json;
@@ -141,7 +141,7 @@ where
         {
             break;
         }
-        btrace::log(
+        btrace::tracer::tracer::log(
             tracing_core::Level::INFO,
             format!("baml_src::{}", node.provider.name()),
             "Failed to start stream".to_string(),

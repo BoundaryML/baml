@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use internal_baml_core::ir::FieldType;
 use std::{collections::HashMap, sync::Arc};
 
-use crate::internal::llm_client::llm_provider::LLMProvider;
+use crate::{internal::llm_client::llm_provider::LLMProvider, tracing::BamlTracer};
 
 #[derive(Debug, Clone)]
 pub struct SpanCtx {
@@ -51,7 +51,6 @@ cfg_if::cfg_if!(
 pub struct RuntimeContext {
     // path to baml_src in the local filesystem
     pub baml_src: Arc<BamlSrcReader>,
-    pub tracer_tx: tokio::sync::mpsc::UnboundedSender<String>,
     env: HashMap<String, String>,
     pub tags: HashMap<String, BamlValue>,
     pub client_overrides: Option<(Option<String>, HashMap<String, Arc<LLMProvider>>)>,
@@ -59,6 +58,7 @@ pub struct RuntimeContext {
     pub enum_overrides: IndexMap<String, RuntimeEnumOverride>,
     pub type_alias_overrides: IndexMap<String, FieldType>,
     pub recursive_type_alias_overrides: Vec<IndexMap<String, FieldType>>,
+    pub tracer: Arc<BamlTracer>,
 }
 
 impl RuntimeContext {
@@ -83,11 +83,10 @@ impl RuntimeContext {
         enum_overrides: IndexMap<String, RuntimeEnumOverride>,
         type_alias_overrides: IndexMap<String, FieldType>,
         recursive_type_alias_overrides: Vec<IndexMap<String, FieldType>>,
+        tracer: Arc<BamlTracer>,
     ) -> RuntimeContext {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         RuntimeContext {
             baml_src,
-            tracer_tx: tx,
             env,
             tags,
             client_overrides,
@@ -95,6 +94,7 @@ impl RuntimeContext {
             enum_overrides,
             type_alias_overrides,
             recursive_type_alias_overrides,
+            tracer,
         }
     }
 

@@ -2,7 +2,7 @@ use once_cell::sync::Lazy;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
-use super::events::{FunctionId, TraceEvent};
+use baml_types::tracing::events::{FunctionId, TraceEvent};
 
 pub static GLOBAL_TRACE_STORAGE: Lazy<Mutex<TraceStorage>> =
     Lazy::new(|| Mutex::new(TraceStorage::default()));

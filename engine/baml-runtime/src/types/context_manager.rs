@@ -7,11 +7,13 @@ use anyhow::{Context, Result};
 use baml_types::BamlValue;
 use std::fmt;
 
-use crate::{client_registry::ClientRegistry, type_builder::TypeBuilder, RuntimeContext, SpanCtx};
+use crate::{
+    client_registry::ClientRegistry, tracing::BamlTracer, type_builder::TypeBuilder,
+    RuntimeContext, SpanCtx,
+};
 
 use super::runtime_context::BamlSrcReader;
-
-type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
+pub type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
 
 #[derive(Clone)]
 pub struct RuntimeContextManager {
@@ -19,6 +21,7 @@ pub struct RuntimeContextManager {
     context: Arc<Mutex<Vec<BamlContext>>>,
     env_vars: HashMap<String, String>,
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
+    tracer: Arc<BamlTracer>,
 }
 
 impl fmt::Debug for RuntimeContextManager {
@@ -38,18 +41,30 @@ impl RuntimeContextManager {
             context: Arc::new(Mutex::new(self.context.lock().unwrap().clone())),
             env_vars: self.env_vars.clone(),
             global_tags: Arc::new(Mutex::new(self.global_tags.lock().unwrap().clone())),
+            tracer: self.tracer.clone(),
         }
+    }
+
+    pub fn span_id(&self) -> Result<uuid::Uuid> {
+        self.context
+            .lock()
+            .unwrap()
+            .last()
+            .map(|(id, ..)| *id)
+            .ok_or_else(|| anyhow::anyhow!("No span id found"))
     }
 
     pub fn new_from_env_vars(
         env_vars: HashMap<String, String>,
         baml_src_reader: BamlSrcReader,
+        tracer: Arc<BamlTracer>,
     ) -> Self {
         Self {
             baml_src_reader: Arc::new(baml_src_reader),
             context: Default::default(),
             env_vars,
             global_tags: Default::default(),
+            tracer,
         }
     }
 
@@ -138,6 +153,7 @@ impl RuntimeContextManager {
             enm,
             als,
             rec_als,
+            self.tracer.clone(),
         );
 
         ctx.client_overrides = match client_registry {

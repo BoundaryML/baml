@@ -100,6 +100,8 @@ tracing-subscriber = { version = "0.3.18", features = [
 ] }
 thiserror = "2.0.1"
 log-once = "0.4.1"
+once_cell.workspace = true
+time.workspace = true
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

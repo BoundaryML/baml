@@ -1,6 +1,7 @@
 mod call;
 mod stream;
 
+use btrace::tracer::tracer::WithTraceContext;
 use serde_json::json;
 use web_time::Duration; // Add this line
 

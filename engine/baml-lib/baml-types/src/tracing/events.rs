@@ -21,7 +21,8 @@ pub struct TraceEvent {
      * The query (span_id, *) gets all logs for a function call
      */
     pub span_id: FunctionId,
-    pub content_span_id: ContentId,
+    // a unique identifier for this particular content
+    pub event_id: ContentId,
 
     // The chain of spans that lead to this log event
     // Includes span_id at the last position (content_span_id is not included)
@@ -51,6 +52,7 @@ pub enum TraceData {
     LogMessage {
         msg: String,
     },
+    // All functions, including non-LLM ones
     // All start events
     FunctionStart(FunctionStart),
     // All end events

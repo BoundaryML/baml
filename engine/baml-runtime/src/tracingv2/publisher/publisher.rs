@@ -7,11 +7,13 @@ use std::{fs::OpenOptions, pin::pin, sync::Arc};
 use baml_types::tracing::events::TraceEvent;
 use serde::{Deserialize, Serialize};
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
-pub struct TracerThread {
+
+// Receives trace events from the system via a channel
+pub struct TracePublisher {
     rx: UnboundedReceiverStream<Arc<TraceEvent>>,
 }
 
-impl TracerThread {
+impl TracePublisher {
     pub fn new(rx: tokio::sync::mpsc::UnboundedReceiver<Arc<TraceEvent>>) -> Self {
         Self {
             rx: UnboundedReceiverStream::new(rx),

@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use crate::internal::llm_client::ResolveMediaUrls;
 use anyhow::Result;
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
-use btrace::WithTraceContext;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use internal_llm_client::openai::ResolvedOpenAI;
@@ -166,23 +165,33 @@ impl WithChat for OpenAIClient {
                 either::Either::Right(prompt),
                 false,
             )
-            .btrace(
-                tracing_core::Level::INFO,
-                "openai_chat",
-                json!({
-                    "prompt": prompt,
-                }),
-                |v| match v {
-                    Ok((response, ..)) => json!({
-                        "llm.response": format!("{:?}", response),
+            .await
+            .inspect_err(|v| {
+                self.tracer.log(
+                    TraceData::LLMRequest(LLMRequest {
+                        client: self.context.name.to_string(),
+                        prompt: prompt.to_vec(),
                     }),
-                    Err(e) => json!({
-                        "exception": {
-                            "message": format!("{:?}", e),
-                        },
-                    }),
-                },
-            )
+                    ctx,
+                )
+            })
+            // .btrace(
+            //     tracing_core::Level::INFO,
+            //     "openai_chat",
+            //     json!({
+            //         "prompt": prompt,
+            //     }),
+            //     |v| match v {
+            //         Ok((response, ..)) => json!({
+            //             "llm.response": format!("{:?}", response),
+            //         }),
+            //         Err(e) => json!({
+            //             "exception": {
+            //                 "message": format!("{:?}", e),
+            //             },
+            //         }),
+            //     },
+            // )
             .await
             {
                 Ok(v) => v,

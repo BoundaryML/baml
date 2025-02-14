@@ -381,6 +381,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
 }
 
 impl RuntimeInterface for InternalBamlRuntime {
+    // TODO: add tracer here?
     async fn call_function_impl(
         &self,
         function_name: String,
@@ -434,6 +435,7 @@ impl RuntimeInterface for InternalBamlRuntime {
 
         // Now actually execute the code.
         let (history, _) =
+            // TODO: add tracer here?
             orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
                 renderer.parse(self.ir(), s, false)
             })
@@ -449,7 +451,6 @@ impl RuntimeInterface for InternalBamlRuntime {
         tracer: Arc<BamlTracer>,
         ctx: RuntimeContext,
         #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
-        tctx: btrace::TraceContext,
     ) -> Result<FunctionResultStream> {
         let func = self.get_function(&function_name, &ctx)?;
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
@@ -477,7 +478,6 @@ impl RuntimeInterface for InternalBamlRuntime {
             renderer,
             #[cfg(not(target_arch = "wasm32"))]
             tokio_runtime,
-            tctx,
         })
     }
 }

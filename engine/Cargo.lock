@@ -1003,6 +1003,7 @@ dependencies = [
  "mime_guess",
  "minijinja",
  "notify-debouncer-full",
+ "once_cell",
  "pin-project-lite",
  "pretty_assertions",
  "reqwest",
@@ -1023,6 +1024,7 @@ dependencies = [
  "strum_macros",
  "test-log",
  "thiserror 2.0.9",
+ "time",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -1097,6 +1099,7 @@ dependencies = [
  "time",
  "tokio",
  "tracing-core",
+ "uuid",
  "web-time",
 ]
 
@@ -1276,6 +1279,7 @@ dependencies = [
  "hostname",
  "js-sys",
  "log",
+ "once_cell",
  "reqwest",
  "serde",
  "serde_json",

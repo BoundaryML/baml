@@ -3,6 +3,7 @@ pub mod api_wrapper;
 use crate::on_log_event::LogEventCallbackSync;
 use crate::InnerTraceStats;
 use anyhow::{Context, Result};
+use baml_types::tracing::events::{ContentId, FunctionId, TraceData, TraceEvent, TraceLevel};
 use baml_types::{BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta};
 use cfg_if::cfg_if;
 use colored::{ColoredString, Colorize};
@@ -10,9 +11,11 @@ use internal_baml_jinja::RenderedPrompt;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use time::OffsetDateTime;
+use tracing::Instrument;
 
-use uuid::Uuid;
 use jsonish::ResponseBamlValue;
+use uuid::Uuid;
 
 use crate::{
     client_registry::ClientRegistry, internal::llm_client::LLMResponse,
@@ -35,9 +38,11 @@ cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         mod wasm_tracer;
         use self::wasm_tracer::NonThreadedTracer as TracerImpl;
+        // use crate::tracingv2::tracer:: as TracerImplV2;
     } else {
         mod threaded_tracer;
         use self::threaded_tracer::ThreadedTracer as TracerImpl;
+        // use self::threaded_tracer::ThreadedTracerV2 as TracerImplV2;
     }
 }
 
@@ -51,6 +56,7 @@ pub struct TracingSpan {
 pub struct BamlTracer {
     options: APIWrapper,
     tracer: Option<TracerImpl>,
+    // tracer_v2: Option<TracerImplV2>,
     trace_stats: TraceStats,
 }
 
@@ -238,6 +244,7 @@ impl BamlTracer {
     ) -> Option<TracingSpan> {
         self.trace_stats.guard().start();
         let span_id = ctx.enter(function_name);
+
         log::trace!("Entering span {:#?} in {:?}", span_id, function_name);
         let span = TracingSpan {
             span_id,
@@ -281,6 +288,7 @@ impl BamlTracer {
         }
     }
 
+    // For non-LLM function calls -- used by FFI boundary like with @trace in python
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn finish_span(
         &self,
@@ -309,12 +317,29 @@ impl BamlTracer {
 
         if let Some(tracer) = &self.tracer {
             tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
+            // tracer.publish() // uses a channel
             guard.finalize();
             Ok(Some(span_id))
         } else {
             guard.done();
             Ok(None)
         }
+    }
+
+    pub(crate) fn log(&self, event: TraceData, ctx: &RuntimeContextManager) {
+        let span_id = ctx.span_id().unwrap();
+        log::trace!("{:#?} Logging event: {:#?}", span_id, event);
+
+        let trace_event = TraceEvent {
+            span_id: FunctionId(span_id.to_string()),
+            event_id: ContentId(span_id.to_string()), // TODO generate uuid
+            span_chain: vec![],
+            timestamp: OffsetDateTime::now_utc(),
+            callsite: "".to_string(),
+            verbosity: TraceLevel::Trace,
+            content: event,
+            tags: Default::default(),
+        };
     }
 
     #[cfg(target_arch = "wasm32")]
