@@ -12,9 +12,9 @@ pub(crate) struct Image {
 }
 
 impl Image {
-    pub fn from_url(url: String) -> Self {
+    pub fn from_url(url: String, media_type: Option<String>) -> Self {
         Self {
-            inner: BamlMedia::url(BamlMediaType::Image, url, None),
+            inner: BamlMedia::url(BamlMediaType::Image, url, media_type),
         }
     }
 
@@ -26,7 +26,7 @@ impl Image {
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("Image", class::object())?;
-        cls.define_singleton_method("from_url", function!(Image::from_url, 1))?;
+        cls.define_singleton_method("from_url", function!(Image::from_url, 2))?;
         cls.define_singleton_method("from_base64", function!(Image::from_base64, 2))?;
 
         Ok(())
@@ -45,20 +45,20 @@ pub(crate) struct Audio {
 }
 
 impl Audio {
-    pub fn from_url(url: String) -> Self {
+    pub fn from_url(url: String, media_type: Option<String>) -> Self {
         Self {
-            inner: BamlMedia::url(BamlMediaType::Audio, url, None),
+            inner: BamlMedia::url(BamlMediaType::Audio, url, media_type),
         }
     }
     pub fn from_base64(media_type: String, base64: String) -> Self {
         Self {
-            inner: BamlMedia::base64(BamlMediaType::Image, base64, Some(media_type)),
+            inner: BamlMedia::base64(BamlMediaType::Audio, base64, Some(media_type)),
         }
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("Audio", class::object())?;
-        cls.define_singleton_method("from_url", function!(Audio::from_url, 1))?;
+        cls.define_singleton_method("from_url", function!(Audio::from_url, 2))?;
         cls.define_singleton_method("from_base64", function!(Audio::from_base64, 2))?;
 
         Ok(())

@@ -80,6 +80,21 @@ jobs:
         working-directory: integ-tests/typescript
       - name: Ensure No Changes
         run: git diff --exit-code
+      - name: Test Node Generator (1 of 3)
+        run: pnpm generate
+        working-directory: integ-tests/typescript
+      - name: Ensure No Changes (1 of 3)
+        run: git diff --exit-code
+      - name: Test Node Generator (2 of 3)
+        run: pnpm generate
+        working-directory: integ-tests/typescript
+      - name: Ensure No Changes (2 of 3)
+        run: git diff --exit-code
+      - name: Test Node Generator (3 of 3)
+        run: pnpm generate
+        working-directory: integ-tests/typescript
+      - name: Ensure No Changes (3 of 3)
+        run: git diff --exit-code
   build:
     runs-on: ubuntu-latest
     steps:

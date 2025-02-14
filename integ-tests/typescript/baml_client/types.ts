@@ -734,22 +734,22 @@ export interface WithReasoning {
   
 }
 
+type JsonArray = JsonValue[]
+
 type JsonEntry = SimpleTag | JsonTemplate
-
-type JsonTemplate = Record<string, JsonEntry>
-
-type RecursiveMapAlias = Record<string, RecursiveMapAlias>
-
-type RecursiveListAlias = RecursiveListAlias[]
-
-type RecAliasOne = RecAliasTwo
-
-type RecAliasTwo = RecAliasThree
-
-type RecAliasThree = RecAliasOne[]
-
-type JsonValue = number | string | boolean | number | JsonObject | JsonArray
 
 type JsonObject = Record<string, JsonValue>
 
-type JsonArray = JsonValue[]
+type JsonTemplate = Record<string, JsonEntry>
+
+type JsonValue = number | string | boolean | number | JsonObject | JsonArray
+
+type RecAliasOne = RecAliasTwo
+
+type RecAliasThree = RecAliasOne[]
+
+type RecAliasTwo = RecAliasThree
+
+type RecursiveListAlias = RecursiveListAlias[]
+
+type RecursiveMapAlias = Record<string, RecursiveMapAlias>

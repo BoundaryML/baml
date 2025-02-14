@@ -8,9 +8,9 @@ crate::lang_wrapper!(BamlImage, baml_types::BamlMedia);
 #[napi]
 impl BamlImage {
     #[napi(ts_return_type = "BamlImage")]
-    pub fn from_url(url: String) -> External<BamlImage> {
+    pub fn from_url(url: String, media_type: Option<String>) -> External<BamlImage> {
         let img = BamlImage {
-            inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Image, url, None),
+            inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Image, url, media_type),
         };
         External::new(img)
     }
