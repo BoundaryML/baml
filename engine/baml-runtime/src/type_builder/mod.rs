@@ -153,15 +153,13 @@ impl EnumBuilder {
 impl fmt::Display for ClassPropertyBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let meta = self.meta.lock().unwrap();
-        write!(
-            f,
-            "{}",
-            self.r#type
-                .lock()
-                .unwrap()
-                .as_ref()
-                .map_or("unset", |_| "set")
-        )?;
+        let type_str = self
+            .r#type
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map_or("(unknown-type)".to_string(), |t| format!("{}", t.clone()));
+        write!(f, "{}", type_str)?;
 
         if !meta.is_empty() {
             write!(f, " (")?;
@@ -326,10 +324,10 @@ impl fmt::Display for TypeBuilder {
         let classes = self.classes.lock().unwrap();
         let enums = self.enums.lock().unwrap();
 
-        writeln!(f, "TypeBuilder(")?;
+        write!(f, "TypeBuilder(")?;
 
         if !classes.is_empty() {
-            write!(f, "  Classes: [")?;
+            write!(f, "\n  Classes: [")?;
             for (i, (name, cls)) in classes.iter().enumerate() {
                 if i > 0 {
                     write!(f, ",")?;
@@ -641,11 +639,26 @@ mod tests {
         let output = builder.to_string();
         assert_eq!(
             output,
-            "TypeBuilder(\n  Classes: [\n    User {\n      name set (alias=String(\"username\"), description=String(\"The user's full name\")),\n      age set (description=String(\"User's age in years\")),\n      email set\n    }\n  ],\n  Enums: [\n    Status {\n      ACTIVE (alias=String(\"active\"), description=String(\"User is active\")),\n      INACTIVE (alias=String(\"inactive\")),\n      PENDING\n    }\n  ]\n)"
+            r#"TypeBuilder(
+  Classes: [
+    User {
+      name string (alias=String("username"), description=String("The user's full name")),
+      age int (description=String("User's age in years")),
+      email string
+    }
+  ],
+  Enums: [
+    Status {
+      ACTIVE (alias=String("active"), description=String("User is active")),
+      INACTIVE (alias=String("inactive")),
+      PENDING
+    }
+  ]
+)"#
         );
     }
 
-    // my paranoia kicked in, so this  test is to ensure that the string representation is correct
+    // this  test is to ensure that the string representation is correct
     // and that the to_overrides method is working as expected
 
     #[test]
@@ -746,11 +759,31 @@ mod tests {
         let output = builder.to_string();
         assert_eq!(
             output,
-             "TypeBuilder(\n  Classes: [\n    Address {\n      street set (alias=String(\"streetAddress\"), description=String(\"Street address including number\")),\n      unit set (description=String(\"Apartment/unit number if applicable\")),\n      tags set (alias=String(\"labels\")),\n      is_primary set,\n      coordinates set (skip=Bool(true))\n    },\n    EmptyClass {}\n  ],\n  Enums: [\n    Priority {\n      HIGH (alias=String(\"urgent\"), description=String(\"Needs immediate attention\"), skip=Bool(false)),\n      MEDIUM (description=String(\"Standard priority\")),\n      LOW (skip=Bool(true)),\n      NONE\n    },\n    EmptyEnum {}\n  ]\n)"
+            r#"TypeBuilder(
+  Classes: [
+    Address {
+      street string (alias=String("streetAddress"), description=String("Street address including number")),
+      unit int? (description=String("Apartment/unit number if applicable")),
+      tags string[] (alias=String("labels")),
+      is_primary bool,
+      coordinates float (skip=Bool(true))
+    },
+    EmptyClass {}
+  ],
+  Enums: [
+    Priority {
+      HIGH (alias=String("urgent"), description=String("Needs immediate attention"), skip=Bool(false)),
+      MEDIUM (description=String("Standard priority")),
+      LOW (skip=Bool(true)),
+      NONE
+    },
+    EmptyEnum {}
+  ]
+)"#
         );
 
         // Test to_overrides()
-        let (classes, enums) = builder.to_overrides();
+        let (classes, enums, aliases, recursive_aliases) = builder.to_overrides();
 
         // Verify class overrides
         assert_eq!(classes.len(), 2);
@@ -782,5 +815,61 @@ mod tests {
             .alias
             .is_some());
         assert!(priority_override.values.get("LOW").unwrap().skip.unwrap());
+    }
+
+    #[test]
+    fn test_recursive_property() {
+        let builder = TypeBuilder::new();
+
+        // Create a 'Node' class where the 'child' property recursively refers to 'Node'
+        let node = builder.class("Node");
+        {
+            let node = node.lock().unwrap();
+            node.property("child")
+                .lock()
+                .unwrap()
+                .r#type(FieldType::class("Node"))
+                .with_meta(
+                    "description",
+                    BamlValue::String("recursive self reference".to_string()),
+                );
+        }
+
+        // Optionally, print the builder's string representation.
+        let output = builder.to_string();
+        println!("{}", output);
+
+        // Verify that the output string contains the recursive property information.
+        assert!(
+            output.contains(
+                r#"TypeBuilder(
+  Classes: [
+    Node {
+      child Node (description=String("recursive self reference"))
+    }
+  ]
+)"#
+            ),
+            "Output did not contain the expected recursive property format: {}",
+            output
+        );
+
+        // Verify via to_overrides() that the recursive field is set correctly.
+        let (class_overrides, _enum_overrides, _aliases, _recursive_aliases) =
+            builder.to_overrides();
+        let node_override = class_overrides
+            .get("Node")
+            .expect("Expected override for Node");
+        let (child_field_type, _child_attrs) = node_override
+            .new_fields
+            .get("child")
+            .expect("Expected a 'child' property in Node");
+
+        // The child's field type should exactly be a recursive reference to 'Node'
+        assert_eq!(
+            child_field_type,
+            &FieldType::class("Node"),
+            "The 'child' field is not correctly set as a recursive reference to 'Node'"
+        );
     }
 }

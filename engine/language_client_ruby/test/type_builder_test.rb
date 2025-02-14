@@ -37,10 +37,10 @@ class TypeBuilderTest < Test::Unit::TestCase
 
     # verify that the string output matches our expectations
     # we check for key structural elements and metadata
-    assert_match(/TypeBuilder\(Classes: \[User \{/, output)
-    assert_match(/name unset \(alias='username', desc='The user's full name'\)/, output)
-    assert_match(/age unset \(desc='User's age in years'\)/, output)
-    assert_match(/email unset/, output)
+    assert_match(/TypeBuilder\(\n  Classes: \[\n    User \{/, output)
+    assert_match(/name \(unknown-type\) \(alias=String\("username"\), description=String\("The user's full name"\)\)/, output)
+    assert_match(/age \(unknown-type\) \(description=String\("User's age in years"\)\)/, output)
+    assert_match(/email \(unknown-type\)/, output)
   end
 
   # tests that enum definitions are correctly stringified with their
@@ -73,9 +73,9 @@ class TypeBuilderTest < Test::Unit::TestCase
 
     # verify the string representation includes all our carefully
     # defined values and their metadata
-    assert_match(/TypeBuilder\(Enums: \[Status \{/, output)
-    assert_match(/ACTIVE \(alias='active', desc='User is active'\)/, output)
-    assert_match(/INACTIVE \(alias='inactive'\)/, output)
+    assert_match(/TypeBuilder\(\n  Enums: \[\n    Status \{/, output)
+    assert_match(/ACTIVE \(alias=String\("active"\), description=String\("User is active"\)\)/, output)
+    assert_match(/INACTIVE \(alias=String\("inactive"\)\)/, output)
     assert_match(/PENDING/, output)
   end
 end

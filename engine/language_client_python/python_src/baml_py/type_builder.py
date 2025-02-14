@@ -42,13 +42,6 @@ class TypeBuilder:
                 ]
             )
 
-        the representation includes:
-            - complete class hierarchy with properties
-            - property types and their metadata (aliases, descriptions)
-            - full enum definitions with values
-            - enum value metadata (aliases, descriptions)
-            - empty classes and enums are shown explicitly
-
         returns:
             str: the formatted string representation of the typebuilder
         """

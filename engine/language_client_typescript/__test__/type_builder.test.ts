@@ -1,6 +1,6 @@
 // import the typescript wrapper for the type builder that provides a clean interface
 // over the native rust implementation
-import { TypeBuilder } from '../src/types/type_builder';
+import { TypeBuilder } from '../native';
 
 describe('TypeBuilder', () => {
   // test that we can create classes with properties and add metadata like aliases and descriptions
@@ -28,11 +28,11 @@ describe('TypeBuilder', () => {
     const output = builder.toString();
 
     // make sure the output has the expected class structure
-    expect(output).toContain('TypeBuilder(Classes: [User {');
+    expect(output).toContain('TypeBuilder(\n  Classes: [\n    User {');
     // verify each property appears with its metadata
-    expect(output).toContain('name unset (alias=\'username\', desc=\'the user\'s full name\')');
-    expect(output).toContain('age unset (desc=\'user\'s age in years\')');
-    expect(output).toContain('email unset');
+    expect(output).toContain("name (unknown-type) (alias=String(\"username\"), description=String(\"the user's full name\"))");
+    expect(output).toContain("age (unknown-type) (description=String(\"user's age in years\"))");
+    expect(output).toContain('email (unknown-type)');
   });
 
   // test that we can create enums with values and add metadata like aliases and descriptions
@@ -60,10 +60,13 @@ describe('TypeBuilder', () => {
     const output = builder.toString();
 
     // make sure the output has the expected enum structure
-    expect(output).toContain('TypeBuilder(Enums: [Status {');
+    console.log(output);
+    expect(output).toContain(`TypeBuilder(
+  Enums: [
+    Status {`);
     // verify each value appears with its metadata
-    expect(output).toContain('ACTIVE (alias=\'active\', desc=\'user is active\')');
-    expect(output).toContain('INACTIVE (alias=\'inactive\')');
+    expect(output).toContain('ACTIVE (alias=String(\"active\"), description=String(\"user is active\"))');
+    expect(output).toContain('INACTIVE (alias=String(\"inactive\"))');
     expect(output).toContain('PENDING');
   });
 });
