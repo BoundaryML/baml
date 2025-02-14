@@ -277,6 +277,9 @@ impl RequestBuilder for VertexClient {
         prompt: either::Either<&String, &[RenderedChatMessage]>,
         allow_proxy: bool,
         stream: bool,
+        // There are no leakable secrets in the Vertex request because
+        // VertexAuth can not be built in the WASM environment.
+        _expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder> {
         let vertex_auth = super::auth::VertexAuth::new(&self.properties.auth_strategy).await?;
 

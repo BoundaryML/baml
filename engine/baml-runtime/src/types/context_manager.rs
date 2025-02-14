@@ -105,8 +105,8 @@ impl RuntimeContextManager {
 
     pub fn create_ctx(
         &self,
-        tb: Option<&TypeBuilder>,
-        cb: Option<&ClientRegistry>,
+        type_builder: Option<&TypeBuilder>,
+        client_registry: Option<&ClientRegistry>,
     ) -> Result<RuntimeContext> {
         let mut tags = self.global_tags.lock().unwrap().clone();
         let ctx_tags = {
@@ -125,7 +125,9 @@ impl RuntimeContextManager {
             ctx.map(|(.., tags)| tags).cloned().unwrap_or_default()
         };
 
-        let (cls, enm) = tb.map(|tb| tb.to_overrides()).unwrap_or_default();
+        let (cls, enm, als, rec_als) = type_builder
+            .map(TypeBuilder::to_overrides)
+            .unwrap_or_default();
 
         let mut ctx = RuntimeContext::new(
             self.baml_src_reader.clone(),
@@ -134,17 +136,17 @@ impl RuntimeContextManager {
             Default::default(),
             cls,
             enm,
+            als,
+            rec_als,
         );
 
-        let client_overrides = match cb {
-            Some(cb) => Some(
-                cb.to_clients(&ctx)
+        ctx.client_overrides = match client_registry {
+            Some(cr) => Some(
+                cr.to_clients(&ctx)
                     .with_context(|| "Failed to create clients from client_registry")?,
             ),
             None => None,
         };
-
-        ctx.client_overrides = client_overrides;
 
         Ok(ctx)
     }
@@ -156,6 +158,8 @@ impl RuntimeContextManager {
             self.baml_src_reader.clone(),
             self.env_vars.clone(),
             ctx.last().map(|(.., x)| x).cloned().unwrap_or_default(),
+            Default::default(),
+            Default::default(),
             Default::default(),
             Default::default(),
             Default::default(),

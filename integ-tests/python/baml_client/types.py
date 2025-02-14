@@ -16,7 +16,8 @@
 import baml_py
 from enum import Enum
 from pydantic import BaseModel, ConfigDict
-from typing import Dict, Generic, List, Literal, Optional, TypeVar, Union, TypeAlias
+from typing_extensions import TypeAlias
+from typing import Dict, Generic, List, Literal, Optional, TypeVar, Union
 
 
 T = TypeVar('T')
@@ -154,6 +155,11 @@ class TestEnum(str, Enum):
     F = "F"
     G = "G"
 
+class AnotherObject(BaseModel):
+    id: str
+    thingy2: str
+    thingy3: str
+
 class BigNumbers(BaseModel):
     a: int
     b: float
@@ -195,10 +201,24 @@ class ClassOptionalOutput2(BaseModel):
 class ClassToRecAlias(BaseModel):
     list: "LinkedListAliasNode"
 
+class ClassWithBlockDone(BaseModel):
+    i_16_digits: int
+    s_20_words: str
+
 class ClassWithImage(BaseModel):
     myImage: baml_py.Image
     param2: str
     fake_image: "FakeImage"
+
+class ClassWithoutDone(BaseModel):
+    i_16_digits: int
+    s_20_words: str
+
+class ComplexMemoryObject(BaseModel):
+    id: str
+    name: str
+    description: str
+    metadata: List[Union[str, int, float]]
 
 class CompoundBigNumbers(BaseModel):
     big: "BigNumbers"
@@ -346,6 +366,11 @@ class Martian(BaseModel):
     """The age of the Martian in Mars years.
     So many Mars years."""
 
+class MemoryObject(BaseModel):
+    id: str
+    name: str
+    description: str
+
 class MergeAttrs(BaseModel):
     amount: Checked[int,Literal["gt_ten"]]
 
@@ -433,6 +458,9 @@ class Recipe(BaseModel):
     ingredients: Dict[str, "Quantity"]
     recipe_type: Union[Literal["breakfast"], Literal["dinner"]]
 
+class RecursiveAliasDependency(BaseModel):
+    value: "JsonValue"
+
 class Resume(BaseModel):
     name: str
     email: str
@@ -458,6 +486,23 @@ class SearchParams(BaseModel):
     description: List["WithReasoning"]
     tags: List[Union["Tag", str]]
 
+class SemanticContainer(BaseModel):
+    sixteen_digit_number: int
+    string_with_twenty_words: str
+    class_1: "ClassWithoutDone"
+    class_2: "ClassWithBlockDone"
+    class_done_needed: "ClassWithBlockDone"
+    class_needed: "ClassWithoutDone"
+    three_small_things: List["SmallThing"]
+    final_string: str
+
+class SimpleTag(BaseModel):
+    field: str
+
+class SmallThing(BaseModel):
+    i_16_digits: int
+    i_8_digits: int
+
 class SomeClassNestedDynamic(BaseModel):
     model_config = ConfigDict(extra='allow')
     hi: str
@@ -479,6 +524,10 @@ class TestClassNested(BaseModel):
 class TestClassWithEnum(BaseModel):
     prop1: str
     prop2: "EnumInClass"
+
+class TestMemoryOutput(BaseModel):
+    items: List[Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
+    more_items: List[Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
 
 class TestOutputClass(BaseModel):
     prop1: str
@@ -502,18 +551,22 @@ class WithReasoning(BaseModel):
     value: str
     reasoning: str
 
-RecursiveMapAlias: TypeAlias = Dict[str, "RecursiveMapAlias"]
+JsonArray: TypeAlias = List["JsonValue"]
 
-RecursiveListAlias: TypeAlias = List["RecursiveListAlias"]
-
-RecAliasOne: TypeAlias = "RecAliasTwo"
-
-RecAliasTwo: TypeAlias = "RecAliasThree"
-
-RecAliasThree: TypeAlias = List["RecAliasOne"]
-
-JsonValue: TypeAlias = Union[int, str, bool, float, "JsonObject", "JsonArray"]
+JsonEntry: TypeAlias = Union["SimpleTag", "JsonTemplate"]
 
 JsonObject: TypeAlias = Dict[str, "JsonValue"]
 
-JsonArray: TypeAlias = List["JsonValue"]
+JsonTemplate: TypeAlias = Dict[str, "JsonEntry"]
+
+JsonValue: TypeAlias = Union[int, str, bool, float, "JsonObject", "JsonArray"]
+
+RecAliasOne: TypeAlias = "RecAliasTwo"
+
+RecAliasThree: TypeAlias = List["RecAliasOne"]
+
+RecAliasTwo: TypeAlias = "RecAliasThree"
+
+RecursiveListAlias: TypeAlias = List["RecursiveListAlias"]
+
+RecursiveMapAlias: TypeAlias = Dict[str, "RecursiveMapAlias"]

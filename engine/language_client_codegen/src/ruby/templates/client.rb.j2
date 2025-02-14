@@ -72,7 +72,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
       )
-      (raw.parsed_using_types(Baml::Types))
+      (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
 
     {% endfor %}

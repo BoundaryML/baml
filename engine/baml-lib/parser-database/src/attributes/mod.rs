@@ -29,6 +29,15 @@ pub struct Attributes {
 
     /// @check and @assert attributes attached to the node.
     pub constraints: Vec<Constraint>,
+
+    /// Whether the node has a `@sstream.done` attribute.
+    pub streaming_done: Option<bool>,
+
+   /// Whether the node has a `@stream.not_null` attribute.
+    pub streaming_needed: Option<bool>,
+
+   /// Whether the node has a `@stream.with_state` attribute.
+    pub streaming_state: Option<bool>,
 }
 
 impl Attributes {

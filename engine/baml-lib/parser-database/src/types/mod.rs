@@ -13,8 +13,8 @@ use indexmap::IndexMap;
 use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_prompt_parser::ast::{ChatBlock, PrinterBlock, Variable};
 use internal_baml_schema_ast::ast::{
-    self, Expression, FieldId, FieldType, RawString, TypeAliasId, ValExpId, WithIdentifier,
-    WithName, WithSpan,
+    self, BlockArgs, Expression, FieldId, FieldType, RawString, TypeAliasId, TypeBuilderBlock,
+    ValExpId, WithIdentifier, WithName, WithSpan,
 };
 use internal_llm_client::{ClientProvider, PropertyHandler, UnresolvedClientProperty};
 
@@ -176,6 +176,9 @@ pub struct TestCase {
     pub args: IndexMap<String, (Span, UnresolvedValue<Span>)>,
     pub args_field_span: Span,
     pub constraints: Vec<(Constraint, Span, Span)>,
+    pub type_builder: Option<TypeBuilderBlock>,
+    // TODO: #1343 Temporary solution until we implement scoping in the AST.
+    pub type_builder_scoped_db: ParserDatabase,
 }
 
 #[derive(Debug, Clone)]
@@ -409,10 +412,10 @@ fn visit_class<'db>(
 
     let mut used_types = class
         .iter_fields()
-        .flat_map(|(_, f)| f.expr.iter().flat_map(|e| e.flat_idns()))
+        .flat_map(|(_, f)| f.expr.iter().flat_map(FieldType::flat_idns))
         .map(|id| id.name().to_string())
         .collect::<HashSet<_>>();
-    let input_deps = class.input().map(|f| f.flat_idns()).unwrap_or_default();
+    let input_deps = class.input().map(BlockArgs::flat_idns).unwrap_or_default();
 
     ctx.types.class_dependencies.insert(class_id, {
         used_types.extend(input_deps.iter().map(|id| id.name().to_string()));

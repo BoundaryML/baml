@@ -1,0 +1,58 @@
+---
+title: Image / Audio
+---
+
+Media values as denoted more specifically in BAML.
+
+| Baml Type |
+| --- |
+| `image` |
+| `audio` |
+
+Both `image` and `audio` values values can be:
+
+- A URL
+- A base64 encoded string
+- A file path
+
+For usage in Python / Typescript / etc, see [baml_client > media](/ref/baml-client/media).
+
+## Usage as a URL
+
+```baml {2,13-15,22-25,32-34}
+// Pass in an image type
+function DescribeImage(image: image) -> string {
+    client "openai/gpt-4o-mini"
+    prompt #"
+        Describe the image.
+        {{ image }}
+    "#
+}
+
+test ImageDescriptionFromURL {
+    functions [DescribeImage]
+    args {
+        image {
+            url "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+        }
+    }
+}
+
+test ImageDescriptionFromBase64 {
+    functions [DescribeImage]
+    args { 
+        image {
+            media_type "image/png"
+            base64 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x/AAzmH+UlvRkwAAAAASUVORK5CYII="
+        }
+    }
+}
+
+test ImageDescriptionFromFile {
+    functions [DescribeImage]
+    args {
+        image {
+            file "./shrek.png"
+        }
+    }
+}

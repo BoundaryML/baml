@@ -9,6 +9,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
 use crate::tracing::{BamlTracer, TracingSpan};
+use crate::type_builder::TypeBuilder;
 use crate::types::on_log_event::LogEventCallbackSync;
 use crate::{
     internal::{ir_features::IrFeatures, llm_client::retry_policy::CallablePolicy},
@@ -166,4 +167,11 @@ pub trait InternalRuntimeInterface {
         test_name: &str,
         ctx: &RuntimeContext,
     ) -> Result<Vec<Constraint>>;
+
+    fn get_test_type_builder(
+        &self,
+        function_name: &str,
+        test_name: &str,
+        ctx: &RuntimeContextManager,
+    ) -> Result<Option<TypeBuilder>>;
 }

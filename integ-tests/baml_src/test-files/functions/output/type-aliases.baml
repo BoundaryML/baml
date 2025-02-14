@@ -134,3 +134,18 @@ function JsonTypeAliasCycle(input: JsonValue) -> JsonValue {
       {{ ctx.output_format }}
     "#
 }
+
+class RecursiveAliasDependency {
+  value JsonValue
+}
+
+function TakeRecAliasDep(input: RecursiveAliasDependency) -> RecursiveAliasDependency {
+    client "openai/gpt-4o"
+    prompt r#"
+      Return the given input back:
+
+      {{ input }}
+
+      {{ ctx.output_format }}
+    "#
+}

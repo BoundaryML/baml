@@ -3,6 +3,7 @@ import { requiredEnvVarsAtom, envVarsAtom, runtimeAtom } from '../atoms'
 
 export const runtimeStateAtom = atom((get) => {
   const { rt } = get(runtimeAtom)
+  console.log('rt', rt)
   if (rt === undefined) {
     return { functions: [] }
   }
@@ -35,7 +36,6 @@ export const functionObjectAtom = atomFamily((functionName: string) =>
     if (!fn) {
       return undefined
     }
-    get(selectedFunctionAtom) // Update selected function atom
     return fn
   }),
 )
@@ -51,7 +51,6 @@ export const testcaseObjectAtom = atomFamily((params: { functionName: string; te
     if (!tc) {
       return undefined
     }
-    get(selectedTestcaseAtom) // Update selected testcase atom
     return tc
   }),
 )

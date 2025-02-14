@@ -18,6 +18,7 @@ use internal_llm_client::aws_bedrock::ResolvedAwsBedrock;
 use internal_llm_client::{
     AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
 };
+use secrecy::ExposeSecret;
 use serde::Deserialize;
 use serde_json::Map;
 use web_time::Instant;
@@ -37,7 +38,7 @@ use crate::internal::llm_client::{
 
 use crate::{RenderCurlSettings, RuntimeContext};
 
-// represents client that interacts with the Anthropic API
+// represents client that interacts with the Bedrock API
 pub struct AwsClient {
     pub name: String,
     retry_policy: Option<String>,
@@ -132,6 +133,9 @@ impl AwsClient {
 
     // TODO: this should be memoized on client construction, but because config loading is async,
     // we can't do this in AwsClient::new (which is called from LLMPRimitiveProvider::try_from)
+    // Note: This function necessarily exposes secret keys when they are provided, so it should
+    // only be called while generating real requests to the provider, not when rendering raw
+    // cURL previews.
     async fn client_anyhow(&self) -> Result<bedrock::Client> {
         #[cfg(target_arch = "wasm32")]
         let mut loader = super::wasm::load_aws_config();
@@ -169,10 +173,13 @@ impl AwsClient {
                     }
                 }
                 if let Some(aws_secret_access_key) = self.properties.secret_access_key.as_ref() {
-                    if aws_secret_access_key.starts_with("$") {
+                    // Exposing the secret key here is relatively safe. First, we expose it only
+                    // to check if it starts with $. If so, the remainer should be an env
+                    // var name, which is also safe to expose.
+                    if aws_secret_access_key.api_key.expose_secret().starts_with("$") {
                         return Err(anyhow::anyhow!(
                             "AWS secret access key expected, please set: env.{}",
-                            &aws_secret_access_key[1..]
+                            &aws_secret_access_key.api_key.expose_secret()[1..]
                         ));
                     }
                 }
@@ -188,8 +195,9 @@ impl AwsClient {
                     self.properties.access_key_id.clone().unwrap_or("".into()),
                     self.properties
                         .secret_access_key
-                        .clone()
-                        .unwrap_or("".into()),
+                        .as_ref()
+                        .map_or("", |key| key.api_key.expose_secret())
+                        .to_string(),
                     self.properties.session_token.clone(),
                     None,
                     "baml-runtime",

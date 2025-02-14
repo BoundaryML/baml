@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_std::stream::StreamExt;
-use baml_types::BamlValue;
+use baml_types::{BamlValue, BamlValueWithMeta};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
 use web_time::Duration;
@@ -25,14 +25,13 @@ pub async fn orchestrate_stream<F>(
     ctx: &RuntimeContext,
     prompt: &PromptRenderer,
     params: &BamlValue,
-    partial_parse_fn: impl Fn(&str) -> Result<BamlValueWithFlags>,
-    parse_fn: impl Fn(&str) -> Result<BamlValueWithFlags>,
+    partial_parse_fn: impl Fn(&str) -> Result<ResponseBamlValue>,
+    parse_fn: impl Fn(&str) -> Result<ResponseBamlValue>,
     on_event: Option<F>,
 ) -> (
     Vec<(
         OrchestrationScope,
         LLMResponse,
-        Option<Result<BamlValueWithFlags>>,
         Option<Result<ResponseBamlValue>>,
     )>,
     Duration,
@@ -52,7 +51,6 @@ where
                     node.scope,
                     LLMResponse::InternalFailure(e.to_string()),
                     None,
-                    None,
                 ));
                 continue;
             }
@@ -65,18 +63,17 @@ where
                 .map(|stream_part| {
                     if let Some(on_event) = on_event.as_ref() {
                         if let LLMResponse::Success(s) = &stream_part {
-                            let parsed = partial_parse_fn(&s.content);
-                            let (parsed, response_value) = match parsed {
-                                Ok(v) => {
-                                    (Some(Ok(v.clone())), Some(Ok(parsed_value_to_response(&v))))
-                                }
-                                Err(e) => (None, Some(Err(e))),
+                            let response_value = partial_parse_fn(&s.content);
+                            let response_value_without_flags = match response_value {
+                                Ok(baml_value) => Ok(ResponseBamlValue(
+                                    baml_value.0.map_meta_owned(|m| (vec![], m.1, m.2)),
+                                )),
+                                Err(e) => Err(e),
                             };
                             on_event(FunctionResult::new(
                                 node.scope.clone(),
                                 LLMResponse::Success(s.clone()),
-                                parsed,
-                                response_value,
+                                Some(response_value_without_flags),
                             ));
                         }
                     }
@@ -99,37 +96,44 @@ where
             Err(response) => response,
         };
 
-        let parsed_response = match &final_response {
+        let response_value = match &final_response {
             LLMResponse::Success(s) => {
                 if !node
                     .finish_reason_filter()
                     .is_allowed(s.metadata.finish_reason.as_ref())
                 {
-                    Some(Err(anyhow::anyhow!(crate::errors::ExposedError::FinishReasonError {
-                        prompt: s.prompt.to_string(),
-                        raw_output: s.content.clone(),
-                        message: "Finish reason not allowed".to_string(),
-                        finish_reason: s.metadata.finish_reason.clone(),
-                    })))
+                    Some(Err(anyhow::anyhow!(
+                        crate::errors::ExposedError::FinishReasonError {
+                            prompt: s.prompt.to_string(),
+                            raw_output: s.content.clone(),
+                            message: "Finish reason not allowed".to_string(),
+                            finish_reason: s.metadata.finish_reason.clone(),
+                        }
+                    )))
                 } else {
                     Some(parse_fn(&s.content))
                 }
-            },
+            }
+            LLMResponse::LLMFailure(LLMErrorResponse { code, client, message, .. }) => {
+                match code {
+                    // This is some internal BAML error, so handle it like any other error
+                    crate::internal::llm_client::ErrorCode::Other(2) => None,
+                    _ => Some(Err(anyhow::anyhow!(crate::errors::ExposedError::ClientHttpError {
+                        client_name: client.clone(),
+                        message: message.clone(),
+                        status_code: code.clone(),
+                    }))),
+                }
+            }
             _ => None,
         };
-        let (parsed_response, response_value) = match parsed_response {
-            Some(Ok(v)) => (Some(Ok(v.clone())), Some(Ok(parsed_value_to_response(&v)))),
-            Some(Err(e)) => (None, Some(Err(e))),
-            None => (None, None),
-        };
-        // parsed_response.map(|r| r.and_then(|v| parsed_value_to_response(v)));
         let sleep_duration = node.error_sleep_duration().cloned();
-        results.push((node.scope, final_response, parsed_response, response_value));
+        results.push((node.scope, final_response, response_value));
 
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results
             .last()
-            .map_or(false, |(_, r, _, _)| matches!(r, LLMResponse::Success(_)))
+            .map_or(false, |(_, r, _)| matches!(r, LLMResponse::Success(_)))
         {
             break;
         } else if let Some(duration) = sleep_duration {

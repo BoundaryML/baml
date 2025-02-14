@@ -1,0 +1,22 @@
+```baml {3, 12-16}
+class DynamicClass {
+    static_prop string
+    @@dynamic
+}
+
+function ReturnDynamicClass(input: string) -> DynamicClass {
+    // ...
+}
+
+test DynamicClassTest {
+    functions [ReturnDynamicClass]
+    type_builder {
+        dynamic DynamicClass {
+            new_prop_here string
+        }
+    }
+    args {
+        input "test data"
+    }
+}
+```

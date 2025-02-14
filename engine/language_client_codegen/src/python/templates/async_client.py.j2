@@ -60,7 +60,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
       )
-      return cast({{fn.return_type}}, raw.cast_to(types, types))
+      return cast({{fn.return_type}}, raw.cast_to(types, types, partial_types, False))
     {% endfor %}
 
 
@@ -102,8 +102,8 @@ class BamlStreamClient:
 
       return baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](
         raw,
-        lambda x: cast({{fn.partial_return_type}}, x.cast_to(types, partial_types)),
-        lambda x: cast({{fn.return_type}}, x.cast_to(types, types)),
+        lambda x: cast({{fn.partial_return_type}}, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast({{fn.return_type}}, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
     {% endfor %}

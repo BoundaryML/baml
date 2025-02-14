@@ -1,10 +1,12 @@
 use anyhow::Result;
 use internal_baml_core::ir::FieldType;
 
-use crate::deserializer::{
+use baml_types::CompletionState;
+
+use crate::{deserializer::{
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
-};
+}};
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 
@@ -31,7 +33,10 @@ pub(super) fn coerce_array(
     let mut flags = DeserializerConditions::new();
 
     match &value {
-        Some(crate::jsonish::Value::Array(arr)) => {
+        Some(crate::jsonish::Value::Array(arr, completion_state)) => {
+            if *completion_state == CompletionState::Incomplete {
+                flags.add_flag(Flag::Incomplete);
+            }
             for (i, item) in arr.iter().enumerate() {
                 match inner.coerce(&ctx.enter_scope(&format!("{i}")), inner, Some(item)) {
                     Ok(v) => items.push(v),

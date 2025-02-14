@@ -31,11 +31,12 @@ use serde_json::json;
 use std::{path::PathBuf, sync::Arc, task::Poll};
 use tokio::{net::TcpListener, sync::RwLock};
 use tokio_stream::StreamExt;
+use jsonish::ResponseBamlValue;
 
 use crate::{
     client_registry::ClientRegistry,
     errors::ExposedError,
-    internal::llm_client::{LLMResponse, ResponseBamlValue},
+    internal::llm_client::LLMResponse,
     BamlRuntime, FunctionResult, RuntimeContextManager,
 };
 use internal_baml_codegen::openapi::OpenApiSchema;
@@ -369,7 +370,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 LLMResponse::Success(_) => {
                     match function_result.result_with_constraints_content() {
                         // Just because the LLM returned 2xx doesn't mean that it returned parse-able content!
-                        Ok(parsed) => (StatusCode::OK, Json::<ResponseBamlValue>(parsed.clone()))
+                        Ok(parsed) => (StatusCode::OK, Json(parsed.serialize_final()))
                             .into_response(),
                         Err(e) => {
                             if let Some(ExposedError::ValidationError {
@@ -483,7 +484,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                                 match function_result.result_with_constraints_content() {
                                     // Just because the LLM returned 2xx doesn't mean that it returned parse-able content!
                                     Ok(parsed) => {
-                                        (StatusCode::OK, Json::<ResponseBamlValue>(parsed.clone()))
+                                        (StatusCode::OK, Json(&parsed.serialize_partial()))
                                             .into_response()
                                     }
 
@@ -657,7 +658,7 @@ impl Stream for EventStream {
         match self.receiver.poll_recv(cx) {
             Poll::Ready(Some(item)) => match item.result_with_constraints_content() {
                 // TODO: not sure if this is the correct way to implement this.
-                Ok(parsed) => Poll::Ready(Some(parsed.into())),
+                Ok(parsed) => Poll::Ready(Some(parsed.0.clone().into())),
                 Err(_) => Poll::Pending,
             },
             Poll::Ready(None) => Poll::Ready(None),

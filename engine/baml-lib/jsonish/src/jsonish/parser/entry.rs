@@ -9,6 +9,7 @@ use crate::jsonish::{
     value::Fixes,
     Value,
 };
+use baml_types::CompletionState;
 
 use super::ParseOptions;
 
@@ -23,7 +24,32 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
     }
 
     match serde_json::from_str(str) {
-        Ok(v) => return Ok(Value::AnyOf(vec![v], str.to_string())),
+        Ok(mut v) => {
+            match &mut v {
+                Value::String(_, completion_state) => {
+                    // The string must have been contained in quotes in order
+                    // to parse as a JSON string, therefore it is complete.
+                    *completion_state = CompletionState::Complete;
+                }
+                Value::Number(_, completion_state) => {
+                    *completion_state = CompletionState::Incomplete;
+                }
+                Value::Boolean(_) => {}
+                Value::Object(_, _) => {}
+                Value::Array(_, _) => {}
+                Value::Null => {}
+                Value::Markdown(_, _, completion_state) => {
+                    *completion_state = CompletionState::Incomplete;
+                }
+                Value::FixedJson(_, _) => {
+                    unreachable!("Serde deserializes into concrete values, not FixedJson")
+                }
+                Value::AnyOf(_, _) => {
+                    unreachable!("Serde deserializes into concrete values, not AnyOf")
+                }
+            }
+            return Ok(Value::AnyOf(vec![v], str.to_string()));
+        }
         Err(e) => {
             log::debug!("Invalid JSON: {:?}", e);
         }
@@ -38,7 +64,11 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                     match res {
                         Some(MarkdownResult::CodeBlock(s, v)) => {
                             return Ok(Value::AnyOf(
-                                vec![Value::Markdown(s.to_string(), Box::new(v))],
+                                vec![Value::Markdown(
+                                    s.to_string(),
+                                    Box::new(v),
+                                    CompletionState::Incomplete,
+                                )],
                                 str.to_string(),
                             ));
                         }
@@ -59,7 +89,9 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                     let others = items
                         .iter()
                         .filter_map(|res| match res {
-                            MarkdownResult::String(s) => Some(Value::String(s.to_string())),
+                            MarkdownResult::String(s) => {
+                                Some(Value::String(s.to_string(), CompletionState::Incomplete))
+                            }
                             _ => None,
                         })
                         .map(|v| {
@@ -85,9 +117,11 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             MarkdownResult::CodeBlock(s, v) => Some((s, v)),
                             _ => None,
                         })
-                        .map(|(s, v)| Value::Markdown(s.to_string(), Box::new(v)))
+                        .map(|(s, v)| {
+                            Value::Markdown(s.to_string(), Box::new(v.clone()), v.completion_state().clone())
+                        })
                         .collect::<Vec<_>>();
-                    let array = Value::Array(items.clone());
+                    let array = Value::Array(items.clone(), CompletionState::Incomplete);
                     let items = items
                         .into_iter()
                         .chain(std::iter::once(array))
@@ -107,7 +141,8 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
             Ok(items) => match items.len() {
                 0 => {}
                 1 => {
-                    return Ok(Value::AnyOf(
+                    let ret =
+                      Value::AnyOf(
                         vec![Value::FixedJson(
                             items
                                 .into_iter()
@@ -117,14 +152,20 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             vec![Fixes::GreppedForJSON],
                         )],
                         str.to_string(),
-                    ))
+                    );
+                    return Ok(ret);
                 }
-                _ => {
-                    let items_clone = Value::Array(items.clone());
+                n => {
+                    let items_clone = Value::Array(items.clone(), CompletionState::Incomplete);
                     let items = items
                         .into_iter()
                         .chain(std::iter::once(items_clone))
-                        .map(|v| Value::FixedJson(v.into(), vec![Fixes::GreppedForJSON]))
+                        .map(|v| {
+                            Value::FixedJson(
+                                v.into(),
+                                vec![Fixes::GreppedForJSON],
+                            )
+                        })
                         .collect::<Vec<_>>();
                     return Ok(Value::AnyOf(items, str.to_string()));
                 }
@@ -145,7 +186,10 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             anyhow::anyhow!("Expected 1 item when performing fixes")
                         })?;
                         return Ok(Value::AnyOf(
-                            vec![Value::FixedJson(v.into(), fixes)],
+                            vec![Value::FixedJson(
+                                v.into(),
+                                fixes,
+                            )],
                             str.to_string(),
                         ));
                     }
@@ -160,10 +204,12 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
 
                         let items = items
                             .into_iter()
-                            .map(|(v, fixes)| Value::FixedJson(v.into(), fixes))
+                            .map(|(v, fixes)| {
+                                Value::FixedJson(v.into(), fixes)
+                            })
                             .collect::<Vec<_>>();
 
-                        let items_clone = Value::Array(items.clone());
+                        let items_clone = Value::Array(items.clone(), CompletionState::Incomplete);
 
                         let items = items
                             .into_iter()
@@ -180,8 +226,103 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
     }
 
     if options.allow_as_string {
-        return Ok(Value::String(str.to_string()));
+        return Ok(Value::String(str.to_string(), CompletionState::Incomplete));
     }
 
     Err(anyhow::anyhow!("Failed to parse JSON"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::jsonish::Value;
+    use baml_types::CompletionState;
+
+    fn to_any_of(inner: Value, s: &str) -> Value {
+        Value::AnyOf(vec![inner], s.to_string())
+    }
+
+    fn to_fixed(inner: Value, fixes: &[Fixes]) -> Value {
+        Value::FixedJson(Box::new(inner), fixes.to_vec())
+    }
+
+    #[test]
+    fn test_partial_int() {
+        let res = parse("1", ParseOptions::default()).unwrap();
+        assert_eq!(
+            res,
+            to_any_of(Value::Number(1.into(), CompletionState::Incomplete), "1")
+        );
+    }
+
+    #[test]
+    fn test_complete_list() {
+        let res = parse("[1]", ParseOptions::default()).unwrap();
+        assert_eq!(
+            res,
+            to_any_of(
+                Value::Array(
+                    vec![Value::Number(1.into(), CompletionState::Complete)],
+                    CompletionState::Complete
+                ),
+                "[1]"
+            )
+        );
+    }
+
+    #[test]
+    fn test_incomplete_list() {
+        let res = parse("[1, 2", ParseOptions::default()).unwrap();
+        assert_eq!(
+            res,
+            to_any_of(
+            to_fixed(
+                to_any_of(
+                    to_fixed(
+                        Value::Array(
+                            vec![
+                                Value::Number(1.into(), CompletionState::Complete),
+                                Value::Number(2.into(), CompletionState::Incomplete),
+                            ],
+                            CompletionState::Incomplete
+                        ),
+                    &[]
+                    ),
+                        "[1, 2"
+                ),
+                &[Fixes::GreppedForJSON]
+            ), "[1, 2"
+        ));
+    }
+
+    #[test]
+    fn test_incomplete_nested_list() {
+        let res = parse("[1, 2, [3", ParseOptions::default()).unwrap();
+        assert_eq!(
+            res,
+            to_any_of(
+            to_fixed(
+                to_any_of(
+                    to_fixed(
+                        Value::Array(
+                            vec![
+                                Value::Number(1.into(), CompletionState::Complete),
+                                Value::Number(2.into(), CompletionState::Complete),
+                                Value::Array(
+                                    vec![Value::Number(3.into(), CompletionState::Incomplete),],
+                                    CompletionState::Incomplete
+                                )
+                            ],
+                            CompletionState::Incomplete
+                        ),
+                        &[]
+                    ),
+                        "[1, 2, [3"
+                ),
+                &[Fixes::GreppedForJSON]
+            ),
+                "[1, 2, [3"
+            )
+        );
+    }
 }

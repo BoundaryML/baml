@@ -16,12 +16,18 @@ impl FunctionResult {
     }
 
     #[napi]
-    pub fn parsed(&self) -> napi::Result<serde_json::Value> {
+    pub fn parsed(&self, allow_partials: bool) -> napi::Result<serde_json::Value> {
         let parsed = self
             .inner
             .result_with_constraints_content()
             .map_err(from_anyhow_error)?;
 
-        Ok(serde_json::to_value(parsed)?)
+        let response = serde_json::to_value( if allow_partials {
+            parsed.serialize_partial()
+        } else {
+            parsed.serialize_final()
+        }
+        )?;
+        Ok(response)
     }
 }

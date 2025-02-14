@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::FieldType;
+use baml_types::{FieldType, StreamingBehavior};
 use internal_baml_jinja::types::Enum;
 
 use crate::deserializer::{
@@ -56,6 +56,7 @@ impl TypeCoercer for Enum {
             vec![],
             BamlValueWithFlags::Enum(self.name.real_name().to_string(), variant_match),
             constraints.clone(),
+            StreamingBehavior::default(),
         )?;
 
         Ok(enum_match)

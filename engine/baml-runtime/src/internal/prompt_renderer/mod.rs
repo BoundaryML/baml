@@ -1,6 +1,6 @@
 mod render_output_format;
 use internal_llm_client::ClientSpec;
-use jsonish::BamlValueWithFlags;
+use jsonish::{BamlValueWithFlags, ResponseBamlValue};
 use render_output_format::render_output_format;
 
 use anyhow::Result;
@@ -15,6 +15,8 @@ use internal_baml_jinja::{
 };
 
 use crate::RuntimeContext;
+
+use super::llm_client::parsed_value_to_response;
 
 pub struct PromptRenderer {
     function_name: String,
@@ -49,13 +51,20 @@ impl PromptRenderer {
         &self.client_spec
     }
 
-    pub fn parse(&self, raw_string: &str, allow_partials: bool) -> Result<BamlValueWithFlags> {
-        jsonish::from_str(
+    pub fn parse(
+        &self,
+        ir: &IntermediateRepr,
+        raw_string: &str,
+        allow_partials: bool
+    ) -> Result<ResponseBamlValue> {
+        let parsed = jsonish::from_str(
             &self.output_defs,
             &self.output_type,
             raw_string,
             allow_partials,
-        )
+        )?;
+        let res = parsed_value_to_response(ir, parsed, &self.output_type, allow_partials);
+        res
     }
 
     pub fn render_prompt(

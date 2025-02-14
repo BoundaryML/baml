@@ -48,11 +48,15 @@ pub enum Flag {
 
     /// Constraint results (only contains checks)
     ConstraintResults(Vec<(String, JinjaExpression, bool)>),
+
+    /// Completion state for the top-level node of the value is Incomplete.
+    Incomplete,
+    Pending
 }
 
 #[derive(Clone)]
 pub struct DeserializerConditions {
-    pub(super) flags: Vec<Flag>,
+    pub flags: Vec<Flag>,
 }
 
 impl DeserializerConditions {
@@ -98,6 +102,8 @@ impl DeserializerConditions {
                 Flag::UnionMatch(_idx, _) => None,
                 Flag::DefaultButHadUnparseableValue(e) => Some(e.clone()),
                 Flag::ConstraintResults(_) => None,
+                Flag::Incomplete => None,
+                Flag::Pending => None,
             })
             .collect::<Vec<_>>()
     }
@@ -112,6 +118,15 @@ impl DeserializerConditions {
             .flatten()
             .collect()
     }
+}
+
+pub fn constraint_results(flags: &Vec<Flag>) -> Vec<(String, JinjaExpression, bool)> {
+    flags.iter().filter_map(|flag| match flag {
+        Flag::ConstraintResults(cs) => Some(cs.clone()),
+        _ => None,
+    })
+    .flatten()
+    .collect()
 }
 
 impl std::fmt::Debug for DeserializerConditions {
@@ -260,6 +275,12 @@ impl std::fmt::Display for Flag {
                         level = ConstraintLevel::Check
                     )?;
                 }
+            }
+            Flag::Incomplete => {
+                write!(f, "Value is incompletely streamed")?;
+            }
+            Flag::Pending => {
+                write!(f, "Value not yet started")?;
             }
         }
         Ok(())

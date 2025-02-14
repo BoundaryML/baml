@@ -74,7 +74,7 @@ fn find_new_class_field(
     class_walker: &Result<ClassWalker<'_>>,
     overrides: &RuntimeClassOverride,
     _ctx: &RuntimeContext,
-) -> Result<(Name, FieldType, Option<String>)> {
+) -> Result<(Name, FieldType, Option<String>, bool)> {
     let Some(field_overrides) = overrides.new_fields.get(field_name) else {
         anyhow::bail!("Class {} does not have a field: {}", class_name, field_name);
     };
@@ -96,7 +96,7 @@ fn find_new_class_field(
     let name = Name::new_with_alias(field_name.to_string(), alias.value());
     let desc = desc.value();
 
-    Ok((name, field_overrides.0.clone(), desc))
+    Ok((name, field_overrides.0.clone(), desc, false)) // TODO: Field overrides are not "stream.not_null". Should this be configurable?
 }
 
 fn find_existing_class_field(
@@ -105,7 +105,7 @@ fn find_existing_class_field(
     class_walker: &Result<ClassWalker<'_>>,
     overrides: &Option<&RuntimeClassOverride>,
     ctx: &RuntimeContext,
-) -> Result<(Name, FieldType, Option<String>)> {
+) -> Result<(Name, FieldType, Option<String>, bool)> {
     let Ok(class_walker) = class_walker else {
         anyhow::bail!("Class {} does not exist", class_name);
     };
@@ -118,10 +118,12 @@ fn find_existing_class_field(
 
     let mut alias = OverridableValue::Unset;
     let mut desc = OverridableValue::Unset;
+    let mut needed = OverridableValue::Unset;
 
     if let Some(attrs) = field_overrides {
         alias = OverridableValue::<String>::from(attrs.alias.as_ref());
         desc = OverridableValue::<String>::from(attrs.meta.get("description"));
+        needed = OverridableValue::<bool>::from(attrs.meta.get("stream.not_null"));
     }
 
     let eval_ctx = ctx.eval_ctx(false);
@@ -141,7 +143,8 @@ fn find_existing_class_field(
     let name = Name::new_with_alias(field_name.to_string(), alias.value());
     let desc = desc.value();
     let r#type = field_walker.r#type();
-    Ok((name, r#type.clone(), desc))
+    let needed = needed.value().unwrap_or(false);
+    Ok((name, r#type.clone(), desc, needed))
 }
 
 fn find_enum_value(
@@ -223,13 +226,15 @@ fn relevant_data_models<'a>(
     let mut classes = Vec::new();
     let mut recursive_classes = IndexSet::new();
     let mut structural_recursive_aliases = IndexMap::new();
-    let mut start: Vec<baml_types::FieldType> = vec![output.clone()];
+    let mut stack: Vec<baml_types::FieldType> = vec![output.clone()];
+
+    // start.extend(ctx.type_alias_overrides.values().cloned());
 
     let eval_ctx = ctx.eval_ctx(false);
 
-    while let Some(output) = start.pop() {
-        match ir.distribute_constraints(&output) {
-            (FieldType::Enum(enm), constraints) => {
+    while let Some(output) = stack.pop() {
+        match ir.distribute_metadata(&output) {
+            (FieldType::Enum(enm), (constraints, streaming_behavior)) => {
                 if checked_types.insert(output.to_string()) {
                     let overrides = ctx.enum_overrides.get(enm);
                     let walker = ir.find_enum(enm);
@@ -275,16 +280,16 @@ fn relevant_data_models<'a>(
             }
             (FieldType::List(inner), _) | (FieldType::Optional(inner), _) => {
                 if !checked_types.contains(&inner.to_string()) {
-                    start.push(inner.as_ref().clone());
+                    stack.push(inner.as_ref().clone());
                 }
             }
             (FieldType::Map(k, v), _) => {
                 if checked_types.insert(output.to_string()) {
                     if !checked_types.contains(&k.to_string()) {
-                        start.push(k.as_ref().clone());
+                        stack.push(k.as_ref().clone());
                     }
                     if !checked_types.contains(&v.to_string()) {
-                        start.push(v.as_ref().clone());
+                        stack.push(v.as_ref().clone());
                     }
                 }
             }
@@ -292,12 +297,12 @@ fn relevant_data_models<'a>(
                 if checked_types.insert(output.to_string()) {
                     for inner in options {
                         if !checked_types.contains(&inner.to_string()) {
-                            start.push(inner.clone());
+                            stack.push(inner.clone());
                         }
                     }
                 }
             }
-            (FieldType::Class(cls), constraints) => {
+            (FieldType::Class(cls), (constraints, streaming_behavior)) => {
                 if checked_types.insert(output.to_string()) {
                     let overrides = ctx.class_override.get(cls);
                     let walker = ir.find_class(cls);
@@ -345,9 +350,9 @@ fn relevant_data_models<'a>(
 
                     let fields = fields.chain(new_fields).collect::<Result<Vec<_>>>()?;
 
-                    for (_, t, _) in fields.iter().as_ref() {
+                    for (_, t, _, _) in fields.iter().as_ref() {
                         if !checked_types.contains(&t.to_string()) {
-                            start.push(t.clone());
+                            stack.push(t.clone());
                         }
                     }
 
@@ -371,6 +376,7 @@ fn relevant_data_models<'a>(
                         name: Name::new_with_alias(cls.to_string(), alias.value()),
                         fields,
                         constraints,
+                        streaming_behavior,
                     });
                 } else {
                     // TODO: @antonio This one was nasty! If aliases are not
@@ -389,14 +395,33 @@ fn relevant_data_models<'a>(
                 for cycle in ir.structural_recursive_alias_cycles() {
                     if cycle.contains_key(name) {
                         for (alias, target) in cycle.iter() {
-                            structural_recursive_aliases.insert(alias.to_owned(), target.clone());
+                            if structural_recursive_aliases
+                                .insert(alias.to_owned(), target.clone())
+                                .is_none()
+                            {
+                                stack.push(target.clone());
+                            }
+                        }
+                    }
+                }
+
+                // Overrides.
+                for cycle in &ctx.recursive_type_alias_overrides {
+                    if cycle.contains_key(name) {
+                        for (alias, target) in cycle.iter() {
+                            if structural_recursive_aliases
+                                .insert(alias.to_owned(), target.clone())
+                                .is_none()
+                            {
+                                stack.push(target.clone());
+                            }
                         }
                     }
                 }
             }
             (FieldType::Literal(_), _) => {}
             (FieldType::Primitive(_), _) => {}
-            (FieldType::Constrained { .. }, _) => {
+            (FieldType::WithMetadata { .. }, _) => {
                 unreachable!("It is guaranteed that a call to distribute_constraints will not return FieldType::Constrained")
             }
         }

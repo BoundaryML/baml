@@ -262,7 +262,7 @@ impl WithJsonSchema for FieldType {
                     }
                 }
             }
-            FieldType::Constrained { base, .. } => base.json_schema(),
+            FieldType::WithMetadata { base, .. } => base.json_schema(),
         }
     }
 }

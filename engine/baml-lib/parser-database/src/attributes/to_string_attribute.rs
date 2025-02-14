@@ -37,10 +37,30 @@ pub(super) fn visit(ctx: &mut Context<'_>, span: &Span, as_block: bool) -> Optio
         ctx.validate_visited_arguments();
     }
 
-    if as_block && ctx.visit_optional_single_attr("dynamic") {
-        attributes.set_dynamic_type();
+    if ctx.visit_optional_single_attr("stream.done") {
+        attributes.streaming_done = Some(true);
         modified = true;
         ctx.validate_visited_arguments();
+    }
+
+    if ctx.visit_optional_single_attr("stream.not_null") {
+        attributes.streaming_needed = Some(true);
+        modified = true;
+        ctx.validate_visited_arguments();
+    }
+
+    if ctx.visit_optional_single_attr("stream.with_state") {
+        attributes.streaming_state = Some(true);
+        modified = true;
+        ctx.validate_visited_arguments();
+    }
+
+    if as_block {
+        if ctx.visit_optional_single_attr("dynamic") {
+            attributes.set_dynamic_type();
+            modified = true;
+            ctx.validate_visited_arguments();
+        }
     }
 
     if modified {

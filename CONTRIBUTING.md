@@ -136,24 +136,24 @@ dotenv -e ../.env -- pnpm integ-tests  # or use infisical for internal BAML devs
 
 1. Install prerequisites:
    - [Python](https://www.python.org/downloads/) 3.8 or higher
-   - [Poetry](https://python-poetry.org/docs/#installation) package manager
+   - [uv](https://astral.sh/uv) package manager
 
 2. Set up the environment:
 ```bash
 cd integ-tests/python
-poetry install
+uv sync
 ```
 
 3. Build and install the Python client:
 ```bash
 # Note: env -u CONDA_PREFIX is needed if using Conda
-env -u CONDA_PREFIX poetry run maturin develop --manifest-path ../../engine/language_client_python/Cargo.toml
+uv run maturin develop --uv --manifest-path ../../engine/language_client_python/Cargo.toml
 ```
 
 4. Generate client code and run tests:
 ```bash
-poetry run baml-cli generate --from ../baml_src
-dotenv -e ../.env -- poetry run pytest  # or use infisical for internal BAML devs
+uv run baml-cli generate --from ../baml_src
+dotenv -e ../.env -- uv run pytest  # or use infisical for internal BAML devs
 ```
 
 ### Ruby Integration Tests
@@ -198,7 +198,7 @@ dotenv -e ../.env -- mise exec -- rake test  # or use infisical for internal BAM
 cd integ-tests/typescript && pnpm generate
 
 # Python
-cd integ-tests/python && poetry run baml-cli generate --from ../baml_src
+cd integ-tests/python && uv run baml-cli generate --from ../baml_src
 
 # Ruby
 cd integ-tests/ruby && mise exec -- baml-cli generate --from ../baml_src

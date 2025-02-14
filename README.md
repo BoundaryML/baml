@@ -1,358 +1,228 @@
+<div align="center">
 <a href="https://boundaryml.com?utm_source=github" target="_blank" rel="noopener noreferrer">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="fern/assets/baml-lamb-white.png">
     <img src="fern/assets/baml-lamb-white.png" height="64" id="top">
   </picture>
-
 </a>
+</div>
 
-# BAML
+<div align="center">
 
-BAML is a domain-specific language to write and test LLM functions.
+## BAML: Basically a Made-up Language
 
-An LLM function is a prompt template with some defined input variables, and a specific output type like a class, enum, union, optional string, etc.
+*or "Bad-Ass Machine Learning" if your boss isn't around*
 
-BAML LLM functions plug into python, TS, and other languages, which makes it easy to focus more on engineering and less on prompting.
 
-BAML outperforms all other current methods of obtaining structured data, even when using it with GPT3.5. It also outperforms models fine-tuned for tool-use using the [Berkeley Function Calling Benchmark](https://gorilla.cs.berkeley.edu/leaderboard.html). See our [interactive results](https://www.boundaryml.com/blog/sota-function-calling?q=0). [Read more on our Schema-Aligned Parser](https://www.boundaryml.com/blog/schema-aligned-parsing).
+<h3>
 
-<img src="docs/old/assets/bfcl-baml-latest.png" width="80%" alt="Boundary Studio">
+[Homepage](https://www.boundaryml.com/) | [Docs](https://docs.boundaryml.com) | [BAML Chat](https://www.boundaryml.com/chat) | [Discord](https://discord.gg/BTNBeXGuaS)
 
-## Documentation - [docs.boundaryml.com](https://docs.boundaryml.com)
-## Try it out in the playground -- [PromptFiddle.com](https://promptfiddle.com)
+</h3>
 
-Share your creations and ask questions in our [Discord](https://discord.gg/BTNBeXGuaS).
+[![GitHub Repo stars](https://img.shields.io/github/stars/boundaryml/baml)](https://github.com/boundaryml/baml)
+[![License: Apache-2](https://img.shields.io/badge/License-Apache-green.svg)](https://opensource.org/licenses/Apache-2)
+[![BAML Version](https://img.shields.io/pypi/v/baml-py?color=006dad&label=BAML%20Version)](https://pypi.org/project/baml-py/)
 
-<br />
 
-## Features
+**Try BAML**: [Prompt Fiddle](https://www.promptfiddle.com) • [Examples](https://baml-examples.vercel.app/) • [Example Source Code](https://github.com/BoundaryML/baml-examples)
 
-- **Python and Typescript support**: Plug-and-play BAML with other languages
-- **Type validation**: More resilient to common LLM mistakes than Pydantic or Zod
-- **Wide model support**: Ollama, Openai, Anthropic. Tested on small models like Llama2
-- **Streaming**: Stream structured partial outputs.
-- **Realtime Prompt Previews**: Always see the full prompt, even if it contains loops and conditionals
-- **Testing support**: Test functions in the playground with a single click.
-- **Resilience and fallback features**: Add retries and redundancy to your LLM calls
-- **Observability Platform**: Use Boundary Studio to visualize your functions and replay production requests with 1 click.
+**5 minute quickstarts**
+[Python](https://docs.boundaryml.com/guide/installation-language/python) • [Typescript](https://docs.boundaryml.com/guide/installation-language/typescript) • [NextJS](https://docs.boundaryml.com/guide/installation-language/next-js) • [Ruby](https://docs.boundaryml.com/guide/installation-language/ruby) • [Others](https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages) (Go, Java, C++, Rust, PHP, etc)
 
-## Resources
+</div>
 
-<a href="https://discord.gg/ENtBB6kkXH"><img src="https://img.shields.io/discord/1119368998161752075.svg?logo=discord&label=Discord%20Community" /></a>
-<a href="https://twitter.com/intent/follow?screen_name=boundaryml"><img src="https://img.shields.io/twitter/follow/boundaryml?style=social"></a>
+|   |     |
+| - | - |
+| What is BAML? | BAML is a new programming language for builing AI applications. |
+| Do I need to write my whole app in BAML? | Nope, only the AI parts, you can then use BAML with any existing language of your choice! [python](/python), [typescript](/ts), and [more](/more). |
+| Is BAML stable? | Yes, many companies use it in production! We ship updates weekly and rarely have breaking changes |
+| Why a new language? | [Jump to section](#why-a-new-programming-language) |
+| Why a lamb? | Baaaaa-ml. LAMB == BAML |
 
-- [Discord Office Hours](https://discord.gg/ENtBB6kkXH) - Come ask us anything! We hold office hours most days (9am - 12pm PST).
-- [Documentation](https://docs.boundaryml.com)
-- [Boundary Studio](https://app.boundaryml.com) - Observability of BAML functions
 
-## Starter projects
+## The core BAML principle: LLM Prompts are functions
 
-- [BAML + NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
-- [BAML + FastAPI + Streaming](https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter)
-- [All BAML Examples](https://github.com/BoundaryML/baml-examples)
+The fundamental building block in BAML is a function. Every prompt is a function that takes in parameters and returns a type.
 
-## A BAML LLM Function
+```baml
+function ChatAgent(message: Message[], tone: "happy" | "sad") -> string
+```
 
-Here is how you extract a "Resume" from a chunk of free-form text. Run this prompt in [PromptFiddle](https://promptfiddle.com/extract-resume).
+Every function additionally defines which models it uses and what its prompt is.
 
-Note: BAML syntax highlight is not supported yet in Github -- so we apologize, we're working on it!
+```baml
+function ChatAgent(message: Message[], tone: "happy" | "sad") -> StopTool | ReplyTool {
+    client "openai/gpt-4o-mini"
 
-```rust
-// Declare some data models for my function, with descriptions
-class Resume {
-  name string
-  education Education[] @description("Extract in the same order listed")
-  skills string[] @description("Only include programming languages")
+    prompt #"
+        Be a {{ tone }} bot.
+
+        {{ ctx.output_format }}
+
+        {% for m in message %}
+        {{ _.role(m.role) }}
+        {{ m.content }}
+        {% endfor %}
+    "#
 }
 
-class Education {
-  school string
-  degree string
-  year int
+class Message {
+    role string
+    content string
 }
 
-function ExtractResume(resume_text: string) -> Resume {
-  // LLM client with params you want (not pictured)
-  client GPT4Turbo
+class ReplyTool {
+  response string
+}
 
-  // BAML prompts use Jinja syntax
-  prompt #"
-    Parse the following resume and return a structured representation of the data in the schema below.
-
-    Resume:
-    ---
-    {{ resume_text }}
-    ---
-
-    {# special Jinja macro to print the output instructions. #}
-    {{ ctx.output_format }}
-
-    JSON:
-  "#
+class StopTool {
+  action "stop" @description(#"
+    when it might be a good time to end the conversation
+  "#)
 }
 ```
 
-Once you're done iterating on it using the interactive BAML VSCode Playground, you can convert it to Python or TS using the BAML CLI.
-
-## Usage in Python
+Then in any language of your choice you can do the following:
 
 ```python
-# baml_client is autogenerated
-from baml_client import baml as b
-# BAML types get converted to Pydantic models
-from baml_client.baml_types import Resume
+from baml_client import b
+from baml_client.types import Message, StopTool
 
-async def main():
-    resume_text = """Jason Doe
-Python, Rust
-University of California, Berkeley, B.S.
-in Computer Science, 2020
-Also an expert in Tableau, SQL, and C++
-"""
+messages = [Message(role="assistant", content="How can I help?")]
 
-    # this function comes from the autogenerated "baml_client".
-    # It calls the LLM you specified and handles the parsing.
-    resume = await b.ExtractResume(resume_text)
-
-    # Fully type-checked and validated!
-    assert isinstance(resume, Resume)
+while True:
+  print(messages[-1].content)
+  user_reply = input()
+  messages.append(Message(role="user", content=user_reply))
+  tool = b.ChatAgent(messages, "happy")
+  if isinstance(tool, StopTool):
+    print("Goodbye!")
+    break
+  else:
+    messages.append(Message(role="assistant", content=tool.reply))
 ```
 
-## Usage in TypeScript
+### Making prompts easy to find and read
 
-```typescript
-// baml_client is autogenerated
-import baml as b from "@/baml_client";
-// BAML also auto generates types for all your data models
-import { Resume } from "@/baml_client/types";
+Since every prompt is a function, we can build tools to find every prompt you've written. But we've taken BAML one step further and built native tooling for VSCode (jetbrains + neovim coming soon).
 
-function getResume(resumeUrl: string): Promise<Resume> {
-  const resume_text = await loadResume(resumeUrl);
-  // Call the BAML function, which calls the LLM client you specified
-  // and handles all the parsing.
-  return b.ExtractResume({ resumeText: content });
-}
-```
+1. You can see the full prompt (including any multi-modal assets)
+![Multi Modal](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/02-multi-modal.gif)
+2. You can see the exact network request we are making
+![Token Preview](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/03-curl-token-preview.gif)
+3. You can see every function you've ever written
 
-With BAML you have:
+![Functions](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/04-functions-preview.png)
 
-- Better output parsing than Pydantic or Zod -- more on this later
-- Your code is looking as clean as ever
-- Calling your LLM feels like calling a normal function, with actual type guarantees.
+### Swapping models: 1-line change
 
-## BAML Toolchain
+It's just 1 line (ok, maybe 2). [Docs](https://docs.boundaryml.com/guide/baml-basics/switching-llms)
+![Sorry Sam](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/05-sorry-sam.png)
 
-|                                                                                           | Capabilities                                                                        |
-| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| VSCode Extension [install](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension) | Syntax highlighting for BAML files<br /> Real-time prompt preview <br /> Testing UI |
-| Boundary Studio [open](https://app.boundaryml.com)<br />(not open source)                 | Type-safe observability <br />Labeling                                              |
+[Retry policies](https://docs.boundaryml.com/ref/llm-client-strategies/retry-policy) • [fallbacks](https://docs.boundaryml.com/ref/llm-client-strategies/fallback) • [model rotations](https://docs.boundaryml.com/ref/llm-client-strategies/round-robin). All statically defined.
+![Fallback Retry](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/06-fallback-retry.gif)
 
-</p>
+> Want to do pick models at runtime? Check out [Client Registry](https://docs.boundaryml.com/guide/baml-advanced/llm-client-registry).
 
-## Installation
+We currently support: [OpenAI](https://docs.boundaryml.com/ref/llm-client-providers/open-ai) • [Anthropic](https://docs.boundaryml.com/ref/llm-client-providers/anthropic) • [Gemini](https://docs.boundaryml.com/ref/llm-client-providers/google-ai-gemini) • [Vertex](https://docs.boundaryml.com/ref/llm-client-providers/google-vertex) • [Bedrock](https://docs.boundaryml.com/ref/llm-client-providers/aws-bedrock) • [Azure OpenAI](https://docs.boundaryml.com/ref/llm-client-providers/open-ai-from-azure) • [Anything OpenAI Compatible](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic) ([Ollama](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-ollama), [OpenRouter](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-open-router), [VLLM](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-v-llm), [LMStudio](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-lm-studio), [TogetherAI](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-together-ai), and more)
 
-### Python
+### Hot-reloading for prompts
 
-`pip install baml-py`
+Using AI is all about iteration speed.
 
-### Typescript
+If testing your pipeline takes 2 minutes, in 20 minutes, you can only test 10 ideas.
 
-`npm install @boundaryml/baml`
+If testing your pipeline took 5 seconds, in 20 minutes, you can test 240 ideas.
 
-### 2. Download VSCode extension
+Introducing testing, for prompts.
 
-Search for "BAML" or [Click here](https://marketplace.visualstudio.com/items?itemName=boundary.Baml-extension)
+![Hot Reload](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/07-hotreload.gif)
 
-> If you are using python, enable typechecking in VSCode’s settings.json:
->
-> "python.analysis.typecheckingMode": "basic"
+### Structured outputs with any LLM
 
-### 3. Add BAML to any existing project
+JSON is amazing for REST APIs, but way too strict and verbose for LLMs. LLMs need something flexible. We created the SAP (schema-aligned parsing) algorithm to support the flexible outputs LLMs can provide, like markdown within a JSON blob or chain-of-thought prior to answering.
 
-Typescript: `npx baml-cli init`
-Python: `baml-cli init`
+![Chain of Thought](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/09-cot.gif)
 
-### 4. OR use these starter projects:
+SAP works with any model on day-1, without depending on tool-use or function-calling APIs.
 
-- [NextJS 14](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter)
-- [FastAPI](https://github.com/BoundaryML/baml-examples/tree/main/python-fastapi-starter)
+To learn more about SAP you can read this post: [Schema-Aligned Parsing](https://www.boundaryml.com/blog/schema-aligned-parsing).
 
-## BAML in the wild
+See it in action with: [Deepseek-R1](https://www.boundaryml.com/blog/deepseek-r1-function-calling) and [OpenAI O1](https://www.boundaryml.com/blog/openai-o1).
 
-Showcase of applications using BAML
+### Streaming (when it's a first class citizen)
 
-- [Zenfetch](https://zenfetch.com/) - ChatGPT for your bookmarks
-- [Vetrec](https://www.vetrec.io/) - AI-powered Clinical Notes for Veterinarians
-- [MagnaPlay](https://www.magnaplay.com/) - Production-quality machine translation for games
-- [Aer Compliance](https://www.aercompliance.com/) - AI-powered compliance tasks
-- [Haven](https://www.usehaven.ai/) - Automate Tenant communications with AI
-- [Muckrock](https://www.muckrock.com/) - FOIA request tracking and filing
-- and more! [Let us know](https://calendly.com/boundaryml/meeting-with-founders) if you want to be showcased or want to work with us 1-1 to solve your usecase.
+Streaming is way harder than it should be. With our [Python/Typescript/Ruby] generated code, streaming becomes natural and type-safe.
 
-## Observability
+![Streaming](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/10-streaming-client.gif#still)
 
-Analyze, label, and trace each request in [Boundary Studio](https://app.boundaryml.com).
+### No strings attached
 
-<img src="docs/assets/images/v3/pipeline_view.png" width="80%" alt="Boundary Studio">
+- 100% open-source (Apache 2)
+- 100% private. AGI will not require an internet connection, neither will BAML
+    - No network requests beyond model calls you explicitly set
+    - Not stored or used for any training data
+- BAML files can be saved locally on your machine and checked into Github for easy diffs.
+- Built in Rust. So fast, you can't even tell it's there.
 
-## Why not just use an existing Python framework?
+## BAML's Design Philosophy
 
-Existing frameworks can work pretty well (especially for very simple prompts), but they run into limitations when working with structured data and complex logic.
+Everything is fair game when making new syntax. If you can code it, it can be yours. This is our design philosophy to help restrict ideas:
 
-<details>
-<summary>Iteration speed is slow</summary>
+- **1:** Avoid invention when possible
+    - Yes, prompts need versioning — we have a great versioning tool: git
+    - Yes, you need to save prompts — we have a great storage tool: filesystems
+- **2:** Any file editor and any terminal should be enough to use it
+- **3:** Be fast
+- **4:** A first year university student should be able to understand it
 
-There are two reasons:
+## Why a new programming language
 
-1. **You can't visualize your prompt in realtime so you need to run it over and over to figure out what string the LLM is actually ingesting.**
-   This gets much worse if you build your prompt using conditionals and loops, or have structured outputs. BAML's prompt-preview feature in the playground works even with complex logic.
-2. **Poor testing support**. Testing prompts is 80% of the battle. Developers have to deal with copy pasting prompts from one playground UI to the codebase, and if you have structured outputs you'll need to generate the pydantic json schema yourself and do more copy-pasting around.
-</details>
-<br />
-<details>
-<summary>Pydantic and Zod weren't made with LLMs in mind</summary>
-
-LLMs don't always output correct JSON.
-
-Sometimes you get something like this text blob below, where the json blob is in-between some other text:
-
-```
-Based on my observations X Y Z...., it seems the answer is:
-{
-  "sentiment": Happy,
-}
-Hope this is what you wanted!
-```
-
-This isn't valid JSON, since it's missing quotes in "Happy" and has some prefix text that you will have to regex out yourself before trying to parse using Pydantic or Zod.
-BAML handles this and many more cases, such as identifying `Enums` in LLM string responses.. See [flexible parsing](#flexible-parsing)
-
-**Aliasing issues**
-
-Prompt engineering requires you to think carefully about what the name of each key in the schema is. Rather than changing your code everytime you want to try a new name out, you can alias fields to a different name and convert them back into the original field name during parsing.
-
-Here's how BAML differs from these frameworks:
-
-**Aliasing object fields in Zod**
-
-```typescript
-const UserSchema = z
-  .object({
-    first_name: z.string(),
-  })
-  .transform((user) => ({
-    firstName: user.first_name,
-  }));
-```
-
-**Aliasing object fields BAML**
-
-```rust
-class User {
-  first_name string @alias("firstName")
-}
-```
-
-**Aliasing enum values in Zod/Pydantic**
-
-Zod: not possible
-
-Pydantic:
+We used to write websites like this:
 
 ```python
-class Sentiment(Enum):
-  HAPPY = ("ecstatic")
-  SAD = ("sad")
-
-  def __init__(self, alias):
-    self._alias = alias
-
-  @property
-  def alias(self):
-    return self._alias
-
-  @classmethod
-  def from_string(cls, category: str) -> "Sentiment":
-    for c in cls:
-      if c.alias == alias:
-        return c
-      raise ValueError(f"Invalid alias: {alias}")
-  ...
-  # more code here to actually parse the aliases
+def home():
+    return "<button onclick=\"() => alert(\\\"hello!\\\")\">Click</button>"
 ```
 
-**Aliasing enum values in BAML**
+And now we do this:
 
-```rust
-enum Sentiment {
-  HAPPY @alias("ecstatic")
-  SAD @alias("sad")
+```jsx
+function Home() {
+  return <button onClick={() => setCount(prev => prev + 1)}>
+          {count} clicks!
+         </button>
 }
 ```
 
-</details>
-<br />
-Finally, BAML is more of an ecosystem designed to bring you the best developer experience for doing any kind of LLM function-calling, which is why we've built tools like the playground and Boundary Studio -- our observability platform.
+New syntax can be incredible at expressing new ideas. Plus the idea of maintaining hundreds of f-strings for prompts kind of disgusts us 🤮. Strings are bad for maintainable codebases. We prefer structured strings.
 
-## FAQ
+The goal of BAML is to give you the expressiveness of English, but the structure of code.
 
-### Why make a new language?
+Full [blog post](https://www.boundaryml.com/blog/ai-agents-need-new-syntax) by us.
 
-We basically wanted [Jinja](https://jinja.palletsprojects.com/en/3.1.x/), but with types + function declarations, so we decided to make it happen. Earlier we tried making a YAML-based sdk, and even a Python SDK, but they were not powerful enough.
 
-<img src="https://imgs.xkcd.com/comics/standards.png" />
+## Conclusion
 
-### Does BAML use LLMs to generate code?
+As models get better, we'll continue expecting even more out of them. But what will never change is that we'll want a way to write maintainable code that uses those models. The current way we all just assemble strings is very reminiscent of the early days PHP/HTML soup in web development. We hope some of the ideas we shared today can make a tiny dent in helping us all shape the way we all code tomorrow.
 
-No, the BAML dependency transpiles the code using Rust 🦀. It takes just a few milliseconds!
-
-### What does BAML stand for?
-
-Basically, A Made-up Language
-
-### How do I deploy with BAML?
-
-BAML files are only used to generate Python or Typescript code. Just commit the generated code as you would any other python code, and you're good to go
-
-### Is BAML secure?
-
-Your BAML-generated code never talks to our servers. We don’t proxy LLM APIs -- you call them directly from your machine. We only publish traces to our servers if you enable Boundary Studio explicitly.
-
-### How do you make money?
-
-BAML and the VSCode extension will always be 100% free and open-source.
-
-Our paid capabilities only start if you use Boundary Studio, which focuses on Monitoring, Collecting Feedback, and Improving your AI pipelines. Contact us for pricing details at [contact@boundaryml.com](mailto:contact@boundaryml.com?subject=I'd%20love%20to%20learn%20more%20about%20boundary).
-
-## Security
-
-Please do not file GitHub issues or post on our public forum for security vulnerabilities, as they are public!
-
-Boundary takes security issues very seriously. If you have any concerns about BAML or believe you have uncovered a vulnerability, please get in touch via the e-mail address contact@boundaryml.com. In the message, try to provide a description of the issue and ideally a way of reproducing it. The security team will get back to you as soon as possible.
-
-Note that this security address should be used only for undisclosed vulnerabilities. Please report any security problems to us before disclosing it publicly.
 
 ## Contributing
 Checkout our [guide on getting started](/CONTRIBUTING.md)
 
-## Documentation
-
-- [Getting Started](docs/getting-started.md)
-- [Code Generation Guide](docs/code-generation.md) - Learn how BAML generates type-safe client libraries
-- [Architecture](docs/architecture.md)
-- [Contributing](CONTRIBUTING.md)
-- [API Reference](docs/api-reference.md)
-
-<hr />
+---
 
 Made with ❤️ by Boundary
 
 HQ in Seattle, WA
 
-P.S. We're hiring for software engineers. [Email us](founders@boundaryml.com) or reach out on [discord](https://discord.gg/ENtBB6kkXH)!
+P.S. We're hiring for software engineers that love rust. [Email us](founders@boundaryml.com) or reach out on [discord](https://discord.gg/ENtBB6kkXH)!
 
 <div align="left" style="align-items: left;">
         <a href="#top">
             <img src="https://img.shields.io/badge/Back%20to%20Top-000000?style=for-the-badge&logo=github&logoColor=white" alt="Back to Top">
         </a>
 </div>
+
+<img src="https://imgs.xkcd.com/comics/standards.png" alt_text="hi" />

@@ -1,5 +1,5 @@
-use std::sync::{Arc, Mutex};
 use std::fmt;
+use std::sync::{Arc, Mutex};
 
 use baml_types::{BamlValue, FieldType};
 use indexmap::IndexMap;
@@ -153,7 +153,15 @@ impl EnumBuilder {
 impl fmt::Display for ClassPropertyBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let meta = self.meta.lock().unwrap();
-        write!(f, "{}", self.r#type.lock().unwrap().as_ref().map_or("unset", |_| "set"))?;
+        write!(
+            f,
+            "{}",
+            self.r#type
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map_or("unset", |_| "set")
+        )?;
 
         if !meta.is_empty() {
             write!(f, " (")?;
@@ -349,10 +357,65 @@ impl fmt::Display for TypeBuilder {
     }
 }
 
+pub struct TypeAliasBuilder {
+    target: Arc<Mutex<Option<FieldType>>>,
+    meta: MetaData,
+}
+impl_meta!(TypeAliasBuilder);
+
+impl TypeAliasBuilder {
+    pub fn new() -> Self {
+        Self {
+            target: Default::default(),
+            meta: Arc::new(Mutex::new(Default::default())),
+        }
+    }
+
+    pub fn target(&self, target: FieldType) -> &Self {
+        *self.target.lock().unwrap() = Some(target);
+        self
+    }
+}
+
+impl std::fmt::Debug for TypeBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Start the debug printout with the struct name
+        writeln!(f, "TypeBuilder {{")?;
+
+        // Safely attempt to acquire the lock and print classes
+        write!(f, "  classes: ")?;
+        match self.classes.lock() {
+            Ok(classes) => {
+                // We iterate through the keys only to avoid deadlocks and because we might not be able to print the values
+                // safely without deep control over locking mechanisms
+                let keys: Vec<_> = classes.keys().collect();
+                writeln!(f, "{:?},", keys)?
+            }
+            Err(_) => writeln!(f, "Cannot acquire lock,")?,
+        }
+
+        // Safely attempt to acquire the lock and print enums
+        write!(f, "  enums: ")?;
+        match self.enums.lock() {
+            Ok(enums) => {
+                // Similarly, print only the keys
+                let keys: Vec<_> = enums.keys().collect();
+                writeln!(f, "{:?}", keys)?
+            }
+            Err(_) => writeln!(f, "Cannot acquire lock,")?,
+        }
+
+        // Close the struct printout
+        write!(f, "}}")
+    }
+}
+
 #[derive(Clone)]
 pub struct TypeBuilder {
     classes: Arc<Mutex<IndexMap<String, Arc<Mutex<ClassBuilder>>>>>,
     enums: Arc<Mutex<IndexMap<String, Arc<Mutex<EnumBuilder>>>>>,
+    type_aliases: Arc<Mutex<IndexMap<String, Arc<Mutex<TypeAliasBuilder>>>>>,
+    recursive_type_aliases: Arc<Mutex<Vec<IndexMap<String, FieldType>>>>,
 }
 
 impl Default for TypeBuilder {
@@ -366,6 +429,8 @@ impl TypeBuilder {
         Self {
             classes: Default::default(),
             enums: Default::default(),
+            type_aliases: Default::default(),
+            recursive_type_aliases: Default::default(),
         }
     }
 
@@ -389,11 +454,27 @@ impl TypeBuilder {
         )
     }
 
+    pub fn type_alias(&self, name: &str) -> Arc<Mutex<TypeAliasBuilder>> {
+        Arc::clone(
+            self.type_aliases
+                .lock()
+                .unwrap()
+                .entry(name.to_string())
+                .or_insert_with(|| Arc::new(Mutex::new(TypeAliasBuilder::new()))),
+        )
+    }
+
+    pub fn recursive_type_aliases(&self) -> Arc<Mutex<Vec<IndexMap<String, FieldType>>>> {
+        Arc::clone(&self.recursive_type_aliases)
+    }
+
     pub fn to_overrides(
         &self,
     ) -> (
         IndexMap<String, RuntimeClassOverride>,
         IndexMap<String, RuntimeEnumOverride>,
+        IndexMap<String, FieldType>,
+        Vec<IndexMap<String, FieldType>>,
     ) {
         log::debug!("Converting types to overrides");
         let cls = self
@@ -466,12 +547,29 @@ impl TypeBuilder {
                 )
             })
             .collect();
+
+        let aliases = self
+            .type_aliases
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(name, builder)| {
+                let mutex = builder.lock().unwrap();
+                let target = mutex.target.lock().unwrap();
+                // TODO: target.unwrap() might not be guaranteed here.
+                (name.clone(), target.to_owned().unwrap())
+            })
+            .collect();
+
         log::debug!(
             "Dynamic types: \n {:#?} \n Dynamic enums\n {:#?} enums",
             cls,
             enm
         );
-        (cls, enm)
+
+        let recursive_aliases = self.recursive_type_aliases.lock().unwrap().clone();
+
+        (cls, enm, aliases, recursive_aliases)
     }
 }
 
@@ -493,14 +591,20 @@ mod tests {
                 .unwrap()
                 .r#type(FieldType::string())
                 .with_meta("alias", BamlValue::String("username".to_string()))
-                .with_meta("description", BamlValue::String("The user's full name".to_string()));
+                .with_meta(
+                    "description",
+                    BamlValue::String("The user's full name".to_string()),
+                );
 
             // Add age property with description only
             cls.property("age")
                 .lock()
                 .unwrap()
                 .r#type(FieldType::int())
-                .with_meta("description", BamlValue::String("User's age in years".to_string()));
+                .with_meta(
+                    "description",
+                    BamlValue::String("User's age in years".to_string()),
+                );
 
             // Add email property with no metadata
             cls.property("email")
@@ -518,7 +622,10 @@ mod tests {
                 .lock()
                 .unwrap()
                 .with_meta("alias", BamlValue::String("active".to_string()))
-                .with_meta("description", BamlValue::String("User is active".to_string()));
+                .with_meta(
+                    "description",
+                    BamlValue::String("User is active".to_string()),
+                );
 
             // Add INACTIVE value with alias only
             enm.value("INACTIVE")
@@ -538,8 +645,8 @@ mod tests {
         );
     }
 
-// my paranoia kicked in, so this  test is to ensure that the string representation is correct
-// and that the to_overrides method is working as expected
+    // my paranoia kicked in, so this  test is to ensure that the string representation is correct
+    // and that the to_overrides method is working as expected
 
     #[test]
     fn test_type_builder_advanced() {
@@ -550,35 +657,46 @@ mod tests {
         {
             let address = address.lock().unwrap();
             // String with all metadata
-            address.property("street")
+            address
+                .property("street")
                 .lock()
                 .unwrap()
                 .r#type(FieldType::string())
                 .with_meta("alias", BamlValue::String("streetAddress".to_string()))
-                .with_meta("description", BamlValue::String("Street address including number".to_string()));
+                .with_meta(
+                    "description",
+                    BamlValue::String("Street address including number".to_string()),
+                );
 
             // Optional int with description
-            address.property("unit")
+            address
+                .property("unit")
                 .lock()
                 .unwrap()
                 .r#type(FieldType::int().as_optional())
-                .with_meta("description", BamlValue::String("Apartment/unit number if applicable".to_string()));
+                .with_meta(
+                    "description",
+                    BamlValue::String("Apartment/unit number if applicable".to_string()),
+                );
 
             // List of strings with alias
-            address.property("tags")
+            address
+                .property("tags")
                 .lock()
                 .unwrap()
                 .r#type(FieldType::string().as_list())
                 .with_meta("alias", BamlValue::String("labels".to_string()));
 
             // Boolean with no metadata
-            address.property("is_primary")
+            address
+                .property("is_primary")
                 .lock()
                 .unwrap()
                 .r#type(FieldType::bool());
 
             // Float with skip metadata
-            address.property("coordinates")
+            address
+                .property("coordinates")
                 .lock()
                 .unwrap()
                 .r#type(FieldType::float())
@@ -593,21 +711,26 @@ mod tests {
         {
             let priority = priority.lock().unwrap();
             // All metadata
-            priority.value("HIGH")
+            priority
+                .value("HIGH")
                 .lock()
                 .unwrap()
                 .with_meta("alias", BamlValue::String("urgent".to_string()))
-                .with_meta("description", BamlValue::String("Needs immediate attention".to_string()))
+                .with_meta(
+                    "description",
+                    BamlValue::String("Needs immediate attention".to_string()),
+                )
                 .with_meta("skip", BamlValue::Bool(false));
 
             // Only description
-            priority.value("MEDIUM")
-                .lock()
-                .unwrap()
-                .with_meta("description", BamlValue::String("Standard priority".to_string()));
+            priority.value("MEDIUM").lock().unwrap().with_meta(
+                "description",
+                BamlValue::String("Standard priority".to_string()),
+            );
 
             // Only skip
-            priority.value("LOW")
+            priority
+                .value("LOW")
                 .lock()
                 .unwrap()
                 .with_meta("skip", BamlValue::Bool(true));
@@ -633,14 +756,31 @@ mod tests {
         assert_eq!(classes.len(), 2);
         let address_override = classes.get("Address").unwrap();
         assert_eq!(address_override.new_fields.len(), 5); // All fields are new
-        assert!(address_override.new_fields.get("street").unwrap().1.alias.is_some());
-        assert!(address_override.new_fields.get("coordinates").unwrap().1.skip.unwrap());
+        assert!(address_override
+            .new_fields
+            .get("street")
+            .unwrap()
+            .1
+            .alias
+            .is_some());
+        assert!(address_override
+            .new_fields
+            .get("coordinates")
+            .unwrap()
+            .1
+            .skip
+            .unwrap());
 
         // Verify enum overrides
         assert_eq!(enums.len(), 2);
         let priority_override = enums.get("Priority").unwrap();
         assert_eq!(priority_override.values.len(), 4);
-        assert!(priority_override.values.get("HIGH").unwrap().alias.is_some());
+        assert!(priority_override
+            .values
+            .get("HIGH")
+            .unwrap()
+            .alias
+            .is_some());
         assert!(priority_override.values.get("LOW").unwrap().skip.unwrap());
     }
 }

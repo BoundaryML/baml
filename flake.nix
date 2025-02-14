@@ -118,6 +118,7 @@
               maturin
               nodePackages.pnpm
               nodePackages.nodejs
+              uv
             ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
             nativeBuildInputs = [
               pkgs.openssl
@@ -133,7 +134,7 @@
 
           };
           devShell = pkgs.mkShell rec {
-            buildInputs = [toolchain];
+            buildInputs = with pkgs; [toolchain uv];
             PATH="${clang}/bin:$PATH";
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
           };

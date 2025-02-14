@@ -14,7 +14,8 @@
         { "include": "#function" },
         { "include": "#language_block_python" },
         { "include": "#language_block_ts" },
-        { "include": "#language_block_jinja" }
+        { "include": "#language_block_jinja" },
+        { "include": "#type_builder" }
       ]
     },
     "comment": {
@@ -73,6 +74,31 @@
           },
           "end": "(?=$|\\n|@|\\}|/)",
           "patterns": [{ "include": "#type_definition" }]
+        },
+        { "include": "#block_attribute" }
+      ]
+    },
+    "dynamic_declaration": {
+      "begin": "(dynamic)\\s+(\\w+)\\s*\\{",
+      "beginCaptures": {
+        "1": { "name": "storage.type.dynamic" },
+        "2": { "name": "entity.name.type.dynamic" }
+      },
+      "end": "\\}",
+      "patterns": [
+        { "include": "#comment" },
+        {
+          "comment": "Property + Type",
+          "begin": "(\\w+)",
+          "beginCaptures": {
+            "1": { "name": "variable.other.readwrite.interface" }
+          },
+          "end": "(?=$|\\n|@|\\}|/)",
+          "patterns": [{ "include": "#type_definition" }]
+        },
+        {
+          "name": "variable.other.field",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
         },
         { "include": "#block_attribute" }
       ]
@@ -327,6 +353,7 @@
       "patterns": [
         { "include": "#comment" },
         { "include": "#block_attribute" },
+        { "include": "#type_builder" },
         { "include": "#property_assignment_expression" }
       ]
     },
@@ -731,7 +758,7 @@
       "end": "(?=$|\\n)",
       "patterns": [
         { "include": "#comment" },
-        { 
+        {
           "begin": "(?<=\\=)\\s*",
           "end": "(?=//|$|\\n)",
           "patterns": [
@@ -748,6 +775,20 @@
     "string_literal": {
       "match": "\"[^\"]*\"",
       "name": "string.quoted.double"
+    },
+    "type_builder": {
+      "begin": "(type_builder)\\s*\\{",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.type_builder" }
+      },
+      "end": "\\}",
+      "patterns": [
+        { "include": "#interface_declaration" },
+        { "include": "#enum_declaration" },
+        { "include": "#dynamic_declaration" },
+        { "include": "#type_alias" },
+        { "include": "#comment" }
+      ]
     }
   },
   "scopeName": "source.baml"

@@ -145,6 +145,7 @@ module Baml
         G = new("G")
       end
     end
+    class AnotherObject < T::Struct; end
     class BigNumbers < T::Struct; end
     class BinaryNode < T::Struct; end
     class Blah < T::Struct; end
@@ -155,7 +156,10 @@ module Baml
     class ClassOptionalOutput < T::Struct; end
     class ClassOptionalOutput2 < T::Struct; end
     class ClassToRecAlias < T::Struct; end
+    class ClassWithBlockDone < T::Struct; end
     class ClassWithImage < T::Struct; end
+    class ClassWithoutDone < T::Struct; end
+    class ComplexMemoryObject < T::Struct; end
     class CompoundBigNumbers < T::Struct; end
     class ContactInfo < T::Struct; end
     class CustomTaskResult < T::Struct; end
@@ -190,6 +194,7 @@ module Baml
     class MalformedConstraints < T::Struct; end
     class MalformedConstraints2 < T::Struct; end
     class Martian < T::Struct; end
+    class MemoryObject < T::Struct; end
     class MergeAttrs < T::Struct; end
     class NamedArgsSingleClass < T::Struct; end
     class Nested < T::Struct; end
@@ -211,19 +216,40 @@ module Baml
     class ReceiptInfo < T::Struct; end
     class ReceiptItem < T::Struct; end
     class Recipe < T::Struct; end
+    class RecursiveAliasDependency < T::Struct; end
     class Resume < T::Struct; end
     class Schema < T::Struct; end
     class SearchParams < T::Struct; end
+    class SemanticContainer < T::Struct; end
+    class SimpleTag < T::Struct; end
+    class SmallThing < T::Struct; end
     class SomeClassNestedDynamic < T::Struct; end
     class StringToClassEntry < T::Struct; end
     class TestClassAlias < T::Struct; end
     class TestClassNested < T::Struct; end
     class TestClassWithEnum < T::Struct; end
+    class TestMemoryOutput < T::Struct; end
     class TestOutputClass < T::Struct; end
     class Tree < T::Struct; end
     class TwoStoriesOneTitle < T::Struct; end
     class UnionTest_ReturnType < T::Struct; end
     class WithReasoning < T::Struct; end
+    class AnotherObject < T::Struct
+      include Baml::Sorbet::Struct
+      const :id, String
+      const :thingy2, String
+      const :thingy3, String
+
+      def initialize(props)
+        super(
+          id: props[:id],
+          thingy2: props[:thingy2],
+          thingy3: props[:thingy3],
+        )
+
+        @props = props
+      end
+    end
     class BigNumbers < T::Struct
       include Baml::Sorbet::Struct
       const :a, Integer
@@ -366,6 +392,20 @@ module Baml
         @props = props
       end
     end
+    class ClassWithBlockDone < T::Struct
+      include Baml::Sorbet::Struct
+      const :i_16_digits, Integer
+      const :s_20_words, String
+
+      def initialize(props)
+        super(
+          i_16_digits: props[:i_16_digits],
+          s_20_words: props[:s_20_words],
+        )
+
+        @props = props
+      end
+    end
     class ClassWithImage < T::Struct
       include Baml::Sorbet::Struct
       const :myImage, Baml::Image
@@ -377,6 +417,38 @@ module Baml
           myImage: props[:myImage],
           param2: props[:param2],
           fake_image: props[:fake_image],
+        )
+
+        @props = props
+      end
+    end
+    class ClassWithoutDone < T::Struct
+      include Baml::Sorbet::Struct
+      const :i_16_digits, Integer
+      const :s_20_words, String
+
+      def initialize(props)
+        super(
+          i_16_digits: props[:i_16_digits],
+          s_20_words: props[:s_20_words],
+        )
+
+        @props = props
+      end
+    end
+    class ComplexMemoryObject < T::Struct
+      include Baml::Sorbet::Struct
+      const :id, String
+      const :name, String
+      const :description, String
+      const :metadata, T::Array[T.any(String, Integer, Float)]
+
+      def initialize(props)
+        super(
+          id: props[:id],
+          name: props[:name],
+          description: props[:description],
+          metadata: props[:metadata],
         )
 
         @props = props
@@ -864,6 +936,22 @@ module Baml
         @props = props
       end
     end
+    class MemoryObject < T::Struct
+      include Baml::Sorbet::Struct
+      const :id, String
+      const :name, String
+      const :description, String
+
+      def initialize(props)
+        super(
+          id: props[:id],
+          name: props[:name],
+          description: props[:description],
+        )
+
+        @props = props
+      end
+    end
     class MergeAttrs < T::Struct
       include Baml::Sorbet::Struct
       const :amount, Baml::Checked[Integer]
@@ -1160,6 +1248,18 @@ module Baml
         @props = props
       end
     end
+    class RecursiveAliasDependency < T::Struct
+      include Baml::Sorbet::Struct
+      const :value, T.anything
+
+      def initialize(props)
+        super(
+          value: props[:value],
+        )
+
+        @props = props
+      end
+    end
     class Resume < T::Struct
       include Baml::Sorbet::Struct
       const :name, String
@@ -1223,6 +1323,58 @@ module Baml
           company: props[:company],
           description: props[:description],
           tags: props[:tags],
+        )
+
+        @props = props
+      end
+    end
+    class SemanticContainer < T::Struct
+      include Baml::Sorbet::Struct
+      const :sixteen_digit_number, Integer
+      const :string_with_twenty_words, String
+      const :class_1, Baml::Types::ClassWithoutDone
+      const :class_2, Baml::Types::ClassWithBlockDone
+      const :class_done_needed, Baml::Types::ClassWithBlockDone
+      const :class_needed, Baml::Types::ClassWithoutDone
+      const :three_small_things, T::Array[Baml::Types::SmallThing]
+      const :final_string, String
+
+      def initialize(props)
+        super(
+          sixteen_digit_number: props[:sixteen_digit_number],
+          string_with_twenty_words: props[:string_with_twenty_words],
+          class_1: props[:class_1],
+          class_2: props[:class_2],
+          class_done_needed: props[:class_done_needed],
+          class_needed: props[:class_needed],
+          three_small_things: props[:three_small_things],
+          final_string: props[:final_string],
+        )
+
+        @props = props
+      end
+    end
+    class SimpleTag < T::Struct
+      include Baml::Sorbet::Struct
+      const :field, String
+
+      def initialize(props)
+        super(
+          field: props[:field],
+        )
+
+        @props = props
+      end
+    end
+    class SmallThing < T::Struct
+      include Baml::Sorbet::Struct
+      const :i_16_digits, Integer
+      const :i_8_digits, Integer
+
+      def initialize(props)
+        super(
+          i_16_digits: props[:i_16_digits],
+          i_8_digits: props[:i_8_digits],
         )
 
         @props = props
@@ -1295,6 +1447,20 @@ module Baml
         super(
           prop1: props[:prop1],
           prop2: props[:prop2],
+        )
+
+        @props = props
+      end
+    end
+    class TestMemoryOutput < T::Struct
+      include Baml::Sorbet::Struct
+      const :items, T::Array[T.any(Baml::Types::MemoryObject, Baml::Types::ComplexMemoryObject, Baml::Types::AnotherObject)]
+      const :more_items, T::Array[T.any(Baml::Types::MemoryObject, Baml::Types::ComplexMemoryObject, Baml::Types::AnotherObject)]
+
+      def initialize(props)
+        super(
+          items: props[:items],
+          more_items: props[:more_items],
         )
 
         @props = props

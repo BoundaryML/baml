@@ -129,7 +129,7 @@ mod internal_tests {
         files.insert(
             "main.baml",
             r##"
-          
+
           class Education {
             school string | null @description(#"
               111
@@ -146,15 +146,15 @@ mod internal_tests {
               api_key env.OPENAI_API_KEY
             }
           }
-          
-          
+
+
           function Extract(input: string) -> Education {
             client GPT4Turbo
             prompt #"
-          
+
               {{ ctx.output_format }}
             "#
-          }  
+          }
 
           test Test {
             functions [Extract]
@@ -206,7 +206,7 @@ mod internal_tests {
         files.insert(
             "main.baml",
             r##"
-          
+
           class Education {
             // school string | (null | int) @description(#"
             //   111
@@ -226,15 +226,15 @@ mod internal_tests {
               api_key env.OPENAI_API_KEY
             }
           }
-          
-          
+
+
           function Extract(input: string) -> Education {
             client GPT4Turbo
             prompt #"
-          
+
               {{ ctx.output_format }}
             "#
-          }  
+          }
 
           test Test {
             functions [Extract]
@@ -285,7 +285,13 @@ mod internal_tests {
         BamlRuntime::from_file_content(
             "baml_src",
             &files,
-            [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            [(
+                "OPENAI_API_KEY",
+                // Use this to test with a real API key.
+                // option_env!("OPENAI_API_KEY").unwrap_or("NO_API_KEY"),
+                "OPENAI_API_KEY",
+            )]
+            .into(),
         )
     }
 
@@ -306,7 +312,7 @@ class Item {
   price float
   quantity int @description("If not specified, assume 1")
 }
- 
+
 // This is our LLM function we can call in Python or Typescript
 // the receipt can be an image OR text here!
 function ExtractReceipt(receipt: image | string) -> Receipt {
@@ -458,7 +464,7 @@ function BuildTree(input: BinaryNode) -> Tree {
     INPUT:
     {{ input }}
 
-    {{ ctx.output_format }}    
+    {{ ctx.output_format }}
   "#
 }
 
@@ -599,5 +605,352 @@ test RecursiveAliasCycle {
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
+    }
+
+    struct TypeBuilderBlockTest {
+        function_name: &'static str,
+        test_name: &'static str,
+        baml: &'static str,
+    }
+
+    fn run_type_builder_block_test(
+        TypeBuilderBlockTest {
+            function_name,
+            test_name,
+            baml,
+        }: TypeBuilderBlockTest,
+    ) -> anyhow::Result<()> {
+        // Use this and RUST_LOG=debug to see the rendered prompt in the
+        // terminal.
+        env_logger::init();
+
+        let runtime = make_test_runtime(baml)?;
+
+        let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()), None);
+
+        let run_test_future = runtime.run_test(function_name, test_name, &ctx, Some(|r| {}));
+        let (res, span) = runtime.async_runtime.block_on(run_test_future);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_type_builder_block_with_dynamic_class() -> anyhow::Result<()> {
+        run_type_builder_block_test(TypeBuilderBlockTest {
+            function_name: "ExtractResume",
+            test_name: "ReturnDynamicClassTest",
+            baml: r##"
+                class Resume {
+                  name string
+                  education Education[]
+                  skills string[]
+                  @@dynamic
+                }
+
+                class Education {
+                  school string
+                  degree string
+                  year int
+                }
+
+                function ExtractResume(from_text: string) -> Resume {
+                  client "openai/gpt-4o"
+                  prompt #"
+                    Extract the resume information from the given text.
+
+                    {{ from_text }}
+
+                    {{ ctx.output_format }}
+                  "#
+                }
+
+                test ReturnDynamicClassTest {
+                  functions [ExtractResume]
+                  type_builder {
+                    class Experience {
+                      title string
+                      company string
+                      start_date string
+                      end_date string
+                    }
+
+                    dynamic Resume {
+                      experience Experience[]
+                    }
+                  }
+                  args {
+                    from_text #"
+                      John Doe
+
+                      Education
+                      - University of California, Berkeley, B.S. in Computer Science, 2020
+
+                      Experience
+                      - Software Engineer, Boundary, Sep 2022 - Sep 2023
+
+                      Skills
+                      - Python
+                      - Java
+                    "#
+                  }
+                }
+            "##,
+        })
+    }
+
+    #[test]
+    fn test_type_builder_block_with_dynamic_enum() -> anyhow::Result<()> {
+        run_type_builder_block_test(TypeBuilderBlockTest {
+            function_name: "ClassifyMessage",
+            test_name: "ReturnDynamicEnumTest",
+            baml: r##"
+                enum Category {
+                  Refund
+                  CancelOrder
+                  AccountIssue
+                  @@dynamic
+                }
+
+                // Function that returns the dynamic enum.
+                function ClassifyMessage(message: string) -> Category {
+                  client "openai/gpt-4o"
+                  prompt #"
+                    Classify this message:
+
+                    {{ message }}
+
+                    {{ ctx.output_format }}
+                  "#
+                }
+
+                test ReturnDynamicEnumTest {
+                  functions [ClassifyMessage]
+                  type_builder {
+                    dynamic Category {
+                      Question
+                      Feedback
+                      TechnicalSupport
+                    }
+                  }
+                  args {
+                    message "I think the product is great!"
+                  }
+                }
+            "##,
+        })
+    }
+
+    #[test]
+    fn test_type_builder_block_mixed_enums_and_classes() -> anyhow::Result<()> {
+        run_type_builder_block_test(TypeBuilderBlockTest {
+            function_name: "ExtractResume",
+            test_name: "ReturnDynamicClassTest",
+            baml: r##"
+              class Resume {
+                name string
+                education Education[]
+                skills string[]
+                @@dynamic
+              }
+
+              class Education {
+                school string
+                degree string
+                year int
+              }
+
+              enum Role {
+                SoftwareEngineer
+                DataScientist
+                @@dynamic
+              }
+
+              function ExtractResume(from_text: string) -> Resume {
+                client "openai/gpt-4o"
+                prompt #"
+                  Extract the resume information from the given text.
+
+                  {{ from_text }}
+
+                  {{ ctx.output_format }}
+                "#
+              }
+
+              test ReturnDynamicClassTest {
+                functions [ExtractResume]
+                type_builder {
+                  class Experience {
+                    title string
+                    company string
+                    start_date string
+                    end_date string
+                  }
+
+                  enum Industry {
+                    Tech
+                    Finance
+                    Healthcare
+                  }
+
+                  dynamic Role {
+                    ProductManager
+                    Sales
+                  }
+
+                  dynamic Resume {
+                    experience Experience[]
+                    role Role
+                    industry Industry
+                  }
+                }
+                args {
+                  from_text #"
+                    John Doe
+
+                    Education
+                    - University of California, Berkeley, B.S. in Computer Science, 2020
+
+                    Experience
+                    - Software Engineer, Boundary, Sep 2022 - Sep 2023
+
+                    Skills
+                    - Python
+                    - Java
+                  "#
+                }
+              }
+          "##,
+        })
+    }
+
+    #[test]
+    fn test_type_builder_block_type_aliases() -> anyhow::Result<()> {
+        run_type_builder_block_test(TypeBuilderBlockTest {
+            function_name: "ExtractResume",
+            test_name: "ReturnDynamicClassTest",
+            baml: r##"
+                class Resume {
+                  name string
+                  education Education[]
+                  skills string[]
+                  @@dynamic
+                }
+
+                class Education {
+                  school string
+                  degree string
+                  year int
+                }
+
+                function ExtractResume(from_text: string) -> Resume {
+                  client "openai/gpt-4o"
+                  prompt #"
+                    Extract the resume information from the given text.
+
+                    {{ from_text }}
+
+                    {{ ctx.output_format }}
+                  "#
+                }
+
+                test ReturnDynamicClassTest {
+                  functions [ExtractResume]
+                  type_builder {
+                    class Experience {
+                      title string
+                      company string
+                      start_date string
+                      end_date string
+                    }
+
+                    type ExpAlias = Experience
+
+                    dynamic Resume {
+                      experience ExpAlias
+                    }
+                  }
+                  args {
+                    from_text #"
+                      John Doe
+
+                      Education
+                      - University of California, Berkeley, B.S. in Computer Science, 2020
+
+                      Experience
+                      - Software Engineer, Boundary, Sep 2022 - Sep 2023
+
+                      Skills
+                      - Python
+                      - Java
+                    "#
+                  }
+                }
+            "##,
+        })
+    }
+
+    #[test]
+    fn test_type_builder_block_recursive_type_aliases() -> anyhow::Result<()> {
+        run_type_builder_block_test(TypeBuilderBlockTest {
+            function_name: "ExtractResume",
+            test_name: "ReturnDynamicClassTest",
+            baml: r##"
+                class Resume {
+                  name string
+                  education Education[]
+                  skills string[]
+                  @@dynamic
+                }
+
+                class Education {
+                  school string
+                  degree string
+                  year int
+                }
+
+                class WhatTheFuck {
+                  j JsonValue
+                }
+
+                type JsonValue = int | float | bool | string | JsonValue[] | map<string, JsonValue>
+
+                function ExtractResume(from_text: string) -> Resume {
+                  client "openai/gpt-4o"
+                  prompt #"
+                    Extract the resume information from the given text.
+
+                    {{ from_text }}
+
+                    {{ ctx.output_format }}
+                  "#
+                }
+
+                test ReturnDynamicClassTest {
+                  functions [ExtractResume]
+                  type_builder {
+                    type JSON = int | float | bool | string | JSON[] | map<string, JSON>
+
+                    dynamic Resume {
+                      experience JSON
+                    }
+                  }
+                  args {
+                    from_text #"
+                      John Doe
+
+                      Education
+                      - University of California, Berkeley, B.S. in Computer Science, 2020
+
+                      Experience
+                      - Software Engineer, Boundary, Sep 2022 - Sep 2023
+
+                      Skills
+                      - Python
+                      - Java
+                    "#
+                  }
+                }
+            "##,
+        })
     }
 }

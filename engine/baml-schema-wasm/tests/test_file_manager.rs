@@ -21,27 +21,27 @@ mod tests {
     /// Sample BAML content for testing.
     fn sample_baml_content() -> String {
         r##"
-        
-        
+
+
         class Email {
             subject string
             body string
             from_address string
         }
-        
+
         enum OrderStatus {
             ORDERED
             SHIPPED
             DELIVERED
             CANCELLED
         }
-        
+
         class OrderInfo {
             order_status OrderStatus
             tracking_number string?
             estimated_arrival_date string?
         }
-        
+
         client<llm> GPT4Turbo {
             provider baml-openai-chat
             options {
@@ -49,7 +49,7 @@ mod tests {
                 api_key env.OPENAI_API_KEY
             }
         }
-        
+
         function GetOrderInfo(input: string) -> OrderInfo {
             client GPT4Turbo
             prompt #"

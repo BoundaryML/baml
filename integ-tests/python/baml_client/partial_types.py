@@ -16,7 +16,7 @@
 import baml_py
 from enum import Enum
 from pydantic import BaseModel, ConfigDict
-from typing import Dict, List, Optional, Union, Literal
+from typing import Dict, Generic, List, Optional, TypeVar, Union, Literal
 
 from . import types
 from .types import Checked, Check
@@ -28,6 +28,16 @@ from .types import Checked, Check
 #
 ###############################################################################
 
+T = TypeVar('T')
+class StreamState(BaseModel, Generic[T]):
+    value: T
+    state: Literal["Pending", "Incomplete", "Complete"]
+
+
+class AnotherObject(BaseModel):
+    id: Optional[str] = None
+    thingy2: Optional[str] = None
+    thingy3: Optional[str] = None
 
 class BigNumbers(BaseModel):
     a: Optional[int] = None
@@ -70,10 +80,24 @@ class ClassOptionalOutput2(BaseModel):
 class ClassToRecAlias(BaseModel):
     list: Optional["LinkedListAliasNode"] = None
 
+class ClassWithBlockDone(BaseModel):
+    i_16_digits: Optional[int] = None
+    s_20_words: Optional[str] = None
+
 class ClassWithImage(BaseModel):
     myImage: Optional[baml_py.Image] = None
     param2: Optional[str] = None
     fake_image: Optional["FakeImage"] = None
+
+class ClassWithoutDone(BaseModel):
+    i_16_digits: Optional[int] = None
+    s_20_words: StreamState[Optional[str]]
+
+class ComplexMemoryObject(BaseModel):
+    id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    metadata: List[Optional[Union[Optional[str], Optional[int], Optional[float]]]]
 
 class CompoundBigNumbers(BaseModel):
     big: Optional["BigNumbers"] = None
@@ -221,6 +245,11 @@ class Martian(BaseModel):
     """The age of the Martian in Mars years.
     So many Mars years."""
 
+class MemoryObject(BaseModel):
+    id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+
 class MergeAttrs(BaseModel):
     amount: Checked[Optional[int],Literal["gt_ten"]]
 
@@ -308,6 +337,9 @@ class Recipe(BaseModel):
     ingredients: Dict[str, Optional["Quantity"]]
     recipe_type: Optional[Union[Optional[Literal["breakfast"]], Optional[Literal["dinner"]]]] = None
 
+class RecursiveAliasDependency(BaseModel):
+    value: Optional["JsonValue"] = None
+
 class Resume(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
@@ -333,6 +365,23 @@ class SearchParams(BaseModel):
     description: List["WithReasoning"]
     tags: List[Optional[Union[Optional[types.Tag], Optional[str]]]]
 
+class SemanticContainer(BaseModel):
+    sixteen_digit_number: Optional[int] = None
+    string_with_twenty_words: Optional[str] = None
+    class_1: Optional["ClassWithoutDone"] = None
+    class_2: Optional["types.ClassWithBlockDone"] = None
+    class_done_needed: "types.ClassWithBlockDone"
+    class_needed: "ClassWithoutDone"
+    three_small_things: List["SmallThing"]
+    final_string: Optional[str] = None
+
+class SimpleTag(BaseModel):
+    field: Optional[str] = None
+
+class SmallThing(BaseModel):
+    i_16_digits: int
+    i_8_digits: Optional[int] = None
+
 class SomeClassNestedDynamic(BaseModel):
     model_config = ConfigDict(extra='allow')
     hi: Optional[str] = None
@@ -354,6 +403,10 @@ class TestClassNested(BaseModel):
 class TestClassWithEnum(BaseModel):
     prop1: Optional[str] = None
     prop2: Optional[types.EnumInClass] = None
+
+class TestMemoryOutput(BaseModel):
+    items: List[Optional[Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]]
+    more_items: List[Optional[Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]]
 
 class TestOutputClass(BaseModel):
     prop1: Optional[str] = None

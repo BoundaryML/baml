@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::{BamlMap, Constraint};
+use baml_types::{BamlMap, Constraint, StreamingBehavior};
 use internal_baml_core::ir::FieldType;
 use internal_baml_jinja::types::{Class, Name};
 
@@ -12,8 +12,8 @@ use crate::deserializer::{
 
 use super::ParsingContext;
 
-// Name, type, description.
-type FieldValue = (Name, FieldType, Option<String>);
+// Name, type, description, streaming_needed.
+type FieldValue = (Name, FieldType, Option<String>, bool);
 
 impl TypeCoercer for Class {
     fn coerce(
@@ -58,10 +58,10 @@ impl TypeCoercer for Class {
 
         let (optional, required): (Vec<_>, Vec<_>) =
             self.fields.iter().partition(|f| f.1.is_optional());
-        let constraints = ctx
+        let (constraints, streaming_behavior) = ctx
             .of
             .find_class(self.name.real_name())
-            .map_or(vec![], |class| class.constraints.clone());
+            .map_or((vec![], StreamingBehavior::default()), |class| (class.constraints.clone(), class.streaming_behavior.clone()));
 
         let mut optional_values = optional
             .iter()
@@ -80,7 +80,7 @@ impl TypeCoercer for Class {
             None => {
                 // Do nothing
             }
-            Some(crate::jsonish::Value::Object(obj)) => {
+            Some(crate::jsonish::Value::Object(obj, completion)) => {
                 // match keys, if that fails, then do something fancy later.
                 let mut extra_keys = vec![];
                 let mut found_keys = false;
@@ -108,7 +108,7 @@ impl TypeCoercer for Class {
                         .coerce(
                             &scope,
                             &field.1,
-                            Some(&crate::jsonish::Value::Object(obj.clone())),
+                            Some(&crate::jsonish::Value::Object(obj.clone(), completion.clone())),
                         )
                         .map(|mut v| {
                             v.add_flag(Flag::ImpliedKey(field.0.real_name().into()));
@@ -133,7 +133,7 @@ impl TypeCoercer for Class {
                     });
                 }
             }
-            Some(crate::jsonish::Value::Array(items)) => {
+            Some(crate::jsonish::Value::Array(items, completion)) => {
                 if self.fields.len() == 1 {
                     let field = &self.fields[0];
                     let scope = ctx.enter_scope(&format!("<implied:{}>", field.0.real_name()));
@@ -154,7 +154,7 @@ impl TypeCoercer for Class {
                     &items.iter().collect::<Vec<_>>(),
                     &|value| self.coerce(ctx, target, Some(value)),
                 )
-                .and_then(|value| apply_constraints(target, vec![], value, constraints.clone()));
+                .and_then(|value| apply_constraints(target, vec![], value, constraints.clone(), streaming_behavior.clone()));
                 if let Ok(option1) = option1_result {
                     completed_cls.push(Ok(option1));
                 }
@@ -195,7 +195,7 @@ impl TypeCoercer for Class {
                             // If we're missing a field, thats ok!
                             None => Some(BamlValueWithFlags::Null(
                                 DeserializerConditions::new()
-                                    .with_flag(Flag::OptionalDefaultFromNoValue),
+                                    .with_flag(Flag::OptionalDefaultFromNoValue)
                             )),
                         };
 
@@ -211,7 +211,8 @@ impl TypeCoercer for Class {
                             if ctx.allow_partials {
                                 Some(BamlValueWithFlags::Null(
                                     DeserializerConditions::new()
-                                        .with_flag(Flag::OptionalDefaultFromNoValue),
+                                        .with_flag(Flag::OptionalDefaultFromNoValue)
+                                        .with_flag(Flag::Pending),
                                 ))
                             } else {
                                 None
@@ -221,7 +222,8 @@ impl TypeCoercer for Class {
                             if ctx.allow_partials {
                                 Some(BamlValueWithFlags::Null(
                                     DeserializerConditions::new()
-                                        .with_flag(Flag::OptionalDefaultFromNoValue),
+                                        .with_flag(Flag::OptionalDefaultFromNoValue)
+                                        .with_flag(Flag::Pending),
                                 ))
                             } else {
                                 None
@@ -302,12 +304,13 @@ impl TypeCoercer for Class {
                                 // Decide if null is a better option.
                                 (k.to_string(), v)
                             }
-                            None => (k.to_string(), BamlValueWithFlags::Null(Default::default())),
+                            None => (k.to_string(), BamlValueWithFlags::Null(DeserializerConditions::new().with_flag(Flag::Incomplete))),
                             Some(Err(e)) => (
                                 k.to_string(),
                                 BamlValueWithFlags::Null(
                                     DeserializerConditions::new()
-                                        .with_flag(Flag::DefaultButHadUnparseableValue(e)),
+                                        .with_flag(Flag::DefaultButHadUnparseableValue(e))
+                                        .with_flag(Flag::Incomplete),
                                 ),
                             ),
                         }
@@ -328,7 +331,7 @@ impl TypeCoercer for Class {
                     flags,
                     ordered_valid_fields.clone(),
                 ))
-                .and_then(|value| apply_constraints(target, vec![], value, constraints.clone()));
+                .and_then(|value| apply_constraints(target, vec![], value, constraints.clone(), streaming_behavior));
 
                 completed_cls.insert(0, completed_instance);
             }
@@ -345,13 +348,15 @@ pub fn apply_constraints(
     scope: Vec<String>,
     mut value: BamlValueWithFlags,
     constraints: Vec<Constraint>,
+    streaming_behavior: StreamingBehavior,
 ) -> Result<BamlValueWithFlags, ParsingError> {
     if constraints.is_empty() {
         Ok(value)
     } else {
-        let constrained_class = FieldType::Constrained {
+        let constrained_class = FieldType::WithMetadata {
             base: Box::new(class_type.clone()),
             constraints,
+            streaming_behavior,
         };
         let constraint_results = run_user_checks(&value.clone().into(), &constrained_class)
             .map_err(|e| ParsingError {

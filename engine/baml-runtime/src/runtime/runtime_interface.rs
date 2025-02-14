@@ -3,6 +3,8 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use super::InternalBamlRuntime;
 use crate::internal::llm_client::traits::WithClientProperties;
 use crate::internal::llm_client::LLMResponse;
+use crate::type_builder::TypeBuilder;
+use crate::RuntimeContextManager;
 use crate::{
     client_registry::ClientProperty,
     internal::{
@@ -25,6 +27,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValue, Constraint, EvaluationContext};
+use internal_baml_core::ir::repr::TypeBuilderEntry;
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
     ir::{repr::IntermediateRepr, ArgCoercer, FunctionWalker, IRHelper},
@@ -285,6 +288,60 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let walker = self.ir().find_test(&func, test_name)?;
         Ok(walker.item.1.elem.constraints.clone())
     }
+
+    fn get_test_type_builder(
+        &self,
+        function_name: &str,
+        test_name: &str,
+        ctx: &RuntimeContextManager,
+    ) -> Result<Option<TypeBuilder>> {
+        let func = self.get_function(function_name, &ctx.create_ctx(None, None)?)?;
+        let test = self.ir().find_test(&func, test_name)?;
+
+        if test.type_builder_contents().is_empty() {
+            return Ok(None);
+        }
+
+        let type_builder = TypeBuilder::new();
+
+        for entry in test.type_builder_contents() {
+            match entry {
+                TypeBuilderEntry::Class(cls) => {
+                    let mutex = type_builder.class(&cls.elem.name);
+                    let class_builder = mutex.lock().unwrap();
+                    for f in &cls.elem.static_fields {
+                        class_builder
+                            .property(&f.elem.name)
+                            .lock()
+                            .unwrap()
+                            .r#type(f.elem.r#type.elem.to_owned());
+                    }
+                }
+
+                TypeBuilderEntry::Enum(enm) => {
+                    let mutex = type_builder.r#enum(&enm.elem.name);
+                    let enum_builder = mutex.lock().unwrap();
+                    for (variant, _) in &enm.elem.values {
+                        enum_builder.value(&variant.elem.0).lock().unwrap();
+                    }
+                }
+
+                TypeBuilderEntry::TypeAlias(alias) => {
+                    let mutex = type_builder.type_alias(&alias.elem.name);
+                    let alias_builder = mutex.lock().unwrap();
+                    alias_builder.target(alias.elem.r#type.elem.to_owned());
+                }
+            }
+        }
+
+        type_builder
+            .recursive_type_aliases()
+            .lock()
+            .unwrap()
+            .extend(test.type_builder_recursive_aliases().iter().cloned());
+
+        Ok(Some(type_builder))
+    }
 }
 
 impl RuntimeConstructor for InternalBamlRuntime {
@@ -340,7 +397,6 @@ impl RuntimeInterface for InternalBamlRuntime {
                         e
                     )),
                     None,
-                    None,
                 ))
             }
         };
@@ -379,7 +435,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         // Now actually execute the code.
         let (history, _) =
             orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
-                renderer.parse(s, false)
+                renderer.parse(self.ir(), s, false)
             })
             .await;
 

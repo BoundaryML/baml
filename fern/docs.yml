@@ -119,6 +119,7 @@ navigation:
             icon: fa-solid fa-terminal
             path: 01-guide/04-baml-basics/my-first-function.mdx
           - page: Switching LLMs
+            slug: switching-llms
             icon: fa-regular fa-random
             path: 01-guide/04-baml-basics/switching-llms.mdx
           - page: Testing functions
@@ -339,6 +340,9 @@ navigation:
                 path: 03-reference/baml/array.mdx
               - page: map (dictionary)
                 path: 03-reference/baml/map.mdx
+              - page: "image / audio"
+                slug: media
+                path: 03-reference/baml/media.mdx
           - page: Types
             path: 03-reference/baml/types.mdx
           - page: function
@@ -421,6 +425,10 @@ navigation:
             path: 03-reference/baml_client/typebuilder.mdx
           - page: ClientRegistry
             path: 01-guide/05-baml-advanced/client-registry.mdx
+          - page: BamlImage / BamlAudio
+            slug: media
+            path: 03-reference/baml_client/media.mdx
+
 
       - section: Prompt Syntax
         contents:
@@ -542,14 +550,27 @@ navbar-links:
     url: https://discord.gg/BTNBeXGuaS
 
 colors:
-  accentPrimary:
-    light: "#a78bfa"
+  accent-primary:
+    light: "#6025d1"
+    dark: "#b794ff"
   background:
     light: "#ffffff"
+    dark: "#0b0d0e"
+  border:
+    light: "#e2e8f0cc"
+    dark: "#2e2e2ecc"
   sidebar-background:
-    light: "#fefefe"
+    light: "#ffffff"
+    dark: "#0b0d0e"
+  header-background:
+    light: "#ffffffb3"
+    dark: "#0b0d0eb3"
+  card-background:
+    light: "#ffffff"
+    dark: "#0b0d0e"
 logo:
   light: assets/favicon.ico
+  dark: assets/favicon.ico
   height: 40
 favicon: assets/favicon.ico
 css: assets/styles.css
@@ -575,6 +596,8 @@ typography:
 
 # Legacy docs
 redirects:
+  - source: "/guide/baml-basics/switching-ll-ms"
+    destination: "/guide/baml-basics/switching-llms"
   - source: "/docs/get-started/what-is-baml"
     destination: "/guide/introduction/what-is-baml"
   - source: "/docs/get-started/interactive-demos"

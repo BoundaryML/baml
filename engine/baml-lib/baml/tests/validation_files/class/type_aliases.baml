@@ -13,6 +13,18 @@ type Amount = Currency @assert({{ this > 0 }})
 // Should be allowed.
 type MultipleAttrs = int @assert({{ this > 0 }}) @check(gt_ten, {{ this > 10 }})
 
+enum SomeEnum {
+    A
+    B
+    C
+}
+
+type EnumAlias = SomeEnum
+
+class TypeAliasPointsToEnum {
+    enm EnumAlias
+}
+
 class MergeAttrs {
     amount Amount @description("In USD")
 }

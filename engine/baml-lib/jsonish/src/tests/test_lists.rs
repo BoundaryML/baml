@@ -138,11 +138,3 @@ test_deserializer!(
     FieldType::List(FieldType::Primitive(TypeValue::Int).into()),
     [1234]
 );
-
-test_partial_deserializer!(
-    test_list_streaming_partial,
-    "",
-    r#"[1234, 5678"#,
-    FieldType::List(FieldType::Primitive(TypeValue::Int).into()),
-    [1234]
-);

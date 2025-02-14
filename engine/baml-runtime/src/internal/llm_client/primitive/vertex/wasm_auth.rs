@@ -41,12 +41,6 @@ impl VertexAuth {
     pub async fn token(&self, scopes: &[&str]) -> Result<Arc<Token>> {
         let claims = Claims::from_service_account(&self.0);
 
-        let jwt = jsonwebtoken::encode(
-            &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256),
-            &claims,
-            &jsonwebtoken::EncodingKey::from_rsa_pem(self.0.private_key.as_bytes())?,
-        )?;
-
         let jwt = encode_jwt(&serde_json::to_value(claims)?, &self.0.private_key)
             .await
             .map_err(|e| anyhow::anyhow!(format!("{e:?}")))?;
@@ -118,12 +112,6 @@ pub struct ServiceAccount {
 async fn get_access_token(service_account: &ServiceAccount) -> Result<String> {
     // Create the JWT
     let claims = Claims::from_service_account(service_account);
-
-    let jwt = jsonwebtoken::encode(
-        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256),
-        &claims,
-        &jsonwebtoken::EncodingKey::from_rsa_pem(service_account.private_key.as_bytes())?,
-    )?;
 
     let jwt = encode_jwt(&serde_json::to_value(claims)?, &service_account.private_key)
         .await

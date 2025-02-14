@@ -86,9 +86,10 @@ pub enum FieldType {
     Tuple(Vec<FieldType>),
     Optional(Box<FieldType>),
     RecursiveTypeAlias(String),
-    Constrained {
+    WithMetadata {
         base: Box<FieldType>,
         constraints: Vec<Constraint>,
+        streaming_behavior: StreamingBehavior,
     },
 }
 
@@ -126,7 +127,7 @@ impl std::fmt::Display for FieldType {
             FieldType::Map(k, v) => write!(f, "map<{k}, {v}>"),
             FieldType::List(t) => write!(f, "{t}[]"),
             FieldType::Optional(t) => write!(f, "{t}?"),
-            FieldType::Constrained { base, .. } => base.fmt(f),
+            FieldType::WithMetadata { base, .. } => base.fmt(f),
         }
     }
 }
@@ -137,7 +138,7 @@ impl FieldType {
             FieldType::Primitive(_) => true,
             FieldType::Optional(t) => t.is_primitive(),
             FieldType::List(t) => t.is_primitive(),
-            FieldType::Constrained { base, .. } => base.is_primitive(),
+            FieldType::WithMetadata { base, .. } => base.is_primitive(),
             _ => false,
         }
     }
@@ -147,7 +148,7 @@ impl FieldType {
             FieldType::Optional(_) => true,
             FieldType::Primitive(TypeValue::Null) => true,
             FieldType::Union(types) => types.iter().any(FieldType::is_optional),
-            FieldType::Constrained { base, .. } => base.is_optional(),
+            FieldType::WithMetadata { base, .. } => base.is_optional(),
             _ => false,
         }
     }
@@ -156,8 +157,52 @@ impl FieldType {
         match self {
             FieldType::Primitive(TypeValue::Null) => true,
             FieldType::Optional(t) => t.is_null(),
-            FieldType::Constrained { base, .. } => base.is_null(),
+            FieldType::WithMetadata { base, .. } => base.is_null(),
             _ => false,
         }
     }
+
+    pub fn streaming_behavior(&self) -> Option<&StreamingBehavior> {
+        match self {
+            FieldType::WithMetadata {
+                streaming_behavior, ..
+            } => Some(streaming_behavior),
+            _ => None,
+        }
+    }
 }
+
+/// Metadata on a type that determines how it behaves under streaming conditions.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct StreamingBehavior {
+    /// A type with the `done` property will not be visible in a stream until
+    /// we are certain that it is completely available (i.e. the parser did
+    /// not finalize it through any early termination, enough tokens were available
+    /// from the LLM response to be certain that it is done).
+    pub done: bool,
+
+    /// A type with the `state` property will be represented in client code as
+    /// a struct: `{value: T, streaming_state: "incomplete" | "complete"}`.
+    pub state: bool,
+}
+
+impl StreamingBehavior {
+    pub fn combine(&self, other: &StreamingBehavior) -> StreamingBehavior {
+        StreamingBehavior {
+            done: self.done || other.done,
+            state: self.state || other.state,
+        }
+    }
+}
+
+impl Default for StreamingBehavior {
+    fn default() -> Self {
+        StreamingBehavior {
+            done: false,
+            state: false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {}

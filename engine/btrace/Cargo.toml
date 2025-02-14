@@ -1,0 +1,58 @@
+[package]
+edition = "2021"
+name = "btrace"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[package.metadata.rustflags]
+RSTEST_TIMEOUT = "10"
+
+[lints.rust]
+dead_code = "warn"
+unused_imports = "deny"
+unused_variables = "deny"
+
+[dependencies]
+anyhow.workspace = true
+baml-types.workspace = true
+base64.workspace = true
+bytes.workspace = true
+log.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+tokio-stream = "0.1"
+tracing-core.workspace = true
+uuid = { version = "1.8", features = ["v7", "js"] }
+web-time.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
+js-sys = "0.3.69"
+reqwest = { version = "0.12.5", features = ["stream", "json"] }
+tokio = { version = "1", features = ["sync"] }
+# WARNING: Do not add serde-serialize feature to wasm-bindgen.
+# It may produce a dependency cycle in projects that use wasm and import baml.
+wasm-bindgen = "^0.2.74"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3.69", features = [
+  "Crypto",
+  "CryptoKey",
+  "Headers",
+  "Request",
+  "RequestInit",
+  "Response",
+  "RequestMode",
+  "SubtleCrypto",
+  "Window",
+] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+hostname = "0.3.1"
+tokio = { version = "1", features = ["full"] }

@@ -11,7 +11,6 @@ import {
   ChevronLeft,
   ChevronRight,
   FlaskConical,
-  Loader,
   Play,
   Search,
   Settings,
@@ -28,6 +27,7 @@ import EnvVars from './env-vars'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { atomWithStorage } from 'jotai/utils'
 import { vscode } from '../../vscode'
+import { Loader } from '../prompt-preview/components'
 
 interface FunctionData {
   name: string
@@ -117,7 +117,7 @@ export default function CustomSidebar() {
                 </div>
                 <div className='overflow-auto flex-1'>
                   <div className='px-2'>
-                    {searchTerm && filteredFunctions.length > 0 && (
+                    {filteredFunctions.length > 0 && (
                       <Button
                         variant='ghost'
                         size='sm'
@@ -213,7 +213,7 @@ function FunctionItem({ label, tests, isLast = false, isSelected = false, search
       <div
         className={cn(
           'flex relative items-center px-1 py-1 -mx-2 transition-colors cursor-pointer group hover:bg-muted',
-          isSelected ? 'font-bold text-purple-400' : 'text-muted-foreground',
+          isSelected ? 'font-bold text-purple-400' : 'text-muted-primary',
         )}
         onClick={handleClick}
       >

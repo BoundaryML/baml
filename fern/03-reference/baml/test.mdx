@@ -8,6 +8,7 @@ A BAML test consists of:
 - Input arguments
 - Optional testing configuration
 - Optional assertions
+- Optional type builders
 
 ```baml
 test TestName {
@@ -20,7 +21,7 @@ test TestName {
 
 ## Test Declaration
 
-### Syntax
+### Basic Syntax
 
 ```baml
 test name {
@@ -31,11 +32,36 @@ test name {
 }
 ```
 
+### Optional Features
+
+```baml {3-11, 15, 16}
+test name {
+    functions [function_list]
+    type_builder {
+        class NewType {
+            // Props
+        }
+        dynamic ExistingDynamicType {
+            new_prop NewType
+            // Inject Props Here
+        }
+    }
+    args {
+        parameter_assignments
+    }
+    @@check( check_length, {{ this.prop|length > 0 }} )
+    @@assert( {{ this.prop|length < 255 }})
+}
+```
+
 ### Components
 
 - `name`: Test identifier (unique per function)
 - `functions`: List of functions to test
 - `args`: Input parameters for the test case
+- `type_builder`: Block used to inject values into dynamic types
+- `@@check`: Conditional check for test validity
+- `@@assert`: Assertion for test result
 
 ## Input Types
 
@@ -197,7 +223,7 @@ test LongTextTest {
 
 ## Testing Multiple Functions
 
-This requires each function to have teh exact same parameters:
+This requires each function to have the exact same parameters:
 
 ```baml
 test EndToEndFlow {
@@ -211,6 +237,12 @@ test EndToEndFlow {
     }
 }
 ```
+
+## Testing Dynamic Types
+
+Dynamic types can be tested using `type_builder` and `dynamic` blocks:
+
+<Markdown src="../../snippets/dynamic-class-test.mdx" />
 
 ## Integration with Development Tools
 

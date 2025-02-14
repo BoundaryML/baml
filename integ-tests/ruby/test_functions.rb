@@ -110,7 +110,7 @@ describe "ruby<->baml integration tests" do
         )
     )
 
-    res = b.RecursiveClassWithAliasIndirection.new(
+    res = b.RecursiveClassWithAliasIndirection(
         cls: Baml::Types::NodeWithAliasIndirection.new(
             value: 1,
             next: Baml::Types::NodeWithAliasIndirection.new(
@@ -257,14 +257,17 @@ describe "ruby<->baml integration tests" do
   it "allows streaming of nested" do
     stream = b.stream.FnOutputClassNested(input: "a")
     msgs = []
+    puts "TEST"
     stream.each do |msg|
+      print("INNER")
       msgs << msg
     end
     final = stream.get_final_response
 
-    puts final
+    puts msgs.last.to_json
+    puts final.to_json
     assert msgs.size > 0, "Expected at least one streamed response but got none."
-    assert msgs.last == final, "Expected last stream message to match final response."
+    assert msgs.last.to_json == final.to_json, "Expected last stream message to match final response."
   end
 
   it "tests dynamic" do
@@ -408,6 +411,63 @@ describe "ruby<->baml integration tests" do
     assert_raises Exception do
       res = b.UseNestedBlockConstraint(inp: nested_block_constraint)
     end
+  end
+
+  it "uses semantic_container" do
+    stream = b.stream.MakeSemanticContainer()
+    stream.each do |msg|
+      puts msg.to_json
+    end
+  end
+
+  it "uses semantic_streaming" do
+    stream = b.stream.MakeSemanticContainer()
+
+    reference_string = nil
+    reference_int = nil
+
+    msgs = []
+    puts "HELLO'"
+
+    stream.each do |msg|
+      puts "THERE"
+      puts msg.to_json
+
+      msgs << msg
+
+       # Check value stability.
+      if !msg.sixteen_digit_number.nil?
+        if reference_int.nil?
+          reference_int = msg.sixteen_digit_number
+        else
+          assert_equal reference_int, msg.sixteen_digit_number
+        end
+      end
+      if !msg.string_with_twenty_words.nil?
+        if reference_string.nil?
+          reference_string = msg.string_with_twenty_words
+        else
+          assert_equal reference_string, msg.string_with_twenty_words
+        end
+      end
+
+      # Check for @stream.with_state.
+      if !msg.class_needed.nil?
+        if !msg.class_needed.s_20_words.value.nil?
+          if len(msg.class_needed.s_20_words.value.split(" ")) < 3 && msg.final_string.nil?
+            puts(msg)
+            assert msg.class_needed.s_20_words.state == "Incomplete"
+          end
+        end
+      end
+      if !msg.final_string.nil?
+        assert msg.class_needed.s_20_words.state == "Complete"
+      end
+    end
+
+    puts "TRY FINAL"
+    final = stream.get_final_response
+    puts final.to_json
   end
 
 end

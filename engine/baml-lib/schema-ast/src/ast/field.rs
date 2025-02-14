@@ -348,6 +348,7 @@ impl FieldType {
             }
         }
     }
+
 }
 
 // Impl display for FieldType

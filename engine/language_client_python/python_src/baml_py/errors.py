@@ -1,10 +1,9 @@
 from .baml_py import (
     BamlError,
     BamlClientError,
-    BamlClientHttpError,
     BamlInvalidArgumentError,
 )
-from .internal_monkeypatch import BamlValidationError
+from .internal_monkeypatch import BamlValidationError, BamlClientHttpError
 
 
 __all__ = [

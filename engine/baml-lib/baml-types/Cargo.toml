@@ -12,16 +12,22 @@ elided_named_lifetimes = "deny"
 unused_imports = "deny"
 unused_variables = "deny"
 
+# Attention:
+#   Please try to keep this crate low-dependency! We want to keep this as minimal as possible.
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
 derive_builder.workspace = true
+log.workspace = true
+minijinja.workspace = true
+once_cell.workspace = true
+secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 strum.workspace = true
-minijinja.workspace = true
-log.workspace = true
-once_cell = "1"
+time.workspace = true
+tracing-core.workspace = true
+web-time.workspace = true
 
 [dependencies.indexmap]
 workspace = true

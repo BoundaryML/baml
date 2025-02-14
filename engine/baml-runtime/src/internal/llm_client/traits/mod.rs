@@ -283,6 +283,7 @@ where
                 either::Right(&chat_messages),
                 false,
                 render_settings.stream && self.supports_streaming(),
+                render_settings.expose_secrets
             )
             .await?;
         let mut request = request_builder.build()?;
@@ -388,8 +389,9 @@ where
     }
 }
 
-/// We assume b64 with mime-type is the universally accepted format in an API request.
-/// Other formats will be converted into that, depending on what formats are allowed according to supported_media_formats.
+/// We assume b64 with mime-type is the universally accepted format in an API
+/// request. Other formats will be converted into that, depending on what
+/// formats are allowed according to supported_media_formats.
 async fn process_media_urls(
     resolve_media_urls: ResolveMediaUrls,
     resolve_files: bool,
@@ -400,6 +402,7 @@ async fn process_media_urls(
     let render_settings = render_settings.unwrap_or(RenderCurlSettings {
         stream: false,
         as_shell_commands: false,
+        expose_secrets: false,
     });
 
     futures::stream::iter(chat.iter().map(|p| {

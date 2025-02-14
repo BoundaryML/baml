@@ -280,7 +280,7 @@ fn init(ruby: &Ruby) -> Result<()> {
     )?;
     module.define_module_function(
         "serialize",
-        function!(ruby_to_json::RubyToJson::serialize, 2),
+        function!(ruby_to_json::RubyToJson::serialize, 4),
     )?;
 
     Ok(())

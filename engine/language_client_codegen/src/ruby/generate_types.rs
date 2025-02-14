@@ -10,7 +10,7 @@ use crate::{field_type_attributes, type_check_attributes, TypeCheckAttributes};
 use super::ruby_language_features::ToRuby;
 use internal_baml_core::ir::{
     repr::{Docstring, IntermediateRepr},
-    ClassWalker, EnumWalker, FieldType,
+    ClassWalker, EnumWalker, FieldType, IRHelper,
 };
 
 #[derive(askama::Template)]
@@ -136,9 +136,21 @@ impl<'ir> From<ClassWalker<'ir>> for PartialRubyStruct<'ir> {
                 .static_fields
                 .iter()
                 .map(|f| {
+                    let not_null: bool = f.attributes.get("stream.not_null").is_some();
+                    let (_, metadata) = c.db.distribute_metadata(&f.elem.r#type.elem);
+                    let done = metadata.1.done;
+                    let field_type = f.elem.r#type.elem.clone();
+                    let generated_field_type = match (done, not_null) {
+                        (false, false) => {
+                            format!("{}", field_type.to_partial_type_ref(c.db, false))
+                        }
+                        (true, false) => format!("T.nilable({})", field_type.to_type_ref()),
+                        (false, true) => field_type.to_partial_type_ref(c.db, true),
+                        (true, true) => field_type.to_type_ref(),
+                    };
                     (
                         f.elem.name.as_str(),
-                        f.elem.r#type.elem.to_partial_type_ref(),
+                        generated_field_type,
                         f.elem.docstring.as_ref().map(|d| render_docstring(d, true)),
                     )
                 })
@@ -153,27 +165,44 @@ impl<'ir> From<ClassWalker<'ir>> for PartialRubyStruct<'ir> {
     }
 }
 
-pub(super) trait ToTypeReferenceInTypeDefinition {
+pub(super) trait ToTypeReferenceInTypeDefinition<'a> {
     fn to_type_ref(&self) -> String;
-    fn to_partial_type_ref(&self) -> String;
+    fn to_partial_type_ref(&self, ir: &'a IntermediateRepr, already_nilable: bool) -> String;
 }
 
-impl ToTypeReferenceInTypeDefinition for FieldType {
+impl ToTypeReferenceInTypeDefinition<'_> for FieldType {
     fn to_type_ref(&self) -> String {
         use ToRuby;
         self.to_ruby()
     }
 
-    fn to_partial_type_ref(&self) -> String {
-        match self {
-            FieldType::Class(name) => format!("Baml::PartialTypes::{}", name.clone()),
-            FieldType::Enum(name) => format!("T.nilable(Baml::Types::{})", name.clone()),
+    /// Render a type into a string for use in a partial-types context.
+    /// The `already_nilable` field indicates whether the caller will wrap
+    /// the returned string with `nilable`, and this function does not need
+    fn to_partial_type_ref(&self, ir: &IntermediateRepr, already_nilable: bool) -> String {
+        
+        let (field_type, metadata) = ir.distribute_metadata(self);
+        let inner = match field_type {
+            FieldType::Class(name) => if already_nilable {
+                format!("Baml::PartialTypes::{}", name.clone())
+            } else {
+                format!("T.nilable(Baml::PartialTypes::{})", name.clone())
+            },
+            FieldType::Enum(name) => {
+                if already_nilable {
+                    format!("T.nilable(Baml::Types::{})", name.clone())
+                } else {
+                    format!("T.nilable(Baml::Types::{})", name.clone())
+                }
+            }
             // TODO: Can we define recursive aliases in Ruby with Sorbet?
             FieldType::RecursiveTypeAlias(_name) => "T.anything".to_string(),
             // TODO: Temporary solution until we figure out Ruby literals.
-            FieldType::Literal(value) => value.literal_base_type().to_partial_type_ref(),
+            FieldType::Literal(value) => value
+                .literal_base_type()
+                .to_partial_type_ref(ir, already_nilable),
             // https://sorbet.org/docs/stdlib-generics
-            FieldType::List(inner) => format!("T::Array[{}]", inner.to_partial_type_ref()),
+            FieldType::List(inner) => format!("T::Array[{}]", inner.to_partial_type_ref(ir, false)),
             FieldType::Map(key, value) => format!(
                 "T::Hash[{}, {}]",
                 match key.as_ref() {
@@ -183,36 +212,51 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     | FieldType::Union(_) => FieldType::string().to_type_ref(),
                     _ => key.to_type_ref(),
                 },
-                value.to_partial_type_ref()
+                value.to_partial_type_ref(ir, false)
             ),
-            FieldType::Primitive(_) => format!("T.nilable({})", self.to_type_ref()),
-            FieldType::Union(inner) => format!(
+            FieldType::Primitive(_) => {
+                if already_nilable {
+                    self.to_type_ref()
+                } else {
+                    format!("T.nilable({})", self.to_type_ref())
+                }
+            }
+            FieldType::Union(inner) => {
+                let inner_string = 
                 // https://sorbet.org/docs/union-types
-                "T.nilable(T.any({}))",
                 inner
                     .iter()
-                    .map(|t| t.to_partial_type_ref())
+                    .map(|t| t.to_partial_type_ref(ir, false))
                     .collect::<Vec<_>>()
                     .join(", ")
-            ),
-            FieldType::Tuple(inner) => format!(
+                ;
+                if already_nilable { format!("T.any({inner_string})") } else {
+                    format!("T.nilable(T.any({}))", inner_string)
+                }
+            },
+            FieldType::Tuple(inner) => {
+                let inner_string = 
                 // https://sorbet.org/docs/tuples
-                "T.nilable([{}])",
                 inner
                     .iter()
-                    .map(|t| t.to_partial_type_ref())
+                    .map(|t| t.to_partial_type_ref(ir, false))
                     .collect::<Vec<_>>()
                     .join(", ")
-            ),
-            FieldType::Optional(inner) => inner.to_partial_type_ref(),
-            FieldType::Constrained { base, .. } => match field_type_attributes(self) {
+                ;
+                if already_nilable { format!("[{}]", inner_string )} else { format!("T.nilable([{}])", inner_string)}
+            },
+            FieldType::Optional(inner) => inner.to_partial_type_ref(ir, false),
+            FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
-                    let base_type_ref = base.to_partial_type_ref();
+                    let base_type_ref = base.to_partial_type_ref(ir, false);
                     format!("Baml::Checked[{base_type_ref}]")
                 }
-                None => base.to_partial_type_ref(),
+                None => base.to_partial_type_ref(ir, false),
             },
-        }
+        };
+        if metadata.1.state {
+            format!("Baml::StreamState[{inner}]")
+        } else { inner }
     }
 }
 

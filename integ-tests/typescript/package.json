@@ -10,7 +10,8 @@
     "integ-tests:ci": "infisical run --env=test -- pnpm test -- --ci --silent false --testTimeout 30000 --verbose=false --reporters=jest-junit",
     "integ-tests": "infisical run --env=test -- pnpm test -- --silent false --testTimeout 30000",
     "integ-tests:dotenv": "dotenv -e ../.env -- pnpm test -- --silent false --testTimeout 30000",
-    "generate": "baml-cli generate --from ../baml_src"
+    "generate": "baml-cli generate --from ../baml_src",
+    "memory-test": "BAML_LOG=info infisical run --env=test -- pnpm test -- --silent false --testTimeout 60000 -t 'memory'"
   },
   "keywords": [],
   "author": "",
@@ -23,16 +24,18 @@
     "dotenv-cli": "^7.4.2",
     "jest": "^29.7.0",
     "jest-html-reporter": "^3.10.2",
-    "jest-summary-reporter": "^0.0.2",
     "jest-junit": "^16.0.0",
+    "jest-summary-reporter": "^0.0.2",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.2"
   },
   "dependencies": {
+    "@aws-sdk/client-sts": "^3.721.0",
     "@boundaryml/baml": "link:../../engine/language_client_typescript",
-    "dotenv": "^16.4.5",
-    "@aws-sdk/client-sts": "^3.721.0"
+    "chart.js": "^4.4.7",
+    "chartjs-node-canvas": "^4.1.6",
+    "dotenv": "^16.4.5"
   }
 }

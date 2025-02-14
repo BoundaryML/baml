@@ -1,4 +1,5 @@
 import { NamedArgsSingleEnumList } from '../baml_client'
+import { SemanticContainer } from '../baml_client/partial_types';
 import { b } from './test-setup'
 
 describe('Basic Input/Output Tests', () => {
@@ -79,4 +80,85 @@ describe('Basic Input/Output Tests', () => {
       expect(classs.prop2).toEqual(540)
     })
   })
+
+  // TODO: @antonio Move this to its own file/block or whatever.
+  it('json type alias cycle', async () => {
+    const data = {
+      number: 1,
+      string: 'test',
+      bool: true,
+      list: [1, 2, 3],
+      object: { number: 1, string: 'test', bool: true, list: [1, 2, 3] },
+      json: {
+        number: 1,
+        string: 'test',
+        bool: true,
+        list: [1, 2, 3],
+        object: { number: 1, string: 'test', bool: true, list: [1, 2, 3] },
+      },
+    }
+    const res = await b.JsonTypeAliasCycle(data)
+    expect(res).toEqual(data)
+    expect(res.json.object.list).toEqual([1, 2, 3])
+  })
+
+  it('json type alias as class dependency', async () => {
+    const data = {
+      number: 1,
+      string: 'test',
+      bool: true,
+      list: [1, 2, 3],
+      object: { number: 1, string: 'test', bool: true, list: [1, 2, 3] },
+      json: {
+        number: 1,
+        string: 'test',
+        bool: true,
+        list: [1, 2, 3],
+        object: { number: 1, string: 'test', bool: true, list: [1, 2, 3] },
+      },
+    }
+    const res = await b.TakeRecAliasDep({value: data})
+    expect(res.value).toEqual(data)
+    expect(res.value.json.object.list).toEqual([1, 2, 3])
+  })
+})
+
+describe('Semantic Streaming Tests', () => {
+  it('should support semantic streaming', async () => {
+    const stream = b.stream.MakeSemanticContainer()
+
+    let reference_string = null;
+    let reference_int = null;
+
+    const msgs: SemanticContainer[] = []
+    for await (const msg of stream) {
+      msgs.push(msg ?? '')
+
+      // Test field stability.
+      if (msg.sixteen_digit_number != null){
+        if (reference_int == null) {
+          reference_int = msg.sixteen_digit_number;
+        } else {
+          expect(msg.sixteen_digit_number).toEqual(reference_int);
+        }
+      }
+
+      // Test @stream.with_state.
+      if (msg.class_needed.s_20_words.value && msg.class_needed.s_20_words.value.split(" ").length < 3 && msg.final_string == null) {
+        expect(msg.class_needed.s_20_words.state).toEqual("Incomplete");
+      }
+      if (msg.final_string) {
+        expect(msg.class_needed.s_20_words.state).toEqual("Complete");
+      }
+
+      // Test @stream.not_null.
+      if (msg.three_small_things) {
+        for (const sub of msg.three_small_things) {
+          expect(sub.i_16_digits).toBeDefined();
+        }
+      }
+    }
+
+    const final = await stream.getFinalResponse();
+  }, 20_000)
 })

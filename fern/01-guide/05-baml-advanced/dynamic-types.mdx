@@ -341,6 +341,173 @@ puts res
 </CodeBlocks>
 
 ### Testing dynamic types in BAML
-This feature is coming soon! Let us know if you're interested in testing it out!
 
-You can still write tests in Python, TypeScript, Ruby, etc in the meantime.
+When testing dynamic types there are two different cases:
+1. Injecting properties into dynamic types returned by the tested function.
+2. Injecting values into dynamic types received as arguments by the tested function.
+
+The first case requires using the `type_builder` and `dynamic` blocks in the
+test, whereas the second case only requires specifying the values in the `args`
+block.
+
+#### Testing return types
+
+##### Dynamic classes
+
+Suppose we have a dynamic class `Resume` and we want to add a property that
+stores the user's work experience when we testing a specific function. We can
+do that by specifying the types and properties that we need in the
+`type_builder` block.
+
+
+```baml {4, 14-27}
+class Resume {
+  name string
+  skills string[]
+  @@dynamic // Marked as @@dynamic.
+}
+
+// Function that returns a dynamic class.
+function ExtractResume(from_text: string) -> Resume {
+  // Prompt
+}
+
+test ReturnDynamicClassTest {
+  functions [ExtractResume]
+  type_builder {
+    // Defines a new type available only within this test block.
+    class Experience {
+      title string
+      company string
+      start_date string
+      end_date string		  
+    }
+
+    // Injects new properties into the `@@dynamic` part of the Resume class.
+    dynamic Resume {
+      experience Experience[]
+    }
+  }
+  args {
+    from_text #"
+      John Doe
+      
+      Experience
+      - Software Engineer, Boundary, Sep 2022 - Sep 2023
+
+      Skills
+      - Python
+      - Java
+    "#
+  }
+}
+```
+
+The rendered prompt for `ExtractResume` will now include the `experience` field
+defined in the `dynamic` block and the LLM will correctly extract the experience
+in the input text.
+
+##### Dynamic enums
+
+Dynamic enums can be included in the `type_builder` block just like classes. The
+only difference is that we inject new variants in the `dynamic` block instead of
+properties.
+
+```baml {7, 17-22}
+enum Category {
+  Refund
+  CancelOrder
+  TechnicalSupport
+  AccountIssue
+  Question
+  @@dynamic // Marked as @@dynamic.
+}
+
+// Function that returns a dynamic enum.
+function ClassifyMessage(message: string) -> Category {
+  // Prompt
+}
+
+test ReturnDynamicEnumTest {
+  functions [ClassifyMessage]
+  type_builder {
+    // Injects new variants into the `@@dynamic` part of the Category enum.
+    dynamic Category {
+      Feedback
+    }
+  }
+  args {
+	  message "I think the product is great!"
+  }
+}
+```
+
+The `Feedback` variant will be rendered in the prompt for `ClassifyMessage`
+during the test execution.
+
+#### Testing parameter types
+
+When a dynamic type is used as an input parameter of a function, we can simply
+pass any value in the `args` block of the test and the value will be rendered in
+the prompt.
+
+##### Dynamic classes
+
+```baml {4, 17-24}
+class Resume {
+  name string
+  skills string[]
+  @@dynamic // Marked as @@dynamic.
+}
+
+function WriteResume(resume: Resume) -> string {
+  // Prompt
+}
+
+test DynamicClassAsInputTest {
+  functions [WriteResume]
+  args {
+    resume {
+      name "John Doe"
+      skills ["C++", "Java"]
+      experience [
+        {
+          title "Software Engineer"
+          company "Boundary"
+          start_date "2023-09-01"
+          end_date "2024-09-01"
+        }
+      ]
+    }  
+  }
+}
+```
+
+##### Dynamic enums
+
+Enums work the same way, any variant defined in the `args` block will be
+rendered normally.
+
+```baml {7, 17}
+enum Category {
+  Refund
+  CancelOrder
+  TechnicalSupport
+  AccountIssue
+  Question
+  @@dynamic // Marked as @@dynamic.
+}
+
+function WriteCustomerMessage(category: Category) -> string {
+  // Prompt
+}
+
+test DynamicEnumAsInputTest {
+  functions [WriteCustomerMessage]
+  args {
+    category Feedback // The enum is dynamic so it accepts a new variant.
+  }
+}
+```
+
+For more information about dynamic types, see [Type Builder](/ref/baml-client/type-builder).

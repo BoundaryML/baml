@@ -38,7 +38,7 @@ pub(super) fn match_string(
 
     // Grab context.
     let jsonish_string = match value {
-        jsonish::Value::String(s) => s.clone(),
+        jsonish::Value::String(s, _) => s.clone(),
         jsonish::Value::AnyOf(_, s) => {
             flags.add_flag(Flag::ObjectToString(value.clone()));
             s.clone()

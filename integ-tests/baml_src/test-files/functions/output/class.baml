@@ -1,5 +1,5 @@
 class TestOutputClass {
-  prop1 string
+  prop1 string @description("A long string with about 200 words")
   prop2 int
 }
 

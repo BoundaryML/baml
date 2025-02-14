@@ -36,8 +36,9 @@ pub(crate) fn parse_type_expression_block(
                 if sub_type.is_none() {
                     // First identifier is the type of block (e.g. class, enum).
                     match current.as_str() {
-                        "class" => sub_type = Some(SubType::Class.clone()),
-                        "enum" => sub_type = Some(SubType::Enum.clone()),
+                        "class" => sub_type = Some(SubType::Class),
+                        "enum" => sub_type = Some(SubType::Enum),
+                        "dynamic" => sub_type = Some(SubType::Dynamic),
 
                         // Report this as an error, otherwise the syntax will be
                         // correct but the type will not be registered and the
@@ -79,6 +80,7 @@ pub(crate) fn parse_type_expression_block(
                                 sub_type.clone().map(|st| match st {
                                     SubType::Enum => "Enum",
                                     SubType::Class => "Class",
+                                    SubType::Dynamic => "Dynamic",
                                     SubType::Other(_) => "Other",
                                 }).unwrap_or(""),
                                 item,
@@ -87,11 +89,9 @@ pub(crate) fn parse_type_expression_block(
                                 sub_type_is_enum,
                             );
                             match sub_type_expression {
-                                    Ok(field) => {
-                                        fields.push(field);
-                                    },
-                                    Err(err) => diagnostics.push_error(err),
-                                }
+                                Ok(field) => fields.push(field),
+                                Err(err) => diagnostics.push_error(err),
+                            }
                         }
                         Rule::comment_block => pending_field_comment = Some(item),
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
@@ -123,6 +123,7 @@ pub(crate) fn parse_type_expression_block(
             sub_type: sub_type
                 .clone()
                 .unwrap_or(SubType::Other("Subtype not found".to_string())),
+            is_dynamic_type_def: matches!(sub_type, Some(SubType::Dynamic)),
         },
         _ => panic!("Encountered impossible type_expression declaration during parsing",),
     }

@@ -1,3 +1,4 @@
 **/baml_client/inlinedbaml.py binary
 **/baml_client/inlinedbaml.ts binary
 **/baml_client/inlined.rb binary
+**/baml_client/** merge=baml_client

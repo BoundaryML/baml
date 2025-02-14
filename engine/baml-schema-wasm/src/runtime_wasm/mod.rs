@@ -11,6 +11,8 @@ use baml_runtime::RenderCurlSettings;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
+use baml_types::BamlValueWithMeta;
+use baml_types::ResponseCheck;
 use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
 use indexmap::IndexMap;
 use internal_baml_codegen::version_check::GeneratorType;
@@ -23,6 +25,7 @@ use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
 use itertools::join;
 use js_sys::Promise;
 use js_sys::Uint8Array;
+use jsonish::ResponseBamlValue;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -485,7 +488,7 @@ impl WasmFunctionResponse {
     pub fn parsed_response(&self) -> Option<String> {
         self.function_response
             .result_with_constraints_content()
-            .map(|p| serde_json::to_string(&BamlValue::from(p)))
+            .map(|p| serde_json::to_string(&p.serialize_partial()))
             .map_or_else(|_| None, |s| s.ok())
     }
 
@@ -507,83 +510,24 @@ impl WasmFunctionResponse {
     }
 }
 
-// TODO: What is supposed to happen with the serialized baml_value?
-// That value has checks nested inside. Are they meant to be removed
-// during flattening? Or duplicated into the top-level list of checks?
-fn flatten_checks(value: &BamlValueWithFlags) -> (serde_json::Value, usize) {
-    // // Note: (Greg) depending on the goal of this function, we may be able
-    // // to replace most of it like this:
-    // let value_with_meta: BamlValueWithMeta<Vec<ResponseCheck>> = parsed_value_to_response(value);
-    // let n_checks: usize = value_with_meta.iter().map(|node| node.meta().len()).sum();
-    // let bare_baml_value: BamlValue = value_with_meta.into();
-    // let json_value: serde_json::Value = serde_json::to_value(bare_baml_value).unwrap_or(
-    //     "Error converting value to JSON".into()
-    // );
-
+fn serialize_value_counting_checks(value: &ResponseBamlValue) -> (serde_json::Value, usize) {
     type J = serde_json::Value;
 
     let checks = value
-        .conditions()
-        .flags()
+        .0
+        .meta()
+        .1
         .iter()
-        .flat_map(|f| match f {
-            Flag::ConstraintResults(c) => c
-                .iter()
-                .map(|(label, _expr, b)| (label.clone(), *b))
-                .collect::<Vec<_>>(),
-            _ => vec![],
-        })
-        .collect::<IndexMap<_, _>>();
+        .map(|ResponseCheck { name, status, .. }| (name.clone(), status.clone()))
+        .collect::<IndexMap<String, String>>();
 
-    let (retval, sub_check_count) = match value {
-        BamlValueWithFlags::String(s) => (J::String(s.value.clone()), 0),
-        BamlValueWithFlags::Int(i) => (i.value.into(), 0),
-        BamlValueWithFlags::Float(f) => (f.value.into(), 0),
-        BamlValueWithFlags::Bool(b) => (J::Bool(b.value), 0),
-        BamlValueWithFlags::List(_, v) => {
-            let (values, counts): (Vec<_>, Vec<_>) = v.iter().map(|e| flatten_checks(e)).unzip();
-            (J::Array(values), counts.iter().sum())
-        }
-        BamlValueWithFlags::Map(_, m) => {
-            let (values, counts): (serde_json::Map<String, J>, Vec<_>) = m
-                .iter()
-                .map(|(k, (_, v))| {
-                    let (value, count) = flatten_checks(v);
-                    ((k.clone(), value), count)
-                })
-                .unzip();
-            (J::Object(values), counts.iter().sum())
-        }
-        BamlValueWithFlags::Enum(_, v) => (J::String(v.value.clone()), 0),
-        BamlValueWithFlags::Class(_, _, m) => {
-            let (values, counts): (serde_json::Map<String, J>, Vec<_>) = m
-                .iter()
-                .map(|(k, v)| {
-                    let (value, count) = flatten_checks(v);
-                    ((k.clone(), value), count)
-                })
-                .unzip();
-            (J::Object(values), counts.iter().sum())
-        }
-        BamlValueWithFlags::Null(_) => (J::Null, 0),
-        BamlValueWithFlags::Media(_) => (
-            serde_json::Value::String("media type not supported".to_string()),
-            0,
-        ),
-    };
+    let sub_check_count: usize = value.0.iter().map(|node| node.meta().1.len()).sum();
+    let json_value: serde_json::Value = serde_json::to_value(value.serialize_final())
+        .unwrap_or("Error converting value to JSON".into());
 
     let check_count = checks.len() + sub_check_count;
 
-    let final_value = if checks.is_empty() {
-        retval
-    } else {
-        json!({
-            "value": retval,
-            "checks": checks,
-        })
-    };
-
-    (final_value, check_count)
+    (json_value, check_count)
 }
 
 #[wasm_bindgen]
@@ -617,14 +561,20 @@ impl WasmTestResponse {
     }
 
     fn parsed_response_impl(&self) -> anyhow::Result<WasmParsedTestResponse> {
-        let parsed_response = self
+        let maybe_parsed_response = &self
             .test_response
             .as_ref()
             .ok()
             .context("No test response")?
             .function_response
-            .parsed_content()?;
-        let (flattened_checks, check_count) = flatten_checks(&parsed_response);
+            .parsed()
+            .as_ref();
+        let parsed_response = match maybe_parsed_response {
+            Some(Ok(value)) => Ok(value),
+            _ => Err(anyhow::anyhow!("No parsed value")),
+        }
+        .context("No parsed value")?;
+        let (flattened_checks, check_count) = serialize_value_counting_checks(&parsed_response);
         Ok(WasmParsedTestResponse {
             value: serde_json::to_string(&flattened_checks)?,
             check_count,
@@ -798,6 +748,9 @@ impl WithRenderError for baml_runtime::TestFailReason<'_> {
                         baml_runtime::errors::ExposedError::FinishReasonError {
                             message, ..
                         } => Some(message.clone()),
+                        baml_runtime::errors::ExposedError::ClientHttpError {
+                            message, ..
+                        } => Some(message.clone()),
                     },
                     None => Some(format!("{e:#}")),
                 }
@@ -927,7 +880,7 @@ fn get_dummy_value(
             Some(format!("({},)", dummy))
         }
         baml_runtime::FieldType::Optional(_) => None,
-        baml_runtime::FieldType::Constrained { base, .. } => {
+        baml_runtime::FieldType::WithMetadata { base, .. } => {
             get_dummy_value(indent, allow_multiline, base)
         }
     }
@@ -1557,13 +1510,20 @@ impl WasmFunction {
         wasm_call_context: &WasmCallContext,
         get_baml_src_cb: js_sys::Function,
     ) -> JsResult<WasmPrompt> {
-        let ctx = rt
+        let context_manager = rt.runtime.create_ctx_manager(
+            BamlValue::String("wasm".to_string()),
+            js_fn_to_baml_src_reader(get_baml_src_cb),
+        );
+
+        let test_type_builder = rt
             .runtime
-            .create_ctx_manager(
-                BamlValue::String("wasm".to_string()),
-                js_fn_to_baml_src_reader(get_baml_src_cb),
-            )
-            .create_ctx_with_default();
+            .internal()
+            .get_test_type_builder(&self.name, &test_name, &context_manager)
+            .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
+
+        let ctx = context_manager
+            .create_ctx(test_type_builder.as_ref(), None)
+            .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt
             .runtime
@@ -1603,13 +1563,20 @@ impl WasmFunction {
         expand_images: bool,
         get_baml_src_cb: js_sys::Function,
     ) -> Result<String, wasm_bindgen::JsError> {
-        let ctx = rt
+        let context_manager = rt.runtime.create_ctx_manager(
+            BamlValue::String("wasm".to_string()),
+            js_fn_to_baml_src_reader(get_baml_src_cb),
+        );
+
+        let test_type_builder = rt
             .runtime
-            .create_ctx_manager(
-                BamlValue::String("wasm".to_string()),
-                js_fn_to_baml_src_reader(get_baml_src_cb),
-            )
-            .create_ctx_with_default();
+            .internal()
+            .get_test_type_builder(&self.name, &test_name, &context_manager)
+            .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
+
+        let ctx = context_manager
+            .create_ctx(test_type_builder.as_ref(), None)
+            .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt
             .runtime
@@ -1639,6 +1606,7 @@ impl WasmFunction {
                 RenderCurlSettings {
                     stream,
                     as_shell_commands: !expand_images,
+                    expose_secrets: false,
                 },
                 wasm_call_context.node_index,
             )

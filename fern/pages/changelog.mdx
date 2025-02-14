@@ -4,6 +4,74 @@ title: Changelog
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.75.0](https://github.com/boundaryml/baml/compare/0.74.0..0.75.0) - 2025-02-06
+
+### Features
+
+- Implement tests for dynamic types (#1343) - ([7f852d0](https://github.com/boundaryml/baml/commit/7f852d02892637b3a6e9637e59b26c2ec822e626)) - Antonio Sarosi
+
+### Bug Fixes
+
+- issue with o1 models not accepting max_tokens (#1410) - ([3831243](https://github.com/boundaryml/baml/commit/383124339dd71a5097f61a75b2e5c7121f5e9a8d)) - Chris Watts
+- Fix panic when recursive type alias is used as class field (#1399) - ([f36f80c](https://github.com/boundaryml/baml/commit/f36f80c7d1f8fa4d5b4f52baaac3772cd054f8cf)) - Antonio Sarosi
+- Fix infinite cycles in client fallbacks (#1401) - ([7b7eec0](https://github.com/boundaryml/baml/commit/7b7eec01412e52429f447c7edebfead7f96e2601)) - Antonio Sarosi
+- Fix panic when using type alias that points to enum (#1407) - ([8994ba6](https://github.com/boundaryml/baml/commit/8994ba6011c70d22e5d9852c0e15b54b683addbb)) - Antonio Sarosi
+- Track Pending fields in Semantic Streaming (#1411) - ([026bc21](https://github.com/boundaryml/baml/commit/026bc21c4b9d5c687c413342a202b6b09f5504b0)) - Greg Hale
+- In prompt rendering, recurse into recursive type alias unions (#1416) - ([a648559](https://github.com/boundaryml/baml/commit/a6485597c0e44c9b44ba9fc89dbe423b3dd9b61e)) - Antonio Sarosi
+
+### Documentation
+
+- fix typos in root README.md (#1402) - ([cc132ad](https://github.com/boundaryml/baml/commit/cc132ad2d035df42b67ef37f1c696b496e08a4ca)) - Prashanth Rao
+- Update pydantic.mdx (#1398) - ([6c3df5a](https://github.com/boundaryml/baml/commit/6c3df5abfe88f7787256d31cf922b3c7580f9346)) - hellovai
+- Update README.md (#1409) - ([207114e](https://github.com/boundaryml/baml/commit/207114e8e4dc1f5964ff98e55b2258cf80619a26)) - aaronvg
+- Add docs for dynamic types tests (#1307) - ([9c068e0](https://github.com/boundaryml/baml/commit/9c068e06475aaa7ab1caffdc569e181c4f3bd0af)) - Antonio Sarosi
+
+
+## [0.74.0](https://github.com/boundaryml/baml/compare/0.73.5..0.74.0) - 2025-01-30
+
+### Features
+
+- Add dark mode to docs (#1382) - ([c684e2d](https://github.com/boundaryml/baml/commit/c684e2d2d35fd9d62e2aae01b4025e5302c3740b)) - Chris Watts
+- dedent strings parsed within triple quote blocks (#1395) - ([8ce04a9](https://github.com/boundaryml/baml/commit/8ce04a951ef9ac7dc2eab934c8163af2440b52bb)) - hellovai
+- Update README with better details (#1380) - ([02d1950](https://github.com/boundaryml/baml/commit/02d19503759986c0dba3b022afb03f45a52c31ad)) - hellovai
+- Semantic Streaming (#1293) - ([e30bdd5](https://github.com/boundaryml/baml/commit/e30bdd526910f11a6a9057cc4df90cf302939666)) - Greg Hale
+
+  
+### Bugfixes
+- Drop unnecessary jsonwebtoken dep in wasm build (#1381) - ([7b85c71](https://github.com/boundaryml/baml/commit/7b85c715e07be8f908ee114c50b85bd784cf567b)) - Greg Hale
+- Removing broken links (#1388) - ([e4b0b5b](https://github.com/boundaryml/baml/commit/e4b0b5ba390d3449247bfebb1f24013df69b6068)) - hellovai
+- Reduce JS client memory usage considerably during streaming (#1390) - ([3165e0f](https://github.com/boundaryml/baml/commit/3165e0f3126d94691bdd1e0a1411ee6de8ed0dea)) - aaronvg
+- Fix issue with semantic-streaming on unions of classes (#1393) - ([39b499d](https://github.com/boundaryml/baml/commit/39b499de396973bc1d1da991079a8d587cb29d75)) - Greg Hale
+- Fix issue where output panel pops open in cursor (#1394) - ([5fd5c46](https://github.com/boundaryml/baml/commit/5fd5c4672887050db533bda4c6f0f46b7ef18644)) - hellovai
+
+
+## [0.73.5](https://github.com/boundaryml/baml/compare/0.73.4..0.73.5) - 2025-01-27
+
+
+### Bugfixes
+- Fix Google AI system prompt JSON (#1374) - ([fe366fe](https://github.com/boundaryml/baml/commit/fe366fe4036b2c9d6863a0d3246df2526bdcb3a4)) - Antonio Sarosi
+- show token usage in the playground card view (#1376) - ([0500a87](https://github.com/boundaryml/baml/commit/0500a87d98c6198807a04268f23a436fb260bec3)) - aaronvg
+- Bump version to 0.73.5 - ([a32aebf](https://github.com/boundaryml/baml/commit/a32aebf51d0f6b5471fe884fa8a0da21aa45c753)) - Aaron Villalpando
+
+## [0.73.4](https://github.com/boundaryml/baml/compare/0.73.3..0.73.4) - 2025-01-22
+Fix another issue where playground could rerender over and over
+
+## [0.73.3](https://github.com/boundaryml/baml/compare/0.73.2..0.73.3) - 2025-01-22
+Fix issue where playground could rerender over and over
+
+### Bug Fixes
+
+- fix rerendering of component causing performance issue in the playground (#1368)
+
+## [0.73.2](https://github.com/boundaryml/baml/compare/0.73.1..0.73.2) - 2025-01-22
+
+
+### Bugfixes
+- Gemini should use system message (#1364) - ([b29fb18](https://github.com/boundaryml/baml/commit/b29fb18386634e6e75cc9149b09592889619ba22)) - hellovai
+- Add more explanations to the tool use doc (#1324) - ([bf048a6](https://github.com/boundaryml/baml/commit/bf048a6871f4073807ce1acbe39a411ace42406e)) - Ben Epstein
+- Improve playground performance in vscode (#1366) - ([ba2b0f1](https://github.com/boundaryml/baml/commit/ba2b0f17f8db321705f8c037c6ede5e6a34e2590)) - aaronvg
+- Bump version to 0.73.2 - ([a877ca9](https://github.com/boundaryml/baml/commit/a877ca9b35ec7d643f80c1225d8de4b1b244486f)) - Aaron Villalpando
+
 ## [0.73.1](https://github.com/boundaryml/baml/compare/0.73.0..0.73.1) - 2025-01-22
 
 ## High-level Overview
@@ -52,12 +120,6 @@ See below for what we fixed and improved across all parts of BAML
 - Fix field type parsing (#1349) - ([d08445f](https://github.com/boundaryml/baml/commit/d08445f6ffcafcdf0758cff398c14ffa4f14d311)) - hellovai
 - Fix syntax highlighting for @@assert expressions with commas (#1357) - ([e5d595e](https://github.com/boundaryml/baml/commit/e5d595e311088574f4bbf94ddf95feb9abf727c9)) - aaronvg
 
-
-# Changelog
-
-<info>BAML generally gets an update every Monday.</info>
-
-All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ## [0.72.0](https://github.com/boundaryml/baml/compare/0.71.1..0.71.2) - 2025-01-07
 

@@ -2,9 +2,8 @@ use anyhow::Result;
 use std::collections::HashSet;
 
 use baml_types::{GetEnvVar, StringOr};
-use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub enum ClientSpec {
     Named(String),
     /// Shorthand for "<provider>/<model>"
@@ -30,7 +29,7 @@ impl ClientSpec {
 }
 
 /// The provider for the client, e.g. baml-openai-chat
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClientProvider {
     /// The OpenAI client provider variant
     OpenAI(OpenAIClientProviderVariant),
@@ -47,7 +46,7 @@ pub enum ClientProvider {
 }
 
 /// The OpenAI client provider variant
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OpenAIClientProviderVariant {
     /// The base OpenAI client provider variant
     Base,
@@ -60,7 +59,7 @@ pub enum OpenAIClientProviderVariant {
 }
 
 /// The strategy client provider variant
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StrategyClientProvider {
     /// The round-robin strategy client provider variant
     RoundRobin,

@@ -3,7 +3,7 @@ pub mod api_wrapper;
 use crate::on_log_event::LogEventCallbackSync;
 use crate::InnerTraceStats;
 use anyhow::{Context, Result};
-use baml_types::{BamlMap, BamlMediaType, BamlValue};
+use baml_types::{BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta};
 use cfg_if::cfg_if;
 use colored::{ColoredString, Colorize};
 use internal_baml_jinja::RenderedPrompt;
@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
+use jsonish::ResponseBamlValue;
 
 use crate::{
     client_registry::ClientRegistry, internal::llm_client::LLMResponse,
@@ -125,9 +126,9 @@ impl Visualize for FunctionResult {
             Some(Ok(val)) => {
                 s.push(format!(
                     "{}",
-                    format!("---Parsed Response ({})---", val.r#type()).blue()
+                    format!("---Parsed Response ({})---", val.0.r#type()).blue()
                 ));
-                let json_str = serde_json::to_string_pretty(&val).unwrap();
+                let json_str = serde_json::to_string_pretty(&val.serialize_final()).unwrap();
                 s.push(truncate_string(&json_str, max_chunk_size).to_string());
             }
             Some(Err(e)) => {
@@ -501,12 +502,12 @@ impl BamlTracer {
                     .result_with_constraints()
                     .as_ref()
                     .and_then(|r| r.as_ref().ok())
-                    .map(|v| v.r#type().to_string()),
+                    .map(|v| v.0.r#type().to_string()),
                 parsed_response: response
                     .result_with_constraints()
                     .as_ref()
                     .and_then(|r| r.as_ref().ok())
-                    .map(|v| serde_json::to_string(v).unwrap_or_default()),
+                    .map(|v| serde_json::to_string(&v.serialize_final()).unwrap_or_default()),
                 error,
             },
             LLMResponse::LLMFailure(err) => BamlEventJson {
@@ -830,7 +831,7 @@ impl ToLogSchema for FunctionResult {
                     .as_ref()
                     .and_then(|r| r.as_ref().ok())
                     .map(|r| {
-                        let v: BamlValue = r.into();
+                        let v: BamlValue = r.0.clone().into();
                         IOValue::from(&v)
                     }),
             },
@@ -846,7 +847,7 @@ impl From<&FunctionResult> for MetadataType {
             result
                 .event_chain()
                 .iter()
-                .map(|(_, r, _, _)| r.into())
+                .map(|(_, r, _)| r.into())
                 .collect::<Vec<_>>(),
         )
     }

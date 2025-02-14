@@ -1,3 +1,6 @@
+use crate::internal::llm_client::ErrorCode;
+
+#[derive(Clone)]
 pub enum ExposedError {
     /// Error in parsing post calling the LLM
     ValidationError {
@@ -10,6 +13,11 @@ pub enum ExposedError {
         raw_output: String,
         message: String,
         finish_reason: Option<String>,
+    },
+    ClientHttpError {
+        client_name: String,
+        message: String,
+        status_code: ErrorCode,
     },
 }
 
@@ -43,6 +51,13 @@ impl std::fmt::Display for ExposedError {
                     raw_output,
                     finish_reason.as_ref().map_or("<none>", |f| f.as_str())
                 )
+            }
+            ExposedError::ClientHttpError {
+                client_name,
+                message,
+                status_code,
+            } => {
+                write!(f, "LLM client \"{}\" failed with status code: {}\nMessage: {}", client_name, status_code, message)
             }
         }
     }

@@ -40,7 +40,7 @@ You can use this to modify the `headers` and `base_url` for example.
 
 <ParamField path="base_url" type="string">
   The base URL for the API.
-  
+
   **Default: `https://api.openai.com/v1`**
 </ParamField>
 
@@ -74,6 +74,26 @@ client<llm> MyClient {
 
 ## Provider request parameters
 These are other parameters that are passed through to the provider, without modification by BAML. For example if the request has a `temperature` field, you can define it in the client here so every call has that set.
+
+<Warning>
+  For reasoning models (like `o1` or `o1-mini`), you must use `max_completion_tokens` instead of `max_tokens`.
+  Please set `max_tokens` to `null` in order to get this to work.
+
+  See the [OpenAI API documentation](https://platform.openai.com/docs/api-reference/chat/create#chat-create-max_completion_tokens) and [OpenAI Reasoning Docs](https://platform.openai.com/docs/guides/reasoning#controlling-costs) for more details about token handling.
+
+  Example:
+
+  ```baml BAML
+  client<llm> OpenAIo1 {
+    provider openai
+    options {
+      model "o1-mini"
+      max_tokens null
+    }
+  }
+  ```
+</Warning>
+
 
 Consult the specific provider's documentation for more information.
 

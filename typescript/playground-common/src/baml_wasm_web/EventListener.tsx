@@ -106,8 +106,10 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
       setOrchestratorIndex(0)
     }
   }, [selectedFunc])
+  console.log('selectedFunc', selectedFunc)
 
   useEffect(() => {
+    console.log('adding event listener')
     const fn = (
       event: MessageEvent<
         | {

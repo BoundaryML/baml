@@ -53,7 +53,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
       }
 
       if (event.isOk()) {
-        yield this.partialCoerce(event.parsed())
+        yield this.partialCoerce(event.parsed(true))
       }
     }
   }
@@ -61,6 +61,6 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
   async getFinalResponse(): Promise<FinalOutputType> {
     const final = await this.driveToCompletionInBg()
 
-    return this.finalCoerce(final.parsed())
+    return this.finalCoerce(final.parsed(false))
   }
 }

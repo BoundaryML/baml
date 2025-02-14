@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::Result;
 
-use baml_types::{GetEnvVar, StringOr, UnresolvedValue};
+use baml_types::{ApiKeyWithProvenance, GetEnvVar, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
@@ -54,7 +54,7 @@ impl<Meta> UnresolvedOpenAI<Meta> {
 
 pub struct ResolvedOpenAI {
     pub base_url: String,
-    pub api_key: Option<String>,
+    pub api_key: Option<ApiKeyWithProvenance>,
     role_selection: RolesSelection,
     pub allowed_metadata: AllowedRoleMetadata,
     supported_request_modes: SupportedRequestModes,
@@ -166,7 +166,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         let api_key = self
             .api_key
             .as_ref()
-            .map(|key| key.resolve(ctx))
+            .map(|key| key.resolve_api_key(ctx))
             .transpose()?;
 
         let role_selection = self.role_selection.resolve(ctx)?;
@@ -184,15 +184,23 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
                 .map(|(k, (_, v))| Ok((k.clone(), v.resolve_serde::<serde_json::Value>(ctx)?)))
                 .collect::<Result<IndexMap<_, _>>>()?;
 
-            // TODO(vbv): Only do this for azure
+            // Set default max_tokens for Azure OpenAI if:
+            // 1. It's an Azure client
+            // 2. max_completion_tokens is not set
+            // 3. max_tokens is not present
             if matches!(
                 provider,
                 crate::ClientProvider::OpenAI(crate::OpenAIClientProviderVariant::Azure)
             ) {
-                properties
-                    .entry("max_tokens".into())
-                    .or_insert(serde_json::json!(4096));
+                if !properties.contains_key("max_completion_tokens")
+                    && !properties.contains_key("max_tokens")
+                {
+                    properties.insert("max_tokens".into(), serde_json::json!(4096));
+                } else if properties.get("max_tokens").map_or(false, |v| v.is_null()) {
+                    properties.shift_remove("max_tokens");
+                }
             }
+
             properties
         };
 

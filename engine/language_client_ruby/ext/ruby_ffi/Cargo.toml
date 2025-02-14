@@ -17,6 +17,7 @@ base64.workspace = true
 env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true
+jsonish = { path = "../../../baml-lib/jsonish" }
 log.workspace = true
 magnus = { version = "0.7.1", features = ["rb-sys"] }
 # Must be kept in sync with ../../Gemfile

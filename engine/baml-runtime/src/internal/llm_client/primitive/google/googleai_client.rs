@@ -30,6 +30,7 @@ use internal_llm_client::google_ai::ResolvedGoogleAI;
 use internal_llm_client::{
     AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
 };
+use secrecy::ExposeSecret;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -268,6 +269,7 @@ impl RequestBuilder for GoogleAIClient {
         prompt: either::Either<&String, &[RenderedChatMessage]>,
         allow_proxy: bool,
         stream: bool,
+        expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder> {
         let mut should_stream = "generateContent";
         if stream {
@@ -293,7 +295,10 @@ impl RequestBuilder for GoogleAIClient {
             req = req.header(key, value);
         }
 
-        req = req.header("x-goog-api-key", self.properties.api_key.clone());
+        req = req.header(
+            "x-goog-api-key",
+            self.properties.api_key.render(expose_secrets),
+        );
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
@@ -403,11 +408,13 @@ impl ToProviderMessageExt for GoogleAIClient {
         if let Some(content) = first.first() {
             if content.role == "system" {
                 res.insert(
-                    "system_instructions".into(),
-                    json!(self.parts_to_message(&content.parts)?),
+                    "system_instruction".into(),
+                    json!({
+                        "parts": self.parts_to_message(&content.parts)?
+                    }),
                 );
                 res.insert(
-                    "messages".into(),
+                    "contents".into(),
                     others
                         .iter()
                         .map(|c| self.role_to_message(c))

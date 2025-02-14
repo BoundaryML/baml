@@ -2,6 +2,7 @@ use crate::internal::llm_client::{
     traits::{ToProviderMessage, ToProviderMessageExt, WithClientProperties},
     ResolveMediaUrls,
 };
+use secrecy::ExposeSecret;
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
@@ -322,6 +323,7 @@ impl RequestBuilder for AnthropicClient {
         prompt: either::Either<&String, &[RenderedChatMessage]>,
         allow_proxy: bool,
         stream: bool,
+        expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder> {
         let destination_url = if allow_proxy {
             self.properties
@@ -341,7 +343,8 @@ impl RequestBuilder for AnthropicClient {
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
         }
-        req = req.header("x-api-key", self.properties.api_key.clone());
+        let api_key = self.properties.api_key.render(expose_secrets);
+        req = req.header("x-api-key", api_key);
 
         if allow_proxy {
             req = req.header("baml-original-url", self.properties.base_url.as_str());

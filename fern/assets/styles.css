@@ -1,100 +1,221 @@
-.fern-sidebar-link-content {
-  padding-top: 0.4rem;
-  padding-bottom: 0.4rem;
+/* Root Variables */
+:root {
+  --background: #ffffff;
+  --text: #333333;
+  --accent-primary: #6025d1;
+  --border: #e2e8f0cc;
+  --sidebar-background: #ffffff;
+  --header-background: #ffffffb3;
+  --card-background: #ffffff;
+  --code-background: #f8f8f8;
+  --faded: #64748b;
+  --tag-primary: #f3f4f6;
 }
 
-.fern-sidebar-link-container {
-  min-height: 26px;
+.dark {
+  --background: #0b0d0e;
+  --text: #edededE6;
+  --accent-primary: #b794ff;
+  --border: #2e2e2ecc;
+  --sidebar-background: #0b0d0e;
+  --header-background: #0b0d0eb3;
+  --card-background: #0b0d0e;
+  --code-background: #2e2e2e;
+  --faded: #94a3b8;
+  --tag-primary: #1e293b;
 }
 
-.fern-prose code {
-  background-color: #f8f8f8;
-  /* font-weight: 600; */
+/* Base Text Colors */
+body, p, ul, h1, h2, h3, h4, h5, h6, span:not(a span) {
+  color: var(--text);
+}
+.dark body, .dark p, .dark ul, .dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6,
+.dark span:not(a span) {
+  color: rgba(237, 237, 237, 0.9);
 }
 
-.prose code {
-  background-color: #f8f8f8;
+/* Background Colors */
+.dark body {
+  background-color: var(--background) !important;
 }
 
-.fern-sidebar-link-container[data-state="active"] .fern-sidebar-link {
-  font-weight: 600;
-}
+/* Header Styling */
 .fern-header {
-  border: 0px;
+  background-color: var(--header-background) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-bottom: 1px solid var(--border) !important;
+  z-index: 50 !important;
+}
+.dark .fern-header {
+  background: rgba(11, 13, 14, 0.7) !important;
+  border-bottom: 1px solid rgba(46, 46, 46, 0.8) !important;
+}
+
+/* Header Tabs */
+.fern-header-tabs {
+  background: transparent !important;
+  border-bottom: 1px solid var(--border) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
 }
 .fern-header-tabs-list {
-  height: 28px;
-  font-size: 12px;
+  /* padding: 0 1rem !important; */
 }
-.fern-header-tabs {
-  height: 32px;
-  max-height: 36px;
-}
-
 .fern-header-tab-button > * {
   font-size: 12px;
-  /* color */
-  color: #333333;
+}
+.dark .fern-header-tab-button > * {
+  color: rgba(237, 237, 237, 0.9);
 }
 
-/* .fern-sidebar-container {
-  color: #000000;
-} */
-
-body .p {
-  font-size: 1rem !important;
+.fern-sidebar-container {
+  background:transparent !important;
 }
 
-p {
-  color: #333333;
+/* Sidebar Styling */
+.fern-sidebar {
+  background-color: var(--sidebar-background) !important;
+  border-right: 1px solid var(--border) !important;
+}
+.dark .fern-sidebar {
+  background: rgba(11, 13, 14, 0.7) !important;
+  border-right: 1px solid rgba(46, 46, 46, 0.8) !important;
 }
 
-fern-docs {
-  color: #333333;
+/* Sidebar Links and Icons */
+.fern-sidebar-link-container {
+  min-height: 26px !important;
+  /* padding: 0 1rem !important; */
 }
 
-ul {
-  color: #333333;
+.fern-sidebar-link-container[data-state="active"] {
+  background-color: var(--tag-primary) !important;
 }
 
-fern-button-text {
-  color: #ffffff;
+.fern-sidebar-link {
+  color: var(--text) !important;
+  text-decoration: none !important;
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  color: #333333;
+.fern-sidebar-link-content {
+  /* padding: 0.4rem 0 !important; */
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
 }
 
-.fern-sidebar-link-container:not([data-state="active"]) .fern-sidebar-link {
-  color: #333333;
+/* Icon styling */
+.fern-sidebar-icon .fa-icon {
+  width: 16px !important;
+  height: 16px !important;
+  background-color: var(--faded) !important;
 }
 
-span:not(a span) {
-  color: #333333;
+/* Active state text */
+.fern-sidebar-link-container[data-state="active"] .fern-sidebar-link {
+  color: var(--accent-primary) !important;
+  font-weight: 600 !important;
 }
 
-:root {
-  --accent-aaa: 139, 92, 246;
+/* Navigation */
+.fern-navigation {
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+  /* padding: 0.5rem 1rem !important; */
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8) !important;
+}
+.dark .fern-navigation {
+  background: rgba(11, 13, 14, 0.7) !important;
 }
 
+/* Content Area */
+.fern-content {
+  /* padding: 2rem; */
+  position: relative;
+  z-index: 1;
+  background-color: var(--background) !important;
+  color: var(--text) !important;
+}
+
+/* Links */
 .fern-mdx-link {
-  text-decoration-color: rgba(167, 139, 250, 1);
+  text-decoration-color: rgba(96, 37, 209, 1);
+  color: #6025d1 !important;
+}
+.dark .fern-mdx-link {
+  text-decoration-color: #b794ff;
+  color: #b794ff !important;
 }
 
-/* .fern-sidebar-group li {
-    margin-top: 0px !important;
-} */
+/* Discord Help Button */
+.fern-button.filled.primary {
+  background-color: #6025d1 !important;
+  transition: all 0.2s ease-in-out !important;
+}
+.fern-button.filled.primary:hover {
+  background-color: #7d47e3 !important;
+}
 
-/* .group\/sidebar {
-  z-index: 1000;
-  padding-top: 20px;
-} */
+/* Background Decoration */
+#fern-docs {
+  position: relative;
+  min-height: 100vh;
+}
+#fern-docs::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  height: 100vh;
+  pointer-events: none;
+  z-index: -1;
+  background: linear-gradient(180deg,
+    rgba(96, 37, 209, 0.15) 0%,
+    rgba(96, 37, 209, 0.05) 20%,
+    rgba(0, 0, 0, 0) 40%
+  );
+}
+.dark #fern-docs::before {
+  z-index: -1;
+  background: linear-gradient(180deg,
+    rgba(183, 148, 255, 0.15) 0%,
+    rgba(183, 148, 255, 0.05) 20%,
+    rgba(0, 0, 0, 0) 40%
+  );
+}
 
-/* .fern-search-bar {
-  margin-bottom: 10px;
-} */
+/* Pattern Overlay */
+#fern-docs::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.05;
+  background-size: 60px 60px;
+  mask-image: linear-gradient(to bottom, black 0%, transparent 40%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 40%);
+}
+
+/* Remove previous background decoration styles */
+.fern-content::before,
+.fern-content::after {
+  display: none;
+}
+
+/* Remove background from main since it's now on the root */
+.fern-main {
+  position: relative;
+  z-index: 1;
+}
+
+/* Navigation and Sidebar Styling */
+.fern-header-container {
+  background: transparent !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}

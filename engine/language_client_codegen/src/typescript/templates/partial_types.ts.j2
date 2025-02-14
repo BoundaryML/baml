@@ -1,0 +1,35 @@
+import { Image } from "@boundaryml/baml"
+
+import * as types from "./types"
+
+/******************************************************************************
+*
+*  These types are used for streaming, for when an instance of a type
+*  is still being built up and any of its fields is not yet fully available.
+*
+******************************************************************************/
+
+export interface StreamState<T> {
+    value: T
+    state: "Pending" | "Incomplete" | "Complete"
+}
+
+{# Partial classes (used for streaming) -#}
+{% for cls in partial_classes %}
+{%- if let Some(docstring) = cls.docstring %}
+{{docstring}}
+{%- endif %}
+export interface {{cls.name}} {
+    
+    {%- for (name, optional, type, m_docstring) in cls.fields %}
+    {%- if let Some(docstring) = m_docstring %}
+    {{ docstring }}
+    {%- endif %}
+    {{name}}{% if optional %}?{% endif%}: {{type}}
+    {%- endfor %}
+
+    {%- if cls.dynamic %}
+    [key: string]: any;
+    {%- endif %}
+}
+{% endfor %}

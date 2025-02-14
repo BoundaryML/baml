@@ -439,8 +439,12 @@ export function startServer(options?: LSOptions): void {
       //accesses project from uri via bamlProjectManager
       const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
       if (proj) {
-        //returns the definition of reference within the project
-        return proj.handleDefinitionRequest(doc, params.position)
+        try {
+          //returns the definition of reference within the project
+          return proj.handleDefinitionRequest(doc, params.position)
+        } catch (e) {
+          console.error(`Error occurred while generating definition:\n${e}`)
+        }
       }
     }
     return undefined

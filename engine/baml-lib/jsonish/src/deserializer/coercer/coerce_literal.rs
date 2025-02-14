@@ -3,6 +3,7 @@ use std::vec;
 use anyhow::Result;
 use baml_types::LiteralValue;
 use internal_baml_core::ir::FieldType;
+use internal_baml_jinja::CompletionOptions;
 
 use crate::{
     deserializer::{
@@ -48,14 +49,14 @@ impl TypeCoercer for LiteralValue {
         };
 
         // If we get an object with a single key-value pair, try to extract the value
-        if let jsonish::Value::Object(obj) = value {
+        if let jsonish::Value::Object(obj, completion_state) = value {
             if obj.len() == 1 {
                 let (key, inner_value) = obj.iter().next().unwrap();
                 // only extract value if it's a primitive (not an object or array, hoping to god its fixed)
                 match inner_value {
-                    jsonish::Value::Number(_) | jsonish::Value::Boolean(_) | jsonish::Value::String(_) => {
-                        let mut result = self.coerce(ctx, target, Some(inner_value))?;
-                        result.add_flag(Flag::ObjectToPrimitive(jsonish::Value::Object(obj.clone())));
+                    jsonish::Value::Number(_, _) | jsonish::Value::Boolean(_) | jsonish::Value::String(_, _) => {
+                        let mut result = self.coerce(ctx, target, Some(&inner_value))?;
+                        result.add_flag(Flag::ObjectToPrimitive(jsonish::Value::Object(obj.clone(), completion_state.clone())));
                         return Ok(result);
                     }
                     _ => {}
@@ -73,7 +74,7 @@ impl TypeCoercer for LiteralValue {
                 if coerced_int.value() == literal_int {
                     Ok(BamlValueWithFlags::Int(coerced_int))
                 } else {
-                    Err(ctx.error_unexpected_type(target, value))
+                    Err(ctx.error_unexpected_type(target, &value))
                 }
             }
 
@@ -86,7 +87,7 @@ impl TypeCoercer for LiteralValue {
                 if coerced_bool.value() == literal_bool {
                     Ok(BamlValueWithFlags::Bool(coerced_bool))
                 } else {
-                    Err(ctx.error_unexpected_type(target, value))
+                    Err(ctx.error_unexpected_type(target, &value))
                 }
             }
 

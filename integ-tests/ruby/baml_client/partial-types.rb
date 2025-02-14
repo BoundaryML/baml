@@ -20,6 +20,7 @@ require_relative "types"
 module Baml
   
   module PartialTypes
+    class AnotherObject < T::Struct; end
     class BigNumbers < T::Struct; end
     class BinaryNode < T::Struct; end
     class Blah < T::Struct; end
@@ -30,7 +31,10 @@ module Baml
     class ClassOptionalOutput < T::Struct; end
     class ClassOptionalOutput2 < T::Struct; end
     class ClassToRecAlias < T::Struct; end
+    class ClassWithBlockDone < T::Struct; end
     class ClassWithImage < T::Struct; end
+    class ClassWithoutDone < T::Struct; end
+    class ComplexMemoryObject < T::Struct; end
     class CompoundBigNumbers < T::Struct; end
     class ContactInfo < T::Struct; end
     class CustomTaskResult < T::Struct; end
@@ -65,6 +69,7 @@ module Baml
     class MalformedConstraints < T::Struct; end
     class MalformedConstraints2 < T::Struct; end
     class Martian < T::Struct; end
+    class MemoryObject < T::Struct; end
     class MergeAttrs < T::Struct; end
     class NamedArgsSingleClass < T::Struct; end
     class Nested < T::Struct; end
@@ -86,19 +91,40 @@ module Baml
     class ReceiptInfo < T::Struct; end
     class ReceiptItem < T::Struct; end
     class Recipe < T::Struct; end
+    class RecursiveAliasDependency < T::Struct; end
     class Resume < T::Struct; end
     class Schema < T::Struct; end
     class SearchParams < T::Struct; end
+    class SemanticContainer < T::Struct; end
+    class SimpleTag < T::Struct; end
+    class SmallThing < T::Struct; end
     class SomeClassNestedDynamic < T::Struct; end
     class StringToClassEntry < T::Struct; end
     class TestClassAlias < T::Struct; end
     class TestClassNested < T::Struct; end
     class TestClassWithEnum < T::Struct; end
+    class TestMemoryOutput < T::Struct; end
     class TestOutputClass < T::Struct; end
     class Tree < T::Struct; end
     class TwoStoriesOneTitle < T::Struct; end
     class UnionTest_ReturnType < T::Struct; end
     class WithReasoning < T::Struct; end
+    class AnotherObject < T::Struct
+      include Baml::Sorbet::Struct
+      const :id, T.nilable(String)
+      const :thingy2, T.nilable(String)
+      const :thingy3, T.nilable(String)
+
+      def initialize(props)
+        super(
+          id: props[:id],
+          thingy2: props[:thingy2],
+          thingy3: props[:thingy3],
+        )
+
+        @props = props
+      end
+    end
     class BigNumbers < T::Struct
       include Baml::Sorbet::Struct
       const :a, T.nilable(Integer)
@@ -116,8 +142,8 @@ module Baml
     class BinaryNode < T::Struct
       include Baml::Sorbet::Struct
       const :data, T.nilable(Integer)
-      const :left, Baml::PartialTypes::BinaryNode
-      const :right, Baml::PartialTypes::BinaryNode
+      const :left, T.nilable(Baml::PartialTypes::BinaryNode)
+      const :right, T.nilable(Baml::PartialTypes::BinaryNode)
 
       def initialize(props)
         super(
@@ -217,7 +243,7 @@ module Baml
       include Baml::Sorbet::Struct
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(String)
-      const :prop3, Baml::PartialTypes::Blah
+      const :prop3, T.nilable(Baml::PartialTypes::Blah)
 
       def initialize(props)
         super(
@@ -231,7 +257,7 @@ module Baml
     end
     class ClassToRecAlias < T::Struct
       include Baml::Sorbet::Struct
-      const :list, Baml::PartialTypes::LinkedListAliasNode
+      const :list, T.nilable(Baml::PartialTypes::LinkedListAliasNode)
 
       def initialize(props)
         super(
@@ -241,11 +267,25 @@ module Baml
         @props = props
       end
     end
+    class ClassWithBlockDone < T::Struct
+      include Baml::Sorbet::Struct
+      const :i_16_digits, T.nilable(Integer)
+      const :s_20_words, T.nilable(String)
+
+      def initialize(props)
+        super(
+          i_16_digits: props[:i_16_digits],
+          s_20_words: props[:s_20_words],
+        )
+
+        @props = props
+      end
+    end
     class ClassWithImage < T::Struct
       include Baml::Sorbet::Struct
       const :myImage, T.nilable(Baml::Image)
       const :param2, T.nilable(String)
-      const :fake_image, Baml::PartialTypes::FakeImage
+      const :fake_image, T.nilable(Baml::PartialTypes::FakeImage)
 
       def initialize(props)
         super(
@@ -257,11 +297,43 @@ module Baml
         @props = props
       end
     end
+    class ClassWithoutDone < T::Struct
+      include Baml::Sorbet::Struct
+      const :i_16_digits, T.nilable(Integer)
+      const :s_20_words, Baml::StreamState[T.nilable(String)]
+
+      def initialize(props)
+        super(
+          i_16_digits: props[:i_16_digits],
+          s_20_words: props[:s_20_words],
+        )
+
+        @props = props
+      end
+    end
+    class ComplexMemoryObject < T::Struct
+      include Baml::Sorbet::Struct
+      const :id, T.nilable(String)
+      const :name, T.nilable(String)
+      const :description, T.nilable(String)
+      const :metadata, T::Array[T.nilable(T.any(T.nilable(String), T.nilable(Integer), T.nilable(Float)))]
+
+      def initialize(props)
+        super(
+          id: props[:id],
+          name: props[:name],
+          description: props[:description],
+          metadata: props[:metadata],
+        )
+
+        @props = props
+      end
+    end
     class CompoundBigNumbers < T::Struct
       include Baml::Sorbet::Struct
-      const :big, Baml::PartialTypes::BigNumbers
-      const :big_nums, T::Array[Baml::PartialTypes::BigNumbers]
-      const :another, Baml::PartialTypes::BigNumbers
+      const :big, T.nilable(Baml::PartialTypes::BigNumbers)
+      const :big_nums, T::Array[T.nilable(Baml::PartialTypes::BigNumbers)]
+      const :another, T.nilable(Baml::PartialTypes::BigNumbers)
 
       def initialize(props)
         super(
@@ -275,8 +347,8 @@ module Baml
     end
     class ContactInfo < T::Struct
       include Baml::Sorbet::Struct
-      const :primary, T.nilable(T.any(Baml::PartialTypes::PhoneNumber, Baml::PartialTypes::EmailAddress))
-      const :secondary, T.nilable(T.any(Baml::PartialTypes::PhoneNumber, Baml::PartialTypes::EmailAddress, T.nilable(NilClass)))
+      const :primary, T.nilable(T.any(T.nilable(Baml::PartialTypes::PhoneNumber), T.nilable(Baml::PartialTypes::EmailAddress)))
+      const :secondary, T.nilable(T.any(T.nilable(Baml::PartialTypes::PhoneNumber), T.nilable(Baml::PartialTypes::EmailAddress), T.nilable(NilClass)))
 
       def initialize(props)
         super(
@@ -289,9 +361,9 @@ module Baml
     end
     class CustomTaskResult < T::Struct
       include Baml::Sorbet::Struct
-      const :bookOrder, T.nilable(T.any(Baml::PartialTypes::BookOrder, T.nilable(NilClass)))
-      const :flightConfirmation, T.nilable(T.any(Baml::PartialTypes::FlightConfirmation, T.nilable(NilClass)))
-      const :groceryReceipt, T.nilable(T.any(Baml::PartialTypes::GroceryReceipt, T.nilable(NilClass)))
+      const :bookOrder, T.nilable(T.any(T.nilable(Baml::PartialTypes::BookOrder), T.nilable(NilClass)))
+      const :flightConfirmation, T.nilable(T.any(T.nilable(Baml::PartialTypes::FlightConfirmation), T.nilable(NilClass)))
+      const :groceryReceipt, T.nilable(T.any(T.nilable(Baml::PartialTypes::GroceryReceipt), T.nilable(NilClass)))
 
       def initialize(props)
         super(
@@ -342,7 +414,7 @@ module Baml
     class DynamicClassTwo < T::Struct
       include Baml::Sorbet::Struct
       const :hi, T.nilable(String)
-      const :some_class, Baml::PartialTypes::SomeClassNestedDynamic
+      const :some_class, T.nilable(Baml::PartialTypes::SomeClassNestedDynamic)
       const :status, T.nilable(Baml::Types::DynEnumOne)
 
       def initialize(props)
@@ -367,7 +439,7 @@ module Baml
     end
     class Earthling < T::Struct
       include Baml::Sorbet::Struct
-      const :age, Baml::Checked[T.nilable(Integer)]
+      const :age, T.nilable(Baml::Checked[Integer])
 
       def initialize(props)
         super(
@@ -477,9 +549,9 @@ module Baml
     end
     class FooAny < T::Struct
       include Baml::Sorbet::Struct
-      const :planetary_age, T.nilable(T.any(Baml::PartialTypes::Martian, Baml::PartialTypes::Earthling))
-      const :certainty, Baml::Checked[T.nilable(Integer)]
-      const :species, Baml::Checked[T.nilable(String)]
+      const :planetary_age, T.nilable(T.any(T.nilable(Baml::PartialTypes::Martian), T.nilable(Baml::PartialTypes::Earthling)))
+      const :certainty, T.nilable(Baml::Checked[Integer])
+      const :species, T.nilable(Baml::Checked[String])
 
       def initialize(props)
         super(
@@ -493,7 +565,7 @@ module Baml
     end
     class Forest < T::Struct
       include Baml::Sorbet::Struct
-      const :trees, T::Array[Baml::PartialTypes::Tree]
+      const :trees, T::Array[T.nilable(Baml::PartialTypes::Tree)]
 
       def initialize(props)
         super(
@@ -581,7 +653,7 @@ module Baml
       include Baml::Sorbet::Struct
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(String)
-      const :inner, Baml::PartialTypes::InnerClass2
+      const :inner, T.nilable(Baml::PartialTypes::InnerClass2)
 
       def initialize(props)
         super(
@@ -624,7 +696,7 @@ module Baml
     class InputClassNested < T::Struct
       include Baml::Sorbet::Struct
       const :key, T.nilable(String)
-      const :nested, Baml::PartialTypes::InputClass
+      const :nested, T.nilable(Baml::PartialTypes::InputClass)
 
       def initialize(props)
         super(
@@ -637,7 +709,7 @@ module Baml
     end
     class LinkedList < T::Struct
       include Baml::Sorbet::Struct
-      const :head, Baml::PartialTypes::Node
+      const :head, T.nilable(Baml::PartialTypes::Node)
       const :len, T.nilable(Integer)
 
       def initialize(props)
@@ -652,7 +724,7 @@ module Baml
     class LinkedListAliasNode < T::Struct
       include Baml::Sorbet::Struct
       const :value, T.nilable(Integer)
-      const :next, Baml::PartialTypes::LinkedListAliasNode
+      const :next, T.nilable(Baml::PartialTypes::LinkedListAliasNode)
 
       def initialize(props)
         super(
@@ -701,7 +773,7 @@ module Baml
     end
     class MalformedConstraints < T::Struct
       include Baml::Sorbet::Struct
-      const :foo, Baml::Checked[T.nilable(Integer)]
+      const :foo, T.nilable(Baml::Checked[Integer])
 
       def initialize(props)
         super(
@@ -729,7 +801,7 @@ module Baml
       include Baml::Sorbet::Struct
       # The age of the Martian in Mars years.
       # So many Mars years.
-      const :age, Baml::Checked[T.nilable(Integer)]
+      const :age, T.nilable(Baml::Checked[Integer])
 
       def initialize(props)
         super(
@@ -739,9 +811,25 @@ module Baml
         @props = props
       end
     end
+    class MemoryObject < T::Struct
+      include Baml::Sorbet::Struct
+      const :id, T.nilable(String)
+      const :name, T.nilable(String)
+      const :description, T.nilable(String)
+
+      def initialize(props)
+        super(
+          id: props[:id],
+          name: props[:name],
+          description: props[:description],
+        )
+
+        @props = props
+      end
+    end
     class MergeAttrs < T::Struct
       include Baml::Sorbet::Struct
-      const :amount, Baml::Checked[T.nilable(Integer)]
+      const :amount, T.nilable(Baml::Checked[Integer])
 
       def initialize(props)
         super(
@@ -771,7 +859,7 @@ module Baml
       include Baml::Sorbet::Struct
       const :prop3, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
       const :prop4, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
-      const :prop20, Baml::PartialTypes::Nested2
+      const :prop20, T.nilable(Baml::PartialTypes::Nested2)
 
       def initialize(props)
         super(
@@ -799,7 +887,7 @@ module Baml
     end
     class NestedBlockConstraint < T::Struct
       include Baml::Sorbet::Struct
-      const :nbc, Baml::Checked[Baml::PartialTypes::BlockConstraint]
+      const :nbc, T.nilable(Baml::PartialTypes::BlockConstraint)
 
       def initialize(props)
         super(
@@ -811,7 +899,7 @@ module Baml
     end
     class NestedBlockConstraintForParam < T::Struct
       include Baml::Sorbet::Struct
-      const :nbcfp, Baml::PartialTypes::BlockConstraintForParam
+      const :nbcfp, T.nilable(Baml::PartialTypes::BlockConstraintForParam)
 
       def initialize(props)
         super(
@@ -824,7 +912,7 @@ module Baml
     class Node < T::Struct
       include Baml::Sorbet::Struct
       const :data, T.nilable(Integer)
-      const :next, Baml::PartialTypes::Node
+      const :next, T.nilable(Baml::PartialTypes::Node)
 
       def initialize(props)
         super(
@@ -838,7 +926,7 @@ module Baml
     class NodeWithAliasIndirection < T::Struct
       include Baml::Sorbet::Struct
       const :value, T.nilable(Integer)
-      const :next, Baml::PartialTypes::NodeWithAliasIndirection
+      const :next, T.nilable(Baml::PartialTypes::NodeWithAliasIndirection)
 
       def initialize(props)
         super(
@@ -879,7 +967,7 @@ module Baml
     end
     class OptionalTest_ReturnType < T::Struct
       include Baml::Sorbet::Struct
-      const :omega_1, Baml::PartialTypes::OptionalTest_Prop1
+      const :omega_1, T.nilable(Baml::PartialTypes::OptionalTest_Prop1)
       const :omega_2, T.nilable(String)
       const :omega_3, T::Array[T.nilable(Baml::Types::OptionalTest_CategoryType)]
 
@@ -976,7 +1064,7 @@ module Baml
     class RaysData < T::Struct
       include Baml::Sorbet::Struct
       const :dataType, T.nilable(Baml::Types::DataType)
-      const :value, T.nilable(T.any(Baml::PartialTypes::Resume, Baml::PartialTypes::Event))
+      const :value, T.nilable(T.any(T.nilable(Baml::PartialTypes::Resume), T.nilable(Baml::PartialTypes::Event)))
 
       def initialize(props)
         super(
@@ -989,7 +1077,7 @@ module Baml
     end
     class ReceiptInfo < T::Struct
       include Baml::Sorbet::Struct
-      const :items, T::Array[Baml::PartialTypes::ReceiptItem]
+      const :items, T::Array[T.nilable(Baml::PartialTypes::ReceiptItem)]
       const :total_cost, T.nilable(Float)
       const :venue, T.nilable(T.any(T.nilable(String), T.nilable(String)))
 
@@ -1023,7 +1111,7 @@ module Baml
     end
     class Recipe < T::Struct
       include Baml::Sorbet::Struct
-      const :ingredients, T::Hash[String, Baml::PartialTypes::Quantity]
+      const :ingredients, T::Hash[String, T.nilable(Baml::PartialTypes::Quantity)]
       const :recipe_type, T.nilable(T.any(T.nilable(String), T.nilable(String)))
 
       def initialize(props)
@@ -1035,12 +1123,24 @@ module Baml
         @props = props
       end
     end
+    class RecursiveAliasDependency < T::Struct
+      include Baml::Sorbet::Struct
+      const :value, T.anything
+
+      def initialize(props)
+        super(
+          value: props[:value],
+        )
+
+        @props = props
+      end
+    end
     class Resume < T::Struct
       include Baml::Sorbet::Struct
       const :name, T.nilable(String)
       const :email, T.nilable(String)
       const :phone, T.nilable(String)
-      const :experience, T::Array[Baml::PartialTypes::Education]
+      const :experience, T::Array[T.nilable(Baml::PartialTypes::Education)]
       const :education, T::Array[T.nilable(String)]
       const :skills, T::Array[T.nilable(String)]
 
@@ -1060,10 +1160,10 @@ module Baml
     class Schema < T::Struct
       include Baml::Sorbet::Struct
       const :prop1, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
-      const :prop2, T.nilable(T.any(Baml::PartialTypes::Nested, T.nilable(String)))
+      const :prop2, T.nilable(T.any(T.nilable(Baml::PartialTypes::Nested), T.nilable(String)))
       const :prop5, T::Array[T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))]
-      const :prop6, T.nilable(T.any(T.nilable(String), T::Array[Baml::PartialTypes::Nested]))
-      const :nested_attrs, T::Array[T.nilable(T.any(T.nilable(String), T.nilable(NilClass), Baml::PartialTypes::Nested))]
+      const :prop6, T.nilable(T.any(T.nilable(String), T::Array[T.nilable(Baml::PartialTypes::Nested)]))
+      const :nested_attrs, T::Array[T.nilable(T.any(T.nilable(String), T.nilable(NilClass), T.nilable(Baml::PartialTypes::Nested)))]
       const :parens, T.nilable(T.any(T.nilable(String), T.nilable(NilClass)))
       const :other_group, T.nilable(T.any(T.nilable(String), T.nilable(T.any(T.nilable(Integer), T.nilable(String)))))
 
@@ -1085,9 +1185,9 @@ module Baml
       include Baml::Sorbet::Struct
       const :dateRange, T.nilable(Integer)
       const :location, T::Array[T.nilable(String)]
-      const :jobTitle, Baml::PartialTypes::WithReasoning
-      const :company, Baml::PartialTypes::WithReasoning
-      const :description, T::Array[Baml::PartialTypes::WithReasoning]
+      const :jobTitle, T.nilable(Baml::PartialTypes::WithReasoning)
+      const :company, T.nilable(Baml::PartialTypes::WithReasoning)
+      const :description, T::Array[T.nilable(Baml::PartialTypes::WithReasoning)]
       const :tags, T::Array[T.nilable(T.any(T.nilable(Baml::Types::Tag), T.nilable(String)))]
 
       def initialize(props)
@@ -1098,6 +1198,58 @@ module Baml
           company: props[:company],
           description: props[:description],
           tags: props[:tags],
+        )
+
+        @props = props
+      end
+    end
+    class SemanticContainer < T::Struct
+      include Baml::Sorbet::Struct
+      const :sixteen_digit_number, T.nilable(Integer)
+      const :string_with_twenty_words, T.nilable(String)
+      const :class_1, T.nilable(Baml::PartialTypes::ClassWithoutDone)
+      const :class_2, T.nilable(Baml::Types::ClassWithBlockDone)
+      const :class_done_needed, Baml::Types::ClassWithBlockDone
+      const :class_needed, Baml::PartialTypes::ClassWithoutDone
+      const :three_small_things, T::Array[T.nilable(Baml::PartialTypes::SmallThing)]
+      const :final_string, T.nilable(String)
+
+      def initialize(props)
+        super(
+          sixteen_digit_number: props[:sixteen_digit_number],
+          string_with_twenty_words: props[:string_with_twenty_words],
+          class_1: props[:class_1],
+          class_2: props[:class_2],
+          class_done_needed: props[:class_done_needed],
+          class_needed: props[:class_needed],
+          three_small_things: props[:three_small_things],
+          final_string: props[:final_string],
+        )
+
+        @props = props
+      end
+    end
+    class SimpleTag < T::Struct
+      include Baml::Sorbet::Struct
+      const :field, T.nilable(String)
+
+      def initialize(props)
+        super(
+          field: props[:field],
+        )
+
+        @props = props
+      end
+    end
+    class SmallThing < T::Struct
+      include Baml::Sorbet::Struct
+      const :i_16_digits, Integer
+      const :i_8_digits, T.nilable(Integer)
+
+      def initialize(props)
+        super(
+          i_16_digits: props[:i_16_digits],
+          i_8_digits: props[:i_8_digits],
         )
 
         @props = props
@@ -1150,7 +1302,7 @@ module Baml
     class TestClassNested < T::Struct
       include Baml::Sorbet::Struct
       const :prop1, T.nilable(String)
-      const :prop2, Baml::PartialTypes::InnerClass
+      const :prop2, T.nilable(Baml::PartialTypes::InnerClass)
 
       def initialize(props)
         super(
@@ -1175,6 +1327,20 @@ module Baml
         @props = props
       end
     end
+    class TestMemoryOutput < T::Struct
+      include Baml::Sorbet::Struct
+      const :items, T::Array[T.nilable(T.any(T.nilable(Baml::PartialTypes::MemoryObject), T.nilable(Baml::PartialTypes::ComplexMemoryObject), T.nilable(Baml::PartialTypes::AnotherObject)))]
+      const :more_items, T::Array[T.nilable(T.any(T.nilable(Baml::PartialTypes::MemoryObject), T.nilable(Baml::PartialTypes::ComplexMemoryObject), T.nilable(Baml::PartialTypes::AnotherObject)))]
+
+      def initialize(props)
+        super(
+          items: props[:items],
+          more_items: props[:more_items],
+        )
+
+        @props = props
+      end
+    end
     class TestOutputClass < T::Struct
       include Baml::Sorbet::Struct
       const :prop1, T.nilable(String)
@@ -1192,7 +1358,7 @@ module Baml
     class Tree < T::Struct
       include Baml::Sorbet::Struct
       const :data, T.nilable(Integer)
-      const :children, Baml::PartialTypes::Forest
+      const :children, T.nilable(Baml::PartialTypes::Forest)
 
       def initialize(props)
         super(

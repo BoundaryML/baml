@@ -11,10 +11,10 @@ cd ..
 
 # Python Tests
 cd python
-poetry install
-poetry run maturin develop --manifest-path ../../engine/language_client_python/Cargo.toml
-poetry run baml-cli generate --from ../baml_src
-poetry run pytest
+uv sync
+uv run maturin develop --uv --manifest-path ../../engine/language_client_python/Cargo.toml
+uv run baml-cli generate --from ../baml_src
+uv run pytest
 cd ..
 
 # Ruby Tests

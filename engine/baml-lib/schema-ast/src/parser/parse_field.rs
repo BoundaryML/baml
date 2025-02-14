@@ -60,15 +60,20 @@ pub(crate) fn parse_value_expr(
     }
 }
 
+/// Sort all attributes on a field into either field attributes or type attributes.
+/// The name of the attribute fully determines whether it will be associated with
+/// the field, or with the type.
 fn reassociate_type_attributes(field_attributes: &mut Vec<Attribute>, field_type: &mut FieldType) {
     let mut all_attrs = field_type.attributes().to_owned();
     all_attrs.append(field_attributes);
-    let (attrs_for_type, attrs_for_field): (Vec<Attribute>, Vec<Attribute>) = all_attrs
+    let (attrs_for_type, attrs_for_field): (Vec<_>, Vec<_>) = all_attrs
         .into_iter()
-        .partition(|attr| ["assert", "check"].contains(&attr.name()));
-    field_type.set_attributes(attrs_for_type);
+        .partition(|attr| TYPE_ATTRIBUTE_NAMES.contains(&attr.name()));
+    field_type.set_attributes(attrs_for_type.clone());
     *field_attributes = attrs_for_field;
 }
+
+const TYPE_ATTRIBUTE_NAMES: [&str; 4] = ["assert", "check", "stream.done", "stream.with_state"];
 
 pub(crate) fn parse_type_expr(
     model_name: &Option<Identifier>,
@@ -96,7 +101,8 @@ pub(crate) fn parse_type_expr(
                 field_type = parse_field_type_chain(current, diagnostics);
             }
             Rule::field_attribute => {
-                field_attributes.push(parse_attribute(current, false, diagnostics))
+                let attribute = parse_attribute(current, false, diagnostics);
+                field_attributes.push(attribute);
             }
             _ => parsing_catch_all(current, "field"),
         }
@@ -477,6 +483,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn streaming_attributes() {
+        test_parse_baml_type! {
+            source: r#"int @stream.done @stream.not_null @stream.with_state"#,
+            target: FieldType::Primitive(
+                FieldArity::Required,
+                TypeValue::Int,
+                Span::fake(),
+                Some(vec![mk_bare_attribute("stream.done"), mk_bare_attribute("stream.not_null"), mk_bare_attribute("stream.with_state")])
+            ),
+        }
+    }
+
     // Convenience functions.
 
     fn mk_int(attrs: Option<Vec<Attribute>>) -> FieldType {
@@ -504,6 +523,17 @@ mod tests {
                 }],
             },
             span: Span::fake(),
+        }
+    }
+
+    fn mk_bare_attribute(value: &'static str) -> Attribute {
+        Attribute {
+            name: (value, Span::fake()).into(),
+            parenthesized: false,
+            arguments: ArgumentsList {
+                arguments: Vec::new()
+            },
+            span: Span::fake()
         }
     }
 }

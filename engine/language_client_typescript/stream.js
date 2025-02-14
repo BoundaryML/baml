@@ -49,13 +49,13 @@ class BamlStream {
                 break;
             }
             if (event.isOk()) {
-                yield this.partialCoerce(event.parsed());
+                yield this.partialCoerce(event.parsed(true));
             }
         }
     }
     async getFinalResponse() {
         const final = await this.driveToCompletionInBg();
-        return this.finalCoerce(final.parsed());
+        return this.finalCoerce(final.parsed(false));
     }
 }
 exports.BamlStream = BamlStream;

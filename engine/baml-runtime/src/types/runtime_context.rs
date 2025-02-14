@@ -56,6 +56,8 @@ pub struct RuntimeContext {
     pub client_overrides: Option<(Option<String>, HashMap<String, Arc<LLMProvider>>)>,
     pub class_override: IndexMap<String, RuntimeClassOverride>,
     pub enum_overrides: IndexMap<String, RuntimeEnumOverride>,
+    pub type_alias_overrides: IndexMap<String, FieldType>,
+    pub recursive_type_alias_overrides: Vec<IndexMap<String, FieldType>>,
 }
 
 impl RuntimeContext {
@@ -78,6 +80,8 @@ impl RuntimeContext {
         client_overrides: Option<(Option<String>, HashMap<String, Arc<LLMProvider>>)>,
         class_override: IndexMap<String, RuntimeClassOverride>,
         enum_overrides: IndexMap<String, RuntimeEnumOverride>,
+        type_alias_overrides: IndexMap<String, FieldType>,
+        recursive_type_alias_overrides: Vec<IndexMap<String, FieldType>>,
     ) -> RuntimeContext {
         RuntimeContext {
             baml_src,
@@ -86,6 +90,8 @@ impl RuntimeContext {
             client_overrides,
             class_override,
             enum_overrides,
+            type_alias_overrides,
+            recursive_type_alias_overrides,
         }
     }
 

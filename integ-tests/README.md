@@ -86,7 +86,7 @@ integ-tests/
 
 ### Language-Specific Requirements
 - **TypeScript**: [Node.js](https://nodejs.org/en/download) and [pnpm](https://pnpm.io/installation)
-- **Python**: [Python 3.8+](https://www.python.org/downloads/) and [Poetry](https://python-poetry.org/docs/#installation)
+- **Python**: [Python 3.8+](https://www.python.org/downloads/) and [uv](https://astral.sh/uv)
 - **Ruby**: [mise](https://mise.jdx.dev/getting-started.html) (via [Homebrew](https://brew.sh))
 
 ## Quick Start
@@ -116,9 +116,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 brew install node
 npm install -g pnpm
 
-# Install Python 3.8+ and Poetry (for Python tests)
+# Install Python 3.8+ and uv (for Python tests)
 brew install python@3.8
-curl -sSL https://install.python-poetry.org | python3 -
+brew install uv
 
 # Install mise for Ruby (for Ruby tests)
 brew install mise
@@ -188,19 +188,19 @@ b. **Using .env File (Recommended for open source contributors)**
       cd python
 
       # Install dependencies
-      poetry install
+      uv sync
 
       # Build the client library
-      poetry run maturin develop --manifest-path ../../engine/language_client_python/Cargo.toml
+      uv run maturin develop --manifest-path ../../engine/language_client_python/Cargo.toml
 
       # Generate the test code
-      poetry run baml-cli generate --from ../baml_src
+      uv run baml-cli generate --from ../baml_src
 
       # Run tests with Infisical (recommended)
-      infisical run --env=test -- poetry run pytest
+      infisical run --env=test -- uv run pytest
 
       # Or run tests with .env file
-      poetry run pytest
+      uv run pytest
       ```
 
    c. **Ruby**

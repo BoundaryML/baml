@@ -15,8 +15,10 @@ import {
   onLogEvent,
   AliasedEnum,
   MapKey,
+  ClassWithDone,
+  ClassWithBlockDone,
 } from '../baml_client'
-import { RecursivePartialNull } from '../baml_client/async_client'
+import  partial_types from '../baml_client/partial_types';
 import { b as b_sync } from '../baml_client/sync_client'
 import { config } from 'dotenv'
 import { BamlLogEvent, BamlRuntime } from '@boundaryml/baml/native'
@@ -224,6 +226,7 @@ describe('Integ tests', () => {
 
     it('merge alias attributes', async () => {
       const res = await b.MergeAliasAttributes(123)
+      console.log(JSON.stringify(res));
       expect(res.amount.value).toEqual(123)
       expect(res.amount.checks['gt_ten'].status).toEqual('succeeded')
     })
@@ -305,6 +308,7 @@ describe('Integ tests', () => {
     expect(literal_string).toEqual('example output')
 
     const list = await b.FnOutputClassList(a)
+    console.log(list);
     expect(list.length).toBeGreaterThan(0)
     assert(list[0].prop1.length > 0)
 
@@ -762,7 +766,7 @@ describe('Integ tests', () => {
 
   it('should work with nested classes', async () => {
     let stream = b.stream.FnOutputClassNested('hi!')
-    let msgs: RecursivePartialNull<TestClassNested[]> = []
+    let msgs: partial_types.TestClassNested[] = []
     for await (const msg of stream) {
       console.log('msg', msg)
       msgs.push(msg)
@@ -1062,3 +1066,12 @@ describe('Integ tests', () => {
     flush()
   })
 })
+
+  it('should support semantic streaming', async () => {
+    const stream = b.stream.MakeClassWithDone()
+    const msgs: ClassWithDone[] = []
+    for await (const msg of stream) {
+      msgs.push(msg ?? '')
+    }
+    const final = await stream.getFinalResponse()
+  }, 20_000)

@@ -216,6 +216,24 @@ fn insert_name(
 
     if let Some(existing) = namespace.insert(name, top_id) {
         let current_type = top.get_type();
+
+        // TODO: #1343 Temporary solution until we implement scoping in the AST.
+        if ctx.ast[existing]
+            .name()
+            .starts_with(ast::DYNAMIC_TYPE_NAME_PREFIX)
+        {
+            return ctx.push_error(DatamodelError::new_validation_error(
+                &format!(
+                    "Multiple dynamic definitions for type `{}`",
+                    ctx.ast[existing]
+                        .name()
+                        .strip_prefix(ast::DYNAMIC_TYPE_NAME_PREFIX)
+                        .unwrap()
+                ),
+                top.span().to_owned(),
+            ));
+        }
+
         if current_type != "impl<llm>" && current_type != "impl<?>" {
             ctx.push_error(duplicate_top_error(&ctx.ast[existing], top));
         }

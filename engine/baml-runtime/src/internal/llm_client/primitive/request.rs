@@ -15,6 +15,7 @@ pub trait RequestBuilder {
         prompt: either::Either<&String, &[RenderedChatMessage]>,
         allow_proxy: bool,
         stream: bool,
+        expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder>;
 
     fn request_options(&self) -> &BamlMap<String, serde_json::Value>;
@@ -39,7 +40,7 @@ pub async fn make_request(
     let (system_now, instant_now) = (web_time::SystemTime::now(), web_time::Instant::now());
 
     let req = match client
-        .build_request(prompt, true, stream)
+        .build_request(prompt, true, stream, true)
         .await
         .context("Failed to build request")
     {

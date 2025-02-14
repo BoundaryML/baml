@@ -31,6 +31,12 @@ serde.workspace = true
 either = "1.10.0"
 test-log = "0.2.16"
 regex.workspace = true
+thiserror = "2.0.9"
 
 [dev-dependencies]
 assert-json-diff = "2.0.2"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "jsonish_benchmark"
+harness = false

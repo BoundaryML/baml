@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { atom, useAtom, useAtomValue } from 'jotai'
+import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { Braces, Bug, BugIcon, ChevronDown, Copy, FileJson, PlayCircle, Settings, Workflow } from 'lucide-react'
 import React from 'react'
 import { ThemeToggle } from '../theme/ThemeToggle'
@@ -43,7 +43,7 @@ export const isClientCallGraphEnabledAtom = atom(false)
 export default function Component() {
   const [renderMode, setRenderMode] = useAtom(renderModeAtom)
   const selections = useAtomValue(selectedItemAtom)
-  const [showEnvDialog, setShowEnvDialog] = useAtom(showEnvDialogAtom)
+  const setShowEnvDialog = useSetAtom(showEnvDialogAtom)
 
   const options: {
     label: string

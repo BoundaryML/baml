@@ -7,6 +7,7 @@ use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use internal_llm_client::openai::ResolvedOpenAI;
 use internal_llm_client::{AllowedRoleMetadata, FinishReasonFilter};
+use secrecy::ExposeSecret;
 use serde_json::json;
 
 use crate::internal::llm_client::{
@@ -228,6 +229,7 @@ impl RequestBuilder for OpenAIClient {
         prompt: either::Either<&String, &[RenderedChatMessage]>,
         allow_proxy: bool,
         stream: bool,
+        expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder> {
         let destination_url = if allow_proxy {
             self.properties
@@ -252,7 +254,7 @@ impl RequestBuilder for OpenAIClient {
             req = req.header(key, value);
         }
         if let Some(key) = &self.properties.api_key {
-            req = req.bearer_auth(key);
+            req = req.bearer_auth(key.render(expose_secrets));
         }
 
         // Don't attach BAML creds to localhost requests, i.e. ollama
@@ -366,7 +368,8 @@ impl SseResponseTrait for OpenAIClient {
                             }
                             inner.model = event.model;
                             inner.metadata.finish_reason = choice.finish_reason.clone();
-                            inner.metadata.baml_is_complete = choice.finish_reason.as_ref().is_some_and(|s| s == "stop");
+                            inner.metadata.baml_is_complete =
+                                choice.finish_reason.as_ref().is_some_and(|s| s == "stop");
                         }
                         inner.latency = instant_start.elapsed();
                         if let Some(usage) = event.usage.as_ref() {

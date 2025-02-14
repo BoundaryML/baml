@@ -1,6 +1,6 @@
 @top Baml { Decl* }
 
-Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl | TemplateStringDecl | TestDecl | TypeAliasDecl }
+Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl | TemplateStringDecl | TestDecl | TypeAliasDecl | TypeBuilderDecl }
 
 ClassDecl { "class" IdentifierDecl "{" (BlockAttribute | ClassField)* "}" }
 
@@ -11,6 +11,12 @@ ClassField {
 TypeAliasDecl {
   "type" IdentifierDecl "=" TypeExpr
 }
+
+// TODO: Can't easily disambiguate between dynamic class and dynamic enum
+// definitions. Dynamic enums are highlighted as if they were classes.
+DynamicDecl { "dynamic" IdentifierDecl "{" ClassField* "}" }
+
+TypeBuilderDecl { TypeBuilderKeyword "{" (ClassDecl | EnumDecl | DynamicDecl | TypeAliasDecl)* "}" }
 
 TypeExpr { ComplexTypeExpr | UnionTypeExpr }
 ComplexTypeExpr {
@@ -56,7 +62,7 @@ ClientDecl {
 }
 
 TestDecl {
-  "test" IdentifierDecl "{" (BlockAttribute | TupleValue)* "}"
+  "test" IdentifierDecl "{" (BlockAttribute | TupleValue | TypeBuilderDecl)* "}"
 }
 
 LiteralDecl { NumericLiteral | QuotedString | UnquotedString }
@@ -71,9 +77,10 @@ TemplateStringDecl {
     NumericLiteral, QuotedString, UnquotedString, UnquotedAttributeValue
   }
   @precedence {
-    MapIdentifier, IdentifierDecl, UnquotedAttributeValue
+    MapIdentifier, TypeBuilderKeyword, IdentifierDecl, UnquotedAttributeValue
   }
 
+  TypeBuilderKeyword { "type_builder" }
   MapIdentifier { "map" }
   IdentifierDecl { $[A-Za-z0-9-_]+ }
 

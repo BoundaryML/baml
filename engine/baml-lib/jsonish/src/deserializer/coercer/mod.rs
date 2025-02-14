@@ -271,7 +271,7 @@ pub fn run_user_checks(
     type_: &FieldType,
 ) -> Result<Vec<(Constraint, bool)>> {
     match type_ {
-        FieldType::Constrained { constraints, .. } => constraints
+        FieldType::WithMetadata { constraints, .. } => constraints
             .iter()
             .map(|constraint| {
                 let result = evaluate_predicate(baml_value, &constraint.expression)?;

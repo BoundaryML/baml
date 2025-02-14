@@ -29,6 +29,7 @@ env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 libc = "0.2"
+jsonish = { path = "../baml-lib/jsonish" }
 log.workspace = true
 ctrlc = "3.4"
 # Consult https://pyo3.rs/main/migration for migration instructions

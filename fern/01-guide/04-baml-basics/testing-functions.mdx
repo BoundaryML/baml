@@ -314,3 +314,14 @@ test MyTest {
 
 For more information about the syntax used inside `@@check` and `@@assert`
 attributes, see [Checks and Asserts](/guide/baml-advanced/checks-and-asserts)
+
+## Dynamic Types Tests
+
+Classes and enums marked with the [`@@dynamic`](/ref/baml-client/type-builder)
+attribute can be modified in tests using the `type_builder` and `dynamic`
+blocks.
+
+<Markdown src="../../snippets/dynamic-class-test.mdx" />
+
+The `type_builder` block can contain new types scoped to the parent `test` block
+and also `dynamic` blocks that act as modifiers for dynamic classes or enums.

@@ -178,7 +178,6 @@ class Project {
     if (!rt) {
       throw new Error(`BAML Generate failed - Project has errors.`)
     }
-
     return rt
   }
 

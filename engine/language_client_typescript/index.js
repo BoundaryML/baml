@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createBamlValidationError = exports.BamlValidationError = exports.BamlClientFinishReasonError = exports.BamlCtxManager = exports.BamlStream = exports.BamlLogEvent = exports.ClientRegistry = exports.invoke_runtime_cli = exports.Audio = exports.ClientBuilder = exports.Image = exports.FunctionResultStream = exports.FunctionResult = exports.BamlRuntime = void 0;
+exports.toBamlError = exports.BamlClientHttpError = exports.BamlValidationError = exports.BamlClientFinishReasonError = exports.BamlCtxManager = exports.BamlStream = exports.BamlLogEvent = exports.ClientRegistry = exports.invoke_runtime_cli = exports.Audio = exports.ClientBuilder = exports.Image = exports.FunctionResultStream = exports.FunctionResult = exports.BamlRuntime = void 0;
 var native_1 = require("./native");
 Object.defineProperty(exports, "BamlRuntime", { enumerable: true, get: function () { return native_1.BamlRuntime; } });
 Object.defineProperty(exports, "FunctionResult", { enumerable: true, get: function () { return native_1.FunctionResult; } });
@@ -87,8 +87,46 @@ class BamlValidationError extends Error {
     }
 }
 exports.BamlValidationError = BamlValidationError;
+class BamlClientHttpError extends Error {
+    client_name;
+    status_code;
+    constructor(client_name, message, status_code) {
+        super(message);
+        this.name = "BamlClientHttpError";
+        this.client_name = client_name;
+        this.status_code = status_code;
+        Object.setPrototypeOf(this, BamlClientHttpError.prototype);
+    }
+    toJSON() {
+        return JSON.stringify({
+            name: this.name,
+            message: this.message,
+            status_code: this.status_code,
+            client_name: this.client_name,
+        });
+    }
+    static from(error) {
+        if (error.message.includes("BamlClientHttpError")) {
+            try {
+                const errorData = JSON.parse(error.message);
+                if (errorData.type === "BamlClientHttpError") {
+                    return new BamlClientHttpError(errorData.client_name || "", errorData.message || error.message, errorData.status_code || -100);
+                }
+            }
+            catch (parseError) {
+                console.warn("Failed to parse BamlClientHttpError:", parseError);
+            }
+        }
+        return undefined;
+    }
+}
+exports.BamlClientHttpError = BamlClientHttpError;
 // Helper function to safely create a BamlValidationError
-function createBamlValidationError(error) {
+function createBamlErrorUnsafe(error) {
+    const bamlClientHttpError = BamlClientHttpError.from(error);
+    if (bamlClientHttpError) {
+        return bamlClientHttpError;
+    }
     const bamlValidationError = BamlValidationError.from(error);
     if (bamlValidationError) {
         return bamlValidationError;
@@ -100,5 +138,13 @@ function createBamlValidationError(error) {
     // otherwise return the original error
     return error;
 }
-exports.createBamlValidationError = createBamlValidationError;
+function toBamlError(error) {
+    try {
+        return createBamlErrorUnsafe(error);
+    }
+    catch (error) {
+        return error;
+    }
+}
+exports.toBamlError = toBamlError;
 // No need for a separate throwBamlValidationError function in TypeScript

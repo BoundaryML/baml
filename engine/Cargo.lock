@@ -78,6 +78,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anes"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
+
+[[package]]
 name = "anstream"
 version = "0.6.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -803,7 +809,7 @@ dependencies = [
 
 [[package]]
 name = "baml-cli"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "ambassador",
  "anyhow",
@@ -891,7 +897,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "base64 0.13.1",
  "dissimilar",
@@ -918,6 +924,7 @@ dependencies = [
  "futures",
  "indexmap 2.2.6",
  "internal-baml-codegen",
+ "jsonish",
  "libc",
  "log",
  "pyo3",
@@ -934,7 +941,7 @@ dependencies = [
 
 [[package]]
 name = "baml-runtime"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "ambassador",
  "anyhow",
@@ -959,6 +966,7 @@ dependencies = [
  "clap",
  "colored",
  "console_log",
+ "criterion",
  "dashmap",
  "derive_more",
  "dissimilar",
@@ -1001,6 +1009,7 @@ dependencies = [
  "ring",
  "rstest",
  "scopeguard",
+ "secrecy",
  "send_wrapper 0.6.0",
  "serde",
  "serde-wasm-bindgen 0.6.5",
@@ -1012,7 +1021,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "test-log",
- "thiserror 2.0.3",
+ "thiserror 2.0.9",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -1032,7 +1041,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1070,7 +1079,7 @@ dependencies = [
 
 [[package]]
 name = "baml-types"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1079,9 +1088,13 @@ dependencies = [
  "log",
  "minijinja",
  "once_cell",
+ "secrecy",
  "serde",
  "serde_json",
  "strum",
+ "time",
+ "tracing-core",
+ "web-time",
 ]
 
 [[package]]
@@ -1199,7 +1212,7 @@ dependencies = [
 
 [[package]]
 name = "bstd"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1249,6 +1262,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "btrace"
+version = "0.75.0"
+dependencies = [
+ "anyhow",
+ "baml-types",
+ "base64 0.22.1",
+ "bytes",
+ "futures-timer",
+ "hostname",
+ "js-sys",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "time",
+ "tokio",
+ "tokio-stream",
+ "tracing-core",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "web-time",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1275,6 +1314,12 @@ dependencies = [
  "bytes",
  "either",
 ]
+
+[[package]]
+name = "cast"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
@@ -1327,6 +1372,33 @@ dependencies = [
  "serde",
  "wasm-bindgen",
  "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "ciborium"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
+dependencies = [
+ "ciborium-io",
+ "ciborium-ll",
+ "serde",
+]
+
+[[package]]
+name = "ciborium-io"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+
+[[package]]
+name = "ciborium-ll"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
+dependencies = [
+ "ciborium-io",
+ "half",
 ]
 
 [[package]]
@@ -1499,6 +1571,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "criterion"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2b12d017a929603d80db1831cd3a24082f8137ce19c69e6447f54f5fc8d692f"
+dependencies = [
+ "anes",
+ "cast",
+ "ciborium",
+ "clap",
+ "criterion-plot",
+ "is-terminal",
+ "itertools 0.10.5",
+ "num-traits",
+ "once_cell",
+ "oorandom",
+ "plotters",
+ "rayon",
+ "regex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "tinytemplate",
+ "walkdir",
+]
+
+[[package]]
+name = "criterion-plot"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
+dependencies = [
+ "cast",
+ "itertools 0.10.5",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1531,6 +1639,12 @@ name = "crossbeam-utils"
 version = "0.8.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22ec99545bb0ed0ea7bb9b8e1e9122ea386ff8a48c0922e43f36d45ab09e0e80"
+
+[[package]]
+name = "crunchy"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
 name = "crypto-common"
@@ -2198,6 +2312,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "half"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dd08c532ae367adf81c312a4580bc67f1d0fe8bc9c460520283f4c0ff277888"
+dependencies = [
+ "cfg-if",
+ "crunchy",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2641,7 +2765,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-codegen"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2666,7 +2790,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -2703,7 +2827,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -2716,7 +2840,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2737,7 +2861,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja-types"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2756,7 +2880,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -2781,7 +2905,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "internal-baml-diagnostics",
  "internal-baml-schema-ast",
@@ -2793,7 +2917,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-schema-ast"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -2814,7 +2938,7 @@ dependencies = [
 
 [[package]]
 name = "internal-llm-client"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -2825,6 +2949,7 @@ dependencies = [
  "env_logger",
  "indexmap 2.2.6",
  "log",
+ "secrecy",
  "serde",
  "serde_json",
  "strum",
@@ -2854,6 +2979,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "928bae27f42bc99b60d9ac7334e3a21d10ad8f1835a4e12ec3ec0464765ed1b3"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "is-terminal"
+version = "0.4.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "261f68e344040fbd0edea105bef17c66edf46f984ddb1115b775ce31be948f4b"
+dependencies = [
+ "hermit-abi 0.4.0",
+ "libc",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2913,13 +3049,14 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.73.1"
+version = "0.75.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
  "baml-types",
  "bstd",
  "colored",
+ "criterion",
  "either",
  "indexmap 2.2.6",
  "indoc",
@@ -2932,6 +3069,7 @@ dependencies = [
  "serde_json",
  "strsim 0.10.0",
  "test-log",
+ "thiserror 2.0.9",
 ]
 
 [[package]]
@@ -3433,6 +3571,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 
 [[package]]
+name = "oorandom"
+version = "11.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b410bbe7e14ab526a0e86877eb47c6996a2bd7746f027ba551028c925390e4e9"
+
+[[package]]
 name = "open"
 version = "5.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3683,6 +3827,34 @@ name = "pkg-config"
 version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
+
+[[package]]
+name = "plotters"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aeb6f403d7a4911efb1e33402027fc44f29b5bf6def3effcc22d7bb75f2b747"
+dependencies = [
+ "num-traits",
+ "plotters-backend",
+ "plotters-svg",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "plotters-backend"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df42e13c12958a16b3f7f4386b9ab1f3e7933914ecea48da7139435263a4172a"
+
+[[package]]
+name = "plotters-svg"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51bae2ac328883f7acdfea3d66a7c35751187f870bc81f94563733a154d7a670"
+dependencies = [
+ "plotters-backend",
+]
 
 [[package]]
 name = "polling"
@@ -4227,6 +4399,7 @@ dependencies = [
  "env_logger",
  "futures",
  "indexmap 2.2.6",
+ "jsonish",
  "log",
  "magnus",
  "rb-sys",
@@ -4405,6 +4578,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "sandbox"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "baml-types",
+ "env_logger",
+ "log",
+ "reqwest",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-core",
+ "tracing-subscriber",
+ "uuid",
+ "web-time",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4433,6 +4625,16 @@ checksum = "da046153aa2352493d6cb7da4b6e5c0c057d8a1d0a9aa8560baffdd945acd414"
 dependencies = [
  "ring",
  "untrusted",
+]
+
+[[package]]
+name = "secrecy"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e891af845473308773346dc847b2c23ee78fe442e0472ac50e22a18a93d3ae5a"
+dependencies = [
+ "serde",
+ "zeroize",
 ]
 
 [[package]]
@@ -4921,11 +5123,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.3"
+version = "2.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c006c85c7651b3cf2ada4584faa36773bd07bac24acfb39f3c431b36d7e667aa"
+checksum = "f072643fd0190df67a8bab670c20ef5d8737177d6ac6b2e9a236cb096206b2cc"
 dependencies = [
- "thiserror-impl 2.0.3",
+ "thiserror-impl 2.0.9",
 ]
 
 [[package]]
@@ -4941,9 +5143,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.3"
+version = "2.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f077553d607adc1caf65430528a576c757a71ed73944b66ebb58ef2bbd243568"
+checksum = "7b50fa271071aae2e6ee85f842e2e28ba8cd2c5fb67f11fcb1fd70b276f9e7d4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4989,6 +5191,16 @@ checksum = "3f252a68540fde3a3877aeea552b832b40ab9a69e318efd078774a01ddee1ccf"
 dependencies = [
  "num-conv",
  "time-core",
+]
+
+[[package]]
+name = "tinytemplate"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -5180,9 +5392,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.32"
+version = "0.1.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c06d3da6113f116aaee68e4d601191614c9053067f9ab7f6edbcb161237daa54"
+checksum = "e672c95779cf947c5311f83787af4fa8fffd12fb27e4993211a84bdfd9610f9c"
 dependencies = [
  "once_cell",
  "valuable",

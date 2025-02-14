@@ -45,6 +45,7 @@ in pkgs.mkShell {
       lld_19
       turbo # js packaging
       wasm-pack
+      uv
     ] ++ (if pkgs.stdenv.isDarwin then appleDeps else [ ]);
 
   LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";

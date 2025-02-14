@@ -231,7 +231,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             FieldType::Optional(inner) => {
                 format!("Optional[{}]", inner.to_type_ref(ir, _with_checked))
             }
-            FieldType::Constrained { base, .. } => match field_type_attributes(self) {
+            FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
                     let base_type_ref = base.to_type_ref(ir, _with_checked);
                     let checks_type_ref = type_name_for_checks(&checks);
@@ -286,7 +286,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => inner.to_partial_type_ref(ir, with_checked),
-            FieldType::Constrained { base, .. } => match field_type_attributes(self) {
+            FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
                     let base_type_ref = base.to_partial_type_ref(ir, with_checked);
                     let checks_type_ref = type_name_for_checks(&checks);
@@ -295,5 +295,61 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 None => base.to_partial_type_ref(ir, with_checked),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use internal_baml_core::ir::repr::make_test_ir;
+
+    use crate::GeneratorArgs;
+
+    use super::*;
+
+    fn mk_ir() -> IntermediateRepr {
+        make_test_ir(r#"
+class Greg {
+  inner Foo? @stream.not_null @stream.with_state @check(foo, {{ true }})
+}
+
+class Foo {
+  s string
+}
+
+// class Foo {
+//   i int @stream.not_null @stream.with_state
+//   b Bar @stream.done
+// }
+
+// class Foo {
+//   str string @stream.with_state
+// }
+//
+// class Inner {
+//   inner_int int
+//   inner_string string @stream.not_null
+//   inner_string_2 string @stream.not_null @stream.done
+// }
+//
+// class InnerDone {
+//   inner_done_inner Inner @stream.done
+//   inner_done_int int
+//   inner_done_str string
+//   @@stream.done
+// }
+        "#).unwrap()
+    }
+
+    fn mk_gen() -> GeneratorArgs {
+        GeneratorArgs::new("baml_client", "baml_src", vec![], "no_version".to_string(), true, GeneratorDefaultClientMode::Async, Vec::new()).unwrap()
+    }
+
+    #[test]
+    fn generate_streaming_python() {
+        let ir = mk_ir();
+        let generator_args = mk_gen();
+        let res = generate(&ir, &generator_args).unwrap();
+        let partial_types = res.get(&PathBuf::from("partial_types.py")).unwrap();
+        eprintln!("{}", partial_types);
     }
 }

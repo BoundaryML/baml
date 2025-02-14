@@ -650,7 +650,7 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                 // something i saw suggested doing this
                 inner.to_type_spec(_ir)?
             }
-            FieldType::Constrained { base, .. } => match field_type_attributes(self) {
+            FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
                     let base_type_ref = base.to_type_spec(_ir)?;
                     let checks_type_spec = type_def_for_checks(checks);

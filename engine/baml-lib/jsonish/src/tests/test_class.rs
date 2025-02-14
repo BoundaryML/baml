@@ -1084,80 +1084,11 @@ class Bar {
 "#;
 
 test_partial_deserializer!(
-  test_object_streaming_ints,
-  OBJECT_STREAM_TEST,
-  r#"{"a": 11, "b": 22"#,
-  FieldType::Class("Foo".to_string()),
-  {"a": 11, "b": null, "c": null}
-);
-
-test_partial_deserializer!(
-  test_object_streaming_ints_newlines,
-  OBJECT_STREAM_TEST,
-  "{\n\"a\":11,\n\"b\": 22",
-  FieldType::Class("Foo".to_string()),
-  {"a": 11, "b": null, "c": null}
-);
-
-test_partial_deserializer!(
   test_object_finished_ints,
   OBJECT_STREAM_TEST,
   r#"{"a": 1234,"b": 1234, "c": 1234}"#,
   FieldType::Class("Foo".to_string()),
   {"a": 1234, "b": 1234, "c": 1234}
-);
-
-test_partial_deserializer!(
-  test_nested_object_streaming,
-  OBJECT_STREAM_TEST,
-  r#"{"a": 1234, "foo": { "c": 33, "a": 11"#,
-  FieldType::Class("Bar".to_string()),
-  {"a": 1234, "foo": { "a": null, "b": null, "c": 33}}
-);
-
-const BIG_OBJECT_STREAM_TEST: &str = r#"
-class BigNumbers {
-  a int
-  b float
-}
-
-class CompoundBigNumbers {
-  big BigNumbers
-  big_nums BigNumbers[]
-  another BigNumbers
-}
-"#;
-
-test_partial_deserializer!(
-  test_big_object_empty,
-  BIG_OBJECT_STREAM_TEST,
-  "{",
-  FieldType::Class("CompoundBigNumbers".to_string()),
-  {"big": null, "big_nums": [], "another": null}
-);
-
-test_partial_deserializer!(
-  test_big_object_start_big,
-  BIG_OBJECT_STREAM_TEST,
-  r#"{"big": {"a": 11, "b": 12"#,
-  FieldType::Class("CompoundBigNumbers".to_string()),
-  {"big": {"a": 11, "b": null}, "big_nums": [], "another": null}
-);
-
-test_partial_deserializer!(
-  test_big_object_start_big_into_list,
-  BIG_OBJECT_STREAM_TEST,
-  r#"json```{"big": {"a": 11, "b": 12}, "big_nums": [{"a": 22, "b": 33"#,
-  FieldType::Class("CompoundBigNumbers".to_string()),
-  {"big": {"a": 11, "b": 12.0}, "big_nums": [{"a": 22, "b": null}], "another": null}
-);
-
-test_partial_deserializer!(
-  test_big_object_start_big_into_list2,
-  BIG_OBJECT_STREAM_TEST,
-  r#"json```{"big": {"a": 11, "b": 12.2}, "big_nums": [{"a": 22, "b": 33}, {"a": 1, "b": 2.2}], "another": {"a": 45, "b": 0.1"#,
-  FieldType::Class("CompoundBigNumbers".to_string()),
-  {"big": {"a": 11, "b": 12.2}, "big_nums": [{"a": 22, "b": 33.0}, {"a": 1, "b": 2.2}], "another": {"a": 45, "b": null}}
 );
 
 test_deserializer!(
@@ -1485,4 +1416,54 @@ test_deserializer!(
       }
     },
   }
+);
+
+const OPTIONAL_LIST_AND_MAP: &str = r#"
+class OptionalListAndMap {
+  p string[]?
+  q map<string, string>?
+}
+"#;
+
+test_partial_deserializer_streaming!(
+  test_optional_list,
+  OPTIONAL_LIST_AND_MAP,
+  r#"
+            ```json
+            {
+              "p": ["test"],
+              "q": {
+                "test": "ok"
+              }
+            }
+            ```
+  "#,
+  FieldType::class("OptionalListAndMap"),
+  {"p": ["test"], "q": { "test": "ok" }}
+);
+
+const INTEG_TEST_FAILURE_STR: &str = r#"
+[
+  {
+    "prop1": "In the realm of artificial intelligence, advancements have been remarkable. Between neural networks and cutting-edge algorithms, the landscape of machine learning has evolved dramatically. From the development of self-driving cars to sophisticated chatbots that can engage in human-like conversations, AI technology has become an integral aspect of modern life. Researchers are continually pushing the boundaries of what is possible, exploring deep learning techniques that enable machines to learn from extensive datasets. The application of AI spans various industries including healthcare, where predictive analytics aids in diagnostics, to finance, where algorithms manage investment portfolios. As AI continues to adapt and grow, ethical considerations surrounding data privacy and decision-making processes become increasingly important. Ongoing debates question the implications of relying on AI and machine learning for critical functions in society. Moreover, governments and organizations alike are grappling with the challenges of regulation and oversight in this fast-paced field. The future of AI seems bright, but it also poses inquiries into trust, accountability, and the long-term effects on the job market. As we look ahead, the collaboration between humans and machines could redefine productivity and creativity, paving the way for innovative solutions to complex problems that society faces.",
+    "prop2": 1
+  }
+]
+"#;
+
+const INTEG_TEST_FAILURE_SCHEMA: &str = r#"
+class TestOutputClass {
+  prop1 string @description("A long string with about 200 words")
+  prop2 int
+}
+"#;
+
+test_partial_deserializer_streaming!(
+    test_integ_test_failure,
+    INTEG_TEST_FAILURE_SCHEMA,
+    INTEG_TEST_FAILURE_STR,
+    FieldType::Class("TestOutputClass".to_string()),
+    { "prop1": "In the realm of artificial intelligence, advancements have been remarkable. Between neural networks and cutting-edge algorithms, the landscape of machine learning has evolved dramatically. From the development of self-driving cars to sophisticated chatbots that can engage in human-like conversations, AI technology has become an integral aspect of modern life. Researchers are continually pushing the boundaries of what is possible, exploring deep learning techniques that enable machines to learn from extensive datasets. The application of AI spans various industries including healthcare, where predictive analytics aids in diagnostics, to finance, where algorithms manage investment portfolios. As AI continues to adapt and grow, ethical considerations surrounding data privacy and decision-making processes become increasingly important. Ongoing debates question the implications of relying on AI and machine learning for critical functions in society. Moreover, governments and organizations alike are grappling with the challenges of regulation and oversight in this fast-paced field. The future of AI seems bright, but it also poses inquiries into trust, accountability, and the long-term effects on the job market. As we look ahead, the collaboration between humans and machines could redefine productivity and creativity, paving the way for innovative solutions to complex problems that society faces.",
+      "prop2": 1
+    }
 );

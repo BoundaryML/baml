@@ -9,6 +9,7 @@ use anyhow::Result;
 use baml_types::{GetEnvVar, StringOr, UnresolvedValue};
 use either::Either;
 use indexmap::IndexMap;
+use secrecy::SecretString;
 use serde::Deserialize;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
@@ -30,7 +31,7 @@ pub struct ServiceAccount {
     pub token_uri: String,
     pub project_id: String,
     pub client_email: String,
-    pub private_key: String,
+    pub private_key: SecretString,
 }
 
 pub enum ResolvedGcpAuthStrategy {
