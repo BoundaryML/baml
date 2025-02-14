@@ -1,7 +1,8 @@
 export declare class BamlClientFinishReasonError extends Error {
     prompt: string;
     raw_output: string;
-    constructor(prompt: string, raw_output: string, message: string);
+    finish_reason?: string;
+    constructor(prompt: string, raw_output: string, message: string, finish_reason: string | undefined);
     toJSON(): string;
     static from(error: Error): BamlClientFinishReasonError | undefined;
 }
@@ -19,5 +20,7 @@ export declare class BamlClientHttpError extends Error {
     toJSON(): string;
     static from(error: Error): BamlClientHttpError | undefined;
 }
-export declare function toBamlError(error: any): any;
+export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError;
+export declare function isBamlError(error: unknown): error is BamlErrors;
+export declare function toBamlError(error: unknown): BamlErrors | Error;
 //# sourceMappingURL=errors.d.ts.map

@@ -23,12 +23,12 @@ First, create a new BAML function for the chat completion:
 <CodeBlocks>
 ```baml title="baml_src/chat.baml"
 class Message {
-  role: string
-  content: string
+  role "user" | "assistant"
+  content string
 }
 
-function Chat(messages: Message[]) -> Message {
-  client openai/gpt-4o-mini
+function Chat(messages: Message[]) -> string {
+  client "openai/gpt-4o-mini"
   prompt #"
     You are a helpful and knowledgeable AI assistant engaging in a conversation.
     Your responses should be:
@@ -37,14 +37,25 @@ function Chat(messages: Message[]) -> Message {
     - Natural and conversational in tone
     - Focused on addressing the user's needs
 
-    {{ _.role("user" )}}
-    Previous conversation:
-    {% for message in messages %}
-    {{message.role}}: {{message.content}}
-    {% endfor %}
+    {{ ctx.output_format }}
 
-    assistant:
+    {% for m in messages %}
+    {{ _.role(m.role)}}
+    {{m.content}}
+    {% endfor %}
   "#
+}
+
+test TestName {
+  functions [Chat]
+  args {
+    messages [
+      {
+        role "user"
+        content "help me understand Chobani's success"
+      }
+    ]
+  }
 }
 ```
 </CodeBlocks>
@@ -76,8 +87,9 @@ export function ChatInterface() {
   const {
     mutate: sendMessage,
     isLoading,
-    data: messages,
-    streamingData: streamingMessages,
+    data: mostRecentData, // FinalTypes & StreamingTypes
+    // finalData,
+    // streamingData,
     error
   } = useChat();
 
@@ -163,7 +175,7 @@ import { useState } from "react";
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [isLoading, setisLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -175,7 +187,7 @@ export function ChatInterface() {
       { role: "user", content: input }
     ];
     setInput("");
-    setisLoading(true);
+    setIsLoading(true);
     setError(null);
 
     try {
@@ -187,7 +199,7 @@ export function ChatInterface() {
     } catch (error) {
       setError(error as Error);
     } finally {
-      setisLoading(false);
+      setIsLoading(false);
     }
   };
 

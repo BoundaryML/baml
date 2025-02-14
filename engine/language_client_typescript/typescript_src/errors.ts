@@ -3,12 +3,14 @@
 export class BamlClientFinishReasonError extends Error {
   prompt: string
   raw_output: string
+  finish_reason?: string
 
-  constructor(prompt: string, raw_output: string, message: string) {
+  constructor(prompt: string, raw_output: string, message: string, finish_reason: string | undefined) {
     super(message)
     this.name = 'BamlClientFinishReasonError'
     this.prompt = prompt
     this.raw_output = raw_output
+    this.finish_reason = finish_reason
 
     Object.setPrototypeOf(this, BamlClientFinishReasonError.prototype)
   }
@@ -20,6 +22,7 @@ export class BamlClientFinishReasonError extends Error {
         message: this.message,
         raw_output: this.raw_output,
         prompt: this.prompt,
+        finish_reason: this.finish_reason,
       },
       null,
       2,
@@ -35,12 +38,10 @@ export class BamlClientFinishReasonError extends Error {
             errorData.prompt || '',
             errorData.raw_output || '',
             errorData.message || error.message,
+            errorData.finish_reason,
           )
-        } else {
-          console.warn('Not a BamlClientFinishReasonError:', error)
         }
       } catch (parseError) {
-        // If JSON parsing fails, fall back to the original error
         console.warn('Failed to parse BamlClientFinishReasonError:', parseError)
       }
     }
@@ -127,7 +128,6 @@ export class BamlClientHttpError extends Error {
           )
         }
       } catch (parseError) {
-        // If JSON parsing fails, try to extract information from the error message
         console.warn('Failed to parse BamlClientHttpError:', parseError)
       }
     }
@@ -135,10 +135,14 @@ export class BamlClientHttpError extends Error {
   }
 }
 
+export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError
+
 // Helper function to safely create a BamlValidationError
-function createBamlErrorUnsafe(
-  error: Error,
-): BamlValidationError | BamlClientFinishReasonError | BamlClientHttpError | Error {
+function createBamlErrorUnsafe(error: unknown): BamlErrors | Error {
+  if (!(error instanceof Error)) {
+    return new Error(String(error))
+  }
+
   const bamlClientHttpError = BamlClientHttpError.from(error)
   if (bamlClientHttpError) {
     return bamlClientHttpError
@@ -158,11 +162,27 @@ function createBamlErrorUnsafe(
   return error
 }
 
-export function toBamlError(error: any) {
+export function isBamlError(error: unknown): error is BamlErrors {
+  if (
+    (error as any).type === 'BamlClientHttpError' ||
+    (error as any).type === 'BamlValidationError' ||
+    (error as any).type === 'BamlClientFinishReasonError'
+  ) {
+    return true
+  }
+
+  return (
+    error instanceof BamlClientHttpError ||
+    error instanceof BamlValidationError ||
+    error instanceof BamlClientFinishReasonError
+  )
+}
+
+export function toBamlError(error: unknown): BamlErrors | Error {
   try {
     return createBamlErrorUnsafe(error)
   } catch (error) {
-    return error
+    return error as Error
   }
 }
 

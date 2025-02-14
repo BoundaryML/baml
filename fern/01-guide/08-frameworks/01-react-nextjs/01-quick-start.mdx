@@ -30,7 +30,7 @@ function WriteMeAStory(input: string) -> Story {
 ```
 
 ```bash title="Generate BAML client"
-baml-cli generate
+npx baml-cli generate
 ```
 
 ```tsx title="app/components/story-form.tsx" {8,10,15-16}
@@ -182,16 +182,15 @@ OPENAI_API_KEY=sk-...
 
 </Accordion>
 
-### Setup BAML Client Provider
-
-<Markdown src="../../../snippets/baml/clients/openai.mdx" />
-
 ### Setup BAML Next.js Generator
 
-```baml title="baml_src/generators.baml"
+Update the `baml_src/generators.baml` file to use the React/Next.js generator.
+
+```diff title="baml_src/generators.baml"
 generator typescript {
-  output_type "typescript/react"
-  output_dir "./"
+-  output_type "typescript"
++  output_type "typescript/react"
+  output_dir "../"
   version "0.75.0"
 }
 ```
@@ -269,14 +268,15 @@ import type { Story } from "@/baml_client/types";
 
 export function StreamingStoryForm() {
   const {
-    data: finalStory,           // Final complete response
-    streamingData: streamingStory, // Real-time partial updates
+    data: story,           // Final complete response
+    finalData: fStory,
+    streamData: sStory, // Real-time partial updates
     isLoading,
     isError,
     error,
     mutate
   } = useWriteMeAStory({
-    onPartial: (partial) => {
+    onStreamUpdate: (partial) => {
       // Handle real-time updates
       console.log('Story in progress:', partial);
     },
