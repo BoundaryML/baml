@@ -19,11 +19,26 @@ jobs:
           echo "::group::Colored Log Group"
 
           # Output text in various colors.
-          echo -e "\033[31mThis is red text\033[0m"
+          echo -e "::group::\033[31mThis is red text\033[0m"
           echo -e "\033[32mThis is green text\033[0m"
+          echo "::endgroup::"
           echo -e "\033[34mThis is blue text\033[0m"
 
           # End the log group.
+          echo "::endgroup::"
+
+          echo -e "::group::\033[31mThis is red text\033[0m"
+          echo -e "\033[32mThis is green text\033[0m"
+          echo "::endgroup::"
+
+          # New log groups with pass/fail emojis
+          echo -e "::group::\033[32m✅ This is a pass message\033[0m"
+          echo "::endgroup::"
+
+          echo -e "::group::\033[31m❌ This is a fail message\033[0m"
+          echo "::endgroup::"
+
+          echo -e "::group::\033[32m✅ Another pass message\033[0m"
           echo "::endgroup::"
 
           # Output some colored text outside the group as well.
