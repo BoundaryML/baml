@@ -6,3 +6,5 @@ __pycache__/
 # C extensions
 *.so
 .env
+
+*.egg-info
