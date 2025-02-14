@@ -84,58 +84,39 @@ import { useState } from "react";
 export function ChatInterface() {
   const [input, setInput] = useState("");
 
-  const {
-    mutate: sendMessage,
-    isLoading,
-    data: mostRecentData, // FinalTypes & StreamingTypes
-    // finalData,
-    // streamingData,
-    error
-  } = useChat();
+  const chat = useChat();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-
+  const handleSubmit = async () => {
     const newMessages = [
-      ...messages,
+      ...chat.data?.messages,
       { role: "user", content: input }
     ];
+
     setInput("");
 
-    try {
-      await sendMessage({ messages: newMessages });
-    } catch (error) {
-      console.error("Chat error:", error);
-    }
+    await chat.mutate({ messages: newMessages });
   };
 
   return (
     <div>
       <div>
-        {messages.map((message, i) => (
+        {chat.data?.messages.map((message, i) => (
           <div key={i}>
             {message.content}
           </div>
         ))}
-        {isLoading && (
-          <div>Typing...</div>
-        )}
+        {chat.isLoading && <div>Generating...</div>}
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div>
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            disabled={isLoading}
-          />
-          <button type="submit" disabled={isLoading}>
-            Send
-          </button>
-        </div>
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Type your message..."
+        />
+        <button type="submit" disabled={chat.isLoading}>
+          Send
+        </button>
       </form>
     </div>
   );
@@ -178,10 +159,7 @@ export function ChatInterface() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-
+  const handleSubmit = async () => {
     const newMessages = [
       ...messages,
       { role: "user", content: input }
@@ -211,19 +189,15 @@ export function ChatInterface() {
             {message.content}
           </div>
         ))}
-        {isLoading && (
-          <div>Typing...</div>
-        )}
+        {isLoading && <div>Typing...</div>}
       </div>
 
       <form onSubmit={handleSubmit}>
         <div>
           <input
-            type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message..."
-            disabled={isLoading}
           />
           <button type="submit" disabled={isLoading}>
             Send

@@ -43,24 +43,18 @@ import { useWriteMeAStory } from "@/baml_client/react/hooks";
 export function StoryForm() {
   const writeMeAStory = useWriteMeAStory();
 
-  const data = writeMeAStory.isLoading ? writeMeAStory.streamingData : writeMeAStory.data;
-
   return (
     <div>
       <button
-        onClick={() => writeMeAStory.mutate("Dragons")}
+        onClick={() => writeMeAStory.mutate("About a cat in a hat")}
         disabled={writeMeAStory.isLoading}>
-        Generate Story
+        {writeMeAStory.isLoading ? 'Generating...' : 'Generate Story'}
       </button>
 
-      {writeMeAStory.isLoading && <div>Generating...</div>}
-
-      {data && (
-        <div>
-          <h4>{data.title}</h4>
-          <p>{data.content}</p>
-        </div>
-      )}
+      <div>
+        <h4>{writeMeAStory.data?.title}</h4>
+        <p>{writeMeAStory.data?.content}</p>
+      </div>
 
       {writeMeAStory.error && <div>Error: {writeMeAStory.error.message}</div>}
     </div>
@@ -231,30 +225,22 @@ import { useWriteMeAStory } from "@/baml_client/react/hooks";
 import type { Story } from "@/baml_client/types";
 
 export function StoryForm() {
-  const {
-    data,          // Final response
-    isLoading,     // Loading state
-    isError,       // Error state
-    error,         // Error details
-    mutate        // Function to call the action
-  } = useWriteMeAStory({
-    stream: false
-  });
+  const writeMeAStory = useWriteMeAStory({ stream: false });
 
   return (
     <div>
-      <button onClick={() => mutate("Dragons")}>
-        Generate Story
+      <button onClick={() => writeMeAStory.mutate("About a cat in a hat")}>
+        {writeMeAStory.isLoading ? 'Generating...' : 'Generate Story'}
       </button>
 
-      {isLoading && <div>Generating...</div>}
-      {error && <div>Error: {error.message}</div>}
-      {data && (
+      {writeMeAStory.data && (
         <div>
-          <h4>{data.title}</h4>
-          <p>{data.content}</p>
+          <h4>{writeMeAStory.data.title}</h4>
+          <p>{writeMeAStory.data.content}</p>
         </div>
       )}
+
+      {writeMeAStory.error && <div>Error: {writeMeAStory.error.message}</div>}
     </div>
   );
 }
@@ -267,45 +253,33 @@ import { useWriteMeAStory } from "@/baml_client/react/hooks";
 import type { Story } from "@/baml_client/types";
 
 export function StreamingStoryForm() {
-  const {
-    data: story,           // Final complete response
-    finalData: fStory,
-    streamData: sStory, // Real-time partial updates
-    isLoading,
-    isError,
-    error,
-    mutate
-  } = useWriteMeAStory({
-    onStreamUpdate: (partial) => {
+  const writeMeAStory = useWriteMeAStory({
+    onStreamData: (partial) => {
       // Handle real-time updates
       console.log('Story in progress:', partial);
     },
-    onFinal: (final) => {
+    onFinalData: (final) => {
       // Handle completed story
       console.log('Story completed:', final);
     }
   });
 
-  const data = isLoading ? streamingStory : finalStory;
-
   return (
     <div>
       <button
-        onClick={() => mutate("Dragons")}
-        disabled={isLoading}>
-        Generate Story
+        onClick={() => writeMeAStory.mutate("About a cat in a hat")}
+        disabled={writeMeAStory.isLoading}>
+        {writeMeAStory.isLoading ? 'Generating...' : 'Generate Story'}
       </button>
 
-      {isLoading && <div>Generating...</div>}
-
-      {data && (
+      {writeMeAStory.data && (
         <div>
-          <h4>{data.title}</h4>
-          <p>{data.content}</p>
+          <h4>{writeMeAStory.data.title}</h4>
+          <p>{writeMeAStory.data.content}</p>
         </div>
       )}
 
-      {error && <div>Error: {error.message}</div>}
+      {writeMeAStory.error && <div>Error: {writeMeAStory.error.message}</div>}
     </div>
   );
 }

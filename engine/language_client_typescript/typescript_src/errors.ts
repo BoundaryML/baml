@@ -137,9 +137,25 @@ export class BamlClientHttpError extends Error {
 
 export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError
 
+function isError(error: unknown): error is Error {
+  if (typeof error === 'string') {
+    return false
+  }
+
+  if ((error as any).message) {
+    return true
+  }
+
+  if (error instanceof Error) {
+    return true
+  }
+
+  return false
+}
+
 // Helper function to safely create a BamlValidationError
 function createBamlErrorUnsafe(error: unknown): BamlErrors | Error {
-  if (!(error instanceof Error)) {
+  if (!isError(error)) {
     return new Error(String(error))
   }
 
@@ -171,6 +187,14 @@ export function isBamlError(error: unknown): error is BamlErrors {
     return true
   }
 
+  if (
+    (error as any).name === 'BamlClientHttpError' ||
+    (error as any).name === 'BamlValidationError' ||
+    (error as any).name === 'BamlClientFinishReasonError'
+  ) {
+    return true
+  }
+
   return (
     error instanceof BamlClientHttpError ||
     error instanceof BamlValidationError ||
@@ -180,6 +204,10 @@ export function isBamlError(error: unknown): error is BamlErrors {
 
 export function toBamlError(error: unknown): BamlErrors | Error {
   try {
+    if (isBamlError(error)) {
+      return error
+    }
+
     return createBamlErrorUnsafe(error)
   } catch (error) {
     return error as Error

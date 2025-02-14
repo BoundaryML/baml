@@ -77,6 +77,7 @@ export type HookOutput<FunctionName extends FunctionNames, Options extends { str
   mutate: (
     ...args: Parameters<(typeof Actions)[FunctionName]>
   ) => Options['stream'] extends false ? Promise<FinalDataType<FunctionName>> : Promise<ReadableStream<Uint8Array>>
+  reset: () => void
 }
 
 /**
@@ -196,14 +197,14 @@ function hookReducer<TPartial, TFinal>(
  * const { data, error, isLoading, mutate } = useBamlAction(StreamingActions.TestAws, { stream: true });
  * ```
  */
+ function useBamlAction<FunctionName extends FunctionNames>(
+  action: ServerAction,
+  props: HookInput<FunctionName, { stream: false }>,
+): HookOutput<FunctionName, { stream: false }>
 function useBamlAction<FunctionName extends FunctionNames>(
   action: ServerAction,
   props?: HookInput<FunctionName, { stream?: true }>,
 ): HookOutput<FunctionName, { stream: true }>
-function useBamlAction<FunctionName extends FunctionNames>(
-  action: ServerAction,
-  props: HookInput<FunctionName, { stream: false }>,
-): HookOutput<FunctionName, { stream: false }>
 function useBamlAction<FunctionName extends FunctionNames>(
   action: ServerAction,
   props: HookInput<FunctionName, { stream?: boolean }> = {},
@@ -300,9 +301,8 @@ function useBamlAction<FunctionName extends FunctionNames>(
     return 'idle'
   }, [isLoading, state.error, state.isSuccess, state.isStreaming])
 
-  let data = undefined
+  let data = state.finalData
   if (state.isStreaming) data = state.streamData
-  else if (state.isSuccess) data = state.finalData
 
   const result = {
     data,
@@ -315,6 +315,7 @@ function useBamlAction<FunctionName extends FunctionNames>(
     isLoading: status === 'pending' || status === 'streaming',
     mutate,
     status,
+    reset: () => dispatch({ type: 'RESET' }),
   } satisfies HookOutput<FunctionName, { stream: typeof props.stream }>
 
   return {
@@ -361,8 +362,8 @@ function useBamlAction<FunctionName extends FunctionNames>(
  * });
  * ```
  */
-export function use{{ func.name }}(props?: HookInput<'{{ func.name }}', { stream?: true }>): HookOutput<'{{ func.name }}', { stream: true }>
 export function use{{ func.name }}(props: HookInput<'{{ func.name }}', { stream: false }>): HookOutput<'{{ func.name }}', { stream: false }>
+export function use{{ func.name }}(props?: HookInput<'{{ func.name }}', { stream?: true }>): HookOutput<'{{ func.name }}', { stream: true }>
 export function use{{ func.name }}(
   props: HookInput<'{{ func.name }}', { stream?: boolean }> = {},
 ): HookOutput<'{{ func.name }}', { stream: true }> | HookOutput<'{{ func.name }}', { stream: false }> {

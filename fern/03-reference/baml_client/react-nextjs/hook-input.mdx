@@ -8,14 +8,15 @@ The `HookInput` type defines the configuration options for BAML React hooks.
 <CodeBlocks>
 ```typescript title="Example Usage"
 function Component() {
-  const { data, streamingData } = useTestAws({
+  const hook = useTestAws({
     stream: true, // optional, defaults to true
-    onPartial: (text) => console.log("Streaming:", text),
-    onFinal: (text) => console.log("Complete:", text),
+    onStreamData: (text) => console.log("Streaming:", text),
+    onFinalData: (text) => console.log("Complete:", text),
+    onData: (text) => console.log("Any update:", text),
     onError: (error) => console.error("Error:", error)
   })
 
-  return <div>{streamingData ?? data}</div>
+  return <div>{hook.data}</div>
 }
 ```
 
@@ -23,24 +24,28 @@ function Component() {
 // Streaming configuration
 const streamingInput: HookInput<'TestAws', { stream: true }> = {
   stream: true,
-  onPartial: (text) => console.log("Partial:", text),
-  onFinal: (text) => console.log("Final:", text),
+  onStreamData: (text) => console.log("Streaming:", text),
+  onFinalData: (text) => console.log("Final:", text),
+  onData: (text) => console.log("Any update:", text),
   onError: (error) => console.error(error),
 }
 
 // Non-streaming configuration
-const nonStreamingInput: HookInput<'TestAws'> = {
-  onFinal: (text) => console.log("Result:", text),
+const nonStreamingInput: HookInput<'TestAws', { stream: false }> = {
+  stream: false,
+  onFinalData: (text) => console.log("Result:", text),
+  onData: (text) => console.log("Result:", text),
   onError: (error) => console.error(error)
 }
 ```
 
 ```typescript title="Type Definition"
-type HookInput<FunctionName, Options extends { stream?: boolean } = { stream?: false }> = {
+type HookInput<FunctionName, Options extends { stream?: boolean } = { stream?: true }> = {
   stream?: Options['stream']
-  onPartial?: Options['stream'] extends true ? (response?: PartialReturnType<FunctionName>) => void : never
-  onFinal?: (response?: FinalReturnType<FunctionName>) => void
-  onError?: (error: Error) => void
+  onStreamData?: Options['stream'] extends false ? never : (response?: StreamDataType<FunctionName>) => void
+  onFinalData?: (response?: FinalDataType<FunctionName>) => void
+  onData?: (response?: StreamDataType<FunctionName> | FinalDataType<FunctionName>) => void
+  onError?: (error: BamlErrors) => void
 }
 ```
 </CodeBlocks>
@@ -71,22 +76,29 @@ type HookInput<FunctionName, Options extends { stream?: boolean } = { stream?: f
 </ParamField>
 
 <ParamField
-  path="onPartial"
-  type="(response?: PartialReturnType<FunctionName>) => void"
+  path="onStreamData"
+  type="(response?: StreamDataType<FunctionName>) => void"
 >
-  Callback function for partial responses. Only available when `Options['stream']` is true.
+  Callback function for streaming responses. Only available when `Options['stream']` is true.
 </ParamField>
 
 <ParamField
-  path="onFinal"
-  type="(response?: FinalReturnType<FunctionName>) => void"
+  path="onFinalData"
+  type="(response?: FinalDataType<FunctionName>) => void"
 >
   Callback function for the final response.
 </ParamField>
 
 <ParamField
+  path="onData"
+  type="(response?: StreamDataType<FunctionName> | FinalDataType<FunctionName>) => void"
+>
+  Unified callback function that receives both streaming and final responses. For non-streaming hooks, only receives final responses.
+</ParamField>
+
+<ParamField
   path="onError"
-  type="(error: Error) => void"
+  type="(error: BamlErrors) => void"
 >
   Callback function for error handling. See [Error Types](../errors/overview).
 </ParamField>
