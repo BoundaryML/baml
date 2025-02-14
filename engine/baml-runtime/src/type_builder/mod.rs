@@ -1,8 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use baml_types::{BamlValue, FieldType};
+use baml_types::{BamlValue, EvaluationContext, FieldType};
 use indexmap::IndexMap;
-use internal_baml_core::internal_baml_parser_database::ParserDatabase;
+use internal_baml_core::{
+    internal_baml_parser_database::ParserDatabase, ir::repr::TypeBuilderEntry,
+};
 
 use crate::runtime_context::{PropertyAttributes, RuntimeClassOverride, RuntimeEnumOverride};
 
@@ -248,6 +250,88 @@ impl TypeBuilder {
         Arc::clone(&self.recursive_type_aliases)
     }
 
+    pub fn add_entries(&self, entries: &[TypeBuilderEntry]) {
+        for entry in entries {
+            match entry {
+                TypeBuilderEntry::Class(cls) => {
+                    let mutex = self.class(&cls.elem.name);
+                    let class_builder = mutex.lock().unwrap();
+                    for f in &cls.elem.static_fields {
+                        class_builder
+                            .property(&f.elem.name)
+                            .lock()
+                            .unwrap()
+                            .r#type(f.elem.r#type.elem.to_owned())
+                            .with_meta(
+                                "alias",
+                                f.attributes.get("alias").map_or(BamlValue::Null, |v| {
+                                    v.resolve_string(&EvaluationContext::default())
+                                        .map_or(BamlValue::Null, BamlValue::String)
+                                }),
+                            )
+                            .with_meta(
+                                "description",
+                                f.attributes
+                                    .get("description")
+                                    .map_or(BamlValue::Null, |v| {
+                                        v.resolve_string(&EvaluationContext::default())
+                                            .map_or(BamlValue::Null, BamlValue::String)
+                                    }),
+                            );
+                    }
+                }
+
+                TypeBuilderEntry::Enum(enm) => {
+                    let mutex = self.r#enum(&enm.elem.name);
+                    let enum_builder = mutex.lock().unwrap();
+                    for (variant, _) in &enm.elem.values {
+                        enum_builder
+                            .value(&variant.elem.0)
+                            .lock()
+                            .unwrap()
+                            .with_meta(
+                                "alias",
+                                variant
+                                    .attributes
+                                    .get("alias")
+                                    .map_or(BamlValue::Null, |v| {
+                                        v.resolve_string(&EvaluationContext::default())
+                                            .map_or(BamlValue::Null, BamlValue::String)
+                                    }),
+                            )
+                            .with_meta(
+                                "description",
+                                variant.attributes.get("description").map_or(
+                                    BamlValue::Null,
+                                    |v| {
+                                        v.resolve_string(&EvaluationContext::default())
+                                            .map_or(BamlValue::Null, BamlValue::String)
+                                    },
+                                ),
+                            )
+                            .with_meta(
+                                "skip",
+                                variant.attributes.get("skip").map_or(BamlValue::Null, |v| {
+                                    v.resolve_bool(&EvaluationContext::default())
+                                        .map_or(BamlValue::Null, BamlValue::Bool)
+                                }),
+                            );
+                    }
+                }
+
+                TypeBuilderEntry::TypeAlias(alias) => {
+                    let mutex = self.type_alias(&alias.elem.name);
+                    let alias_builder = mutex.lock().unwrap();
+                    alias_builder.target(alias.elem.r#type.elem.to_owned());
+                }
+            }
+        }
+    }
+
+    /// Internal API of `TypeBuilder::add_baml`.
+    ///
+    /// Python, TS and Ruby wrappers will call this function when the user runs
+    /// `type_builder.add_baml("BAML CODE")`
     pub fn add_baml(&self, baml: &str, rt: &crate::BamlRuntime) -> anyhow::Result<()> {
         use internal_baml_core::{
             internal_baml_diagnostics::{Diagnostics, SourceFile},
@@ -255,8 +339,6 @@ impl TypeBuilder {
             ir::repr::IntermediateRepr,
             run_validation_pipeline_on_db, validate_type_builder_entries,
         };
-
-        use baml_types::EvaluationContext;
 
         let path = std::path::PathBuf::from("TypeBuilder::add_baml");
         let source = SourceFile::from((path.clone().into(), baml));
@@ -293,71 +375,14 @@ impl TypeBuilder {
             IntermediateRepr::type_builder_entries_from_scoped_db(&scoped_db, &rt.inner.db)
                 .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
-        for cls in classes {
-            let mutex = self.class(&cls.elem.name);
-            let class_builder = mutex.lock().unwrap();
-            for f in &cls.elem.static_fields {
-                class_builder
-                    .property(&f.elem.name)
-                    .lock()
-                    .unwrap()
-                    .r#type(f.elem.r#type.elem.to_owned())
-                    .with_meta(
-                        "alias",
-                        f.attributes.get("alias").map_or(BamlValue::Null, |v| {
-                            v.resolve_string(&EvaluationContext::default())
-                                .map_or(BamlValue::Null, BamlValue::String)
-                        }),
-                    )
-                    .with_meta(
-                        "description",
-                        f.attributes
-                            .get("description")
-                            .map_or(BamlValue::Null, |v| {
-                                v.resolve_string(&EvaluationContext::default())
-                                    .map_or(BamlValue::Null, BamlValue::String)
-                            }),
-                    );
-            }
-        }
-
-        for enm in enums {
-            let mutex = self.r#enum(&enm.elem.name);
-            let enum_builder = mutex.lock().unwrap();
-            for (variant, _) in &enm.elem.values {
-                enum_builder
-                    .value(&variant.elem.0)
-                    .lock()
-                    .unwrap()
-                    .with_meta(
-                        "alias",
-                        variant
-                            .attributes
-                            .get("alias")
-                            .map_or(BamlValue::Null, |v| {
-                                v.resolve_string(&EvaluationContext::default())
-                                    .map_or(BamlValue::Null, BamlValue::String)
-                            }),
-                    )
-                    .with_meta(
-                        "description",
-                        variant
-                            .attributes
-                            .get("description")
-                            .map_or(BamlValue::Null, |v| {
-                                v.resolve_string(&EvaluationContext::default())
-                                    .map_or(BamlValue::Null, BamlValue::String)
-                            }),
-                    )
-                    .with_meta(
-                        "skip",
-                        variant.attributes.get("skip").map_or(BamlValue::Null, |v| {
-                            v.resolve_bool(&EvaluationContext::default())
-                                .map_or(BamlValue::Null, BamlValue::Bool)
-                        }),
-                    );
-            }
-        }
+        self.add_entries(
+            &classes
+                .into_iter()
+                .map(TypeBuilderEntry::Class)
+                .chain(enums.into_iter().map(TypeBuilderEntry::Enum))
+                .chain(type_aliases.into_iter().map(TypeBuilderEntry::TypeAlias))
+                .collect::<Vec<_>>(),
+        );
 
         self.recursive_type_aliases()
             .lock()
