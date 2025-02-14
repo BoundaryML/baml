@@ -5,6 +5,7 @@ pub(crate) mod commands;
 pub(crate) mod deploy;
 pub(crate) mod format;
 pub(crate) mod propelauth;
+pub(crate) mod test;
 pub(crate) mod tui;
 
 use anyhow::Result;

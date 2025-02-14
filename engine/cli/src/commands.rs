@@ -39,6 +39,9 @@ pub(crate) enum Commands {
 
     #[command(about = "Format BAML source files", name = "fmt", hide = true)]
     Format(crate::format::FormatArgs),
+
+    #[command(about = "Run BAML tests")]
+    Test(crate::test::TestArgs),
 }
 
 impl RuntimeCli {
@@ -74,6 +77,7 @@ impl RuntimeCli {
                 // args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
                 args.run()
             }
+            Commands::Test(args) => t.block_on(async { args.run().await }),
         }
     }
 }

@@ -8,11 +8,12 @@ pub(crate) mod internal;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod cli;
 pub mod client_registry;
-pub mod test_constraints;
 pub mod errors;
 pub mod request;
 mod runtime;
 pub mod runtime_interface;
+pub mod test_constraints;
+pub mod test_executor;
 pub mod tracing;
 pub mod type_builder;
 mod types;
@@ -29,6 +30,8 @@ use baml_types::BamlValue;
 use baml_types::Constraint;
 use cfg_if::cfg_if;
 use client_registry::ClientRegistry;
+use futures::future::join;
+use futures::future::join_all;
 use indexmap::IndexMap;
 use internal_baml_core::configuration::CloudProject;
 use internal_baml_core::configuration::CodegenGenerator;
@@ -64,8 +67,8 @@ pub use internal_baml_core::internal_baml_diagnostics;
 pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
 pub use internal_baml_core::ir::{scope_diagnostics, FieldType, IRHelper, TypeValue};
 
-use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
 use crate::internal::llm_client::LLMResponse;
+use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
 
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
@@ -267,8 +270,14 @@ impl BamlRuntime {
             } else {
                 match val {
                     Some(Ok(value)) => {
-                        let value_with_constraints = value.0.map_meta(|(_,constraints,_)| constraints.clone());
-                        evaluate_test_constraints(&params, &value_with_constraints, complete_resp, constraints)
+                        let value_with_constraints =
+                            value.0.map_meta(|(_, constraints, _)| constraints.clone());
+                        evaluate_test_constraints(
+                            &params,
+                            &value_with_constraints,
+                            complete_resp,
+                            constraints,
+                        )
                     }
                     _ => TestConstraintsResult::empty(),
                 }
