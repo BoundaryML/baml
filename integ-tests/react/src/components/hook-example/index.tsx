@@ -167,10 +167,10 @@ function ResponseCard({ hookResult, hasStarted }: ResponseCardProps) {
 }
 
 export default function TestClient() {
-  const [isStreamingEnabled, setIsStreamingEnabled] = React.useState<boolean>()
+  const [isStreamingEnabled, setIsStreamingEnabled] = React.useState(true)
 
   const hookResult = useTestAws({
-    stream: true,
+    stream: isStreamingEnabled as true,
     onStreamData: (response) => {},
   })
 
