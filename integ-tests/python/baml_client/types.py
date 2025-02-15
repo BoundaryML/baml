@@ -16,7 +16,8 @@
 import baml_py
 from enum import Enum
 from pydantic import BaseModel, ConfigDict
-from typing import Dict, Generic, List, Literal, Optional, TypeVar, Union, TypeAlias
+from typing_extensions import TypeAlias
+from typing import Dict, Generic, List, Literal, Optional, TypeVar, Union
 
 
 T = TypeVar('T')
@@ -558,22 +559,22 @@ class WithReasoning(BaseModel):
     value: str
     reasoning: str
 
-RecursiveMapAlias: TypeAlias = Dict[str, "RecursiveMapAlias"]
-
-RecursiveListAlias: TypeAlias = List["RecursiveListAlias"]
-
-RecAliasOne: TypeAlias = "RecAliasTwo"
-
-RecAliasTwo: TypeAlias = "RecAliasThree"
-
-RecAliasThree: TypeAlias = List["RecAliasOne"]
-
-JsonValue: TypeAlias = Union[int, str, bool, float, "JsonObject", "JsonArray"]
-
-JsonObject: TypeAlias = Dict[str, "JsonValue"]
-
 JsonArray: TypeAlias = List["JsonValue"]
 
 JsonEntry: TypeAlias = Union["SimpleTag", "JsonTemplate"]
 
+JsonObject: TypeAlias = Dict[str, "JsonValue"]
+
 JsonTemplate: TypeAlias = Dict[str, "JsonEntry"]
+
+JsonValue: TypeAlias = Union[int, str, bool, float, "JsonObject", "JsonArray"]
+
+RecAliasOne: TypeAlias = "RecAliasTwo"
+
+RecAliasThree: TypeAlias = List["RecAliasOne"]
+
+RecAliasTwo: TypeAlias = "RecAliasThree"
+
+RecursiveListAlias: TypeAlias = List["RecursiveListAlias"]
+
+RecursiveMapAlias: TypeAlias = Dict[str, "RecursiveMapAlias"]
