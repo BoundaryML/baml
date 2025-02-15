@@ -1,18 +1,26 @@
 // Run from the baml-schema-wasm folder with:
-// wasm-pack test --node
+// RUST_LOG=info wasm-pack test --node --test test_log_collector
 // and make sure to set rust-analyzer target in vscode settings to:   "rust-analyzer.cargo.target": "wasm32-unknown-unknown",
+
+// Browser test command is:
+// RUST_BACKTRACE=1 RUST_LOG=info wasm-pack test --chrome --headless --test test_log_collector -- --nocapture
 #[cfg(target_arch = "wasm32")]
 #[cfg(test)]
 mod tests {
 
-    use tokio::sync::Mutex;
+    use core::time;
+    use core::time::Duration;
+    use once_cell::sync::Lazy;
+    use std::sync::Mutex;
+    use wasmtimer::tokio::*;
 
-    pub static GLOBAL_TRACE_STORAGE: Lazy<Mutex<u32>> = Lazy::new(|| Mutex::new(0));
+    // pub static GLOBAL_TRACE_STORAGE: Lazy<Mutex<u32>> = Lazy::new(|| Mutex::new(0));
+    use baml_runtime::{tracingv2::storage::storage::TRACER, InternalRuntimeInterface};
     use std::collections::HashMap;
 
     use baml_schema_build::runtime_wasm::{WasmProject, WasmRuntime};
 
-    use baml_runtime::{BamlRuntime, RuntimeContext};
+    use baml_runtime::{tracingv2::publisher::publisher::flush, BamlRuntime, RuntimeContext};
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;
@@ -20,7 +28,20 @@ mod tests {
 
     // instantiate logger
 
-    // wasm_bindgen_test_configure!(run_in_browser);
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    use futures_timer::Delay;
+    use wasm_bindgen::prelude::*;
+    use wasmtimer::tokio::{interval, sleep, timeout};
+    use web_sys::console::log_1;
+
+    // #[wasm_bindgen_test]
+    // pub async fn sleep_test() {
+    //     log_1(&JsValue::from_str("Sleeping Rust"));
+    //     sleep(Duration::from_secs(3)).await;
+    //     // let now = Delay::new(Duration::from_secs(3)).await;
+    //     log_1(&JsValue::from_str("Slept Rust"));
+    // }
 
     /// Sample BAML content for testing.
     fn sample_baml_content() -> String {
@@ -72,32 +93,25 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn test_run_tests() {
+    async fn test_run_tests() {
         wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
         let sample_baml_content = r##"
-function Func(name: string ) -> string {
-        client "openai/gpt-4o"
-        prompt #"
-        Return the name of {{name}}
-        "#
-}
-
-test One {
-    functions [Func]
-    args {
-        name "john"
+    function Func(name: string ) -> string {
+            client "openai/gpt-4o"
+            prompt #"
+            Return the name of {{name}}
+            "#
     }
-}
 
-test Two {
-    functions [Func]
-    args {
-        name "jane"
+    test One {
+        functions [Func]
+        args {
+            name "john"
+        }
     }
-}
 
 
-        "##;
+            "##;
         let mut files = HashMap::new();
         files.insert("error.baml".to_string(), sample_baml_content.to_string());
         let files_js = to_value(&files).unwrap();
@@ -111,18 +125,27 @@ test Two {
             .collect::<HashMap<_, _>>();
         let env_vars_js = to_value(&env_vars).unwrap();
 
-        let current_runtime = project.runtime(env_vars_js).map_err(JsValue::from).unwrap();
+        let mut current_runtime = project.runtime(env_vars_js).map_err(JsValue::from).unwrap();
 
         let diagnostics = project.diagnostics(&current_runtime);
-        let functions = current_runtime.list_functions();
-        functions.iter().for_each(|f| {
-            log::info!("function: {:#?}", f);
-            f.test_cases.iter().for_each(|t| {
-                log::info!("test case: {:#?}", t);
-            });
-            f.run_test(&mut current_runtime, "One".to_string(), None, None);
-        });
-
         assert!(diagnostics.errors().is_empty());
+
+        let functions = current_runtime.list_functions();
+        for f in functions.iter() {
+            f.run_test(
+                &mut current_runtime,
+                "One".to_string(),
+                (js_sys::Function::new_no_args("")),
+                (js_sys::Function::new_no_args("")),
+            )
+            .await;
+        }
+
+        let events = TRACER.blocking_lock().events();
+        log::info!("Events {:#?}", events);
+        // TODO: this makes the test hang on Node, but not in browser.
+        flush().await;
+
+        log::info!("done!!")
     }
 }

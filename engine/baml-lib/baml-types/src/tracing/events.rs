@@ -31,7 +31,7 @@ pub struct TraceEvent {
     // The timestamp of the log
     // idk what this does yet #[serde(with = "timestamp_serde")]
     #[serde(with = "timestamp_serde")]
-    pub timestamp: OffsetDateTime,
+    pub timestamp: web_time::SystemTime,
 
     /// human-readable callsite identifier, e.g. "ExtractResume" or "openai/gpt-4o/chat"
     pub callsite: String,
@@ -169,7 +169,6 @@ pub struct LLMUsage {
 /// (If you need to support error variants, you will have to expand this logic.)
 ///
 use serde::Deserializer;
-use time::OffsetDateTime;
 fn deserialize_ok<'de, D, T>(deserializer: D) -> Result<Result<T, anyhow::Error>, D::Error>
 where
     D: Deserializer<'de>,
@@ -189,32 +188,29 @@ where
     }
 }
 
-/// -------------------------------------------------------------------------
-///
-/// Custom (de)serializer for timestamps.
-///
-/// This module is essentially the same as in tracing.rs but adapted
-/// for the `web_time::Instant` type. (It expects that `web_time::Instant`
-/// has a method [`unix_timestamp()`] and an associated
-/// constructor [`from_unix_timestamp(i64)`].)
-///
 mod timestamp_serde {
     use serde::{Deserializer, Serializer};
-    use time::OffsetDateTime;
+    use web_time::{Duration, SystemTime};
 
-    pub fn serialize<S>(time: &OffsetDateTime, serializer: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(time: &SystemTime, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        serializer.serialize_i64(time.unix_timestamp())
+        // Convert to duration since Unix epoch, then to i64 milliseconds
+        let dur = time
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(serde::ser::Error::custom)?;
+        let millis = dur.as_millis() as i64;
+        serializer.serialize_i64(millis)
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<SystemTime, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let timestamp_millis: i64 = serde::Deserialize::deserialize(deserializer)?;
-        OffsetDateTime::from_unix_timestamp(timestamp_millis).map_err(serde::de::Error::custom)
+        // Read the i64 milliseconds, convert back to SystemTime
+        let millis: i64 = serde::Deserialize::deserialize(deserializer)?;
+        Ok(SystemTime::UNIX_EPOCH + Duration::from_millis(millis as u64))
     }
 }
 

@@ -112,7 +112,7 @@ colored = { version = "2.1.0", default-features = false, features = [
   "no-color",
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
-js-sys = "0.3.69"
+js-sys = "0.3.77"
 reqwest = { version = "0.12.12", features = ["stream", "json", "native-tls-vendored", "native-tls-alpn"] }
 # 
 send_wrapper = { version = "0.6.0", features = ["futures"] }
@@ -120,7 +120,7 @@ serde-wasm-bindgen = "0.6.5"
 uuid = { version = "1.8.0", features = ["v4", "serde", "js"] }
 # WARNING: Do not add serde-serialize feature to wasm-bindgen.
 # It may produce a dependency cycle in projects that use wasm and import baml.
-wasm-bindgen = "^0.2.74"
+wasm-bindgen = "^0.2.100"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3.69", features = [
   "Crypto",
@@ -133,6 +133,7 @@ web-sys = { version = "0.3.69", features = [
   "SubtleCrypto",
   "Window",
 ] }
+wasmtimer = "0.4.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 aws-config = "1.5.3"
@@ -166,7 +167,7 @@ expect-test = "1.1.0"
 indoc.workspace = true
 either = "1.8.1"
 rstest = "0.22.0"
-wasm-bindgen-test = "0.3.42"
+wasm-bindgen-test = "0.3.50"
 walkdir = "2.5.0"
 wasm-logger = "0.2.0"
 

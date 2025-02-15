@@ -6,10 +6,11 @@ use tokio::sync::Mutex;
 // (In your real code these come from the baml_types crate)
 use baml_types::tracing::events::{FunctionId, TraceEvent};
 
+use crate::tracingv2::publisher::publisher::PublisherMessage;
+
 use super::super::publisher::PUBLISHING_CHANNEL;
 
-pub static GLOBAL_TRACE_STORAGE: Lazy<Mutex<TraceStorage>> =
-    Lazy::new(|| Mutex::new(TraceStorage::default()));
+pub static TRACER: Lazy<Mutex<TraceStorage>> = Lazy::new(|| Mutex::new(TraceStorage::default()));
 
 #[derive(Default)]
 pub struct TraceStorage {
@@ -19,6 +20,7 @@ pub struct TraceStorage {
     usage_count: HashMap<FunctionId, usize>,
 }
 
+// TODO: dont spawn new threads for each event. Use a channel.
 impl TraceStorage {
     pub fn new() -> Self {
         Self {
@@ -70,8 +72,12 @@ impl TraceStorage {
         }
 
         // Publish this event so that the TracePublisher can process it.
-        if let Err(e) = PUBLISHING_CHANNEL.send(event.clone()) {
-            log::error!("Failed to send event to publisher: {:?}", e);
-        }
+        // if let Err(e) = PUBLISHING_CHANNEL.send(PublisherMessage::Trace(event.clone())) {
+        //     log::error!("Failed to send event to publisher: {:?}", e);
+        // }
+    }
+
+    pub fn events(&self) -> HashMap<FunctionId, Arc<Mutex<Vec<Arc<TraceEvent>>>>> {
+        return self.span_map.clone();
     }
 }

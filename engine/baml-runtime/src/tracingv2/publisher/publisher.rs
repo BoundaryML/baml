@@ -1,19 +1,23 @@
+use baml_types::rpc::{TraceEventBatch, TraceEventUploadRequest};
 use baml_types::tracing::events::TraceEvent;
+use core::time::Duration;
 use futures::StreamExt;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio::time::{self, Duration};
-
-// Bring in our definitions for our event types and upload objects.
-// (Again these are assumed to come from baml_types or your own modules.)
-use baml_types::rpc::{TraceEventBatch, TraceEventUploadRequest};
+#[cfg(not(target_family = "wasm"))]
+use tokio::time::*;
+#[cfg(target_family = "wasm")]
+use wasmtimer::tokio::*;
+pub enum PublisherMessage {
+    Trace(Arc<TraceEvent>),
+    Flush(tokio::sync::oneshot::Sender<()>),
+}
 
 /// Global publisher channel.
 /// When the module is first used, we create an unbounded channel and then spawn the publisher task.
-/// (We use `tokio::spawn` on native and `wasm_bindgen_futures::spawn_local` on wasm.)
-pub static PUBLISHING_CHANNEL: once_cell::sync::Lazy<mpsc::UnboundedSender<Arc<TraceEvent>>> =
+pub static PUBLISHING_CHANNEL: once_cell::sync::Lazy<mpsc::UnboundedSender<PublisherMessage>> =
     once_cell::sync::Lazy::new(|| {
-        let (tx, rx) = mpsc::unbounded_channel::<Arc<TraceEvent>>();
+        let (tx, rx) = mpsc::unbounded_channel::<PublisherMessage>();
         // Spawn the publisher task.
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -33,32 +37,45 @@ pub static PUBLISHING_CHANNEL: once_cell::sync::Lazy<mpsc::UnboundedSender<Arc<T
     });
 
 pub struct TracePublisher {
-    rx: mpsc::UnboundedReceiver<Arc<TraceEvent>>,
+    rx: mpsc::UnboundedReceiver<PublisherMessage>,
 }
 
 impl TracePublisher {
-    pub fn new(rx: mpsc::UnboundedReceiver<Arc<TraceEvent>>) -> Self {
+    pub fn new(rx: mpsc::UnboundedReceiver<PublisherMessage>) -> Self {
         Self { rx }
     }
 
     /// Runs the publisher loop.
     ///
-    /// The loop collects incoming events until either a batch reaches 1024 events
-    /// or 5 seconds elapse. Then it calls `process_batch` on the collected events.
+    /// The loop collects incoming events until a batch condition is reached, a timer expires,
+    /// or a flush command is received.
     pub async fn run(&mut self) {
         let mut buffer: Vec<Arc<TraceEvent>> = Vec::new();
-        let mut tick_interval = time::interval(Duration::from_secs(3));
+        let mut tick_interval = interval(Duration::from_secs(2));
 
         loop {
             tokio::select! {
-                // Receive a new event.
-                Some(event) = self.rx.recv() => {
-                    buffer.push(event);
-                    if buffer.len() >= 1024 {
-                        self.process_batch(std::mem::take(&mut buffer)).await;
+                // Process any incoming command or event.
+                Some(message) = self.rx.recv() => {
+                    match message {
+                        PublisherMessage::Trace(event) => {
+                            buffer.push(event);
+                            if buffer.len() >= 3 {
+                                self.process_batch(std::mem::take(&mut buffer)).await;
+                            }
+                        },
+                        PublisherMessage::Flush(flush_ack) => {
+                            log::info!("Got a flush event");
+                            // Flush the current buffer if it has any pending events.
+                            if !buffer.is_empty() {
+                                self.process_batch(std::mem::take(&mut buffer)).await;
+                            }
+                            // Signal flush completion.
+                            let _ = flush_ack.send(());
+                        },
                     }
                 }
-                // Every 5 seconds, process any events that have been buffered.
+                // Periodic flush of pending events.
                 _ = tick_interval.tick() => {
                     if !buffer.is_empty() {
                         self.process_batch(std::mem::take(&mut buffer)).await;
@@ -75,6 +92,7 @@ impl TracePublisher {
     ///   2. Append the JSON to a file (using async file I/O on macOS).
     ///   3. Post the JSON to an HTTP API with up to 3 retries.
     async fn process_batch(&self, batch: Vec<Arc<TraceEvent>>) {
+        log::info!("Processing batch {:#?}", batch);
         // Assemble the upload request structure.
         let upload_request = TraceEventUploadRequest::V1 {
             project_id: "project123".to_string(),
@@ -102,27 +120,49 @@ impl TracePublisher {
         }
 
         // Upload via HTTP with retry logic.
-        let client = reqwest::Client::new();
-        let mut retries = 3;
-        while retries > 0 {
-            match client
-                .post("https://3vwc8vlts7.execute-api.us-east-1.amazonaws.com/v1/baml-traces")
-                .json(&upload_request)
-                .send()
-                .await
-            {
-                Ok(response) => {
-                    log::info!("Upload completed with status {}", response.status());
-                    break;
-                }
-                Err(e) => {
-                    log::error!("Upload failed: {}", e);
-                    retries -= 1;
-                    if retries > 0 {
-                        time::sleep(Duration::from_secs(1)).await;
-                    }
-                }
-            }
-        }
+        // TODO watch out with time crate
+        // let client = reqwest::Client::new();
+        // let mut retries = 3;
+        // while retries > 0 {
+        //     match client
+        //         .post("https://3vwc8vlts7.execute-api.us-east-1.amazonaws.com/v1/baml-traces")
+        //         .json(&upload_request)
+        //         .send()
+        //         .await
+        //     {
+        //         Ok(response) => {
+        //             log::info!("Upload completed with status {}", response.status());
+        //             break;
+        //         }
+        //         Err(e) => {
+        //             log::error!("Upload failed: {}", e);
+        //             retries -= 1;
+        //             if retries > 0 {
+        //                 time::sleep(Duration::from_secs(1)).await;
+        //             }
+        //         }
+        //     }
+        // }
+    }
+}
+
+// Note, the library we are using doesnt seem to work well for flushing in Node
+// but that's ok since noone uses our wasm build in node for logging.
+// https://github.com/whizsid/wasmtimer-rs/issues/26
+pub async fn flush() {
+    log::info!("flushing");
+    let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+    if let Err(e) = PUBLISHING_CHANNEL.send(PublisherMessage::Flush(ack_tx)) {
+        log::error!("Failed to send flush request: {:?}", e);
+        return;
+    }
+
+    // Set a timeout to avoid waiting indefinitely.
+    let timeout_duration = Duration::from_secs(3);
+
+    match timeout(timeout_duration, ack_rx).await {
+        Ok(Ok(())) => log::info!("Flush acknowledged successfully."),
+        Ok(Err(e)) => log::error!("Flush acknowledgement error: {:?}", e),
+        Err(_) => log::error!("Flush timed out after {:?}", timeout_duration),
     }
 }

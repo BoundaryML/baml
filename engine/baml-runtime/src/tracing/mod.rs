@@ -1,9 +1,12 @@
 pub mod api_wrapper;
 
 use crate::on_log_event::LogEventCallbackSync;
+use crate::tracingv2::storage::storage::TRACER;
 use crate::InnerTraceStats;
 use anyhow::{Context, Result};
-use baml_types::tracing::events::{ContentId, FunctionId, TraceData, TraceEvent, TraceLevel};
+use baml_types::tracing::events::{
+    BamlOptions, ContentId, FunctionId, FunctionStart, TraceData, TraceEvent, TraceLevel,
+};
 use baml_types::{BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta};
 use cfg_if::cfg_if;
 use colored::{ColoredString, Colorize};
@@ -11,7 +14,7 @@ use internal_baml_jinja::RenderedPrompt;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use time::OffsetDateTime;
+use std::time::SystemTime;
 use tracing::Instrument;
 
 use jsonish::ResponseBamlValue;
@@ -251,6 +254,24 @@ impl BamlTracer {
             params: params.clone(),
             start_time: web_time::SystemTime::now(),
         };
+        let trace_event = TraceEvent {
+            span_id: FunctionId(span_id.to_string()),
+            event_id: ContentId(span_id.to_string()), // TODO generate uuid
+            span_chain: vec![],
+            timestamp: web_time::SystemTime::now(),
+            callsite: "".to_string(),
+            verbosity: TraceLevel::Trace,
+            content: TraceData::FunctionStart(FunctionStart {
+                name: Default::default(),
+                args: vec![],
+                options: BamlOptions {
+                    type_builder: None,
+                    client_registry: None,
+                },
+            }),
+            tags: Default::default(),
+        };
+        TRACER.blocking_lock().put(Arc::new(trace_event));
 
         Some(span)
     }
@@ -334,7 +355,7 @@ impl BamlTracer {
             span_id: FunctionId(span_id.to_string()),
             event_id: ContentId(span_id.to_string()), // TODO generate uuid
             span_chain: vec![],
-            timestamp: OffsetDateTime::now_utc(),
+            timestamp: web_time::SystemTime::now(),
             callsite: "".to_string(),
             verbosity: TraceLevel::Trace,
             content: event,

@@ -170,9 +170,9 @@ impl RuntimeContextManager {
         Ok(ctx)
     }
 
+    // for tests only
     pub fn create_ctx_with_default(&self) -> RuntimeContext {
         let ctx = self.context.lock().unwrap();
-        let span_id = ctx.last().map(|(id, ..)| *id).unwrap();
 
         RuntimeContext::new(
             self.baml_src_reader.clone(),
@@ -183,7 +183,7 @@ impl RuntimeContextManager {
             Default::default(),
             Default::default(),
             Default::default(),
-            span_id,
+            uuid::Uuid::new_v4(),
         )
     }
 
