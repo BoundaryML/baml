@@ -1,4 +1,4 @@
-import { BamlRuntime, FunctionResult, BamlCtxManager, BamlSyncStream, Image, ClientRegistry, createBamlValidationError, BamlValidationError } from "@boundaryml/baml"
+import { BamlRuntime, FunctionResult, BamlCtxManager, BamlSyncStream, Image, ClientRegistry, toBamlError } from "@boundaryml/baml"
 import { Checked, Check } from "./types"
 import {
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%} 
@@ -42,12 +42,7 @@ export class BamlSyncClient {
     )
     return raw.parsed(false) as {{fn.return_type}}
     } catch (error: any) {
-      const bamlError = createBamlValidationError(error);
-      if (bamlError instanceof BamlValidationError) {
-        throw bamlError;
-      } else {
-        throw error;
-      }
+      throw toBamlError(error);
     }
   }
   {% endfor %}

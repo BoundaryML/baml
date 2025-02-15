@@ -126,6 +126,17 @@ where
                     Some(parse_fn(&s.content))
                 }
             }
+            LLMResponse::LLMFailure(LLMErrorResponse { code, client, message, .. }) => {
+                match code {
+                    // This is some internal BAML error, so handle it like any other error
+                    crate::internal::llm_client::ErrorCode::Other(2) => None,
+                    _ => Some(Err(anyhow::anyhow!(crate::errors::ExposedError::ClientHttpError {
+                        client_name: client.clone(),
+                        message: message.clone(),
+                        status_code: code.clone(),
+                    }))),
+                }
+            }
             _ => None,
         };
 

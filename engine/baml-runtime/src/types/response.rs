@@ -113,19 +113,23 @@ impl FunctionResult {
         self.result_with_constraints()
             .as_ref()
             .map(|res| {
-                if let Ok(val) = res {
-                    Ok(val)
-                } else {
-                    Err(self.format_err(res.as_ref().err().unwrap()))
+                match res {
+                    Ok(val) => Ok(val),
+                    Err(err) => {
+                        Err(anyhow::anyhow!(self.format_err(err)))
+                    }
                 }
             })
             .unwrap_or_else(|| Err(anyhow::anyhow!(self.llm_response().clone())))
     }
 
-    fn format_err(&self, err: &anyhow::Error) -> anyhow::Error {
+    fn format_err(&self, err: &anyhow::Error) -> ExposedError {
+        if let Some(exposed_error) = err.downcast_ref::<ExposedError>() {
+            return exposed_error.clone();
+        }
         // Capture the actual error to preserve its details
         let actual_error = err.to_string();
-        anyhow::anyhow!(ExposedError::ValidationError {
+        ExposedError::ValidationError {
             prompt: match self.llm_response() {
                 LLMResponse::Success(resp) => resp.prompt.to_string(),
                 LLMResponse::LLMFailure(err) => err.prompt.to_string(),
@@ -150,7 +154,7 @@ impl FunctionResult {
                 LLMResponse::InternalFailure(err) =>
                     format!("Internal Failure: {} - {}", err, actual_error),
             },
-        })
+        }
     }
 }
 

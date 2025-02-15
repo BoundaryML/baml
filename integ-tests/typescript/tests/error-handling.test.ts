@@ -1,4 +1,4 @@
-import { b, ClientRegistry, BamlValidationError } from './test-setup'
+import { b, ClientRegistry, BamlValidationError, BamlClientHttpError } from './test-setup'
 
 describe('Error Handling Tests', () => {
   it('should raise an error for invalid argument types', async () => {
@@ -27,7 +27,7 @@ describe('Error Handling Tests', () => {
         expect(error.raw_output).toBeDefined()
         expect(error.raw_output.length).toBeGreaterThan(0)
       } else {
-        fail('Expected error to be an instance of BamlValidationError')
+        expect(`${error}`).toBe("FAILED")
       }
     }
   })
@@ -40,7 +40,29 @@ describe('Error Handling Tests', () => {
       await b.MyFunc("My name is Harrison. My hair is black and I'm 6 feet tall.", { clientRegistry: cr })
       fail('Expected b.MyFunc to throw a BamlClientHttpError')
     } catch (error: any) {
-      expect(error.message).toContain('BamlClientHttpError')
+      if (error instanceof BamlClientHttpError) {
+        expect(error.message).toContain('BamlClientHttpError')
+        expect(error.status_code).toBe(401)
+      } else {
+        expect(`${error}`).toBe("FAILED")
+      }
+    }
+  })
+
+  it('should raise a BamlClientHttpError with proper details', async () => {
+    try {
+      const cr = new ClientRegistry()
+      cr.addLlmClient('MyClient', 'openai', { model: 'random-model' })
+      cr.setPrimary('MyClient')
+      await b.MyFunc("My name is Harrison. My hair is black and I'm 6 feet tall.", { clientRegistry: cr })
+      fail('Expected b.MyFunc to throw a BamlClientHttpError')
+    } catch (error: any) {
+      if (error instanceof BamlClientHttpError) {
+        expect(error.message).toContain('BamlClientHttpError')
+        expect(error.status_code).toBe(404)
+      } else {
+          expect(`${error}`).toBe("FAILED")
+      }
     }
   })
 })

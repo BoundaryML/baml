@@ -35,6 +35,23 @@ impl TypeBuilder {
         type_builder::TypeBuilder::new().into()
     }
 
+    /// provides a detailed string representation of the typebuilder for python users.
+    ///
+    /// this method exposes the rust-implemented string formatting to python, ensuring
+    /// consistent and professional output across both languages. the representation
+    /// includes a complete view of:
+    ///
+    /// * all defined classes with their properties
+    /// * all defined enums with their values
+    /// * metadata such as aliases and descriptions
+    /// * type information for properties
+    ///
+    /// the output format is carefully structured for readability, making it quite easy :D
+    /// to understand the complete type hierarchy at a glance.
+    pub fn __str__(&self) -> String {
+        self.inner.to_string()
+    }
+
     pub fn r#enum(&self, name: &str) -> EnumBuilder {
         EnumBuilder {
             inner: self.inner.r#enum(name),

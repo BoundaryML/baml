@@ -12,9 +12,10 @@ crate::lang_wrapper!(BamlAudioPy, baml_types::BamlMedia);
 #[pymethods]
 impl BamlAudioPy {
     #[staticmethod]
-    fn from_url(url: String) -> Self {
+    #[pyo3(signature = (url, media_type = None))]
+    fn from_url(url: String, media_type: Option<String>) -> Self {
         BamlAudioPy {
-            inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Audio, url, None),
+            inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Audio, url, media_type),
         }
     }
 

@@ -1,14 +1,64 @@
 ---
-title: Chain of Thought Prompting
+title: Chain-of-Thought Prompting
 ---
 
-Chain of thought prompting is a technique that encourages the language model to think step by step, reasoning through the problem before providing an answer. This can improve the quality of the response and make it easier to understand.
+Chain-of-thought prompting is a technique that asdf encourages the language model to think step by step, reasoning through the problem before providing an answer. This can improve the quality of the response and make it easier to understand.
 
+<Frame caption="Chain-of-Thought Prompting [Wei et al. (2022)](https://arxiv.org/abs/2201.11903)">
+  <img src="../../assets/guide/cot.png" alt="Chain-of-Thought Prompting"/>
+</Frame>
+
+
+There are a few different ways to implement chain-of-thought prompting, especially for structured outputs.
+
+1. Require the model to reason before outputting the structured object.
+    - Bonus: Use a `template_string` to embed the reasoning into multiple functions.
+2. Require the model to **flexibly** reason before outputting the structured object.
+3. Embed reasoning in the structured object.
+4. Ask the model to embed reasoning as comments in the structured object.
+
+Let's look at an example of each of these.
+
+<Tip>
+  We recommend [Technique 2](#technique-2-allowing-for-flexible-reasoning) for most use cases.
+  But each technique has its own trade-offs, so please try them out and see which one works best for your use case.
+</Tip>
+
+<Info>
+  Since BAML leverages [Schema-Aligned Parsing (SAP)](https://www.boundaryml.com/blog/schema-aligned-parsing) instead of JSON.parse or LLM modification (like constrained generation or structured outputs), we can do all of the above techniques with any language model!
+</Info>
+
+## Technique 1: Reasoning before outputting the structured object
 
 In the below example, we use chain of thought prompting to extract information from an email.
 
-BAML will still parse the response as an `OrderInfo` object, even though there is additional text in the response.
-```baml
+```baml {9-17}
+function GetOrderInfo(email: Email) -> OrderInfo {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    extract everything from this email.
+
+
+    {{ ctx.output_format }}
+
+    Before you answer, please explain your reasoning step-by-step. 
+    
+    For example:
+    If we think step by step we can see that ...
+
+    Therefore the output is:
+    {
+      ... // schema
+    }
+
+    {{ _.role('user') }}
+
+    Sender: {{email.from_address}}
+    Email Subject: {{email.subject}}
+    Email Body: {{email.body}}
+  "#
+}
+
 class Email {
     subject string
     body string
@@ -20,30 +70,6 @@ class OrderInfo {
     order_status "ORDERED" | "SHIPPED" | "DELIVERED" | "CANCELLED"
     tracking_number string?
     estimated_arrival_date string?
-}
-
-function GetOrderInfo(email: Email) -> OrderInfo {
-  client GPT4o
-  prompt #"
-    Extract the info from this email in the INPUT:
-
-    INPUT:
-    -------
-    from: {{email.from_address}}
-    Email Subject: {{email.subject}}
-    Email Body: {{email.body}}
-    -------
-
-    {{ ctx.output_format }}
-
-    Before you output the JSON, please explain your
-    reasoning step-by-step. Here is an example on how to do this:
-    'If we think step by step we can see that ...
-     therefore the output JSON is:
-    {
-      ... the json schema ...
-    }'
-  "#
 }
 
 test Test1 {
@@ -71,5 +97,169 @@ test Test1 {
 
     }
   }
+}
+```
+
+
+### Reusable Chain-of-Thought Snippets
+
+You may want to reuse the same technique for multiple functions. Consider [template_string](/ref/baml/template-string)!
+
+```baml {1-12, 21}
+template_string ChainOfThought(action: string?) #"
+    Before you answer, please explain your reasoning step-by-step.
+    {% if action %}{{ action }}{% endif %}
+    
+    For example:
+    If we think step by step we can see that ...
+
+    Therefore the output is:
+    {
+      ... // schema
+    }
+"#
+
+function GetOrderInfo(email: Email) -> OrderInfo {
+  client "openai/gpt-"
+  prompt #"
+    Extract everything from this email.
+
+    {{ ctx.output_format }}
+
+    {{ ChainOfThought("focus on things related to shipping") }}
+
+    {{ _.role('user') }}
+
+    Sender: {{email.from_address}}
+    Email Subject: {{email.subject}}
+    Email Body: {{email.body}}
+  "#
+}
+
+```
+
+## Technique 2: Allowing for flexible reasoning
+
+<Tip>
+  This is one we recommend for most use cases.
+</Tip>
+
+```baml {9-16}
+function GetOrderInfo(email: Email) -> OrderInfo {
+  client "openai/gpt-"
+  prompt #"
+    extract everything from this email.
+
+
+    {{ ctx.output_format }}
+
+    Outline some relevant information before you answer.
+    Example:
+    - ...
+    - ...
+    ...
+    {
+      ... // schema
+    }
+
+    {{ _.role('user') }}
+
+    Sender: {{email.from_address}}
+    Email Subject: {{email.subject}}
+    Email Body: {{email.body}}
+  "#
+}
+```
+
+The benefit of using `- ...` is that we allow the model to know it needs to output some information, but we don't limit it to a specific format or inject any bias by adding example text that may not be relevant.
+
+Similarly, we use `...` after two `- ...` to indicate that we don't mean to limit the number of items to 2.
+
+<Accordion title="Reuseable snippet">
+
+```baml {1-10, 19}
+template_string ChainOfThought() #"
+    Outline some relevant information before you answer.
+    Example:
+    - ...
+    - ...
+    ...
+    {
+      ... // schema
+    }
+"#
+
+function GetOrderInfo(email: Email) -> OrderInfo {
+  client "openai/gpt-"
+  prompt #"
+    extract everything from this email.
+
+    {{ ctx.output_format }}
+
+    {{ ChainOfThought() }}
+
+    {{ _.role('user') }}
+
+    Sender: {{email.from_address}}
+    Email Subject: {{email.subject}}
+    Email Body: {{email.body}}
+  "#
+}
+```
+</Accordion>
+
+## Technique 3: Embed reasoning in the structured object
+
+```baml {2-4}
+class OrderInfo {
+    clues string[] @description(#"
+      relevant quotes from the email related to shipping
+    "#)
+    order_status "ORDERED" | "SHIPPED" | "DELIVERED" | "CANCELLED"
+    tracking_number string?
+    estimated_arrival_date string?
+}
+
+function GetOrderInfo(email: Email) -> OrderInfo {
+  client "openai/gpt-"
+  prompt #"
+    extract everything from this email.
+
+    {{ ctx.output_format }}
+
+    {{ _.role('user') }}
+
+    Sender: {{email.from_address}}
+    Email Subject: {{email.subject}}
+    Email Body: {{email.body}}
+  "#
+}
+```
+
+## Technique 4: Ask the model to embed reasoning as comments in the structured object
+
+```baml {3-5}
+class OrderInfo {
+    order_status "ORDERED" | "SHIPPED" | "DELIVERED" | "CANCELLED"
+      @description(#"
+        before fields, in comments list out any relevant clues from the email
+      "#)
+    tracking_number string?
+    estimated_arrival_date string?
+}
+
+function GetOrderInfo(email: Email) -> OrderInfo {
+  client "openai/gpt-"
+  prompt #"
+    extract everything from this email.
+
+    {{ ctx.output_format }}
+
+    {{ _.role('user') }}
+
+    Sender: {{email.from_address}}
+    Email Subject: {{email.subject}}
+    Email Body: {{email.body}}
+  "#
 }
 ```

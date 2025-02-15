@@ -174,37 +174,12 @@ impl WasmScope {
     pub fn get_orchestration_scope_info(&self) -> JsValue {
         self.scope.to_js_value()
     }
-
-    #[wasm_bindgen]
-    pub fn iter_scopes(&self) -> ScopeIterator {
-        ScopeIterator {
-            scopes: self.scope.scope.clone(),
-            index: 0,
-        }
-    }
 }
 
 #[wasm_bindgen]
 pub struct ScopeIterator {
     scopes: Vec<ExecutionScope>,
     index: usize,
-}
-
-#[wasm_bindgen]
-impl ScopeIterator {
-    #[wasm_bindgen]
-    pub fn next(&mut self) -> JsValue {
-        if self.index < self.scopes.len() {
-            let scope = &self.scopes[self.index];
-            self.index += 1;
-            match to_value(scope) {
-                Ok(value) => value,
-                Err(_) => JsValue::NULL,
-            }
-        } else {
-            JsValue::NULL
-        }
-    }
 }
 
 #[wasm_bindgen]

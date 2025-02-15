@@ -1,9 +1,26 @@
-from .baml_py import BamlError
+from .baml_py import BamlError, BamlClientError
 from typing import Optional
 
 # Define the BamlValidationError exception with additional fields
 # note on custom exceptions https://github.com/PyO3/pyo3/issues/295
 # can't use extends=PyException yet https://github.com/PyO3/pyo3/discussions/3838
+
+
+class BamlClientHttpError(BamlClientError):
+    """Raised for HTTP-related client errors."""
+    def __init__(self, client_name: str, message: str, status_code: int):
+        super().__init__(message)
+        self.client_name = client_name
+        self.status_code = status_code
+        self.message = message
+
+    def __str__(self):
+        return f"BamlClientHttpError(client_name={self.client_name}, message={self.message}, status_code={self.status_code})"
+
+    def __repr__(self):
+        return f"BamlClientHttpError(client_name={self.client_name}, message={self.message}, status_code={self.status_code})"
+
+
 class BamlValidationError(BamlError):
     def __init__(self, prompt: str, message: str, raw_output: str):
         super().__init__(message)

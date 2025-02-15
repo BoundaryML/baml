@@ -72,10 +72,14 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonT
         Ok(PythonTypes {
             enums: ir.walk_enums().map(PythonEnum::from).collect::<Vec<_>>(),
             classes: ir.walk_classes().map(PythonClass::from).collect::<Vec<_>>(),
-            structural_recursive_alias_cycles: ir
+            structural_recursive_alias_cycles: {
+                let mut cycles = ir
                 .walk_alias_cycles()
                 .map(PythonTypeAlias::from)
-                .collect::<Vec<_>>(),
+                .collect::<Vec<_>>();
+                cycles.sort_by_key(|alias| alias.name.clone());
+                cycles
+            },
         })
     }
 }

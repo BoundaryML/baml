@@ -135,3 +135,71 @@ where
     let s: &str = Deserialize::deserialize(deserializer)?;
     ClientProvider::from_str(s).map_err(|e| serde::de::Error::custom(e.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_each_provider() {
+        for provider in ClientProvider::allowed_providers() {
+            let json = format!(r#"{{"name": "dummy_name", "provider": "{}", "retry_policy": null, "options": {{"model": "gpt-3"}}}}"#, provider);
+            let client: ClientProperty = serde_json::from_str(&json).unwrap();
+            assert_eq!(client.provider, ClientProvider::from_str(provider).unwrap());
+        }
+    }
+    
+    #[test]
+    fn test_deserialize_valid_client() {
+        let json = r#"
+            {
+                "name": "dummy_name",
+                "provider": "openai",
+                "retry_policy": null,
+                "options": {"model": "gpt-3"}
+            }
+        "#;
+        let client: ClientProperty = serde_json::from_str(json).unwrap();
+        assert_eq!(client.name, "dummy_name");
+        assert_eq!(client.provider, ClientProvider::OpenAI(internal_llm_client::OpenAIClientProviderVariant::Base));
+        assert_eq!(client.retry_policy, None);
+        assert_eq!(client.options.get("model"), Some(&BamlValue::String("gpt-3".to_string())));
+    }
+
+    #[test]
+    fn test_deserialize_invalid_provider() {
+        let json = r#"
+            {
+                "name": "InvalidClient/gpt-3",
+                "provider": "doesn't exist",
+                "retry_policy": null,
+                "options": {"model": "gpt-3"}
+            }
+        "#;
+        let result: Result<ClientProperty, _> = serde_json::from_str(json);
+        assert!(result.is_err(), "Deserialization should fail for an invalid provider");
+    }
+
+    #[test]
+    fn test_deserialize_client_registry() {
+        let json = r#"
+        {
+            "clients": [
+                {
+                    "name": "dummy_name",
+                    "provider": "openai",
+                    "retry_policy": "always",
+                    "options": {"model": "gpt-3"}
+                }
+            ]
+        }
+        "#;
+        let registry: ClientRegistry = serde_json::from_str(json).unwrap();
+        assert_eq!(registry.clients.len(), 1);
+        let client = registry.clients.get("dummy_name").unwrap();
+        assert_eq!(client.provider, ClientProvider::OpenAI(internal_llm_client::OpenAIClientProviderVariant::Base));
+        assert_eq!(registry.primary, None);
+    }
+}

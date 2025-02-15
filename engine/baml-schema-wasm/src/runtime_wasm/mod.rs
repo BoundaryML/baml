@@ -748,6 +748,9 @@ impl WithRenderError for baml_runtime::TestFailReason<'_> {
                         baml_runtime::errors::ExposedError::FinishReasonError {
                             message, ..
                         } => Some(message.clone()),
+                        baml_runtime::errors::ExposedError::ClientHttpError {
+                            message, ..
+                        } => Some(message.clone()),
                     },
                     None => Some(format!("{e:#}")),
                 }

@@ -1,4 +1,4 @@
-import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image, ClientRegistry, BamlValidationError, createBamlValidationError } from "@boundaryml/baml"
+import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image, ClientRegistry, toBamlError } from "@boundaryml/baml"
 import { Checked, Check } from "./types"
 import type * as partial_types from "./partial_types"
 import {
@@ -43,12 +43,7 @@ export class BamlAsyncClient {
       )
       return raw.parsed(false) as {{fn.return_type}}
     } catch (error: any) {
-      const bamlError = createBamlValidationError(error);
-      if (bamlError instanceof BamlValidationError) {
-        throw bamlError;
-      } else {
-        throw error;
-      }
+      throw toBamlError(error);
     }
   }
   {% endfor %}
@@ -85,13 +80,7 @@ class BamlStreamClient {
         __baml_options__?.tb?.__tb(),
       )
     } catch (error) {
-      if (error instanceof Error) {
-        const bamlError = createBamlValidationError(error);
-        if (bamlError instanceof BamlValidationError) {
-          throw bamlError;
-        }
-      }
-      throw error;
+      throw toBamlError(error);
     }
   }
   {% endfor %}

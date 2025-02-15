@@ -1,27 +1,64 @@
+// This file provides the native bindings between our Rust implementation and TypeScript
+// We use NAPI-RS to expose Rust functionality to JavaScript/TypeScript
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::BamlValue;
 use napi_derive::napi;
 
+// Create TypeScript-compatible wrappers for our Rust types
+// These macros generate the necessary code for TypeScript interop
 crate::lang_wrapper!(TypeBuilder, type_builder::TypeBuilder);
+
+// Thread-safe wrapper for EnumBuilder with name tracking
+// The sync_thread_safe attribute ensures safe concurrent access from TypeScript
 crate::lang_wrapper!(EnumBuilder, type_builder::EnumBuilder, sync_thread_safe, name: String);
+
+// Thread-safe wrapper for ClassBuilder with name tracking
+// Enables safe TypeScript interop with class definitions
 crate::lang_wrapper!(ClassBuilder, type_builder::ClassBuilder, sync_thread_safe, name: String);
+
+// Thread-safe wrapper for EnumValueBuilder
+// Ensures enum value definitions can be safely accessed across threads
 crate::lang_wrapper!(
     EnumValueBuilder,
     type_builder::EnumValueBuilder,
     sync_thread_safe
 );
+
+// Thread-safe wrapper for ClassPropertyBuilder
+// Enables concurrent access to class property definitions
 crate::lang_wrapper!(
     ClassPropertyBuilder,
     type_builder::ClassPropertyBuilder,
     sync_thread_safe
 );
+
+// Thread-safe wrapper for FieldType
+// Core type system representation with thread-safety guarantees
 crate::lang_wrapper!(FieldType, baml_types::FieldType, sync_thread_safe);
 
+// Implement Default for TypeBuilder to allow easy instantiation
+// This enables idiomatic Rust usage while maintaining TypeScript compatibility
 impl Default for TypeBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
+
+
+// note: you may notice a rust-analyzer warning in vs code when working with this file.
+// the warning "did not find struct napitypebuilder parsed before expand #[napi] for impl"
+// is a known false positive that occurs due to how rust-analyzer processes macro state.
+//
+// don't worry - the code compiles and works correctly! the warning is yet to be addressed by napi maintainers.
+//
+// if you'd like to hide this warning in vs code, you can add this to your settings.json:
+//   "rust-analyzer.diagnostics.disabled": ["macro-error"]
+//
+// ref:
+// https://github.com/napi-rs/napi-rs/issues/1630
+
+
+
 
 #[napi]
 impl TypeBuilder {
@@ -114,6 +151,11 @@ impl TypeBuilder {
                 .collect(),
         )
         .into()
+    }
+
+    #[napi]
+    pub fn to_string(&self) -> String {
+        self.inner.to_string()
     }
 }
 

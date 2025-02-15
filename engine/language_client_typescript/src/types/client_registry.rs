@@ -32,7 +32,7 @@ impl ClientRegistry {
         env: Env,
         name: String,
         provider: String,
-        #[napi(ts_arg_type = "{ [string]: any }")] options: JsObject,
+        #[napi(ts_arg_type = "{ [key: string]: any }")] options: JsObject,
         retry_policy: Option<String>,
     ) -> napi::Result<()> {
         let args = parse_ts_types::js_object_to_baml_value(env, options)?;

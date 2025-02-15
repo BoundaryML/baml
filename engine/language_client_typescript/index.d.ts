@@ -15,5 +15,12 @@ export declare class BamlValidationError extends Error {
     toJSON(): string;
     static from(error: Error): BamlValidationError | undefined;
 }
-export declare function createBamlValidationError(error: Error): BamlValidationError | BamlClientFinishReasonError | Error;
+export declare class BamlClientHttpError extends Error {
+    client_name: string;
+    status_code: number;
+    constructor(client_name: string, message: string, status_code: number);
+    toJSON(): string;
+    static from(error: Error): BamlClientHttpError | undefined;
+}
+export declare function toBamlError(error: any): any;
 //# sourceMappingURL=index.d.ts.map

@@ -29,7 +29,7 @@ impl ClientSpec {
 }
 
 /// The provider for the client, e.g. baml-openai-chat
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClientProvider {
     /// The OpenAI client provider variant
     OpenAI(OpenAIClientProviderVariant),
@@ -46,7 +46,7 @@ pub enum ClientProvider {
 }
 
 /// The OpenAI client provider variant
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OpenAIClientProviderVariant {
     /// The base OpenAI client provider variant
     Base,
@@ -59,7 +59,7 @@ pub enum OpenAIClientProviderVariant {
 }
 
 /// The strategy client provider variant
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StrategyClientProvider {
     /// The round-robin strategy client provider variant
     RoundRobin,
