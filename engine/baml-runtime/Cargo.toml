@@ -47,6 +47,7 @@ internal-baml-jinja = { path = "../baml-lib/jinja-runtime" }
 log.workspace = true
 minijinja.workspace = true
 pin-project-lite.workspace = true
+regex.workspace = true
 reqwest-eventsource = "0.6.0"
 scopeguard.workspace = true
 secrecy.workspace = true
@@ -109,7 +110,12 @@ colored = { version = "2.1.0", default-features = false, features = [
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
 js-sys = "0.3.69"
-reqwest = { version = "0.12.12", features = ["stream", "json", "native-tls-vendored", "native-tls-alpn"] }
+reqwest = { version = "0.12.12", features = [
+  "stream",
+  "json",
+  "native-tls-vendored",
+  "native-tls-alpn",
+] }
 # 
 send_wrapper = { version = "0.6.0", features = ["futures"] }
 serde-wasm-bindgen = "0.6.5"

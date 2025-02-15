@@ -1004,6 +1004,7 @@ dependencies = [
  "notify-debouncer-full",
  "pin-project-lite",
  "pretty_assertions",
+ "regex",
  "reqwest",
  "reqwest-eventsource",
  "ring",
