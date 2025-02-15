@@ -22,7 +22,7 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
-use btrace::WithTraceContext;
+// use btrace::WithTraceContext;
 use chrono::{Duration, Utc};
 use futures::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]
@@ -182,14 +182,14 @@ impl SseResponseTrait for VertexClient {
                                 .as_ref()
                                 .and_then(|c| c.parts.first().map(|p| p.text.as_ref()))
                             {
-                                btrace::log(
-                                    btrace::Level::INFO,
-                                    "vertex_client".to_string(),
-                                    "event".to_string(),
-                                    json!({
-                                        "delta.content": content,
-                                    }),
-                                );
+                                // btrace::log(
+                                //     btrace::Level::INFO,
+                                //     "vertex_client".to_string(),
+                                //     "event".to_string(),
+                                //     json!({
+                                //         "delta.content": content,
+                                //     }),
+                                // );
                                 inner.content += content;
                             }
                             if let Some(FinishReason::Stop) = choice.finish_reason.as_ref() {
@@ -355,23 +355,23 @@ impl WithChat for VertexClient {
         //non-streaming, complete response is returned
         let (response, system_now, instant_now) =
             match make_parsed_request::<VertexResponse>(self, either::Either::Right(prompt), false)
-                .btrace(
-                    tracing_core::Level::INFO,
-                    "vertex_chat",
-                    json!({
-                        "prompt": prompt,
-                    }),
-                    |v| match v {
-                        Ok((response, ..)) => json!({
-                            "llm.response": format!("{:?}", response),
-                        }),
-                        Err(e) => json!({
-                            "exception": {
-                                "message": format!("{:?}", e),
-                            },
-                        }),
-                    },
-                )
+                // .btrace(
+                //     tracing_core::Level::INFO,
+                //     "vertex_chat",
+                //     json!({
+                //         "prompt": prompt,
+                //     }),
+                //     |v| match v {
+                //         Ok((response, ..)) => json!({
+                //             "llm.response": format!("{:?}", response),
+                //         }),
+                //         Err(e) => json!({
+                //             "exception": {
+                //                 "message": format!("{:?}", e),
+                //             },
+                //         }),
+                //     },
+                // )
                 .await
             {
                 Ok(v) => v,

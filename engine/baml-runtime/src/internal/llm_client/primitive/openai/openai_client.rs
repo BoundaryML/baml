@@ -159,21 +159,20 @@ impl WithNoCompletion for OpenAIClient {}
 
 impl WithChat for OpenAIClient {
     async fn chat(&self, _ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
-        let (response, system_start, instant_start) =
-            match make_parsed_request::<ChatCompletionResponse>(
+        let (response, system_start, instant_start) = match make_parsed_request::<ChatCompletionResponse>(
                 self,
                 either::Either::Right(prompt),
                 false,
             )
             .await
             .inspect_err(|v| {
-                self.tracer.log(
-                    TraceData::LLMRequest(LLMRequest {
-                        client: self.context.name.to_string(),
-                        prompt: prompt.to_vec(),
-                    }),
-                    ctx,
-                )
+                // self.tracer.log(
+                //     TraceData::LLMRequest(LLMRequest {
+                //         client: self.context.name.to_string(),
+                //         prompt: prompt.to_vec(),
+                //     }),
+                //     ctx,
+                // )
             })
             // .btrace(
             //     tracing_core::Level::INFO,
@@ -192,7 +191,7 @@ impl WithChat for OpenAIClient {
             //         }),
             //     },
             // )
-            .await
+            // .await
             {
                 Ok(v) => v,
                 Err(e) => return e,
@@ -391,14 +390,14 @@ impl SseResponseTrait for OpenAIClient {
                         };
                         if let Some(choice) = event.choices.first() {
                             if let Some(content) = choice.delta.content.as_ref() {
-                                btrace::log(
-                                    btrace::Level::INFO,
-                                    "openai_client".to_string(),
-                                    "event".to_string(),
-                                    json!({
-                                        "delta.content": content,
-                                    }),
-                                );
+                                // btrace::log(
+                                //     btrace::Level::INFO,
+                                //     "openai_client".to_string(),
+                                //     "event".to_string(),
+                                //     json!({
+                                //         "delta.content": content,
+                                //     }),
+                                // );
                                 inner.content += content.as_str();
                             }
                             inner.model = event.model;

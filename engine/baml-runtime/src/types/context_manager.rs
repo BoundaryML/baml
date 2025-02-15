@@ -21,7 +21,7 @@ pub struct RuntimeContextManager {
     context: Arc<Mutex<Vec<BamlContext>>>,
     env_vars: HashMap<String, String>,
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
-    tracer: Arc<BamlTracer>,
+    // tracer: Arc<BamlTracer>,
 }
 
 impl fmt::Debug for RuntimeContextManager {
@@ -41,7 +41,7 @@ impl RuntimeContextManager {
             context: Arc::new(Mutex::new(self.context.lock().unwrap().clone())),
             env_vars: self.env_vars.clone(),
             global_tags: Arc::new(Mutex::new(self.global_tags.lock().unwrap().clone())),
-            tracer: self.tracer.clone(),
+            // tracer: self.tracer.clone(),
         }
     }
 
@@ -57,14 +57,14 @@ impl RuntimeContextManager {
     pub fn new_from_env_vars(
         env_vars: HashMap<String, String>,
         baml_src_reader: BamlSrcReader,
-        tracer: Arc<BamlTracer>,
+        // tracer: Arc<BamlTracer>,
     ) -> Self {
         Self {
             baml_src_reader: Arc::new(baml_src_reader),
             context: Default::default(),
             env_vars,
             global_tags: Default::default(),
-            tracer,
+            // tracer,
         }
     }
 
@@ -144,6 +144,8 @@ impl RuntimeContextManager {
             .map(TypeBuilder::to_overrides)
             .unwrap_or_default();
 
+        let span_id = self.span_id()?;
+
         let mut ctx = RuntimeContext::new(
             self.baml_src_reader.clone(),
             self.env_vars.clone(),
@@ -153,7 +155,8 @@ impl RuntimeContextManager {
             enm,
             als,
             rec_als,
-            self.tracer.clone(),
+            span_id,
+            // self.tracer.clone(),
         );
 
         ctx.client_overrides = match client_registry {
@@ -169,6 +172,7 @@ impl RuntimeContextManager {
 
     pub fn create_ctx_with_default(&self) -> RuntimeContext {
         let ctx = self.context.lock().unwrap();
+        let span_id = ctx.last().map(|(id, ..)| *id).unwrap();
 
         RuntimeContext::new(
             self.baml_src_reader.clone(),
@@ -179,6 +183,7 @@ impl RuntimeContextManager {
             Default::default(),
             Default::default(),
             Default::default(),
+            span_id,
         )
     }
 

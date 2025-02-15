@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_std::stream::StreamExt;
 use baml_types::{BamlValue, BamlValueWithMeta};
-use btrace::tracer::tracer::{btrace, WithTraceContext};
+// use btrace::tracer::tracer::{btrace, WithTraceContext};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
 use serde_json::json;
@@ -82,16 +82,16 @@ where
                     stream_part
                 })
                 .fold(None, |_, current| Some(current))
-                .btrace(
-                    tracing::Level::INFO,
-                    format!("stream_run::{}", node.provider.name()),
-                    json!({
-                        "prompt": prompt,
-                        "params": params,
-                        "node": node.scope.name(),
-                    }),
-                    |_| serde_json::Value::Null,
-                )
+                // .btrace(
+                //     tracing::Level::INFO,
+                //     format!("stream_run::{}", node.provider.name()),
+                //     json!({
+                //         "prompt": prompt,
+                //         "params": params,
+                //         "node": node.scope.name(),
+                //     }),
+                //     |_| serde_json::Value::Null,
+                // )
                 .await
                 .unwrap_or_else(|| {
                     LLMResponse::LLMFailure(LLMErrorResponse {
@@ -141,15 +141,15 @@ where
         {
             break;
         }
-        btrace::tracer::tracer::log(
-            tracing_core::Level::INFO,
-            format!("baml_src::{}", node.provider.name()),
-            "Failed to start stream".to_string(),
-            json!({
-                "sleep_duration": sleep_duration,
-                "baml.llm_client": node_name,
-            }),
-        );
+        // btrace::tracer::tracer::log(
+        //     tracing_core::Level::INFO,
+        //     format!("baml_src::{}", node.provider.name()),
+        //     "Failed to start stream".to_string(),
+        //     json!({
+        //         "sleep_duration": sleep_duration,
+        //         "baml.llm_client": node_name,
+        //     }),
+        // );
 
         if let Some(duration) = sleep_duration {
             total_sleep_duration += duration;

@@ -21,7 +21,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent};
-use btrace::WithTraceContext;
+// use btrace::WithTraceContext;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use http::header;
@@ -175,25 +175,25 @@ impl SseResponseTrait for GoogleAIClient {
                                 .as_ref()
                                 .and_then(|c| c.parts.get(part_index))
                             {
-                                btrace::log(
-                                    btrace::Level::INFO,
-                                    "googleai_client".to_string(),
-                                    "event".to_string(),
-                                    json!({
-                                        "delta.content": content.text,
-                                    }),
-                                );
+                                // btrace::log(
+                                //     btrace::Level::INFO,
+                                //     "googleai_client".to_string(),
+                                //     "event".to_string(),
+                                //     json!({
+                                //         "delta.content": content.text,
+                                //     }),
+                                // );
                                 inner.content += &content.text;
                             }
                             if let Some(FinishReason::Stop) = choice.finish_reason.as_ref() {
-                                btrace::log(
-                                    btrace::Level::INFO,
-                                    "googleai_client".to_string(),
-                                    "event".to_string(),
-                                    json!({
-                                        "finish_reason": "stop",
-                                    }),
-                                );
+                                // btrace::log(
+                                //     btrace::Level::INFO,
+                                //     "googleai_client".to_string(),
+                                //     "event".to_string(),
+                                //     json!({
+                                //         "finish_reason": "stop",
+                                //     }),
+                                // );
                                 inner.metadata.baml_is_complete = true;
                                 inner.metadata.finish_reason = Some(FinishReason::Stop.to_string());
                             }
@@ -341,23 +341,23 @@ impl WithChat for GoogleAIClient {
         //non-streaming, complete response is returned
         let (response, system_now, instant_now) =
             match make_parsed_request::<GoogleResponse>(self, either::Either::Right(prompt), false)
-                .btrace(
-                    tracing_core::Level::INFO,
-                    "googleai_chat",
-                    json!({
-                        "prompt": prompt,
-                    }),
-                    |v| match v {
-                        Ok((response, ..)) => json!({
-                            "llm.response": response,
-                        }),
-                        Err(e) => json!({
-                            "exception": {
-                                "message": format!("{:?}", e),
-                            },
-                        }),
-                    },
-                )
+                // .btrace(
+                //     tracing_core::Level::INFO,
+                //     "googleai_chat",
+                //     json!({
+                //         "prompt": prompt,
+                //     }),
+                //     |v| match v {
+                //         Ok((response, ..)) => json!({
+                //             "llm.response": response,
+                //         }),
+                //         Err(e) => json!({
+                //             "exception": {
+                //                 "message": format!("{:?}", e),
+                //             },
+                //         }),
+                //     },
+                // )
                 .await
             {
                 Ok(v) => v,

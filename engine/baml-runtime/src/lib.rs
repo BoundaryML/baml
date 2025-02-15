@@ -192,7 +192,7 @@ impl BamlRuntime {
         let ctx = RuntimeContextManager::new_from_env_vars(
             self.env_vars.clone(),
             baml_src_reader,
-            self.tracer.clone(),
+            // self.tracer.clone(),
         );
         let tags: HashMap<String, BamlValue> = [("baml.language", language)]
             .into_iter()

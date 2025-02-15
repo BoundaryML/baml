@@ -35,7 +35,7 @@ use crate::internal::llm_client::{
     ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
     ModelFeatures, ResolveMediaUrls,
 };
-use btrace::WithTraceContext;
+// use btrace::WithTraceContext;
 
 use crate::{RenderCurlSettings, RuntimeContext};
 
@@ -177,7 +177,11 @@ impl AwsClient {
                     // Exposing the secret key here is relatively safe. First, we expose it only
                     // to check if it starts with $. If so, the remainer should be an env
                     // var name, which is also safe to expose.
-                    if aws_secret_access_key.api_key.expose_secret().starts_with("$") {
+                    if aws_secret_access_key
+                        .api_key
+                        .expose_secret()
+                        .starts_with("$")
+                    {
                         return Err(anyhow::anyhow!(
                             "AWS secret access key expected, please set: env.{}",
                             &aws_secret_access_key.api_key.expose_secret()[1..]
@@ -501,14 +505,14 @@ impl WithStreamChat for AwsClient {
                                         ref delta,
                                     )) = content_block_delta.delta
                                     {
-                                        btrace::log(
-                                            btrace::Level::INFO,
-                                            "aws_client".to_string(),
-                                            "event".to_string(),
-                                            json!({
-                                                "delta.content": delta,
-                                            }),
-                                        );
+                                        // btrace::log(
+                                        //     btrace::Level::INFO,
+                                        //     "aws_client".to_string(),
+                                        //     "event".to_string(),
+                                        //     json!({
+                                        //         "delta.content": delta,
+                                        //     }),
+                                        // );
                                         new_state.content += delta;
                                         // TODO- handle
                                     }
@@ -727,24 +731,24 @@ impl WithChat for AwsClient {
 
         let response = match request
             .send()
-            .btrace(
-                tracing_core::Level::INFO,
-                "aws_chat",
-                json!({
-                    "prompt": chat_messages,
-                }),
-                |v| match v {
-                    Ok(response) => json!({
-                        // TODO: structured tracing for bedrock responses
-                        "llm.response": format!("{:?}", response),
-                    }),
-                    Err(e) => json!({
-                        "exception": {
-                            "message": format!("{:?}", e),
-                        },
-                    }),
-                },
-            )
+            // .btrace(
+            //     tracing_core::Level::INFO,
+            //     "aws_chat",
+            //     json!({
+            //         "prompt": chat_messages,
+            //     }),
+            //     |v| match v {
+            //         Ok(response) => json!({
+            //             // TODO: structured tracing for bedrock responses
+            //             "llm.response": format!("{:?}", response),
+            //         }),
+            //         Err(e) => json!({
+            //             "exception": {
+            //                 "message": format!("{:?}", e),
+            //             },
+            //         }),
+            //     },
+            // )
             .await
         {
             Ok(resp) => resp,

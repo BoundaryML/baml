@@ -1,7 +1,7 @@
 mod call;
 mod stream;
 
-use btrace::tracer::tracer::WithTraceContext;
+// use btrace::tracer::tracer::WithTraceContext;
 use serde_json::json;
 use web_time::Duration; // Add this line
 
@@ -10,7 +10,7 @@ use crate::{
     internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
     RuntimeContext,
 };
-use btrace::WithTraceContext;
+// use btrace::WithTraceContext;
 
 use super::traits::{WithClientProperties, WithRenderRawCurl};
 use super::LLMCompleteResponse;
@@ -221,12 +221,12 @@ impl WithStreamable for OrchestratorNode {
             .for_each(drop);
         self.provider
             .stream(ctx, prompt)
-            .btrace(
-                tracing::Level::INFO,
-                format!("stream_init::{}", self.provider.name()),
-                json!({}),
-                |_| serde_json::Value::Null,
-            )
+            // .btrace(
+            //     tracing::Level::INFO,
+            //     format!("stream_init::{}", self.provider.name()),
+            //     json!({}),
+            //     |_| serde_json::Value::Null,
+            // )
             .await
     }
 }

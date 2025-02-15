@@ -2,7 +2,6 @@ use crate::internal::llm_client::{
     traits::{ToProviderMessage, ToProviderMessageExt, WithClientProperties},
     ResolveMediaUrls,
 };
-use btrace::{tracer::tracer::WithTraceContext, WithTraceContext};
 use secrecy::ExposeSecret;
 use std::collections::HashMap;
 
@@ -189,14 +188,14 @@ impl SseResponseTrait for AnthropicClient {
                                     Some(body.usage.input_tokens + body.usage.output_tokens);
                             }
                             MessageChunk::ContentBlockDelta(event) => {
-                                btrace::tracer::tracer::log(
-                                    tracing::Level::INFO,
-                                    "anthropic_client".to_string(),
-                                    "event".to_string(),
-                                    json!({
-                                        "delta.content": event.delta.text,
-                                    }),
-                                );
+                                // btrace::tracer::tracer::log(
+                                //     tracing::Level::INFO,
+                                //     "anthropic_client".to_string(),
+                                //     "event".to_string(),
+                                //     json!({
+                                //         "delta.content": event.delta.text,
+                                //     }),
+                                // );
                                 inner.content += &event.delta.text;
                             }
                             MessageChunk::ContentBlockStart(_) => (),
@@ -386,21 +385,21 @@ impl WithChat for AnthropicClient {
         >(
             self, either::Either::Right(prompt), false
         )
-        .btrace(
-            tracing_core::Level::INFO,
-            "anthropic_chat",
-            json!({
-                "prompt": prompt,
-            }),
-            |v| match v {
-                Ok((response, ..)) => json!({
-                    "llm.response": response,
-                }),
-                Err(e) => json!({
-                    "exception": e,
-                }),
-            },
-        )
+        // .btrace(
+        //     tracing_core::Level::INFO,
+        //     "anthropic_chat",
+        //     json!({
+        //         "prompt": prompt,
+        //     }),
+        //     |v| match v {
+        //         Ok((response, ..)) => json!({
+        //             "llm.response": response,
+        //         }),
+        //         Err(e) => json!({
+        //             "exception": e,
+        //         }),
+        //     },
+        // )
         .await
         {
             Ok(v) => v,

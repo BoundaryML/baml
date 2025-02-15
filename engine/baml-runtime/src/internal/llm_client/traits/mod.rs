@@ -16,7 +16,6 @@ use crate::{internal::llm_client::ResolveMediaUrls, RenderCurlSettings};
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
 use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, MediaBase64, MediaUrl};
 use base64::{prelude::BASE64_STANDARD, Engine};
-use btrace::WithTraceContext;
 use futures::stream::StreamExt;
 use infer;
 use internal_baml_core::ir::repr::IntermediateRepr;
@@ -284,7 +283,7 @@ where
                 either::Right(&chat_messages),
                 false,
                 render_settings.stream && self.supports_streaming(),
-                render_settings.expose_secrets
+                render_settings.expose_secrets,
             )
             .await?;
         let mut request = request_builder.build()?;
