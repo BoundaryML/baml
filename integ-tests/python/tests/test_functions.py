@@ -921,6 +921,20 @@ async def test_dynamic():
     for r in tb_res:
         print(r.model_dump())
 
+@pytest.mark.asyncio
+async def test_typebuilder_print():
+    tb = TypeBuilder()
+    tb.Person.add_property("candy", tb.string().list())
+    print("Typebuilder print repr: ", tb)
+    expected = """TypeBuilder(
+  Classes: [
+    Person {
+      candy string[]
+    }
+  ]
+)"""
+    assert str(tb) == expected
+
 
 @pytest.mark.asyncio
 async def test_dynamic_class_output():

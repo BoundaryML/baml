@@ -113,6 +113,7 @@ export declare class TypeBuilder {
   null(): FieldType
   map(key: FieldType, value: FieldType): FieldType
   union(types: Array<FieldType>): FieldType
+  toString(): string
 }
 
 export interface BamlLogEvent {

@@ -135,10 +135,7 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypeBuilder<'
             .collect::<Vec<_>>();
         classes.sort_by(|a, b| a.name.cmp(&b.name));
 
-        Ok(TypeBuilder {
-            enums,
-            classes,
-        })
+        Ok(TypeBuilder { enums, classes })
     }
 }
 
