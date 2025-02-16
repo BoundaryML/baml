@@ -329,9 +329,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                 {config.showDuration && (
                   <TableCell className='px-1 py-1 whitespace-normal'>
                     {test.response.status === 'done' && (
-                      <span className='text-xs text-muted-foreground'>
-                        {(test.response.latency_ms).toFixed(0)} ms
-                      </span>
+                      <span className='text-xs text-muted-foreground'>{test.response.latency_ms.toFixed(0)} ms</span>
                     )}
                   </TableCell>
                 )}
