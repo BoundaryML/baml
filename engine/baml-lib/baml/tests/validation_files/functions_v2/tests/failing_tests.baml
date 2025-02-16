@@ -86,16 +86,16 @@ test Bar {
 // 71 | test Foo {
 // 72 |   functions [InputImage]
 //    | 
-//   -->  functions_v2/tests/failing_tests.baml:72
+//   -->  functions_v2/tests/failing_tests.baml:66
 //    | 
-// 71 | test Foo {
-// 72 |   functions [InputImage]
+// 65 | test Foo {
+// 66 |   functions [InputImage]
 //    | 
 // error: Test "Foo" is already defined for function "InputImage"
-//   -->  functions_v2/tests/failing_tests.baml:72
+//   -->  functions_v2/tests/failing_tests.baml:66
 //    | 
-// 71 | test Foo {
-// 72 |   functions [InputImage]
+// 65 | test Foo {
+// 66 |   functions [InputImage]
 //    | 
 //   -->  functions_v2/tests/failing_tests.baml:72
 //    | 

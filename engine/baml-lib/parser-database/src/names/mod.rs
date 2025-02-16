@@ -22,8 +22,8 @@ pub(super) struct Names {
     pub(super) tops: HashMap<StringId, TopId>,
     /// Generators have their own namespace.
     pub(super) generators: HashMap<StringId, TopId>,
-    /// Tests have their own namespace.
-    pub(super) tests: HashMap<StringId, HashMap<StringId, TopId>>,
+    /// Tests have their own namespace. <function_name, <test_name, test_id>>
+    pub(super) tests: HashMap<StringId, HashMap<StringId, Span>>,
     pub(super) model_fields: HashMap<(ast::TypeExpId, StringId), ast::FieldId>,
 }
 
@@ -73,7 +73,10 @@ impl DuplicateNames {
                     .filter_map(|(i, data)| if i != idx { Some(data.clone()) } else { None })
                     .collect::<Vec<_>>();
                 ctx.push_error(DatamodelError::new_duplicate_top_error(
-                    ast_top.name().strip_prefix(ast::DYNAMIC_TYPE_NAME_PREFIX).unwrap(),
+                    ast_top
+                        .name()
+                        .strip_prefix(ast::DYNAMIC_TYPE_NAME_PREFIX)
+                        .unwrap(),
                     ast_top.get_type(),
                     ast_top.identifier().span().clone(),
                     others,
@@ -83,7 +86,11 @@ impl DuplicateNames {
 
         for (test_name, tests) in self.tests {
             for (idx, (function_name, function_name_span)) in tests.iter().enumerate() {
-                let others = tests.iter().enumerate().filter_map(|(i, data)| if i != idx { Some(data.clone()) } else { None }).collect::<Vec<_>>();
+                let others = tests
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, data)| if i != idx { Some(data.clone()) } else { None })
+                    .collect::<Vec<_>>();
                 let test_name = ctx.interner.get(test_name).unwrap();
                 ctx.push_error(DatamodelError::new_duplicate_test_error(
                     function_name,
@@ -262,7 +269,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                     let func_id = ctx.interner.intern(func_name);
                     let namespace = names.tests.entry(func_id).or_insert_with(HashMap::default);
                     let test_name = ctx.interner.intern(top.name());
-                    if let Some(existing) = namespace.insert(test_name, top_id) {
+                    if let Some(existing) = namespace.insert(test_name, func_name_span.clone()) {
                         duplicate_names
                             .tests
                             .entry(test_name)
@@ -272,7 +279,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
                             .tests
                             .entry(test_name)
                             .or_insert_with(Vec::default)
-                            .push((func_name.to_string(), func_name_span.clone()));
+                            .push((func_name.to_string(), existing));
                     }
                 }
             }
