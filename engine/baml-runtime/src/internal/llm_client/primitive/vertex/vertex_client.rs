@@ -1,4 +1,5 @@
 use crate::client_registry::ClientProperty;
+use crate::internal::llm_client::primitive::request::make_request_stream;
 use crate::internal::llm_client::traits::{
     ToProviderMessage, ToProviderMessageExt, WithClientProperties,
 };
@@ -215,7 +216,7 @@ impl WithStreamChat for VertexClient {
     ) -> StreamResponse {
         //incomplete, streaming response object is returned
         let (response, system_now, instant_now) =
-            match make_request(self, either::Either::Right(prompt), true).await {
+            match make_request_stream(self, either::Either::Right(prompt), true, ctx).await {
                 Ok(v) => v,
                 Err(e) => return Err(e),
             };
@@ -353,30 +354,34 @@ impl RequestBuilder for VertexClient {
 impl WithChat for VertexClient {
     async fn chat(&self, _ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
         //non-streaming, complete response is returned
-        let (response, system_now, instant_now) =
-            match make_parsed_request::<VertexResponse>(self, either::Either::Right(prompt), false)
-                // .btrace(
-                //     tracing_core::Level::INFO,
-                //     "vertex_chat",
-                //     json!({
-                //         "prompt": prompt,
-                //     }),
-                //     |v| match v {
-                //         Ok((response, ..)) => json!({
-                //             "llm.response": format!("{:?}", response),
-                //         }),
-                //         Err(e) => json!({
-                //             "exception": {
-                //                 "message": format!("{:?}", e),
-                //             },
-                //         }),
-                //     },
-                // )
-                .await
-            {
-                Ok(v) => v,
-                Err(e) => return e,
-            };
+        let (response, system_now, instant_now) = match make_parsed_request::<VertexResponse>(
+            self,
+            either::Either::Right(prompt),
+            false,
+            _ctx,
+        )
+        // .btrace(
+        //     tracing_core::Level::INFO,
+        //     "vertex_chat",
+        //     json!({
+        //         "prompt": prompt,
+        //     }),
+        //     |v| match v {
+        //         Ok((response, ..)) => json!({
+        //             "llm.response": format!("{:?}", response),
+        //         }),
+        //         Err(e) => json!({
+        //             "exception": {
+        //                 "message": format!("{:?}", e),
+        //             },
+        //         }),
+        //     },
+        // )
+        .await
+        {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
 
         if response.candidates.len() != 1 {
             return LLMResponse::LLMFailure(LLMErrorResponse {

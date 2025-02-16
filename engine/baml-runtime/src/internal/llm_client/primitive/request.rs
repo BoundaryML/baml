@@ -1,12 +1,57 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
+use crate::{
+    internal::llm_client::{traits::WithClient, ErrorCode, LLMErrorResponse, LLMResponse},
+    tracingv2::storage::storage::BAML_TRACER,
+    RuntimeContext,
+};
 use anyhow::{Context, Result};
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use baml_types::tracing::events::{
+    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, HTTPRequest, HTTPResponse,
+    TraceData, TraceEvent, TraceLevel,
+};
 use baml_types::BamlMap;
-use internal_baml_jinja::RenderedChatMessage;
-use reqwest::Response;
+use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
+use reqwest::{header::HeaderMap, Response, StatusCode};
 use serde::de::DeserializeOwned;
+use serde_json::json;
 
-use crate::internal::llm_client::{traits::WithClient, ErrorCode, LLMErrorResponse, LLMResponse};
+use bytes::Bytes;
+use http::Response as HttpResponse;
+
+pub struct LoggedHttpResponse {
+    pub status: StatusCode,
+    pub headers: HeaderMap,
+    pub url: String,
+    pub body: Bytes,
+}
+
+impl LoggedHttpResponse {
+    pub async fn new_from_reqwest(mut resp: reqwest::Response) -> Result<Self, reqwest::Error> {
+        let status = resp.status();
+        let url = resp.url().to_string();
+        let headers = resp.headers().clone();
+        let body = resp.bytes().await?;
+
+        Ok(Self {
+            status,
+            headers,
+            url,
+            body,
+        })
+    }
+
+    pub fn into_http_response(self) -> HttpResponse<Bytes> {
+        let mut builder = http::response::Builder::new().status(self.status);
+        for (key, value) in self.headers.iter() {
+            builder = builder.header(key, value);
+        }
+        builder
+            .body(self.body)
+            .expect("Building HttpResponse failed")
+    }
+}
 
 pub trait RequestBuilder {
     #[allow(async_fn_in_trait)]
@@ -19,34 +64,88 @@ pub trait RequestBuilder {
     ) -> Result<reqwest::RequestBuilder>;
 
     fn request_options(&self) -> &BamlMap<String, serde_json::Value>;
-
     fn http_client(&self) -> &reqwest::Client;
 }
 
-fn to_prompt(
-    prompt: either::Either<&String, &[RenderedChatMessage]>,
-) -> internal_baml_jinja::RenderedPrompt {
+fn to_prompt(prompt: either::Either<&String, &[RenderedChatMessage]>) -> RenderedPrompt {
     match prompt {
-        either::Left(prompt) => internal_baml_jinja::RenderedPrompt::Completion(prompt.clone()),
-        either::Right(prompt) => internal_baml_jinja::RenderedPrompt::Chat(prompt.to_vec()),
+        either::Left(p) => RenderedPrompt::Completion(p.clone()),
+        either::Right(p) => RenderedPrompt::Chat(p.to_vec()),
     }
 }
 
-pub async fn make_request(
+fn json_headers(headers: &HeaderMap) -> serde_json::Value {
+    let mut map = serde_json::Map::new();
+    for (key, value) in headers.iter() {
+        let value_str = value.to_str().unwrap_or_default().to_string();
+        map.insert(key.to_string(), serde_json::Value::String(value_str));
+    }
+    serde_json::Value::Object(map)
+}
+
+fn json_body(body: Option<&reqwest::Body>) -> Result<serde_json::Value> {
+    if let Some(b) = body {
+        if let Ok(s) =
+            std::str::from_utf8(b.as_bytes().context("Failed to convert body to string")?)
+        {
+            Ok(serde_json::Value::String(s.to_string()))
+        } else {
+            Ok(serde_json::Value::Null)
+        }
+    } else {
+        Ok(serde_json::Value::Null)
+    }
+}
+
+async fn log_http_response(
+    runtime_context: &RuntimeContext,
+    trace_level: TraceLevel,
+    request_id: ContentId,
+    status: u16,
+    headers: serde_json::Value,
+    body: serde_json::Value,
+) {
+    BAML_TRACER.lock().await.put(Arc::new(TraceEvent {
+        span_id: FunctionId(runtime_context.span_id.to_string()),
+        event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+        span_chain: vec![],
+        timestamp: web_time::SystemTime::now(),
+        callsite: "".to_string(),
+        verbosity: trace_level,
+        content: TraceData::RawLLMResponse(HTTPResponse {
+            request_id,
+            status,
+            headers,
+            body,
+        }),
+        tags: Default::default(),
+    }));
+}
+
+async fn build_and_log_outbound_request(
     client: &(impl WithClient + RequestBuilder),
     prompt: either::Either<&String, &[RenderedChatMessage]>,
+    allow_proxy: bool,
     stream: bool,
-) -> Result<(Response, web_time::SystemTime, web_time::Instant), LLMResponse> {
-    let (system_now, instant_now) = (web_time::SystemTime::now(), web_time::Instant::now());
+    runtime_context: &RuntimeContext,
+) -> Result<
+    (
+        ContentId,
+        web_time::SystemTime,
+        web_time::Instant,
+        reqwest::Request,
+    ),
+    LLMResponse,
+> {
+    let system_now = web_time::SystemTime::now();
+    let instant_now = web_time::Instant::now();
 
-    let req = match client
-        .build_request(prompt, true, stream, true)
+    let req_builder = client
+        .build_request(prompt, allow_proxy, stream, true)
         .await
         .context("Failed to build request")
-    {
-        Ok(req) => req,
-        Err(e) => {
-            return Err(LLMResponse::LLMFailure(LLMErrorResponse {
+        .map_err(|e| {
+            LLMResponse::LLMFailure(LLMErrorResponse {
                 client: client.context().name.to_string(),
                 model: None,
                 prompt: to_prompt(prompt),
@@ -55,29 +154,67 @@ pub async fn make_request(
                 latency: instant_now.elapsed(),
                 message: format!("{:#?}", e),
                 code: ErrorCode::Other(2),
-            }));
-        }
-    };
+            })
+        })?;
 
-    let req = match req.build() {
-        Ok(req) => req,
-        Err(e) => {
-            return Err(LLMResponse::LLMFailure(LLMErrorResponse {
-                client: client.context().name.to_string(),
-                model: None,
-                prompt: to_prompt(prompt),
-                start_time: system_now,
-                request_options: client.request_options().clone(),
-                latency: instant_now.elapsed(),
-                message: format!("{:#?}", e),
-                code: ErrorCode::Other(2),
-            }));
-        }
-    };
+    let built_req = req_builder.build().map_err(|e| {
+        LLMResponse::LLMFailure(LLMErrorResponse {
+            client: client.context().name.to_string(),
+            model: None,
+            prompt: to_prompt(prompt),
+            start_time: system_now,
+            request_options: client.request_options().clone(),
+            latency: instant_now.elapsed(),
+            message: format!("{:#?}", e),
+            code: ErrorCode::Other(2),
+        })
+    })?;
 
-    let response = match client.http_client().execute(req).await {
-        Ok(response) => response,
+    let request_id = ContentId(uuid::Uuid::new_v4().to_string());
+    BAML_TRACER.lock().await.put(Arc::new(TraceEvent {
+        span_id: FunctionId(runtime_context.span_id.to_string()),
+        event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+        span_chain: vec![],
+        timestamp: web_time::SystemTime::now(),
+        callsite: "".to_string(),
+        verbosity: TraceLevel::Info,
+        content: TraceData::RawLLMRequest(HTTPRequest {
+            request_id: request_id.clone(),
+            url: built_req.url().to_string(),
+            method: built_req.method().to_string(),
+            headers: json_headers(built_req.headers()),
+            body: json_body(built_req.body()).unwrap_or_default(),
+        }),
+        tags: Default::default(),
+    }));
+
+    Ok((request_id, system_now, instant_now, built_req))
+}
+
+async fn execute_request(
+    client: &(impl WithClient + RequestBuilder),
+    built_req: reqwest::Request,
+    request_id: ContentId,
+    prompt: either::Either<&String, &[RenderedChatMessage]>,
+    system_now: web_time::SystemTime,
+    instant_now: web_time::Instant,
+    runtime_context: &RuntimeContext,
+    consume_body: bool,
+) -> Result<(EitherResponse, web_time::SystemTime, web_time::Instant), LLMResponse> {
+    let response = match client.http_client().execute(built_req).await {
+        Ok(resp) => resp,
         Err(e) => {
+            log_http_response(
+                runtime_context,
+                TraceLevel::Error,
+                request_id.clone(),
+                e.status()
+                    .unwrap_or(reqwest::StatusCode::INTERNAL_SERVER_ERROR)
+                    .as_u16(),
+                serde_json::Value::Null,
+                serde_json::Value::String(format!("No response. Error: {:?}", e)),
+            )
+            .await;
             return Err(LLMResponse::LLMFailure(LLMErrorResponse {
                 client: client.context().name.to_string(),
                 model: None,
@@ -86,24 +223,54 @@ pub async fn make_request(
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
                 message: format!("{:?}", e),
-                code: ErrorCode::Other(2),
+                code: e
+                    .status()
+                    .map_or(ErrorCode::Other(2), ErrorCode::from_status),
             }));
         }
     };
 
-    let status = response.status();
-    if !status.is_success() {
-        let url = response.url().to_string();
-        let text = response.text().await.map_or_else(
-            |_| "<no response>".to_string(),
-            |text| {
-                if text.is_empty() {
-                    "<empty response>".to_string()
-                } else {
-                    text
-                }
-            },
-        );
+    if !response.status().is_success() && !consume_body {
+        let logged_res = match LoggedHttpResponse::new_from_reqwest(response).await {
+            Ok(lr) => lr,
+            Err(e) => {
+                log_http_response(
+                    runtime_context,
+                    TraceLevel::Error,
+                    request_id.clone(),
+                    0,
+                    serde_json::Value::Null,
+                    serde_json::Value::String(format!("Could not read response body: {:?}", e)),
+                )
+                .await;
+                return Err(LLMResponse::LLMFailure(LLMErrorResponse {
+                    client: client.context().name.to_string(),
+                    model: None,
+                    prompt: to_prompt(prompt),
+                    start_time: system_now,
+                    request_options: client.request_options().clone(),
+                    latency: instant_now.elapsed(),
+                    message: format!("Could not read response body: {:?}", e),
+                    code: e
+                        .status()
+                        .map_or(ErrorCode::Other(2), ErrorCode::from_status),
+                }));
+            }
+        };
+
+        let resp_body = match std::str::from_utf8(&logged_res.body) {
+            Ok(s) if !s.is_empty() => s.to_string(),
+            _ => "<no response or invalid utf-8>".to_string(),
+        };
+        log_http_response(
+            runtime_context,
+            TraceLevel::Error,
+            request_id.clone(),
+            logged_res.status.as_u16(),
+            json_headers(&logged_res.headers),
+            serde_json::Value::String(resp_body.clone()),
+        )
+        .await;
         return Err(LLMResponse::LLMFailure(LLMErrorResponse {
             client: client.context().name.to_string(),
             model: None,
@@ -111,23 +278,57 @@ pub async fn make_request(
             start_time: system_now,
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
-            message: format!("Request failed: {}\n{}", url, text),
-            code: ErrorCode::from_status(status),
+            message: format!(
+                "Request failed with status code: {}, \n{}",
+                logged_res.status,
+                resp_body.clone()
+            ),
+            code: ErrorCode::from_status(logged_res.status),
         }));
     }
 
-    Ok((response, system_now, instant_now))
-}
+    if consume_body {
+        let logged_response = match LoggedHttpResponse::new_from_reqwest(response).await {
+            Ok(lr) => lr,
+            Err(e) => {
+                log_http_response(
+                    runtime_context,
+                    TraceLevel::Error,
+                    request_id.clone(),
+                    0,
+                    serde_json::Value::Null,
+                    serde_json::Value::String(format!("Could not read response body: {:?}", e)),
+                )
+                .await;
+                return Err(LLMResponse::LLMFailure(LLMErrorResponse {
+                    client: client.context().name.to_string(),
+                    model: None,
+                    prompt: to_prompt(prompt),
+                    start_time: system_now,
+                    request_options: client.request_options().clone(),
+                    latency: instant_now.elapsed(),
+                    message: format!("Could not read response body: {:?}", e),
+                    code: e
+                        .status()
+                        .map_or(ErrorCode::Other(2), ErrorCode::from_status),
+                }));
+            }
+        };
 
-pub async fn make_parsed_request<T: DeserializeOwned>(
-    client: &(impl WithClient + RequestBuilder),
-    prompt: either::Either<&String, &[RenderedChatMessage]>,
-    stream: bool,
-) -> Result<(T, web_time::SystemTime, web_time::Instant), LLMResponse> {
-    let (response, system_now, instant_now) = make_request(client, prompt, stream).await?;
-    let j = match response.json::<serde_json::Value>().await {
-        Ok(response) => response,
-        Err(e) => {
+        if !logged_response.status.is_success() {
+            let resp_body = match std::str::from_utf8(&logged_response.body) {
+                Ok(s) if !s.is_empty() => s.to_string(),
+                _ => "<no response or invalid utf-8>".to_string(),
+            };
+            log_http_response(
+                runtime_context,
+                TraceLevel::Error,
+                request_id.clone(),
+                logged_response.status.as_u16(),
+                json_headers(&logged_response.headers),
+                serde_json::Value::String(resp_body.clone()),
+            )
+            .await;
             return Err(LLMResponse::LLMFailure(LLMErrorResponse {
                 client: client.context().name.to_string(),
                 model: None,
@@ -135,16 +336,121 @@ pub async fn make_parsed_request<T: DeserializeOwned>(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: e.to_string(),
-                code: ErrorCode::Other(2),
-            }))
+                message: format!("Request failed: {}\n{}", &logged_response.url, resp_body),
+                code: ErrorCode::from_status(logged_response.status),
+            }));
         }
-    };
 
-    match T::deserialize(&j).context(format!(
+        let resp_body = match std::str::from_utf8(&logged_response.body) {
+            Ok(b) => b.to_string(),
+            Err(_) => "<invalid utf-8>".to_string(),
+        };
+        log_http_response(
+            runtime_context,
+            TraceLevel::Info,
+            request_id.clone(),
+            logged_response.status.as_u16(),
+            json_headers(&logged_response.headers),
+            serde_json::Value::String(resp_body),
+        )
+        .await;
+
+        Ok((
+            EitherResponse::Consumed(logged_response),
+            system_now,
+            instant_now,
+        ))
+    } else {
+        Ok((EitherResponse::Raw(response), system_now, instant_now))
+    }
+}
+
+enum EitherResponse {
+    Raw(Response),
+    Consumed(LoggedHttpResponse),
+}
+
+pub async fn make_request_stream(
+    client: &(impl WithClient + RequestBuilder),
+    prompt: either::Either<&String, &[RenderedChatMessage]>,
+    stream: bool,
+    runtime_context: &RuntimeContext,
+) -> Result<(Response, web_time::SystemTime, web_time::Instant), LLMResponse> {
+    let (request_id, system_now, instant_now, built_req) =
+        build_and_log_outbound_request(client, prompt, true, stream, runtime_context).await?;
+
+    match execute_request(
+        client,
+        built_req,
+        request_id,
+        prompt,
+        system_now,
+        instant_now,
+        runtime_context,
+        false,
+    )
+    .await?
+    {
+        (EitherResponse::Raw(resp), sys, inst) => Ok((resp, sys, inst)),
+        (EitherResponse::Consumed(_), _, _) => {
+            unreachable!("We never consume the body in streaming mode unless an error is returned.")
+        }
+    }
+}
+
+pub async fn make_request(
+    client: &(impl WithClient + RequestBuilder),
+    prompt: either::Either<&String, &[RenderedChatMessage]>,
+    stream: bool,
+    runtime_context: &RuntimeContext,
+) -> Result<(LoggedHttpResponse, web_time::SystemTime, web_time::Instant), LLMResponse> {
+    let (request_id, system_now, instant_now, built_req) =
+        build_and_log_outbound_request(client, prompt, true, stream, runtime_context).await?;
+
+    match execute_request(
+        client,
+        built_req,
+        request_id,
+        prompt,
+        system_now,
+        instant_now,
+        runtime_context,
+        true,
+    )
+    .await?
+    {
+        (EitherResponse::Consumed(logged_res), sys, inst) => Ok((logged_res, sys, inst)),
+        (EitherResponse::Raw(_), _, _) => unreachable!("We always consume the body here."),
+    }
+}
+
+pub async fn make_parsed_request<T: DeserializeOwned>(
+    client: &(impl WithClient + RequestBuilder),
+    prompt: either::Either<&String, &[RenderedChatMessage]>,
+    stream: bool,
+    runtime_context: &RuntimeContext,
+) -> Result<(T, web_time::SystemTime, web_time::Instant), LLMResponse> {
+    let (logged_response, system_now, instant_now) =
+        make_request(client, prompt, stream, runtime_context).await?;
+
+    let json_val =
+        serde_json::from_slice::<serde_json::Value>(&logged_response.body).map_err(|e| {
+            LLMResponse::LLMFailure(LLMErrorResponse {
+                client: client.context().name.to_string(),
+                model: None,
+                prompt: to_prompt(prompt),
+                start_time: system_now,
+                request_options: client.request_options().clone(),
+                latency: instant_now.elapsed(),
+                message: format!("Failed to parse JSON: {}", e),
+                code: ErrorCode::Other(2),
+            })
+        })?;
+
+    match T::deserialize(&json_val).context(format!(
         "Failed to parse into a response accepted by {}: {}",
         std::any::type_name::<T>(),
-        j
+        json_val
     )) {
         Ok(response) => Ok((response, system_now, instant_now)),
         Err(e) => Err(LLMResponse::LLMFailure(LLMErrorResponse {

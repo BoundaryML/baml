@@ -1,10 +1,12 @@
 mod call;
 mod stream;
 
+use baml_types::tracing::events::LLMUsage;
 // use btrace::tracer::tracer::WithTraceContext;
 use serde_json::json;
 use web_time::Duration; // Add this line
 
+use crate::tracingv2::storage::storage::BAML_TRACER;
 use crate::RenderCurlSettings;
 use crate::{
     internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
@@ -24,13 +26,19 @@ pub use super::primitive::LLMPrimitiveProvider;
 pub use call::orchestrate as orchestrate_call;
 pub use stream::orchestrate_stream;
 
+use crate::tracing::Visualize;
 use anyhow::Result;
+use baml_types::tracing::events::{
+    ContentId, FunctionId, HTTPRequest, HTTPResponse, LLMClient, LoggedLLMRequest,
+    LoggedLLMResponse, TraceData, TraceEvent, TraceLevel,
+};
 use baml_types::BamlValue;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_jinja::RenderedChatMessage;
 use internal_baml_jinja::RenderedPrompt;
 use serde::Serialize;
 use std::{collections::HashMap, sync::Arc};
+use web_time::SystemTime;
 pub struct OrchestratorNode {
     pub scope: OrchestrationScope,
     pub provider: Arc<LLMPrimitiveProvider>,
@@ -193,8 +201,106 @@ impl WithRenderRawCurl for OrchestratorNode {
     }
 }
 
+/// Takes an `LLMResponse` plus some IDs and context info,
+/// returns the appropriate TraceEvent populated with
+/// LoggedLLMResponse fields and verbosity.
+fn make_trace_event_for_response(
+    llm_response: &LLMResponse,
+    function_id: &FunctionId,
+    request_id: &ContentId,
+    callsite: &str,
+) -> TraceEvent {
+    let (verbosity, logged_response) = match llm_response {
+        LLMResponse::Success(success) => (
+            TraceLevel::Info,
+            LoggedLLMResponse {
+                request_id: request_id.clone(),
+                model: Some(success.model.clone()),
+                finish_reason: success.metadata.finish_reason.clone(),
+                usage: Some(LLMUsage {
+                    input_tokens: success.metadata.prompt_tokens,
+                    output_tokens: success.metadata.output_tokens,
+                    total_tokens: success.metadata.total_tokens,
+                }),
+                raw_text_output: Some(success.content.clone()),
+                error_message: None,
+            },
+        ),
+        LLMResponse::LLMFailure(fail) => (
+            TraceLevel::Error,
+            LoggedLLMResponse {
+                request_id: request_id.clone(),
+                model: fail.model.clone().map(|m| m.to_string()),
+                finish_reason: None,
+                usage: None,
+                raw_text_output: None,
+                error_message: Some(format!("LLM call failed: {}", fail.message)),
+            },
+        ),
+        LLMResponse::UserFailure(msg) => (
+            TraceLevel::Error,
+            LoggedLLMResponse {
+                request_id: request_id.clone(),
+                model: None,
+                finish_reason: None,
+                usage: None,
+                raw_text_output: None,
+                error_message: Some(format!("User failure before LLM call: {}", msg)),
+            },
+        ),
+        LLMResponse::InternalFailure(msg) => (
+            TraceLevel::Error,
+            LoggedLLMResponse {
+                request_id: request_id.clone(),
+                model: None,
+                finish_reason: None,
+                usage: None,
+                raw_text_output: None,
+                error_message: Some(format!("Internal error before LLM call: {}", msg)),
+            },
+        ),
+    };
+
+    TraceEvent {
+        span_id: function_id.clone(),
+        event_id: request_id.clone(),
+        // Could also parameterize or omit entirely; in your snippet you set
+        // vector with function_id or empty. Adjust as needed.
+        span_chain: vec![function_id.clone()],
+        timestamp: SystemTime::now(),
+        callsite: callsite.to_string(),
+        verbosity,
+        content: TraceData::LLMResponse(logged_response),
+        tags: Default::default(),
+    }
+}
+
 impl WithSingleCallable for OrchestratorNode {
     async fn single_call(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> LLMResponse {
+        // Create IDs for the function call and content
+        let function_id = FunctionId(uuid::Uuid::new_v4().to_string());
+        let request_id = ContentId(uuid::Uuid::new_v4().to_string());
+
+        // Log LLMRequest
+        BAML_TRACER.lock().await.put(Arc::new(TraceEvent {
+            span_id: FunctionId(ctx.span_id.clone().to_string()),
+            event_id: request_id.clone(),
+            span_chain: vec![],
+            timestamp: SystemTime::now(),
+            callsite: "OrchestratorNode::single_call".to_string(),
+            verbosity: TraceLevel::Info,
+            content: TraceData::LLMRequest(LoggedLLMRequest {
+                client: LLMClient::Ref(self.provider.default_role()),
+                params: serde_json::json!({
+                    "request_options": "",
+                }),
+                // Some placeholder JSON representation of the prompt
+                prompt: serde_json::to_value(prompt).unwrap(),
+            }),
+            tags: Default::default(),
+        }));
+
+        // Possibly increment RoundRobin scope
         self.scope
             .scope
             .iter()
@@ -204,12 +310,46 @@ impl WithSingleCallable for OrchestratorNode {
             })
             .map(|a| a.increment_index())
             .for_each(drop);
-        self.provider.single_call(ctx, prompt).await
+
+        // Call the underlying LLM
+        let response = self.provider.single_call(ctx, prompt).await;
+
+        // After we get the response, log LLMResponse
+        let trace_event = make_trace_event_for_response(
+            &response,
+            &function_id,
+            &request_id,
+            "OrchestratorNode::single_call",
+        );
+        BAML_TRACER.lock().await.put(Arc::new(trace_event));
+
+        response
     }
 }
 
 impl WithStreamable for OrchestratorNode {
     async fn stream(&self, ctx: &RuntimeContext, prompt: &RenderedPrompt) -> StreamResponse {
+        let request_id = ContentId(uuid::Uuid::new_v4().to_string());
+
+        // Log streaming request
+        BAML_TRACER.lock().await.put(Arc::new(TraceEvent {
+            span_id: FunctionId(ctx.span_id.clone().to_string()),
+            event_id: request_id.clone(),
+            span_chain: vec![],
+            timestamp: SystemTime::now(),
+            callsite: "OrchestratorNode::stream".to_string(),
+            verbosity: TraceLevel::Info,
+            content: TraceData::LLMRequest(LoggedLLMRequest {
+                client: LLMClient::Ref(self.provider.default_role()),
+                params: serde_json::json!({
+                    "request_options": "",
+                }),
+                prompt: serde_json::to_value(prompt).unwrap(),
+            }),
+            tags: Default::default(),
+        }));
+
+        // Possibly increment RoundRobin scope
         self.scope
             .scope
             .iter()
@@ -219,15 +359,25 @@ impl WithStreamable for OrchestratorNode {
             })
             .map(|a| a.increment_index())
             .for_each(drop);
-        self.provider
-            .stream(ctx, prompt)
-            // .btrace(
-            //     tracing::Level::INFO,
-            //     format!("stream_init::{}", self.provider.name()),
-            //     json!({}),
-            //     |_| serde_json::Value::Null,
-            // )
-            .await
+
+        // Perform the streaming call
+        let result = self.provider.stream(ctx, prompt).await;
+
+        // We do not log the full LLMResponse here the same way as single_call,
+        // because streaming typically emits chunked events. If you want to log
+        // events at the end of the stream, you could handle it after collecting
+        // all chunks. For now, just log any immediate error:
+        if let Err(err_resp) = &result {
+            let trace_event = make_trace_event_for_response(
+                err_resp,
+                &FunctionId(ctx.span_id.clone().to_string()),
+                &request_id,
+                "OrchestratorNode::stream",
+            );
+            BAML_TRACER.lock().await.put(Arc::new(trace_event));
+        }
+
+        result
     }
 }
 

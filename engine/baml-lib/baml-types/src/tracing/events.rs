@@ -61,7 +61,7 @@ pub enum TraceData {
     // The rest are intermediate events that happen between start and end
 
     // LLM request
-    LLMRequest(LLMRequest),
+    LLMRequest(LoggedLLMRequest),
     // Raw HTTP request to the LLM
     RawLLMRequest(HTTPRequest),
 
@@ -69,9 +69,8 @@ pub enum TraceData {
     // ----
     // Raw HTTP response from the LLM
     RawLLMResponse(HTTPResponse),
-    // Parsed LLM response
-    #[serde(deserialize_with = "deserialize_ok", serialize_with = "serialize_ok")]
-    LLMResponse(Result<LLMResponse>),
+    /// LLM response now a plain struct, so we don't wrap it in `Result`.
+    LLMResponse(LoggedLLMResponse),
     // ----
 
     // We don't want to store the parsed LLM response in the log event
@@ -118,7 +117,7 @@ pub enum LLMClient {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct LLMRequest {
+pub struct LoggedLLMRequest {
     pub client: LLMClient,
     pub params: serde_json::Value,
     pub prompt: Prompt,
@@ -144,14 +143,29 @@ pub struct HTTPResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct LLMResponse {
-    // since LLM requests could be made in parallel, we need to match the response to the request
+pub struct LoggedLLMResponse {
+    /// Since LLM requests could be made in parallel, we need to match the response to the request.
     pub request_id: ContentId,
-    // Fully qualified model name
-    pub finish_reason: String,
-    pub model: String,
-    pub usage: LLMUsage,
-    pub string_output: String,
+
+    /// If available, fully qualified model name. None in failure cases or unknown state.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+
+    /// If available, a textual finish reason from the LLM. None in errors or unknown state.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finish_reason: Option<String>,
+
+    /// If available, usage information from the LLM. None if usage data is unavailable or in error states.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<LLMUsage>,
+
+    /// If available, the accumulated text output after retrieving chunks from LLM. None in error states.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_text_output: Option<String>,
+
+    /// If an error occurred, store the message here. None if the request was successful.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

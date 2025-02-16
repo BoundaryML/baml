@@ -19,7 +19,7 @@ use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta};
 
 use crate::client_registry::ClientProperty;
 use crate::internal::llm_client::primitive::request::{
-    make_parsed_request, make_request, RequestBuilder,
+    make_parsed_request, make_request, make_request_stream, RequestBuilder,
 };
 use crate::internal::llm_client::traits::{
     SseResponseTrait, StreamResponse, ToProviderMessage, ToProviderMessageExt,
@@ -159,39 +159,14 @@ impl WithNoCompletion for OpenAIClient {}
 
 impl WithChat for OpenAIClient {
     async fn chat(&self, _ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
-        let (response, system_start, instant_start) = match make_parsed_request::<ChatCompletionResponse>(
+        let (response, system_start, instant_start) =
+            match make_parsed_request::<ChatCompletionResponse>(
                 self,
                 either::Either::Right(prompt),
                 false,
+                _ctx,
             )
             .await
-            .inspect_err(|v| {
-                // self.tracer.log(
-                //     TraceData::LLMRequest(LLMRequest {
-                //         client: self.context.name.to_string(),
-                //         prompt: prompt.to_vec(),
-                //     }),
-                //     ctx,
-                // )
-            })
-            // .btrace(
-            //     tracing_core::Level::INFO,
-            //     "openai_chat",
-            //     json!({
-            //         "prompt": prompt,
-            //     }),
-            //     |v| match v {
-            //         Ok((response, ..)) => json!({
-            //             "llm.response": format!("{:?}", response),
-            //         }),
-            //         Err(e) => json!({
-            //             "exception": {
-            //                 "message": format!("{:?}", e),
-            //             },
-            //         }),
-            //     },
-            // )
-            // .await
             {
                 Ok(v) => v,
                 Err(e) => return e,
@@ -390,6 +365,8 @@ impl SseResponseTrait for OpenAIClient {
                         };
                         if let Some(choice) = event.choices.first() {
                             if let Some(content) = choice.delta.content.as_ref() {
+                                // TODO: replace with
+                                // BAML_TRACER. Log the raw stream. event. Add a new event for this kind of content?
                                 // btrace::log(
                                 //     btrace::Level::INFO,
                                 //     "openai_client".to_string(),
@@ -426,7 +403,7 @@ impl WithStreamChat for OpenAIClient {
         prompt: &[RenderedChatMessage],
     ) -> StreamResponse {
         let (resp, system_start, instant_start) =
-            match make_request(self, either::Either::Right(prompt), true).await {
+            match make_request_stream(self, either::Either::Right(prompt), true, _ctx).await {
                 Ok(v) => v,
                 Err(e) => return Err(e),
             };
