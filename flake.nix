@@ -76,6 +76,27 @@
           inherit (fenix.packages.${system}.latest) rust-std;
         };
 
+        buildInputs = (with pkgs; [
+          git
+          openssl
+          pkg-config
+          lld_19
+          pythonEnv
+          ruby
+          maturin
+          nodePackages.pnpm
+          nodePackages.nodejs
+          toolchain
+          uv
+        ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
+        nativeBuildInputs = [
+          pkgs.openssl
+          pkgs.pkg-config
+          pkgs.ruby
+          pythonEnv
+          pkgs.maturin
+        ];
+
       in
         {
           packages.default = rustPlatform.buildRustPackage {
@@ -109,24 +130,7 @@
               runHook postCheck
             '';
 
-            buildInputs = (with pkgs; [
-              openssl
-              pkg-config
-              lld_19
-              pythonEnv
-              ruby
-              maturin
-              nodePackages.pnpm
-              nodePackages.nodejs
-              uv
-            ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
-            nativeBuildInputs = [
-              pkgs.openssl
-              pkgs.pkg-config
-              pkgs.ruby
-              pythonEnv
-              pkgs.maturin
-            ];
+            inherit buildInputs;
             PYTHON_SYS_EXECUTABLE="${pythonEnv}/bin/python3";
             LD_LIBRARY_PATH="${pythonEnv}/lib";
             PYTHONPATH="${pythonEnv}/${pythonEnv.sitePackages}";
@@ -134,7 +138,7 @@
 
           };
           devShell = pkgs.mkShell rec {
-            buildInputs = with pkgs; [toolchain uv];
+            inherit buildInputs;
             PATH="${clang}/bin:$PATH";
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
           };
