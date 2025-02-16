@@ -6,7 +6,7 @@ mod internal_tests {
     use std::any;
     use std::collections::HashMap;
 
-    use baml_runtime::{tracingv2::storage::storage::TRACER, BamlRuntime};
+    use baml_runtime::{tracingv2::storage::storage::BAML_TRACER, BamlRuntime};
     use std::sync::Once;
 
     // use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
@@ -98,7 +98,7 @@ mod internal_tests {
 
         let (res, function_span_id) = runtime.async_runtime.block_on(call_function_future);
 
-        let trace_storage = runtime.async_runtime.block_on(TRACER.lock());
+        let trace_storage = runtime.async_runtime.block_on(BAML_TRACER.lock());
         let trace = trace_storage
             .get(FunctionId(function_span_id.unwrap_or_default().to_string()))
             .unwrap();

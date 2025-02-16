@@ -1,8 +1,11 @@
 use anyhow::Result;
 
+use baml_types::tracing::events::{
+    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, TraceData, TraceEvent,
+    TraceLevel,
+};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use serde_json::json;
-
 use std::sync::Arc;
 
 use crate::{
@@ -12,6 +15,7 @@ use crate::{
         prompt_renderer::PromptRenderer,
     },
     tracing::BamlTracer,
+    tracingv2::storage::storage::BAML_TRACER,
     type_builder::TypeBuilder,
     FunctionResult, RuntimeContextManager,
 };
@@ -91,6 +95,28 @@ impl FunctionResultStream {
         let span = self
             .tracer
             .start_span(&self.function_name, ctx, &local_params);
+
+        let trace_event = TraceEvent {
+            span_id: FunctionId(span.as_ref().unwrap().span_id.to_string()),
+            event_id: ContentId(uuid::Uuid::new_v4().to_string()), // TODO generate uuid
+            span_chain: vec![],
+            timestamp: web_time::SystemTime::now(),
+            callsite: self.function_name.clone(),
+            verbosity: TraceLevel::Info,
+            content: TraceData::FunctionStart(FunctionStart {
+                name: self.function_name.clone(),
+                // TODO:
+                args: vec![],
+                //  TODO!
+                options: BamlOptions {
+                    type_builder: None,
+                    client_registry: None,
+                },
+            }),
+            // TODO: send separately?
+            tags: Default::default(),
+        };
+        BAML_TRACER.lock().await.put(Arc::new(trace_event));
 
         let rctx = ctx.create_ctx(tb, cb);
         let res = match rctx {

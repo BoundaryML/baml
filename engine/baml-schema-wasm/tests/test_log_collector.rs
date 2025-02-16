@@ -15,7 +15,7 @@ mod tests {
     use wasmtimer::tokio::*;
 
     // pub static GLOBAL_TRACE_STORAGE: Lazy<Mutex<u32>> = Lazy::new(|| Mutex::new(0));
-    use baml_runtime::{tracingv2::storage::storage::TRACER, InternalRuntimeInterface};
+    use baml_runtime::{tracingv2::storage::storage::BAML_TRACER, InternalRuntimeInterface};
     use std::collections::HashMap;
 
     use baml_schema_build::runtime_wasm::{WasmProject, WasmRuntime};
@@ -141,7 +141,7 @@ mod tests {
             .await;
         }
 
-        let events = TRACER.blocking_lock().events();
+        let events = BAML_TRACER.blocking_lock().events();
         log::info!("Events {:#?}", events);
         // TODO: this makes the test hang on Node, but not in browser.
         flush().await;

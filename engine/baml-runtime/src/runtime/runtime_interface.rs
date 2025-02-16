@@ -3,6 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use super::InternalBamlRuntime;
 use crate::internal::llm_client::traits::WithClientProperties;
 use crate::internal::llm_client::LLMResponse;
+use crate::tracingv2::storage::storage::BAML_TRACER;
 use crate::type_builder::TypeBuilder;
 use crate::RuntimeContextManager;
 use crate::{
@@ -26,6 +27,11 @@ use crate::{
     RuntimeContext, RuntimeInterface,
 };
 use anyhow::{Context, Result};
+use baml_types::tracing::events::{
+    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, TraceData, TraceEvent,
+    TraceLevel,
+};
+
 use baml_types::{BamlMap, BamlValue, Constraint, EvaluationContext};
 use internal_baml_core::ir::repr::TypeBuilderEntry;
 use internal_baml_core::{
@@ -430,6 +436,28 @@ impl RuntimeInterface for InternalBamlRuntime {
         //     }
         // };
 
+        let trace_event = TraceEvent {
+            span_id: FunctionId(ctx.span_id.to_string()),
+            event_id: ContentId(uuid::Uuid::new_v4().to_string()), // TODO generate uuid
+            span_chain: vec![],
+            timestamp: web_time::SystemTime::now(),
+            callsite: function_name.clone(),
+            verbosity: TraceLevel::Info,
+            content: TraceData::FunctionStart(FunctionStart {
+                name: function_name.clone(),
+                // TODO:
+                args: vec![],
+                //  TODO!
+                options: BamlOptions {
+                    type_builder: None,
+                    client_registry: None,
+                },
+            }),
+            // TODO: send separately?
+            tags: Default::default(),
+        };
+        BAML_TRACER.blocking_lock().put(Arc::new(trace_event));
+
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
         let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
 
@@ -444,6 +472,9 @@ impl RuntimeInterface for InternalBamlRuntime {
         FunctionResult::new_chain(history)
     }
 
+    // Note that this only returns a FunctionResultStream object,
+    // but does not actually start the stream.
+    // The stream is started when one calls functionResultStream.run()
     fn stream_function_impl(
         &self,
         function_name: String,

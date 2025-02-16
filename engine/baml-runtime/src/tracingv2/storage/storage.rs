@@ -10,14 +10,13 @@ use crate::tracingv2::publisher::publisher::PublisherMessage;
 
 use super::super::publisher::PUBLISHING_CHANNEL;
 
-pub static TRACER: Lazy<Mutex<TraceStorage>> = Lazy::new(|| Mutex::new(TraceStorage::default()));
+pub static BAML_TRACER: Lazy<Mutex<TraceStorage>> =
+    Lazy::new(|| Mutex::new(TraceStorage::default()));
 
 #[derive(Default)]
 pub struct TraceStorage {
     // Lookup of span id to trace events
     span_map: HashMap<FunctionId, Arc<Mutex<Vec<Arc<TraceEvent>>>>>,
-    // Although not used in this example, you might track usage.
-    usage_count: HashMap<FunctionId, usize>,
 }
 
 // TODO: dont spawn new threads for each event. Use a channel.
@@ -25,7 +24,6 @@ impl TraceStorage {
     pub fn new() -> Self {
         Self {
             span_map: HashMap::new(),
-            usage_count: HashMap::new(),
         }
     }
 
@@ -72,9 +70,9 @@ impl TraceStorage {
         }
 
         // Publish this event so that the TracePublisher can process it.
-        // if let Err(e) = PUBLISHING_CHANNEL.send(PublisherMessage::Trace(event.clone())) {
-        //     log::error!("Failed to send event to publisher: {:?}", e);
-        // }
+        if let Err(e) = PUBLISHING_CHANNEL.send(PublisherMessage::Trace(event.clone())) {
+            log::error!("Failed to send event to publisher: {:?}", e);
+        }
     }
 
     pub fn events(&self) -> HashMap<FunctionId, Arc<Mutex<Vec<Arc<TraceEvent>>>>> {

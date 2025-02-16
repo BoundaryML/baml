@@ -1,7 +1,7 @@
 pub mod api_wrapper;
 
 use crate::on_log_event::LogEventCallbackSync;
-use crate::tracingv2::storage::storage::TRACER;
+use crate::tracingv2::storage::storage::BAML_TRACER;
 use crate::InnerTraceStats;
 use anyhow::{Context, Result};
 use baml_types::tracing::events::{
@@ -51,7 +51,7 @@ cfg_if! {
 
 #[derive(Debug, Clone)]
 pub struct TracingSpan {
-    span_id: Uuid,
+    pub span_id: Uuid,
     params: BamlMap<String, BamlValue>,
     start_time: web_time::SystemTime,
 }
@@ -254,24 +254,6 @@ impl BamlTracer {
             params: params.clone(),
             start_time: web_time::SystemTime::now(),
         };
-        let trace_event = TraceEvent {
-            span_id: FunctionId(span_id.to_string()),
-            event_id: ContentId(span_id.to_string()), // TODO generate uuid
-            span_chain: vec![],
-            timestamp: web_time::SystemTime::now(),
-            callsite: "".to_string(),
-            verbosity: TraceLevel::Trace,
-            content: TraceData::FunctionStart(FunctionStart {
-                name: Default::default(),
-                args: vec![],
-                options: BamlOptions {
-                    type_builder: None,
-                    client_registry: None,
-                },
-            }),
-            tags: Default::default(),
-        };
-        TRACER.blocking_lock().put(Arc::new(trace_event));
 
         Some(span)
     }

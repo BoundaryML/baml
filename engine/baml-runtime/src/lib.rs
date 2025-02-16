@@ -25,8 +25,6 @@ use std::sync::Arc;
 use anyhow::Context;
 use anyhow::Result;
 
-use baml_types::tracing::events::FunctionEnd;
-use baml_types::tracing::events::TraceData;
 use baml_types::BamlMap;
 use baml_types::BamlValue;
 use baml_types::Constraint;
@@ -41,6 +39,7 @@ use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
 use serde_json::json;
 use std::sync::OnceLock;
+use tracingv2::storage::storage::BAML_TRACER;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
@@ -351,19 +350,12 @@ impl BamlRuntime {
         let span = self.tracer.start_span(&function_name, ctx, params);
 
         let response = match ctx.create_ctx(tb, cb) {
-            Ok(rctx) => self
-                .inner
-                // TODO: add tracer here?
-                .call_function_impl(function_name.clone(), params, rctx)
-                .await
-                .inspect(|r| {
-                    self.tracer.log(
-                        TraceData::FunctionEnd(FunctionEnd {
-                            result: Ok(BamlValue::String("test".to_string())),
-                        }),
-                        ctx,
-                    )
-                }),
+            Ok(rctx) => {
+                self.inner
+                    // TODO: add tracer here?
+                    .call_function_impl(function_name.clone(), params, rctx)
+                    .await
+            }
             Err(e) => Err(e),
         };
 
