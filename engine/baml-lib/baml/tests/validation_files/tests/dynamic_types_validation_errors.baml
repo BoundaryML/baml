@@ -8,18 +8,6 @@ class NonDynamic {
   b string
 }
 
-test AttemptToModifyNonDynamicClass {
-  functions [TypeBuilderFn]
-  type_builder {
-    dynamic NonDynamic {
-      c string
-    }
-  }
-  args {
-    from_text "Test"
-  }
-}
-
 type SomeAlias = NonDynamic
 
 test AttemptToModifyTypeAlias {
@@ -92,60 +80,79 @@ test NameAlreadyExists {
   }
 }
 
-// error: Error validating: Type 'NonDynamic' does not contain the `@@dynamic` attribute so it cannot be modified in a type builder block
-//   -->  tests/dynamic_types_validation_errors.baml:14
-//    | 
-// 13 |   type_builder {
-// 14 |     dynamic NonDynamic {
-// 15 |       c string
-// 16 |     }
-//    | 
 // error: Error validating: The `dynamic` keyword only works on classes and enums, but type 'SomeAlias' is a type alias
-//   -->  tests/dynamic_types_validation_errors.baml:28
+//   -->  tests/dynamic_types_validation_errors.baml:16
 //    | 
-// 27 |   type_builder {
-// 28 |     dynamic SomeAlias {
-// 29 |       c string
-// 30 |     }
+// 15 |   type_builder {
+// 16 |     dynamic SomeAlias {
 //    | 
-// error: Error validating: The `@@dynamic` attribute is not allowed in type_builder blocks
-//   -->  tests/dynamic_types_validation_errors.baml:46
+// error: The `@@dynamic` attribute is not allowed in type_builder blocks.
+//   -->  tests/dynamic_types_validation_errors.baml:36
 //    | 
-// 45 |   type_builder {
-// 46 |     class NotAllowedHere {
-// 47 |       a string
-// 48 |       @@dynamic
-// 49 |     }
+// 35 |       a string
+// 36 |       @@dynamic
 //    | 
-// error: Error validating: The `@@dynamic` attribute is not allowed in type_builder blocks
-//   -->  tests/dynamic_types_validation_errors.baml:50
+// error: The `@@dynamic` attribute is not allowed in type_builder blocks.
+//   -->  tests/dynamic_types_validation_errors.baml:40
 //    | 
-// 49 |     }
-// 50 |     enum StillNotAllowed {
-// 51 |       A
-// 52 |       @@dynamic
-// 53 |     }
+// 39 |       A
+// 40 |       @@dynamic
 //    | 
-// error: Error validating: Dynamic type definitions cannot contain the `@@dynamic` attribute
-//   -->  tests/dynamic_types_validation_errors.baml:54
+// error: The `@@dynamic` attribute is not allowed in type_builder blocks.
+//   -->  tests/dynamic_types_validation_errors.baml:44
 //    | 
-// 53 |     }
-// 54 |     dynamic DynamicClass {
-// 55 |       c string
-// 56 |       @@dynamic
+// 43 |       c string
+// 44 |       @@dynamic
+//    | 
+// error: The class "DynamicClass" cannot be re-defined because a class with that name already exists.
+//   -->  tests/dynamic_types_validation_errors.baml:55
+//    | 
+// 54 |   type_builder {
+// 55 |     dynamic DynamicClass {
+// 56 |       c string
 // 57 |     }
 //    | 
-// error: Error validating: Multiple dynamic definitions for type `DynamicClass`
+//   -->  tests/dynamic_types_validation_errors.baml:58
+//    | 
+// 57 |     }
+// 58 |     dynamic DynamicClass {
+// 59 |       d string
+// 60 |     }
+//    | 
+// error: The class "DynamicClass" cannot be re-defined because a class with that name already exists.
+//   -->  tests/dynamic_types_validation_errors.baml:58
+//    | 
+// 57 |     }
+// 58 |     dynamic DynamicClass {
+// 59 |       d string
+// 60 |     }
+//    | 
+//   -->  tests/dynamic_types_validation_errors.baml:55
+//    | 
+// 54 |   type_builder {
+// 55 |     dynamic DynamicClass {
+// 56 |       c string
+// 57 |     }
+//    | 
+// error: The class "NonDynamic" cannot be re-defined because a class with that name already exists.
+//   -->  tests/dynamic_types_validation_errors.baml:6
+//    | 
+//  5 | 
+//  6 | class NonDynamic {
+//    | 
 //   -->  tests/dynamic_types_validation_errors.baml:70
 //    | 
-// 69 |     }
-// 70 |     dynamic DynamicClass {
-// 71 |       d string
-// 72 |     }
+// 69 |   type_builder {
+// 70 |     class NonDynamic {
 //    | 
-// error: The class "NonDynamic" cannot be defined because a class with that name already exists.
-//   -->  tests/dynamic_types_validation_errors.baml:82
+// error: The class "NonDynamic" cannot be re-defined because a class with that name already exists.
+//   -->  tests/dynamic_types_validation_errors.baml:70
 //    | 
-// 81 |   type_builder {
-// 82 |     class NonDynamic {
+// 69 |   type_builder {
+// 70 |     class NonDynamic {
+//    | 
+//   -->  tests/dynamic_types_validation_errors.baml:6
+//    | 
+//  5 | 
+//  6 | class NonDynamic {
 //    | 

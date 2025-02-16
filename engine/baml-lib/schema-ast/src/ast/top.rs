@@ -32,7 +32,6 @@ impl Top {
     /// A string saying what kind of item this is.
     pub fn get_type(&self) -> &str {
         match self {
-            // Top::CompositeType(_) => "composite type",
             Top::Enum(_) => "enum",
             Top::Class(_) => "class",
             Top::Function(_) => "function",

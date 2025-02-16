@@ -152,10 +152,9 @@ fn validate_type_builder_blocks(
         for type_def in &type_builder.entries {
             local_ast.tops.push(match type_def {
                 ast::TypeBuilderEntry::Class(c) => {
-                    if c.attributes.iter().any(|attr| attr.name.name() == "dynamic") {
-                        diagnostics.push_error(DatamodelError::new_validation_error(
-                            "The `@@dynamic` attribute is not allowed in type_builder blocks",
-                            c.span.to_owned(),
+                    if let Some(attr) = c.attributes.iter().find(|attr| attr.name.name() == "dynamic") {
+                        diagnostics.push_error(DatamodelError::disallow_dynamic_type_definitions(
+                            attr.span.to_owned(),
                         ));
                         continue;
                     }
@@ -163,10 +162,9 @@ fn validate_type_builder_blocks(
                     ast::Top::Class(c.to_owned())
                 },
                 ast::TypeBuilderEntry::Enum(e) => {
-                    if e.attributes.iter().any(|attr| attr.name.name() == "dynamic") {
-                        diagnostics.push_error(DatamodelError::new_validation_error(
-                            "The `@@dynamic` attribute is not allowed in type_builder blocks",
-                            e.span.to_owned(),
+                    if let Some(attr) = e.attributes.iter().find(|attr| attr.name.name() == "dynamic") {
+                        diagnostics.push_error(DatamodelError::disallow_dynamic_type_definitions(
+                            attr.span.to_owned(),
                         ));
                         continue;
                     }
@@ -174,10 +172,9 @@ fn validate_type_builder_blocks(
                     ast::Top::Enum(e.to_owned())
                 },
                 ast::TypeBuilderEntry::Dynamic(d) => {
-                    if d.attributes.iter().any(|attr| attr.name.name() == "dynamic") {
-                        diagnostics.push_error(DatamodelError::new_validation_error(
-                            "Dynamic type definitions cannot contain the `@@dynamic` attribute",
-                            d.span.to_owned(),
+                    if let Some(attr) = d.attributes.iter().find(|attr| attr.name.name() == "dynamic") {
+                        diagnostics.push_error(DatamodelError::disallow_dynamic_type_definitions(
+                            attr.span.to_owned(),
                         ));
                         continue;
                     }
@@ -229,7 +226,7 @@ fn validate_type_builder_blocks(
                             TypeWalker::TypeAlias(_) => {
                                 diagnostics.push_error(DatamodelError::new_validation_error(
                                     &format!("The `dynamic` keyword only works on classes and enums, but type '{}' is a type alias", d.name()),
-                                    d.span.to_owned(),
+                                    d.type_span.to_owned(),
                                 ));
                                 continue;
                             },
