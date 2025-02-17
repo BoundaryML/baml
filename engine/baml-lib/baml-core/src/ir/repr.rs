@@ -365,10 +365,6 @@ impl NodeAttributes {
         self.meta.get(key)
     }
 
-    pub fn meta(&self) -> &IndexMap<String, UnresolvedValue<()>> {
-        &self.meta
-    }
-
     pub fn streaming_behavior(&self) -> StreamingBehavior {
         fn is_some_true(maybe_value: Option<&UnresolvedValue<()>>) -> bool {
             match maybe_value {
@@ -1205,8 +1201,8 @@ pub enum TypeBuilderEntry {
 #[derive(Debug)]
 pub struct TestTypeBuilder {
     pub entries: Vec<TypeBuilderEntry>,
-    pub structural_recursive_alias_cycles: Vec<IndexMap<String, FieldType>>,
     pub recursive_classes: Vec<IndexSet<String>>,
+    pub recursive_aliases: Vec<IndexMap<String, FieldType>>,
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -1309,7 +1305,7 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
             .collect::<Vec<_>>(),
             type_builder: TestTypeBuilder {
                 entries: type_builder_entries,
-                structural_recursive_alias_cycles: recursive_aliases,
+                recursive_aliases,
                 recursive_classes,
             },
         })

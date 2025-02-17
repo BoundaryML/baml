@@ -433,8 +433,6 @@ fn relevant_data_models<'a>(
         }
     }
 
-    log::debug!("recursive_classes: {:?}", recursive_classes);
-
     Ok((
         enums,
         classes,

@@ -231,12 +231,7 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
 
     // TODO: #1343 Temporary solution until we implement scoping in the AST.
     pub fn type_builder_recursive_aliases(&self) -> &[IndexMap<String, FieldType>] {
-        &self
-            .item
-            .1
-            .elem
-            .type_builder
-            .structural_recursive_alias_cycles
+        &self.item.1.elem.type_builder.recursive_aliases
     }
 
     // TODO: #1343 Temporary solution until we implement scoping in the AST.
