@@ -213,32 +213,6 @@ impl ParserDatabase {
             resolved_dependency_graph.insert(*id, resolved_deps);
         }
 
-        // let deps_of_dynamic_defs = resolved_dependency_graph
-        //     .iter()
-        //     .filter_map(|(id, deps)| {
-        //         let cls = &self.ast[*id];
-        //         if cls.name().starts_with(ast::DYNAMIC_TYPE_NAME_PREFIX) {
-        //             Some((*id, deps.to_owned()))
-        //         } else {
-        //             None
-        //         }
-        //     })
-        //     .collect::<HashMap<_, _>>();
-
-        // for (id, deps) in deps_of_dynamic_defs {
-        //     let dyn_cls = &self.ast[id];
-        //     let name = &dyn_cls
-        //         .name()
-        //         .strip_prefix(ast::DYNAMIC_TYPE_NAME_PREFIX)
-        //         .unwrap();
-        //     if let Some(TypeWalker::Class(cls)) = self.find_type_by_str(name) {
-        //         resolved_dependency_graph
-        //             .get_mut(&cls.id)
-        //             .unwrap()
-        //             .extend(deps);
-        //     }
-        // }
-
         // log::debug!(
         //     "Resolved graph dependencies: {:?}",
         //     resolved_dependency_graph

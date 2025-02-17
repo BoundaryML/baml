@@ -944,7 +944,8 @@ mod tests {
         );
 
         // Test to_overrides()
-        let (classes, enums, aliases, recursive_aliases) = builder.to_overrides();
+        let (classes, enums, aliases, recursive_classes, recursive_aliases) =
+            builder.to_overrides();
 
         // Verify class overrides
         assert_eq!(classes.len(), 2);
@@ -1016,7 +1017,7 @@ mod tests {
         );
 
         // Verify via to_overrides() that the recursive field is set correctly.
-        let (class_overrides, _enum_overrides, _aliases, _recursive_aliases) =
+        let (class_overrides, _enum_overrides, _aliases, _recursive_classes, _recursive_aliases) =
             builder.to_overrides();
         let node_override = class_overrides
             .get("Node")
