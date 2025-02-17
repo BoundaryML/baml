@@ -557,10 +557,11 @@ class BamlProjectManager {
   }
 
   private throwPanicErrorMessage(e: Error) {
-    console.error(`Wasm Panic: ${e.message ?? "<No error message>"}`)
+    console.error(`Wasm Panic: ${e.message ?? '<No error message>'}`)
     this.notifier({
-      message: "The baml server has crashed, please reload the baml playground. Contact us at [boundaryml.com/discord](https://www.boundaryml.com/discord) if this problem recurs.",
-      type: 'error'
+      message:
+        'The baml server has crashed, please reload the baml playground. Contact us at [boundaryml.com/discord](https://www.boundaryml.com/discord) if this problem recurs.',
+      type: 'error',
     })
   }
 
