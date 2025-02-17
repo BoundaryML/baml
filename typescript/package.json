@@ -3,8 +3,12 @@
   "scripts": {
     "clean": "turbo clean",
     "build": "pnpm i && turbo run build",
+    "build:playground": "turbo build --force --filter=fiddle-frontend",
     "cache": "turbo cache list",
     "dev": "turbo run dev",
+    "dev:vscode": "turbo run watch --filter=baml-client",
+    "dev:language-server": "turbo run watch --filter=@gloo-ai/baml-language-server",
+    "dev:playground": "turbo run dev --filter=fiddle-frontend",
     "format": "biome format --write .",
     "generate": "turbo run generate",
     "lint": "turbo run lint",
