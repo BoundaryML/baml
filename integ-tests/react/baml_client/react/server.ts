@@ -1830,6 +1830,24 @@ export const TakeRecAliasDep = async (
 };
 
 /**
+ * Executes the "TellStory" BAML action.
+ *
+ * This server action calls the underlying BAML function "TellStory"
+ * with the specified parameters.
+ *
+ * @param { string } story - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TellStory = async (
+  story: string,
+): Promise<string> => {
+  return b.TellStory(
+    story,
+  );
+};
+
+/**
  * Executes the "TestAnthropic" BAML action.
  *
  * This server action calls the underlying BAML function "TestAnthropic"

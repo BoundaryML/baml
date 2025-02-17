@@ -1929,6 +1929,25 @@ export const TakeRecAliasDep = async (
 };
 
 /**
+ * Executes the streaming variant of the "TellStory" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } story - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TellStory = async (
+  story: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TellStory(
+    story,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestAnthropic" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding

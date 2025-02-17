@@ -123,6 +123,7 @@ export type StreamingServerTypes = {
   StreamUnionIntegers: ((number | null) | (string | null) | null)[],
   StreamingCompoundNumbers: partial_types.CompoundBigNumbers,
   TakeRecAliasDep: partial_types.RecursiveAliasDependency,
+  TellStory: string,
   TestAnthropic: string,
   TestAnthropicShorthand: string,
   TestAws: string,
