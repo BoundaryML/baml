@@ -1,0 +1,9 @@
+```baml title="baml_src/clients.baml"
+client<llm> OpenAI {
+  provider openai
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+  }
+}
+```

@@ -3,6 +3,7 @@
   "version": "1.0.12",
   "description": "",
   "keywords": [],
+  "packageManager": "pnpm@9.12.0",
   "author": "",
   "license": "ISC",
   "scripts": {

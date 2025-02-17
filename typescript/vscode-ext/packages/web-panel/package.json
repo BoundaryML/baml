@@ -2,6 +2,7 @@
   "name": "@gloo-ai/web-panel",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "pnpm@9.12.0",
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development vite",

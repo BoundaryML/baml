@@ -83,10 +83,18 @@ navigation:
           - page: REST API (other languages)
             icon: fa-regular fa-network-wired
             path: 01-guide/02-languages/rest.mdx
-
-          - page: NextJS
+      - section: Framework Integration
+        icon: fa-solid fa-plug
+        contents:
+          - section: React/Next.js
             icon: fa-brands fa-react
-            path: 01-guide/08-integrations/nextjs.mdx
+            contents:
+              - page: Quick Start
+                icon: fa-regular fa-rocket
+                path: 01-guide/08-frameworks/01-react-nextjs/01-quick-start.mdx
+              - page: Building a Chatbot
+                icon: fa-solid fa-robot
+                path: 01-guide/08-frameworks/01-react-nextjs/02-chatbot.mdx
       - section: Development
         contents:
           - page: Environment Variables
@@ -104,9 +112,6 @@ navigation:
               - page: AWS
                 icon: fa-brands fa-aws
                 path: 01-guide/03-development/deploying/aws.mdx
-              - page: NextJs
-                icon: fa-brands fa-react
-                path: 01-guide/03-development/deploying/nextjs.mdx
               - page: Docker
                 icon: fa-brands fa-docker
                 path: 01-guide/03-development/deploying/docker.mdx
@@ -232,7 +237,7 @@ navigation:
       #     - page: Flask + ChatBot
       #       icon: fa-regular fa-comments
       #       path: 01-guide/introduction.mdx
-      #     - page: Reflex + Reciept Parsing
+      #     - page: Reflex + Receipt Parsing
       #       icon: fa-regular fa-receipt
       #       path: 01-guide/introduction.mdx
       #     - page: Parsing PDFs
@@ -288,6 +293,44 @@ navigation:
       #       path: 01-guide/introduction.mdx
       #     - page: PHP
       #       icon: fa-brands fa-php
+      #       path: 01-guide/introduction.mdx
+      #     - page: b
+      #       path: 01-guide/introduction.mdx
+      #     - page: async_client
+      #       path: 01-guide/introduction.mdx
+      #     - page: sync_client
+      #       path: 01-guide/introduction.mdx
+      #     - page: reset_baml_env_vars
+      #       path: 01-guide/introduction.mdx
+      #     - page: trace
+      #       path: 01-guide/introduction.mdx
+      #     - page: set_tags
+      #       path: 01-guide/introduction.mdx
+      # - section: "baml_client: Typescript"
+      #   contents:
+      #     - page: TypeBuilder
+      #       path: 01-guide/introduction.mdx
+      #     - page: ClientRegistry
+      #       path: 01-guide/introduction.mdx
+      #     - page: BamlError
+      #       path: 01-guide/introduction.mdx
+      #     - page: BamlImageTs
+      #       path: 01-guide/introduction.mdx
+      #     - page: BamlAudioTs
+      #       path: 01-guide/introduction.mdx
+      #     - page: b
+      #       path: 01-guide/introduction.mdx
+      #     - page: async_client
+      #       path: 01-guide/introduction.mdx
+      #     - page: sync_client
+      #       path: 01-guide/introduction.mdx
+      #     - page: resetBamlEnvVars
+      #       path: 01-guide/introduction.mdx
+      #     - page: trace_async
+      #       path: 01-guide/introduction.mdx
+      #     - page: trace_sync
+      #       path: 01-guide/introduction.mdx
+      #     - page: set_tags
       #       path: 01-guide/introduction.mdx
   - tab: reference
     layout:
@@ -359,6 +402,32 @@ navigation:
             path: 03-reference/baml/enum.mdx
           - page: generator
             path: 03-reference/generator.mdx
+      - section: Generated baml_client
+        slug: baml_client
+        contents:
+          - page: TypeBuilder
+            path: 03-reference/baml_client/typebuilder.mdx
+          - page: ClientRegistry
+            path: 01-guide/05-baml-advanced/client-registry.mdx
+          - page: BamlImage / BamlAudio
+            slug: media
+            path: 03-reference/baml_client/media.mdx
+          - section: Errors
+            contents:
+              - page: Overview
+                path: 03-reference/baml_client/errors/overview.mdx
+              - page: BamlValidationError
+                path: 03-reference/baml_client/errors/baml-validation-error.mdx
+              - page: BamlClientFinishReasonError
+                path: 03-reference/baml_client/errors/baml-client-finish-reason-error.mdx
+          - section: React/Next.js
+            contents:
+              - page: use{FunctionName} Hook
+                path: 03-reference/baml_client/react-nextjs/use-function-name.mdx
+              - page: HookInput
+                path: 03-reference/baml_client/react-nextjs/hook-input.mdx
+              - page: HookOutput
+                path: 03-reference/baml_client/react-nextjs/hook-output.mdx
       - section: Attributes
         contents:
           - page: What are attributes?
@@ -419,16 +488,6 @@ navigation:
             path: 03-reference/baml/clients/strategy/fallback.mdx
           - page: "Round Robin"
             path: 03-reference/baml/clients/strategy/round-robin.mdx
-      - section: baml_client
-        contents:
-          - page: TypeBuilder
-            path: 03-reference/baml_client/typebuilder.mdx
-          - page: ClientRegistry
-            path: 01-guide/05-baml-advanced/client-registry.mdx
-          - page: BamlImage / BamlAudio
-            slug: media
-            path: 03-reference/baml_client/media.mdx
-
 
       - section: Prompt Syntax
         contents:

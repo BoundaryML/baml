@@ -1,0 +1,26 @@
+```baml title="baml_src/story.baml" focus={1-16}
+class Story {
+  title: string
+  content: string
+}
+
+function WriteMeAStory(prompt: string) -> Story {
+  client OpenAI
+  prompt #"
+    Act as a storyteller.
+
+    { ctx.output_format }
+
+    { _.role('user') }
+    Once upon a time {prompt}
+  "#
+}
+
+test WriteMeAStory {
+  functions [WriteMeAStory]
+  args {
+    prompt "The Universe"
+  }
+
+}
+```

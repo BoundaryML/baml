@@ -27,5 +27,6 @@
     "patchedDependencies": {
       "vite-plugin-wasm@3.3.0": "patches/vscode-inline-wasm-as-base64.patch"
     }
-  }
+  },
+  "packageManager": "pnpm@9.12.0"
 }

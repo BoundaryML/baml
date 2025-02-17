@@ -1,0 +1,321 @@
+---
+title: React/Next.js Setup
+---
+
+This guide walks you through setting up BAML with React/Next.js, leveraging Server Actions and React Server Components for optimal performance.
+
+## Example Usage
+
+BAML automatically generates a server action and React hook for your BAML functions, with built-in support for both streaming and non-streaming modes. For details on the generated hooks, see [Generated Hooks](/ref/baml_client/react-next-js/use-function-name-hook).
+
+<CodeBlocks>
+```baml title="baml_src/prompt.baml"
+class Story {
+  title string @stream.not_null
+  content string @stream.not_null
+}
+
+function WriteMeAStory(input: string) -> Story {
+  client "openai/gpt-4o"
+  prompt #"
+    Tell me a story
+
+    {{ ctx.output_format() }}
+
+    {{ _.role("user") }}
+
+    Topic: {{input}}
+  "#
+}
+```
+
+```bash title="Generate BAML client"
+npx baml-cli generate
+```
+
+```tsx title="app/components/story-form.tsx" {8,10,15-16}
+'use client'
+
+  // ✅ Automatically generates a server action and React hook
+
+import { useWriteMeAStory } from "@/baml_client/react/hooks";
+
+export function StoryForm() {
+  const writeMeAStory = useWriteMeAStory();
+
+  return (
+    <div>
+      <button
+        onClick={() => writeMeAStory.mutate("About a cat in a hat")}
+        disabled={writeMeAStory.isLoading}>
+        {writeMeAStory.isLoading ? 'Generating...' : 'Generate Story'}
+      </button>
+
+      <div>
+        <h4>{writeMeAStory.data?.title}</h4>
+        <p>{writeMeAStory.data?.content}</p>
+      </div>
+
+      {writeMeAStory.error && <div>Error: {writeMeAStory.error.message}</div>}
+    </div>
+  );
+}
+```
+</CodeBlocks>
+
+## Quick Start
+
+Follow the step-by-step instructions below to set up BAML in a new or existing Next.js project.
+
+<Steps>
+### Create a New Next.js Project
+
+First, create a new Next.js project with the App Router:
+
+<CodeBlocks>
+```bash npm
+npx create-next-app@latest my-baml-app
+```
+
+```bash pnpm
+pnpm create next-app my-baml-app
+```
+
+```bash yarn
+yarn create next-app my-baml-app
+```
+</CodeBlocks>
+
+When prompted, make sure to:
+- Select **Yes** for "Would you like to use TypeScript?"
+- Select **Yes** for "Would you like to use the App Router? (recommended)"
+- Configure other options as needed for your project
+
+### Install Dependencies
+
+Next, install BAML and its dependencies:
+
+<CodeBlocks>
+```bash npm
+npm install @boundaryml/baml @boundaryml/baml-nextjs-plugin
+```
+
+```bash pnpm
+pnpm add @boundaryml/baml @boundaryml/baml-nextjs-plugin
+```
+
+```bash yarn
+yarn add @boundaryml/baml @boundaryml/baml-nextjs-plugin
+```
+</CodeBlocks>
+
+### Configure Next.js
+
+Update your `next.config.mjs`:
+
+<CodeBlocks>
+```typescript title="next.config.ts" {1,8}
+import { withBaml } from '@boundaryml/baml-nextjs-plugin';
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  // ... existing config
+};
+
+export default withBaml()(nextConfig);
+```
+
+```javascript title="next.config.mjs" {1,8}
+import { withBaml } from '@boundaryml/baml-nextjs-plugin';
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  // ... existing config
+};
+
+export default withBaml()(nextConfig);
+```
+
+```javascript title="next.config.js" {1,8}
+const { withBaml } = require('@boundaryml/baml-nextjs-plugin');
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // ... existing config
+}
+
+module.exports = withBaml()(nextConfig)
+```
+</CodeBlocks>
+
+### Initialize BAML
+
+Create a new BAML project in your Next.js application:
+<Markdown src="../../../snippets/baml/cli/install/nodejs.mdx" />
+
+This will create a `baml_src` directory with starter code.
+
+### Setup Environment Variables
+
+Setup provider specific API Keys.
+
+```.env .env.local
+OPENAI_API_KEY=sk-...
+```
+
+<Accordion title='(Optional) BAML Observability'>
+To enable observability with BAML, you'll first need to sign up for a [Boundary Studio](https://app.boundaryml.com) account.
+
+
+```.env .env.local
+BOUNDARY_PROJECT_ID=sk-...
+BOUNDARY_SECRET=sk-...
+
+OPENAI_API_KEY=sk-...
+```
+
+</Accordion>
+
+### Setup BAML Next.js Generator
+
+Update the `baml_src/generators.baml` file to use the React/Next.js generator.
+
+```diff title="baml_src/generators.baml"
+generator typescript {
+-  output_type "typescript"
++  output_type "typescript/react"
+  output_dir "../"
+  version "0.75.0"
+}
+```
+
+### Generate BAML Client
+
+<Markdown src="../../../snippets/baml/cli/generate.mdx" />
+
+### Generated React Hooks
+
+BAML automatically generates type-safe Next.js server actions and React hooks for your BAML functions.
+
+<CodeBlocks>
+```baml title="baml_src/prompt.baml"
+class Story {
+  title string @stream.not_null
+  content string @stream.not_null
+}
+
+function WriteMeAStory(input: string) -> Story {
+  client "openai/gpt-4o"
+  prompt #"
+    Tell me a story
+
+    {{ ctx.output_format() }}
+
+    {{ _.role("user") }}
+
+    Topic: {{input}}
+  "#
+}
+```
+
+```tsx title="Non-Streaming Example"
+'use client'
+
+import { useWriteMeAStory } from "@/baml_client/react/hooks";
+import type { Story } from "@/baml_client/types";
+
+export function StoryForm() {
+  const writeMeAStory = useWriteMeAStory({ stream: false });
+
+  return (
+    <div>
+      <button onClick={() => writeMeAStory.mutate("About a cat in a hat")}>
+        {writeMeAStory.isLoading ? 'Generating...' : 'Generate Story'}
+      </button>
+
+      {writeMeAStory.data && (
+        <div>
+          <h4>{writeMeAStory.data.title}</h4>
+          <p>{writeMeAStory.data.content}</p>
+        </div>
+      )}
+
+      {writeMeAStory.error && <div>Error: {writeMeAStory.error.message}</div>}
+    </div>
+  );
+}
+```
+
+```tsx title="Streaming Example"
+'use client'
+
+import { useWriteMeAStory } from "@/baml_client/react/hooks";
+import type { Story } from "@/baml_client/types";
+
+export function StreamingStoryForm() {
+  const writeMeAStory = useWriteMeAStory({
+    onStreamData: (partial) => {
+      // Handle real-time updates
+      console.log('Story in progress:', partial);
+    },
+    onFinalData: (final) => {
+      // Handle completed story
+      console.log('Story completed:', final);
+    }
+  });
+
+  return (
+    <div>
+      <button
+        onClick={() => writeMeAStory.mutate("About a cat in a hat")}
+        disabled={writeMeAStory.isLoading}>
+        {writeMeAStory.isLoading ? 'Generating...' : 'Generate Story'}
+      </button>
+
+      {writeMeAStory.data && (
+        <div>
+          <h4>{writeMeAStory.data.title}</h4>
+          <p>{writeMeAStory.data.content}</p>
+        </div>
+      )}
+
+      {writeMeAStory.error && <div>Error: {writeMeAStory.error.message}</div>}
+    </div>
+  );
+}
+```
+</CodeBlocks>
+
+### Update Package Scripts
+
+Update your `package.json` scripts:
+
+```json {3,4}
+{
+  "scripts": {
+    "prebuild": "npm run generate",
+    "generate": "baml-cli generate",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+  }
+}
+```
+
+</Steps>
+
+## Reference Documentation
+
+For complete API documentation of the React/Next.js integration, see:
+
+### Core Concepts
+- [Generated Hooks](/ref/baml_client/react-next-js/use-function-name-hook) - Auto-generated hooks for each BAML function
+
+### Hook Configuration
+- [HookInput](/ref/baml_client/react-next-js/hook-input) - Configuration options for hooks
+- [HookOutput](/ref/baml_client/react-next-js/hook-output) - Return value types and states
+- [Error Types](/ref/baml_client/errors/overview) - Error handling and types
+
+## Next Steps
+
+- Check out the [BAML Examples](https://github.com/BoundaryML/baml-examples/tree/main/nextjs-starter) for more use cases

@@ -7,7 +7,7 @@ use anyhow::Result;
 use generate_types::{to_python_literal, type_name_for_checks};
 use indexmap::IndexMap;
 use internal_baml_core::{
-    configuration::GeneratorDefaultClientMode,
+    configuration::{GeneratorDefaultClientMode, GeneratorOutputType},
     ir::{repr::IntermediateRepr, FieldType, IRHelper},
 };
 
@@ -341,7 +341,7 @@ class Foo {
     }
 
     fn mk_gen() -> GeneratorArgs {
-        GeneratorArgs::new("baml_client", "baml_src", vec![], "no_version".to_string(), true, GeneratorDefaultClientMode::Async, Vec::new()).unwrap()
+        GeneratorArgs::new("baml_client", "baml_src", vec![], "no_version".to_string(), true, GeneratorDefaultClientMode::Async, Vec::new(), Some(GeneratorOutputType::PythonPydantic)).unwrap()
     }
 
     #[test]

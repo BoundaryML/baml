@@ -6,7 +6,7 @@ use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::RetryPolicyStrategy;
 use internal_llm_client::ClientSpec;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use super::{
     repr::{self, FunctionConfig, TypeBuilderEntry, WithRepr},

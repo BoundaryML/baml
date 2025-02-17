@@ -5,6 +5,6 @@ if (require.main === module) {
     process.env.BAML_LOG = 'info'
   }
 
-  const baml = require('./native')
+  const baml = require('./artifacts/native')
   baml.invoke_runtime_cli(process.argv.slice(1))
 }

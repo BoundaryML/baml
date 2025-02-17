@@ -1,19 +1,81 @@
 mod generate_types;
 mod typescript_language_features;
 
-use std::path::PathBuf;
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+};
 
 use anyhow::Result;
 use baml_types::LiteralValue;
 use generate_types::{render_docstring, type_name_for_checks};
 use indexmap::IndexMap;
 use internal_baml_core::{
-    configuration::GeneratorDefaultClientMode,
+    configuration::{GeneratorDefaultClientMode, GeneratorOutputType},
     ir::{repr::IntermediateRepr, FieldType, IRHelper},
 };
 
 use self::typescript_language_features::{ToTypescript, TypescriptLanguageFeatures};
 use crate::{dir_writer::FileCollector, field_type_attributes};
+
+mod framework {
+    use internal_baml_core::configuration::GeneratorOutputType;
+
+    #[derive(Debug, Clone, Copy)]
+    pub enum TypescriptFramework {
+        None,
+        React,
+    }
+
+    impl TypescriptFramework {
+        pub fn from_generator_type(output_type: Option<GeneratorOutputType>) -> Option<Self> {
+            match output_type {
+                Some(GeneratorOutputType::TypescriptReact) => Some(Self::React),
+                Some(GeneratorOutputType::Typescript) | None => Some(Self::None),
+                Some(GeneratorOutputType::OpenApi) => None,
+                Some(GeneratorOutputType::PythonPydantic) => None,
+                Some(GeneratorOutputType::RubySorbet) => None,
+            }
+        }
+    }
+}
+
+use framework::TypescriptFramework;
+
+mod filters {
+    pub fn length<T>(v: &Vec<T>) -> Result<usize, askama::Error> {
+        Ok(v.len())
+    }
+}
+
+#[derive(askama::Template)]
+#[template(path = "react/server.ts.j2", escape = "none")]
+struct ReactServerActions {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+}
+
+#[derive(askama::Template)]
+#[template(path = "react/server_streaming.ts.j2", escape = "none")]
+struct ReactServerStreaming {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+}
+
+#[derive(askama::Template)]
+#[template(path = "react/server_streaming_types.ts.j2", escape = "none")]
+struct ReactServerStreamingTypes {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+    partial_return_types: IndexMap<String, String>,
+}
+
+#[derive(askama::Template)]
+#[template(path = "react/hooks.tsx.j2", escape = "none")]
+struct ReactClientHooks {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+}
 
 #[derive(askama::Template)]
 #[template(path = "async_client.ts.j2", escape = "none")]
@@ -32,6 +94,7 @@ struct SyncTypescriptClient {
 struct TypescriptClient {
     funcs: Vec<TypescriptFunction>,
     types: Vec<String>,
+    partial_return_types: IndexMap<String, String>,
 }
 
 impl From<TypescriptClient> for AsyncTypescriptClient {
@@ -44,6 +107,43 @@ impl From<TypescriptClient> for AsyncTypescriptClient {
 }
 
 impl From<TypescriptClient> for SyncTypescriptClient {
+    fn from(value: TypescriptClient) -> Self {
+        Self {
+            funcs: value.funcs,
+            types: value.types,
+        }
+    }
+}
+
+impl From<TypescriptClient> for ReactServerActions {
+    fn from(value: TypescriptClient) -> Self {
+        Self {
+            funcs: value.funcs,
+            types: value.types,
+        }
+    }
+}
+
+impl From<TypescriptClient> for ReactServerStreaming {
+    fn from(value: TypescriptClient) -> Self {
+        Self {
+            funcs: value.funcs,
+            types: value.types,
+        }
+    }
+}
+
+impl From<TypescriptClient> for ReactServerStreamingTypes {
+    fn from(value: TypescriptClient) -> Self {
+        Self {
+            funcs: value.funcs,
+            types: value.types,
+            partial_return_types: value.partial_return_types,
+        }
+    }
+}
+
+impl From<TypescriptClient> for ReactClientHooks {
     fn from(value: TypescriptClient) -> Self {
         Self {
             funcs: value.funcs,
@@ -86,7 +186,11 @@ pub(crate) fn generate(
     ir: &IntermediateRepr,
     generator: &crate::GeneratorArgs,
 ) -> Result<IndexMap<PathBuf, String>> {
+    let framework = TypescriptFramework::from_generator_type(generator.client_type)
+        .expect("Invalid generator type for TypeScript framework");
     let mut collector = FileCollector::<TypescriptLanguageFeatures>::new();
+
+    // Add base TypeScript files
     collector.add_template::<generate_types::TypescriptTypes>("types.ts", (ir, generator))?;
     collector.add_template::<generate_types::TypescriptStreamTypes>(
         "partial_types.ts",
@@ -99,6 +203,23 @@ pub(crate) fn generate(
     collector.add_template::<TypescriptTracing>("tracing.ts", (ir, generator))?;
     collector.add_template::<TypescriptInit>("index.ts", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlinedbaml.ts", (ir, generator))?;
+
+    // Add framework-specific files
+    match framework {
+        TypescriptFramework::React => {
+            collector.add_template::<ReactServerActions>("react/server.ts", (ir, generator))?;
+            collector.add_template::<ReactServerStreaming>(
+                "react/server_streaming.ts",
+                (ir, generator),
+            )?;
+            collector.add_template::<ReactServerStreamingTypes>(
+                "react/server_streaming_types.ts",
+                (ir, generator),
+            )?;
+            collector.add_template::<ReactClientHooks>("react/hooks.tsx", (ir, generator))?;
+        }
+        TypescriptFramework::None => {}
+    }
 
     collector.commit(&generator.output_dir())
 }
@@ -125,7 +246,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
     type Error = anyhow::Error;
 
     fn try_from((ir, _): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
-        let functions = ir
+        let mut functions: Vec<TypescriptFunction> = ir
             .walk_functions()
             .map(|f| {
                 let configs = f.walk_impls();
@@ -158,13 +279,27 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
             .flatten()
             .collect();
 
-        let types = ir
+        // Sort functions by name
+        functions.sort_by(|a, b| a.name.cmp(&b.name));
+
+        // Collect and sort all types including recursive aliases
+        let mut types: Vec<String> = ir
             .walk_classes()
             .map(|c| c.name().to_string())
             .chain(ir.walk_enums().map(|e| e.name().to_string()))
+            .chain(ir.walk_alias_cycles().map(|a| a.item.0.clone()))
             .collect();
+        types.sort();
+
+        let mut partial_return_types: IndexMap<String, String> = functions
+            .iter()
+            .map(|f| (f.name.clone(), f.partial_return_type.clone()))
+            .collect();
+        partial_return_types.sort_keys();
+
         Ok(TypescriptClient {
             funcs: functions,
+            partial_return_types,
             types,
         })
     }
@@ -206,6 +341,42 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptIni
     }
 }
 
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for ReactServerActions {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for ReactServerStreaming {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for ReactServerStreamingTypes {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for ReactClientHooks {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
+    }
+}
+
 trait ToTypeReferenceInClientDefinition {
     fn to_type_ref(&self, ir: &IntermediateRepr, use_module_prefix: bool) -> String;
     /// The string representation of a field type, and whether the field is optional.
@@ -220,7 +391,11 @@ impl ToTypeReferenceInClientDefinition for FieldType {
         let use_module_prefix = !is_partial_type;
         let with_state = metadata.1.state;
         let constraints = metadata.0;
-        let module_prefix = if use_module_prefix { "types." } else { "partial_types." };
+        let module_prefix = if use_module_prefix {
+            "types."
+        } else {
+            "partial_types."
+        };
         let (base_rep, optional) = match base_type {
             FieldType::Class(name) => {
                 if needed {
@@ -250,9 +425,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 };
                 res
             }
-            FieldType::Literal(value) => {
-                (value.to_string(), false)
-            }
+            FieldType::Literal(value) => (value.to_string(), false),
             FieldType::List(inner) => (
                 format!("{}[]", inner.to_partial_type_ref(ir, false).0),
                 true,

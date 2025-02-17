@@ -1,0 +1,13 @@
+import type { Check, Checked  } from "../types";
+import type { Image, Audio } from "@boundaryml/baml";
+
+import type { {% for t in types %} {{ t }}{% if !loop.last %}, {% endif %}{% endfor %} } from "../types"
+
+import type * as types from "../types"
+import type { partial_types }from "../partial_types";
+
+export type StreamingServerTypes = {
+{%- for (name, partial_return_type) in partial_return_types %}
+  {{ name }}: {{ partial_return_type }},
+{%- endfor %}
+}

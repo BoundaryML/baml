@@ -1,11 +1,17 @@
-import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image, ClientRegistry, toBamlError } from "@boundaryml/baml"
-import { Checked, Check } from "./types"
-import type * as partial_types from "./partial_types"
+import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image, ClientRegistry, toBamlError, Audio } from "@boundaryml/baml"
+import { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
+import type { partial_types } from "./partial_types"
 import {
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
 } from "./types"
-import TypeBuilder from "./type_builder"
+import * as types from "./types"
+import type TypeBuilder from "./type_builder"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
+
+/**
+ * @deprecated Use RecursivePartialNull from 'baml_client/types' instead.
+ */
+export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
 export class BamlAsyncClient {
   private runtime: BamlRuntime
@@ -74,10 +80,9 @@ class BamlStreamClient {
       )
       return new BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}>(
         raw,
-        (a): a is {{ fn.partial_return_type }} => a,
-        (a): a is {{ fn.return_type }} => a,
+        (a): {{ fn.partial_return_type }} => a,
+        (a): {{ fn.return_type }} => a,
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
       )
     } catch (error) {
       throw toBamlError(error);

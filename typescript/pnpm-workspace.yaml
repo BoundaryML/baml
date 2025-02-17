@@ -3,6 +3,7 @@ packages:
   - 'vscode-ext/packages'
   - 'baml-schema-wasm-node'
   - 'baml-schema-wasm-web'
+  - 'nextjs-plugin'
   - 'common'
   - 'playground-common'
   - 'fiddle-frontend'

@@ -113,7 +113,7 @@ export declare class TypeBuilder {
   null(): FieldType
   map(key: FieldType, value: FieldType): FieldType
   union(types: Array<FieldType>): FieldType
-  addBaml(baml: string, rt: BamlRuntime): void
+  toString(): string
 }
 
 export interface BamlLogEvent {
@@ -131,4 +131,3 @@ export interface LogEventMetadata {
   parentId?: string
   rootEventId: string
 }
-

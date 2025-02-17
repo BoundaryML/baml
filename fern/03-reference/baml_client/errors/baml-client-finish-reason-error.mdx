@@ -1,0 +1,61 @@
+---
+title: BamlClientFinishReasonError
+description: Technical reference for the BamlClientFinishReasonError class
+---
+
+The `BamlClientFinishReasonError` class represents an error that occurs when an LLM terminates with a disallowed finish reason.
+
+## Type Definition
+
+<CodeBlocks>
+```typescript Type Definition
+class BamlClientFinishReasonError extends Error {
+  type: 'BamlClientFinishReasonError'
+  message: string
+  prompt: string
+  raw_output: string
+}
+```
+</CodeBlocks>
+
+## Properties
+
+<ParamField
+  path="type"
+  type="'BamlClientFinishReasonError'"
+>
+  Literal type identifier for the error class.
+</ParamField>
+
+<ParamField
+  path="message"
+  type="string"
+>
+  Error message describing the specific finish reason that caused the termination.
+</ParamField>
+
+<ParamField
+  path="prompt"
+  type="string"
+>
+  The original prompt sent to the LLM.
+</ParamField>
+
+<ParamField
+  path="raw_output"
+  type="string"
+>
+  The partial output received from the LLM before termination.
+</ParamField>
+
+## Type Guards
+
+The error can be identified using TypeScript's `instanceof` operator:
+
+<CodeBlocks>
+```typescript Type Check
+if (error instanceof BamlClientFinishReasonError) {
+  // Handle finish reason error
+}
+```
+</CodeBlocks>

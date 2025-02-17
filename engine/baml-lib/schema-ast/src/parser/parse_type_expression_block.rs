@@ -23,7 +23,7 @@ pub(crate) fn parse_type_expression_block(
     let mut name: Option<Identifier> = None;
     let mut attributes: Vec<Attribute> = Vec::new();
     let mut fields: Vec<Field<FieldType>> = Vec::new();
-    let mut sub_type: Option<SubType> = None;
+    let mut sub_type: Option<_> = None;
     let mut input = None;
 
     for current in pair.into_inner() {
@@ -36,8 +36,8 @@ pub(crate) fn parse_type_expression_block(
                 if sub_type.is_none() {
                     // First identifier is the type of block (e.g. class, enum).
                     match current.as_str() {
-                        "class" => sub_type = Some(SubType::Class),
-                        "enum" => sub_type = Some(SubType::Enum),
+                        "class" => sub_type = Some((SubType::Class, current.as_span())),
+                        "enum" => sub_type = Some((SubType::Enum, current.as_span())),
 
                         // Since previously this was allowed we will display a
                         // nice error here for users who have this in their
@@ -50,7 +50,8 @@ pub(crate) fn parse_type_expression_block(
                                 diagnostics.span(current.as_span()),
                             ));
 
-                            sub_type = Some(SubType::Other("dynamic".to_string()))
+                            sub_type =
+                                Some((SubType::Other("dynamic".to_string()), current.as_span()))
                         }
 
                         // Report this as an error, otherwise the syntax will be
@@ -64,7 +65,7 @@ pub(crate) fn parse_type_expression_block(
                                 diagnostics.span(current.as_span()),
                             ));
 
-                            sub_type = Some(SubType::Other(other.to_string()))
+                            sub_type = Some((SubType::Other(other.to_string()), current.as_span()));
                         }
                     }
                 } else {
@@ -87,10 +88,10 @@ pub(crate) fn parse_type_expression_block(
                             attributes.push(parse_attribute(item, false, diagnostics));
                         }
                         Rule::type_expression =>{
-                            let sub_type_is_enum = matches!(sub_type, Some(SubType::Enum));
+                            let sub_type_is_enum = matches!(sub_type, Some((SubType::Enum, _)));
                             let sub_type_expression = parse_type_expr(
                                 &name,
-                                sub_type.clone().map(|st| match st {
+                                sub_type.clone().map(|st| match st.0 {
                                     SubType::Enum => "Enum",
                                     SubType::Class => "Class",
                                     SubType::Dynamic(d) => match *d {
@@ -114,7 +115,7 @@ pub(crate) fn parse_type_expression_block(
                         Rule::BLOCK_LEVEL_CATCH_ALL => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 match sub_type {
-                                    Some(SubType::Enum) => "This line is not an enum value definition. BAML enums don't have commas, and all values must be all caps.",
+                                    Some((SubType::Enum, _)) => "This line is not an enum value definition. BAML enums don't have commas, and all values must be all caps.",
                                     _ => "This line is not a valid field or attribute definition. A valid class property looks like: 'myProperty string[] @description(\"This is a description\")'",
                                 },
                                 diagnostics.span(item.as_span()),
@@ -129,6 +130,9 @@ pub(crate) fn parse_type_expression_block(
         }
     }
 
+    let sub_type = sub_type.unwrap_or((SubType::Other("Subtype not found".to_string()), pair_span));
+    let is_dynamic_type_def = matches!(sub_type.0, SubType::Dynamic(_));
+
     match name {
         Some(name) => TypeExpressionBlock {
             name,
@@ -137,10 +141,9 @@ pub(crate) fn parse_type_expression_block(
             attributes,
             documentation: doc_comment.and_then(parse_comment_block),
             span: diagnostics.span(pair_span),
-            sub_type: sub_type
-                .clone()
-                .unwrap_or(SubType::Other("Subtype not found".to_string())),
-            is_dynamic_type_def: matches!(sub_type, Some(SubType::Dynamic(_))),
+            sub_type: sub_type.0,
+            type_span: diagnostics.span(sub_type.1),
+            is_dynamic_type_def,
         },
         _ => panic!("Encountered impossible type_expression declaration during parsing"),
     }

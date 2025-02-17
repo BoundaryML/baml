@@ -32,6 +32,47 @@ paths:
                 title: AaaSamOutputFormatResponse
                 $ref: '#/components/schemas/Recipe'
       operationId: AaaSamOutputFormat
+  /call/AliasThatPointsToRecursiveType:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AliasThatPointsToRecursiveType'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AliasThatPointsToRecursiveTypeResponse
+                $ref: '#/components/schemas/LinkedListAliasNode'
+      operationId: AliasThatPointsToRecursiveType
+  /call/AliasWithMultipleAttrs:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AliasWithMultipleAttrs'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AliasWithMultipleAttrsResponse
+                type: object
+                properties:
+                  value:
+                    type: integer
+                  checks:
+                    type: object
+                    properties:
+                      gt_ten:
+                        $ref: '#components/schemas/Check'
+                    required:
+                    - gt_ten
+                    additionalProperties: false
+                required:
+                - value
+                - checks
+                additionalProperties: false
+      operationId: AliasWithMultipleAttrs
   /call/AliasedInputClass:
     post:
       requestBody:
@@ -97,6 +138,32 @@ paths:
                 title: AliasedInputListResponse
                 type: string
       operationId: AliasedInputList
+  /call/AllowedOptionals:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AllowedOptionals'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AllowedOptionalsResponse
+                $ref: '#/components/schemas/OptionalListAndMap'
+      operationId: AllowedOptionals
+  /call/AssertFn:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AssertFn'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AssertFnResponse
+                type: integer
+      operationId: AssertFn
   /call/AudioInput:
     post:
       requestBody:
@@ -110,6 +177,45 @@ paths:
                 title: AudioInputResponse
                 type: string
       operationId: AudioInput
+  /call/BuildLinkedList:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/BuildLinkedList'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: BuildLinkedListResponse
+                $ref: '#/components/schemas/LinkedList'
+      operationId: BuildLinkedList
+  /call/BuildTree:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/BuildTree'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: BuildTreeResponse
+                $ref: '#/components/schemas/Tree'
+      operationId: BuildTree
+  /call/ClassThatPointsToRecursiveClassThroughAlias:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ClassThatPointsToRecursiveClassThroughAlias'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ClassThatPointsToRecursiveClassThroughAliasResponse
+                $ref: '#/components/schemas/ClassToRecAlias'
+      operationId: ClassThatPointsToRecursiveClassThroughAlias
   /call/ClassifyDynEnumTwo:
     post:
       requestBody:
@@ -162,6 +268,19 @@ paths:
                 title: ClassifyMessage3Response
                 $ref: '#/components/schemas/Category'
       operationId: ClassifyMessage3
+  /call/Completion:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/Completion'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: CompletionResponse
+                type: string
+      operationId: Completion
   /call/CustomTask:
     post:
       requestBody:
@@ -325,6 +444,21 @@ paths:
                 title: ExtractContactInfoResponse
                 $ref: '#/components/schemas/ContactInfo'
       operationId: ExtractContactInfo
+  /call/ExtractHobby:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ExtractHobby'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ExtractHobbyResponse
+                type: array
+                items:
+                  $ref: '#/components/schemas/Hobby'
+      operationId: ExtractHobby
   /call/ExtractNames:
     post:
       requestBody:
@@ -448,6 +582,34 @@ paths:
                 title: FnEnumOutputResponse
                 $ref: '#/components/schemas/EnumOutput'
       operationId: FnEnumOutput
+  /call/FnLiteralClassInputOutput:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnLiteralClassInputOutput'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnLiteralClassInputOutputResponse
+                $ref: '#/components/schemas/LiteralClassHello'
+      operationId: FnLiteralClassInputOutput
+  /call/FnLiteralUnionClassInputOutput:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnLiteralUnionClassInputOutput'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnLiteralUnionClassInputOutputResponse
+                oneOf:
+                - $ref: '#/components/schemas/LiteralClassOne'
+                - $ref: '#/components/schemas/LiteralClassTwo'
+      operationId: FnLiteralUnionClassInputOutput
   /call/FnNamedArgsSingleStringOptional:
     post:
       requestBody:
@@ -528,6 +690,58 @@ paths:
                 title: FnOutputClassWithEnumResponse
                 $ref: '#/components/schemas/TestClassWithEnum'
       operationId: FnOutputClassWithEnum
+  /call/FnOutputInt:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnOutputInt'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnOutputIntResponse
+                type: integer
+      operationId: FnOutputInt
+  /call/FnOutputLiteralBool:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnOutputLiteralBool'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnOutputLiteralBoolResponse
+                type: boolean
+      operationId: FnOutputLiteralBool
+  /call/FnOutputLiteralInt:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnOutputLiteralInt'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnOutputLiteralIntResponse
+                type: integer
+      operationId: FnOutputLiteralInt
+  /call/FnOutputLiteralString:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnOutputLiteralString'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnOutputLiteralStringResponse
+                type: string
+      operationId: FnOutputLiteralString
   /call/FnOutputStringList:
     post:
       requestBody:
@@ -621,6 +835,164 @@ paths:
                 title: GetQueryResponse
                 $ref: '#/components/schemas/SearchParams'
       operationId: GetQuery
+  /call/InOutEnumMapKey:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/InOutEnumMapKey'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: InOutEnumMapKeyResponse
+                type: object
+                additionalProperties:
+                  type: string
+      operationId: InOutEnumMapKey
+  /call/InOutLiteralStringUnionMapKey:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/InOutLiteralStringUnionMapKey'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: InOutLiteralStringUnionMapKeyResponse
+                type: object
+                additionalProperties:
+                  type: string
+      operationId: InOutLiteralStringUnionMapKey
+  /call/InOutSingleLiteralStringMapKey:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/InOutSingleLiteralStringMapKey'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: InOutSingleLiteralStringMapKeyResponse
+                type: object
+                additionalProperties:
+                  type: string
+      operationId: InOutSingleLiteralStringMapKey
+  /call/JsonTypeAliasCycle:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/JsonTypeAliasCycle'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: JsonTypeAliasCycleResponse
+                anyOf: []
+      operationId: JsonTypeAliasCycle
+  /call/LiteralUnionsTest:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/LiteralUnionsTest'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: LiteralUnionsTestResponse
+                oneOf:
+                - type: integer
+                - type: boolean
+                - type: string
+      operationId: LiteralUnionsTest
+  /call/MakeBlockConstraint:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/MakeBlockConstraint'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: MakeBlockConstraintResponse
+                type: object
+                properties:
+                  value:
+                    $ref: '#/components/schemas/BlockConstraint'
+                  checks:
+                    type: object
+                    properties:
+                      cross_field:
+                        $ref: '#components/schemas/Check'
+                    required:
+                    - cross_field
+                    additionalProperties: false
+                required:
+                - value
+                - checks
+                additionalProperties: false
+      operationId: MakeBlockConstraint
+  /call/MakeNestedBlockConstraint:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/MakeNestedBlockConstraint'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: MakeNestedBlockConstraintResponse
+                $ref: '#/components/schemas/NestedBlockConstraint'
+      operationId: MakeNestedBlockConstraint
+  /call/MakeSemanticContainer:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/MakeSemanticContainer'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: MakeSemanticContainerResponse
+                $ref: '#/components/schemas/SemanticContainer'
+      operationId: MakeSemanticContainer
+  /call/MapAlias:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/MapAlias'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: MapAliasResponse
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    type: string
+      operationId: MapAlias
+  /call/MergeAliasAttributes:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/MergeAliasAttributes'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: MergeAliasAttributesResponse
+                $ref: '#/components/schemas/MergeAttrs'
+      operationId: MergeAliasAttributes
   /call/MyFunc:
     post:
       requestBody:
@@ -634,6 +1006,45 @@ paths:
                 title: MyFuncResponse
                 $ref: '#/components/schemas/DynamicOutput'
       operationId: MyFunc
+  /call/NestedAlias:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/NestedAlias'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: NestedAliasResponse
+                oneOf:
+                - oneOf:
+                  - type: integer
+                  - type: string
+                  - type: boolean
+                  - type: number
+                - type: array
+                  items:
+                    type: string
+                - type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string
+      operationId: NestedAlias
+  /call/NullLiteralClassHello:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/NullLiteralClassHello'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: NullLiteralClassHelloResponse
+                $ref: '#/components/schemas/ClassForNullLiteral'
+      operationId: NullLiteralClassHello
   /call/OptionalTest_Function:
     post:
       requestBody:
@@ -690,6 +1101,23 @@ paths:
                 - checks
                 additionalProperties: false
       operationId: PredictAgeBare
+  /call/PrimitiveAlias:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/PrimitiveAlias'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: PrimitiveAliasResponse
+                oneOf:
+                - type: integer
+                - type: string
+                - type: boolean
+                - type: number
+      operationId: PrimitiveAlias
   /call/PromptTestClaude:
     post:
       requestBody:
@@ -781,6 +1209,60 @@ paths:
                 title: PromptTestStreamingResponse
                 type: string
       operationId: PromptTestStreaming
+  /call/RecursiveAliasCycle:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/RecursiveAliasCycle'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: RecursiveAliasCycleResponse
+                anyOf: []
+      operationId: RecursiveAliasCycle
+  /call/RecursiveClassWithAliasIndirection:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/RecursiveClassWithAliasIndirection'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: RecursiveClassWithAliasIndirectionResponse
+                $ref: '#/components/schemas/NodeWithAliasIndirection'
+      operationId: RecursiveClassWithAliasIndirection
+  /call/ReturnAliasWithMergedAttributes:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ReturnAliasWithMergedAttributes'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ReturnAliasWithMergedAttributesResponse
+                type: object
+                properties:
+                  value:
+                    type: integer
+                  checks:
+                    type: object
+                    properties:
+                      gt_ten:
+                        $ref: '#components/schemas/Check'
+                    required:
+                    - gt_ten
+                    additionalProperties: false
+                required:
+                - value
+                - checks
+                additionalProperties: false
+      operationId: ReturnAliasWithMergedAttributes
   /call/ReturnFailingAssert:
     post:
       requestBody:
@@ -794,6 +1276,19 @@ paths:
                 title: ReturnFailingAssertResponse
                 type: integer
       operationId: ReturnFailingAssert
+  /call/ReturnJsonEntry:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ReturnJsonEntry'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ReturnJsonEntryResponse
+                anyOf: []
+      operationId: ReturnJsonEntry
   /call/ReturnMalformedConstraints:
     post:
       requestBody:
@@ -820,6 +1315,32 @@ paths:
                 title: SchemaDescriptionsResponse
                 $ref: '#/components/schemas/Schema'
       operationId: SchemaDescriptions
+  /call/SimpleRecursiveListAlias:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/SimpleRecursiveListAlias'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: SimpleRecursiveListAliasResponse
+                anyOf: []
+      operationId: SimpleRecursiveListAlias
+  /call/SimpleRecursiveMapAlias:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/SimpleRecursiveMapAlias'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: SimpleRecursiveMapAliasResponse
+                anyOf: []
+      operationId: SimpleRecursiveMapAlias
   /call/StreamBigNumbers:
     post:
       requestBody:
@@ -889,6 +1410,19 @@ paths:
                 title: StreamingCompoundNumbersResponse
                 $ref: '#/components/schemas/CompoundBigNumbers'
       operationId: StreamingCompoundNumbers
+  /call/TakeRecAliasDep:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TakeRecAliasDep'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TakeRecAliasDepResponse
+                $ref: '#/components/schemas/RecursiveAliasDependency'
+      operationId: TakeRecAliasDep
   /call/TestAnthropic:
     post:
       requestBody:
@@ -928,6 +1462,58 @@ paths:
                 title: TestAwsResponse
                 type: string
       operationId: TestAws
+  /call/TestAwsInvalidAccessKey:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsInvalidAccessKey'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsInvalidAccessKeyResponse
+                type: string
+      operationId: TestAwsInvalidAccessKey
+  /call/TestAwsInvalidProfile:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsInvalidProfile'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsInvalidProfileResponse
+                type: string
+      operationId: TestAwsInvalidProfile
+  /call/TestAwsInvalidRegion:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsInvalidRegion'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsInvalidRegionResponse
+                type: string
+      operationId: TestAwsInvalidRegion
+  /call/TestAwsInvalidSessionToken:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsInvalidSessionToken'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsInvalidSessionTokenResponse
+                type: string
+      operationId: TestAwsInvalidSessionToken
   /call/TestAzure:
     post:
       requestBody:
@@ -941,6 +1527,97 @@ paths:
                 title: TestAzureResponse
                 type: string
       operationId: TestAzure
+  /call/TestAzureFailure:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAzureFailure'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAzureFailureResponse
+                type: string
+      operationId: TestAzureFailure
+  /call/TestAzureO1NoMaxTokens:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAzureO1NoMaxTokens'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAzureO1NoMaxTokensResponse
+                type: string
+      operationId: TestAzureO1NoMaxTokens
+  /call/TestAzureO1WithMaxCompletionTokens:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAzureO1WithMaxCompletionTokens'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAzureO1WithMaxCompletionTokensResponse
+                type: string
+      operationId: TestAzureO1WithMaxCompletionTokens
+  /call/TestAzureO1WithMaxTokens:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAzureO1WithMaxTokens'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAzureO1WithMaxTokensResponse
+                type: string
+      operationId: TestAzureO1WithMaxTokens
+  /call/TestAzureO3NoMaxTokens:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAzureO3NoMaxTokens'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAzureO3NoMaxTokensResponse
+                type: string
+      operationId: TestAzureO3NoMaxTokens
+  /call/TestAzureO3WithMaxCompletionTokens:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAzureO3WithMaxCompletionTokens'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAzureO3WithMaxCompletionTokensResponse
+                type: string
+      operationId: TestAzureO3WithMaxCompletionTokens
+  /call/TestAzureWithMaxTokens:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAzureWithMaxTokens'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAzureWithMaxTokensResponse
+                type: string
+      operationId: TestAzureWithMaxTokens
   /call/TestCaching:
     post:
       requestBody:
@@ -1144,6 +1821,45 @@ paths:
                 title: TestGeminiResponse
                 type: string
       operationId: TestGemini
+  /call/TestGeminiOpenAiGeneric:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestGeminiOpenAiGeneric'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestGeminiOpenAiGenericResponse
+                type: string
+      operationId: TestGeminiOpenAiGeneric
+  /call/TestGeminiSystem:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestGeminiSystem'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestGeminiSystemResponse
+                type: string
+      operationId: TestGeminiSystem
+  /call/TestGeminiSystemAsChat:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestGeminiSystemAsChat'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestGeminiSystemAsChatResponse
+                type: string
+      operationId: TestGeminiSystemAsChat
   /call/TestImageInput:
     post:
       requestBody:
@@ -1183,6 +1899,19 @@ paths:
                 title: TestImageListInputResponse
                 type: string
       operationId: TestImageListInput
+  /call/TestMemory:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestMemory'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestMemoryResponse
+                $ref: '#/components/schemas/TestMemoryOutput'
+      operationId: TestMemory
   /call/TestMulticlassNamedArgs:
     post:
       requestBody:
@@ -1196,6 +1925,45 @@ paths:
                 title: TestMulticlassNamedArgsResponse
                 type: string
       operationId: TestMulticlassNamedArgs
+  /call/TestNamedArgsLiteralBool:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestNamedArgsLiteralBool'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestNamedArgsLiteralBoolResponse
+                type: string
+      operationId: TestNamedArgsLiteralBool
+  /call/TestNamedArgsLiteralInt:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestNamedArgsLiteralInt'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestNamedArgsLiteralIntResponse
+                type: string
+      operationId: TestNamedArgsLiteralInt
+  /call/TestNamedArgsLiteralString:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestNamedArgsLiteralString'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestNamedArgsLiteralStringResponse
+                type: string
+      operationId: TestNamedArgsLiteralString
   /call/TestOllama:
     post:
       requestBody:
@@ -1209,6 +1977,19 @@ paths:
                 title: TestOllamaResponse
                 type: string
       operationId: TestOllama
+  /call/TestOpenAI:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAI'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIResponse
+                type: string
+      operationId: TestOpenAI
   /call/TestOpenAILegacyProvider:
     post:
       requestBody:
@@ -1222,6 +2003,45 @@ paths:
                 title: TestOpenAILegacyProviderResponse
                 type: string
       operationId: TestOpenAILegacyProvider
+  /call/TestOpenAIO1NoMaxTokens:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIO1NoMaxTokens'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIO1NoMaxTokensResponse
+                type: string
+      operationId: TestOpenAIO1NoMaxTokens
+  /call/TestOpenAIO1WithMaxCompletionTokens:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIO1WithMaxCompletionTokens'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIO1WithMaxCompletionTokensResponse
+                type: string
+      operationId: TestOpenAIO1WithMaxCompletionTokens
+  /call/TestOpenAIO1WithMaxTokens:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIO1WithMaxTokens'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIO1WithMaxTokensResponse
+                type: string
+      operationId: TestOpenAIO1WithMaxTokens
   /call/TestOpenAIShorthand:
     post:
       requestBody:
@@ -1235,6 +2055,32 @@ paths:
                 title: TestOpenAIShorthandResponse
                 type: string
       operationId: TestOpenAIShorthand
+  /call/TestOpenAIWithMaxTokens:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIWithMaxTokens'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIWithMaxTokensResponse
+                type: string
+      operationId: TestOpenAIWithMaxTokens
+  /call/TestOpenAIWithNullMaxTokens:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIWithNullMaxTokens'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIWithNullMaxTokensResponse
+                type: string
+      operationId: TestOpenAIWithNullMaxTokens
   /call/TestRetryConstant:
     post:
       requestBody:
@@ -1274,6 +2120,19 @@ paths:
                 title: TestSingleFallbackClientResponse
                 type: string
       operationId: TestSingleFallbackClient
+  /call/TestUniverseQuestion:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestUniverseQuestion'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestUniverseQuestionResponse
+                $ref: '#/components/schemas/UniverseQuestion'
+      operationId: TestUniverseQuestion
   /call/TestVertex:
     post:
       requestBody:
@@ -1287,6 +2146,19 @@ paths:
                 title: TestVertexResponse
                 type: string
       operationId: TestVertex
+  /call/TestVertexWithSystemInstructions:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestVertexWithSystemInstructions'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestVertexWithSystemInstructionsResponse
+                type: string
+      operationId: TestVertexWithSystemInstructions
   /call/UnionTest_Function:
     post:
       requestBody:
@@ -1300,6 +2172,19 @@ paths:
                 title: UnionTest_FunctionResponse
                 $ref: '#/components/schemas/UnionTest_ReturnType'
       operationId: UnionTest_Function
+  /call/UseBlockConstraint:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/UseBlockConstraint'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: UseBlockConstraintResponse
+                type: integer
+      operationId: UseBlockConstraint
   /call/UseMalformedConstraints:
     post:
       requestBody:
@@ -1313,6 +2198,19 @@ paths:
                 title: UseMalformedConstraintsResponse
                 type: integer
       operationId: UseMalformedConstraints
+  /call/UseNestedBlockConstraint:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/UseNestedBlockConstraint'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: UseNestedBlockConstraintResponse
+                type: integer
+      operationId: UseNestedBlockConstraint
 components:
   requestBodies:
     AaaSamOutputFormat:
@@ -1330,6 +2228,53 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - recipe
+            additionalProperties: false
+    AliasThatPointsToRecursiveType:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AliasThatPointsToRecursiveTypeRequest
+            type: object
+            properties:
+              list:
+                $ref: '#/components/schemas/LinkedListAliasNode'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - list
+            additionalProperties: false
+    AliasWithMultipleAttrs:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AliasWithMultipleAttrsRequest
+            type: object
+            properties:
+              money:
+                type: object
+                properties:
+                  value:
+                    type: integer
+                  checks:
+                    type: object
+                    properties:
+                      gt_ten:
+                        $ref: '#components/schemas/Check'
+                    required:
+                    - gt_ten
+                    additionalProperties: false
+                required:
+                - value
+                - checks
+                additionalProperties: false
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - money
             additionalProperties: false
     AliasedInputClass:
       required: true
@@ -1413,6 +2358,38 @@ components:
             required:
             - input
             additionalProperties: false
+    AllowedOptionals:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AllowedOptionalsRequest
+            type: object
+            properties:
+              optionals:
+                $ref: '#/components/schemas/OptionalListAndMap'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - optionals
+            additionalProperties: false
+    AssertFn:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AssertFnRequest
+            type: object
+            properties:
+              a:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - a
+            additionalProperties: false
     AudioInput:
       required: true
       content:
@@ -1428,6 +2405,56 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - aud
+            additionalProperties: false
+    BuildLinkedList:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: BuildLinkedListRequest
+            type: object
+            properties:
+              input:
+                type: array
+                items:
+                  type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    BuildTree:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: BuildTreeRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/BinaryNode'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    ClassThatPointsToRecursiveClassThroughAlias:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ClassThatPointsToRecursiveClassThroughAliasRequest
+            type: object
+            properties:
+              cls:
+                $ref: '#/components/schemas/ClassToRecAlias'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - cls
             additionalProperties: false
     ClassifyDynEnumTwo:
       required: true
@@ -1492,6 +2519,28 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    Completion:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: CompletionRequest
+            type: object
+            properties:
+              language:
+                type: string
+              prefix:
+                type: string
+              suffix:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - language
+            - prefix
+            - suffix
             additionalProperties: false
     CustomTask:
       required: true
@@ -1690,6 +2739,22 @@ components:
             required:
             - document
             additionalProperties: false
+    ExtractHobby:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ExtractHobbyRequest
+            type: object
+            properties:
+              text:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - text
+            additionalProperties: false
     ExtractNames:
       required: true
       content:
@@ -1751,10 +2816,10 @@ components:
             title: ExtractResumeRequest
             type: object
             properties:
-              resume:
-                type: string
               img:
                 $ref: '#/components/schemas/BamlImage'
+              resume:
+                type: string
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -1835,6 +2900,40 @@ components:
             properties:
               input:
                 type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    FnLiteralClassInputOutput:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnLiteralClassInputOutputRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/LiteralClassHello'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    FnLiteralUnionClassInputOutput:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnLiteralUnionClassInputOutputRequest
+            type: object
+            properties:
+              input:
+                oneOf:
+                - $ref: '#/components/schemas/LiteralClassOne'
+                - $ref: '#/components/schemas/LiteralClassTwo'
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -1926,6 +3025,70 @@ components:
         application/json:
           schema:
             title: FnOutputClassWithEnumRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    FnOutputInt:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnOutputIntRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    FnOutputLiteralBool:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnOutputLiteralBoolRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    FnOutputLiteralInt:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnOutputLiteralIntRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    FnOutputLiteralString:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnOutputLiteralStringRequest
             type: object
             properties:
               input:
@@ -2048,6 +3211,177 @@ components:
             required:
             - query
             additionalProperties: false
+    InOutEnumMapKey:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: InOutEnumMapKeyRequest
+            type: object
+            properties:
+              i1:
+                type: object
+                additionalProperties:
+                  type: string
+              i2:
+                type: object
+                additionalProperties:
+                  type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - i1
+            - i2
+            additionalProperties: false
+    InOutLiteralStringUnionMapKey:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: InOutLiteralStringUnionMapKeyRequest
+            type: object
+            properties:
+              i1:
+                type: object
+                additionalProperties:
+                  type: string
+              i2:
+                type: object
+                additionalProperties:
+                  type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - i1
+            - i2
+            additionalProperties: false
+    InOutSingleLiteralStringMapKey:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: InOutSingleLiteralStringMapKeyRequest
+            type: object
+            properties:
+              m:
+                type: object
+                additionalProperties:
+                  type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - m
+            additionalProperties: false
+    JsonTypeAliasCycle:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: JsonTypeAliasCycleRequest
+            type: object
+            properties:
+              input:
+                anyOf: []
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    LiteralUnionsTest:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: LiteralUnionsTestRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    MakeBlockConstraint:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: MakeBlockConstraintRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
+            additionalProperties: false
+    MakeNestedBlockConstraint:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: MakeNestedBlockConstraintRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
+            additionalProperties: false
+    MakeSemanticContainer:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: MakeSemanticContainerRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
+            additionalProperties: false
+    MapAlias:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: MapAliasRequest
+            type: object
+            properties:
+              m:
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - m
+            additionalProperties: false
+    MergeAliasAttributes:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: MergeAliasAttributesRequest
+            type: object
+            properties:
+              money:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - money
+            additionalProperties: false
     MyFunc:
       required: true
       content:
@@ -2063,6 +3397,51 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    NestedAlias:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: NestedAliasRequest
+            type: object
+            properties:
+              c:
+                oneOf:
+                - oneOf:
+                  - type: integer
+                  - type: string
+                  - type: boolean
+                  - type: number
+                - type: array
+                  items:
+                    type: string
+                - type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - c
+            additionalProperties: false
+    NullLiteralClassHello:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: NullLiteralClassHelloRequest
+            type: object
+            properties:
+              s:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - s
             additionalProperties: false
     OptionalTest_Function:
       required: true
@@ -2111,6 +3490,26 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - inp
+            additionalProperties: false
+    PrimitiveAlias:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: PrimitiveAliasRequest
+            type: object
+            properties:
+              p:
+                oneOf:
+                - type: integer
+                - type: string
+                - type: boolean
+                - type: number
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - p
             additionalProperties: false
     PromptTestClaude:
       required: true
@@ -2224,6 +3623,69 @@ components:
             required:
             - input
             additionalProperties: false
+    RecursiveAliasCycle:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: RecursiveAliasCycleRequest
+            type: object
+            properties:
+              input:
+                anyOf: []
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    RecursiveClassWithAliasIndirection:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: RecursiveClassWithAliasIndirectionRequest
+            type: object
+            properties:
+              cls:
+                $ref: '#/components/schemas/NodeWithAliasIndirection'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - cls
+            additionalProperties: false
+    ReturnAliasWithMergedAttributes:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ReturnAliasWithMergedAttributesRequest
+            type: object
+            properties:
+              money:
+                type: object
+                properties:
+                  value:
+                    type: integer
+                  checks:
+                    type: object
+                    properties:
+                      gt_ten:
+                        $ref: '#components/schemas/Check'
+                    required:
+                    - gt_ten
+                    additionalProperties: false
+                required:
+                - value
+                - checks
+                additionalProperties: false
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - money
+            additionalProperties: false
     ReturnFailingAssert:
       required: true
       content:
@@ -2239,6 +3701,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - inp
+            additionalProperties: false
+    ReturnJsonEntry:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ReturnJsonEntryRequest
+            type: object
+            properties:
+              s:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - s
             additionalProperties: false
     ReturnMalformedConstraints:
       required: true
@@ -2272,6 +3750,38 @@ components:
             required:
             - input
             additionalProperties: false
+    SimpleRecursiveListAlias:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: SimpleRecursiveListAliasRequest
+            type: object
+            properties:
+              input:
+                anyOf: []
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    SimpleRecursiveMapAlias:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: SimpleRecursiveMapAliasRequest
+            type: object
+            properties:
+              input:
+                anyOf: []
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     StreamBigNumbers:
       required: true
       content:
@@ -2296,16 +3806,16 @@ components:
             title: StreamFailingAssertionRequest
             type: object
             properties:
-              theme:
-                type: string
               length:
                 type: integer
+              theme:
+                type: string
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required:
-            - theme
             - length
+            - theme
             additionalProperties: false
     StreamOneBigNumber:
       required: true
@@ -2358,6 +3868,22 @@ components:
             - digits
             - yapping
             additionalProperties: false
+    TakeRecAliasDep:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TakeRecAliasDepRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/RecursiveAliasDependency'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestAnthropic:
       required: true
       content:
@@ -2406,12 +3932,188 @@ components:
             required:
             - input
             additionalProperties: false
+    TestAwsInvalidAccessKey:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsInvalidAccessKeyRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAwsInvalidProfile:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsInvalidProfileRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAwsInvalidRegion:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsInvalidRegionRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAwsInvalidSessionToken:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsInvalidSessionTokenRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestAzure:
       required: true
       content:
         application/json:
           schema:
             title: TestAzureRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAzureFailure:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAzureFailureRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAzureO1NoMaxTokens:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAzureO1NoMaxTokensRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAzureO1WithMaxCompletionTokens:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAzureO1WithMaxCompletionTokensRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAzureO1WithMaxTokens:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAzureO1WithMaxTokensRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAzureO3NoMaxTokens:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAzureO3NoMaxTokensRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAzureO3WithMaxCompletionTokens:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAzureO3WithMaxCompletionTokensRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAzureWithMaxTokens:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAzureWithMaxTokensRequest
             type: object
             properties:
               input:
@@ -2676,6 +4378,51 @@ components:
             required:
             - input
             additionalProperties: false
+    TestGeminiOpenAiGeneric:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestGeminiOpenAiGenericRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
+            additionalProperties: false
+    TestGeminiSystem:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestGeminiSystemRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestGeminiSystemAsChat:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestGeminiSystemAsChatRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestImageInput:
       required: true
       content:
@@ -2726,6 +4473,22 @@ components:
             required:
             - imgs
             additionalProperties: false
+    TestMemory:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestMemoryRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestMulticlassNamedArgs:
       required: true
       content:
@@ -2745,12 +4508,76 @@ components:
             - myArg
             - myArg2
             additionalProperties: false
+    TestNamedArgsLiteralBool:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestNamedArgsLiteralBoolRequest
+            type: object
+            properties:
+              myBool:
+                type: boolean
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - myBool
+            additionalProperties: false
+    TestNamedArgsLiteralInt:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestNamedArgsLiteralIntRequest
+            type: object
+            properties:
+              myInt:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - myInt
+            additionalProperties: false
+    TestNamedArgsLiteralString:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestNamedArgsLiteralStringRequest
+            type: object
+            properties:
+              myString:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - myString
+            additionalProperties: false
     TestOllama:
       required: true
       content:
         application/json:
           schema:
             title: TestOllamaRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestOpenAI:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIRequest
             type: object
             properties:
               input:
@@ -2777,12 +4604,92 @@ components:
             required:
             - input
             additionalProperties: false
+    TestOpenAIO1NoMaxTokens:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIO1NoMaxTokensRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestOpenAIO1WithMaxCompletionTokens:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIO1WithMaxCompletionTokensRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestOpenAIO1WithMaxTokens:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIO1WithMaxTokensRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestOpenAIShorthand:
       required: true
       content:
         application/json:
           schema:
             title: TestOpenAIShorthandRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestOpenAIWithMaxTokens:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIWithMaxTokensRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestOpenAIWithNullMaxTokens:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIWithNullMaxTokensRequest
             type: object
             properties:
               input:
@@ -2832,6 +4739,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
+    TestUniverseQuestion:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestUniverseQuestionRequest
+            type: object
+            properties:
+              question:
+                $ref: '#/components/schemas/UniverseQuestionInput'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - question
+            additionalProperties: false
     TestVertex:
       required: true
       content:
@@ -2847,6 +4770,19 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    TestVertexWithSystemInstructions:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestVertexWithSystemInstructionsRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
             additionalProperties: false
     UnionTest_Function:
       required: true
@@ -2866,6 +4802,22 @@ components:
             required:
             - input
             additionalProperties: false
+    UseBlockConstraint:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: UseBlockConstraintRequest
+            type: object
+            properties:
+              inp:
+                $ref: '#/components/schemas/BlockConstraintForParam'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - inp
+            additionalProperties: false
     UseMalformedConstraints:
       required: true
       content:
@@ -2881,6 +4833,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - a
+            additionalProperties: false
+    UseNestedBlockConstraint:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: UseNestedBlockConstraintRequest
+            type: object
+            properties:
+              inp:
+                $ref: '#/components/schemas/NestedBlockConstraintForParam'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - inp
             additionalProperties: false
   schemas:
     BamlImage:
@@ -2971,6 +4939,89 @@ components:
       - KEY_ONE
       - KEY_TWO
       type: string
+    AnotherObject:
+      type: object
+      properties:
+        id:
+          type: string
+        thingy2:
+          type: string
+        thingy3:
+          type: string
+      required:
+      - id
+      - thingy2
+      - thingy3
+      additionalProperties: false
+    BigNumbers:
+      type: object
+      properties:
+        a:
+          type: integer
+        b:
+          type: number
+      required:
+      - a
+      - b
+      additionalProperties: false
+    BinaryNode:
+      type: object
+      properties:
+        data:
+          type: integer
+        left:
+          $ref: '#/components/schemas/BinaryNode'
+        right:
+          $ref: '#/components/schemas/BinaryNode'
+      required:
+      - data
+      additionalProperties: false
+    Blah:
+      type: object
+      properties:
+        prop4:
+          type: string
+      required: []
+      additionalProperties: false
+    BlockConstraint:
+      type: object
+      properties:
+        bar:
+          type: string
+        foo:
+          type: integer
+      required:
+      - bar
+      - foo
+      additionalProperties: false
+    BlockConstraintForParam:
+      type: object
+      properties:
+        bcfp:
+          type: integer
+        bcfp2:
+          type: string
+      required:
+      - bcfp
+      - bcfp2
+      additionalProperties: false
+    BookOrder:
+      type: object
+      properties:
+        orderId:
+          type: string
+        price:
+          type: number
+        quantity:
+          type: integer
+        title:
+          type: string
+      required:
+      - orderId
+      - price
+      - quantity
+      - title
+      additionalProperties: false
     Category:
       enum:
       - Refund
@@ -2995,116 +5046,13 @@ components:
       - AccountIssue
       - Question
       type: string
-    Color:
-      enum:
-      - RED
-      - BLUE
-      - GREEN
-      - YELLOW
-      - BLACK
-      - WHITE
-      type: string
-    DataType:
-      enum:
-      - Resume
-      - Event
-      type: string
-    DynEnumOne:
-      enum: []
-      type: string
-    DynEnumTwo:
-      enum: []
-      type: string
-    EnumInClass:
-      enum:
-      - ONE
-      - TWO
-      type: string
-    EnumOutput:
-      enum:
-      - ONE
-      - TWO
-      - THREE
-      type: string
-    Hobby:
-      enum:
-      - SPORTS
-      - MUSIC
-      - READING
-      type: string
-    NamedArgsSingleEnum:
-      enum:
-      - ONE
-      - TWO
-      type: string
-    NamedArgsSingleEnumList:
-      enum:
-      - ONE
-      - TWO
-      type: string
-    OptionalTest_CategoryType:
-      enum:
-      - Aleph
-      - Beta
-      - Gamma
-      type: string
-    OrderStatus:
-      enum:
-      - ORDERED
-      - SHIPPED
-      - DELIVERED
-      - CANCELLED
-      type: string
-    Tag:
-      enum:
-      - Security
-      - AI
-      - Blockchain
-      type: string
-    TestEnum:
-      enum:
-      - A
-      - B
-      - C
-      - D
-      - E
-      - F
-      - G
-      type: string
-    BigNumbers:
+    ClassForNullLiteral:
       type: object
       properties:
         a:
-          type: integer
-        b:
-          type: number
+          type: string
       required:
       - a
-      - b
-      additionalProperties: false
-    Blah:
-      type: object
-      properties:
-        prop4:
-          type: string
-      required: []
-      additionalProperties: false
-    BookOrder:
-      type: object
-      properties:
-        orderId:
-          type: string
-        title:
-          type: string
-        quantity:
-          type: integer
-        price:
-          type: number
-      required:
-      - orderId
-      - title
-      - quantity
-      - price
       additionalProperties: false
     ClassOptionalOutput:
       type: object
@@ -3128,35 +5076,96 @@ components:
           $ref: '#/components/schemas/Blah'
       required: []
       additionalProperties: false
+    ClassToRecAlias:
+      type: object
+      properties:
+        list:
+          $ref: '#/components/schemas/LinkedListAliasNode'
+      required:
+      - list
+      additionalProperties: false
+    ClassWithBlockDone:
+      type: object
+      properties:
+        i_16_digits:
+          type: integer
+        s_20_words:
+          type: string
+      required:
+      - i_16_digits
+      - s_20_words
+      additionalProperties: false
     ClassWithImage:
       type: object
       properties:
+        fake_image:
+          $ref: '#/components/schemas/FakeImage'
         myImage:
           $ref: '#/components/schemas/BamlImage'
         param2:
           type: string
-        fake_image:
-          $ref: '#/components/schemas/FakeImage'
       required:
+      - fake_image
       - myImage
       - param2
-      - fake_image
+      additionalProperties: false
+    ClassWithoutDone:
+      type: object
+      properties:
+        i_16_digits:
+          type: integer
+        s_20_words:
+          type: string
+      required:
+      - i_16_digits
+      - s_20_words
+      additionalProperties: false
+    Color:
+      enum:
+      - RED
+      - BLUE
+      - GREEN
+      - YELLOW
+      - BLACK
+      - WHITE
+      type: string
+    ComplexMemoryObject:
+      type: object
+      properties:
+        description:
+          type: string
+        id:
+          type: string
+        metadata:
+          type: array
+          items:
+            oneOf:
+            - type: string
+            - type: integer
+            - type: number
+        name:
+          type: string
+      required:
+      - description
+      - id
+      - metadata
+      - name
       additionalProperties: false
     CompoundBigNumbers:
       type: object
       properties:
+        another:
+          $ref: '#/components/schemas/BigNumbers'
         big:
           $ref: '#/components/schemas/BigNumbers'
         big_nums:
           type: array
           items:
             $ref: '#/components/schemas/BigNumbers'
-        another:
-          $ref: '#/components/schemas/BigNumbers'
       required:
+      - another
       - big
       - big_nums
-      - another
       additionalProperties: false
     ContactInfo:
       type: object
@@ -3186,6 +5195,11 @@ components:
           - $ref: '#/components/schemas/GroceryReceipt'
       required: []
       additionalProperties: false
+    DataType:
+      enum:
+      - Resume
+      - Event
+      type: string
     DummyOutput:
       type: object
       properties:
@@ -3197,6 +5211,12 @@ components:
       - nonce
       - nonce2
       additionalProperties: false
+    DynEnumOne:
+      enum: []
+      type: string
+    DynEnumTwo:
+      enum: []
+      type: string
     DynInputOutput:
       type: object
       properties:
@@ -3240,13 +5260,13 @@ components:
             checks:
               type: object
               properties:
-                no_infants:
-                  $ref: '#components/schemas/Check'
                 earth_aged:
                   $ref: '#components/schemas/Check'
+                no_infants:
+                  $ref: '#components/schemas/Check'
               required:
-              - no_infants
               - earth_aged
+              - no_infants
               additionalProperties: false
           required:
           - value
@@ -3258,77 +5278,73 @@ components:
     Education:
       type: object
       properties:
+        degree:
+          type: string
+        graduation_date:
+          type: string
         institution:
           type: string
         location:
-          type: string
-        degree:
           type: string
         major:
           type: array
           items:
             type: string
-        graduation_date:
-          type: string
       required:
+      - degree
       - institution
       - location
-      - degree
       - major
       additionalProperties: false
     Email:
       type: object
       properties:
-        subject:
-          type: string
         body:
           type: string
         from_address:
           type: string
+        subject:
+          type: string
       required:
-      - subject
       - body
       - from_address
+      - subject
       additionalProperties: false
     EmailAddress:
       type: object
       properties:
         value:
-          type: object
-          properties:
-            value:
-              type: string
-            checks:
-              type: object
-              properties:
-                valid_email:
-                  $ref: '#components/schemas/Check'
-              required:
-              - valid_email
-              additionalProperties: false
-          required:
-          - value
-          - checks
-          additionalProperties: false
+          type: string
       required:
       - value
       additionalProperties: false
+    EnumInClass:
+      enum:
+      - ONE
+      - TWO
+      type: string
+    EnumOutput:
+      enum:
+      - ONE
+      - TWO
+      - THREE
+      type: string
     Event:
       type: object
       properties:
-        title:
-          type: string
         date:
-          type: string
-        location:
           type: string
         description:
           type: string
+        location:
+          type: string
+        title:
+          type: string
       required:
-      - title
       - date
-      - location
       - description
+      - location
+      - title
       additionalProperties: false
     FakeImage:
       type: object
@@ -3341,30 +5357,26 @@ components:
     FlightConfirmation:
       type: object
       properties:
-        confirmationNumber:
+        arrivalTime:
           type: string
-        flightNumber:
+        confirmationNumber:
           type: string
         departureTime:
           type: string
-        arrivalTime:
+        flightNumber:
           type: string
         seatNumber:
           type: string
       required:
-      - confirmationNumber
-      - flightNumber
-      - departureTime
       - arrivalTime
+      - confirmationNumber
+      - departureTime
+      - flightNumber
       - seatNumber
       additionalProperties: false
     FooAny:
       type: object
       properties:
-        planetary_age:
-          oneOf:
-          - $ref: '#/components/schemas/Martian'
-          - $ref: '#/components/schemas/Earthling'
         certainty:
           type: object
           properties:
@@ -3382,6 +5394,10 @@ components:
           - value
           - checks
           additionalProperties: false
+        planetary_age:
+          oneOf:
+          - $ref: '#/components/schemas/Martian'
+          - $ref: '#/components/schemas/Earthling'
         species:
           type: object
           properties:
@@ -3392,31 +5408,81 @@ components:
               properties:
                 regex_bad:
                   $ref: '#components/schemas/Check'
-                trivial:
-                  $ref: '#components/schemas/Check'
                 regex_good:
+                  $ref: '#components/schemas/Check'
+                trivial:
                   $ref: '#components/schemas/Check'
               required:
               - regex_bad
-              - trivial
               - regex_good
+              - trivial
               additionalProperties: false
           required:
           - value
           - checks
           additionalProperties: false
       required:
-      - planetary_age
       - certainty
+      - planetary_age
       - species
+      additionalProperties: false
+    Forest:
+      type: object
+      properties:
+        trees:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tree'
+      required:
+      - trees
+      additionalProperties: false
+    FormatterTest0:
+      type: object
+      properties:
+        ipsum:
+          type: string
+        lorem:
+          type: string
+      required:
+      - ipsum
+      - lorem
+      additionalProperties: false
+    FormatterTest1:
+      type: object
+      properties:
+        ipsum:
+          type: string
+        lorem:
+          type: string
+      required:
+      - ipsum
+      - lorem
+      additionalProperties: false
+    FormatterTest2:
+      type: object
+      properties:
+        ipsum:
+          type: string
+        lorem:
+          type: string
+      required:
+      - ipsum
+      - lorem
+      additionalProperties: false
+    FormatterTest3:
+      type: object
+      properties:
+        ipsum:
+          type: string
+        lorem:
+          type: string
+      required:
+      - ipsum
+      - lorem
       additionalProperties: false
     GroceryReceipt:
       type: object
       properties:
-        receiptId:
-          type: string
-        storeName:
-          type: string
         items:
           type: array
           items:
@@ -3424,27 +5490,37 @@ components:
             - type: string
             - type: integer
             - type: number
+        receiptId:
+          type: string
+        storeName:
+          type: string
         totalAmount:
           type: number
       required:
+      - items
       - receiptId
       - storeName
-      - items
       - totalAmount
       additionalProperties: false
+    Hobby:
+      enum:
+      - SPORTS
+      - MUSIC
+      - READING
+      type: string
     InnerClass:
       type: object
       properties:
+        inner:
+          $ref: '#/components/schemas/InnerClass2'
         prop1:
           type: string
         prop2:
           type: string
-        inner:
-          $ref: '#/components/schemas/InnerClass2'
       required:
+      - inner
       - prop1
       - prop2
-      - inner
       additionalProperties: false
     InnerClass2:
       type: object
@@ -3479,6 +5555,50 @@ components:
       - key
       - nested
       additionalProperties: false
+    LinkedList:
+      type: object
+      properties:
+        head:
+          $ref: '#/components/schemas/Node'
+        len:
+          type: integer
+      required:
+      - len
+      additionalProperties: false
+    LinkedListAliasNode:
+      type: object
+      properties:
+        next:
+          $ref: '#/components/schemas/LinkedListAliasNode'
+        value:
+          type: integer
+      required:
+      - value
+      additionalProperties: false
+    LiteralClassHello:
+      type: object
+      properties:
+        prop:
+          type: string
+      required:
+      - prop
+      additionalProperties: false
+    LiteralClassOne:
+      type: object
+      properties:
+        prop:
+          type: string
+      required:
+      - prop
+      additionalProperties: false
+    LiteralClassTwo:
+      type: object
+      properties:
+        prop:
+          type: string
+      required:
+      - prop
+      additionalProperties: false
     MalformedConstraints:
       type: object
       properties:
@@ -3510,6 +5630,12 @@ components:
       required:
       - foo
       additionalProperties: false
+    MapKey:
+      enum:
+      - A
+      - B
+      - C
+      type: string
     Martian:
       type: object
       properties:
@@ -3533,31 +5659,78 @@ components:
       required:
       - age
       additionalProperties: false
+    MemoryObject:
+      type: object
+      properties:
+        description:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+      required:
+      - description
+      - id
+      - name
+      additionalProperties: false
+    MergeAttrs:
+      type: object
+      properties:
+        amount:
+          type: object
+          properties:
+            value:
+              type: integer
+            checks:
+              type: object
+              properties:
+                gt_ten:
+                  $ref: '#components/schemas/Check'
+              required:
+              - gt_ten
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
+      required:
+      - amount
+      additionalProperties: false
     NamedArgsSingleClass:
       type: object
       properties:
         key:
           type: string
-        key_two:
-          type: boolean
         key_three:
           type: integer
+        key_two:
+          type: boolean
       required:
       - key
-      - key_two
       - key_three
+      - key_two
       additionalProperties: false
+    NamedArgsSingleEnum:
+      enum:
+      - ONE
+      - TWO
+      type: string
+    NamedArgsSingleEnumList:
+      enum:
+      - ONE
+      - TWO
+      type: string
     Nested:
       type: object
       properties:
+        prop20:
+          $ref: '#/components/schemas/Nested2'
         prop3:
           oneOf:
           - type: string
         prop4:
           oneOf:
           - type: string
-        prop20:
-          $ref: '#/components/schemas/Nested2'
       required:
       - prop20
       additionalProperties: false
@@ -3572,6 +5745,76 @@ components:
           - type: string
       required: []
       additionalProperties: false
+    NestedBlockConstraint:
+      type: object
+      properties:
+        nbc:
+          type: object
+          properties:
+            value:
+              $ref: '#/components/schemas/BlockConstraint'
+            checks:
+              type: object
+              properties:
+                cross_field:
+                  $ref: '#components/schemas/Check'
+              required:
+              - cross_field
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
+      required:
+      - nbc
+      additionalProperties: false
+    NestedBlockConstraintForParam:
+      type: object
+      properties:
+        nbcfp:
+          $ref: '#/components/schemas/BlockConstraintForParam'
+      required:
+      - nbcfp
+      additionalProperties: false
+    Node:
+      type: object
+      properties:
+        data:
+          type: integer
+        next:
+          $ref: '#/components/schemas/Node'
+      required:
+      - data
+      additionalProperties: false
+    NodeWithAliasIndirection:
+      type: object
+      properties:
+        next:
+          $ref: '#/components/schemas/NodeWithAliasIndirection'
+        value:
+          type: integer
+      required:
+      - value
+      additionalProperties: false
+    OptionalListAndMap:
+      type: object
+      properties:
+        p:
+          type: array
+          items:
+            type: string
+        q:
+          type: object
+          additionalProperties:
+            type: string
+      required: []
+      additionalProperties: false
+    OptionalTest_CategoryType:
+      enum:
+      - Aleph
+      - Beta
+      - Gamma
+      type: string
     OptionalTest_Prop1:
       type: object
       properties:
@@ -3600,15 +5843,22 @@ components:
     OrderInfo:
       type: object
       properties:
+        estimated_arrival_date:
+          type: string
         order_status:
           $ref: '#/components/schemas/OrderStatus'
         tracking_number:
           type: string
-        estimated_arrival_date:
-          type: string
       required:
       - order_status
       additionalProperties: false
+    OrderStatus:
+      enum:
+      - ORDERED
+      - SHIPPED
+      - DELIVERED
+      - CANCELLED
+      type: string
     OriginalA:
       type: object
       properties:
@@ -3628,32 +5878,17 @@ components:
     Person:
       type: object
       properties:
-        name:
-          type: string
         hair_color:
           $ref: '#/components/schemas/Color'
+        name:
+          type: string
       required: []
       additionalProperties: false
     PhoneNumber:
       type: object
       properties:
         value:
-          type: object
-          properties:
-            value:
-              type: string
-            checks:
-              type: object
-              properties:
-                valid_phone_number:
-                  $ref: '#components/schemas/Check'
-              required:
-              - valid_phone_number
-              additionalProperties: false
-          required:
-          - value
-          - checks
-          additionalProperties: false
+          type: string
       required:
       - value
       additionalProperties: false
@@ -3702,18 +5937,18 @@ components:
     ReceiptItem:
       type: object
       properties:
-        name:
-          type: string
         description:
           type: string
-        quantity:
-          type: integer
+        name:
+          type: string
         price:
           type: number
+        quantity:
+          type: integer
       required:
       - name
-      - quantity
       - price
+      - quantity
       additionalProperties: false
     Recipe:
       type: object
@@ -3730,38 +5965,61 @@ components:
       - ingredients
       - recipe_type
       additionalProperties: false
+    RecursiveAliasDependency:
+      type: object
+      properties:
+        value:
+          anyOf: []
+      required:
+      - value
+      additionalProperties: false
     Resume:
       type: object
       properties:
-        name:
-          type: string
+        education:
+          type: array
+          items:
+            type: string
         email:
-          type: string
-        phone:
           type: string
         experience:
           type: array
           items:
             $ref: '#/components/schemas/Education'
-        education:
-          type: array
-          items:
-            type: string
+        name:
+          type: string
+        phone:
+          type: string
         skills:
           type: array
           items:
             type: string
       required:
-      - name
-      - email
-      - phone
-      - experience
       - education
+      - email
+      - experience
+      - name
+      - phone
       - skills
       additionalProperties: false
     Schema:
       type: object
       properties:
+        nested_attrs:
+          type: array
+          items:
+            oneOf:
+            - type: string
+            - $ref: '#/components/schemas/Nested'
+        other_group:
+          oneOf:
+          - type: string
+          - oneOf:
+            - type: integer
+            - type: string
+        parens:
+          oneOf:
+          - type: string
         prop1:
           oneOf:
           - type: string
@@ -3780,45 +6038,30 @@ components:
           - type: array
             items:
               $ref: '#/components/schemas/Nested'
-        nested_attrs:
-          type: array
-          items:
-            oneOf:
-            - type: string
-            - $ref: '#/components/schemas/Nested'
-        parens:
-          oneOf:
-          - type: string
-        other_group:
-          oneOf:
-          - type: string
-          - oneOf:
-            - type: integer
-            - type: string
       required:
+      - nested_attrs
+      - other_group
       - prop2
       - prop5
       - prop6
-      - nested_attrs
-      - other_group
       additionalProperties: false
     SearchParams:
       type: object
       properties:
-        dateRange:
-          type: integer
-        location:
-          type: array
-          items:
-            type: string
-        jobTitle:
-          $ref: '#/components/schemas/WithReasoning'
         company:
           $ref: '#/components/schemas/WithReasoning'
+        dateRange:
+          type: integer
         description:
           type: array
           items:
             $ref: '#/components/schemas/WithReasoning'
+        jobTitle:
+          $ref: '#/components/schemas/WithReasoning'
+        location:
+          type: array
+          items:
+            type: string
         tags:
           type: array
           items:
@@ -3826,9 +6069,59 @@ components:
             - $ref: '#/components/schemas/Tag'
             - type: string
       required:
-      - location
       - description
+      - location
       - tags
+      additionalProperties: false
+    SemanticContainer:
+      type: object
+      properties:
+        class_1:
+          $ref: '#/components/schemas/ClassWithoutDone'
+        class_2:
+          $ref: '#/components/schemas/ClassWithBlockDone'
+        class_done_needed:
+          $ref: '#/components/schemas/ClassWithBlockDone'
+        class_needed:
+          $ref: '#/components/schemas/ClassWithoutDone'
+        final_string:
+          type: string
+        sixteen_digit_number:
+          type: integer
+        string_with_twenty_words:
+          type: string
+        three_small_things:
+          type: array
+          items:
+            $ref: '#/components/schemas/SmallThing'
+      required:
+      - class_1
+      - class_2
+      - class_done_needed
+      - class_needed
+      - final_string
+      - sixteen_digit_number
+      - string_with_twenty_words
+      - three_small_things
+      additionalProperties: false
+    SimpleTag:
+      type: object
+      properties:
+        field:
+          type: string
+      required:
+      - field
+      additionalProperties: false
+    SmallThing:
+      type: object
+      properties:
+        i_16_digits:
+          type: integer
+        i_8_digits:
+          type: integer
+      required:
+      - i_16_digits
+      - i_8_digits
       additionalProperties: false
     SomeClassNestedDynamic:
       type: object
@@ -3846,6 +6139,12 @@ components:
       required:
       - word
       additionalProperties: false
+    Tag:
+      enum:
+      - Security
+      - AI
+      - Blockchain
+      type: string
     TestClassAlias:
       type: object
       properties:
@@ -3888,6 +6187,37 @@ components:
       - prop1
       - prop2
       additionalProperties: false
+    TestEnum:
+      enum:
+      - A
+      - B
+      - C
+      - D
+      - E
+      - F
+      - G
+      type: string
+    TestMemoryOutput:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            oneOf:
+            - $ref: '#/components/schemas/MemoryObject'
+            - $ref: '#/components/schemas/ComplexMemoryObject'
+            - $ref: '#/components/schemas/AnotherObject'
+        more_items:
+          type: array
+          items:
+            oneOf:
+            - $ref: '#/components/schemas/MemoryObject'
+            - $ref: '#/components/schemas/ComplexMemoryObject'
+            - $ref: '#/components/schemas/AnotherObject'
+      required:
+      - items
+      - more_items
+      additionalProperties: false
     TestOutputClass:
       type: object
       properties:
@@ -3899,19 +6229,30 @@ components:
       - prop1
       - prop2
       additionalProperties: false
+    Tree:
+      type: object
+      properties:
+        children:
+          $ref: '#/components/schemas/Forest'
+        data:
+          type: integer
+      required:
+      - children
+      - data
+      additionalProperties: false
     TwoStoriesOneTitle:
       type: object
       properties:
-        title:
-          type: string
         story_a:
           type: string
         story_b:
           type: string
+        title:
+          type: string
       required:
-      - title
       - story_a
       - story_b
+      - title
       additionalProperties: false
     UnionTest_ReturnType:
       type: object
@@ -3939,14 +6280,33 @@ components:
       - prop2
       - prop3
       additionalProperties: false
+    UniverseQuestion:
+      type: object
+      properties:
+        answer:
+          type: string
+        question:
+          type: string
+      required:
+      - answer
+      - question
+      additionalProperties: false
+    UniverseQuestionInput:
+      type: object
+      properties:
+        question:
+          type: string
+      required:
+      - question
+      additionalProperties: false
     WithReasoning:
       type: object
       properties:
-        value:
-          type: string
         reasoning:
           type: string
+        value:
+          type: string
       required:
-      - value
       - reasoning
+      - value
       additionalProperties: false

@@ -17,6 +17,38 @@ class TypeBuilder:
         self.__tb = _TypeBuilder()
         self.__runtime = runtime
 
+    def __str__(self) -> str:
+        """
+        returns a comprehensive string representation of the typebuilder.
+
+        this method provides a detailed view of the entire type hierarchy,
+        using the rust implementation to ensure compatibility.
+
+        Format:
+            TypeBuilder(
+                Classes: [
+                    ClassName {
+                        property_name type (alias='custom_name', desc='property description'),
+                        another_property type (desc='another description'),
+                        simple_property type
+                    },
+                    EmptyClass { }
+                ],
+                Enums: [
+                    EnumName {
+                        VALUE (alias='custom_value', desc='value description'),
+                        ANOTHER_VALUE (alias='custom'),
+                        SIMPLE_VALUE
+                    },
+                    EmptyEnum { }
+                ]
+            )
+
+        returns:
+            str: the formatted string representation of the typebuilder
+        """
+        return str(self._tb)
+
     @property
     def _tb(self) -> _TypeBuilder:
         return self.__tb

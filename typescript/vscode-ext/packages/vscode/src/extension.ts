@@ -328,10 +328,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   const pythonSelector = { language: 'python', scheme: 'file' }
   const typescriptSelector = { language: 'typescript', scheme: 'file' }
+  const reactSelector = { language: 'typescriptreact', scheme: 'file' }
 
   context.subscriptions.push(
     vscode.languages.registerCodeLensProvider(pythonSelector, glooLens),
     vscode.languages.registerCodeLensProvider(typescriptSelector, glooLens),
+    vscode.languages.registerCodeLensProvider(reactSelector, glooLens),
   )
 
   context.subscriptions.push(diagnosticsCollection)

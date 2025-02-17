@@ -23,7 +23,7 @@ use axum_extra::{
     headers::{self, authorization::Basic, Authorization, Header},
     TypedHeader,
 };
-use baml_types::{BamlValue, GeneratorDefaultClientMode};
+use baml_types::{BamlValue, GeneratorDefaultClientMode, GeneratorOutputType};
 use core::pin::Pin;
 use futures::Stream;
 use serde::{Deserialize, Serialize};
@@ -67,7 +67,7 @@ impl ServeArgs {
         if !self.preview {
             log::warn!(
                 r#"BAML-over-HTTP API is a preview feature.
-                
+
 Please run with --preview, like so:
 
     {} serve --preview
@@ -623,6 +623,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             true,
             GeneratorDefaultClientMode::Sync,
             Vec::new(),
+            None,
         )
         .map_err(|_| BamlError::InternalError {
             message: "Failed to make placeholder generator".to_string(),
