@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use baml_types::{BamlValue, EvaluationContext, FieldType};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::{
     internal_baml_parser_database::ParserDatabase, ir::repr::TypeBuilderEntry,
 };
@@ -195,6 +195,7 @@ pub struct TypeBuilder {
     enums: Arc<Mutex<IndexMap<String, Arc<Mutex<EnumBuilder>>>>>,
     type_aliases: Arc<Mutex<IndexMap<String, Arc<Mutex<TypeAliasBuilder>>>>>,
     recursive_type_aliases: Arc<Mutex<Vec<IndexMap<String, FieldType>>>>,
+    recursive_classes: Arc<Mutex<Vec<IndexSet<String>>>>,
 
     parser_database: ParserDatabase,
 }
@@ -212,6 +213,7 @@ impl TypeBuilder {
             enums: Default::default(),
             type_aliases: Default::default(),
             recursive_type_aliases: Default::default(),
+            recursive_classes: Default::default(),
             parser_database: Default::default(),
         }
     }
@@ -248,6 +250,10 @@ impl TypeBuilder {
 
     pub fn recursive_type_aliases(&self) -> Arc<Mutex<Vec<IndexMap<String, FieldType>>>> {
         Arc::clone(&self.recursive_type_aliases)
+    }
+
+    pub fn recursive_classes(&self) -> Arc<Mutex<Vec<IndexSet<String>>>> {
+        Arc::clone(&self.recursive_classes)
     }
 
     pub fn add_entries(&self, entries: &[TypeBuilderEntry]) {
@@ -371,7 +377,7 @@ impl TypeBuilder {
             anyhow::bail!("{}", diagnostics.to_pretty_string());
         }
 
-        let (classes, enums, type_aliases, recursive_aliases) =
+        let (classes, enums, type_aliases, recursive_classes, recursive_aliases) =
             IntermediateRepr::type_builder_entries_from_scoped_db(&scoped_db, &rt.inner.db)
                 .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
@@ -389,6 +395,11 @@ impl TypeBuilder {
             .unwrap()
             .extend(recursive_aliases);
 
+        self.recursive_classes()
+            .lock()
+            .unwrap()
+            .extend(recursive_classes);
+
         Ok(())
     }
 
@@ -398,6 +409,7 @@ impl TypeBuilder {
         IndexMap<String, RuntimeClassOverride>,
         IndexMap<String, RuntimeEnumOverride>,
         IndexMap<String, FieldType>,
+        Vec<IndexSet<String>>,
         Vec<IndexMap<String, FieldType>>,
     ) {
         log::debug!("Converting types to overrides");
@@ -492,8 +504,9 @@ impl TypeBuilder {
         );
 
         let recursive_aliases = self.recursive_type_aliases.lock().unwrap().clone();
+        let recursive_classes = self.recursive_classes.lock().unwrap().clone();
 
-        (cls, enm, aliases, recursive_aliases)
+        (cls, enm, aliases, recursive_classes, recursive_aliases)
     }
 }
 

@@ -953,4 +953,58 @@ test RecursiveAliasCycle {
             "##,
         })
     }
+
+    #[test]
+    fn test_type_builder_recursive_dynamic_classes() -> anyhow::Result<()> {
+        run_type_builder_block_test(TypeBuilderBlockTest {
+            function_name: "MyFunc",
+            test_name: "Foo",
+            baml: r##"
+              class DynamicOutput {
+                @@dynamic
+              }
+
+              function MyFunc(input: string) -> DynamicOutput {
+                client "openai/gpt-4o"
+                prompt #"
+                  Given a string, extract info using the schema:
+
+                  {{ input}}
+
+                  {{ ctx.output_format }}
+                "#
+              }
+
+              class Other {
+                bar int
+                @@dynamic
+              }
+
+
+              test Foo {
+                functions [MyFunc]
+                args {
+                  input "hi"
+                }
+                type_builder {
+                  class NewClass {
+                    ten int
+                  }
+
+                  dynamic class Other {
+                    other_dyn string
+                    dyn_out DynamicOutput?
+                  }
+
+                  dynamic class DynamicOutput {
+                    foo int
+                    nc NewClass
+                    other Other?
+                  }
+
+                }
+              }
+            "##,
+        })
+    }
 }

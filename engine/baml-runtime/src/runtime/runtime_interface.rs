@@ -312,6 +312,12 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             .unwrap()
             .extend(test.type_builder_recursive_aliases().iter().cloned());
 
+        type_builder
+            .recursive_classes()
+            .lock()
+            .unwrap()
+            .extend(test.type_builder_recursive_classes().iter().cloned());
+
         Ok(Some(type_builder))
     }
 }

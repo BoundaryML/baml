@@ -861,7 +861,12 @@ mod tests {
                         None,
                         false,
                     ),
-                    (Name::new("severity".to_string()), FieldType::string(), None, false),
+                    (
+                        Name::new("severity".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
                 ],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -869,7 +874,12 @@ mod tests {
             Class {
                 name: Name::new("Enhancement".to_string()),
                 fields: vec![
-                    (Name::new("title".to_string()), FieldType::string(), None, false),
+                    (
+                        Name::new("title".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
                     (
                         Name::new("description".to_string()),
                         FieldType::string(),
@@ -883,8 +893,18 @@ mod tests {
             Class {
                 name: Name::new("Documentation".to_string()),
                 fields: vec![
-                    (Name::new("module".to_string()), FieldType::string(), None, false),
-                    (Name::new("format".to_string()), FieldType::string(), None, false),
+                    (
+                        Name::new("module".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("format".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
                 ],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -934,7 +954,12 @@ r#"Answer in JSON using any of these schemas:
                         None,
                         false,
                     ),
-                    (Name::new("date".to_string()), FieldType::string(), None, false),
+                    (
+                        Name::new("date".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
                 ],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -948,7 +973,12 @@ r#"Answer in JSON using any of these schemas:
                         None,
                         false,
                     ),
-                    (Name::new("severity".to_string()), FieldType::string(), None, false),
+                    (
+                        Name::new("severity".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
                 ],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -956,7 +986,12 @@ r#"Answer in JSON using any of these schemas:
             Class {
                 name: Name::new("Enhancement".to_string()),
                 fields: vec![
-                    (Name::new("title".to_string()), FieldType::string(), None, false),
+                    (
+                        Name::new("title".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
                     (
                         Name::new("description".to_string()),
                         FieldType::string(),
@@ -970,8 +1005,18 @@ r#"Answer in JSON using any of these schemas:
             Class {
                 name: Name::new("Documentation".to_string()),
                 fields: vec![
-                    (Name::new("module".to_string()), FieldType::string(), None, false),
-                    (Name::new("format".to_string()), FieldType::string(), None, false),
+                    (
+                        Name::new("module".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("format".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
                 ],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -1208,7 +1253,12 @@ Answer in JSON using this schema: A"#
                         false,
                     ),
                     (Name::new("data".to_string()), FieldType::int(), None, false),
-                    (Name::new("field".to_string()), FieldType::bool(), None, false),
+                    (
+                        Name::new("field".to_string()),
+                        FieldType::bool(),
+                        None,
+                        false,
+                    ),
                 ],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -1302,7 +1352,12 @@ Answer in JSON using this schema:
                         false,
                     ),
                     (Name::new("data".to_string()), FieldType::int(), None, false),
-                    (Name::new("field".to_string()), FieldType::bool(), None, false),
+                    (
+                        Name::new("field".to_string()),
+                        FieldType::bool(),
+                        None,
+                        false,
+                    ),
                 ],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -1311,7 +1366,12 @@ Answer in JSON using this schema:
                 name: Name::new("Nested".to_string()),
                 fields: vec![
                     (Name::new("data".to_string()), FieldType::int(), None, false),
-                    (Name::new("field".to_string()), FieldType::bool(), None, false),
+                    (
+                        Name::new("field".to_string()),
+                        FieldType::bool(),
+                        None,
+                        false,
+                    ),
                 ],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -1425,7 +1485,7 @@ Answer in JSON using this schema: Tree"#
                 false,
             )],
             constraints: Vec::new(),
-                streaming_behavior: StreamingBehavior::default(),
+            streaming_behavior: StreamingBehavior::default(),
         }];
 
         let content = OutputFormatContent::target(FieldType::class("SelfReferential"))
@@ -1630,7 +1690,12 @@ Answer in JSON using this schema:
                 name: Name::new("NonRecursive".to_string()),
                 fields: vec![
                     (Name::new("data".to_string()), FieldType::int(), None, false),
-                    (Name::new("tag".to_string()), FieldType::string(), None, false),
+                    (
+                        Name::new("tag".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
                 ],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -1730,7 +1795,12 @@ Node or Tree or {
                 name: Name::new("NonRecursive".to_string()),
                 fields: vec![
                     (Name::new("data".to_string()), FieldType::int(), None, false),
-                    (Name::new("tag".to_string()), FieldType::string(), None, false),
+                    (
+                        Name::new("tag".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
                 ],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -1817,7 +1887,12 @@ Answer in JSON using this schema:
                         false,
                     ),
                     (Name::new("data".to_string()), FieldType::int(), None, false),
-                    (Name::new("field".to_string()), FieldType::bool(), None, false),
+                    (
+                        Name::new("field".to_string()),
+                        FieldType::bool(),
+                        None,
+                        false,
+                    ),
                 ],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -1966,7 +2041,12 @@ Node or int or string or Tree"#
                         false,
                     ),
                     (Name::new("data".to_string()), FieldType::int(), None, false),
-                    (Name::new("field".to_string()), FieldType::bool(), None, false),
+                    (
+                        Name::new("field".to_string()),
+                        FieldType::bool(),
+                        None,
+                        false,
+                    ),
                 ],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -2018,7 +2098,7 @@ Answer in JSON using this schema:
                 ),
             ],
             constraints: Vec::new(),
-                streaming_behavior: StreamingBehavior::default(),
+            streaming_behavior: StreamingBehavior::default(),
         }];
 
         let content = OutputFormatContent::target(FieldType::list(FieldType::class("Node")))
@@ -2049,10 +2129,10 @@ Node[]"#
                 Name::new("data".to_string()),
                 FieldType::map(FieldType::string(), FieldType::class("RecursiveMap")),
                 None,
-                false
+                false,
             )],
             constraints: Vec::new(),
-                streaming_behavior: StreamingBehavior::default(),
+            streaming_behavior: StreamingBehavior::default(),
         }];
 
         let content = OutputFormatContent::target(FieldType::class("RecursiveMap"))
@@ -2135,7 +2215,7 @@ Answer in JSON using this schema:
                 ),
             ],
             constraints: Vec::new(),
-                streaming_behavior: StreamingBehavior::default(),
+            streaming_behavior: StreamingBehavior::default(),
         }];
 
         let content = OutputFormatContent::target(FieldType::map(
@@ -2183,7 +2263,7 @@ map<string, Node>"#
                         Name::new("next".to_string()),
                         FieldType::optional(FieldType::class("Node")),
                         None,
-                        false
+                        false,
                     ),
                 ],
                 constraints: Vec::new(),
@@ -2288,7 +2368,12 @@ Answer in JSON using this schema:
             Class {
                 name: Name::new("NonRecursive".to_string()),
                 fields: vec![
-                    (Name::new("field".to_string()), FieldType::string(), None, false),
+                    (
+                        Name::new("field".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
                     (Name::new("data".to_string()), FieldType::int(), None, false),
                 ],
                 constraints: Vec::new(),
@@ -2342,7 +2427,7 @@ map<string, Node or int or {
                         ]),
                     ),
                     None,
-                    false
+                    false,
                 )],
                 constraints: Vec::new(),
                 streaming_behavior: StreamingBehavior::default(),
@@ -2364,7 +2449,12 @@ map<string, Node or int or {
             Class {
                 name: Name::new("NonRecursive".to_string()),
                 fields: vec![
-                    (Name::new("field".to_string()), FieldType::string(), None, false),
+                    (
+                        Name::new("field".to_string()),
+                        FieldType::string(),
+                        None,
+                        false,
+                    ),
                     (Name::new("data".to_string()), FieldType::int(), None, false),
                 ],
                 constraints: Vec::new(),

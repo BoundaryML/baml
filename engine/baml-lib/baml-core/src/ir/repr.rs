@@ -257,6 +257,7 @@ impl IntermediateRepr {
         Vec<Node<Class>>,
         Vec<Node<Enum>>,
         Vec<Node<TypeAlias>>,
+        Vec<IndexSet<String>>,
         Vec<IndexMap<String, FieldType>>,
     )> {
         let classes = scoped_db
@@ -283,6 +284,25 @@ impl IntermediateRepr {
             .map(|a| a.node(scoped_db))
             .collect::<Result<Vec<Node<TypeAlias>>>>()?;
 
+        let recursive_classes = scoped_db
+            .finite_recursive_cycles()
+            .iter()
+            .map(|ids| {
+                ids.iter()
+                    .map(|id| {
+                        let name = scoped_db.ast()[*id].name();
+                        if name.starts_with(ast::DYNAMIC_TYPE_NAME_PREFIX) {
+                            name.strip_prefix(ast::DYNAMIC_TYPE_NAME_PREFIX)
+                                .unwrap()
+                                .to_string()
+                        } else {
+                            name.to_string()
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+
         let mut recursive_aliases = vec![];
         for cycle in scoped_db.recursive_alias_cycles() {
             let mut component = IndexMap::new();
@@ -298,7 +318,13 @@ impl IntermediateRepr {
             recursive_aliases.push(component);
         }
 
-        Ok((classes, enums, type_aliases, recursive_aliases))
+        Ok((
+            classes,
+            enums,
+            type_aliases,
+            recursive_classes,
+            recursive_aliases,
+        ))
     }
 }
 
@@ -1180,6 +1206,7 @@ pub enum TypeBuilderEntry {
 pub struct TestTypeBuilder {
     pub entries: Vec<TypeBuilderEntry>,
     pub structural_recursive_alias_cycles: Vec<IndexMap<String, FieldType>>,
+    pub recursive_classes: Vec<IndexSet<String>>,
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -1247,7 +1274,7 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
             .collect::<Result<Vec<_>>>()?;
 
         // TODO: #1343 Temporary solution until we implement scoping in the AST.
-        let (classes, enums, type_aliases, recursive_aliases) =
+        let (classes, enums, type_aliases, recursive_classes, recursive_aliases) =
             IntermediateRepr::type_builder_entries_from_scoped_db(
                 &self.test_case().type_builder_scoped_db,
                 db,
@@ -1283,6 +1310,7 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
             type_builder: TestTypeBuilder {
                 entries: type_builder_entries,
                 structural_recursive_alias_cycles: recursive_aliases,
+                recursive_classes,
             },
         })
     }
