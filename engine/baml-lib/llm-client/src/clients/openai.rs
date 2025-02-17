@@ -289,10 +289,17 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             .map(|v| v.clone())
             .unwrap_or_else(|| StringOr::EnvVar("AZURE_OPENAI_API_KEY".to_string()));
 
-        let mut query_params = IndexMap::new();
-        if let Some((_, v, _)) = properties.ensure_string("api_version", false) {
-            query_params.insert("api-version".to_string(), v.clone());
-        }
+        let query_params = match properties.ensure_query_params() {
+            Some(query_params) => query_params,
+            None => {
+                // you can override the query params by providing a query_params field in the client spec
+                let mut query_params = IndexMap::new();
+                if let Some((_, v, _)) = properties.ensure_string("api_version", false) {
+                    query_params.insert("api-version".to_string(), v.clone());
+                }
+                query_params
+            }
+        };
 
         let mut instance = Self::create_common(properties, base_url, None)?;
         instance.query_params = query_params;
@@ -342,6 +349,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         let supported_request_modes = properties.ensure_supported_request_modes();
         let headers = properties.ensure_headers().unwrap_or_default();
         let finish_reason_filter = properties.ensure_finish_reason_filter();
+        let query_params = properties.ensure_query_params().unwrap_or_default();
         let (properties, errors) = properties.finalize();
 
         if !errors.is_empty() {
@@ -356,7 +364,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             supported_request_modes,
             headers,
             properties,
-            query_params: IndexMap::new(),
+            query_params,
             finish_reason_filter,
         })
     }

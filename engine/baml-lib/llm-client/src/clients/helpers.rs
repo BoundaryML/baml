@@ -326,6 +326,28 @@ impl<Meta: Clone> PropertyHandler<Meta> {
         UnresolvedAllowedRoleMetadata::None
     }
 
+    pub fn ensure_query_params(&mut self) -> Option<IndexMap<String, StringOr>> {
+        self.ensure_map("query_params", false).map(|(_, value, _)| {
+            value
+                .into_iter()
+                .filter_map(|(k, (_, v))| match v.as_str() {
+                    Some(s) => Some((k, s.clone())),
+                    None => {
+                        self.push_error(
+                            format!(
+                                "Query param key {} must have a string value. Got: {}",
+                                k,
+                                v.r#type()
+                            ),
+                            v.meta().clone(),
+                        );
+                        None
+                    }
+                })
+                .collect()
+        })
+    }
+
     pub fn ensure_headers(&mut self) -> Option<IndexMap<String, StringOr>> {
         self.ensure_map("headers", false).map(|(_, value, _)| {
             value

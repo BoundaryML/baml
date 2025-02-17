@@ -462,6 +462,8 @@ navigation:
             path: 03-reference/baml/clients/providers/azure.mdx
           - page: "openai-generic"
             path: 03-reference/baml/clients/providers/openai-generic.mdx
+          - page: "openai-generic: Azure AI Foundary"
+            path: 03-reference/baml/clients/providers/azure-ai-foundary.mdx
           - page: "openai-generic: Groq"
             path: 03-reference/baml/clients/providers/groq.mdx
           - page: "openai-generic: Hugging Face"
