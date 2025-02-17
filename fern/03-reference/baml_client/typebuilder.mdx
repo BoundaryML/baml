@@ -35,7 +35,7 @@ from baml_client import b
 tb = TypeBuilder()
 
 # Add new values to the Category enum
-tb.Category.add_value('GREEN') 
+tb.Category.add_value('GREEN')
 tb.Category.add_value('YELLOW')
 
 # Pass the typebuilder when calling the function
@@ -155,7 +155,7 @@ hobbies.add_value("Soccer")
 hobbies.add_value("Reading")
 
 # Create a new class
-address = tb.add_class("Address") 
+address = tb.add_class("Address")
 address.add_property("street", tb.string())
 address.add_property("city", tb.string())
 
@@ -274,7 +274,7 @@ tb.User.add_property("email", tb.string())
 `EnumValueBuilder` is a type that represents a value in an enum. It can be used to add descriptions, constraints, and other metadata to a value.
 
 | Method | Returns | Description | Example |
-|--------|---------|-------------|---------|  
+|--------|---------|-------------|---------|
 | `description(description: string)` | `EnumValueBuilder` | Adds a description to the enum value | `my_value.description("A value in the enum")` |
 | `alias(alias: string)` | `EnumValueBuilder` | Adds the alias attribute to the enum value | `my_value.alias("VALUE1")` |
 | `skip()` | `EnumValueBuilder` | Adds the skip attribute to the enum value | `my_value.skip()` |
@@ -292,7 +292,7 @@ tb = TypeBuilder()
 tb.User.add_property("email", tb.string()) \
    .description("User's primary email address")
 
-# Add description to an enum value 
+# Add description to an enum value
 tb.Category.add_value("URGENT") \
    .description("Needs immediate attention")
 ```
@@ -318,6 +318,81 @@ tb.User.add_property("email", tb.string)
 tb.Category.add_value("URGENT")
    .description("Needs immediate attention")
 ```
+</CodeBlocks>
+
+## Creating/modyfing dynamic types with the `add_baml` method
+
+The `TypeBuilder` has a higher level API for creating dynamic types at runtime.
+Here's an example:
+
+<CodeBlocks>
+
+```python Python
+tb = TypeBuilder()
+tb.add_baml("""
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
+
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
+
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynmic enum Category {
+    PURPLE
+  }
+""")
+```
+
+```typescript TypeScript
+const tb = new TypeBuilder()
+tb.addBaml(`
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
+
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
+
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynmic enum Category {
+    PURPLE
+  }
+`)
+```
+
+```ruby Ruby
+tb = Baml::TypeBuilder.new
+tb.add_baml("
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
+
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
+
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynmic enum Category {
+    PURPLE
+  }
+")
+```
+
 </CodeBlocks>
 
 ## Common Patterns
@@ -406,7 +481,7 @@ for examples of testing functions that use dynamic types. See also the
 We're working on additional features for TypeBuilder:
 
 - JSON Schema support (awaiting use cases)
-- OpenAPI schema integration  
+- OpenAPI schema integration
 - Pydantic model support
 
 If you're interested in these features, please join the discussion in our GitHub
