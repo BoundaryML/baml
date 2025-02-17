@@ -2025,6 +2025,26 @@ export class BamlSyncClient {
     }
   }
   
+  TellStory(
+      story: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    try {
+    const raw = this.runtime.callFunctionSync(
+      "TellStory",
+      {
+        "story": story
+      },
+      this.ctx_manager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+    )
+    return raw.parsed(false) as string
+    } catch (error: any) {
+      throw toBamlError(error);
+    }
+  }
+  
   TestAnthropic(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }

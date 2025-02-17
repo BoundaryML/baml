@@ -9,7 +9,7 @@
     "build": "npx tsc --noEmit && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "NODE_ENV=development vite preview",
-    "watch": "NODE_ENV=development vite build --watch"
+    "watch": "NODE_ENV=development vite"
   },
   "dependencies": {
     "@baml/common": "workspace:^",

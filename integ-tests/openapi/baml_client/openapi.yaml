@@ -1423,6 +1423,19 @@ paths:
                 title: TakeRecAliasDepResponse
                 $ref: '#/components/schemas/RecursiveAliasDependency'
       operationId: TakeRecAliasDep
+  /call/TellStory:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TellStory'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TellStoryResponse
+                type: string
+      operationId: TellStory
   /call/TestAnthropic:
     post:
       requestBody:
@@ -3883,6 +3896,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    TellStory:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TellStoryRequest
+            type: object
+            properties:
+              story:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - story
             additionalProperties: false
     TestAnthropic:
       required: true

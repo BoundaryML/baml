@@ -33,6 +33,7 @@ target_clients = {
     "python": FILE_PATH / "python" / "baml_client",
     "typescript": FILE_PATH / "typescript" / "baml_client",
     "ruby": FILE_PATH / "ruby" / "baml_client",
+    "react": FILE_PATH / "react" / "baml_client",
     "openapi": FILE_PATH / "openapi" / "baml_client",
 }
 
@@ -41,6 +42,7 @@ class Spinner:
     """
     A simple spinner to show progress while waiting for a command to finish.
     """
+
     def __init__(self, delay=0.1):
         self.delay = delay
         self.spinner = itertools.cycle(["-", "\\", "|", "/"])
@@ -215,9 +217,11 @@ def diff_snapshots(snapshot1: dict, snapshot2: dict) -> str:
         content1 = snapshot1.get(file, "").splitlines(keepends=True)
         content2 = snapshot2.get(file, "").splitlines(keepends=True)
         if content1 != content2:
-            diff = list(unified_diff(content1, content2,
-                                     fromfile=f"{file} (v1)",
-                                     tofile=f"{file} (v2)"))
+            diff = list(
+                unified_diff(
+                    content1, content2, fromfile=f"{file} (v1)", tofile=f"{file} (v2)"
+                )
+            )
             if diff:
                 diff_lines.append(f"--- Diff for {file} ---\n" + "".join(diff))
     return "\n".join(diff_lines)
@@ -228,27 +232,54 @@ def print_table(table_rows):
     Prints a summary table given the rows.
     Each row is a tuple: (Generator, Target, Iteration, Hash)
     """
-    col1_width = max(len("Generator"), max((len(row[0]) for row in table_rows), default=0))
+    col1_width = max(
+        len("Generator"), max((len(row[0]) for row in table_rows), default=0)
+    )
     col2_width = max(len("Target"), max((len(row[1]) for row in table_rows), default=0))
-    col3_width = max(len("Iteration"), max((len(str(row[2])) for row in table_rows), default=0))
+    col3_width = max(
+        len("Iteration"), max((len(str(row[2])) for row in table_rows), default=0)
+    )
     col4_width = max(len("Hash"), max((len(row[3]) for row in table_rows), default=0))
 
     sep_line = (
-        "+" + "-" * (col1_width + 2) +
-        "+" + "-" * (col2_width + 2) +
-        "+" + "-" * (col3_width + 2) +
-        "+" + "-" * (col4_width + 2) + "+"
+        "+"
+        + "-" * (col1_width + 2)
+        + "+"
+        + "-" * (col2_width + 2)
+        + "+"
+        + "-" * (col3_width + 2)
+        + "+"
+        + "-" * (col4_width + 2)
+        + "+"
     )
 
     print(sep_line)
-    print("| {0:<{w1}} | {1:<{w2}} | {2:<{w3}} | {3:<{w4}} |".format(
-        "Generator", "Target", "Iteration", "Hash",
-        w1=col1_width, w2=col2_width, w3=col3_width, w4=col4_width))
+    print(
+        "| {0:<{w1}} | {1:<{w2}} | {2:<{w3}} | {3:<{w4}} |".format(
+            "Generator",
+            "Target",
+            "Iteration",
+            "Hash",
+            w1=col1_width,
+            w2=col2_width,
+            w3=col3_width,
+            w4=col4_width,
+        )
+    )
     print(sep_line)
     for row in table_rows:
-        print("| {0:<{w1}} | {1:<{w2}} | {2:<{w3}} | {3:<{w4}} |".format(
-            row[0], row[1], row[2], row[3],
-            w1=col1_width, w2=col2_width, w3=col3_width, w4=col4_width))
+        print(
+            "| {0:<{w1}} | {1:<{w2}} | {2:<{w3}} | {3:<{w4}} |".format(
+                row[0],
+                row[1],
+                row[2],
+                row[3],
+                w1=col1_width,
+                w2=col2_width,
+                w3=col3_width,
+                w4=col4_width,
+            )
+        )
     print(sep_line)
 
 
@@ -260,19 +291,21 @@ def main():
         "--iterations",
         type=int,
         default=3,
-        help="Number of iterations to run each codegen (default: 3)"
+        help="Number of iterations to run each codegen (default: 3)",
     )
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help="Show detailed output from codegen commands"
+        help="Show detailed output from codegen commands",
     )
     parser.add_argument(
         "--only",
         type=str,
         default="",
-        help=("Comma-separated list of generator commands to run. "
-              "Options: python, typescript (default: both)")
+        help=(
+            "Comma-separated list of generator commands to run. "
+            "Options: python, typescript (default: both)"
+        ),
     )
     args = parser.parse_args()
 
@@ -292,7 +325,9 @@ def main():
         selected = {lang.strip().lower() for lang in args.only.split(",")}
         generators_to_run = available_generators.intersection(selected)
         if not generators_to_run:
-            print(f"{BOLD}{RED}No valid generators selected. Available options: {', '.join(available_generators)}{RESET}")
+            print(
+                f"{BOLD}{RED}No valid generators selected. Available options: {', '.join(available_generators)}{RESET}"
+            )
             sys.exit(1)
     else:
         generators_to_run = available_generators
@@ -303,8 +338,12 @@ def main():
     # Dictionaries to store per-run results:
     # results[generator][target] = list of hash strings (one per iteration)
     # snapshots[generator][target] = list of snapshots (each a dict mapping relative file path to content)
-    results = {gen: {target: [] for target in targets_to_check} for gen in generators_to_run}
-    snapshots = {gen: {target: [] for target in targets_to_check} for gen in generators_to_run}
+    results = {
+        gen: {target: [] for target in targets_to_check} for gen in generators_to_run
+    }
+    snapshots = {
+        gen: {target: [] for target in targets_to_check} for gen in generators_to_run
+    }
     table_rows = []  # List of tuples: (Generator, Target, Iteration, Hash)
     overall_fail = 0
 
@@ -329,7 +368,9 @@ def main():
             try:
                 generate_func(args.verbose)
             except subprocess.CalledProcessError as e:
-                print(f"{BOLD}{RED}Error during '{gen}' codegen on iteration {iteration}.{RESET}")
+                print(
+                    f"{BOLD}{RED}Error during '{gen}' codegen on iteration {iteration}.{RESET}"
+                )
                 sys.exit(e.returncode)
             # For each target, record the hash and capture a snapshot.
             for target in targets_to_check:
@@ -354,9 +395,13 @@ def main():
                     unique_versions[h] = snapshots[gen][target][idx]
             version_count = len(unique_versions)
             if version_count == 1:
-                print(f"{BOLD}{GREEN}✅ {target} codegen is stable for generator '{gen}': in {runs} runs, generated 1 version.{RESET}\n")
+                print(
+                    f"{BOLD}{GREEN}✅ {target} codegen is stable for generator '{gen}': in {runs} runs, generated 1 version.{RESET}\n"
+                )
             else:
-                print(f"{BOLD}{RED}❌ {target} codegen is unstable for generator '{gen}': in {runs} runs, generated {version_count} versions:{RESET}")
+                print(
+                    f"{BOLD}{RED}❌ {target} codegen is unstable for generator '{gen}': in {runs} runs, generated {version_count} versions:{RESET}"
+                )
                 for h in unique_versions:
                     print(f"  Version hash: {h}")
                 overall_fail += 1
@@ -367,12 +412,16 @@ def main():
                         continue
                     diff_text = diff_snapshots(baseline_snapshot, snap)
                     if diff_text:
-                        print(f"{YELLOW}Diff between baseline version ({baseline_hash}) and version ({h}):{RESET}")
+                        print(
+                            f"{YELLOW}Diff between baseline version ({baseline_hash}) and version ({h}):{RESET}"
+                        )
                         print(diff_text)
                 print("")
 
     if overall_fail > 0:
-        print(f"{BOLD}{RED}Failed stability checks for {overall_fail} generator/target combination(s).{RESET}")
+        print(
+            f"{BOLD}{RED}Failed stability checks for {overall_fail} generator/target combination(s).{RESET}"
+        )
         sys.exit(1)
     else:
         print(f"{BOLD}{GREEN}All codegen stability checks passed!{RESET}")

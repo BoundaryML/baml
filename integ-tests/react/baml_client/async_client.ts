@@ -2024,6 +2024,26 @@ export class BamlAsyncClient {
     }
   }
   
+  async TellStory(
+      story: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Promise<string> {
+    try {
+      const raw = await this.runtime.callFunction(
+        "TellStory",
+        {
+          "story": story
+        },
+        this.ctx_manager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      )
+      return raw.parsed(false) as string
+    } catch (error: any) {
+      throw toBamlError(error);
+    }
+  }
+  
   async TestAnthropic(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -5797,6 +5817,32 @@ class BamlStreamClient {
         raw,
         (a): partial_types.RecursiveAliasDependency => a,
         (a): RecursiveAliasDependency => a,
+        this.ctx_manager.cloneContext(),
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TellStory(
+      story: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): BamlStream<string, string> {
+    try {
+      const raw = this.runtime.streamFunction(
+        "TellStory",
+        {
+          "story": story
+        },
+        undefined,
+        this.ctx_manager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      )
+      return new BamlStream<string, string>(
+        raw,
+        (a): string => a,
+        (a): string => a,
         this.ctx_manager.cloneContext(),
       )
     } catch (error) {

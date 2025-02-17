@@ -1,3 +1,63 @@
+# BAML TypeScript Packages
+
+This directory contains all TypeScript-related packages for BAML, including the VSCode extension, language server, and other utilities.
+
+## Package Structure
+
+- `vscode-ext/packages/vscode` - VSCode extension (package: `baml-client`)
+- `vscode-ext/packages/language-server` - Language server (package: `@gloo-ai/baml-language-server`)
+- `common` - Shared utilities and types
+- `playground-common` - Shared code for the BAML playground
+- `fiddle-frontend` - Frontend for the BAML playground
+- Other utility packages for WASM bindings and CodeMirror integration
+
+## Development
+
+### Prerequisites
+
+- Node.js (LTS version recommended)
+- pnpm (package manager)
+
+### Setup
+
+1. Install dependencies:
+```bash
+pnpm install
+```
+
+2. Build all packages:
+```bash
+pnpm build
+```
+
+### Development Commands
+
+Available scripts in package.json:
+- `pnpm dev:vscode` - dev mode for VSCode extension
+- `pnpm dev:language-server` - dev mode for Language Server
+- `pnpm dev:all` - dev mode for all packages
+- `pnpm dev:playground` - Force rebuild the playground frontend
+
+### VSCode Extension Development
+
+The VSCode extension is located in `vscode-ext/packages/vscode`. To develop:
+
+1. Open the project in VSCode
+2. Run `pnpm dev:vscode` to start the dev mode
+3. Press F5 to launch a new VSCode instance with the extension
+
+### Playground Development
+
+The playground consists of multiple packages:
+
+- `fiddle-frontend` - Next.js frontend
+- `playground-common` - Shared utilities
+
+To develop the playground:
+
+1. Run `pnpm dev` to start all development servers
+2. For frontend only, use `pnpm dev:playground`
+
 # BAML TypeScript
 
 > **⚠️ IMPORTANT NOTE**
@@ -10,7 +70,7 @@
 
 To test the BAML playground in VSCode:
 
-1. First, open the `root-wasm32.code-workspace` file in VSCode
+1. First, open the [`root-wasm32.code-workspace`](../root-wasm32.code-workspace) file in VSCode
 2. Press F5 or use the Run and Debug view
 3. Select "Launch VS Code extension" from the debug configurations
 4. A new VSCode window will open with the BAML extension running in development mode
@@ -22,3 +82,39 @@ You can also run both the VSCode extension and Language Server together by:
 This will launch both the extension and attach the debugger to the language server.
 
 > **Note**: Opening the workspace file is important as it contains the necessary VSCode settings and recommended extensions for development.
+
+## Development Workflows
+
+Here are the common development workflows depending on what you're working on:
+
+### VSCode Extension Development
+
+#### Client-side Only Changes (No Language Server)
+If you're only making changes to the VSCode extension client-side:
+```bash
+pnpm dev:vscode
+```
+
+#### Language Server Only Changes
+If you're working on the language server:
+```bash
+pnpm dev:language-server
+```
+
+#### Both Client and Language Server
+If you're working on both components simultaneously, run the dev commands in separate terminals:
+```bash
+# Terminal 1 - VSCode Extension
+pnpm dev:vscode
+
+# Terminal 2 - Language Server
+pnpm dev:language-server
+```
+
+### Rust Changes for Playground
+When making changes to the Rust compiler that affect the playground:
+```bash
+# Rebuild the playground frontend
+npx turbo build --force --filter=fiddle-frontend
+```
+Run this command after each compiler change, then relaunch the prompt fiddle to see your changes.

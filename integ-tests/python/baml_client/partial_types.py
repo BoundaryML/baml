@@ -97,7 +97,7 @@ class ComplexMemoryObject(BaseModel):
     id: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None
-    metadata: List[Optional[Union[Optional[str], Optional[int], Optional[float]]]]
+    metadata: List[Union[str, int, float]]
 
 class CompoundBigNumbers(BaseModel):
     big: Optional["BigNumbers"] = None
@@ -106,7 +106,7 @@ class CompoundBigNumbers(BaseModel):
 
 class ContactInfo(BaseModel):
     primary: Optional[Union["PhoneNumber", "EmailAddress"]] = None
-    secondary: Optional[Union["PhoneNumber", "EmailAddress", Optional[None]]] = None
+    secondary: Optional[Union["PhoneNumber", "EmailAddress", None]] = None
 
 class CustomTaskResult(BaseModel):
     bookOrder: Optional[Union["BookOrder", Optional[None]]] = None
@@ -141,7 +141,7 @@ class Education(BaseModel):
     institution: Optional[str] = None
     location: Optional[str] = None
     degree: Optional[str] = None
-    major: List[Optional[str]]
+    major: List[str]
     graduation_date: Optional[str] = None
 
 class Email(BaseModel):
@@ -195,7 +195,7 @@ class FormatterTest3(BaseModel):
 class GroceryReceipt(BaseModel):
     receiptId: Optional[str] = None
     storeName: Optional[str] = None
-    items: List[Optional[Union[Optional[str], Optional[int], Optional[float]]]]
+    items: List[Union[str, int, float]]
     totalAmount: Optional[float] = None
 
 class InnerClass(BaseModel):
@@ -259,13 +259,13 @@ class NamedArgsSingleClass(BaseModel):
     key_three: Optional[int] = None
 
 class Nested(BaseModel):
-    prop3: Optional[Union[Optional[str], Optional[None]]] = None
-    prop4: Optional[Union[Optional[str], Optional[None]]] = None
+    prop3: Optional[Union[str, Optional[None]]] = None
+    prop4: Optional[Union[str, Optional[None]]] = None
     prop20: Optional["Nested2"] = None
 
 class Nested2(BaseModel):
-    prop11: Optional[Union[Optional[str], Optional[None]]] = None
-    prop12: Optional[Union[Optional[str], Optional[None]]] = None
+    prop11: Optional[Union[str, Optional[None]]] = None
+    prop12: Optional[Union[str, Optional[None]]] = None
 
 class NestedBlockConstraint(BaseModel):
     nbc: Checked[Optional["BlockConstraint"],Literal["cross_field"]]
@@ -282,8 +282,8 @@ class NodeWithAliasIndirection(BaseModel):
     next: Optional["NodeWithAliasIndirection"] = None
 
 class OptionalListAndMap(BaseModel):
-    p: List[Optional[str]]
-    q: Dict[str, Optional[str]]
+    p: Optional[List[str]] = None
+    q: Optional[Dict[str, Optional[str]]] = None
 
 class OptionalTest_Prop1(BaseModel):
     omega_a: Optional[str] = None
@@ -315,7 +315,7 @@ class PhoneNumber(BaseModel):
     value: Optional[str] = None
 
 class Quantity(BaseModel):
-    amount: Optional[Union[Optional[int], Optional[float]]] = None
+    amount: Optional[Union[int, float]] = None
     unit: Optional[str] = None
 
 class RaysData(BaseModel):
@@ -325,7 +325,7 @@ class RaysData(BaseModel):
 class ReceiptInfo(BaseModel):
     items: List["ReceiptItem"]
     total_cost: Optional[float] = None
-    venue: Optional[Union[Optional[Literal["barisa"]], Optional[Literal["ox_burger"]]]] = None
+    venue: Optional[Union[Literal["barisa"], Literal["ox_burger"]]] = None
 
 class ReceiptItem(BaseModel):
     name: Optional[str] = None
@@ -335,7 +335,7 @@ class ReceiptItem(BaseModel):
 
 class Recipe(BaseModel):
     ingredients: Dict[str, Optional["Quantity"]]
-    recipe_type: Optional[Union[Optional[Literal["breakfast"]], Optional[Literal["dinner"]]]] = None
+    recipe_type: Optional[Union[Literal["breakfast"], Literal["dinner"]]] = None
 
 class RecursiveAliasDependency(BaseModel):
     value: Optional["JsonValue"] = None
@@ -345,25 +345,25 @@ class Resume(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     experience: List["Education"]
-    education: List[Optional[str]]
-    skills: List[Optional[str]]
+    education: List[str]
+    skills: List[str]
 
 class Schema(BaseModel):
-    prop1: Optional[Union[Optional[str], Optional[None]]] = None
-    prop2: Optional[Union["Nested", Optional[str]]] = None
-    prop5: List[Optional[Union[Optional[str], Optional[None]]]]
-    prop6: Optional[Union[Optional[str], List["Nested"]]] = None
-    nested_attrs: List[Optional[Union[Optional[str], Optional[None], "Nested"]]]
-    parens: Optional[Union[Optional[str], Optional[None]]] = None
-    other_group: Optional[Union[Optional[str], Optional[Union[Optional[int], Optional[str]]]]] = None
+    prop1: Optional[Union[str, Optional[None]]] = None
+    prop2: Optional[Union["Nested", str]] = None
+    prop5: List[Union[str, Optional[None]]]
+    prop6: Optional[Union[str, List["Nested"]]] = None
+    nested_attrs: List[Union[str, Optional[None], "Nested"]]
+    parens: Optional[Union[str, Optional[None]]] = None
+    other_group: Optional[Union[str, Union[int, str]]] = None
 
 class SearchParams(BaseModel):
     dateRange: Optional[int] = None
-    location: List[Optional[str]]
+    location: List[str]
     jobTitle: Optional["WithReasoning"] = None
     company: Optional["WithReasoning"] = None
     description: List["WithReasoning"]
-    tags: List[Optional[Union[Optional[types.Tag], Optional[str]]]]
+    tags: List[Union[types.Tag, str]]
 
 class SemanticContainer(BaseModel):
     sixteen_digit_number: Optional[int] = None
@@ -405,8 +405,8 @@ class TestClassWithEnum(BaseModel):
     prop2: Optional[types.EnumInClass] = None
 
 class TestMemoryOutput(BaseModel):
-    items: List[Optional[Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]]
-    more_items: List[Optional[Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]]
+    items: List[Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
+    more_items: List[Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
 
 class TestOutputClass(BaseModel):
     prop1: Optional[str] = None
@@ -422,9 +422,9 @@ class TwoStoriesOneTitle(BaseModel):
     story_b: Optional[str] = None
 
 class UnionTest_ReturnType(BaseModel):
-    prop1: Optional[Union[Optional[str], Optional[bool]]] = None
-    prop2: List[Optional[Union[Optional[float], Optional[bool]]]]
-    prop3: Optional[Union[List[Optional[bool]], List[Optional[int]]]] = None
+    prop1: Optional[Union[str, bool]] = None
+    prop2: List[Union[float, bool]]
+    prop3: Optional[Union[List[bool], List[int]]] = None
 
 class UniverseQuestion(BaseModel):
     """my docs"""
