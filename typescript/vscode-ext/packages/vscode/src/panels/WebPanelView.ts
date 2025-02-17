@@ -158,7 +158,7 @@ export class WebPanelView {
 
     const getBaseHtml = (scripts: string) => /*html*/ `
       <!DOCTYPE html>
-      <html lang="en" class="dark">
+      <html lang="en">
         <head>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -166,7 +166,7 @@ export class WebPanelView {
           <title>BAML Playground</title>
           ${isDevelopment ? '' : `<link rel="stylesheet" type="text/css" href="${getUri(webview, extensionUri, ['web-panel', 'dist', 'assets', 'index.css'])}">`}
         </head>
-        <body class="vscode-dark">
+        <body>
           <div id="root"></div>
           ${scripts}
         </body>

@@ -118,5 +118,3 @@ When making changes to the Rust compiler that affect the playground:
 npx turbo build --force --filter=fiddle-frontend
 ```
 Run this command after each compiler change, then relaunch the prompt fiddle to see your changes.
-
-> **Note**: Make sure you have all the necessary dependencies installed before running these commands. You can run `pnpm install` in the root directory to ensure all dependencies are up to date.
