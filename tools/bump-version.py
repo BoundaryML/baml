@@ -321,7 +321,7 @@ def perform_version_bumps(
                 "--config-file",
                 f"./versions/{config}.cfg",
                 user_confirmation,
-                "--allow-dirty" if allow_dirty else "",
+                "--allow-dirty", # always true since the first run of this dirties the git tree
             )
     elif ts:
         bump2version("--config-file", "./versions/typescript.cfg", "patch")
