@@ -26,17 +26,15 @@ use axum_extra::{
 use baml_types::{BamlValue, GeneratorDefaultClientMode, GeneratorOutputType};
 use core::pin::Pin;
 use futures::Stream;
+use jsonish::ResponseBamlValue;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{path::PathBuf, sync::Arc, task::Poll};
 use tokio::{net::TcpListener, sync::RwLock};
 use tokio_stream::StreamExt;
-use jsonish::ResponseBamlValue;
 
 use crate::{
-    client_registry::ClientRegistry,
-    errors::ExposedError,
-    internal::llm_client::LLMResponse,
+    client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
     BamlRuntime, FunctionResult, RuntimeContextManager,
 };
 use internal_baml_codegen::openapi::OpenApiSchema;
@@ -370,8 +368,9 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 LLMResponse::Success(_) => {
                     match function_result.result_with_constraints_content() {
                         // Just because the LLM returned 2xx doesn't mean that it returned parse-able content!
-                        Ok(parsed) => (StatusCode::OK, Json(parsed.serialize_final()))
-                            .into_response(),
+                        Ok(parsed) => {
+                            (StatusCode::OK, Json(parsed.serialize_final())).into_response()
+                        }
                         Err(e) => {
                             if let Some(ExposedError::ValidationError {
                                 prompt,
@@ -717,4 +716,67 @@ fn parse_args(
     }
 
     Ok(args)
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_types::BamlMap;
+    use internal_llm_client::{ClientProvider, OpenAIClientProviderVariant};
+
+    use crate::client_registry::ClientProperty;
+
+    use super::*;
+
+    #[test]
+    fn test_parse_baml_options() {
+        let baml_options: BamlOptions = serde_json::from_str(
+            r#"
+        {
+            "client_registry": {
+                "clients": [
+                    {
+                        "name": "testing",
+                        "provider": "openai",
+                        "options": {
+                            "model": "gpt-4o",
+                            "api_key": "[redacted]",
+                            "base_url": "[redacted]"
+                        }
+                    }
+                ],
+                "primary": "testing"
+            }
+        }"#,
+        )
+        .unwrap();
+        assert!(
+            baml_options.client_registry.is_some(),
+            "client_registry should be Some"
+        );
+        let client_registry = baml_options.client_registry.unwrap();
+        
+        
+        let provider = ClientProvider::OpenAI(OpenAIClientProviderVariant::Base);
+        let retry_policy = None;
+        let options = BamlMap::from_iter(vec![(
+            "model".to_string(),
+            BamlValue::String("gpt-4o".to_string()),
+        ), (
+            "api_key".to_string(),
+            BamlValue::String("[redacted]".to_string()),
+        ), (
+            "base_url".to_string(),
+            BamlValue::String("[redacted]".to_string()),
+        ),]);
+        let client_property =
+            ClientProperty::new("testing".into(), provider, retry_policy, options);
+
+        let client_registry = {
+            let mut client_registry = ClientRegistry::new();
+            client_registry.add_client(client_property);
+            client_registry.set_primary("testing".to_string());
+            client_registry
+        };
+        assert_eq!(client_registry, client_registry);
+    }
 }
