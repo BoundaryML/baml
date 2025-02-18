@@ -20,7 +20,7 @@ export declare class BamlImage {
 
 export declare class BamlRuntime {
   static fromDirectory(directory: string, envVars: Record<string, string>): BamlRuntime
-  static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): BamlRuntime
+  static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string | undefined | null>): BamlRuntime
   reset(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): void
   createContextManager(): RuntimeContextManager
   callFunction(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, cb?: ClientRegistry | undefined | null): Promise<FunctionResult>
@@ -113,6 +113,7 @@ export declare class TypeBuilder {
   null(): FieldType
   map(key: FieldType, value: FieldType): FieldType
   union(types: Array<FieldType>): FieldType
+  addBaml(baml: string, rt: BamlRuntime): void
   toString(): string
 }
 
@@ -131,3 +132,4 @@ export interface LogEventMetadata {
   parentId?: string
   rootEventId: string
 }
+
