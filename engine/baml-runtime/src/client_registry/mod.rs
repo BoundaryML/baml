@@ -132,8 +132,8 @@ fn deserialize_client_provider<'de, D>(deserializer: D) -> Result<ClientProvider
 where
     D: Deserializer<'de>,
 {
-    let s: &str = Deserialize::deserialize(deserializer)?;
-    ClientProvider::from_str(s).map_err(|e| serde::de::Error::custom(e.to_string()))
+    let s: String = Deserialize::deserialize(deserializer)?;
+    ClientProvider::from_str(&s).map_err(|e| serde::de::Error::custom(e.to_string()))
 }
 
 #[cfg(test)]
