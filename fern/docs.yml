@@ -162,15 +162,15 @@ navigation:
             path: 01-guide/05-baml-advanced/checks-and-asserts.mdx
       - section: Boundary Cloud
         contents:
-          - section: Functions
-            icon: fa-cloud
-            contents:
-              - page: Get Started
-                path: 01-guide/functions/get-started.mdx
-              - page: Using OpenAPI
-                path: 01-guide/functions/using-openapi.mdx
-              - page: Environment Variables
-                path: 01-guide/functions/environment-variables.mdx
+          # - section: Functions
+          #   icon: fa-cloud
+          #   contents:
+          #     - page: Get Started
+          #       path: 01-guide/functions/get-started.mdx
+          #     - page: Using OpenAPI
+          #       path: 01-guide/functions/using-openapi.mdx
+          #     - page: Environment Variables
+          #       path: 01-guide/functions/environment-variables.mdx
           - section: Observability
             icon: fa-chart-simple
             contents:
