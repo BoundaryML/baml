@@ -771,12 +771,12 @@ mod tests {
         let client_property =
             ClientProperty::new("testing".into(), provider, retry_policy, options);
 
-        let client_registry = {
+        let expected_client_registry = {
             let mut client_registry = ClientRegistry::new();
             client_registry.add_client(client_property);
             client_registry.set_primary("testing".to_string());
             client_registry
         };
-        assert_eq!(client_registry, client_registry);
+        assert_eq!(client_registry, expected_client_registry);
     }
 }
