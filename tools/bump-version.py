@@ -154,7 +154,7 @@ def main(
     selected_version_bump = typer.prompt(
         "Please confirm the version bump type (minor/patch)",
         default=suggested_version_bump,
-        type=VersionBumpType,
+        type=str,
     )
     if selected_version_bump not in ("minor", "patch"):
         print("Error: Invalid version bump type.")

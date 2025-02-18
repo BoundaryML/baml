@@ -4,6 +4,38 @@ title: Changelog
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.76.0](https://github.com/boundaryml/baml/compare/0.75.0..0.76.0) - 2025-02-18
+
+We added a new NextJS generator and deep support for Typebuilder!! Read the docs to learn more about it!
+
+### Bug Fixes
+
+- Default max_tokens to null for openai providers (azure defaults to 4069 still) (#1438) - ([1ee0124](https://github.com/boundaryml/baml/commit/1ee01242ceca4bd39eed110deeabb30888d35ba1)) - Chris Watts
+- Rest/OpenAPI: Fix the way we parse providers for during reading client-registry (#1428) - ([9ec9927](https://github.com/boundaryml/baml/commit/9ec992746beb0e54772bfe92586d47079643f6a2)) - hellovai
+- Fix typescript partial types codegen (#1437) - ([078eef7](https://github.com/boundaryml/baml/commit/078eef7d046bab7816bd6c105bf996962fdfe97f)) - Greg Hale
+- import typealias correctly for python 3.8+ from typing_extensions Fixes #1448 (#1451) - ([2b1d51d](https://github.com/boundaryml/baml/commit/2b1d51d12b95cc2fb21c8f73658441b530fbcc07)) - hellovai
+- Enhance error handling and validation for duplicate definitions (#1462) - ([9f6443c](https://github.com/boundaryml/baml/commit/9f6443c51324e8323c50d186c1c10afe39ad6861)) - hellovai
+- Fix default None and Optional Nesting in python partial types (#1459) - ([06a311b](https://github.com/boundaryml/baml/commit/06a311bd159082d8a9925b7283953b4754340387)) - Greg Hale
+- Show nicer error message when VSCode extension crashes (#1467) - ([d14a913](https://github.com/boundaryml/baml/commit/d14a913401930a185df4df4c7fe0bce6f4ecc1e2)) - Antonio Sarosi
+
+### Documentation
+
+- Improve docs for Chain-of-thought prompting Fixes #1412 (#1445) - ([79083b1](https://github.com/boundaryml/baml/commit/79083b13a37c42d603f24b44e27a02993acc2ac3)) - hellovai
+- Update README.md (#1430) - ([f5f9291](https://github.com/boundaryml/baml/commit/f5f92911e637028627641c12ac30123d0607e2e3)) - Yasser Shalabi
+
+### Features
+
+- NextJS Generator (read the docs!)  (#1346) - ([0b792de](https://github.com/boundaryml/baml/commit/0b792decf96ebd2c84e6b9388b996612910e52f8)) - Chris Watts
+- Implement `TypeBuilder::add_baml` (#1449) - ([da76b96](https://github.com/boundaryml/baml/commit/da76b963f98a916cefdc5a763f7e97f1333e9283)) - Antonio Sarosi
+- Add a TypeBuilder string representation! (#1260) - ([fca8b91](https://github.com/boundaryml/baml/commit/fca8b91eede7ebe26393e332497b64c7e6edf0e6)) - afyef
+- Add ClientHttpError support across language clients (#1443) - ([1d481f1](https://github.com/boundaryml/baml/commit/1d481f1994ba90bb135aa4340d646f7768692b6a)) - hellovai
+- Add duration display option to test panel tabular view (#1463) - ([4d5c993](https://github.com/boundaryml/baml/commit/4d5c9931a7f1f6d07f597309ef5ca6260bf5e5c9)) - hellovai
+- Hide API credentials from frontend rendering for raw curl (#1431) - ([03735fe](https://github.com/boundaryml/baml/commit/03735feb5b9e70ad6a872e1c5d0837eea43034df)) - Greg Hale
+- Support overriding `media_type` when using from_url() Fixes #1436 (#1444) - ([c913f09](https://github.com/boundaryml/baml/commit/c913f09389ce0d63498e1aede6d61008b6b3f3f0)) - hellovai
+- Adding support for Azure AI Foundary (#1469) - ([92e139a](https://github.com/boundaryml/baml/commit/92e139aa61dc85e79de9bc9d3d5305f61e34854d)) - hellovai
+- Add client response type validation and support for LLM clients (#1473) - ([2987d59](https://github.com/boundaryml/baml/commit/2987d591718440a77cea77b0f30768904b06e0bb)) - hellovai
+
+
 ## [0.75.0](https://github.com/boundaryml/baml/compare/0.74.0..0.75.0) - 2025-02-06
 
 ### Features
@@ -21,10 +53,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Documentation
 
-- fix typos in root README.md (#1402) - ([cc132ad](https://github.com/boundaryml/baml/commit/cc132ad2d035df42b67ef37f1c696b496e08a4ca)) - Prashanth Rao
-- Update pydantic.mdx (#1398) - ([6c3df5a](https://github.com/boundaryml/baml/commit/6c3df5abfe88f7787256d31cf922b3c7580f9346)) - hellovai
-- Update README.md (#1409) - ([207114e](https://github.com/boundaryml/baml/commit/207114e8e4dc1f5964ff98e55b2258cf80619a26)) - aaronvg
-- Add docs for dynamic types tests (#1307) - ([9c068e0](https://github.com/boundaryml/baml/commit/9c068e06475aaa7ab1caffdc569e181c4f3bd0af)) - Antonio Sarosi
+- Fix typos in README.md (#1402) - ([cc132ad](https://github.com/boundaryml/baml/commit/cc132ad2d035df42b67ef37f1c696b496e08a4ca)) - Prashanth Rao
 
 
 ## [0.74.0](https://github.com/boundaryml/baml/compare/0.73.5..0.74.0) - 2025-01-30
