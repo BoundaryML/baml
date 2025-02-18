@@ -417,11 +417,11 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
     ) -> Response {
         let mut b_options = None;
         if let Some(options_value) = b_args.get("__baml_options__") {
-            match serde_json::from_value::<BamlOptions>(options_value.clone()) {
+            match BamlOptions::deserialize(options_value) {
                 Ok(opts) => b_options = Some(opts),
-                Err(_) => {
+                Err(e) => {
                     return BamlError::InvalidArgument {
-                        message: "Failed to parse __baml_options__".to_string(),
+                        message: format!("Failed to parse __baml_options__: {}", e),
                     }
                     .into_response()
                 }
@@ -552,11 +552,11 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
     ) -> Response {
         let mut b_options = None;
         if let Some(options_value) = body.get("__baml_options__") {
-            match serde_json::from_value::<BamlOptions>(options_value.clone()) {
+            match BamlOptions::deserialize(options_value) {
                 Ok(opts) => b_options = Some(opts),
-                Err(_) => {
+                Err(e) => {
                     return BamlError::InvalidArgument {
-                        message: "Failed to parse __baml_options__".to_string(),
+                        message: format!("Failed to parse __baml_options__: {}", e),
                     }
                     .into_response()
                 }
