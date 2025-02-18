@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.76.0",
+  "version": "0.75.0",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
@@ -21,48 +21,21 @@
   },
   "files": [
     "./cli.js",
-    "./artifacts/index.d.ts",
-    "./artifacts/index.js",
-    "./artifacts/native.d.ts",
-    "./artifacts/native.js",
-    "./artifacts/async_context_vars.d.ts",
-    "./artifacts/async_context_vars.js",
-    "./artifacts/stream.d.ts",
-    "./artifacts/stream.js",
-    "./artifacts/type_builder.d.ts",
-    "./artifacts/type_builder.js",
-    "./artifacts/errors.d.ts",
-    "./artifacts/errors.js"
+    "./index.d.ts",
+    "./index.js",
+    "./native.d.ts",
+    "./native.js",
+    "./async_context_vars.d.ts",
+    "./async_context_vars.js",
+    "./stream.d.ts",
+    "./stream.js",
+    "./type_builder.d.ts",
+    "./type_builder.js",
+    "./errors.d.ts",
+    "./errors.js"
   ],
-  "main": "./artifacts/index.js",
-  "types": "./artifacts/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./artifacts/index.d.ts",
-      "node": "./artifacts/index.js",
-      "default": "./artifacts/index.js"
-    },
-    "./type_builder": {
-      "types": "./artifacts/type_builder.d.ts",
-      "default": "./artifacts/type_builder.js"
-    },
-    "./async_context_vars": {
-      "types": "./artifacts/async_context_vars.d.ts",
-      "default": "./artifacts/async_context_vars.js"
-    },
-    "./stream": {
-      "types": "./artifacts/stream.d.ts",
-      "default": "./artifacts/stream.js"
-    },
-    "./native": {
-      "types": "./artifacts/native.d.ts",
-      "default": "./artifacts/native.js"
-    },
-    "./errors": {
-      "types": "./artifacts/errors.d.ts",
-      "default": "./artifacts/errors.js"
-    }
-  },
+  "main": "./index.js",
+  "types": "./index.d.ts",
   "napi": {
     "binaryName": "baml",
     "targets": [
@@ -86,10 +59,10 @@
   "scripts": {
     "artifacts": "napi artifacts",
     "build": "pnpm build:napi-release && pnpm build:ts_build",
-    "build:debug": "pnpm build:napi-debug && pnpm build:ts_build && pnpm napi create-npm-dirs && pnpm artifacts",
+    "build:debug": "pnpm build:napi-debug && pnpm build:ts_build",
     "build:napi-release": "pnpm build:napi-debug --release",
-    "build:napi-debug": "napi build -o ./artifacts --js ./native.js --dts ./native.d.ts --platform",
-    "build:ts_build": "tsc ./typescript_src/*.ts --outDir ./artifacts --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true",
+    "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform",
+    "build:ts_build": "tsc ./typescript_src/*.ts --outDir ./ --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true",
     "format": "run-p format:biome format:rs format:toml",
     "format:biome": "biome --write .",
     "format:rs": "cargo fmt",
