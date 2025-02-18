@@ -248,6 +248,84 @@ impl IntermediateRepr {
 
         Ok(repr)
     }
+
+    /// TODO: #1343 Temporary solution until we implement scoping in the AST.
+    pub fn type_builder_entries_from_scoped_db(
+        scoped_db: &ParserDatabase,
+        global_db: &ParserDatabase,
+    ) -> Result<(
+        Vec<Node<Class>>,
+        Vec<Node<Enum>>,
+        Vec<Node<TypeAlias>>,
+        Vec<IndexSet<String>>,
+        Vec<IndexMap<String, FieldType>>,
+    )> {
+        let classes = scoped_db
+            .walk_classes()
+            .filter(|c| {
+                scoped_db.ast()[c.id].is_dynamic_type_def
+                    || global_db.find_type_by_str(c.name()).is_none()
+            })
+            .map(|c| c.node(scoped_db))
+            .collect::<Result<Vec<Node<Class>>>>()?;
+
+        let enums = scoped_db
+            .walk_enums()
+            .filter(|e| {
+                scoped_db.ast()[e.id].is_dynamic_type_def
+                    || global_db.find_type_by_str(e.name()).is_none()
+            })
+            .map(|e| e.node(scoped_db))
+            .collect::<Result<Vec<Node<Enum>>>>()?;
+
+        let type_aliases = scoped_db
+            .walk_type_aliases()
+            .filter(|a| global_db.find_type_by_str(a.name()).is_none())
+            .map(|a| a.node(scoped_db))
+            .collect::<Result<Vec<Node<TypeAlias>>>>()?;
+
+        let recursive_classes = scoped_db
+            .finite_recursive_cycles()
+            .iter()
+            .map(|ids| {
+                ids.iter()
+                    .map(|id| {
+                        let name = scoped_db.ast()[*id].name();
+                        if name.starts_with(ast::DYNAMIC_TYPE_NAME_PREFIX) {
+                            name.strip_prefix(ast::DYNAMIC_TYPE_NAME_PREFIX)
+                                .unwrap()
+                                .to_string()
+                        } else {
+                            name.to_string()
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+
+        let mut recursive_aliases = vec![];
+        for cycle in scoped_db.recursive_alias_cycles() {
+            let mut component = IndexMap::new();
+            for id in cycle {
+                let alias = &scoped_db.ast()[*id];
+                // Those are global cycles, skip.
+                if global_db.find_type_by_str(alias.name()).is_some() {
+                    continue;
+                }
+                // Cycles defined in the scoped test type builder block.
+                component.insert(alias.name().to_string(), alias.value.repr(scoped_db)?);
+            }
+            recursive_aliases.push(component);
+        }
+
+        Ok((
+            classes,
+            enums,
+            type_aliases,
+            recursive_classes,
+            recursive_aliases,
+        ))
+    }
 }
 
 // TODO:
@@ -1123,7 +1201,8 @@ pub enum TypeBuilderEntry {
 #[derive(Debug)]
 pub struct TestTypeBuilder {
     pub entries: Vec<TypeBuilderEntry>,
-    pub structural_recursive_alias_cycles: Vec<IndexMap<String, FieldType>>,
+    pub recursive_classes: Vec<IndexSet<String>>,
+    pub recursive_aliases: Vec<IndexMap<String, FieldType>>,
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -1191,33 +1270,12 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
             .collect::<Result<Vec<_>>>()?;
 
         // TODO: #1343 Temporary solution until we implement scoping in the AST.
-        let enums = self
-            .test_case()
-            .type_builder_scoped_db
-            .walk_enums()
-            .filter(|e| {
-                self.test_case().type_builder_scoped_db.ast()[e.id].is_dynamic_type_def
-                    || db.find_type_by_str(e.name()).is_none()
-            })
-            .map(|e| e.node(&self.test_case().type_builder_scoped_db))
-            .collect::<Result<Vec<Node<Enum>>>>()?;
-        let classes = self
-            .test_case()
-            .type_builder_scoped_db
-            .walk_classes()
-            .filter(|c| {
-                self.test_case().type_builder_scoped_db.ast()[c.id].is_dynamic_type_def
-                    || db.find_type_by_str(c.name()).is_none()
-            })
-            .map(|c| c.node(&self.test_case().type_builder_scoped_db))
-            .collect::<Result<Vec<Node<Class>>>>()?;
-        let type_aliases = self
-            .test_case()
-            .type_builder_scoped_db
-            .walk_type_aliases()
-            .filter(|a| db.find_type_by_str(a.name()).is_none())
-            .map(|a| a.node(&self.test_case().type_builder_scoped_db))
-            .collect::<Result<Vec<Node<TypeAlias>>>>()?;
+        let (classes, enums, type_aliases, recursive_classes, recursive_aliases) =
+            IntermediateRepr::type_builder_entries_from_scoped_db(
+                &self.test_case().type_builder_scoped_db,
+                db,
+            )?;
+
         let mut type_builder_entries = Vec::new();
 
         for e in enums {
@@ -1228,28 +1286,6 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
         }
         for a in type_aliases {
             type_builder_entries.push(TypeBuilderEntry::TypeAlias(a));
-        }
-
-        let mut recursive_aliases = vec![];
-        for cycle in self
-            .test_case()
-            .type_builder_scoped_db
-            .recursive_alias_cycles()
-        {
-            let mut component = IndexMap::new();
-            for id in cycle {
-                let alias = &self.test_case().type_builder_scoped_db.ast()[*id];
-                // Those are global cycles, skip.
-                if db.find_type_by_str(alias.name()).is_some() {
-                    continue;
-                }
-                // Cycles defined in the scoped test type builder block.
-                component.insert(
-                    alias.name().to_string(),
-                    alias.value.repr(&self.test_case().type_builder_scoped_db)?,
-                );
-            }
-            recursive_aliases.push(component);
         }
 
         Ok(TestCase {
@@ -1269,7 +1305,8 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
             .collect::<Vec<_>>(),
             type_builder: TestTypeBuilder {
                 entries: type_builder_entries,
-                structural_recursive_alias_cycles: recursive_aliases,
+                recursive_aliases,
+                recursive_classes,
             },
         })
     }

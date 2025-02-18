@@ -23,12 +23,20 @@ require_relative "type-registry"
 
 module Baml
   @instance = nil
+  @do_not_use_directly_unless_you_know_what_youre_doing_runtime = nil
+
+  def self.do_not_use_directly_unless_you_know_what_youre_doing_runtime
+    if @do_not_use_directly_unless_you_know_what_youre_doing_runtime.nil?
+      @do_not_use_directly_unless_you_know_what_youre_doing_runtime =  Baml::Ffi::BamlRuntime.from_files("baml_src", Baml::Inlined::FILE_MAP, ENV)
+    end
+    @do_not_use_directly_unless_you_know_what_youre_doing_runtime
+  end
 
   def self.Client
     if @instance.nil?
-      @instance = BamlClient.new(runtime: Baml::Ffi::BamlRuntime.from_files("baml_src", Baml::Inlined::FILE_MAP, ENV))
+      @instance = BamlClient.new(runtime: Baml::do_not_use_directly_unless_you_know_what_youre_doing_runtime)
     end
-  
+
     @instance
   end
 

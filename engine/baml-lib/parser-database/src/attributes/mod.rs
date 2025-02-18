@@ -13,7 +13,7 @@ use baml_types::{Constraint, UnresolvedValue};
 use internal_baml_schema_ast::ast::{Expression, SubType};
 
 /// Node attributes.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Attributes {
     /// Description of the node, used in describing the node to the LLM.
     pub description: Option<UnresolvedValue<Span>>,
@@ -33,10 +33,10 @@ pub struct Attributes {
     /// Whether the node has a `@sstream.done` attribute.
     pub streaming_done: Option<bool>,
 
-   /// Whether the node has a `@stream.not_null` attribute.
+    /// Whether the node has a `@stream.not_null` attribute.
     pub streaming_needed: Option<bool>,
 
-   /// Whether the node has a `@stream.with_state` attribute.
+    /// Whether the node has a `@stream.with_state` attribute.
     pub streaming_state: Option<bool>,
 }
 

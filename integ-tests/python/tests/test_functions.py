@@ -46,6 +46,8 @@ from ..baml_client.types import (
     MergeAttrs,
     OptionalListAndMap,
     RecursiveAliasDependency,
+    Person,
+    Color,
     JsonEntry,
     SimpleTag,
 )
@@ -1613,6 +1615,125 @@ async def test_differing_unions():
     res = await b.DifferentiateUnions({"tb": tb})
     assert isinstance(res, OriginalB)
 
+
+@pytest.mark.asyncio
+async def test_add_baml_existing_class():
+    tb = TypeBuilder()
+    tb.add_baml("""
+        class ExtraPersonInfo {
+            height int
+            weight int
+        }
+
+        dynamic class Person {
+            age int?
+            extra ExtraPersonInfo?
+        }
+    """)
+    res = await b.ExtractPeople(
+        "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
+        {"tb": tb},
+    )
+    assert res == [Person(name="John Doe", hair_color=Color.YELLOW, age=30, extra={"height": 6, "weight": 180})]
+
+
+@pytest.mark.asyncio
+async def test_add_baml_existing_enum():
+    tb = TypeBuilder()
+    tb.add_baml("""
+        dynamic enum Hobby {
+            VideoGames
+            BikeRiding
+        }
+    """)
+    res = await b.ExtractHobby("I play video games", {"tb": tb})
+    assert res == ["VideoGames"]
+
+
+@pytest.mark.asyncio
+async def test_add_baml_both_classes_and_enums():
+    tb = TypeBuilder()
+    tb.add_baml("""
+        class ExtraPersonInfo {
+            height int
+            weight int
+        }
+
+        enum Job {
+            Programmer
+            Architect
+            Musician
+        }
+
+        dynamic enum Hobby {
+            VideoGames
+            BikeRiding
+        }
+
+        dynamic enum Color {
+            BROWN
+        }
+
+        dynamic class Person {
+            age int?
+            extra ExtraPersonInfo?
+            job Job?
+            hobbies Hobby[]
+        }
+    """)
+    res = await b.ExtractPeople(
+        "My name is John Doe. I'm 30 years old. My height is 6 feet and I weigh 180 pounds. My hair is brown. I work as a programmer and enjoy bike riding.",
+        {"tb": tb},
+    )
+    assert res == [
+        Person(
+            name="John Doe",
+            hair_color="BROWN",
+            age=30,
+            extra={"height": 6, "weight": 180},
+            job="Programmer",
+            hobbies=["BikeRiding"],
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_add_baml_with_attrs():
+    tb = TypeBuilder()
+    tb.add_baml("""
+        class ExtraPersonInfo {
+            height int @description("In centimeters and rounded to the nearest whole number")
+            weight int @description("In kilograms and rounded to the nearest whole number")
+        }
+
+        dynamic class Person {
+            extra ExtraPersonInfo?
+        }
+    """)
+    res = await b.ExtractPeople(
+        "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
+        {"tb": tb},
+    )
+    assert res == [Person(name="John Doe", hair_color=Color.YELLOW, extra={"height": 183, "weight": 82})]
+
+@pytest.mark.asyncio
+async def test_add_baml_error():
+    tb = TypeBuilder()
+    with pytest.raises(errors.BamlError):
+        tb.add_baml("""
+            dynamic Hobby {
+                VideoGames
+                BikeRiding
+            }
+        """)
+
+@pytest.mark.asyncio
+async def test_add_baml_parser_error():
+    tb = TypeBuilder()
+    with pytest.raises(errors.BamlError):
+        tb.add_baml("""
+            syntaxerror
+        """)
 
 @pytest.mark.asyncio
 async def test_return_failing_assert():

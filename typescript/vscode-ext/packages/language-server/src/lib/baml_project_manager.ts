@@ -15,6 +15,7 @@ import { debounce } from 'lodash'
 import semver from 'semver'
 import { bamlConfig } from '../bamlConfig'
 import { Uri } from 'vscode'
+import { isWasmPanic } from './wasm/error/panic'
 type Notify = (
   params:
     | { type: 'error' | 'warn' | 'info'; message: string }
@@ -486,10 +487,19 @@ class BamlProjectManager {
 
   private projects: Map<string, Project> = new Map()
 
+  /**
+   * We can't recover from a WASM panic unless we reload the extension.
+   */
+  private wasmPanicked = false
+
   constructor(private notifier: Notify) {}
 
   private handleMessage(e: any) {
-    if (e instanceof BamlWasm.WasmDiagnosticError) {
+    if (isWasmPanic(e) || this.wasmPanicked) {
+      this.throwPanicErrorMessage(e)
+      // Set this to true and just throw the same error again.
+      this.wasmPanicked = true
+    } else if (e instanceof BamlWasm.WasmDiagnosticError) {
       const diagnostics = new Map<string, Diagnostic[]>(e.all_files.map((f) => [URI.file(f).toString(), []]))
       // console.log('diagnostic filess ' + JSON.stringify(diagnostics, null, 2))
 
@@ -544,6 +554,15 @@ class BamlProjectManager {
         type: 'error',
       })
     }
+  }
+
+  private throwPanicErrorMessage(e: Error) {
+    console.error(`Wasm Panic: ${e.message ?? '<No error message>'}`)
+    this.notifier({
+      message:
+        'The baml server has crashed, please reload the baml playground. Contact us at [boundaryml.com/discord](https://www.boundaryml.com/discord) if this problem recurs.',
+      type: 'error',
+    })
   }
 
   private wrapSync<T>(fn: () => T): T | undefined {

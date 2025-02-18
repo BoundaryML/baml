@@ -16,7 +16,7 @@ use validate_reserved_names::*;
 use self::validate_reserved_names::{validate_enum_value_name, validate_function_name};
 
 /// Resolved names for use in the validation process.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(super) struct Names {
     /// Models, enums, composite types and type aliases
     pub(super) tops: HashMap<StringId, TopId>,

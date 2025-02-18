@@ -7,7 +7,7 @@ use crate::ClientSpec;
 
 use super::helpers::{Error, PropertyHandler};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnresolvedFallback<Meta> {
     strategy: Vec<(either::Either<StringOr, ClientSpec>, Meta)>,
 }

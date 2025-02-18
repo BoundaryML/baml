@@ -19,7 +19,7 @@ enum Category {
   VALUE1 // normal static enum values that don't change
   VALUE2
   @@dynamic // this enum can have more values added at runtime
-} 
+}
 
 // The Category enum can now be modified at runtime!
 function DynamicCategorizer(input: string) -> Category {
@@ -27,7 +27,7 @@ function DynamicCategorizer(input: string) -> Category {
   prompt #"
     Given a string, classify it into a category
     {{ input }}
-     
+
     {{ ctx.output_format }}
   "#
 }
@@ -120,7 +120,7 @@ function DynamicUserCreator(user_info: string) -> User {
   prompt #"
     Extract the information from this chunk of text:
     "{{ user_info }}"
-     
+
     {{ ctx.output_format }}
   "#
 }
@@ -167,7 +167,7 @@ def run
   tb = Baml::TypeBuilder.new
   tb.User.add_property('email', tb.string)
   tb.User.add_property('address', tb.string).description("The user's address")
-  
+
   res = Baml.Client.dynamic_user_creator(input: "some user info", baml_options: {tb: tb})
   # Now res can have email and address fields
   puts res
@@ -239,7 +239,7 @@ def run
 
   tb.User.add_property('hobby', hobbies_enum.type.optional)
   tb.User.add_property('address', address_class.type.optional)
-  
+
   res = Baml::Client.dynamic_user_creator(input: "some user info", baml_options: { tb: tb })
   # Now res might have the hobby property, which can be Soccer or Reading
   puts res
@@ -276,6 +276,81 @@ tb.User.addProperty("email", tb.string()).description("The user's email")
 ```ruby Ruby
 tb = Baml::TypeBuilder.new
 tb.User.add_property("email", tb.string).description("The user's email")
+```
+
+</CodeBlocks>
+
+### Creating dynamic classes and enums at runtime with BAML
+
+The `TypeBuilder` has a higher level API for creating dynamic types at runtime.
+Here's an example:
+
+<CodeBlocks>
+
+```python Python
+tb = TypeBuilder()
+tb.add_baml("""
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
+
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
+
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynmic enum Category {
+    VALUE5
+  }
+""")
+```
+
+```typescript TypeScript
+const tb = new TypeBuilder()
+tb.addBaml(`
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
+
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
+
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynmic enum Category {
+    VALUE5
+  }
+`)
+```
+
+```ruby Ruby
+tb = Baml::TypeBuilder.new
+tb.add_baml("
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
+
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
+
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynmic enum Category {
+    VALUE5
+  }
+")
 ```
 
 </CodeBlocks>
@@ -380,18 +455,18 @@ test ReturnDynamicClassTest {
       title string
       company string
       start_date string
-      end_date string		  
+      end_date string
     }
 
     // Injects new properties into the `@@dynamic` part of the Resume class.
-    dynamic Resume {
+    dynamic class Resume {
       experience Experience[]
     }
   }
   args {
     from_text #"
       John Doe
-      
+
       Experience
       - Software Engineer, Boundary, Sep 2022 - Sep 2023
 
@@ -432,7 +507,7 @@ test ReturnDynamicEnumTest {
   functions [ClassifyMessage]
   type_builder {
     // Injects new variants into the `@@dynamic` part of the Category enum.
-    dynamic Category {
+    dynamic enum Category {
       Feedback
     }
   }
@@ -478,7 +553,7 @@ test DynamicClassAsInputTest {
           end_date "2024-09-01"
         }
       ]
-    }  
+    }
   }
 }
 ```

@@ -2,6 +2,7 @@
 #![deny(rust_2018_idioms, unsafe_code)]
 #![allow(clippy::derive_partial_eq_without_eq)]
 
+use enumflags2::BitFlags;
 pub use internal_baml_diagnostics;
 use internal_baml_parser_database::TypeWalker;
 pub use internal_baml_parser_database::{self};
@@ -102,7 +103,7 @@ pub fn validate(root_path: &Path, files: Vec<SourceFile>) -> ValidatedSchema {
     db.finalize(&mut diagnostics);
 
     // TODO: #1343 Temporary solution until we implement scoping in the AST.
-    validate_type_builder_blocks(&mut diagnostics, &mut db, &configuration);
+    validate_test_type_builders(&mut diagnostics, &mut db, &configuration);
 
     ValidatedSchema {
         db,
@@ -111,6 +112,8 @@ pub fn validate(root_path: &Path, files: Vec<SourceFile>) -> ValidatedSchema {
     }
 }
 
+/// TODO: #1343 Temporary solution until we implement scoping in the AST.
+///
 /// TODO: This is a very ugly hack to implement scoping for type builder blocks
 /// in test cases. Type builder blocks support all the type definitions (class,
 /// enum, type alias), and all these definitions have access to both the global
@@ -134,7 +137,7 @@ pub fn validate(root_path: &Path, files: Vec<SourceFile>) -> ValidatedSchema {
 /// this way because we wanted to ship the feature and delay AST refactoring,
 /// since it would take much longer to refactor the AST and include scoping than
 /// it would take to ship this hack.
-fn validate_type_builder_blocks(
+fn validate_test_type_builders(
     diagnostics: &mut Diagnostics,
     db: &mut internal_baml_parser_database::ParserDatabase,
     configuration: &Configuration,
@@ -148,103 +151,7 @@ fn validate_type_builder_blocks(
             continue;
         };
 
-        let mut local_ast = ast::SchemaAst::new();
-        for type_def in &type_builder.entries {
-            local_ast.tops.push(match type_def {
-                ast::TypeBuilderEntry::Class(c) => {
-                    if let Some(attr) = c.attributes.iter().find(|attr| attr.name.name() == "dynamic") {
-                        diagnostics.push_error(DatamodelError::disallow_dynamic_type_definitions(
-                            attr.span.to_owned(),
-                        ));
-                        continue;
-                    }
-
-                    ast::Top::Class(c.to_owned())
-                },
-                ast::TypeBuilderEntry::Enum(e) => {
-                    if let Some(attr) = e.attributes.iter().find(|attr| attr.name.name() == "dynamic") {
-                        diagnostics.push_error(DatamodelError::disallow_dynamic_type_definitions(
-                            attr.span.to_owned(),
-                        ));
-                        continue;
-                    }
-
-                    ast::Top::Enum(e.to_owned())
-                },
-                ast::TypeBuilderEntry::Dynamic(d) => {
-                    if let Some(attr) = d.attributes.iter().find(|attr| attr.name.name() == "dynamic") {
-                        diagnostics.push_error(DatamodelError::disallow_dynamic_type_definitions(
-                            attr.span.to_owned(),
-                        ));
-                        continue;
-                    }
-
-                    let mut dyn_type = d.to_owned();
-
-                    // TODO: Extemely ugly hack to avoid collisions in the name
-                    // interner. We use syntax that is not normally allowed by
-                    // BAML for type names.
-                    dyn_type.name = Identifier::Local(
-                        format!("{}{}", ast::DYNAMIC_TYPE_NAME_PREFIX, dyn_type.name()),
-                        dyn_type.span.to_owned(),
-                    );
-
-                    dyn_type.is_dynamic_type_def = true;
-
-                    // Resolve dynamic definition. It either appends to a
-                    // @@dynamic class or enum.
-                    match db.find_type_by_str(d.name()) {
-                        Some(t) => match t {
-                            TypeWalker::Class(cls) => {
-                                if !cls.ast_type_block().attributes.iter().any(|attr| attr.name.name() == "dynamic") {
-                                    diagnostics.push_error(DatamodelError::new_validation_error(
-                                        &format!(
-                                            "Type '{}' does not contain the `@@dynamic` attribute so it cannot be modified in a type builder block",
-                                             cls.name()
-                                        ),
-                                        dyn_type.span.to_owned(),
-                                    ));
-                                    continue;
-                                }
-
-                                ast::Top::Class(dyn_type)
-                            },
-                            TypeWalker::Enum(enm) => {
-                                if !enm.ast_type_block().attributes.iter().any(|attr| attr.name.name() == "dynamic") {
-                                    diagnostics.push_error(DatamodelError::new_validation_error(
-                                        &format!(
-                                            "Type '{}' does not contain the `@@dynamic` attribute so it cannot be modified in a type builder block",
-                                            enm.name()
-                                        ),
-                                        dyn_type.span.to_owned(),
-                                    ));
-                                    continue;
-                                }
-
-                                ast::Top::Enum(dyn_type)
-                            },
-                            TypeWalker::TypeAlias(_) => {
-                                diagnostics.push_error(DatamodelError::new_validation_error(
-                                    &format!("The `dynamic` keyword only works on classes and enums, but type '{}' is a type alias", d.name()),
-                                    d.type_span.to_owned(),
-                                ));
-                                continue;
-                            },
-                        },
-                        None => {
-                            diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Type '{}' not found", dyn_type.name()),
-                                dyn_type.span.to_owned(),
-                            ));
-                            continue;
-                        }
-                    }
-                }
-                ast::TypeBuilderEntry::TypeAlias(assignment) => {
-                    ast::Top::TypeAlias(assignment.to_owned())
-                },
-            });
-        }
+        let local_ast = validate_type_builder_entries(diagnostics, db, &type_builder.entries);
 
         scoped_db.add_ast(local_ast);
 
@@ -263,6 +170,152 @@ fn validate_type_builder_blocks(
     for (test_id, scoped_db) in test_case_scoped_dbs.into_iter() {
         db.add_test_case_db(test_id, scoped_db);
     }
+}
+
+pub fn run_validation_pipeline_on_db(
+    db: &mut internal_baml_parser_database::ParserDatabase,
+    diagnostics: &mut Diagnostics,
+) {
+    validate::validate(db, BitFlags::<PreviewFeature>::default(), diagnostics);
+    if diagnostics.has_errors() {
+        return;
+    }
+    db.finalize(diagnostics);
+}
+
+/// TODO: #1343 Temporary solution until we implement scoping in the AST.
+///
+/// See [`validate_test_type_builders`] for more information.
+pub fn validate_type_builder_entries(
+    diagnostics: &mut Diagnostics,
+    db: &internal_baml_parser_database::ParserDatabase,
+    entries: &[ast::TypeBuilderEntry],
+) -> ast::SchemaAst {
+    let mut local_ast = ast::SchemaAst::new();
+    for type_def in entries {
+        local_ast.tops.push(match type_def {
+            ast::TypeBuilderEntry::Class(c) => {
+                if c.attributes.iter().any(|attr| attr.name.name() == "dynamic") {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        "The `@@dynamic` attribute is not allowed in type_builder blocks",
+                        c.span.to_owned(),
+                    ));
+                    continue;
+                }
+
+                ast::Top::Class(c.to_owned())
+            },
+            ast::TypeBuilderEntry::Enum(e) => {
+                if e.attributes.iter().any(|attr| attr.name.name() == "dynamic") {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        "The `@@dynamic` attribute is not allowed in type_builder blocks",
+                        e.span.to_owned(),
+                    ));
+                    continue;
+                }
+
+                ast::Top::Enum(e.to_owned())
+            },
+            ast::TypeBuilderEntry::Dynamic(d) => {
+                if d.attributes.iter().any(|attr| attr.name.name() == "dynamic") {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        "Dynamic type definitions cannot contain the `@@dynamic` attribute",
+                        d.span.to_owned(),
+                    ));
+                    continue;
+                }
+
+                let mut dyn_type = d.to_owned();
+
+                // TODO: Extemely ugly hack to avoid collisions in the name
+                // interner. We use syntax that is not normally allowed by
+                // BAML for type names.
+                dyn_type.name = Identifier::Local(
+                    format!("{}{}", ast::DYNAMIC_TYPE_NAME_PREFIX, dyn_type.name()),
+                    dyn_type.span.to_owned(),
+                );
+
+                // TODO: Not necessary, the parser also does this now that we've
+                // change "dynamic ClassName" to "dynamic class ClassName".
+                dyn_type.is_dynamic_type_def = true;
+
+                // Resolve dynamic definition. It either appends to a
+                // @@dynamic class or enum.
+                match db.find_type_by_str(d.name()) {
+                    Some(t) => match t {
+                        TypeWalker::Class(cls) => {
+                            if !cls.ast_type_block().attributes.iter().any(|attr| attr.name.name() == "dynamic") {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!(
+                                        "Type '{}' does not contain the `@@dynamic` attribute so it cannot be modified in a type builder block",
+                                        cls.name()
+                                    ),
+                                    dyn_type.span.to_owned(),
+                                ));
+                                continue;
+                            }
+
+                            if matches!(dyn_type.sub_type, ast::SubType::Enum) {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!(
+                                        "Type '{}' is a class, but the dynamic block is defined as 'dynamic enum'",
+                                        cls.name()
+                                    ),
+                                    dyn_type.span.to_owned(),
+                                ));
+                                continue;
+                            }
+
+                            ast::Top::Class(dyn_type)
+                        },
+                        TypeWalker::Enum(enm) => {
+                            if !enm.ast_type_block().attributes.iter().any(|attr| attr.name.name() == "dynamic") {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!(
+                                        "Type '{}' does not contain the `@@dynamic` attribute so it cannot be modified in a type builder block",
+                                        enm.name()
+                                    ),
+                                    dyn_type.span.to_owned(),
+                                ));
+                                continue;
+                            }
+
+                            if matches!(dyn_type.sub_type, ast::SubType::Class) {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!(
+                                        "Type '{}' is an enum, but the dynamic block is defined as 'dynamic class'",
+                                        enm.name()
+                                    ),
+                                    dyn_type.span.to_owned(),
+                                ));
+                                continue;
+                            }
+
+                            ast::Top::Enum(dyn_type)
+                        },
+                        TypeWalker::TypeAlias(_) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("The `dynamic` keyword only works on classes and enums, but type '{}' is a type alias", d.name()),
+                                d.span.to_owned(),
+                            ));
+                            continue;
+                        },
+                    },
+                    None => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Type '{}' not found", d.name()),
+                            dyn_type.span.to_owned(),
+                        ));
+                        continue;
+                    }
+                }
+            }
+            ast::TypeBuilderEntry::TypeAlias(assignment) => {
+                ast::Top::TypeAlias(assignment.to_owned())
+            },
+        });
+    }
+    local_ast
 }
 
 /// Loads all configuration blocks from a datamodel using the built-in source definitions.

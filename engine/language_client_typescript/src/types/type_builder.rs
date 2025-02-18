@@ -44,7 +44,6 @@ impl Default for TypeBuilder {
     }
 }
 
-
 // note: you may notice a rust-analyzer warning in vs code when working with this file.
 // the warning "did not find struct napitypebuilder parsed before expand #[napi] for impl"
 // is a known false positive that occurs due to how rust-analyzer processes macro state.
@@ -56,9 +55,6 @@ impl Default for TypeBuilder {
 //
 // ref:
 // https://github.com/napi-rs/napi-rs/issues/1630
-
-
-
 
 #[napi]
 impl TypeBuilder {
@@ -151,6 +147,13 @@ impl TypeBuilder {
                 .collect(),
         )
         .into()
+    }
+
+    #[napi]
+    pub fn add_baml(&self, baml: String, rt: &crate::BamlRuntime) -> napi::Result<()> {
+        self.inner
+            .add_baml(&baml, &rt.inner)
+            .map_err(crate::errors::from_anyhow_error)
     }
 
     #[napi]

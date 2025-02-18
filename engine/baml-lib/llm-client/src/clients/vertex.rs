@@ -14,7 +14,7 @@ use serde::Deserialize;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum UnresolvedGcpAuthStrategy<Meta> {
     /// This can be resolved as either FilePath or JsonString
     CredentialsString(StringOr),
@@ -146,7 +146,7 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnresolvedVertex<Meta> {
     // Either base_url or location
     base_url_or_location: Either<UnresolvedUrl, StringOr>,

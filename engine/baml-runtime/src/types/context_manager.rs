@@ -125,7 +125,7 @@ impl RuntimeContextManager {
             ctx.map(|(.., tags)| tags).cloned().unwrap_or_default()
         };
 
-        let (cls, enm, als, rec_als) = type_builder
+        let (cls, enm, als, rec_cls, rec_als) = type_builder
             .map(TypeBuilder::to_overrides)
             .unwrap_or_default();
 
@@ -137,6 +137,7 @@ impl RuntimeContextManager {
             cls,
             enm,
             als,
+            rec_cls,
             rec_als,
         );
 
@@ -158,6 +159,7 @@ impl RuntimeContextManager {
             self.baml_src_reader.clone(),
             self.env_vars.clone(),
             ctx.last().map(|(.., x)| x).cloned().unwrap_or_default(),
+            Default::default(),
             Default::default(),
             Default::default(),
             Default::default(),

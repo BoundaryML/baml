@@ -66,10 +66,9 @@ pub fn parsed_value_to_response(
     let response_value = baml_value_with_streaming
         .zip_meta(&value_with_response_checks)?
         .zip_meta(&meta_flags)?
-        .map_meta(|((x, y), z)| (z.clone(), y.clone(), x.clone() ));
+        .map_meta(|((x, y), z)| (z.clone(), y.clone(), x.clone()));
     Ok(ResponseBamlValue(response_value))
 }
-
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum ResolveMediaUrls {

@@ -1,4 +1,4 @@
-function TypeBuilderFn() -> string { 
+function TypeBuilderFn() -> string {
   client "openai/gpt-4o-mini"
   prompt #"Hello"#
 }
@@ -8,16 +8,28 @@ class NonDynamic {
   b string
 }
 
+test AttemptToModifyNonDynamicClass {
+  functions [TypeBuilderFn]
+  type_builder {
+    dynamic class NonDynamic {
+      c string
+    }
+  }
+args {
+    from_text "Test"
+  }
+}
+
 type SomeAlias = NonDynamic
 
 test AttemptToModifyTypeAlias {
   functions [TypeBuilderFn]
   type_builder {
-    dynamic SomeAlias {
+    dynamic class SomeAlias {
       c string
     }
   }
-  args {
+args {
     from_text "Test"
   }
 }
@@ -39,12 +51,12 @@ test AttemptToAddDynamicAttrInDyanmicDef {
       A
       @@dynamic
     }
-    dynamic DynamicClass {
+    dynamic class DynamicClass {
       c string
       @@dynamic
     }
   }
-  args {
+args {
     from_text "Test"
   }
 }
@@ -52,14 +64,14 @@ test AttemptToAddDynamicAttrInDyanmicDef {
 test AttemptToModifySameDynamicMultipleTimes {
   functions [TypeBuilderFn]
   type_builder {
-    dynamic DynamicClass {
+    dynamic class DynamicClass {
       c string
     }
-    dynamic DynamicClass {
+    dynamic class DynamicClass {
       d string
     }
-  }
-  args {
+}
+args {
     from_text "Test"
   }
 }
@@ -71,68 +83,108 @@ test NameAlreadyExists {
       a string
       b string
     }
-    dynamic DynamicClass {
+    dynamic class DynamicClass {
       non_dynamic NonDynamic
     }
   }
-  args {
+args {
     from_text "Test"
   }
 }
 
+enum DynamicEnum {
+  A
+  B
+  @@dynamic
+}
+
+test TypeMismatch {
+  functions [TypeBuilderFn]
+  type_builder {
+    dynamic class DynamicEnum {
+      C
+    }
+    dynamic enum DynamicClass {
+      c string
+    }
+}
+args {
+    from_text "Test"
+  }
+}
+
+// error: Error validating: Type 'NonDynamic' does not contain the `@@dynamic` attribute so it cannot be modified in a type builder block
+//   -->  tests/dynamic_types_validation_errors.baml:14
+//    | 
+// 13 |   type_builder {
+// 14 |     dynamic class NonDynamic {
+// 15 |       c string
+// 16 |     }
+//    | 
 // error: Error validating: The `dynamic` keyword only works on classes and enums, but type 'SomeAlias' is a type alias
-//   -->  tests/dynamic_types_validation_errors.baml:16
+//   -->  tests/dynamic_types_validation_errors.baml:28
 //    | 
-// 15 |   type_builder {
-// 16 |     dynamic SomeAlias {
+// 27 |   type_builder {
+// 28 |     dynamic class SomeAlias {
+// 29 |       c string
+// 30 |     }
 //    | 
-// error: The `@@dynamic` attribute is not allowed in type_builder blocks.
-//   -->  tests/dynamic_types_validation_errors.baml:36
+// error: Error validating: The `@@dynamic` attribute is not allowed in type_builder blocks
+//   -->  tests/dynamic_types_validation_errors.baml:46
 //    | 
-// 35 |       a string
-// 36 |       @@dynamic
+// 45 |   type_builder {
+// 46 |     class NotAllowedHere {
+// 47 |       a string
+// 48 |       @@dynamic
+// 49 |     }
 //    | 
-// error: The `@@dynamic` attribute is not allowed in type_builder blocks.
-//   -->  tests/dynamic_types_validation_errors.baml:40
+// error: Error validating: The `@@dynamic` attribute is not allowed in type_builder blocks
+//   -->  tests/dynamic_types_validation_errors.baml:50
 //    | 
-// 39 |       A
-// 40 |       @@dynamic
+// 49 |     }
+// 50 |     enum StillNotAllowed {
+// 51 |       A
+// 52 |       @@dynamic
+// 53 |     }
 //    | 
-// error: The `@@dynamic` attribute is not allowed in type_builder blocks.
-//   -->  tests/dynamic_types_validation_errors.baml:44
+// error: Error validating: Dynamic type definitions cannot contain the `@@dynamic` attribute
+//   -->  tests/dynamic_types_validation_errors.baml:54
 //    | 
-// 43 |       c string
-// 44 |       @@dynamic
+// 53 |     }
+// 54 |     dynamic class DynamicClass {
+// 55 |       c string
+// 56 |       @@dynamic
+// 57 |     }
 //    | 
 // error: The class "DynamicClass" cannot be re-defined because a class with that name already exists.
-//   -->  tests/dynamic_types_validation_errors.baml:55
+//   -->  tests/dynamic_types_validation_errors.baml:67
 //    | 
-// 54 |   type_builder {
-// 55 |     dynamic DynamicClass {
-// 56 |       c string
-// 57 |     }
+// 66 |   type_builder {
+// 67 |     dynamic class DynamicClass {
+// 68 |       c string
+// 69 |     }
 //    | 
-//   -->  tests/dynamic_types_validation_errors.baml:58
+//   -->  tests/dynamic_types_validation_errors.baml:70
 //    | 
-// 57 |     }
-// 58 |     dynamic DynamicClass {
-// 59 |       d string
-// 60 |     }
+// 69 |     }
+// 70 |     dynamic class DynamicClass {
+// 71 |       d string
+// 72 |     }
 //    | 
 // error: The class "DynamicClass" cannot be re-defined because a class with that name already exists.
-//   -->  tests/dynamic_types_validation_errors.baml:58
+//   -->  tests/dynamic_types_validation_errors.baml:70
 //    | 
-// 57 |     }
-// 58 |     dynamic DynamicClass {
-// 59 |       d string
-// 60 |     }
+// 69 |     }
+// 70 |     dynamic class DynamicClass {
+// 71 |       d string
+// 72 |     }
 //    | 
-//   -->  tests/dynamic_types_validation_errors.baml:55
+//   -->  tests/dynamic_types_validation_errors.baml:67
 //    | 
-// 54 |   type_builder {
-// 55 |     dynamic DynamicClass {
-// 56 |       c string
-// 57 |     }
+// 66 |   type_builder {
+// 67 |     dynamic class DynamicClass {
+// 68 |       c string
+// 69 |     }
 //    | 
 // error: The class "NonDynamic" cannot be re-defined because a class with that name already exists.
 //   -->  tests/dynamic_types_validation_errors.baml:6
@@ -140,19 +192,35 @@ test NameAlreadyExists {
 //  5 | 
 //  6 | class NonDynamic {
 //    | 
-//   -->  tests/dynamic_types_validation_errors.baml:70
+//   -->  tests/dynamic_types_validation_errors.baml:82
 //    | 
-// 69 |   type_builder {
-// 70 |     class NonDynamic {
+// 81 |   type_builder {
+// 82 |     class NonDynamic {
 //    | 
 // error: The class "NonDynamic" cannot be re-defined because a class with that name already exists.
-//   -->  tests/dynamic_types_validation_errors.baml:70
+//   -->  tests/dynamic_types_validation_errors.baml:82
 //    | 
-// 69 |   type_builder {
-// 70 |     class NonDynamic {
+// 81 |   type_builder {
+// 82 |     class NonDynamic {
 //    | 
 //   -->  tests/dynamic_types_validation_errors.baml:6
 //    | 
 //  5 | 
 //  6 | class NonDynamic {
+//    | 
+// error: Error validating: Type 'DynamicEnum' is an enum, but the dynamic block is defined as 'dynamic class'
+//   -->  tests/dynamic_types_validation_errors.baml:104
+//    | 
+// 103 |   type_builder {
+// 104 |     dynamic class DynamicEnum {
+// 105 |       C
+// 106 |     }
+//    | 
+// error: Error validating: Type 'DynamicClass' is a class, but the dynamic block is defined as 'dynamic enum'
+//   -->  tests/dynamic_types_validation_errors.baml:107
+//    | 
+// 106 |     }
+// 107 |     dynamic enum DynamicClass {
+// 108 |       c string
+// 109 |     }
 //    | 

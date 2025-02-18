@@ -71,6 +71,7 @@ use names::Names;
 ///   fields.
 /// - Global validations are then performed on the mostly validated schema.
 ///   Currently only index name collisions.
+#[derive(Clone)]
 pub struct ParserDatabase {
     /// The AST.
     pub ast: ast::SchemaAst,
@@ -173,6 +174,17 @@ impl ParserDatabase {
                 match self.find_type_by_str(dep) {
                     Some(TypeWalker::Class(cls)) => {
                         resolved_deps.insert(cls.id);
+
+                        // TODO: #1343 Temporary solution until we implement scoping in the AST.
+                        if !cls.name().starts_with(ast::DYNAMIC_TYPE_NAME_PREFIX) {
+                            let dyn_def_name =
+                                format!("{}{}", ast::DYNAMIC_TYPE_NAME_PREFIX, cls.name());
+                            if let Some(TypeWalker::Class(dyn_def)) =
+                                self.find_type_by_str(&dyn_def_name)
+                            {
+                                resolved_deps.insert(dyn_def.id);
+                            }
+                        }
                     }
                     Some(TypeWalker::Enum(_)) => {}
                     // Gotta resolve type aliases.
@@ -201,9 +213,36 @@ impl ParserDatabase {
             resolved_dependency_graph.insert(*id, resolved_deps);
         }
 
+        // log::debug!(
+        //     "Resolved graph dependencies: {:?}",
+        //     resolved_dependency_graph
+        //         .iter()
+        //         .map(|(k, v)| {
+        //             (
+        //                 self.ast[*k].name.to_string(),
+        //                 v.iter()
+        //                     .map(|v| self.ast[*v].name.to_string())
+        //                     .collect::<HashSet<_>>(),
+        //             )
+        //         })
+        //         .collect::<HashMap<_, _>>()
+        // );
+
         // Find the cycles and inject them into parser DB. This will then be
         // passed into the IR and then into the Jinja output format.
         self.types.finite_recursive_cycles = Tarjan::components(&resolved_dependency_graph);
+
+        // log::debug!(
+        //     "Cycles: {:?}",
+        //     self.types
+        //         .finite_recursive_cycles
+        //         .iter()
+        //         .map(|c| c
+        //             .iter()
+        //             .map(|id| self.ast[*id].name.to_string())
+        //             .collect::<Vec<_>>())
+        //         .collect::<Vec<_>>()
+        // );
 
         // Fully resolve function dependencies.
         let extends = self

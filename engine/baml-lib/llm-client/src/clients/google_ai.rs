@@ -1,17 +1,17 @@
 use std::collections::HashSet;
 
 use crate::{AllowedRoleMetadata, SupportedRequestModes, UnresolvedAllowedRoleMetadata};
-use anyhow::Result;
 use crate::{
-    FinishReasonFilter, RolesSelection, UnresolvedFinishReasonFilter, UnresolvedRolesSelection
+    FinishReasonFilter, RolesSelection, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
 };
+use anyhow::Result;
 
 use baml_types::{ApiKeyWithProvenance, EvaluationContext, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnresolvedGoogleAI<Meta> {
     api_key: StringOr,
     base_url: UnresolvedUrl,
@@ -64,7 +64,11 @@ pub struct ResolvedGoogleAI {
 impl ResolvedGoogleAI {
     pub fn allowed_roles(&self) -> Vec<String> {
         self.role_selection.allowed_or_else(|| {
-            vec!["system".to_string(), "user".to_string(), "assistant".to_string()]
+            vec![
+                "system".to_string(),
+                "user".to_string(),
+                "assistant".to_string(),
+            ]
         })
     }
 
@@ -74,7 +78,10 @@ impl ResolvedGoogleAI {
             if allowed_roles.contains(&"user".to_string()) {
                 "user".to_string()
             } else {
-                allowed_roles.first().cloned().unwrap_or_else(|| "user".to_string())
+                allowed_roles
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "user".to_string())
             }
         })
     }
@@ -139,7 +146,10 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
 
     pub fn create_from(mut properties: PropertyHandler<Meta>) -> Result<Self, Vec<Error<Meta>>> {
         let role_selection = properties.ensure_roles_selection();
-        let api_key = properties.ensure_api_key().map(|v| v.clone()).unwrap_or(StringOr::EnvVar("GOOGLE_API_KEY".to_string()));
+        let api_key = properties
+            .ensure_api_key()
+            .map(|v| v.clone())
+            .unwrap_or(StringOr::EnvVar("GOOGLE_API_KEY".to_string()));
 
         let model = properties
             .ensure_string("model", false)

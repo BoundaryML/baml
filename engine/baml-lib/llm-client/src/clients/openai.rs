@@ -11,7 +11,7 @@ use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnresolvedOpenAI<Meta> {
     base_url: Option<either::Either<UnresolvedUrl, (StringOr, StringOr)>>,
     api_key: Option<StringOr>,

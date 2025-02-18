@@ -8,7 +8,7 @@ use crate::JinjaExpression;
 use indexmap::{IndexMap, IndexSet};
 use secrecy::{ExposeSecret, SecretString};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Resolvable<Id, Meta> {
     // Enums go into here.
     String(Id, Meta),

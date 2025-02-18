@@ -27,7 +27,7 @@ impl std::ops::Index<FieldId> for TypeExpressionBlock {
 pub enum SubType {
     Enum,
     Class,
-    Dynamic,
+    Dynamic(Box<Self>),
     Other(String),
 }
 

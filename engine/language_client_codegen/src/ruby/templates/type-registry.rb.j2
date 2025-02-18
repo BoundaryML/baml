@@ -6,12 +6,13 @@ module Baml
             @registry = Baml::Ffi::TypeBuilder.new
             @classes = Set[{% for cls in classes %} "{{cls.name}}", {% endfor %}]
             @enums = Set[{% for enum in enums %} "{{enum.name}}", {% endfor %}]
+            @runtime = Baml::do_not_use_directly_unless_you_know_what_youre_doing_runtime
         end
 
         def string
             @registry.string
         end
-    
+
         def int
             @registry.int
         end
@@ -27,7 +28,7 @@ module Baml
         def list(inner_type)
             @registry.list(inner_type)
         end
-        
+
         def null
             @registry.null
         end
@@ -60,6 +61,10 @@ module Baml
             end
             @enums.add(name)
             EnumBuilder.new(@registry, name)
+        end
+
+        def add_baml(baml)
+            @registry.add_baml(baml, @runtime)
         end
 
         class ClassBuilder

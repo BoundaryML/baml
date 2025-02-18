@@ -372,6 +372,12 @@ fn relevant_data_models<'a>(
                         }
                     }
 
+                    for cycle in &ctx.recursive_class_overrides {
+                        if cycle.contains(cls) {
+                            recursive_classes.extend(cycle.iter().map(ToOwned::to_owned));
+                        }
+                    }
+
                     classes.push(Class {
                         name: Name::new_with_alias(cls.to_string(), alias.value()),
                         fields,
