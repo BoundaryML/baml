@@ -1,7 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use baml_runtime::tracingv2::storage::storage::{Collector, BAML_TRACER};
-use baml_types::tracing::events::FunctionId;
+use baml_runtime::tracingv2::storage::storage::Collector;
+// use baml_types::tracing::events::{FunctionId, TraceEvent};
 use pyo3::prelude::*;
 // use baml_types::tracing::events::TraceEvent;
 
@@ -36,11 +36,11 @@ crate::lang_wrapper!(
 impl LogCollector {
     #[new]
     pub fn new(id: String) -> Self {
-        let collector = Arc::new(Collector::new());
-        BAML_TRACER.blocking_lock().register_collector(collector);
+        let collector = Collector::new(id);
+        // BAML_TRACER.blocking_lock().register_collector(collector);
         Self {
             // id,
-            inner: collector,
+            inner: Arc::new(collector),
             last: None,
         }
     }
@@ -49,55 +49,77 @@ impl LogCollector {
     fn __repr__(&self) -> String {
         format!(
             "<LogCollector collector_id={}, has_last={}>",
-            self.inner.collector_id,
+            self.inner.id(),
             self.last.is_some()
         )
     }
+
+    // TODO: just get event ids
+    pub fn events(&self) -> Vec<FunctionLog> {
+        self.inner
+            .function_logs()
+            .iter()
+            .map(|inner_function_log| FunctionLog {
+                inner: inner_function_log.clone(),
+            })
+            .collect()
+    }
 }
 
-#[pyclass(module = "baml_py.baml_py")]
-pub struct FunctionLog {
-    id: String,
-    // inner: Arc<Mutex<Vec<Arc<TraceEvent>>>>,
-}
+// TODO: do the decrementing in the Rust object, so we dont have to replicate this logic in Typescript as well. Just call like "clean" or something.
+
+// #[pyclass(module = "baml_py.baml_py")]
+// pub struct FunctionLog {
+//     // id: String,
+//     // inner: Arc<Mutex<Vec<Arc<TraceEvent>>>>,
+// }
+
+crate::lang_wrapper!(
+    FunctionLog,
+    baml_runtime::tracingv2::storage::storage::FunctionLog,
+    clone_safe
+);
 
 #[pymethods]
 impl FunctionLog {
-    #[new]
-    pub fn new(id: String) -> Self {
-        BAML_TRACER
-            .blocking_lock()
-            .inc_function_id(&FunctionId(id.clone()));
-        Self { id }
-    }
+    // #[new]
+    // pub fn new(id: String) -> Self {
+    //     BAML_TRACER
+    //         .blocking_lock()
+    //         .inc_function_id(&FunctionId(id.clone()));
+    //     Self { id }
+    // }
 
-    pub fn id(&self) -> String {
-        self.id.clone()
-    }
+    // pub fn id(&self) -> String {
+    //     self.id.clone()
+    // }
 
-    pub fn usage(&self) -> String {
-        // "usage".to_string()
-        // self.usage.clone()
-        BAML_TRACER
-            .blocking_lock()
-            .get_events(&FunctionId(self.id.clone()))
-            .iter()
-            .last()
-            .unwrap()
-            // TODO this panics in async context ?
-            .blocking_lock()
-            .last()
-            .unwrap()
-            .event_id
-            .0
-            .to_string()
+    // pub fn usage(&self) -> String {
+    //     // "usage".to_string()
+    //     // self.usage.clone()
+    //     BAML_TRACER
+    //         .blocking_lock()
+    //         .get_events(&FunctionId(self.id.clone()))
+    //         .iter()
+    //         .last()
+    //         .unwrap()
+    //         // TODO this panics in async context ?
+    //         .blocking_lock()
+    //         .last()
+    //         .unwrap()
+    //         .event_id
+    //         .0
+    //         .to_string()
+    // }
+    fn __repr__(&self) -> String {
+        format!("<FunctionLog id={}>", self.inner.id().0)
     }
 }
 
-impl Drop for FunctionLog {
-    fn drop(&mut self) {
-        BAML_TRACER
-            .blocking_lock()
-            .dec_function_id(&FunctionId(self.id.clone()));
-    }
-}
+// impl Drop for FunctionLog {
+//     fn drop(&mut self) {
+//         BAML_TRACER
+//             .blocking_lock()
+//             .dec_function_id(&FunctionId(self.id.clone()));
+//     }
+// }
