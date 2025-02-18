@@ -138,20 +138,19 @@ impl EnumBuilder {
 }
 
 // displays a class property along with its current state and metadata
-// the format shows three key pieces of information:
+// the format shows two key pieces of information:
 // 1. the property name as defined in the class
-// 2. the type status: either 'set' (type defined) or 'unset' (type pending)
-// 3. any metadata attached to the property in parentheses
+// 2. any metadata attached to the property in parentheses
 //
 // metadata is shown in key=value format, with values formatted according to their type
 // multiple metadata entries are separated by commas for readability
 //
 // examples of the output format:
-//   name set (alias='username', description='full name')
+//   name string (alias='username', description='full name')
 //   - shows a property with both alias and description metadata
 //   age unset
 //   - shows a property without a defined type or metadata
-//   email set (required=true, format='email')
+//   email string (required=true, format='email')
 //   - shows a property with multiple metadata values of different types
 impl fmt::Display for ClassPropertyBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -162,6 +161,7 @@ impl fmt::Display for ClassPropertyBuilder {
             .unwrap()
             .as_ref()
             .map_or("(unknown-type)".to_string(), |t| format!("{}", t.clone()));
+
         write!(f, "{}", type_str)?;
 
         if !meta.is_empty() {
@@ -226,9 +226,9 @@ impl fmt::Display for EnumValueBuilder {
 //
 // example of the complete format:
 //   User {
-//     name set (alias='username', description='user's full name'),
-//     age set (type='integer', min=0),
-//     email set (format='email', required=true),
+//     name string (alias='username', description='user\'s full name'),
+//     age int
+//     email string
 //     status unset
 //   }
 impl fmt::Display for ClassBuilder {
@@ -303,8 +303,8 @@ impl fmt::Display for EnumBuilder {
 // TypeBuilder(
 //   Classes: [
 //     User {
-//       name set (alias='username'),
-//       email set (required=true)
+//       name string (alias='username'),
+//       email string (required=true)
 //     },
 //     Address { }
 //   ],
@@ -326,6 +326,8 @@ impl fmt::Display for TypeBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let classes = self.classes.lock().unwrap();
         let enums = self.enums.lock().unwrap();
+        let type_aliases = self.type_aliases.lock().unwrap();
+        let recursive_type_aliases = self.recursive_type_aliases.lock().unwrap();
 
         write!(f, "TypeBuilder(")?;
 
@@ -338,6 +340,30 @@ impl fmt::Display for TypeBuilder {
                 write!(f, "\n    {} {}", name, cls.lock().unwrap())?;
             }
             write!(f, "\n  ]")?;
+        }
+
+        if !type_aliases.is_empty() {
+            write!(f, "\n  type_aliases: ")?;
+
+            match self.type_aliases.lock() {
+                Ok(type_aliases) => {
+                    let keys: Vec<_> = type_aliases.keys().collect();
+                    writeln!(f, "{:?}", keys)?
+                }
+                Err(_) => writeln!(f, "Cannot acquire lock,")?,
+            }
+        }
+
+        if !recursive_type_aliases.is_empty() {
+            write!(f, "\n  recursive_type_aliases: ")?;
+
+            match self.recursive_type_aliases.lock() {
+                Ok(recursive_type_aliases) => {
+                    let keys: Vec<_> = recursive_type_aliases.iter().map(|v| v.keys()).collect();
+                    writeln!(f, "{:?}", keys)?
+                }
+                Err(_) => writeln!(f, "Cannot acquire lock,")?,
+            }
         }
 
         if !enums.is_empty() {
@@ -734,6 +760,8 @@ impl TypeBuilder {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
 
     #[test]
@@ -999,7 +1027,7 @@ mod tests {
 
         // Optionally, print the builder's string representation.
         let output = builder.to_string();
-        println!("{}", output);
+        // println!("{}", output);
 
         // Verify that the output string contains the recursive property information.
         assert!(
@@ -1033,5 +1061,88 @@ mod tests {
             &FieldType::class("Node"),
             "The 'child' field is not correctly set as a recursive reference to 'Node'"
         );
+    }
+
+    use crate::BamlRuntime;
+
+    #[test]
+    fn test_type_builder_recursive_2() -> anyhow::Result<()> {
+        let builder = TypeBuilder::new();
+
+        let mut files = HashMap::new();
+        files.insert(
+            "main.baml",
+            r##"
+
+          class Output {
+            hello string
+            @@dynamic
+          }
+
+
+          client<llm> GPT4Turbo {
+            provider baml-openai-chat
+            options {
+              model gpt-4-1106-preview
+              api_key env.OPENAI_API_KEY
+            }
+          }
+
+
+          function Extract(input: string) -> Output {
+            client GPT4Turbo
+            prompt #"
+
+              {{ ctx.output_format }}
+            "#
+          }
+
+          test Test {
+            functions [Extract]
+            args {
+              input "hi"
+            }
+          }
+          "##,
+        );
+
+        let function_name = "Extract";
+        let test_name = "Test";
+
+        let runtime = BamlRuntime::from_file_content(
+            "baml_src",
+            &files,
+            [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+        )
+        .unwrap();
+
+        let baml = r##"
+
+            class Two {
+                three string
+                dynamicField Output
+            }
+
+            dynamic class Output {
+                two Node
+                three string
+
+            }
+
+            class C {
+                hello string
+            }
+            class D {
+                hello string
+            }
+            class Node {
+                child C | D | Node
+            }
+        "##;
+
+        builder.add_baml(&baml, &runtime)?;
+        println!("{}", builder.to_string());
+        builder.to_overrides();
+        Ok(())
     }
 }
