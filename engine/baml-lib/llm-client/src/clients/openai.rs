@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
+    AllowedRoleMetadata, FinishReasonFilter, ResponseType, RolesSelection, SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType, UnresolvedRolesSelection
 };
 use anyhow::Result;
 
@@ -22,6 +21,7 @@ pub struct UnresolvedOpenAI<Meta> {
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
     query_params: IndexMap<String, StringOr>,
     finish_reason_filter: UnresolvedFinishReasonFilter,
+    client_response_type: Option<UnresolvedResponseType>,
 }
 
 impl<Meta> UnresolvedOpenAI<Meta> {
@@ -48,6 +48,7 @@ impl<Meta> UnresolvedOpenAI<Meta> {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
             finish_reason_filter: self.finish_reason_filter.clone(),
+            client_response_type: self.client_response_type.clone(),
         }
     }
 }
@@ -63,6 +64,7 @@ pub struct ResolvedOpenAI {
     pub query_params: IndexMap<String, String>,
     pub proxy_url: Option<String>,
     pub finish_reason_filter: FinishReasonFilter,
+    pub client_response_type: ResponseType,
 }
 
 impl ResolvedOpenAI {
@@ -221,6 +223,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             query_params,
             proxy_url: super::helpers::get_proxy_url(ctx),
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
+            client_response_type: self.client_response_type.as_ref().map_or(Ok(ResponseType::OpenAI), |v| v.resolve(ctx))?,
         })
     }
 
@@ -350,6 +353,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         let headers = properties.ensure_headers().unwrap_or_default();
         let finish_reason_filter = properties.ensure_finish_reason_filter();
         let query_params = properties.ensure_query_params().unwrap_or_default();
+        let client_response_type = properties.ensure_client_response_type();
         let (properties, errors) = properties.finalize();
 
         if !errors.is_empty() {
@@ -366,6 +370,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             properties,
             query_params,
             finish_reason_filter,
+            client_response_type,
         })
     }
 }

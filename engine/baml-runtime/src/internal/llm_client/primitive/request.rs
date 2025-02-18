@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use baml_types::BamlMap;
 use internal_baml_jinja::RenderedChatMessage;
+pub use internal_llm_client::ResponseType;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
 
@@ -117,13 +118,6 @@ pub async fn make_request(
     }
 
     Ok((response, system_now, instant_now))
-}
-
-pub enum ResponseType {
-    OpenAI,
-    Anthropic,
-    Google,
-    Vertex,
 }
 
 pub async fn make_parsed_request(

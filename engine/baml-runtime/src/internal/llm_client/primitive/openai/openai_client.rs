@@ -99,7 +99,7 @@ impl WithChat for OpenAIClient {
             model_name,
             either::Either::Right(prompt),
             false,
-            ResponseType::OpenAI,
+            self.properties.client_response_type.clone(),
         )
         .await
     }

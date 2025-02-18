@@ -4,8 +4,7 @@ use baml_types::{GetEnvVar, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use crate::{
-    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
-    UnresolvedRolesSelection,
+    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType, UnresolvedRolesSelection
 };
 
 #[derive(Debug, Clone)]
@@ -324,6 +323,36 @@ impl<Meta: Clone> PropertyHandler<Meta> {
             }
         }
         UnresolvedAllowedRoleMetadata::None
+    }
+
+    pub fn ensure_client_response_type(&mut self) -> Option<UnresolvedResponseType> {
+        self.ensure_string("client_response_type", false)
+            .and_then(|(key_span, value, _)| {
+                if let StringOr::Value(value) = value {
+                    return Some(match value.as_str() {
+                        "openai" => UnresolvedResponseType::OpenAI,
+                        "anthropic" => UnresolvedResponseType::Anthropic,
+                        "google" => UnresolvedResponseType::Google,
+                        "vertex" => UnresolvedResponseType::Vertex,
+                        other => {
+                            self.push_error(
+                                format!(
+                                    "client_response_type must be one of \"openai\", \"anthropic\", \"google\", or \"vertex\". Got: {}",
+                                    other
+                                ),
+                                key_span,
+                            );
+                            return None;
+                        }
+                    })
+                } else {
+                    self.push_error(
+                        "client_response_type must be one of \"openai\", \"anthropic\", \"google\", or \"vertex\" and not an environment variable",
+                        key_span,
+                    );
+                    None
+                }
+            })
     }
 
     pub fn ensure_query_params(&mut self) -> Option<IndexMap<String, StringOr>> {

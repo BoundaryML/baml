@@ -1903,3 +1903,11 @@ async def test_semantic_streaming():
 
     final = await stream.get_final_response()
     print(final)
+
+@pytest.mark.asyncio
+async def test_client_response_type():
+    cr = baml_py.ClientRegistry()
+    cr.add_llm_client("temp_client", "openai", { "client_response_type": "anthropic", "model": "gpt-4o" })
+    cr.set_primary("temp_client")
+    with pytest.raises(errors.BamlClientError):
+        _ = await b.TestOpenAI("test", baml_options={ "client_registry": cr })
