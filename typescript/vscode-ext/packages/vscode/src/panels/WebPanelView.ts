@@ -114,6 +114,7 @@ export class WebPanelView {
 
   public postMessage<T>(command: string, content: T) {
     this._panel.webview.postMessage({ command: command, content })
+    console.log('postMessage', command, content)
     this.reporter?.sendTelemetryEvent({
       event: `baml.webview.${command}`,
       properties: {},
@@ -209,6 +210,7 @@ export class WebPanelView {
         function_name: openPlaygroundConfig.lastOpenedFunction,
       })
       this.postMessage('baml_cli_version', bamlConfig.cliVersion)
+      this.postMessage('baml_settings_updated', bamlConfig)
     }
 
     webview.onDidReceiveMessage(
@@ -312,12 +314,6 @@ export class WebPanelView {
               }
             }
             this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: webviewUriResp })
-            return
-          case 'GET_VSCODE_SETTINGS':
-            const responseData: GetVSCodeSettingsResponse = {
-              enablePlaygroundProxy: bamlConfig.config?.enablePlaygroundProxy ?? true,
-            }
-            this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: responseData })
             return
           case 'GET_PLAYGROUND_PORT':
             const response: GetPlaygroundPortResponse = {

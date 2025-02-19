@@ -97,13 +97,6 @@ class VSCodeAPIWrapper {
     return resp.uri
   }
 
-  public async getIsProxyEnabled() {
-    const resp = await this.rpc<GetVSCodeSettingsRequest, GetVSCodeSettingsResponse>({
-      vscodeCommand: 'GET_VSCODE_SETTINGS',
-    })
-    return resp.enablePlaygroundProxy ?? true
-  }
-
   public async getPlaygroundPort() {
     const resp = await this.rpc<GetPlaygroundPortRequest, GetPlaygroundPortResponse>({
       vscodeCommand: 'GET_PLAYGROUND_PORT',

@@ -20,6 +20,7 @@ import { CodeMirrorDiagnosticsAtom } from '@/shared/baml-project-panel/codemirro
 import { AlertTriangle, XCircle } from 'lucide-react'
 import { CheckCircle } from 'lucide-react'
 import { useDebounce, useDebounceCallback } from '@react-hook/debounce'
+import { bamlConfig, BamlConfigAtom } from './bamlConfig'
 
 export const hasClosedEnvVarsDialogAtom = atomWithStorage<boolean>(
   'has-closed-env-vars-dialog',
@@ -84,6 +85,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom)
   const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
+  const setBamlConfig = useSetAtom(bamlConfig)
   const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
   const { setRunningTests } = useRunTests()
   const wasm = useAtomValue(wasmAtom)
@@ -157,6 +159,10 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             content: string
           }
         | {
+            command: 'baml_settings_updated'
+            content: BamlConfigAtom
+          }
+        | {
             command: 'run_test'
             content: { test_name: string }
           }
@@ -183,6 +189,10 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
           if ('cursor' in content) {
             updateCursor(content.cursor)
           }
+          break
+        case 'baml_settings_updated':
+          console.log('baml_settings_updated', content)
+          setBamlConfig(content)
           break
         case 'baml_cli_version':
           console.log('baml_cli_version', content)

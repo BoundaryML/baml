@@ -54,7 +54,7 @@ pub async fn make_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("{:#?}", e),
+                message: format!("Failed to create request builder: {:#?}", e),
                 code: ErrorCode::Other(2),
             }));
         }
@@ -70,7 +70,7 @@ pub async fn make_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("{:#?}", e),
+                message: format!("Failed to build request: {:#?}", e),
                 code: ErrorCode::Other(2),
             }));
         }
@@ -86,8 +86,22 @@ pub async fn make_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("{:?}", e),
-                code: ErrorCode::Other(2),
+                message: {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        format!("{}", e.to_string())
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        format!(
+                            "{}\n\nIf you haven't yet, try enabling the proxy (See API Keys button)",
+                            e.to_string()
+                        )
+                    }
+                },
+                code: e
+                    .status()
+                    .map_or(ErrorCode::Other(2), |s| ErrorCode::from_status(s)),
             }));
         }
     };
@@ -149,9 +163,37 @@ pub async fn make_parsed_request(
     };
 
     match response_type {
-        ResponseType::OpenAI => super::openai::response_handler::parse_openai_response(client, prompt, response_body, system_now, instant_now, model_name),
-        ResponseType::Anthropic => super::anthropic::response_handler::parse_anthropic_response(client, prompt, response_body, system_now, instant_now, model_name),
-        ResponseType::Google => super::google::response_handler::parse_google_response(client, prompt, response_body, system_now, instant_now, model_name),
-        ResponseType::Vertex => super::vertex::response_handler::parse_vertex_response(client, prompt, response_body, system_now, instant_now, model_name),
+        ResponseType::OpenAI => super::openai::response_handler::parse_openai_response(
+            client,
+            prompt,
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        ),
+        ResponseType::Anthropic => super::anthropic::response_handler::parse_anthropic_response(
+            client,
+            prompt,
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        ),
+        ResponseType::Google => super::google::response_handler::parse_google_response(
+            client,
+            prompt,
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        ),
+        ResponseType::Vertex => super::vertex::response_handler::parse_vertex_response(
+            client,
+            prompt,
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        ),
     }
 }
