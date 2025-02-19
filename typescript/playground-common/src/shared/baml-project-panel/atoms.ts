@@ -87,6 +87,8 @@ export const runtimeAtom = atom<{
     const wasm = get(wasmAtom)
     const project = get(projectAtom)
     const envVars = get(envVarsAtom)
+    // const vscodeEnv = get(vscodeEnvAtom)
+
     if (wasm === undefined || project === undefined) {
       let previousState: {
         rt: WasmRuntime | undefined
@@ -180,9 +182,24 @@ const vscodeSettingsAtom = atom<{ enablePlaygroundProxy: boolean }>((get) => {
   }
 })
 
+const vscodeEnvAtom = unwrap(
+  atom(async () => {
+    try {
+      const res = await vscode.loadEnv()
+      return res
+    } catch (e) {
+      console.error(`Error occurred while loading env from vscode:\n${JSON.stringify(e)}`)
+      return { envVars: {}, awsCreds: undefined }
+    }
+  }),
+)
+
 const playgroundPortAtom = unwrap(
   atom(async () => {
     try {
+      const resp = await vscode.loadEnv()
+      console.log('fetched env vars from vscode', resp)
+
       const res = await vscode.getPlaygroundPort()
       return res
     } catch (e) {
@@ -242,6 +259,7 @@ export const envKeyValuesAtom = atom(
     }
   },
 )
+
 export const envVarsAtom = atom(
   (get) => {
     if (typeof window === 'undefined') {

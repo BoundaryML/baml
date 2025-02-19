@@ -1,4 +1,5 @@
-import type { StringSpan, TestFileContent, TestRequest } from '@baml/common'
+import type { StringSpan } from '@baml/common'
+import { fromIni } from '@aws-sdk/credential-providers' // ES6 import
 import { type Disposable, Uri, ViewColumn, type Webview, type WebviewPanel, window, workspace } from 'vscode'
 import * as vscode from 'vscode'
 import { getNonce } from '../utils/getNonce'
@@ -6,11 +7,13 @@ import { getUri } from '../utils/getUri'
 import {
   EchoResponse,
   GetBamlSrcResponse,
+  LoadEnvRequest,
   GetPlaygroundPortResponse,
   GetVSCodeSettingsResponse,
   GetWebviewUriResponse,
   WebviewToVscodeRpc,
   encodeBuffer,
+  LoadEnvResponse,
 } from '../vscode-rpc'
 
 import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
@@ -18,7 +21,12 @@ import { URI } from 'vscode-uri'
 import { getCurrentOpenedFile } from '../helpers/get-open-file'
 import { bamlConfig, requestDiagnostics } from '../plugins/language-server'
 import TelemetryReporter from '../telemetryReporter'
-
+import { exec, fork } from 'child_process'
+import { promisify } from 'util'
+import { dirname, join } from 'path'
+import * as dotenv from 'dotenv'
+import * as fs from 'fs'
+import { AwsCredentialIdentity } from '@smithy/types'
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
   separator: '_',
@@ -28,6 +36,9 @@ const customConfig: Config = {
 export const openPlaygroundConfig: { lastOpenedFunction: null | string } = {
   lastOpenedFunction: null,
 }
+
+const execAsync = promisify(exec)
+const readFileAsync = promisify(fs.readFile)
 
 /**
  * This class manages the state and behavior of HelloWorld webview panels.
@@ -310,6 +321,20 @@ export class WebPanelView {
             }
             this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: response })
             return
+          case 'LOAD_ENV':
+            ;(async () => {
+              try {
+                const envVars = await loadEnv(vscodeMessage)
+                this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: envVars })
+              } catch (error) {
+                this._panel.webview.postMessage({
+                  rpcId: message.rpcId,
+                  rpcMethod: vscodeCommand,
+                  data: { error: error },
+                })
+              }
+            })()
+            return
           case 'INITIALIZED': // when the playground is initialized and listening for file changes, we should resend all project files.
             // request diagnostics, which updates the runtime and triggers a new project files update.
             addProject()
@@ -322,4 +347,64 @@ export class WebPanelView {
       this._disposables,
     )
   }
+}
+
+const getActiveWorkspacePath = (): string | undefined => {
+  const activeDocument = window.activeTextEditor?.document.uri
+  if (activeDocument) {
+    const activeWorkspace = workspace.getWorkspaceFolder(activeDocument)
+    if (activeWorkspace) {
+      return activeWorkspace.uri.fsPath
+    }
+  }
+  return workspace.workspaceFolders?.[0]?.uri.fsPath
+}
+
+const getEnvVarBlob = async (activeWorkspacePath: string): Promise<string> => {
+  const envVarFile: string | undefined = workspace.getConfiguration('baml').get('envVarFile')
+  const envVarCommand: string | undefined = workspace.getConfiguration('baml').get('envVarCommand')
+
+  if (envVarFile) {
+    await readFileAsync(join(activeWorkspacePath, envVarFile))
+  }
+  if (envVarCommand) {
+    const { stdout, stderr } = await execAsync(envVarCommand, {
+      cwd: activeWorkspacePath,
+      env: {
+        workspaceFolder: activeWorkspacePath,
+        fileWorkspaceFolder: activeWorkspacePath,
+        ...process.env,
+      },
+      timeout: 10_000, // milliseconds
+      windowsHide: true,
+    })
+    if (stderr) {
+      throw new Error(stderr)
+    }
+    return stdout
+  }
+  return ''
+}
+
+const loadEnv = async (req: LoadEnvRequest): Promise<LoadEnvResponse> => {
+  const activeWorkspacePath = getActiveWorkspacePath()
+  if (!activeWorkspacePath) {
+    console.warn('Failed to choose workspace for resolving env vars')
+    return { envVars: {} }
+  }
+
+  let awsCreds: AwsCredentialIdentity | undefined
+  try {
+    const credentialProvider = fromIni({
+      profile: 'boundaryml-prod',
+    })
+    awsCreds = await credentialProvider()
+  } catch (err) {
+    console.log('Error loading aws creds:', err)
+  }
+
+  const envVarBlob = await getEnvVarBlob(activeWorkspacePath)
+  const envVars = dotenv.parse(envVarBlob)
+
+  return { envVars, awsCreds }
 }

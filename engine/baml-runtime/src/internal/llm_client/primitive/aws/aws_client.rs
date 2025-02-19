@@ -47,6 +47,9 @@ use crate::internal::llm_client::{
 use crate::tracingv2::storage::storage::BAML_TRACER;
 use crate::{json_body, JsonBodyInput, RenderCurlSettings, RuntimeContext};
 
+#[cfg(target_arch = "wasm32")]
+use super::wasm::WasmAwsCreds;
+
 // represents client that interacts with the Bedrock API
 pub struct AwsClient {
     pub name: String,
@@ -266,16 +269,9 @@ impl AwsClient {
         http_request_id: &HttpRequestId,
     ) -> Result<bedrock::Client> {
         #[cfg(target_arch = "wasm32")]
-        let mut loader = super::wasm::load_aws_config();
+        let loader = super::wasm::load_aws_config();
         #[cfg(not(target_arch = "wasm32"))]
-        let mut loader = aws_config::defaults(BehaviorVersion::latest());
-
-        // Set profile first if specified
-        if let Some(profile) = self.properties.profile.as_ref() {
-            loader = loader.profile_name(profile);
-        }
-
-        // Set region if specified
+        let loader = aws_config::defaults(BehaviorVersion::latest());
 
         // Set credentials provider
         let mut loader = match (
@@ -284,14 +280,27 @@ impl AwsClient {
             self.properties.session_token.as_ref(),
         ) {
             (None, None, None) => {
-                // If no credentials provided, get them all from env vars
-                loader.credentials_provider(
-                    aws_config::default_provider::credentials::DefaultCredentialsChain::builder()
-                        .build()
-                        .await,
-                )
+                let mut builder =
+                    aws_config::default_provider::credentials::DefaultCredentialsChain::builder();
+                if let Some(profile) = self.properties.profile.as_ref() {
+                    builder = builder.profile_name(profile);
+                }
+                log::debug!("Building wasm aws credentials chain - none of access key id / secret access key / session token provided");
+                // is it because of the 'static lifetime requirement?
+                #[cfg(target_arch = "wasm32")]
+                {
+                    loader.credentials_provider(WasmAwsCreds {
+                        default_chain: builder.build().await,
+                    })
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    loader.credentials_provider(builder.build().await)
+                }
             }
             _ => {
+                log::debug!("Building wasm aws credentials chain - at least one of access key id / secret access key / session token provided");
                 if let Some(aws_access_key_id) = self.properties.access_key_id.as_ref() {
                     if aws_access_key_id.starts_with("$") {
                         return Err(anyhow::anyhow!(
@@ -337,6 +346,7 @@ impl AwsClient {
             }
         };
 
+        // Set region if specified
         if let Some(aws_region) = self.properties.region.as_ref() {
             if aws_region.starts_with("$") {
                 return Err(anyhow::anyhow!(

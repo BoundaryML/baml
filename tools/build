@@ -220,7 +220,7 @@ case "$_path" in
     if [ "$_test_mode" -eq 1 ]; then
       #command="${command} && pnpm integ-tests"
       # command="${command} && BAML_LOG=${BAML_LOG}  infisical run -- pnpm test tests/integ-tests.test.ts"
-      command="${command} && BAML_LOG=${BAML_LOG} pnpm test tests/providers/vertex.test.ts"
+      command="${command} && BAML_LOG=${BAML_LOG} pnpm test tests/providers/aws.test.ts"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
