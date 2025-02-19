@@ -1,10 +1,11 @@
-import { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image, ClientRegistry, toBamlError, Audio } from "@boundaryml/baml"
-import { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
+import type { BamlRuntime, FunctionResult, BamlCtxManager, BamlStream, Image, ClientRegistry, toBamlError, Audio } from "@boundaryml/baml"
+import { toBamlError } from "@boundaryml/baml"
+import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
 import type { partial_types } from "./partial_types"
-import {
+import type * as types from "./types"
+import type {
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
 } from "./types"
-import * as types from "./types"
 import type TypeBuilder from "./type_builder"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
@@ -48,7 +49,7 @@ export class BamlAsyncClient {
         __baml_options__?.clientRegistry,
       )
       return raw.parsed(false) as {{fn.return_type}}
-    } catch (error: any) {
+    } catch (error) {
       throw toBamlError(error);
     }
   }
