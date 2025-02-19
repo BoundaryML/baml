@@ -815,9 +815,6 @@ importers:
       '@types/js-levenshtein':
         specifier: 1.1.2
         version: 1.1.2
-      gitignore-parser:
-        specifier: ^0.0.2
-        version: 0.0.2
       js-levenshtein:
         specifier: 1.1.6
         version: 1.1.6
@@ -846,9 +843,6 @@ importers:
         specifier: ^3.22.4
         version: 3.24.1
     devDependencies:
-      '@types/gitignore-parser':
-        specifier: 0.0.3
-        version: 0.0.3
       '@types/lodash':
         specifier: ^4.14.200
         version: 4.17.14
@@ -3628,9 +3622,6 @@ packages:
   '@types/express@4.17.21':
     resolution: {integrity: sha512-ejlPM315qwLpaQlQDTjPdsUFSc6ZsP4AN6AlWnogPjQ7CVi7PYF3YVz+CY3jE2pwYf7E/7HlDAN0rV2GxTG0HQ==}
 
-  '@types/gitignore-parser@0.0.3':
-    resolution: {integrity: sha512-sbdu1sG2pQcwjEYWTsX78OqJo5pKnonwC4FV3m2JeQRE2xYb3q0icHHopCHEvpn4uIBuvWBTpJUCJ76ISK24CA==}
-
   '@types/glob@8.1.0':
     resolution: {integrity: sha512-IO+MJPVhoqz+28h1qLAcBEH2+xHMK6MTyHJc7MTnnYb6wsoLR29POVGJ7LycmVXIqyy/4/2ShP5sUwTXuOwb/w==}
 
@@ -5596,10 +5587,6 @@ packages:
 
   github-from-package@0.0.0:
     resolution: {integrity: sha512-SyHy3T1v2NUXn29OsWdxmK6RwHD+vkj3v8en8AOBZ1wBQ/hCAQ5bAQTD02kW4W9tUp/3Qh6J8r9EvntiyCmOOw==}
-
-  gitignore-parser@0.0.2:
-    resolution: {integrity: sha512-X6mpqUv59uWLGD4n3hZ8Cu8KbF2PMWPSFYmxZjdkpm3yOU7hSUYnzTkZI1mcWqchphvqyuz3/BhgBR4E/JtkCg==}
-    engines: {node: '>=0.10.0'}
 
   glob-parent@5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
@@ -11279,8 +11266,6 @@ snapshots:
       '@types/qs': 6.9.17
       '@types/serve-static': 1.15.7
 
-  '@types/gitignore-parser@0.0.3': {}
-
   '@types/glob@8.1.0':
     dependencies:
       '@types/minimatch': 5.1.2
@@ -13971,8 +13956,6 @@ snapshots:
 
   github-from-package@0.0.0:
     optional: true
-
-  gitignore-parser@0.0.2: {}
 
   glob-parent@5.1.2:
     dependencies:
