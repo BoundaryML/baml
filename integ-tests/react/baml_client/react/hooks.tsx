@@ -307,7 +307,7 @@ function useBamlAction<FunctionName extends FunctionNames>(
         throw error_
       }
     },
-    [action, props.stream, onFinalData, onError],
+    [action, onFinalData, onError, props],
   )
 
   const status = useMemo<HookStatus<{ stream: typeof props.stream }>>(() => {
@@ -318,7 +318,10 @@ function useBamlAction<FunctionName extends FunctionNames>(
     return 'idle'
   }, [isLoading, state.error, state.isSuccess, state.isStreaming])
 
-  let data = state.finalData
+  let data:
+		| FinalDataType<FunctionName>
+		| StreamDataType<FunctionName>
+		| undefined = state.finalData;
   if (state.isStreaming) data = state.streamData
 
   const result = {
