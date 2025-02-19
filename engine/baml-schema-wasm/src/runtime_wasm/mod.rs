@@ -60,7 +60,7 @@ pub fn on_wasm_init() {
         if #[cfg(debug_assertions)] {
             const LOG_LEVEL: log::Level = log::Level::Debug;
         } else {
-            const LOG_LEVEL: log::Level = log::Level::Warn;
+            const LOG_LEVEL: log::Level = log::Level::Debug;
         }
     };
     // I dont think we need this line anymore -- seems to break logging if you add it.
@@ -748,9 +748,9 @@ impl WithRenderError for baml_runtime::TestFailReason<'_> {
                         baml_runtime::errors::ExposedError::FinishReasonError {
                             message, ..
                         } => Some(message.clone()),
-                        baml_runtime::errors::ExposedError::ClientHttpError {
-                            message, ..
-                        } => Some(message.clone()),
+                        baml_runtime::errors::ExposedError::ClientHttpError { message, .. } => {
+                            Some(message.clone())
+                        }
                     },
                     None => Some(format!("{e:#}")),
                 }

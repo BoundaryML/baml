@@ -1,3 +1,5 @@
+import { AwsCredentialIdentity } from '@smithy/types'
+
 // Commands that vscode sends to the webview
 export type VscodeToWebviewCommand =
   | {
@@ -115,6 +117,16 @@ export interface GetPlaygroundPortResponse {
   port: number
 }
 
+export interface LoadEnvRequest {
+  vscodeCommand: 'LOAD_ENV'
+}
+
+export interface LoadEnvResponse {
+  envVars: Record<string, string>
+  awsCreds?: AwsCredentialIdentity
+  error?: string
+}
+
 export interface InitializedRequest {
   vscodeCommand: 'INITIALIZED'
 }
@@ -131,6 +143,7 @@ type ApiPairs = [
   [GetWebviewUriRequest, GetWebviewUriResponse],
   [GetVSCodeSettingsRequest, GetVSCodeSettingsResponse],
   [GetPlaygroundPortRequest, GetPlaygroundPortResponse],
+  [LoadEnvRequest, LoadEnvResponse],
   [InitializedRequest, InitializedResponse],
 ]
 

@@ -9,6 +9,8 @@ import {
   InitializedResponse,
   InitializedRequest,
   SetProxySettingsRequest,
+  LoadEnvRequest,
+  LoadEnvResponse,
 } from './vscode-rpc'
 import type { WebviewApi } from 'vscode-webview'
 
@@ -110,6 +112,13 @@ class VSCodeAPIWrapper {
       vscodeCommand: 'SET_PROXY_SETTINGS',
       proxyEnabled,
     })
+  }
+
+  public async loadEnv() {
+    const resp = await this.rpc<LoadEnvRequest, LoadEnvResponse>({
+      vscodeCommand: 'LOAD_ENV',
+    })
+    return resp
   }
 
   public async markInitialized() {

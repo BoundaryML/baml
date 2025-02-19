@@ -328,7 +328,7 @@ const plugin: BamlVSCodePlugin = {
         },
       ],
       synchronize: {
-        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json}'),
+        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.baml'),
       },
     }
 

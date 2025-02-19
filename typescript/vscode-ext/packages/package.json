@@ -77,6 +77,16 @@
           "type": "boolean",
           "default": false,
           "description": "Indicates whether the Baml playground panel is open or closed."
+        },
+        "baml.envVarFile": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a .env file to load environment variables from (uses dotenv)."
+        },
+        "baml.envVarCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Command to run to get environment variables."
         }
       }
     },
@@ -191,4 +201,3 @@
   },
   "preview": false
 }
-
