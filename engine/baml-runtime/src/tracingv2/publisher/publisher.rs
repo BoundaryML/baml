@@ -92,7 +92,7 @@ impl TracePublisher {
     ///   2. Append the JSON to a file (using async file I/O on macOS).
     ///   3. Post the JSON to an HTTP API with up to 3 retries.
     async fn process_batch(&self, batch: Vec<Arc<TraceEvent>>) {
-        log::info!("Processing batch {:#?}", batch);
+        // log::info!("Processing batch {:#?}", batch);
         // Assemble the upload request structure.
         let upload_request = TraceEventUploadRequest::V1 {
             project_id: "project123".to_string(),

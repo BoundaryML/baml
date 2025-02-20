@@ -270,7 +270,7 @@ fn make_trace_event_for_response(
         timestamp: SystemTime::now(),
         callsite: callsite.to_string(),
         verbosity,
-        content: TraceData::LLMResponse(logged_response),
+        content: TraceData::LLMResponse(Arc::new(logged_response)),
         tags: Default::default(),
     }
 }
@@ -282,21 +282,21 @@ impl WithSingleCallable for OrchestratorNode {
         let request_id = ContentId(uuid::Uuid::new_v4().to_string());
 
         // Log LLMRequest
-        BAML_TRACER.lock().await.put(Arc::new(TraceEvent {
+        BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
             span_id: FunctionId(ctx.span_id.clone().to_string()),
             event_id: request_id.clone(),
             span_chain: vec![],
             timestamp: SystemTime::now(),
             callsite: "OrchestratorNode::single_call".to_string(),
             verbosity: TraceLevel::Info,
-            content: TraceData::LLMRequest(LoggedLLMRequest {
+            content: TraceData::LLMRequest(Arc::new(LoggedLLMRequest {
                 client: LLMClient::Ref(self.provider.default_role()),
                 params: serde_json::json!({
                     "request_options": "",
                 }),
                 // Some placeholder JSON representation of the prompt
                 prompt: serde_json::to_value(prompt).unwrap(),
-            }),
+            })),
             tags: Default::default(),
         }));
 
@@ -321,7 +321,7 @@ impl WithSingleCallable for OrchestratorNode {
             &request_id,
             "OrchestratorNode::single_call",
         );
-        BAML_TRACER.lock().await.put(Arc::new(trace_event));
+        BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
         response
     }
@@ -332,20 +332,20 @@ impl WithStreamable for OrchestratorNode {
         let request_id = ContentId(uuid::Uuid::new_v4().to_string());
 
         // Log streaming request
-        BAML_TRACER.lock().await.put(Arc::new(TraceEvent {
+        BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
             span_id: FunctionId(ctx.span_id.clone().to_string()),
             event_id: request_id.clone(),
             span_chain: vec![],
             timestamp: SystemTime::now(),
             callsite: "OrchestratorNode::stream".to_string(),
             verbosity: TraceLevel::Info,
-            content: TraceData::LLMRequest(LoggedLLMRequest {
+            content: TraceData::LLMRequest(Arc::new(LoggedLLMRequest {
                 client: LLMClient::Ref(self.provider.default_role()),
                 params: serde_json::json!({
                     "request_options": "",
                 }),
                 prompt: serde_json::to_value(prompt).unwrap(),
-            }),
+            })),
             tags: Default::default(),
         }));
 
@@ -374,7 +374,7 @@ impl WithStreamable for OrchestratorNode {
                 &request_id,
                 "OrchestratorNode::stream",
             );
-            BAML_TRACER.lock().await.put(Arc::new(trace_event));
+            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
         }
 
         result

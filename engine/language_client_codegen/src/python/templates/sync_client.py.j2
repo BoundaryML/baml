@@ -16,6 +16,7 @@ OutputType = TypeVar('OutputType')
 class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
+    collector: NotRequired[baml_py.baml_py.Collector]
 
 class BamlSyncClient:
     __runtime: baml_py.BamlRuntime

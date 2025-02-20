@@ -25,6 +25,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use anyhow::Result;
 
+use baml_types::tracing::events::FunctionId;
 use baml_types::BamlMap;
 use baml_types::BamlValue;
 use baml_types::Constraint;
@@ -39,6 +40,7 @@ use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
 use serde_json::json;
 use std::sync::OnceLock;
+use tracingv2::storage::storage::Collector;
 use tracingv2::storage::storage::BAML_TRACER;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -333,8 +335,9 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        logger: Option<Arc<Collector>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
-        let fut = self.call_function(function_name, params, ctx, tb, cb);
+        let fut = self.call_function(function_name, params, ctx, tb, cb, logger);
         self.async_runtime.block_on(fut)
     }
 
@@ -345,9 +348,15 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        logger: Option<Arc<Collector>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
         let span = self.tracer.start_span(&function_name, ctx, params);
+        if let Some(span) = span.clone() {
+            if let Some(logger) = logger {
+                logger.track_function(FunctionId(span.clone().span_id.to_string()));
+            }
+        }
 
         let response = match ctx.create_ctx(tb, cb) {
             Ok(rctx) => {

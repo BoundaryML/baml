@@ -105,19 +105,19 @@ async fn log_http_response(
     headers: serde_json::Value,
     body: serde_json::Value,
 ) {
-    BAML_TRACER.lock().await.put(Arc::new(TraceEvent {
+    BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
         span_id: FunctionId(runtime_context.span_id.to_string()),
         event_id: ContentId(uuid::Uuid::new_v4().to_string()),
         span_chain: vec![],
         timestamp: web_time::SystemTime::now(),
         callsite: "".to_string(),
         verbosity: trace_level,
-        content: TraceData::RawLLMResponse(HTTPResponse {
+        content: TraceData::RawLLMResponse(Arc::new(HTTPResponse {
             request_id,
             status,
             headers,
             body,
-        }),
+        })),
         tags: Default::default(),
     }));
 }
@@ -171,20 +171,20 @@ async fn build_and_log_outbound_request(
     })?;
 
     let request_id = ContentId(uuid::Uuid::new_v4().to_string());
-    BAML_TRACER.lock().await.put(Arc::new(TraceEvent {
+    BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
         span_id: FunctionId(runtime_context.span_id.to_string()),
         event_id: ContentId(uuid::Uuid::new_v4().to_string()),
         span_chain: vec![],
         timestamp: web_time::SystemTime::now(),
         callsite: "".to_string(),
         verbosity: TraceLevel::Info,
-        content: TraceData::RawLLMRequest(HTTPRequest {
+        content: TraceData::RawLLMRequest(Arc::new(HTTPRequest {
             request_id: request_id.clone(),
             url: built_req.url().to_string(),
             method: built_req.method().to_string(),
             headers: json_headers(built_req.headers()),
             body: json_body(built_req.body()).unwrap_or_default(),
-        }),
+        })),
         tags: Default::default(),
     }));
 

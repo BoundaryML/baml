@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::BamlValue;
 use anyhow::Result;
 use serde::{Deserialize, Serialize, Serializer};
@@ -61,16 +63,16 @@ pub enum TraceData {
     // The rest are intermediate events that happen between start and end
 
     // LLM request
-    LLMRequest(LoggedLLMRequest),
+    LLMRequest(Arc<LoggedLLMRequest>),
     // Raw HTTP request to the LLM
-    RawLLMRequest(HTTPRequest),
+    RawLLMRequest(Arc<HTTPRequest>),
 
     // Do to streaming, its possible to have multiple responses for a single request
     // ----
     // Raw HTTP response from the LLM
-    RawLLMResponse(HTTPResponse),
+    RawLLMResponse(Arc<HTTPResponse>),
     /// LLM response now a plain struct, so we don't wrap it in `Result`.
-    LLMResponse(LoggedLLMResponse),
+    LLMResponse(Arc<LoggedLLMResponse>),
     // ----
 
     // We don't want to store the parsed LLM response in the log event

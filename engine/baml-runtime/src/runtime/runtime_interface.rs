@@ -456,7 +456,7 @@ impl RuntimeInterface for InternalBamlRuntime {
             // TODO: send separately?
             tags: Default::default(),
         };
-        BAML_TRACER.blocking_lock().put(Arc::new(trace_event));
+        BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
         let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;

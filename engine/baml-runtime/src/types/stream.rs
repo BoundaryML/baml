@@ -116,7 +116,7 @@ impl FunctionResultStream {
             // TODO: send separately?
             tags: Default::default(),
         };
-        BAML_TRACER.lock().await.put(Arc::new(trace_event));
+        BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
         let rctx = ctx.create_ctx(tb, cb);
         let res = match rctx {

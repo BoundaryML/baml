@@ -12,11 +12,12 @@ pub(crate) mod runtime_ctx_manager;
 pub(crate) mod span;
 pub(crate) mod trace_stats;
 pub(crate) mod type_builder;
+
 pub use audio::BamlAudioPy;
 pub use function_result_stream::{FunctionResultStream, SyncFunctionResultStream};
 pub use function_results::FunctionResult;
 pub use image::BamlImagePy;
-pub use log_collector::{FunctionLog, LogCollector};
+pub use log_collector::{Collector, FunctionLog, LLMCall, Timing, Usage};
 pub use runtime_ctx_manager::RuntimeContextManager;
 pub use span::BamlSpan;
 pub use type_builder::*;

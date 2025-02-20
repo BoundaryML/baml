@@ -26,17 +26,15 @@ use axum_extra::{
 use baml_types::{BamlValue, GeneratorDefaultClientMode};
 use core::pin::Pin;
 use futures::Stream;
+use jsonish::ResponseBamlValue;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{path::PathBuf, sync::Arc, task::Poll};
 use tokio::{net::TcpListener, sync::RwLock};
 use tokio_stream::StreamExt;
-use jsonish::ResponseBamlValue;
 
 use crate::{
-    client_registry::ClientRegistry,
-    errors::ExposedError,
-    internal::llm_client::LLMResponse,
+    client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
     BamlRuntime, FunctionResult, RuntimeContextManager,
 };
 use internal_baml_codegen::openapi::OpenApiSchema;
@@ -362,7 +360,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
 
         let locked = self.b.read().await;
         let (result, _trace_id) = locked
-            .call_function(b_fn, &args, &ctx_mgr, None, client_registry.as_ref())
+            .call_function(b_fn, &args, &ctx_mgr, None, client_registry.as_ref(), None)
             .await;
 
         match result {
@@ -370,8 +368,9 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 LLMResponse::Success(_) => {
                     match function_result.result_with_constraints_content() {
                         // Just because the LLM returned 2xx doesn't mean that it returned parse-able content!
-                        Ok(parsed) => (StatusCode::OK, Json(parsed.serialize_final()))
-                            .into_response(),
+                        Ok(parsed) => {
+                            (StatusCode::OK, Json(parsed.serialize_final())).into_response()
+                        }
                         Err(e) => {
                             if let Some(ExposedError::ValidationError {
                                 prompt,

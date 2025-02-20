@@ -18,7 +18,7 @@ OutputType = TypeVar('OutputType')
 class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
-
+    collector: NotRequired[baml_py.baml_py.Collector]
 class BamlAsyncClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
@@ -48,7 +48,7 @@ class BamlAsyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-
+      collector = baml_options.get("collector", None)
       raw = await self.__runtime.call_function(
         "{{fn.name}}",
         {
@@ -59,6 +59,7 @@ class BamlAsyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collector,
       )
       return cast({{fn.return_type}}, raw.cast_to(types, types, partial_types, False))
     {% endfor %}

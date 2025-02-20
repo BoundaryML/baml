@@ -6,7 +6,7 @@ use crate::types::trace_stats::TraceStats;
 use crate::types::function_result_stream::{FunctionResultStream, SyncFunctionResultStream};
 use crate::types::runtime_ctx_manager::RuntimeContextManager;
 use crate::types::type_builder::TypeBuilder;
-use crate::types::ClientRegistry;
+use crate::types::{ClientRegistry, Collector};
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
@@ -114,7 +114,7 @@ impl BamlRuntime {
             .into()
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, collector))]
     fn call_function(
         &self,
         py: Python<'_>,
@@ -123,6 +123,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collector: Option<&Collector>,
     ) -> PyResult<PyObject> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -140,11 +141,18 @@ impl BamlRuntime {
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
-
+        let collector = collector.map(|c| c.inner.clone());
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let ctx_mng = ctx_mng;
             let (result, _) = baml_runtime
-                .call_function(function_name, &args_map, &ctx_mng, tb.as_ref(), cb.as_ref())
+                .call_function(
+                    function_name,
+                    &args_map,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                    collector,
+                )
                 .await;
 
             result
@@ -154,7 +162,7 @@ impl BamlRuntime {
         .map(|f| f.into())
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, collector))]
     fn call_function_sync(
         &self,
         function_name: String,
@@ -162,6 +170,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collector: Option<&Collector>,
     ) -> PyResult<FunctionResult> {
         let Some(args) = parse_py_type(args, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -178,13 +187,14 @@ impl BamlRuntime {
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
-
+        let collector = collector.map(|c| c.inner.clone());
         let (result, _event_id) = self.inner.call_function_sync(
             function_name,
             &args_map,
             &ctx_mng,
             tb.as_ref(),
             cb.as_ref(),
+            collector,
         );
 
         result
@@ -202,6 +212,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        // collector: Option<&Collector>,
     ) -> PyResult<FunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -243,6 +254,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        // collector: Option<&Collector>,
     ) -> PyResult<SyncFunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
