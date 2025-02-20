@@ -23,7 +23,7 @@ use crate::{BamlRuntime, TestResponse, TestStatus};
 #[allow(async_fn_in_trait)]
 pub trait TestExecutor {
     fn cli_list_tests(&self, args: &TestFilter) -> Result<()>;
-    async fn cli_run_tests(&self) -> Result<()>;
+    async fn cli_run_tests(&self, args: &TestFilter) -> Result<()>;
 }
 
 /// Test status.
@@ -71,8 +71,10 @@ impl TestExecutor for BamlRuntime {
         Ok(())
     }
 
-    async fn cli_run_tests(&self) -> Result<()> {
-        let output_renderer = output_github::GithubTestExecutionStatusRenderer {};
+    async fn cli_run_tests(&self, args: &TestFilter) -> Result<()> {
+        let output_renderer = output_pretty::PrettyTestExecutionStatusRenderer::new();
+        let max_concurrency = 10;
+        let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrency));
 
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -80,14 +82,20 @@ impl TestExecutor for BamlRuntime {
             .inner
             .ir
             .walk_tests()
-            .take(3)
-            .map(|node_pair| {
+            .filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();
-
+                if args.includes(function_name, test_name) {
+                    Some((function_name, test_name))
+                } else {
+                    None
+                }
+            })
+            .map(|(function_name, test_name)| {
+                let semaphore = semaphore.clone();
                 let tx = tx.clone();
-
                 (
                     async move {
+                        let permit = semaphore.acquire().await.unwrap();
                         let ctx_manager =
                             self.create_ctx_manager(BamlValue::String("cli".to_string()), None);
 
@@ -124,8 +132,6 @@ impl TestExecutor for BamlRuntime {
                         .values()
                         .filter(|status| matches!(status, TestExecutionStatus::Finished(_, _)))
                         .count();
-
-                    println!("finished: {} of {}", finished_count, total_count);
 
                     if finished_count == total_count {
                         break;

@@ -270,6 +270,26 @@ impl TestResponse {
     }
 }
 
+impl std::fmt::Display for TestFailReason<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TestUnspecified(e) => write!(f, "{}", e),
+            Self::TestLLMFailure(r) => write!(f, "{}", r),
+            Self::TestParseFailure(e) => write!(f, "{}", e),
+            Self::TestFinishReasonFailed(e) => write!(f, "{}", e),
+            Self::TestConstraintsFailure { checks, failed_assert } => {
+                for (check, pass) in checks {
+                    write!(f, "{} - {}", check, if *pass { "passed" } else { "failed" })?;
+                }
+                if let Some(failed_assert) = failed_assert {
+                    write!(f, "{}", failed_assert)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 use std::process::Termination;
 

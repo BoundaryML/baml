@@ -1,9 +1,8 @@
 use anyhow::Result;
-use baml_runtime::{test_executor::TestFilter, BamlRuntime};
+use crate::{test_executor::TestFilter, BamlRuntime};
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
-
-use baml_runtime::test_executor::TestExecutor;
+use crate::test_executor::TestExecutor;
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {
@@ -33,10 +32,11 @@ pub enum TestCommand {
     /// List all available tests
     List,
     /// Run specified tests
-    Run {
-        #[arg(long, help = "Output format to use for test results")]
-        output_format: OutputFormat,
-    },
+    Run
+    // Run {
+    //     #[arg(long, help = "Output format to use for test results")]
+    //     output_format: OutputFormat,
+    // },
 }
 
 #[derive(Clone, Debug)]
@@ -55,49 +55,13 @@ impl std::str::FromStr for OutputFormat {
     }
 }
 
-impl From<TestArgs> for TestFilter {
-    fn from(args: TestArgs) -> Self {
-        TestFilter {
-            include: args
-                .include
-                .iter()
-                .flat_map(|s| match s.to_string().split_once("::") {
-                    Some((function_match, test_match)) => {
-                        vec![(function_match.to_string(), test_match.to_string())]
-                    }
-                    None => {
-                        vec![
-                            (s.to_string(), "".to_string()),
-                            ("".to_string(), s.to_string()),
-                        ]
-                    }
-                })
-                .collect(),
-            exclude: args
-                .exclude
-                .iter()
-                .flat_map(|s| match s.to_string().split_once("::") {
-                    Some((function_match, test_match)) => {
-                        vec![(function_match.to_string(), test_match.to_string())]
-                    }
-                    None => {
-                        vec![
-                            (s.to_string(), "".to_string()),
-                            ("".to_string(), s.to_string()),
-                        ]
-                    }
-                })
-                .collect(),
-        }
-    }
-}
 impl TestArgs {
     pub async fn run(&self) -> Result<()> {
         let from = BamlRuntime::parse_baml_src_path(&self.from)?;
 
         let runtime = BamlRuntime::from_directory(&from, std::env::vars().collect())?;
 
-        let test_execution_args: TestFilter = self.clone().into();
+        let test_execution_args = TestFilter::from(self.include.iter().map(|s| s.as_str()), self.exclude.iter().map(|s| s.as_str()));
 
         match &self.command {
             Some(TestCommand::List) | None => {
@@ -105,7 +69,7 @@ impl TestArgs {
                 runtime.cli_list_tests(&test_execution_args)?;
             }
             Some(TestCommand::Run { .. }) => {
-                runtime.cli_run_tests().await?;
+                runtime.cli_run_tests(&test_execution_args).await?;
             }
         }
 

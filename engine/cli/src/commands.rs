@@ -28,20 +28,20 @@ pub(crate) enum Commands {
     #[command(about = "Starts a development server")]
     Dev(baml_runtime::cli::dev::DevArgs),
 
-    #[command(subcommand, about = "Authenticate with Boundary Cloud")]
+    #[command(subcommand, about = "Authenticate with Boundary Cloud", hide = true)]
     Auth(crate::auth::AuthCommands),
 
-    #[command(about = "Login to Boundary Cloud (alias for `baml auth login`)")]
+    #[command(about = "Login to Boundary Cloud (alias for `baml auth login`)", hide = true)]
     Login(crate::auth::LoginArgs),
 
-    #[command(about = "Deploy a BAML project to Boundary Cloud")]
+    #[command(about = "Deploy a BAML project to Boundary Cloud", hide = true)]
     Deploy(crate::deploy::DeployArgs),
 
     #[command(about = "Format BAML source files", name = "fmt", hide = true)]
     Format(crate::format::FormatArgs),
 
     #[command(about = "Run BAML tests")]
-    Test(crate::test::TestArgs),
+    Test(baml_runtime::cli::testing::TestArgs),
 }
 
 impl RuntimeCli {

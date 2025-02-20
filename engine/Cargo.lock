@@ -986,6 +986,7 @@ dependencies = [
  "http-body 1.0.1",
  "include_dir",
  "indexmap 2.2.6",
+ "indicatif",
  "indoc",
  "infer",
  "internal-baml-codegen",
