@@ -1,0 +1,231 @@
+---
+title: Building a Chatbot with BAML React Hooks
+description: Learn to build a streaming chatbot using BAML React hooks and Next.js
+---
+
+In this tutorial, you'll build a real-time streaming chatbot using BAML React hooks. By following along, you'll learn how to:
+- Create a BAML function for chat completions
+- Use BAML's React hooks for streaming responses
+- Build a modern chat interface
+- Handle loading states and errors
+
+## Prerequisites
+
+Before starting, ensure you have:
+- Completed the [Quick Start Guide](/guide/framework-integration/react-next-js/quick-start)
+- A Next.js project with BAML set up
+- An OpenAI API key
+
+## Step 1: Define the Chat Function
+
+First, create a new BAML function for the chat completion:
+
+<CodeBlocks>
+```baml title="baml_src/chat.baml"
+class Message {
+  role "user" | "assistant"
+  content string
+}
+
+function Chat(messages: Message[]) -> string {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    You are a helpful and knowledgeable AI assistant engaging in a conversation.
+    Your responses should be:
+    - Clear and concise
+    - Accurate and informative
+    - Natural and conversational in tone
+    - Focused on addressing the user's needs
+
+    {{ ctx.output_format }}
+
+    {% for m in messages %}
+    {{ _.role(m.role)}}
+    {{m.content}}
+    {% endfor %}
+  "#
+}
+
+test TestName {
+  functions [Chat]
+  args {
+    messages [
+      {
+        role "user"
+        content "help me understand Chobani's success"
+      }
+    ]
+  }
+}
+```
+</CodeBlocks>
+
+Generate the BAML client to create the React hooks:
+
+```bash
+baml-cli generate
+```
+
+## Step 2: Implement the Chat Interface
+
+You can implement the chat interface in two ways:
+
+### Option A: Using the Generated Hook Directly
+
+The simplest approach is to use the generated hook directly:
+
+<CodeBlocks>
+```tsx title="app/components/chat-interface.tsx"
+'use client'
+
+import { useChat } from "@/baml_client/react/hooks";
+import { useState } from "react";
+
+export function ChatInterface() {
+  const [input, setInput] = useState("");
+
+  const chat = useChat();
+
+  const handleSubmit = async () => {
+    const newMessages = [
+      ...chat.data?.messages,
+      { role: "user", content: input }
+    ];
+
+    setInput("");
+
+    await chat.mutate({ messages: newMessages });
+  };
+
+  return (
+    <div>
+      <div>
+        {chat.data?.messages.map((message, i) => (
+          <div key={i}>
+            {message.content}
+          </div>
+        ))}
+        {chat.isLoading && <div>Generating...</div>}
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Type your message..."
+        />
+        <button type="submit" disabled={chat.isLoading}>
+          Send
+        </button>
+      </form>
+    </div>
+  );
+}
+```
+</CodeBlocks>
+
+### Option B: Using a Custom Server Action
+
+Alternatively, you can create a custom server action for more control over the server-side implementation:
+
+<CodeBlocks>
+```ts title="app/actions/chat.ts"
+'use server'
+
+import { b } from "@/baml_client";
+import { Message } from "@/baml_client/types";
+
+export async function streamChat(messages: Message[]) {
+  const user = await authUser();
+
+  if (!user) {
+    throw new Error("User not authenticated");
+  }
+
+  return b.stream.Chat(messages).toStreamable();
+}
+```
+
+```tsx title="app/components/chat-interface-with-action.tsx"
+'use client'
+
+import { useChat } from "@/baml_client/react/hooks";
+import { streamChat } from "../actions/chat";
+import { useState } from "react";
+
+export function ChatInterface() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const handleSubmit = async () => {
+    const newMessages = [
+      ...messages,
+      { role: "user", content: input }
+    ];
+    setInput("");
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const stream = await streamChat(newMessages);
+
+      for await (const message of stream) {
+        setMessages((prev) => [...prev, message]);
+      }
+    } catch (error) {
+      setError(error as Error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <div>
+        {messages.map((message, i) => (
+          <div key={i}>
+            {message.content}
+          </div>
+        ))}
+        {isLoading && <div>Typing...</div>}
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <div>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type your message..."
+          />
+          <button type="submit" disabled={isLoading}>
+            Send
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+```
+</CodeBlocks>
+
+The server action approach is useful when you need to:
+- Add custom server-side logic
+- Handle authentication
+- Add logging or monitoring
+- Implement rate limiting
+- Add custom error handling
+
+## Next Steps
+
+To enhance your chatbot, you could:
+- Add [error handling](/ref/baml_client/errors/overview) for different types of errors
+- Add chat history persistence
+- Implement different chat models or configurations
+
+For more information, check out:
+- [Generated Hooks](/ref/baml_client/react-next-js/use-function-name-hook)
+- [HookInput](/ref/baml_client/react-next-js/hook-input)
+- [HookOutput](/ref/baml_client/react-next-js/hook-output)
+- [Error Handling](/ref/baml_client/errors/overview)

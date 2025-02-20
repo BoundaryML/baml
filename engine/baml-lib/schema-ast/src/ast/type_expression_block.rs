@@ -27,7 +27,7 @@ impl std::ops::Index<FieldId> for TypeExpressionBlock {
 pub enum SubType {
     Enum,
     Class,
-    Dynamic,
+    Dynamic(Box<Self>),
     Other(String),
 }
 
@@ -86,6 +86,7 @@ pub struct TypeExpressionBlock {
 
     /// This is used to distinguish between enums and classes.
     pub sub_type: SubType,
+    pub type_span: Span,
     /// TODO: #1343 Temporary solution until we implement scoping in the AST.
     pub is_dynamic_type_def: bool,
 }

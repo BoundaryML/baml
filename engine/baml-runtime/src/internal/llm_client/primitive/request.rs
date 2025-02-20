@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use baml_types::BamlMap;
 use internal_baml_jinja::RenderedChatMessage;
+pub use internal_llm_client::ResponseType;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
 
@@ -23,7 +24,7 @@ pub trait RequestBuilder {
     fn http_client(&self) -> &reqwest::Client;
 }
 
-fn to_prompt(
+pub(crate) fn to_prompt(
     prompt: either::Either<&String, &[RenderedChatMessage]>,
 ) -> internal_baml_jinja::RenderedPrompt {
     match prompt {
@@ -53,7 +54,7 @@ pub async fn make_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("{:#?}", e),
+                message: format!("Failed to create request builder: {:#?}", e),
                 code: ErrorCode::Other(2),
             }));
         }
@@ -69,7 +70,7 @@ pub async fn make_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("{:#?}", e),
+                message: format!("Failed to build request: {:#?}", e),
                 code: ErrorCode::Other(2),
             }));
         }
@@ -85,8 +86,22 @@ pub async fn make_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("{:?}", e),
-                code: ErrorCode::Other(2),
+                message: {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        format!("{}", e.to_string())
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        format!(
+                            "{}\n\nIf you haven't yet, try enabling the proxy (See API Keys button)",
+                            e.to_string()
+                        )
+                    }
+                },
+                code: e
+                    .status()
+                    .map_or(ErrorCode::Other(2), |s| ErrorCode::from_status(s)),
             }));
         }
     };
@@ -119,16 +134,22 @@ pub async fn make_request(
     Ok((response, system_now, instant_now))
 }
 
-pub async fn make_parsed_request<T: DeserializeOwned>(
+pub async fn make_parsed_request(
     client: &(impl WithClient + RequestBuilder),
+    model_name: Option<String>,
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     stream: bool,
-) -> Result<(T, web_time::SystemTime, web_time::Instant), LLMResponse> {
-    let (response, system_now, instant_now) = make_request(client, prompt, stream).await?;
-    let j = match response.json::<serde_json::Value>().await {
+    response_type: ResponseType,
+) -> LLMResponse {
+    let (response, system_now, instant_now) = match make_request(client, prompt, stream).await {
+        Ok((response, system_now, instant_now)) => (response, system_now, instant_now),
+        Err(e) => return e,
+    };
+
+    let response_body = match response.json::<serde_json::Value>().await {
         Ok(response) => response,
         Err(e) => {
-            return Err(LLMResponse::LLMFailure(LLMErrorResponse {
+            return LLMResponse::LLMFailure(LLMErrorResponse {
                 client: client.context().name.to_string(),
                 model: None,
                 prompt: to_prompt(prompt),
@@ -137,25 +158,42 @@ pub async fn make_parsed_request<T: DeserializeOwned>(
                 latency: instant_now.elapsed(),
                 message: e.to_string(),
                 code: ErrorCode::Other(2),
-            }))
+            })
         }
     };
 
-    match T::deserialize(&j).context(format!(
-        "Failed to parse into a response accepted by {}: {}",
-        std::any::type_name::<T>(),
-        j
-    )) {
-        Ok(response) => Ok((response, system_now, instant_now)),
-        Err(e) => Err(LLMResponse::LLMFailure(LLMErrorResponse {
-            client: client.context().name.to_string(),
-            model: None,
-            prompt: to_prompt(prompt),
-            start_time: system_now,
-            request_options: client.request_options().clone(),
-            latency: instant_now.elapsed(),
-            message: format!("{:?}", e),
-            code: ErrorCode::Other(2),
-        })),
+    match response_type {
+        ResponseType::OpenAI => super::openai::response_handler::parse_openai_response(
+            client,
+            prompt,
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        ),
+        ResponseType::Anthropic => super::anthropic::response_handler::parse_anthropic_response(
+            client,
+            prompt,
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        ),
+        ResponseType::Google => super::google::response_handler::parse_google_response(
+            client,
+            prompt,
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        ),
+        ResponseType::Vertex => super::vertex::response_handler::parse_vertex_response(
+            client,
+            prompt,
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        ),
     }
 }

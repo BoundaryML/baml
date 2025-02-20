@@ -308,6 +308,98 @@ mod test_cli {
         Ok(())
     }
 
+
+    #[rstest]
+    #[tokio::test]
+    async fn call_function_with_baml_options() -> Result<()> {
+        let h = Harness::new(format!("baml_options_test"))?;
+
+        const PORT: &str = "2035";
+
+        let run = h.run_cli("init")?.output()?;
+        assert_eq!(run.status.code(), Some(0));
+
+        let mut child = h
+            .run_cli(format!("serve --preview --port {PORT}"))?
+            .spawn()?;
+        defer! { let _ = child.kill(); }
+
+        assert!(
+            reqwest::get(&format!("http://localhost:{PORT}/_debug/ping"))
+                .await?
+                .status()
+                .is_success()
+        );
+
+        let resume = indoc! {"
+      Vaibhav Gupta
+      vbv@boundaryml.com
+
+      Experience:
+      - Founder at BoundaryML
+      - CV Engineer at Google
+      - CV Engineer at Microsoft
+
+      Skills:
+      - Rust
+      - C++
+    "};
+        let resp = reqwest::Client::new()
+            .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
+            .json(&json!({ 
+                "resume": resume, 
+                "__baml_options__": {
+                    "client_registry": {
+                        "clients": [
+                            {
+                                "name": "testing",
+                                "provider": "openai",
+                                "options": {
+                                    "model": "gpt-4o-mini",
+                                    "api_key": "my-super-secret-password"
+                                }
+                            }
+                        ],
+                        "primary": "testing"
+                    }
+                }
+            }))
+            .send()
+            .await?;
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        let resp_json = resp.json::<serde_json::Value>().await?;
+        println!("baml options error expected: {:?}", resp_json);
+        assert!(resp_json.get("error").is_some(), "error field not found in error object of response");
+        assert!(resp_json.get("message").is_some(), "message field not found in error object of response");
+        assert!(resp_json.get("message").unwrap().as_str().unwrap().contains("Incorrect API key provided: my-super"), "message does not contain expected content");
+
+        let resp = reqwest::Client::new()
+            .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
+            .json(&json!({ 
+                "resume": resume, 
+                "__baml_options__": {
+                    "client_registry": {
+                        "clients": [
+                            {
+                                "name": "testing",
+                                "provider": "openai",
+                                "options": {
+                                    "model": "gpt-4o-mini",
+                                    "api_key": std::env::var("OPENAI_API_KEY").unwrap()
+                                }
+                            }
+                        ],
+                        "primary": "testing"
+                    }
+                }
+            }))
+            .send()
+            .await?;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        Ok(())
+    }
+
     #[rstest]
     #[tokio::test]
     async fn call_function_validation_error() -> Result<()> {

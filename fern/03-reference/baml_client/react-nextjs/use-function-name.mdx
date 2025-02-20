@@ -1,0 +1,175 @@
+---
+title: Generated Hooks Reference
+description: Technical reference for BAML's auto-generated React hooks
+---
+
+BAML automatically generates a type-safe React hook for each BAML function. Each hook follows the naming pattern `use{FunctionName}` and supports both streaming and non-streaming modes.
+
+<CodeBlocks>
+```typescript title="Example Usage"
+import { useWriteMeAStory } from "@/baml_client/react/hooks";
+
+// Basic usage with streaming enabled by default
+const hook = useWriteMeAStory();
+
+// Access streaming and final data
+const { data, streamData, finalData } = hook;
+
+// Track request state
+const { isLoading, isStreaming, isPending, isSuccess, isError } = hook;
+
+// Execute the function
+await hook.mutate("A story about a brave AI");
+
+// Reset state if needed
+hook.reset();
+```
+
+```baml title="BAML Function"
+class Story {
+  title string @stream.not_null
+  content string @stream.not_null
+}
+
+function WriteMeAStory(input: string) -> Story {
+  client openai/gpt-4
+  prompt #"
+    Tell me a story.
+
+    {{ ctx.output_format() }}
+
+    {{ _.role("user") }}
+
+    Topic: {{input}}
+  "#
+}
+```
+</CodeBlocks>
+
+## HookInput
+
+The hook accepts an optional configuration object. See [Hook Input](./hook-input) for complete details.
+
+<ParamField
+  path="stream"
+  type="boolean"
+>
+  Enable streaming mode for real-time updates. Defaults to true.
+</ParamField>
+
+<ParamField
+  path="onStreamData"
+  type="(response?: StreamDataType<FunctionName>) => void"
+>
+  Callback for streaming updates. Only available when streaming is enabled.
+</ParamField>
+
+<ParamField
+  path="onFinalData"
+  type="(response?: FinalDataType<FunctionName>) => void"
+>
+  Callback when the request completes.
+</ParamField>
+
+<ParamField
+  path="onData"
+  type="(response?: StreamDataType<FunctionName> | FinalDataType<FunctionName>) => void"
+>
+  Unified callback for both streaming and final responses.
+</ParamField>
+
+<ParamField
+  path="onError"
+  type="(error: BamlErrors) => void"
+>
+  Callback when an error occurs. See [Error Types](../errors/overview).
+</ParamField>
+
+## HookOutput
+
+The hook returns an object with the following properties. See [Hook Output](./hook-output) for complete details.
+
+<ParamField
+  path="data"
+  type="FinalDataType<FunctionName> | StreamDataType<FunctionName> | undefined"
+>
+  The current response data. Contains either streaming or final data depending on the request state.
+</ParamField>
+
+<ParamField
+  path="finalData"
+  type="FinalDataType<FunctionName> | undefined"
+>
+  The final response data. Only available when the request completes.
+</ParamField>
+
+<ParamField
+  path="streamData"
+  type="StreamDataType<FunctionName> | undefined"
+>
+  Latest streaming update. Only available in streaming mode.
+</ParamField>
+
+<ParamField
+  path="error"
+  type="BamlErrors | undefined"
+>
+  Error information if the request fails. See [Error Types](../errors/overview).
+</ParamField>
+
+<ParamField
+  path="isLoading"
+  type="boolean"
+>
+  True while the request is in progress (either pending or streaming).
+</ParamField>
+
+<ParamField
+  path="isPending"
+  type="boolean"
+>
+  True if the request is pending (not yet streaming or completed).
+</ParamField>
+
+<ParamField
+  path="isStreaming"
+  type="boolean"
+>
+  True if the request is currently streaming data. Only available in streaming mode.
+</ParamField>
+
+<ParamField
+  path="isSuccess"
+  type="boolean"
+>
+  True if the request completed successfully.
+</ParamField>
+
+<ParamField
+  path="isError"
+  type="boolean"
+>
+  True if the request failed.
+</ParamField>
+
+<ParamField
+  path="status"
+  type="HookStatus<Options>"
+>
+  Current state of the request. For streaming hooks: 'idle' | 'pending' | 'streaming' | 'success' | 'error'. For non-streaming hooks: 'idle' | 'pending' | 'success' | 'error'.
+</ParamField>
+
+<ParamField
+  path="mutate"
+  type="(...args: Parameters<ServerAction>) => Promise<OutputType>"
+>
+  Function to execute the BAML function. Returns a ReadableStream for streaming hooks, or a Promise of the final response for non-streaming hooks.
+</ParamField>
+
+<ParamField
+  path="reset"
+  type="() => void"
+>
+  Function to reset the hook state back to its initial values.
+</ParamField>
+

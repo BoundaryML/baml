@@ -172,7 +172,13 @@ b. **Using .env File (Recommended for open source contributors)**
       ```bash
       # Build the debug version of the client
       cd typescript && pnpm run build:debug
+      ```
 
+      <Note>
+      For local development, use `pnpm run build:debug` which is much faster. The full `pnpm run build` can take several minutes as it creates an optimized production build.
+      </Note>
+
+      ```bash
       # Generate the test code
       pnpm run generate
 

@@ -18,7 +18,7 @@ pub enum PrimitiveClient {
     Vertex,
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug, PartialEq)]
 pub struct ClientProperty {
     pub name: String,
     #[serde(deserialize_with = "deserialize_client_provider")]
@@ -74,7 +74,7 @@ impl ClientProperty {
     }
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug, PartialEq)]
 pub struct ClientRegistry {
     #[serde(deserialize_with = "deserialize_clients")]
     clients: HashMap<String, ClientProperty>,

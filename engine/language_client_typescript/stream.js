@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BamlStream = void 0;
+const _1 = require(".");
 class BamlStream {
     ffiStream;
     partialCoerce;
@@ -56,6 +57,50 @@ class BamlStream {
     async getFinalResponse() {
         const final = await this.driveToCompletionInBg();
         return this.finalCoerce(final.parsed(false));
+    }
+    /**
+     * Converts the BAML stream to a Next.js compatible stream.
+     * This is used for server-side streaming in Next.js API routes and Server Actions.
+     * The stream emits JSON-encoded messages containing either:
+     * - Partial results of type PartialOutputType
+     * - Final result of type FinalOutputType
+     * - Error information
+     */
+    toStreamable() {
+        const stream = this;
+        const encoder = new TextEncoder();
+        return new ReadableStream({
+            async start(controller) {
+                try {
+                    // Stream partials
+                    for await (const partial of stream) {
+                        controller.enqueue(encoder.encode(JSON.stringify({ partial })));
+                    }
+                    try {
+                        const final = await stream.getFinalResponse();
+                        controller.enqueue(encoder.encode(JSON.stringify({ final })));
+                        controller.close();
+                        return;
+                    }
+                    catch (err) {
+                        const bamlError = (0, _1.toBamlError)(err instanceof Error ? err : new Error(String(err)));
+                        controller.enqueue(encoder.encode(JSON.stringify({ error: bamlError })));
+                        controller.close();
+                        return;
+                    }
+                }
+                catch (streamErr) {
+                    const errorPayload = {
+                        type: 'StreamError',
+                        message: streamErr instanceof Error ? streamErr.message : 'Error in stream processing',
+                        prompt: '',
+                        raw_output: '',
+                    };
+                    controller.enqueue(encoder.encode(JSON.stringify({ error: errorPayload })));
+                    controller.close();
+                }
+            },
+        });
     }
 }
 exports.BamlStream = BamlStream;

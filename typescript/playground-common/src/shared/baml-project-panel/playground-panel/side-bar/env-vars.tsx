@@ -16,13 +16,18 @@ import {
   Edit2,
   Eye,
   EyeOff,
+  Info,
   PlusCircle,
   Settings2,
   XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
-import { envVarsAtom, requiredEnvVarsAtom } from '../../atoms'
+import { envVarsAtom, proxyUrlAtom, requiredEnvVarsAtom } from '../../atoms'
 import { cn } from '@/lib/utils'
+import { Switch } from '@radix-ui/react-switch'
+import { QuestionMarkCircledIcon, QuestionMarkIcon } from '@radix-ui/react-icons'
+import { Checkbox } from '@/components/ui/checkbox'
+import { vscode } from '../../vscode'
 const renderedEnvVarsAtom = atom((get) => {
   const envVars = get(envVarsAtom)
   const requiredEnvVars = get(requiredEnvVarsAtom)
@@ -56,6 +61,7 @@ export default function EnvVars() {
   const envVars = useAtomValue(renderedEnvVarsAtom)
   const setEnvVars = useSetAtom(envVarsAtom)
   const currentEnvVars = useAtomValue(envVarsAtom)
+  const proxySettings = useAtomValue(proxyUrlAtom)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [newKey, setNewKey] = useState('')
@@ -129,70 +135,104 @@ export default function EnvVars() {
             See supported LLMs
           </a>
         </div>
+        <div className='text-left text-muted-foreground'>
+          <div className='flex gap-2 items-center'>
+            <p className='flex gap-2 items-center'>
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <QuestionMarkCircledIcon className='w-4 h-4' />
+                  </TooltipTrigger>
+                  <TooltipContent side='top' className='text-xs w-80'>
+                    The BAML playground directly calls the LLM provider's API. Some providers make it difficult for
+                    browsers to call their API due to CORS restrictions.
+                    <br />
+                    <br />
+                    To get around this, the BAML VSCode extension includes a <b>localhost proxy</b> that sits between
+                    your browser and the LLM provider's API.
+                    <br />
+                    <br />
+                    <b>BAML MAKES NO NETWORK CALLS BEYOND THE LLM PROVIDER'S API YOU SPECIFY.</b>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              VSCode proxy is <b>{proxySettings.proxyEnabled ? 'enabled' : 'disabled'}</b>
+              <Checkbox
+                checked={proxySettings.proxyEnabled}
+                onCheckedChange={() => {
+                  vscode.setProxySettings(!proxySettings.proxyEnabled)
+                }}
+              />
+            </p>
+            <p>{proxySettings.proxyUrl}</p>
+          </div>
+        </div>
         <div className='space-y-1'>
-          {envVars.map(({ key, value, required }, index) => (
-            <TooltipProvider key={key} delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.02 }}
-                    className='group relative flex items-center gap-2 rounded-sm px-1 py-0.5 transition-colors hover:bg-muted/30'
-                  >
-                    <div className='flex relative gap-2 items-center w-fit'>
-                      <div className='flex gap-2 items-center group-hover:invisible'>
-                        {required ? (
-                          <CircleDot className='w-3 h-3 text-muted-foreground' />
-                        ) : (
-                          <Circle className='w-3 h-3 text-muted-foreground' />
-                        )}
-                        {!value || value === '' ? (
-                          <AlertTriangle className='h-4 w-4 rounded-full bg-orange-400 p-0.5 text-white' />
-                        ) : (
-                          <Check className='h-4 w-4 rounded-full bg-green-500 p-0.5 text-white' />
-                        )}
+          {envVars
+            .filter(({ key }) => key !== 'BOUNDARY_PROXY_URL')
+            .map(({ key, value, required }, index) => (
+              <TooltipProvider key={key} delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.02 }}
+                      className='group relative flex items-center gap-2 rounded-sm px-1 py-0.5 transition-colors hover:bg-muted/30'
+                    >
+                      <div className='flex relative gap-2 items-center w-fit'>
+                        <div className='flex gap-2 items-center group-hover:invisible'>
+                          {required ? (
+                            <CircleDot className='w-3 h-3 text-muted-foreground' />
+                          ) : (
+                            <Circle className='w-3 h-3 text-muted-foreground' />
+                          )}
+                          {!value || value === '' ? (
+                            <AlertTriangle className='h-4 w-4 rounded-full bg-orange-400 p-0.5 text-white' />
+                          ) : (
+                            <Check className='h-4 w-4 rounded-full bg-green-500 p-0.5 text-white' />
+                          )}
+                        </div>
+
+                        <div className='hidden absolute left-0 gap-2 items-center group-hover:flex'>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='p-0 w-4 h-4'
+                            onClick={(e) => {
+                              e.preventDefault()
+                              const newVars = { ...currentEnvVars }
+                              delete newVars[key]
+                              setEnvVars(newVars)
+                            }}
+                          >
+                            <XCircle className='w-4 h-4 text-muted-foreground hover:text-destructive' />
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='p-0 w-4 h-4'
+                            onClick={(e) => {
+                              e.preventDefault()
+                              handleEdit(key, value as string)
+                            }}
+                          >
+                            <Edit2 className='w-4 h-4 text-muted-foreground hover:text-primary' />
+                          </Button>
+                        </div>
                       </div>
 
-                      <div className='hidden absolute left-0 gap-2 items-center group-hover:flex'>
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          className='p-0 w-4 h-4'
-                          onClick={(e) => {
-                            e.preventDefault()
-                            const newVars = { ...currentEnvVars }
-                            delete newVars[key]
-                            setEnvVars(newVars)
-                          }}
-                        >
-                          <XCircle className='w-4 h-4 text-muted-foreground hover:text-destructive' />
-                        </Button>
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          className='p-0 w-4 h-4'
-                          onClick={(e) => {
-                            e.preventDefault()
-                            handleEdit(key, value as string)
-                          }}
-                        >
-                          <Edit2 className='w-4 h-4 text-muted-foreground hover:text-primary' />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <code className='font-mono text-xs transition-colors text-muted-foreground group-hover:text-foreground'>
-                      {key}
-                    </code>
-                  </motion.div>
-                </TooltipTrigger>
-                <TooltipContent side='top' className='text-xs'>
-                  {value !== undefined && value !== '' ? 'Click to edit' : 'Variable needs to be set'}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ))}
+                      <code className='font-mono text-xs transition-colors text-muted-foreground group-hover:text-foreground'>
+                        {key}
+                      </code>
+                    </motion.div>
+                  </TooltipTrigger>
+                  <TooltipContent side='top' className='text-xs'>
+                    {value !== undefined && value !== '' ? 'Click to edit' : 'Variable needs to be set'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ))}
         </div>
         <div className='flex items-center mt-4 space-x-2'>
           <Input

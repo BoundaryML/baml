@@ -1,5 +1,6 @@
 import { FieldType } from '@boundaryml/baml/native'
 import { TypeBuilder as _TypeBuilder, EnumBuilder, ClassBuilder } from '@boundaryml/baml/type_builder'
+import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
 export default class TypeBuilder {
     private tb: _TypeBuilder;
@@ -19,7 +20,8 @@ export default class TypeBuilder {
           ]),
           enums: new Set([
             {% for enum in enums %}"{{enum.name}}",{% endfor %}
-          ])
+          ]),
+          runtime: DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
         });
         {% for cls in classes %}{% if cls.dynamic %}
         this.{{cls.name}} = this.tb.classBuilder("{{cls.name}}", [
@@ -36,7 +38,7 @@ export default class TypeBuilder {
     __tb() {
       return this.tb._tb();
     }
-    
+
     string(): FieldType {
         return this.tb.string()
     }
@@ -87,5 +89,9 @@ export default class TypeBuilder {
 
     addEnum<Name extends string>(name: Name): EnumBuilder<Name> {
         return this.tb.addEnum(name);
+    }
+
+    addBaml(baml: string): void {
+        this.tb.addBaml(baml, this.runtime);
     }
 }

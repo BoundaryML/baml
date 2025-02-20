@@ -16,30 +16,15 @@ import type { BamlVSCodePlugin } from '../types'
 import { URI } from 'vscode-uri'
 import StatusBarPanel from '../../panels/StatusBarPanel'
 import { getCurrentOpenedFile } from '../../helpers/get-open-file'
+import { bamlConfig, getConfig } from './bamlConfig'
 
+export { bamlConfig }
 const packageJson = require('../../../../package.json') // eslint-disable-line
 
-const BamlConfig = z.optional(
-  z.object({
-    path: z.string().optional(),
-    enablePlaygroundProxy: z.boolean().default(true),
-    trace: z.optional(
-      z.object({
-        server: z.string(),
-      }),
-    ),
-  }),
-)
-type BamlConfig = z.infer<typeof BamlConfig>
 let client: LanguageClient
 let serverModule: string
 let telemetry: TelemetryReporter
 const intervalTimers: NodeJS.Timeout[] = []
-
-export const bamlConfig: { config: BamlConfig | null; cliVersion: string | null } = {
-  config: null,
-  cliVersion: null,
-}
 
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
@@ -137,21 +122,6 @@ const sleep = (time: number) => {
   })
 }
 
-const getConfig = async () => {
-  try {
-    console.log('getting config')
-    const configResponse = workspace.getConfiguration('baml')
-    console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
-    bamlConfig.config = BamlConfig.parse(configResponse)
-  } catch (e: any) {
-    if (e instanceof Error) {
-      console.log('Error getting config' + e.message + ' ' + e.stack)
-    } else {
-      console.log('Error getting config' + e)
-    }
-  }
-}
-
 const activateClient = (
   context: ExtensionContext,
   serverOptions: ServerOptions,
@@ -246,6 +216,13 @@ const activateClient = (
       } catch (e) {
         console.error('Error executing command', e)
       }
+    })
+
+    client.onRequest('baml_settings_updated', (config: typeof bamlConfig) => {
+      console.log('baml_settings_updated', config)
+      bamlConfig.config = config.config
+      bamlConfig.cliVersion = config.cliVersion
+      WebPanelView.currentPanel?.postMessage('baml_settings_updated', bamlConfig)
     })
 
     client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {

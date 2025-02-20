@@ -1,7 +1,11 @@
+use std::fmt;
 use std::sync::{Arc, Mutex};
 
-use baml_types::{BamlValue, FieldType};
-use indexmap::IndexMap;
+use baml_types::{BamlValue, EvaluationContext, FieldType};
+use indexmap::{IndexMap, IndexSet};
+use internal_baml_core::{
+    internal_baml_parser_database::ParserDatabase, ir::repr::TypeBuilderEntry,
+};
 
 use crate::runtime_context::{PropertyAttributes, RuntimeClassOverride, RuntimeEnumOverride};
 
@@ -133,6 +137,253 @@ impl EnumBuilder {
     }
 }
 
+// displays a class property along with its current state and metadata
+// the format shows two key pieces of information:
+// 1. the property name as defined in the class
+// 2. any metadata attached to the property in parentheses
+//
+// metadata is shown in key=value format, with values formatted according to their type
+// multiple metadata entries are separated by commas for readability
+//
+// examples of the output format:
+//   name string (alias='username', description='full name')
+//   - shows a property with both alias and description metadata
+//   age unset
+//   - shows a property without a defined type or metadata
+//   email string (required=true, format='email')
+//   - shows a property with multiple metadata values of different types
+impl fmt::Display for ClassPropertyBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let meta = self.meta.lock().unwrap();
+        let type_str = self
+            .r#type
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map_or("(unknown-type)".to_string(), |t| format!("{}", t.clone()));
+
+        write!(f, "{}", type_str)?;
+
+        if !meta.is_empty() {
+            write!(f, " (")?;
+            for (i, (key, value)) in meta.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}={}", key, value)?;
+            }
+            write!(f, ")")?;
+        }
+        Ok(())
+    }
+}
+
+// displays an enum value and its associated metadata
+// the format focuses on clarity and completeness:
+// 1. the enum value name in uppercase (following enum conventions)
+// 2. any metadata in parentheses, showing all attached information
+//
+// metadata is displayed in a consistent key=value format:
+// - each piece of metadata is separated by commas
+// - values are formatted based on their type (quotes for strings, etc.)
+// - all metadata is shown, not just common fields like alias
+//
+// examples of the output format:
+//   ACTIVE (alias='active', priority=1, enabled=true)
+//   - shows an enum value with multiple metadata types
+//   PENDING
+//   - shows a simple enum value with no metadata
+//   INACTIVE (description='not currently in use', status=null)
+//   - shows how null values and longer descriptions are formatted
+impl fmt::Display for EnumValueBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let meta = self.meta.lock().unwrap();
+
+        if !meta.is_empty() {
+            write!(f, " (")?;
+            for (i, (key, value)) in meta.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}={}", key, value)?;
+            }
+            write!(f, ")")?;
+        }
+        Ok(())
+    }
+}
+
+// displays a complete class definition with all its properties
+// the format provides a clear hierarchical structure:
+// 1. class name followed by an opening brace
+// 2. indented list of properties, each on its own line
+// 3. closing brace aligned with the class name
+//
+// properties are displayed with consistent indentation and formatting:
+// - each property starts on a new line with proper indentation
+// - properties are separated by commas for valid syntax
+// - the last property doesn't have a trailing comma
+//
+// example of the complete format:
+//   User {
+//     name string (alias='username', description='user\'s full name'),
+//     age int
+//     email string
+//     status unset
+//   }
+impl fmt::Display for ClassBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let properties = self.properties.lock().unwrap();
+        write!(f, "{{")?;
+        if !properties.is_empty() {
+            for (i, (name, prop)) in properties.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ",")?;
+                }
+                write!(f, "\n      {} {}", name, prop.lock().unwrap())?;
+            }
+            write!(f, "\n    ")?;
+        }
+        write!(f, "}}")
+    }
+}
+
+// displays a complete enum definition with all its values
+// the format creates a clear and readable structure:
+// 1. enum name followed by an opening brace
+// 2. indented list of enum values, each on its own line
+// 3. closing brace aligned with the enum name
+//
+// values are displayed with consistent formatting:
+// - each value starts on a new line with proper indentation
+// - values are separated by commas for valid syntax
+// - metadata is shown in parentheses when present
+// - empty enums are shown with empty braces
+//
+// example of the complete format:
+//   Status {
+//     ACTIVE (alias='active', weight=1.0),
+//     PENDING (description='awaiting processing'),
+//     INACTIVE (enabled=false),
+//     ARCHIVED
+//   }
+impl fmt::Display for EnumBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let values = self.values.lock().unwrap();
+        write!(f, "{{")?;
+        if !values.is_empty() {
+            for (i, (name, value)) in values.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ",")?;
+                }
+                write!(f, "\n      {}{}", name, value.lock().unwrap())?;
+            }
+            write!(f, "\n    ")?;
+        }
+        write!(f, "}}")
+    }
+}
+
+// displays the complete type builder state in a clear, hierarchical format
+// this is the top-level representation that shows all defined types
+//
+//
+// 1. starts with "TypeBuilder(" to identify the structure
+// 2. contains two main sections: Classes and Enums
+// 3. each section is properly indented and bracketed
+// 4. empty sections are omitted for conciseness
+//
+// the structure maintains consistent formatting:
+// - each class and enum starts on a new line
+// - proper indentation shows the hierarchy
+// - commas separate multiple items
+// - empty classes/enums are shown with empty braces
+//
+// example of the complete format:
+// TypeBuilder(
+//   Classes: [
+//     User {
+//       name string (alias='username'),
+//       email string (required=true)
+//     },
+//     Address { }
+//   ],
+//   Enums: [
+//     Status {
+//       ACTIVE (alias='active'),
+//       PENDING,
+//       INACTIVE (enabled=false)
+//     }
+//   ]
+// )
+//
+// this format makes it easy to:
+// - understand the overall structure of defined types
+// - see relationships between classes and their properties
+// - identify enum values and their metadata
+// - spot any missing or incomplete definitions
+impl fmt::Display for TypeBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let classes = self.classes.lock().unwrap();
+        let enums = self.enums.lock().unwrap();
+        let type_aliases = self.type_aliases.lock().unwrap();
+        let recursive_type_aliases = self.recursive_type_aliases.lock().unwrap();
+
+        write!(f, "TypeBuilder(")?;
+
+        if !classes.is_empty() {
+            write!(f, "\n  Classes: [")?;
+            for (i, (name, cls)) in classes.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ",")?;
+                }
+                write!(f, "\n    {} {}", name, cls.lock().unwrap())?;
+            }
+            write!(f, "\n  ]")?;
+        }
+
+        if !type_aliases.is_empty() {
+            write!(f, "\n  type_aliases: ")?;
+
+            match self.type_aliases.lock() {
+                Ok(type_aliases) => {
+                    let keys: Vec<_> = type_aliases.keys().collect();
+                    writeln!(f, "{:?}", keys)?
+                }
+                Err(_) => writeln!(f, "Cannot acquire lock,")?,
+            }
+        }
+
+        if !recursive_type_aliases.is_empty() {
+            write!(f, "\n  recursive_type_aliases: ")?;
+
+            match self.recursive_type_aliases.lock() {
+                Ok(recursive_type_aliases) => {
+                    let keys: Vec<_> = recursive_type_aliases.iter().map(|v| v.keys()).collect();
+                    writeln!(f, "{:?}", keys)?
+                }
+                Err(_) => writeln!(f, "Cannot acquire lock,")?,
+            }
+        }
+
+        if !enums.is_empty() {
+            if !classes.is_empty() {
+                write!(f, ",")?;
+            }
+            write!(f, "\n  Enums: [")?;
+            for (i, (name, e)) in enums.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ",")?;
+                }
+                write!(f, "\n    {} {}", name, e.lock().unwrap())?;
+            }
+            write!(f, "\n  ]")?;
+        }
+
+        write!(f, "\n)")
+    }
+}
+
 pub struct TypeAliasBuilder {
     target: Arc<Mutex<Option<FieldType>>>,
     meta: MetaData,
@@ -192,6 +443,9 @@ pub struct TypeBuilder {
     enums: Arc<Mutex<IndexMap<String, Arc<Mutex<EnumBuilder>>>>>,
     type_aliases: Arc<Mutex<IndexMap<String, Arc<Mutex<TypeAliasBuilder>>>>>,
     recursive_type_aliases: Arc<Mutex<Vec<IndexMap<String, FieldType>>>>,
+    recursive_classes: Arc<Mutex<Vec<IndexSet<String>>>>,
+
+    parser_database: ParserDatabase,
 }
 
 impl Default for TypeBuilder {
@@ -207,6 +461,8 @@ impl TypeBuilder {
             enums: Default::default(),
             type_aliases: Default::default(),
             recursive_type_aliases: Default::default(),
+            recursive_classes: Default::default(),
+            parser_database: Default::default(),
         }
     }
 
@@ -244,12 +500,164 @@ impl TypeBuilder {
         Arc::clone(&self.recursive_type_aliases)
     }
 
+    pub fn recursive_classes(&self) -> Arc<Mutex<Vec<IndexSet<String>>>> {
+        Arc::clone(&self.recursive_classes)
+    }
+
+    pub fn add_entries(&self, entries: &[TypeBuilderEntry]) {
+        for entry in entries {
+            match entry {
+                TypeBuilderEntry::Class(cls) => {
+                    let mutex = self.class(&cls.elem.name);
+                    let class_builder = mutex.lock().unwrap();
+                    for f in &cls.elem.static_fields {
+                        class_builder
+                            .property(&f.elem.name)
+                            .lock()
+                            .unwrap()
+                            .r#type(f.elem.r#type.elem.to_owned())
+                            .with_meta(
+                                "alias",
+                                f.attributes.get("alias").map_or(BamlValue::Null, |v| {
+                                    v.resolve_string(&EvaluationContext::default())
+                                        .map_or(BamlValue::Null, BamlValue::String)
+                                }),
+                            )
+                            .with_meta(
+                                "description",
+                                f.attributes
+                                    .get("description")
+                                    .map_or(BamlValue::Null, |v| {
+                                        v.resolve_string(&EvaluationContext::default())
+                                            .map_or(BamlValue::Null, BamlValue::String)
+                                    }),
+                            );
+                    }
+                }
+
+                TypeBuilderEntry::Enum(enm) => {
+                    let mutex = self.r#enum(&enm.elem.name);
+                    let enum_builder = mutex.lock().unwrap();
+                    for (variant, _) in &enm.elem.values {
+                        enum_builder
+                            .value(&variant.elem.0)
+                            .lock()
+                            .unwrap()
+                            .with_meta(
+                                "alias",
+                                variant
+                                    .attributes
+                                    .get("alias")
+                                    .map_or(BamlValue::Null, |v| {
+                                        v.resolve_string(&EvaluationContext::default())
+                                            .map_or(BamlValue::Null, BamlValue::String)
+                                    }),
+                            )
+                            .with_meta(
+                                "description",
+                                variant.attributes.get("description").map_or(
+                                    BamlValue::Null,
+                                    |v| {
+                                        v.resolve_string(&EvaluationContext::default())
+                                            .map_or(BamlValue::Null, BamlValue::String)
+                                    },
+                                ),
+                            )
+                            .with_meta(
+                                "skip",
+                                variant.attributes.get("skip").map_or(BamlValue::Null, |v| {
+                                    v.resolve_bool(&EvaluationContext::default())
+                                        .map_or(BamlValue::Null, BamlValue::Bool)
+                                }),
+                            );
+                    }
+                }
+
+                TypeBuilderEntry::TypeAlias(alias) => {
+                    let mutex = self.type_alias(&alias.elem.name);
+                    let alias_builder = mutex.lock().unwrap();
+                    alias_builder.target(alias.elem.r#type.elem.to_owned());
+                }
+            }
+        }
+    }
+
+    /// Internal API of `TypeBuilder::add_baml`.
+    ///
+    /// Python, TS and Ruby wrappers will call this function when the user runs
+    /// `type_builder.add_baml("BAML CODE")`
+    pub fn add_baml(&self, baml: &str, rt: &crate::BamlRuntime) -> anyhow::Result<()> {
+        use internal_baml_core::{
+            internal_baml_diagnostics::{Diagnostics, SourceFile},
+            internal_baml_schema_ast::parse_type_builder_contents_from_str,
+            ir::repr::IntermediateRepr,
+            run_validation_pipeline_on_db, validate_type_builder_entries,
+        };
+
+        let path = std::path::PathBuf::from("TypeBuilder::add_baml");
+        let source = SourceFile::from((path.clone().into(), baml));
+
+        let mut diagnostics = Diagnostics::new(path);
+        diagnostics.set_source(&source);
+
+        let type_builder_entries = parse_type_builder_contents_from_str(baml, &mut diagnostics)?;
+
+        if diagnostics.has_errors() {
+            anyhow::bail!("{}", diagnostics.to_pretty_string());
+        }
+
+        // TODO: A bunch of mem usage here but at least we drop this one at the
+        // end of the function, unlike scoped DBs for type builders.
+        let mut scoped_db = rt.inner.db.clone();
+
+        let local_ast =
+            validate_type_builder_entries(&mut diagnostics, &scoped_db, &type_builder_entries);
+        scoped_db.add_ast(local_ast);
+
+        if let Err(d) = scoped_db.validate(&mut diagnostics) {
+            diagnostics.push(d);
+            anyhow::bail!("{}", diagnostics.to_pretty_string());
+        }
+
+        run_validation_pipeline_on_db(&mut scoped_db, &mut diagnostics);
+
+        if diagnostics.has_errors() {
+            anyhow::bail!("{}", diagnostics.to_pretty_string());
+        }
+
+        let (classes, enums, type_aliases, recursive_classes, recursive_aliases) =
+            IntermediateRepr::type_builder_entries_from_scoped_db(&scoped_db, &rt.inner.db)
+                .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+
+        self.add_entries(
+            &classes
+                .into_iter()
+                .map(TypeBuilderEntry::Class)
+                .chain(enums.into_iter().map(TypeBuilderEntry::Enum))
+                .chain(type_aliases.into_iter().map(TypeBuilderEntry::TypeAlias))
+                .collect::<Vec<_>>(),
+        );
+
+        self.recursive_type_aliases()
+            .lock()
+            .unwrap()
+            .extend(recursive_aliases);
+
+        self.recursive_classes()
+            .lock()
+            .unwrap()
+            .extend(recursive_classes);
+
+        Ok(())
+    }
+
     pub fn to_overrides(
         &self,
     ) -> (
         IndexMap<String, RuntimeClassOverride>,
         IndexMap<String, RuntimeEnumOverride>,
         IndexMap<String, FieldType>,
+        Vec<IndexSet<String>>,
         Vec<IndexMap<String, FieldType>>,
     ) {
         log::debug!("Converting types to overrides");
@@ -344,27 +752,397 @@ impl TypeBuilder {
         );
 
         let recursive_aliases = self.recursive_type_aliases.lock().unwrap().clone();
+        let recursive_classes = self.recursive_classes.lock().unwrap().clone();
 
-        (cls, enm, aliases, recursive_aliases)
+        (cls, enm, aliases, recursive_classes, recursive_aliases)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
 
     #[test]
     fn test_type_builder() {
         let builder = TypeBuilder::new();
-        let cls = builder.class("Person");
-        let property = cls.lock().unwrap().property("name");
-        property.lock().unwrap().r#type(FieldType::string());
-        cls.lock()
+
+        // Add a class with properties and metadata
+        let cls = builder.class("User");
+        {
+            let cls = cls.lock().unwrap();
+            // Add name property with alias and description
+            cls.property("name")
+                .lock()
+                .unwrap()
+                .r#type(FieldType::string())
+                .with_meta("alias", BamlValue::String("username".to_string()))
+                .with_meta(
+                    "description",
+                    BamlValue::String("The user's full name".to_string()),
+                );
+
+            // Add age property with description only
+            cls.property("age")
+                .lock()
+                .unwrap()
+                .r#type(FieldType::int())
+                .with_meta(
+                    "description",
+                    BamlValue::String("User's age in years".to_string()),
+                );
+
+            // Add email property with no metadata
+            cls.property("email")
+                .lock()
+                .unwrap()
+                .r#type(FieldType::string());
+        }
+
+        // Add an enum with values and metadata
+        let enm = builder.r#enum("Status");
+        {
+            let enm = enm.lock().unwrap();
+            // Add ACTIVE value with alias and description
+            enm.value("ACTIVE")
+                .lock()
+                .unwrap()
+                .with_meta("alias", BamlValue::String("active".to_string()))
+                .with_meta(
+                    "description",
+                    BamlValue::String("User is active".to_string()),
+                );
+
+            // Add INACTIVE value with alias only
+            enm.value("INACTIVE")
+                .lock()
+                .unwrap()
+                .with_meta("alias", BamlValue::String("inactive".to_string()));
+
+            // Add PENDING value with no metadata
+            enm.value("PENDING");
+        }
+
+        // Convert to string and verify the format
+        let output = builder.to_string();
+        assert_eq!(
+            output,
+            r#"TypeBuilder(
+  Classes: [
+    User {
+      name string (alias=String("username"), description=String("The user's full name")),
+      age int (description=String("User's age in years")),
+      email string
+    }
+  ],
+  Enums: [
+    Status {
+      ACTIVE (alias=String("active"), description=String("User is active")),
+      INACTIVE (alias=String("inactive")),
+      PENDING
+    }
+  ]
+)"#
+        );
+    }
+
+    // this  test is to ensure that the string representation is correct
+    // and that the to_overrides method is working as expected
+
+    #[test]
+    fn test_type_builder_advanced() {
+        let builder = TypeBuilder::new();
+
+        // 1. Complex class with nested types and all field types
+        let address = builder.class("Address");
+        {
+            let address = address.lock().unwrap();
+            // String with all metadata
+            address
+                .property("street")
+                .lock()
+                .unwrap()
+                .r#type(FieldType::string())
+                .with_meta("alias", BamlValue::String("streetAddress".to_string()))
+                .with_meta(
+                    "description",
+                    BamlValue::String("Street address including number".to_string()),
+                );
+
+            // Optional int with description
+            address
+                .property("unit")
+                .lock()
+                .unwrap()
+                .r#type(FieldType::int().as_optional())
+                .with_meta(
+                    "description",
+                    BamlValue::String("Apartment/unit number if applicable".to_string()),
+                );
+
+            // List of strings with alias
+            address
+                .property("tags")
+                .lock()
+                .unwrap()
+                .r#type(FieldType::string().as_list())
+                .with_meta("alias", BamlValue::String("labels".to_string()));
+
+            // Boolean with no metadata
+            address
+                .property("is_primary")
+                .lock()
+                .unwrap()
+                .r#type(FieldType::bool());
+
+            // Float with skip metadata
+            address
+                .property("coordinates")
+                .lock()
+                .unwrap()
+                .r#type(FieldType::float())
+                .with_meta("skip", BamlValue::Bool(true));
+        }
+
+        // 2. Empty class
+        builder.class("EmptyClass");
+
+        // 3. Complex enum with various metadata combinations
+        let priority = builder.r#enum("Priority");
+        {
+            let priority = priority.lock().unwrap();
+            // All metadata
+            priority
+                .value("HIGH")
+                .lock()
+                .unwrap()
+                .with_meta("alias", BamlValue::String("urgent".to_string()))
+                .with_meta(
+                    "description",
+                    BamlValue::String("Needs immediate attention".to_string()),
+                )
+                .with_meta("skip", BamlValue::Bool(false));
+
+            // Only description
+            priority.value("MEDIUM").lock().unwrap().with_meta(
+                "description",
+                BamlValue::String("Standard priority".to_string()),
+            );
+
+            // Only skip
+            priority
+                .value("LOW")
+                .lock()
+                .unwrap()
+                .with_meta("skip", BamlValue::Bool(true));
+
+            // No metadata
+            priority.value("NONE");
+        }
+
+        // 4. Empty enum
+        builder.r#enum("EmptyEnum");
+
+        // Test string representation
+        let output = builder.to_string();
+        assert_eq!(
+            output,
+            r#"TypeBuilder(
+  Classes: [
+    Address {
+      street string (alias=String("streetAddress"), description=String("Street address including number")),
+      unit int? (description=String("Apartment/unit number if applicable")),
+      tags string[] (alias=String("labels")),
+      is_primary bool,
+      coordinates float (skip=Bool(true))
+    },
+    EmptyClass {}
+  ],
+  Enums: [
+    Priority {
+      HIGH (alias=String("urgent"), description=String("Needs immediate attention"), skip=Bool(false)),
+      MEDIUM (description=String("Standard priority")),
+      LOW (skip=Bool(true)),
+      NONE
+    },
+    EmptyEnum {}
+  ]
+)"#
+        );
+
+        // Test to_overrides()
+        let (classes, enums, aliases, recursive_classes, recursive_aliases) =
+            builder.to_overrides();
+
+        // Verify class overrides
+        assert_eq!(classes.len(), 2);
+        let address_override = classes.get("Address").unwrap();
+        assert_eq!(address_override.new_fields.len(), 5); // All fields are new
+        assert!(address_override
+            .new_fields
+            .get("street")
             .unwrap()
-            .property("age")
-            .lock()
+            .1
+            .alias
+            .is_some());
+        assert!(address_override
+            .new_fields
+            .get("coordinates")
             .unwrap()
-            .r#type(FieldType::int())
-            .with_meta("alias", BamlValue::String("years".to_string()));
+            .1
+            .skip
+            .unwrap());
+
+        // Verify enum overrides
+        assert_eq!(enums.len(), 2);
+        let priority_override = enums.get("Priority").unwrap();
+        assert_eq!(priority_override.values.len(), 4);
+        assert!(priority_override
+            .values
+            .get("HIGH")
+            .unwrap()
+            .alias
+            .is_some());
+        assert!(priority_override.values.get("LOW").unwrap().skip.unwrap());
+    }
+
+    #[test]
+    fn test_recursive_property() {
+        let builder = TypeBuilder::new();
+
+        // Create a 'Node' class where the 'child' property recursively refers to 'Node'
+        let node = builder.class("Node");
+        {
+            let node = node.lock().unwrap();
+            node.property("child")
+                .lock()
+                .unwrap()
+                .r#type(FieldType::class("Node"))
+                .with_meta(
+                    "description",
+                    BamlValue::String("recursive self reference".to_string()),
+                );
+        }
+
+        // Optionally, print the builder's string representation.
+        let output = builder.to_string();
+        // println!("{}", output);
+
+        // Verify that the output string contains the recursive property information.
+        assert!(
+            output.contains(
+                r#"TypeBuilder(
+  Classes: [
+    Node {
+      child Node (description=String("recursive self reference"))
+    }
+  ]
+)"#
+            ),
+            "Output did not contain the expected recursive property format: {}",
+            output
+        );
+
+        // Verify via to_overrides() that the recursive field is set correctly.
+        let (class_overrides, _enum_overrides, _aliases, _recursive_classes, _recursive_aliases) =
+            builder.to_overrides();
+        let node_override = class_overrides
+            .get("Node")
+            .expect("Expected override for Node");
+        let (child_field_type, _child_attrs) = node_override
+            .new_fields
+            .get("child")
+            .expect("Expected a 'child' property in Node");
+
+        // The child's field type should exactly be a recursive reference to 'Node'
+        assert_eq!(
+            child_field_type,
+            &FieldType::class("Node"),
+            "The 'child' field is not correctly set as a recursive reference to 'Node'"
+        );
+    }
+
+    use crate::BamlRuntime;
+
+    #[test]
+    fn test_type_builder_recursive_2() -> anyhow::Result<()> {
+        let builder = TypeBuilder::new();
+
+        let mut files = HashMap::new();
+        files.insert(
+            "main.baml",
+            r##"
+
+          class Output {
+            hello string
+            @@dynamic
+          }
+
+
+          client<llm> GPT4Turbo {
+            provider baml-openai-chat
+            options {
+              model gpt-4-1106-preview
+              api_key env.OPENAI_API_KEY
+            }
+          }
+
+
+          function Extract(input: string) -> Output {
+            client GPT4Turbo
+            prompt #"
+
+              {{ ctx.output_format }}
+            "#
+          }
+
+          test Test {
+            functions [Extract]
+            args {
+              input "hi"
+            }
+          }
+          "##,
+        );
+
+        let function_name = "Extract";
+        let test_name = "Test";
+
+        let runtime = BamlRuntime::from_file_content(
+            "baml_src",
+            &files,
+            [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+        )
+        .unwrap();
+
+        let baml = r##"
+
+            class Two {
+                three string
+                dynamicField Output
+            }
+
+            dynamic class Output {
+                two Node
+                three string
+
+            }
+
+            class C {
+                hello string
+            }
+            class D {
+                hello string
+            }
+            class Node {
+                child C | D | Node
+            }
+        "##;
+
+        builder.add_baml(&baml, &runtime)?;
+        println!("{}", builder.to_string());
+        builder.to_overrides();
+        Ok(())
     }
 }

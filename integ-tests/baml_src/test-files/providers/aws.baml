@@ -5,6 +5,32 @@ function TestAws(input: string) -> string {
   "#
 }
 
+/// my docs
+class UniverseQuestion {
+  question string
+  answer string
+}
+
+class UniverseQuestionInput {
+  question string
+}
+
+function TestUniverseQuestion(question: UniverseQuestionInput) -> UniverseQuestion {
+  client AwsBedrock
+  prompt #"
+    You are a helpful assistant that answers questions about the universe.
+
+    {{ ctx.output_format }}
+
+    {{ _.role("user")}}
+
+    Question: {{ question }}
+
+    Answer:
+  "#
+}
+
+
 function TestAwsInvalidRegion(input: string) -> string {
   client AwsBedrockInvalidRegion
   prompt #"

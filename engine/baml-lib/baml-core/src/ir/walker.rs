@@ -1,6 +1,6 @@
 use anyhow::Result;
 use baml_types::{BamlValue, EvaluationContext, UnresolvedValue};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 
 use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::RetryPolicyStrategy;
@@ -231,12 +231,12 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
 
     // TODO: #1343 Temporary solution until we implement scoping in the AST.
     pub fn type_builder_recursive_aliases(&self) -> &[IndexMap<String, FieldType>] {
-        &self
-            .item
-            .1
-            .elem
-            .type_builder
-            .structural_recursive_alias_cycles
+        &self.item.1.elem.type_builder.recursive_aliases
+    }
+
+    // TODO: #1343 Temporary solution until we implement scoping in the AST.
+    pub fn type_builder_recursive_classes(&self) -> &[IndexSet<String>] {
+        &self.item.1.elem.type_builder.recursive_classes
     }
 
     pub fn function(&'a self) -> Walker<'a, &'a FunctionNode> {

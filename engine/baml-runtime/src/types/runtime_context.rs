@@ -1,6 +1,6 @@
 use anyhow::Result;
 use baml_types::{BamlValue, EvaluationContext, UnresolvedValue};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::FieldType;
 use std::{collections::HashMap, sync::Arc};
 
@@ -58,6 +58,7 @@ pub struct RuntimeContext {
     pub enum_overrides: IndexMap<String, RuntimeEnumOverride>,
     pub type_alias_overrides: IndexMap<String, FieldType>,
     pub recursive_type_alias_overrides: Vec<IndexMap<String, FieldType>>,
+    pub recursive_class_overrides: Vec<IndexSet<String>>,
 }
 
 impl RuntimeContext {
@@ -81,6 +82,7 @@ impl RuntimeContext {
         class_override: IndexMap<String, RuntimeClassOverride>,
         enum_overrides: IndexMap<String, RuntimeEnumOverride>,
         type_alias_overrides: IndexMap<String, FieldType>,
+        recursive_class_overrides: Vec<IndexSet<String>>,
         recursive_type_alias_overrides: Vec<IndexMap<String, FieldType>>,
     ) -> RuntimeContext {
         RuntimeContext {
@@ -92,6 +94,7 @@ impl RuntimeContext {
             enum_overrides,
             type_alias_overrides,
             recursive_type_alias_overrides,
+            recursive_class_overrides,
         }
     }
 

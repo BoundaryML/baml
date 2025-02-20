@@ -63,8 +63,12 @@ impl BamlRuntime {
     pub fn from_files(
         root_path: String,
         files: HashMap<String, String>,
-        env_vars: HashMap<String, String>,
+        env_vars: HashMap<String, Option<String>>,
     ) -> napi::Result<Self> {
+        let env_vars = env_vars
+            .into_iter()
+            .filter_map(|(key, value)| value.map(|value| (key, value)))
+            .collect();
         Ok(CoreRuntime::from_file_content(&root_path, &files, env_vars)
             .map_err(from_anyhow_error)?
             .into())

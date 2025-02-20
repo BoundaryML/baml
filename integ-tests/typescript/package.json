@@ -7,9 +7,9 @@
     "test": "jest",
     "build:debug": "cd ../../engine/language_client_typescript && pnpm run build:debug && cd - && pnpm i",
     "build": "cd ../../engine/language_client_typescript && npm run build && cd - && pnpm i",
-    "integ-tests:ci": "infisical run --env=test -- pnpm test -- --ci --silent false --testTimeout 30000 --verbose=false --reporters=jest-junit",
-    "integ-tests": "infisical run --env=test -- pnpm test -- --silent false --testTimeout 30000",
-    "integ-tests:dotenv": "dotenv -e ../.env -- pnpm test -- --silent false --testTimeout 30000",
+    "integ-tests:ci": "pnpm tsc && infisical run --env=test -- pnpm test -- --ci --silent false --testTimeout 30000 --verbose=false --reporters=jest-junit",
+    "integ-tests": "pnpm tsc && infisical run --env=test -- pnpm test -- --silent false --testTimeout 30000",
+    "integ-tests:dotenv": "pnpm tsc && dotenv -e ../.env -- pnpm test -- --silent false --testTimeout 30000",
     "generate": "baml-cli generate --from ../baml_src",
     "memory-test": "BAML_LOG=info infisical run --env=test -- pnpm test -- --silent false --testTimeout 60000 -t 'memory'"
   },
@@ -37,5 +37,6 @@
     "chart.js": "^4.4.7",
     "chartjs-node-canvas": "^4.1.6",
     "dotenv": "^16.4.5"
-  }
+  },
+  "packageManager": "pnpm@9.12.0+sha512.4abf725084d7bcbafbd728bfc7bee61f2f791f977fd87542b3579dcb23504d170d46337945e4c66485cd12d588a0c0e570ed9c477e7ccdd8507cf05f3f92eaca"
 }

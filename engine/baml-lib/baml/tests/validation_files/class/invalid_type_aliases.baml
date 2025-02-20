@@ -20,11 +20,27 @@ type Four = int | string | b
 //  8 | // Unexpected keyword.
 //  9 | typpe Two = float
 //    | 
-// error: The type_alias "One" cannot be defined because a class with that name already exists.
+// error: The class "One" cannot be re-defined because a type_alias with that name already exists.
+//   -->  class/invalid_type_aliases.baml:1
+//    | 
+//    | 
+//  1 | class One {
+//    | 
 //   -->  class/invalid_type_aliases.baml:6
 //    | 
 //  5 | // Already existing name.
 //  6 | type One = int
+//    | 
+// error: The type_alias "One" cannot be re-defined because a class with that name already exists.
+//   -->  class/invalid_type_aliases.baml:6
+//    | 
+//  5 | // Already existing name.
+//  6 | type One = int
+//    | 
+//   -->  class/invalid_type_aliases.baml:1
+//    | 
+//    | 
+//  1 | class One {
 //    | 
 // error: Error validating: Type alias points to unknown identifier `i`
 //   -->  class/invalid_type_aliases.baml:12

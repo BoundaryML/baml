@@ -160,6 +160,7 @@ pub enum PromptAst<'a> {
 
 /// The properties of the client.
 /// This is highly dangerous, but i did this to only copy the options once.
+#[derive(Debug, Clone)]
 pub struct ClientProperties {
     /// The provider for the client, e.g. baml-openai-chat
     pub provider: (ClientProvider, Span),
@@ -169,7 +170,7 @@ pub struct ClientProperties {
     pub options: UnresolvedClientProperty<Span>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TestCase {
     pub functions: Vec<(String, Span)>,
     // The span is the span of the argument (the expression has its own span)
@@ -206,7 +207,7 @@ impl PrinterType {
 }
 
 /// How to retry a request.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RetryPolicy {
     /// The maximum number of retries.
     pub max_retries: u32,
@@ -259,7 +260,7 @@ pub struct TemplateStringProperties {
     pub template: String,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(super) struct Types {
     pub(super) enum_attributes: HashMap<ast::TypeExpId, EnumAttributes>,
     pub(super) class_attributes: HashMap<ast::TypeExpId, ClassAttributes>,

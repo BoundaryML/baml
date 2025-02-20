@@ -1,12 +1,12 @@
 import { b } from "../baml_client"
-import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
-import { Chart, registerables } from 'chart.js';
+// import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
+// import { Chart, registerables } from 'chart.js';
 import fs from 'fs';
 
 // BAML_LOG=info infisical run --env=test -- npx tsx tests/load.test.ts
 
 // Register Chart.js components
-Chart.register(...registerables);
+// Chart.register(...registerables);
 
 
 
@@ -40,7 +40,7 @@ async function measureMemoryUsage<T>(
 }> {
   const memoryUsageLog: { timestamp: number; heapUsed: number; rss: number; heapUsedDiff: number; rssDiff: number }[] = [];
   const events: MemoryEvent[] = [];
-  
+
   // Get baseline memory usage
   const baseline = process.memoryUsage();
   let maxHeapUsed = 0;
@@ -54,12 +54,12 @@ async function measureMemoryUsage<T>(
     const mem = process.memoryUsage();
     const heapUsedDiff = mem.heapUsed - baseline.heapUsed;
     const rssDiff = mem.rss - baseline.rss;
-    
+
     maxHeapUsed = Math.max(maxHeapUsed, mem.heapUsed);
     maxRss = Math.max(maxRss, mem.rss);
     maxHeapUsedDiff = Math.max(maxHeapUsedDiff, heapUsedDiff);
     maxRssDiff = Math.max(maxRssDiff, rssDiff);
-    
+
     memoryUsageLog.push({
       timestamp: Date.now(),
       heapUsed: mem.heapUsed,
@@ -110,15 +110,15 @@ async function generateMemoryPlot(timeline: Array<{ timestamp: number; heapUsed:
     ChartJS.defaults.responsive = true;
     ChartJS.defaults.maintainAspectRatio = false;
   };
-  
-  const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height, chartCallback });
-  
+
+  // const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height, chartCallback });
+
   const startTime = timeline[0].timestamp;
   const timeData = timeline.map(t => (t.timestamp - startTime) / 1000); // Convert to seconds
   const heapData = timeline.map(t => t.heapUsed / 1024 / 1024); // Convert to MB
   const rssData = timeline.map(t => t.rss / 1024 / 1024); // Convert to MB
   const heapDiffData = timeline.map(t => t.heapUsedDiff / 1024 / 1024); // Convert to MB
-  
+
   const eventAnnotations = events.map(event => ({
     type: 'line' as const,
     xMin: (event.timestamp - startTime) / 1000,
@@ -184,8 +184,8 @@ async function generateMemoryPlot(timeline: Array<{ timestamp: number; heapUsed:
     }
   };
 
-  const image = await chartJSNodeCanvas.renderToBuffer(configuration);
-  fs.writeFileSync('memory-usage-plot.png', image);
+  // const image = await chartJSNodeCanvas.renderToBuffer(configuration);
+  // fs.writeFileSync('memory-usage-plot.png', image);
 }
 
 async function main() {

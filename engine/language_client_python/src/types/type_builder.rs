@@ -7,6 +7,8 @@ use pyo3::{
     Bound, PyResult,
 };
 
+use crate::errors::BamlError;
+
 crate::lang_wrapper!(TypeBuilder, type_builder::TypeBuilder);
 crate::lang_wrapper!(EnumBuilder, type_builder::EnumBuilder, sync_thread_safe, name: String);
 crate::lang_wrapper!(ClassBuilder, type_builder::ClassBuilder, sync_thread_safe, name: String);
@@ -33,6 +35,23 @@ impl TypeBuilder {
     #[new]
     pub fn new() -> Self {
         type_builder::TypeBuilder::new().into()
+    }
+
+    /// provides a detailed string representation of the typebuilder for python users.
+    ///
+    /// this method exposes the rust-implemented string formatting to python, ensuring
+    /// consistent and professional output across both languages. the representation
+    /// includes a complete view of:
+    ///
+    /// * all defined classes with their properties
+    /// * all defined enums with their values
+    /// * metadata such as aliases and descriptions
+    /// * type information for properties
+    ///
+    /// the output format is carefully structured for readability, making it quite easy :D
+    /// to understand the complete type hierarchy at a glance.
+    pub fn __str__(&self) -> String {
+        self.inner.to_string()
     }
 
     pub fn r#enum(&self, name: &str) -> EnumBuilder {
@@ -108,6 +127,16 @@ impl TypeBuilder {
             rs_types.push(item.borrow().inner.lock().unwrap().clone());
         }
         Ok(baml_types::FieldType::union(rs_types).into())
+    }
+
+    pub fn add_baml(
+        &self,
+        baml: &str,
+        rt: &crate::runtime::BamlRuntime,
+    ) -> Result<(), pyo3::PyErr> {
+        self.inner
+            .add_baml(baml, &rt.inner)
+            .map_err(BamlError::from_anyhow)
     }
 }
 

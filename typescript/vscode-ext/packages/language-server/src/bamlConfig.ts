@@ -1,3 +1,5 @@
+// COPIED FROM ./vscode-ext/packages/vscode/src/plugins/language-server/bamlConfig.ts
+
 import { z } from 'zod'
 export const bamlConfigSchema = z
   .object({

@@ -15,9 +15,9 @@ import {
 
 import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { URI } from 'vscode-uri'
+import { getCurrentOpenedFile } from '../helpers/get-open-file'
 import { bamlConfig, requestDiagnostics } from '../plugins/language-server'
 import TelemetryReporter from '../telemetryReporter'
-import { getCurrentOpenedFile } from '../helpers/get-open-file'
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -114,6 +114,7 @@ export class WebPanelView {
 
   public postMessage<T>(command: string, content: T) {
     this._panel.webview.postMessage({ command: command, content })
+    console.log('postMessage', command, content)
     this.reporter?.sendTelemetryEvent({
       event: `baml.webview.${command}`,
       properties: {},
@@ -153,29 +154,44 @@ export class WebPanelView {
    * rendered within the webview panel
    */
   private _getWebviewContent(webview: Webview, extensionUri: Uri) {
-    // The CSS file from the React dist output
-    const stylesUri = getUri(webview, extensionUri, ['web-panel', 'dist', 'assets', 'index.css'])
-    // The JS file from the React dist output
-    const scriptUri = getUri(webview, extensionUri, ['web-panel', 'dist', 'assets', 'index.js'])
-
+    const isDevelopment = process.env.VSCODE_DEBUG_MODE === 'true'
     const nonce = getNonce()
 
-    // Tip: Install the es6-string-html VS Code extension to enable code highlighting below
-    return /*html*/ `
+    const getBaseHtml = (scripts: string) => /*html*/ `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <link rel="stylesheet" type="text/css" href="${stylesUri}">
-          <title>Hello World</title>
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' 'unsafe-eval' http://localhost:* ws://localhost:*; connect-src ws://localhost:* http://localhost:*; img-src ${webview.cspSource} https:; font-src ${webview.cspSource};">
+          <title>BAML Playground</title>
+          ${isDevelopment ? '' : `<link rel="stylesheet" type="text/css" href="${getUri(webview, extensionUri, ['web-panel', 'dist', 'assets', 'index.css'])}">`}
         </head>
         <body>
-          <div id="root">Waiting for react: ${scriptUri}</div>
-          <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
+          <div id="root"></div>
+          ${scripts}
         </body>
       </html>
     `
+
+    if (isDevelopment) {
+      const devServerPort = process.env.VITE_PORT || '3000'
+      return getBaseHtml(/*html*/ `
+        <script type="module" nonce="${nonce}">
+          import RefreshRuntime from "http://localhost:${devServerPort}/@react-refresh"
+          RefreshRuntime.injectIntoGlobalHook(window)
+          window.$RefreshReg$ = () => {}
+          window.$RefreshSig$ = () => (type) => type
+          window.__vite_plugin_react_preamble_installed__ = true
+        </script>
+        <script type="module" nonce="${nonce}" src="http://localhost:${devServerPort}/@vite/client"></script>
+        <script type="module" nonce="${nonce}" src="http://localhost:${devServerPort}/src/main.tsx"></script>
+      `)
+    }
+
+    return getBaseHtml(/*html*/ `
+      <script type="module" nonce="${nonce}" src="${getUri(webview, extensionUri, ['web-panel', 'dist', 'assets', 'index.js'])}"></script>
+    `)
   }
 
   /**
@@ -194,6 +210,7 @@ export class WebPanelView {
         function_name: openPlaygroundConfig.lastOpenedFunction,
       })
       this.postMessage('baml_cli_version', bamlConfig.cliVersion)
+      this.postMessage('baml_settings_updated', bamlConfig)
     }
 
     webview.onDidReceiveMessage(
@@ -267,6 +284,11 @@ export class WebPanelView {
             // also respond with rpc id
             this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: echoresp })
             return
+          case 'SET_PROXY_SETTINGS':
+            const { proxyEnabled } = vscodeMessage
+            const config = vscode.workspace.getConfiguration()
+            config.update('baml.enablePlaygroundProxy', proxyEnabled, vscode.ConfigurationTarget.Workspace)
+            return
           case 'GET_WEBVIEW_URI':
             // This is 1:1 with the contents of `image.file` in a test file, e.g. given `image { file baml_src://path/to-image.png }`,
             // relpath will be 'baml_src://path/to-image.png'
@@ -297,12 +319,6 @@ export class WebPanelView {
               }
             }
             this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: webviewUriResp })
-            return
-          case 'GET_VSCODE_SETTINGS':
-            const responseData: GetVSCodeSettingsResponse = {
-              enablePlaygroundProxy: bamlConfig.config?.enablePlaygroundProxy ?? true,
-            }
-            this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: responseData })
             return
           case 'GET_PLAYGROUND_PORT':
             const response: GetPlaygroundPortResponse = {

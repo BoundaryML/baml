@@ -328,10 +328,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   const pythonSelector = { language: 'python', scheme: 'file' }
   const typescriptSelector = { language: 'typescript', scheme: 'file' }
+  const reactSelector = { language: 'typescriptreact', scheme: 'file' }
 
   context.subscriptions.push(
     vscode.languages.registerCodeLensProvider(pythonSelector, glooLens),
     vscode.languages.registerCodeLensProvider(typescriptSelector, glooLens),
+    vscode.languages.registerCodeLensProvider(reactSelector, glooLens),
   )
 
   context.subscriptions.push(diagnosticsCollection)
@@ -349,17 +351,19 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (editor) {
       const name = editor.document.fileName
-      const text = editor.document.getText()
+      if (name.endsWith('.baml')) {
+        const text = editor.document.getText()
 
-      // TODO: buggy when used with multiple functions, needs a fix.
-      WebPanelView.currentPanel?.postMessage('update_cursor', {
-        cursor: {
-          fileName: name,
-          fileText: text,
-          line: position.line + 1,
-          column: position.character,
-        },
-      })
+        // TODO: buggy when used with multiple functions, needs a fix.
+        WebPanelView.currentPanel?.postMessage('update_cursor', {
+          cursor: {
+            fileName: name,
+            fileText: text,
+            line: position.line + 1,
+            column: position.character,
+          },
+        })
+      }
     }
   })
 

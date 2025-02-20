@@ -5,6 +5,7 @@ import {
   EnumValueBuilder,
   FieldType,
   TypeBuilder as _TypeBuilder,
+  BamlRuntime
 } from './native'
 
 type IsLiteral<T extends string> = string extends T ? false : true
@@ -21,11 +22,13 @@ export class TypeBuilder {
   private tb: _TypeBuilder
   protected classes: Set<string>
   protected enums: Set<string>
+  protected runtime: BamlRuntime
 
-  constructor({ classes, enums }: { classes: Set<string>; enums: Set<string> }) {
+  constructor({ classes, enums, runtime }: { classes: Set<string>; enums: Set<string>; runtime: BamlRuntime }) {
     this.classes = classes
     this.enums = enums
     this.tb = new _TypeBuilder()
+    this.runtime = runtime
   }
 
   _tb(): _TypeBuilder {
@@ -107,6 +110,10 @@ export class TypeBuilder {
     }
     this.enums.add(name)
     return new EnumBuilder(this.tb, name)
+  }
+
+  addBaml(baml: string): void {
+    this.tb.addBaml(baml, this.runtime)
   }
 }
 

@@ -9,7 +9,7 @@ use indexmap::IndexSet;
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct StringId(usize);
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(crate) struct StringInterner {
     map: IndexSet<String>,
 }

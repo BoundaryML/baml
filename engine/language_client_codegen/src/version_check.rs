@@ -109,6 +109,9 @@ pub fn check_version(
                 GeneratorOutputType::Typescript => {
                     format!("npm install --save-dev @boundaryml/baml@{}", gen_version)
                 }
+                GeneratorOutputType::TypescriptReact => {
+                    format!("npm install --save-dev @boundaryml/baml@{}", gen_version)
+                }
                 GeneratorOutputType::RubySorbet => format!("gem install baml -v {}", gen_version),
             };
             (

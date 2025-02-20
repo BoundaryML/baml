@@ -406,3 +406,35 @@ impl AllowedRoleMetadata {
         }
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub enum UnresolvedResponseType {
+    OpenAI,
+    Anthropic,
+    Google,
+    Vertex,
+}
+
+#[derive(Clone, Debug)]
+pub enum ResponseType {
+    OpenAI,
+    Anthropic,
+    Google,
+    Vertex,
+}
+
+impl UnresolvedResponseType {
+    pub fn required_env_vars(&self) -> HashSet<String> {
+        HashSet::new()
+    }
+
+    pub fn resolve(&self, _: &impl GetEnvVar) -> Result<ResponseType> {
+        match self {
+            Self::OpenAI => Ok(ResponseType::OpenAI),
+            Self::Anthropic => Ok(ResponseType::Anthropic),
+            Self::Google => Ok(ResponseType::Google),
+            Self::Vertex => Ok(ResponseType::Vertex),
+        }
+    }
+}
