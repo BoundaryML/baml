@@ -29,18 +29,27 @@ function Categorize(text: string) -> Category {
 <CodeBlocks>
 ```python Python
 from baml_client.type_builder import TypeBuilder
-from baml_client import b
+from baml_client.async_client import b
+import asyncio
 
 # Create a TypeBuilder instance
 tb = TypeBuilder()
 
 # Add new values to the Category enum
-tb.Category.add_value('GREEN') 
+tb.Category.add_value('GREEN')
 tb.Category.add_value('YELLOW')
 
-# Pass the typebuilder when calling the function
-result = await b.Categorize("The sun is bright", {"tb": tb})
-# result can now be RED, BLUE, GREEN, or YELLOW
+async def categorize_text():
+    # Pass the typebuilder when calling the function
+    result = await b.Categorize("The sun is bright", {"tb": tb})
+    # result can now be RED, BLUE, GREEN, or YELLOW
+    print(result)
+
+async def main():
+    await categorize_text()
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 ```typescript TypeScript
 import { TypeBuilder } from '../baml_client/type_builder'
