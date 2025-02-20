@@ -284,6 +284,11 @@ export class WebPanelView {
             // also respond with rpc id
             this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: echoresp })
             return
+          case 'SET_PROXY_SETTINGS':
+            const { proxyEnabled } = vscodeMessage
+            const config = vscode.workspace.getConfiguration()
+            config.update('baml.enablePlaygroundProxy', proxyEnabled, vscode.ConfigurationTarget.Workspace)
+            return
           case 'GET_WEBVIEW_URI':
             // This is 1:1 with the contents of `image.file` in a test file, e.g. given `image { file baml_src://path/to-image.png }`,
             // relpath will be 'baml_src://path/to-image.png'

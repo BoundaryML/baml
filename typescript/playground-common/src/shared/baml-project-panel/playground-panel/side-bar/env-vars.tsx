@@ -26,6 +26,8 @@ import { envVarsAtom, proxyUrlAtom, requiredEnvVarsAtom } from '../../atoms'
 import { cn } from '@/lib/utils'
 import { Switch } from '@radix-ui/react-switch'
 import { QuestionMarkCircledIcon, QuestionMarkIcon } from '@radix-ui/react-icons'
+import { Checkbox } from '@/components/ui/checkbox'
+import { vscode } from '../../vscode'
 const renderedEnvVarsAtom = atom((get) => {
   const envVars = get(envVarsAtom)
   const requiredEnvVars = get(requiredEnvVarsAtom)
@@ -155,6 +157,12 @@ export default function EnvVars() {
                 </Tooltip>
               </TooltipProvider>
               VSCode proxy is <b>{proxySettings.proxyEnabled ? 'enabled' : 'disabled'}</b>
+              <Checkbox
+                checked={proxySettings.proxyEnabled}
+                onCheckedChange={() => {
+                  vscode.setProxySettings(!proxySettings.proxyEnabled)
+                }}
+              />
             </p>
             <p>{proxySettings.proxyUrl}</p>
           </div>
