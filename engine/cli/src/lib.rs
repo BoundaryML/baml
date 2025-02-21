@@ -10,7 +10,36 @@ pub(crate) mod tui;
 use anyhow::Result;
 use clap::Parser;
 
-pub fn run_cli(argv: Vec<String>, caller_type: baml_runtime::RuntimeCliDefaults) -> Result<()> {
+pub enum ExitCode {
+    Success,
+    InvalidArgs,
+    Other,
+    HumanEvalRequired,
+    TestFailure,
+    TestCancelled,
+    NoTestsRun,
+}
+
+impl From<ExitCode> for u32 {
+    fn from(exit_code: ExitCode) -> Self {
+        match exit_code {
+            // All tests passed
+            ExitCode::Success => 0,
+            // All tests completed, but some required human evaluation
+            ExitCode::HumanEvalRequired => 1,
+            // Some tests failed
+            ExitCode::TestFailure => 2,
+            // Execution was interrupted
+            ExitCode::TestCancelled => 3,
+            // Some internal error occurred
+            ExitCode::Other | ExitCode::InvalidArgs => 4,
+            // No tests were found
+            ExitCode::NoTestsRun => 5,
+        }
+    }
+}
+
+pub fn run_cli(argv: Vec<String>, caller_type: baml_runtime::RuntimeCliDefaults) -> Result<ExitCode> {
     let mut cli = commands::RuntimeCli::parse_from(argv);
     if !matches!(cli.command, commands::Commands::Test(_)) {
         // We only need to set the exit handlers if we're not running tests

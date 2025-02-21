@@ -9,16 +9,18 @@ use pyo3::{wrap_pyfunction, Bound, Python};
 use tracing_subscriber::{self, EnvFilter};
 
 #[pyfunction]
-fn invoke_runtime_cli(py: Python) -> PyResult<()> {
-    baml_cli::run_cli(
+fn invoke_runtime_cli(py: Python) -> PyResult<u32> {
+    match baml_cli::run_cli(
         py.import("sys")?
             .getattr("argv")?
             .extract::<Vec<String>>()?,
         baml_runtime::RuntimeCliDefaults {
             output_type: baml_types::GeneratorOutputType::PythonPydantic,
         },
-    )
-    .map_err(errors::BamlError::from_anyhow)
+    ) {
+        Ok(exit_code) => Ok(exit_code.into()),
+        Err(e) => Err(errors::BamlError::from_anyhow(e)),
+    }
 }
 
 pub(crate) const MODULE_NAME: &str = "baml_py.baml_py";

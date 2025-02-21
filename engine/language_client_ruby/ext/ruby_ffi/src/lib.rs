@@ -185,22 +185,22 @@ impl BamlRuntimeFfi {
     }
 }
 
-fn invoke_runtime_cli(ruby: &Ruby, argv0: String, argv: Vec<String>) -> Result<()> {
-    baml_cli::run_cli(
+fn invoke_runtime_cli(ruby: &Ruby, argv0: String, argv: Vec<String>) -> Result<u32> {
+    match baml_cli::run_cli(
         std::iter::once(argv0).chain(argv).collect(),
         baml_runtime::RuntimeCliDefaults {
             output_type: baml_types::GeneratorOutputType::RubySorbet,
         },
-    )
-    .map_err(|e| {
-        Error::new(
+    ) {
+        Ok(exit_code) => Ok(exit_code.into()),
+        Err(e) => Err(Error::new(
             ruby.exception_runtime_error(),
             format!(
                 "{:?}",
                 e.context("error while invoking baml-cli".to_string())
             ),
-        )
-    })
+        ))
+    }
 }
 
 #[magnus::init(name = "ruby_ffi")]

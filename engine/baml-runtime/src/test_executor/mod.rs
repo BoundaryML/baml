@@ -20,10 +20,23 @@ use tokio::sync::{Mutex, MutexGuard};
 
 use crate::{BamlRuntime, TestResponse, TestStatus};
 
+pub enum TestRunStatus {
+    /// No tests were selected.
+    NoTests,
+    /// All tests passed.
+    Passed,
+    /// Some tests need human evaluation.
+    NeedsEval,
+    /// Some tests failed or aborted.
+    Failed(usize),
+    /// The tests were cancelled.
+    Cancelled,
+}
+
 #[allow(async_fn_in_trait)]
 pub trait TestExecutor {
     fn cli_list_tests(&self, args: &TestFilter) -> Result<()>;
-    async fn cli_run_tests(self: std::sync::Arc<Self>, args: &TestFilter) -> Result<()>;
+    async fn cli_run_tests(self: std::sync::Arc<Self>, args: &TestFilter, max_concurrency: usize) -> TestRunStatus;
 }
 
 /// Test status.
@@ -38,6 +51,16 @@ pub enum TestExecutionStatus {
     /// We say "excluded" instead of "skipped" as inspired by cargo, and for consistency with --exclude.
     /// cargo test makes an expplicit distinction between "marked with #[ignore]" and "excluded by cargo test flags"
     Excluded,
+}
+
+impl TestExecutionStatus {
+    pub fn is_failed(&self) -> bool {
+        match self {
+            TestExecutionStatus::Finished(Err(_), _) => true,
+            TestExecutionStatus::Finished(Ok(t), _) => matches!(t.status(), TestStatus::Fail(_)),
+            _ => false,
+        }
+    }
 }
 
 type TestExecutionStatusMap = BTreeMap<(String, String), TestExecutionStatus>;
@@ -81,7 +104,7 @@ impl TestExecutor for BamlRuntime {
         Ok(())
     }
 
-    async fn cli_run_tests(self: std::sync::Arc<Self>, args: &TestFilter) -> Result<()> {
+    async fn cli_run_tests(self: std::sync::Arc<Self>, args: &TestFilter, max_concurrency: usize) -> TestRunStatus {
         let output_renderer = output_pretty::PrettyTestExecutionStatusRenderer::new();
         let selected_tests = self
             .inner
@@ -99,10 +122,9 @@ impl TestExecutor for BamlRuntime {
 
         if selected_tests.is_empty() {
             println!("No tests selected");
-            return Ok(());
+            return TestRunStatus::NoTests;
         }
 
-        let max_concurrency = 10;
         let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrency));
 
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
@@ -189,18 +211,28 @@ impl TestExecutor for BamlRuntime {
                 .await
                 .expect("Failed to listen for Ctrl+C");
             println!("\nCtrl+C received. Cancelling remaining tests...");
-            let status_map = test_status_locked.lock().await;
-            output_renderer.render_final(&status_map, &selected_tests);
             Ok::<(), anyhow::Error>(())
         };
 
-        tokio::select! {
-            _ = tests_future => {},
-            res = ctrl_c_future => { res?; return Ok(()); },
-        }
+        let res = tokio::select! {
+            _ = tests_future => { Ok(())},
+            _ = ctrl_c_future => { Err(1) },
+        };
 
         let final_status = test_status_locked.into_inner();
         output_renderer.render_final(&final_status, &selected_tests);
-        Ok(())
+
+
+        match res {
+            Ok(_) => {
+                let failed_count = final_status.values().filter(|status| status.is_failed()).count();
+                if failed_count > 0 {
+                    TestRunStatus::Failed(failed_count)
+                } else {
+                    TestRunStatus::Passed
+                }
+            }
+            Err(_) => TestRunStatus::Cancelled,
+        }
     }
 }
