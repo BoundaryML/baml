@@ -1,5 +1,6 @@
 mod output_github;
 mod output_pretty;
+mod output_junit;
 mod test_execution_args;
 
 pub use test_execution_args::TestFilter;
@@ -36,7 +37,7 @@ pub enum TestRunStatus {
 #[allow(async_fn_in_trait)]
 pub trait TestExecutor {
     fn cli_list_tests(&self, args: &TestFilter) -> Result<()>;
-    async fn cli_run_tests(self: std::sync::Arc<Self>, args: &TestFilter, max_concurrency: usize) -> TestRunStatus;
+    async fn cli_run_tests(self: std::sync::Arc<Self>, args: &TestFilter, max_concurrency: usize, output_format: &crate::cli::testing::OutputFormat, junit_path: Option<&String>) -> TestRunStatus;
 }
 
 /// Test status.
@@ -69,6 +70,39 @@ pub(super) trait RenderTestExecutionStatus {
     fn render_progress(&self, test_status_map: &TestExecutionStatusMap);
 
     fn render_final(&self, test_status_map: &TestExecutionStatusMap, selected_tests: &BTreeMap<(String, String), String>);
+}
+
+struct AggregateRenderer {
+    renderers: Vec<Box<dyn RenderTestExecutionStatus>>,
+}
+
+impl AggregateRenderer {
+    fn new(output_format: &crate::cli::testing::OutputFormat, junit_path: Option<&String>) -> Self {
+        let mut renderers: Vec<Box<dyn RenderTestExecutionStatus>> = match output_format {
+            crate::cli::testing::OutputFormat::Pretty => vec![Box::new(output_pretty::PrettyTestExecutionStatusRenderer::new())],
+            crate::cli::testing::OutputFormat::Github => vec![Box::new(output_github::GithubTestExecutionStatusRenderer::new())],
+        };
+
+        if let Some(junit_path) = junit_path {
+            renderers.push(Box::new(output_junit::JUnitXMLRenderer::new(junit_path.as_str())));
+        }
+
+        Self { renderers }
+    }
+}
+
+impl RenderTestExecutionStatus for AggregateRenderer {
+    fn render_progress(&self, test_status_map: &TestExecutionStatusMap) {
+        for renderer in self.renderers.iter() {
+            renderer.render_progress(test_status_map);
+        }
+    }
+
+    fn render_final(&self, test_status_map: &TestExecutionStatusMap, selected_tests: &BTreeMap<(String, String), String>) {
+        for renderer in self.renderers.iter() {
+            renderer.render_final(test_status_map, selected_tests);
+        }
+    }
 }
 
 async fn file_reader(path: String) -> Result<Vec<u8>> {
@@ -104,8 +138,8 @@ impl TestExecutor for BamlRuntime {
         Ok(())
     }
 
-    async fn cli_run_tests(self: std::sync::Arc<Self>, args: &TestFilter, max_concurrency: usize) -> TestRunStatus {
-        let output_renderer = output_pretty::PrettyTestExecutionStatusRenderer::new();
+    async fn cli_run_tests(self: std::sync::Arc<Self>, args: &TestFilter, max_concurrency: usize, output_format: &crate::cli::testing::OutputFormat, junit_path: Option<&String>) -> TestRunStatus {
+        let renderer = AggregateRenderer::new(output_format, junit_path);
         let selected_tests = self
             .inner
             .ir
@@ -172,7 +206,7 @@ impl TestExecutor for BamlRuntime {
                     while let Some((function_name, test_name, status)) = rx.recv().await {
                         let mut status_map = test_status_locked.lock().await;
                         status_map.insert((function_name.to_string(), test_name.to_string()), status);
-                        output_renderer.render_progress(status_map.deref());
+                        renderer.render_progress(status_map.deref());
 
                         let total_count = status_map.len();
                         let finished_count = status_map
@@ -198,7 +232,7 @@ impl TestExecutor for BamlRuntime {
                             if finished_count == total_count {
                                 break;
                             }
-                            output_renderer.render_progress(status_map.deref());
+                            renderer.render_progress(status_map.deref());
                         }
                         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                     }
@@ -220,8 +254,7 @@ impl TestExecutor for BamlRuntime {
         };
 
         let final_status = test_status_locked.into_inner();
-        output_renderer.render_final(&final_status, &selected_tests);
-
+        renderer.render_final(&final_status, &selected_tests);
 
         match res {
             Ok(_) => {

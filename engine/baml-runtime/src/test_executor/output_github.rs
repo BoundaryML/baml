@@ -1,5 +1,11 @@
 pub(super) struct GithubTestExecutionStatusRenderer;
 
+impl GithubTestExecutionStatusRenderer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 use std::collections::BTreeMap;
 
 use crate::TestStatus;

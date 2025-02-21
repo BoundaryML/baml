@@ -44,6 +44,12 @@ pub enum TestCommand {
 
         #[arg(long, help = "Output format to use for test results", default_value_t = OutputFormat::Pretty)]
         output_format: OutputFormat,
+
+        #[arg(long, help = "Output JUnit XML results", default_value_t = false)]
+        junit: bool,
+
+        #[arg(long, help = "JUnit XML output file, example: --junit-path=junit-report.xml", default_value_t = String::from("junit-report.xml"))]
+        junit_path: String,
     },
 }
 
@@ -104,8 +110,10 @@ impl TestArgs {
                 pass_if_no_tests,
                 require_human_eval,
                 output_format,
+                junit,
+                junit_path,
             }) => {
-                match runtime.cli_run_tests(&test_execution_args, *parallel).await {
+                match runtime.cli_run_tests(&test_execution_args, *parallel, output_format, if *junit { Some(junit_path) } else { None }).await {
                     crate::test_executor::TestRunStatus::NoTests => {
                         if *pass_if_no_tests {
                             return Ok(TestRunResult::Success)

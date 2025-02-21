@@ -152,6 +152,8 @@ reqwest.workspace = true
 walkdir = "2.5.0"
 which = "6.0.3"
 indicatif = "0.17"
+junit-report = "0.8.3"
+
 
 [features]
 defaults = ["skip-integ-tests"]
